@@ -11,10 +11,9 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS ON)    # computed goto
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# set(CMAKE_CXX_STANDARD 26)
-# set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# set(CMAKE_CXX_EXTENSIONS ON)    # computed goto
-# set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)    # computed goto
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(MOS_UBSAN "Enable -fsanitize=undefined" OFF)
@@ -37,7 +36,7 @@ set(MOS_C_SHARED -fPIC -shared)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
 
-  set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra -Wunused -Wconversion -Wimplicit-fallthrough)
+  set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra -Wswitch-enum -Wunused -Wconversion -Wimplicit-fallthrough)
 
 else()
 
@@ -171,9 +170,6 @@ endif()
 #   set(MOS_LINK_OPTIONS -static-libstdc++)
 # endif()
 
-# # -- GSL --
-# CPMAddPackage("gh:microsoft/GSL@4.2.0")
-
 # -- zlib --
 
 option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
@@ -248,14 +244,6 @@ if(UNIX)
   add_compile_options(${MOS_SYSTEM_INCLUDE})
 endif()
 
-# -- libraries -----------------------------------------------------
-
-# add_subdirectory(lib/mos)
+# -- modules -----------------------------------------------------
 
 add_subdirectory(src/mos)
-
-# -- executables ---------------------------------------------------
-
-# add_subdirectory(exe/hello)
-# add_subdirectory(exe/repl)
-# add_subdirectory(exe/smile)
