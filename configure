@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+usage() {
+    echo "configure <build_dir> [options...]"
+    echo
+    echo "Example: CC=clang CXX=clang++ CMAKE_BUILD_TYPE=Debug ./configure build-asan -DMOS_ASAN=YES"
+    echo
+}
+
+if [ $# -lt 1 ]; then
+    usage
+    exit 1
+fi
+
+if [ -z "$CMAKE_BUILD_TYPE" ]; then
+    echo "CMAKE_BUILD_TYPE not set. Setting to Debug."
+    export CMAKE_BUILD_TYPE=Debug
+fi
+
+# Configure a shared CPM download cache
+export CPM_SOURCE_CACHE="$(pwd)/.cache/CPM"
+echo "Using CPM cache: $CPM_SOURCE_CACHE"
+
+build_dir=$1
+shift
+if [[ $build_dir == -* ]]; then usage; exit 1; fi
+
+
+# keep the directory around so we don't re-download CPM deps
+if [ -d "$build_dir" ]; then
+    echo "Deleting directory: $build_dir"
+    rm -rf "$build_dir"
+else
+    mkdir -p "$build_dir"
+fi
+
+echo "Configuring with cmake into '$build_dir'."
+echo
+
+if cmake "$@" -GNinja -B "$build_dir" -S .; then
+    echo
+    echo "Configuration into '$build_dir' is complete. Build with 'cmake --build $build_dir'."
+else
+    echo
+    echo "Configuration failed."
+fi
