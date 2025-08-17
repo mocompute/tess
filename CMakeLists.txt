@@ -217,7 +217,7 @@ target_link_libraries(readline INTERFACE tinfo) # users of readline must link ti
 # -- Keep this AFTER including external packages --
 
 if(UNIX)
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
     # Teach clang about where to find its include files. This is
     # required to make eglot work under NixOS, and to make
     # SCAN_FOR_MODULES work.
