@@ -3,11 +3,13 @@ message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 add_library(mos)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/vector.h
 )
 
 set(SOURCES
   src/alloc.c
+  src/hash.c
   src/vector.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
