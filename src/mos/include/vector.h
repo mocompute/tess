@@ -17,10 +17,11 @@ int mos_vector_reserve(mos_allocator_t *, mos_vector_t *, size_t);
 int mos_vector_empty(mos_vector_t const *);
 
 // Returns: 0 on success.
-int mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void *element);
+int mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void const *element);
 
 // Returns: 0 on success.
-int mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void *start, size_t count);
+int mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void const *start,
+                         size_t count);
 
 // Returns: pointer to back element. Undefined if vector is empty.
 void *mos_vector_back(mos_vector_t *vec);
@@ -32,9 +33,20 @@ void *mos_vector_data(mos_vector_t *);
 size_t mos_vector_size(mos_vector_t const *);
 size_t mos_vector_capacity(mos_vector_t const *);
 
-// assoc lists
+//
+// Association lists
+//
+// Vector element is understood to be a pair: the first field is a
+// size_t, and the (optionally zero-length) remainder of the element
+// size is the data.
+//
+// Association lists may contain duplicate values, but get() and
+// erase() operate only on the first one found, searching from the
+// back of the vector.
+//
 
-void mos_vector_assoc(mos_allocator_t *, mos_vector_t *, void *first, void *second);
-void **mos_vector_assoc_get(mos_vector_t *, void const *first);
+void mos_vector_assoc(mos_allocator_t *, mos_vector_t *, void const *);
+void *mos_vector_assoc_get(mos_vector_t *, size_t);
+void mos_vector_assoc_erase(mos_vector_t *, size_t);
 
 #endif

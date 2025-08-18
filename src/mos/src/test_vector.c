@@ -53,25 +53,63 @@ int test_assoc(void) {
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
   mos_vector_t *vec = mos_vector_alloc(alloc);
-  mos_vector_init(vec, 2 * sizeof(void *));
+  mos_vector_init(vec, 2 * sizeof(size_t));
 
-  mos_vector_assoc(alloc, vec, (void *)1, (void *)2);
-  error += (void *)2 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
+  size_t pair[2];
 
-  mos_vector_assoc(alloc, vec, (void *)2, (void *)3);
-  error += (void *)3 == *mos_vector_assoc_get(vec, (void *)2) ? 0 : 1;
-  mos_vector_assoc(alloc, vec, (void *)1, (void *)2);
-  error += (void *)2 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
+  pair[0] = 1;
+  pair[1] = 2;
+  mos_vector_assoc(alloc, vec, pair);
+  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
 
-  mos_vector_assoc(alloc, vec, (void *)1, (void *)30);
-  error += (void *)30 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
-  error += (void *)3 == *mos_vector_assoc_get(vec, (void *)2) ? 0 : 1;
+  pair[0] = 2;
+  pair[1] = 3;
+  mos_vector_assoc(alloc, vec, pair);
+  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
 
-  error += 0 == mos_vector_assoc_get(vec, (void *)999) ? 0 : 1;
+  pair[0] = 1;
+  pair[1] = 99;
+  mos_vector_assoc(alloc, vec, pair);
+  error += 99 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+
+  /* note that this erase only removes the first match */
+  mos_vector_assoc_erase(vec, 1);
+  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+
+  /* the second erase will remove the original value we set */
+  mos_vector_assoc_erase(vec, 1);
+  error += 0 == mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+
+  error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
 
   mos_vector_deinit(alloc, vec);
   mos_vector_dealloc(alloc, vec);
 
+  return error;
+}
+
+int test_assoc_set(void) {
+  int error = 0;
+
+  mos_allocator_t *alloc = mos_alloc_default_allocator();
+
+  mos_vector_t *vec = mos_vector_alloc(alloc);
+
+  /* no payload, just the key */
+  mos_vector_init(vec, sizeof(size_t));
+
+  size_t key = 1;
+  mos_vector_assoc(alloc, vec, &key);
+
+  error += 0 != mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
+
+  mos_vector_deinit(alloc, vec);
+  mos_vector_dealloc(alloc, vec);
   return error;
 }
 
@@ -80,6 +118,7 @@ int main(void) {
 
   error += test_vector();
   error += test_assoc();
+  error += test_assoc_set();
 
   return error;
 }
