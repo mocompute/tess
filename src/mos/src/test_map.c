@@ -2,6 +2,7 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -112,7 +113,7 @@ int main(void) {
   int error = 0;
   int this_error = 0;
 
-  srand((uint)time(0));
+  srand((uint32_t)time(0));
 
   T(test_power_of_two);
   T(test_align);
