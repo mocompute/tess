@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR 0.80f
+#define DEFAULT_LOAD_FACTOR 0.75f
 #define MAX_PROBE_LEN (1 << 6) - 1
 
 typedef struct status_t {
@@ -161,12 +161,15 @@ static int set_one(mos_map_t *map, size_t const key, char const *element) {
   uint32_t index = key_to_bucket(map, key);
   unsigned char probe_distance = 0;
 
+  int warning_printed = 0;
+
   while (1) {
     if (probe_distance > MAX_PROBE_LEN) return 1; // overflow
 
-    if (probe_distance > 20) {
+    if (probe_distance > 16 && !warning_printed) {
       fprintf(stderr, "warning: high probe distance for key: %zu, load factor: %f\n",
               *(size_t *)map->to_store, load_factor(map));
+      warning_printed = 1;
     }
 
     if (map->status[index].occupied) {
@@ -189,6 +192,7 @@ static int set_one(mos_map_t *map, size_t const key, char const *element) {
         map->status[index].probe_distance = probe_distance;
 
         // restart probing with swapped element, using evicted key
+        warning_printed = 0;
         probe_distance = 0;
         index = key_to_bucket(map, *(size_t *)map->to_store);
       }
