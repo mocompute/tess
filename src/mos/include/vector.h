@@ -3,7 +3,12 @@
 
 #include "alloc.h"
 
-typedef struct mos_vector_t mos_vector_t;
+typedef struct mos_vector_t {
+  size_t element_size;
+  size_t capacity;
+  size_t size;
+  char *data;
+} mos_vector_t;
 
 mos_vector_t *mos_vector_alloc(mos_allocator_t *);
 void mos_vector_dealloc(mos_allocator_t *, mos_vector_t *);
@@ -23,8 +28,11 @@ int mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void const *element)
 int mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void const *start,
                          size_t count);
 
+// Returns: pointer to element at index. Undefined if index is out of range.
+void *mos_vector_at(mos_vector_t *, size_t);
+
 // Returns: pointer to back element. Undefined if vector is empty.
-void *mos_vector_back(mos_vector_t *vec);
+void *mos_vector_back(mos_vector_t *);
 
 // Reduces vector size by one. Undefined if vector is empty.
 void mos_vector_pop_back(mos_vector_t *);

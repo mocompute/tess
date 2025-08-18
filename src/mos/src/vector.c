@@ -7,13 +7,6 @@
 #include <stdint.h>
 #include <string.h>
 
-struct mos_vector_t {
-  size_t element_size;
-  size_t capacity;
-  size_t size;
-  char *data;
-};
-
 mos_vector_t *mos_vector_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(mos_vector_t));
 }
@@ -34,11 +27,15 @@ int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) 
 
   if (vec->capacity >= count) return 0;
 
-  void *p = alloc->realloc(vec->data, count * vec->element_size);
+  size_t new_capacity = vec->capacity * 2;
+  if (new_capacity == 0) new_capacity = 8;
+  while (new_capacity < count) new_capacity *= 2;
+
+  void *p = alloc->realloc(vec->data, new_capacity * vec->element_size);
   if (!p) return 1;
 
   vec->data = p;
-  vec->capacity = count;
+  vec->capacity = new_capacity;
   return 0;
 }
 
@@ -59,6 +56,10 @@ int mos_vector_copy_back(mos_allocator_t *alloc, mos_vector_t *vec, void const *
   memcpy(vec->data + vec->size * vec->element_size, start, count * vec->element_size);
   vec->size += count;
   return 0;
+}
+
+void *mos_vector_at(mos_vector_t *vec, size_t index) {
+  return vec->data + index * vec->element_size;
 }
 
 void *mos_vector_back(mos_vector_t *vec) {
