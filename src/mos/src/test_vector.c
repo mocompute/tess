@@ -47,10 +47,39 @@ int test_vector(void) {
   return error;
 }
 
+int test_assoc(void) {
+  int error = 0;
+
+  mos_allocator_t *alloc = mos_alloc_default_allocator();
+
+  mos_vector_t *vec = mos_vector_alloc(alloc);
+  mos_vector_init(vec, 2 * sizeof(void *));
+
+  mos_vector_assoc(alloc, vec, (void *)1, (void *)2);
+  error += (void *)2 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
+
+  mos_vector_assoc(alloc, vec, (void *)2, (void *)3);
+  error += (void *)3 == *mos_vector_assoc_get(vec, (void *)2) ? 0 : 1;
+  mos_vector_assoc(alloc, vec, (void *)1, (void *)2);
+  error += (void *)2 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
+
+  mos_vector_assoc(alloc, vec, (void *)1, (void *)30);
+  error += (void *)30 == *mos_vector_assoc_get(vec, (void *)1) ? 0 : 1;
+  error += (void *)3 == *mos_vector_assoc_get(vec, (void *)2) ? 0 : 1;
+
+  error += 0 == mos_vector_assoc_get(vec, (void *)999) ? 0 : 1;
+
+  mos_vector_deinit(alloc, vec);
+  mos_vector_dealloc(alloc, vec);
+
+  return error;
+}
+
 int main(void) {
   int error = 0;
 
   error += test_vector();
+  error += test_assoc();
 
   return error;
 }

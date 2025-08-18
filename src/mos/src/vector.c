@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 
+#include <assert.h>
 #include <string.h>
 
 struct mos_vector_t {
@@ -38,7 +39,7 @@ int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) 
   return 0;
 }
 
-int mos_vector_empty(mos_vector_t *vec) { return vec->size == 0; }
+int mos_vector_empty(mos_vector_t const *vec) { return vec->size == 0; }
 
 int mos_vector_push_back(mos_allocator_t *alloc, mos_vector_t *vec, void *element) {
   if (mos_vector_reserve(alloc, vec, vec->size + 1)) return 1;
@@ -63,5 +64,27 @@ void *mos_vector_back(mos_vector_t *vec) {
 void mos_vector_pop_back(mos_vector_t *vec) { --vec->size; }
 
 void *mos_vector_data(mos_vector_t *vec) { return vec->data; }
-size_t mos_vector_size(mos_vector_t *vec) { return vec->size; }
-size_t mos_vector_capacity(mos_vector_t *vec) { return vec->capacity; }
+size_t mos_vector_size(mos_vector_t const *vec) { return vec->size; }
+size_t mos_vector_capacity(mos_vector_t const *vec) { return vec->capacity; }
+
+void mos_vector_assoc(mos_allocator_t *alloc, mos_vector_t *vec, void *first,
+                      void *second) {
+  assert(vec->element_size == 2 * sizeof(void *));
+
+  void const *pair[2] = {first, second};
+  mos_vector_push_back(alloc, vec, (void *)pair);
+}
+
+void **mos_vector_assoc_get(mos_vector_t *vec, void const *first) {
+  if (mos_vector_empty(vec)) return 0;
+
+  void **const last = (void **)vec->data;
+  void **it = (void **)mos_vector_back(vec);
+
+  while (1) {
+    if (first == *it) return (it + 1); /* return second element of pair */
+    if (it == last) break;             /* examined last pair */
+    it -= 2;                           /* a pair is two pointers */
+  }
+  return 0;
+}
