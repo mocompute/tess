@@ -1,7 +1,5 @@
 #include "vector.h"
 
-/* #include "alloc.h" */
-
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -74,12 +72,12 @@ int test_assoc(void) {
   error += 99 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
 
-  /* note that this erase only removes the first match */
+  // note that this erase only removes the first match
   mos_vector_assoc_erase(vec, 1);
   error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
 
-  /* the second erase will remove the original value we set */
+  // the second erase will remove the original value we set
   mos_vector_assoc_erase(vec, 1);
   error += 0 == mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
@@ -99,7 +97,7 @@ int test_assoc_set(void) {
 
   mos_vector_t *vec = mos_vector_alloc(alloc);
 
-  /* no payload, just the key */
+  // no payload, just the key
   mos_vector_init(vec, sizeof(size_t));
 
   size_t key = 1;

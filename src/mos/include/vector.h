@@ -29,7 +29,10 @@ void *mos_vector_back(mos_vector_t *vec);
 // Reduces vector size by one. Undefined if vector is empty.
 void mos_vector_pop_back(mos_vector_t *);
 
-void *mos_vector_data(mos_vector_t *);
+// Erase element.
+void mos_vector_erase(mos_vector_t *, char *);
+
+char *mos_vector_data(mos_vector_t *);
 size_t mos_vector_size(mos_vector_t const *);
 size_t mos_vector_capacity(mos_vector_t const *);
 
@@ -46,7 +49,7 @@ size_t mos_vector_capacity(mos_vector_t const *);
 //
 
 void mos_vector_assoc(mos_allocator_t *, mos_vector_t *, void const *);
-void *mos_vector_assoc_get(mos_vector_t *, size_t);
+char *mos_vector_assoc_get(mos_vector_t *, size_t);
 void mos_vector_assoc_erase(mos_vector_t *, size_t);
 
 #endif

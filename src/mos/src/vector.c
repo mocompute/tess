@@ -67,7 +67,15 @@ void *mos_vector_back(mos_vector_t *vec) {
 
 void mos_vector_pop_back(mos_vector_t *vec) { --vec->size; }
 
-void *mos_vector_data(mos_vector_t *vec) { return vec->data; }
+void mos_vector_erase(mos_vector_t *vec, char *it) {
+  char const *const end = vec->data + vec->size * vec->element_size;
+  ptrdiff_t len = end - it - (ptrdiff_t)vec->element_size;
+
+  memmove(it, it + vec->element_size, (size_t)len);
+  --vec->size;
+}
+
+char *mos_vector_data(mos_vector_t *vec) { return vec->data; }
 size_t mos_vector_size(mos_vector_t const *vec) { return vec->size; }
 size_t mos_vector_capacity(mos_vector_t const *vec) { return vec->capacity; }
 
@@ -76,11 +84,11 @@ void mos_vector_assoc(mos_allocator_t *alloc, mos_vector_t *vec, void const *pai
   mos_vector_push_back(alloc, vec, pair);
 }
 
-void *mos_vector_assoc_get(mos_vector_t *vec, size_t key) {
+char *mos_vector_assoc_get(mos_vector_t *vec, size_t key) {
   if (mos_vector_empty(vec)) return 0;
 
-  /* From the back, search for an element whose first size_t field
-     matches the search term. */
+  // From the back, search for an element whose first size_t field
+  // matches the search term.
 
   char const *const last = vec->data;
   char *it = mos_vector_back(vec);
@@ -88,9 +96,9 @@ void *mos_vector_assoc_get(mos_vector_t *vec, size_t key) {
 
   while (1) {
     if (key == *(size_t *)it)
-      return (it + sizeof(size_t)); /* return second element of pair */
+      return (it + sizeof(size_t)); // return second element of pair
 
-    if (it == last) break; /* examined last pair */
+    if (it == last) break; // examined last pair
     it -= element_size;
   }
   return 0;
@@ -101,12 +109,8 @@ void mos_vector_assoc_erase(mos_vector_t *vec, size_t key) {
   char *it = mos_vector_assoc_get(vec, key);
   if (!it) return;
 
-  /* it points just past the key, so reverse it */
+  // it points just past the key, so reverse it
   it -= sizeof(size_t);
 
-  char const *const end = vec->data + vec->size * vec->element_size;
-  ptrdiff_t len = end - it - (ptrdiff_t)vec->element_size;
-
-  memmove(it, it + vec->element_size, (size_t)len);
-  --vec->size;
+  mos_vector_erase(vec, it);
 }
