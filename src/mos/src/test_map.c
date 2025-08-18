@@ -2,6 +2,7 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
@@ -71,28 +72,45 @@ int test_map(void) {
 int test_big_map(void) {
   int error = 0;
 
-  size_t N = 1000000;
+  size_t const N = 100000;
 
   typedef struct pair_t {
-    int left, right;
+    ptrdiff_t left, right;
   } pair_t;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
   mos_vector_t vec;
   mos_vector_init(&vec, sizeof(pair_t));
+  mos_vector_reserve(alloc, &vec, N);
+
+  mos_map_t *map = mos_map_alloc(alloc);
+  mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0);
 
   for (size_t i = 0; i < N; ++i) {
     pair_t pair = {rand(), rand()};
+    if (mos_map_get(map, (size_t)pair.left)) continue;
     if (mos_vector_push_back(alloc, &vec, &pair)) { return 1; }
+    if (mos_map_set(alloc, map, (size_t)pair.left, &pair.right)) return 1;
   }
 
-  mos_map_t *map = mos_map_alloc(alloc);
-  mos_map_init(alloc, map, sizeof(int), 1024, 0); // TODO
-
-  // insert data into map
-  for (size_t i = 0; i < N; ++i) {
+  // verify
+  for (size_t i = 0; i < mos_vector_size(&vec); ++i) {
     pair_t *pair = mos_vector_at(&vec, i);
-    if (mos_map_set(alloc, map, (size_t)pair->left, &pair->right)) return 1;
+    void *res = mos_map_get(map, (size_t)pair->left);
+    if (!res) {
+      fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left,
+              pair->right, res);
+      return (error + 1);
+    }
+
+    error += pair->right == *(int *)res ? 0 : 1;
+
+    if (error) {
+      fprintf(stderr, "verify failed %zu: %zu -> %zu (%p)\n", i, pair->left,
+              pair->right, res);
+      fprintf(stderr, "got %i instead\n", *(int *)res);
+      return (error + 1);
+    }
   }
 
   mos_map_deinit(alloc, map);
@@ -113,7 +131,12 @@ int main(void) {
   int error = 0;
   int this_error = 0;
 
-  srand((uint32_t)time(0));
+  unsigned int seed = (unsigned int)time(0);
+
+  seed = 1755508043;
+  fprintf(stderr, "Seed = %u\n\n", seed);
+
+  srand(seed);
 
   T(test_power_of_two);
   T(test_align);

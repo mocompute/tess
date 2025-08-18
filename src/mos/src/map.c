@@ -3,16 +3,16 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
 
 #define DEFAULT_LOAD_FACTOR 0.80f
 #define MAX_PROBE_LEN (1 << 6) - 1
 
 typedef struct status_t {
-  uint occupied : 1;
-  uint tombstone : 1;
-  uint probe_distance : 6;
+  unsigned char occupied : 1;
+  unsigned char tombstone : 1;
+  unsigned char probe_distance : 6;
 } status_t;
 
 // The header of each entry
@@ -26,7 +26,8 @@ struct mos_map_t {
   char *data;
   status_t *status;
 
-  // buffers size of element_size, used during robin hood swapping
+  // buffers size of aligned_element_size + sizeof(header_t), used during robin hood
+  // swapping
   char *to_store;
   char *tmp;
 
@@ -41,6 +42,18 @@ static float load_factor(mos_map_t *map) {
 
 static size_t bucket_size(mos_map_t const *map) {
   return map->aligned_element_size + sizeof(header_t);
+}
+
+static uint32_t key_to_bucket(mos_map_t const *map, size_t key) {
+  return key % map->buckets;
+}
+
+static uint32_t incr_index(mos_map_t const *map, uint32_t index) {
+  return (index + 1) % map->buckets;
+}
+
+static char *cell_at(mos_map_t *map, uint32_t index) {
+  return map->data + index * bucket_size(map);
 }
 
 size_t mos_align_to_word_size(size_t n) {
@@ -74,6 +87,8 @@ void mos_map_dealloc(mos_allocator_t *alloc, mos_map_t *p) { alloc->free(p); }
 int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size,
                  uint32_t buckets, float max_load_factor) {
 
+  assert(sizeof(size_t) == sizeof(header_t));
+  assert(sizeof(status_t) == 1);
   assert(element_size <= PTRDIFF_MAX);
 
   buckets = mos_map_next_power_of_two(buckets);
@@ -85,9 +100,9 @@ int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size,
   map->buckets = buckets;
   map->max_load_factor = max_load_factor;
   map->data = alloc->malloc(buckets * bucket_size(map));
-  map->status = alloc->calloc(buckets, sizeof *map->status);
-  map->to_store = alloc->malloc(element_size);
-  map->tmp = alloc->malloc(element_size);
+  map->status = alloc->calloc(buckets, sizeof(status_t));
+  map->to_store = alloc->malloc(map->aligned_element_size + sizeof(header_t));
+  map->tmp = alloc->malloc(map->aligned_element_size + sizeof(header_t));
   if (!map->data || !map->status || !map->to_store || !map->tmp) return 1;
 
   return 0;
@@ -100,52 +115,102 @@ void mos_map_deinit(mos_allocator_t *alloc, mos_map_t *map) {
   alloc->free(map->data);
 }
 
-int set_one(mos_map_t *map, size_t key, char const *element) {
+// Returns: if key exists, pointer to header. Sets out_index to found
+// bucket index.
+static char *map_find(mos_map_t *map, size_t key, uint32_t *out_index) {
+  uint32_t index = key_to_bucket(map, key);
 
-  memcpy(map->to_store, element, map->element_size);
+  uint32_t probe_distance = 0;
 
-  uint32_t index = key % map->buckets;
-  uint probe_distance = 0;
+  while (1) {
+    if (probe_distance++ > MAX_PROBE_LEN) return 0;
+
+    status_t status = map->status[index];
+
+    if (status.tombstone) {
+      // keep looking
+      index = incr_index(map, index);
+    } else if (status.occupied) {
+      char *const cell = cell_at(map, index);
+      size_t found_key = *(size_t *)cell;
+
+      if (found_key != key) {
+        // keep looking
+        index = incr_index(map, index);
+      } else {
+        // found
+        if (out_index) *out_index = (uint32_t)index;
+        return cell;
+      }
+    } else {
+      // target bucket is empty and not a tombstone
+      return 0;
+    }
+  }
+}
+
+static int set_one(mos_map_t *map, size_t const key, char const *element) {
+
+  size_t const cell_size = sizeof(header_t) + map->element_size;
+  assert(bucket_size(map) >= cell_size);
+
+  // write header and data to to_store
+  memcpy(map->to_store, &key, sizeof key);
+  memcpy(map->to_store + sizeof key, element, map->element_size);
+
+  uint32_t index = key_to_bucket(map, key);
+  unsigned char probe_distance = 0;
 
   while (1) {
     if (probe_distance > MAX_PROBE_LEN) return 1; // overflow
+
+    if (probe_distance > 20) {
+      fprintf(stderr, "warning: high probe distance for key: %zu, load factor: %f\n",
+              *(size_t *)map->to_store, load_factor(map));
+    }
 
     if (map->status[index].occupied) {
       if (probe_distance <= map->status[index].probe_distance) {
         // continue probing
         ++probe_distance;
-        index = (index + 1) % map->buckets;
+        index = incr_index(map, index);
       } else {
         // swap
-        char *const p = map->data + index * bucket_size(map);
+        char *const cell = cell_at(map, index);
 
-        memcpy(map->tmp, p, map->element_size);
-        memcpy(p, map->to_store, map->element_size);
-        memcpy(map->to_store, map->tmp, map->element_size);
+        // copy evicted cell (header + data) to tmp
+        memcpy(map->tmp, cell, cell_size);
+        // write header (from to_store) in place of evicted cell
+        memcpy(cell, map->to_store, cell_size);
+        // write evicted cell (header + data) into to_store
+        memcpy(map->to_store, map->tmp, cell_size);
 
-        uint evicted_probe_distance = map->status[index].probe_distance;
+        // uint evicted_probe_distance = map->status[index].probe_distance;
         map->status[index].probe_distance = probe_distance;
 
-        // continue probing with swapped element
-        probe_distance = evicted_probe_distance + 1;
-        index = (index + 1) % map->buckets;
+        // restart probing with swapped element, using evicted key
+        probe_distance = 0;
+        index = key_to_bucket(map, *(size_t *)map->to_store);
       }
     } else {
       // found an empty slot
       map->status[index].occupied = 1;
+      map->status[index].tombstone = 0;
       map->status[index].probe_distance = probe_distance;
       map->occupied++;
 
-      char *const p = map->data + index * bucket_size(map);
+      char *const cell = cell_at(map, index);
 
-      // write header
-      memcpy(p, &key, sizeof key);
-      // write element
-      memcpy(p + sizeof key, map->to_store, map->element_size);
-      break;
+      // write cell (header + data) to bucket
+      memcpy(cell, map->to_store, cell_size);
+      return 0;
     }
   }
   return 0;
+}
+
+static int set_one_cell(mos_map_t *map, char *cell) {
+  return set_one(map, *(size_t *)cell, cell + sizeof(size_t));
 }
 
 static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
@@ -153,7 +218,8 @@ static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
   // the new map. Then release the old map's buffers, and overwrite
   // its struct with the new map.
 
-  size_t new_buckets = (size_t)map->buckets * 2;
+  size_t new_buckets = (size_t)map->buckets * 2U;
+
   if (new_buckets > UINT32_MAX) return 1;
 
   mos_map_t new_map;
@@ -161,13 +227,15 @@ static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
                    map->max_load_factor))
     return 1;
 
-  for (size_t i = 0; i < map->buckets; ++i) {
+  for (uint32_t i = 0; i < map->buckets; ++i) {
     if (map->status[i].occupied) {
-      char *el = map->data + i * bucket_size(map);
-      set_one(&new_map, *(size_t *)el, el + sizeof(size_t));
+      char *cell = cell_at(map, i);
+
+      if (set_one_cell(&new_map, cell)) return 1;
     }
   }
 
+  // free old map buffers and overwrite pointers with new map's pointers
   mos_map_deinit(alloc, map);
   memcpy(map, &new_map, sizeof *map);
 
@@ -183,41 +251,10 @@ int mos_map_set(mos_allocator_t *alloc, mos_map_t *map, size_t key, void *data) 
   return set_one(map, key, data);
 }
 
-char *map_find(mos_map_t *map, size_t key, uint32_t *out_index) {
-  size_t index = key & map->buckets;
-
-  while (1) {
-    if (index > UINT32_MAX) return 0; // overflow
-    status_t status = map->status[index];
-
-    if (status.tombstone) {
-      // keep looking
-      ++index;
-      continue;
-    } else if (status.occupied) {
-      char *const p = map->data + index * bucket_size(map);
-      size_t found_key = *(size_t *)p;
-
-      if (found_key != key) {
-        // keep looking
-        ++index;
-        continue;
-      } else {
-        // found
-        if (out_index) *out_index = (uint32_t)index;
-        return p;
-      }
-    } else {
-      // empty
-      return 0;
-    }
-  }
-}
-
 void *mos_map_get(mos_map_t *map, size_t key) {
-  char *p = map_find(map, key, 0);
-  if (!p) return 0;
-  return p + sizeof(header_t);
+  char *cell = map_find(map, key, 0);
+  if (!cell) return 0;
+  return cell + sizeof(header_t);
 }
 
 void mos_map_erase(mos_map_t *map, size_t key) {
