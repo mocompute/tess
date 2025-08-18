@@ -248,6 +248,13 @@ static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
 
 int mos_map_set(mos_allocator_t *alloc, mos_map_t *map, size_t key, void *data) {
 
+  // Must check for existing key. Replace if present.
+  void *existing = mos_map_get(map, key);
+  if (existing) {
+    memcpy(existing, data, map->element_size);
+    return 0;
+  }
+
   if (load_factor(map) >= map->max_load_factor) {
     if (grow_buckets(alloc, map)) return 1;
   }

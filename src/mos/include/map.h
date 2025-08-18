@@ -5,7 +5,9 @@
 
 #include <stdint.h>
 
-// A hash map with size_t keys and aribitrary-sized values.
+// A hash map with size_t keys and aribitrary-sized values. Note that
+// keys are size_t because they should be a good hash selected by the
+// client.
 
 typedef struct mos_map_t mos_map_t;
 
@@ -19,6 +21,8 @@ int mos_map_init(mos_allocator_t *, mos_map_t *, size_t element_size, uint32_t b
 
 void mos_map_deinit(mos_allocator_t *, mos_map_t *);
 
+// Set map key to data, replacing if key already exists. Returns 1 on
+// allocation error.
 int mos_map_set(mos_allocator_t *, mos_map_t *, size_t key, void *data);
 void *mos_map_get(mos_map_t *, size_t);
 void mos_map_erase(mos_map_t *, size_t);
