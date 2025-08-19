@@ -15,10 +15,10 @@ typedef struct status_t {
   uint8_t probe_distance : 6;
 } status_t;
 
+static_assert(sizeof(status_t) == 1, "");
+static_assert(sizeof(mos_map_header_t) == sizeof(size_t), "");
+
 // The header of each entry
-typedef struct header_t {
-  size_t key;
-} header_t;
 
 struct mos_map_t {
   size_t    element_size;
@@ -39,7 +39,7 @@ struct mos_map_t {
 // -- statics --
 
 static size_t bucket_size(mos_map_t const *map) {
-  return map->aligned_element_size + sizeof(header_t);
+  return map->aligned_element_size + sizeof(mos_map_header_t);
 }
 
 static uint32_t key_to_bucket(mos_map_t const *map, size_t key) {
@@ -86,7 +86,7 @@ static char *map_find(mos_map_t *map, size_t key, uint32_t *out_index) {
 
 static int set_one(mos_map_t *map, size_t const key, char const *element) {
 
-  size_t const cell_size = sizeof(header_t) + map->element_size;
+  size_t const cell_size = sizeof(mos_map_header_t) + map->element_size;
   assert(bucket_size(map) >= cell_size);
 
   // write header and data to to_store
@@ -235,8 +235,6 @@ void mos_map_dealloc(mos_allocator_t *alloc, mos_map_t *p) {
 int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, uint32_t buckets,
                  float max_load_factor) {
 
-  assert(sizeof(size_t) == sizeof(header_t));
-  assert(sizeof(status_t) == 1);
   assert(element_size <= PTRDIFF_MAX);
 
   buckets = mos_map_next_power_of_two(buckets);
@@ -249,8 +247,8 @@ int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, ui
   map->max_load_factor      = max_load_factor;
   map->data                 = alloc->malloc(buckets * bucket_size(map));
   map->status               = alloc->calloc(buckets, sizeof(status_t));
-  map->to_store             = alloc->malloc(map->aligned_element_size + sizeof(header_t));
-  map->tmp                  = alloc->malloc(map->aligned_element_size + sizeof(header_t));
+  map->to_store             = alloc->malloc(map->aligned_element_size + sizeof(mos_map_header_t));
+  map->tmp                  = alloc->malloc(map->aligned_element_size + sizeof(mos_map_header_t));
   if (!map->data || !map->status || !map->to_store || !map->tmp) return 1;
 
   return 0;
@@ -282,7 +280,7 @@ int mos_map_set(mos_allocator_t *alloc, mos_map_t *map, size_t key, void *data) 
 void *mos_map_get(mos_map_t *map, size_t key) {
   char *cell = map_find(map, key, 0);
   if (!cell) return 0;
-  return cell + sizeof(header_t);
+  return cell + sizeof(mos_map_header_t);
 }
 
 void mos_map_erase(mos_map_t *map, size_t key) {
