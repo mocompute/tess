@@ -247,3 +247,4 @@ endif()
 # -- modules -----------------------------------------------------
 
 add_subdirectory(src/mos)
+add_subdirectory(src/tess)

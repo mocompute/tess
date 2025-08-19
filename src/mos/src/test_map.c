@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 int test_power_of_two(void) {
