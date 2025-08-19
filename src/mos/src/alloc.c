@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include <stdint.h>
 
 // use LSAN's allocators if present
 #if defined(__has_feature)
@@ -15,3 +16,13 @@ mos_allocator_t *mos_alloc_default_allocator() {
   static mos_allocator_t allocator = {&malloc, &calloc, &realloc, &free};
   return &allocator;
 }
+
+#ifndef NDEBUG
+void mos_alloc_invalidate(void *p, size_t len) {
+  while (len--) {
+    if ((intptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;
+    else *(unsigned char *)p = 0xad;
+    ++p;
+  }
+}
+#endif

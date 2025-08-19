@@ -10,7 +10,13 @@ typedef struct mos_allocator_t {
   void (*free)(void *);
 } mos_allocator_t;
 
-/// Return the default allocator: system's malloc/free
+// Return the default allocator: system's malloc/free
 mos_allocator_t *mos_alloc_default_allocator();
+
+#ifdef NDEBUG
+#define mos_alloc_invalidate(...) ((void)0)
+#else
+void mos_alloc_invalidate(void *, size_t);
+#endif
 
 #endif
