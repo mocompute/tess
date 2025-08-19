@@ -74,13 +74,13 @@ int test_tokenizer_basic(void) {
     // expect eof
     error += 1 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
-    error += eof == err.tag ? 0 : 1;
+    error += tess_err_eof == err.tag ? 0 : 1;
     tess_token_deinit(alloc, &tok);
 
     // still eof
     error += 1 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
-    error += eof == err.tag ? 0 : 1;
+    error += tess_err_eof == err.tag ? 0 : 1;
     tess_token_deinit(alloc, &tok);
 
     tess_tokenizer_deinit(alloc, t);

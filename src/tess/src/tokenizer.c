@@ -19,7 +19,7 @@ struct tess_tokenizer_t {
 
 // -- statics --
 
-static void tok_error(tess_tokenizer_error_t *err, tess_tokenizer_error_tag_t tag, size_t pos) {
+static void tok_error(tess_tokenizer_error_t *err, tess_error_tag_t tag, size_t pos) {
   err->tag = tag;
   err->pos = pos;
 }
@@ -284,7 +284,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case stop_newline_indent:
       if (self->pos - start_capture > 0xff) {
-        if (out_err) tok_error(out_err, indent_too_long, self->pos);
+        if (out_err) tok_error(out_err, tess_err_indent_too_long, self->pos);
         return 1;
       }
 
@@ -338,7 +338,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
           state = stop_number;
         } else {
           --self->pos;
-          if (out_err) tok_error(out_err, invalid_token, self->pos);
+          if (out_err) tok_error(out_err, tess_err_invalid_token, self->pos);
           return 1;
         }
       }
@@ -448,7 +448,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
       case '"':  state = stop_string; break;
       default:
         if (mos_vector_push_back(alloc, &self->buf, &c)) {
-          if (out_err) tok_error(out_err, out_of_memory, self->pos);
+          if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
 
@@ -482,7 +482,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
       }
       if (actual) {
         if (mos_vector_push_back(alloc, &self->buf, &actual)) {
-          if (out_err) tok_error(out_err, out_of_memory, self->pos);
+          if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
 
@@ -491,7 +491,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
         char backslash = '\\';
         if (mos_vector_push_back(alloc, &self->buf, &backslash) ||
             mos_vector_push_back(alloc, &self->buf, &c)) {
-          if (out_err) tok_error(out_err, out_of_memory, self->pos);
+          if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
       }
@@ -512,7 +512,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 finish:
 
   if (start == state) {
-    if (out_err) tok_error(out_err, eof, self->pos);
+    if (out_err) tok_error(out_err, tess_err_eof, self->pos);
     return 1;
   }
 
@@ -525,13 +525,4 @@ finish:
   }
 
   return 0;
-}
-
-// -- utilities --
-
-char const *tess_tokenizer_error_tag_to_string(tess_tokenizer_error_tag_t tag) {
-#define STRING_ITEM(name, str) [name]                    = str,
-  static char const *const tokenizer_error_tag_strings[] = {TOKENIZER_ERROR_TAG_LIST(STRING_ITEM)};
-#undef STRING_ITEM
-  return tokenizer_error_tag_strings[tag];
 }
