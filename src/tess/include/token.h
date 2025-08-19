@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-#define TOKEN_TAG_LIST(X)                                                                                  \
+#define TESS_TOKEN_TAGS(X)                                                                                 \
   X(tess_tok_one_newline, "one_newline")                                                                   \
   X(tess_tok_two_newline, "two_newline")                                                                   \
   X(tess_tok_comma, "comma")                                                                               \
@@ -22,7 +22,7 @@
   X(tess_tok_comment, "comment")
 
 #define ENUM_ITEM(name, str) name,
-typedef enum tess_token_tag_t { TOKEN_TAG_LIST(ENUM_ITEM) } tess_token_tag_t;
+typedef enum tess_token_tag_t { TESS_TOKEN_TAGS(ENUM_ITEM) } tess_token_tag_t;
 #undef ENUM_ITEM
 
 typedef struct tess_token_t {
