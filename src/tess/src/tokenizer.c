@@ -10,12 +10,12 @@
 #include <string.h>
 
 struct tess_tokenizer {
-  char const  *input;
-  size_t       input_len;
-  size_t       pos;
+  char const       *input;
+  size_t            input_len;
+  size_t            pos;
 
-  mos_vector_t buf;
-  mos_vector_t backtrack;
+  struct mos_vector buf;
+  struct mos_vector backtrack;
 };
 
 // -- statics --
@@ -50,6 +50,16 @@ void tess_tokenizer_deinit(mos_allocator_t *alloc, tess_tokenizer_t *tok) {
   mos_vector_deinit(alloc, &tok->backtrack);
   mos_vector_deinit(alloc, &tok->buf);
   mos_alloc_invalidate(tok, sizeof *tok);
+}
+
+void tess_tokenizer_error_init(tess_tokenizer_error_t *err) {
+  // future
+  (void)err;
+}
+
+void tess_tokenizer_error_deinit(tess_tokenizer_error_t *err) {
+  // future
+  (void)err;
 }
 
 // -- parsing --

@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include "parser.h"
 #include "tokenizer.h"
 
 #include <assert.h>
@@ -148,6 +149,22 @@ int test_tokenizer_terminal_static_string(void) {
   return error;
 }
 
+int test_parser_init(void) {
+  int              error = 0;
+
+  char const      *input = "()";
+
+  mos_allocator_t *alloc = mos_alloc_default_allocator();
+
+  tess_parser_t   *p     = tess_parser_alloc(alloc);
+  tess_parser_init(alloc, p, input, strlen(input));
+
+  tess_parser_deinit(alloc, p);
+  tess_parser_dealloc(alloc, p);
+
+  return error;
+}
+
 #define T(name)                                                                                            \
   this_error = name();                                                                                     \
   if (this_error) {                                                                                        \
@@ -168,6 +185,7 @@ int main(void) {
   T(test_tokenizer_basic);
   T(test_tokenizer_string);
   T(test_tokenizer_terminal_static_string);
+  T(test_parser_init);
 
   return error;
 }

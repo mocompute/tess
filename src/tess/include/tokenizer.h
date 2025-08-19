@@ -23,6 +23,9 @@ void              tess_tokenizer_dealloc(mos_allocator_t *, tess_tokenizer_t *);
 void              tess_tokenizer_init(mos_allocator_t *, tess_tokenizer_t *, char const *, size_t);
 void              tess_tokenizer_deinit(mos_allocator_t *, tess_tokenizer_t *);
 
+void              tess_tokenizer_error_init(tess_tokenizer_error_t *);
+void              tess_tokenizer_error_deinit(tess_tokenizer_error_t *);
+
 // -- parsing --
 //
 // next() may allocate memory for string tokens. Caller must token_deinit the [out] token.

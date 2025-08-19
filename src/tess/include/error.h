@@ -2,6 +2,7 @@
 #define TESS_ERROR_H
 
 #define TESS_ERROR_TAG_LIST(X)                                                                             \
+  X(tess_err_ok, "ok")                                                                                     \
   /* tokenizer */                                                                                          \
   X(tess_err_eof, "eof")                                                                                   \
   X(tess_err_out_of_memory, "out_of_memory")                                                               \
