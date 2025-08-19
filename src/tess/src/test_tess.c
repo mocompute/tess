@@ -1,11 +1,48 @@
+#include "alloc.h"
+#include "tokenizer.h"
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
-int test_tess(void) {
-  int error = 0;
+int test_tess_token_string(void) {
+  int              error = 0;
+
+  mos_allocator_t *alloc = mos_alloc_default_allocator();
+
+  error += strcmp("comma", tess_token_tag_to_string(comma)) == 0 ? 0 : 1;
+
+  tess_token_t tok;
+
+  {
+    tess_token_init(&tok, equal_sign);
+    char *s = tess_token_to_string(alloc, &tok);
+    error += 0 == strcmp("(equal_sign)", s) ? 0 : 1;
+    alloc->free(s);
+  }
+
+  {
+    tess_token_init_v(&tok, newline_indent, 4);
+    char *s = tess_token_to_string(alloc, &tok);
+    error += 0 == strcmp("(newline_indent 4)", s) ? 0 : 1;
+    alloc->free(s);
+  }
+
+  {
+    error += 0 == tess_token_init_s(alloc, &tok, number, "123") ? 0 : 1;
+    if (error) return error;
+
+    char *s = tess_token_to_string(alloc, &tok);
+
+    error += 0 == strcmp("(number \"123\")", s) ? 0 : 1;
+    alloc->free(s);
+
+    tess_token_deinit(alloc, &tok);
+  }
+
   return error;
 }
 
@@ -25,7 +62,7 @@ int main(void) {
   fprintf(stderr, "Seed = %u\n\n", seed);
   srand(seed);
 
-  T(test_tess);
+  T(test_tess_token_string);
 
   return error;
 }

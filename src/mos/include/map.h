@@ -22,7 +22,7 @@ typedef struct mos_map_header_t {
   size_t key;
 } mos_map_header_t;
 
-// -- allocation and deallocation
+// -- allocation and deallocation --
 
 mos_map_t *mos_map_alloc(mos_allocator_t *);
 void       mos_map_dealloc(mos_allocator_t *, mos_map_t *);
