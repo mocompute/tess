@@ -26,7 +26,7 @@ static void tok_error(tess_tokenizer_error_t *err, tess_tokenizer_error_tag_t ta
 
 //
 
-void *tess_tokenizer_alloc(mos_allocator_t *alloc) {
+tess_tokenizer_t *tess_tokenizer_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(tess_tokenizer_t));
 }
 
