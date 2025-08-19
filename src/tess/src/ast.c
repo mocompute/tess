@@ -47,7 +47,7 @@ tess_type_pool_t *tess_type_pool_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(tess_type_pool_t));
 }
 
-void tess_type_pool_dealoc(mos_allocator_t *alloc, tess_type_pool_t *pool) {
+void tess_type_pool_dealloc(mos_allocator_t *alloc, tess_type_pool_t *pool) {
   alloc->free(pool);
 }
 
@@ -72,4 +72,24 @@ int tess_type_pool_move_back(mos_allocator_t *alloc, tess_type_pool_t *pool, tes
   mos_alloc_invalidate(ty, sizeof *ty);
 
   return 0;
+}
+
+// -- utilities --
+
+char const *tess_type_tag_to_string(tess_type_tag_t tag) {
+
+#define STRING_ITEM(name, str) [name] = str,
+  static char const *const strings[]  = {TESS_TYPE_TAGS(STRING_ITEM)};
+#undef STRING_ITEM
+
+  return strings[tag];
+}
+
+char const *tess_ast_tag_to_string(tess_ast_tag_t tag) {
+
+#define STRING_ITEM(name, str) [name] = str,
+  static char const *const strings[]  = {TESS_AST_TAGS(STRING_ITEM)};
+#undef STRING_ITEM
+
+  return strings[tag];
 }

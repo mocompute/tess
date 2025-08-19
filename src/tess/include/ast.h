@@ -20,6 +20,30 @@
 typedef enum tess_type_tag { TESS_TYPE_TAGS(TESS_ENUM) } tess_type_tag_t;
 #undef TESS_ENUM
 
+#define TESS_AST_TAGS(X)                                                                                   \
+  X(tess_ast_eof, "eof")                                                                                   \
+  X(tess_ast_nil, "nil")                                                                                   \
+  X(tess_ast_bool, "bool")                                                                                 \
+  X(tess_ast_symbol, "symbol")                                                                             \
+  X(tess_ast_i64, "i64")                                                                                   \
+  X(tess_ast_u64, "u64")                                                                                   \
+  X(tess_ast_f64, "f64")                                                                                   \
+  X(tess_ast_string, "string")                                                                             \
+  X(tess_ast_infix, "infix")                                                                               \
+  X(tess_ast_tuple, "tuple")                                                                               \
+  X(tess_ast_let_in, "let_in")                                                                             \
+  X(tess_ast_let, "let")                                                                                   \
+  X(tess_ast_if_then_else, "if_then_else")                                                                 \
+  X(tess_ast_lambda_function, "lambda_function")                                                           \
+  X(tess_ast_function_declaration, "function_declaration")                                                 \
+  X(tess_ast_lambda_declaration, "lambda_declaration")                                                     \
+  X(tess_ast_lambda_function_application, "lambda_function_application")                                   \
+  X(tess_ast_named_function_application, "named_function_application")
+
+#define TESS_ENUM(name, str) name,
+typedef enum tess_ast_tag { TESS_AST_TAGS(TESS_ENUM) } tess_ast_tag_t;
+#undef TESS_ENUM
+
 struct arrow_type {
   size_t left;
   size_t right;
@@ -27,7 +51,7 @@ struct arrow_type {
 
 typedef struct tess_type {
   union {
-    mos_vector_t      tuple;
+    struct mos_vector tuple;
     struct arrow_type arrow;
     uint32_t          val;
   };
@@ -35,7 +59,7 @@ typedef struct tess_type {
 } tess_type_t;
 
 typedef struct tess_type_pool {
-  mos_vector_t data; // tess_type_t
+  struct mos_vector data; // tess_type_t
 } tess_type_pool_t;
 
 // -- allocation and deallocation --
@@ -51,12 +75,19 @@ void tess_type_deinit(mos_allocator_t *, tess_type_t *);
 // tess_type_pool_t
 
 tess_type_pool_t *tess_type_pool_alloc(mos_allocator_t *);
-void              tess_type_pool_dealoc(mos_allocator_t *, tess_type_pool_t *);
+void              tess_type_pool_dealloc(mos_allocator_t *, tess_type_pool_t *);
 void              tess_type_pool_init(mos_allocator_t *, tess_type_pool_t *);
 void              tess_type_pool_deinit(mos_allocator_t *, tess_type_pool_t *);
 
 // -- pool operations --
+//
+// move_back() takes ownership of type and invalidates caller's copy
 
 int tess_type_pool_move_back(mos_allocator_t *, tess_type_pool_t *, tess_type_t *, size_t *);
+
+// -- utilities --
+
+char const *tess_type_tag_to_string(tess_type_tag_t);
+char const *tess_ast_tag_to_string(tess_ast_tag_t);
 
 #endif

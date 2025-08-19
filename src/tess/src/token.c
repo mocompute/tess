@@ -62,10 +62,10 @@ void tess_token_deinit(mos_allocator_t *alloc, tess_token_t *tok) {
 }
 
 char const *tess_token_tag_to_string(tess_token_tag_t tag) {
-#define STRING_ITEM(name, str) [name]          = str,
-  static char const *const token_tag_strings[] = {TESS_TOKEN_TAGS(STRING_ITEM)};
+#define STRING_ITEM(name, str) [name] = str,
+  static char const *const strings[]  = {TESS_TOKEN_TAGS(STRING_ITEM)};
 #undef STRING_ITEM
-  return token_tag_strings[tag];
+  return strings[tag];
 }
 
 char *tess_token_to_string(mos_allocator_t *alloc, tess_token_t const *tok) {
