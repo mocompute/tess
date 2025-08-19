@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 
-typedef struct mos_vector_t {
+typedef struct mos_vector {
   size_t element_size;
   size_t capacity;
   size_t size;

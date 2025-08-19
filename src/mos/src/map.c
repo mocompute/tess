@@ -18,9 +18,7 @@ typedef struct status_t {
 static_assert(sizeof(status_t) == 1, "");
 static_assert(sizeof(mos_map_header_t) == sizeof(size_t), "");
 
-// The header of each entry
-
-struct mos_map_t {
+struct mos_map {
   size_t    element_size;
   size_t    aligned_element_size;
   char     *data;
@@ -28,12 +26,12 @@ struct mos_map_t {
 
   // buffers size of aligned_element_size + sizeof(header_t), used during robin hood
   // swapping
-  char     *to_store;
-  char     *tmp;
+  char    *to_store;
+  char    *tmp;
 
-  float     max_load_factor;
-  uint32_t  buckets;
-  uint32_t  occupied;
+  float    max_load_factor;
+  uint32_t buckets;
+  uint32_t occupied;
 };
 
 // -- statics --
