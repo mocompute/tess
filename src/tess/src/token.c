@@ -42,20 +42,20 @@ int tess_token_init_sn(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag
 
 void tess_token_deinit(mos_allocator_t *alloc, struct tess_token_t *tok) {
   switch (tok->tag) {
-  case one_newline:
-  case two_newline:
-  case comma:
-  case semicolon:
-  case arrow:
-  case open_round:
-  case close_round:
-  case equal_sign:
-  case invalid:
-  case newline_indent: break;
-  case number:
-  case symbol:
-  case string:
-  case comment:        alloc->free(tok->s); break;
+  case tess_tok_one_newline:
+  case tess_tok_two_newline:
+  case tess_tok_comma:
+  case tess_tok_semicolon:
+  case tess_tok_arrow:
+  case tess_tok_open_round:
+  case tess_tok_close_round:
+  case tess_tok_equal_sign:
+  case tess_tok_invalid:
+  case tess_tok_newline_indent: break;
+  case tess_tok_number:
+  case tess_tok_symbol:
+  case tess_tok_string:
+  case tess_tok_comment:        alloc->free(tok->s); break;
   }
 
   mos_alloc_invalidate(tok, sizeof *tok);
@@ -72,21 +72,23 @@ char *tess_token_to_string(mos_allocator_t *alloc, tess_token_t const *tok) {
   char buf[64];
 
   switch (tok->tag) {
-  case one_newline:
-  case two_newline:
-  case comma:
-  case semicolon:
-  case arrow:
-  case open_round:
-  case close_round:
-  case equal_sign:
-  case invalid:        sprintf(buf, "(%s)", tess_token_tag_to_string(tok->tag)); break;
-  case newline_indent: sprintf(buf, "(%s %d)", tess_token_tag_to_string(tok->tag), tok->val); break;
+  case tess_tok_one_newline:
+  case tess_tok_two_newline:
+  case tess_tok_comma:
+  case tess_tok_semicolon:
+  case tess_tok_arrow:
+  case tess_tok_open_round:
+  case tess_tok_close_round:
+  case tess_tok_equal_sign:
+  case tess_tok_invalid:     sprintf(buf, "(%s)", tess_token_tag_to_string(tok->tag)); break;
+  case tess_tok_newline_indent:
+    sprintf(buf, "(%s %d)", tess_token_tag_to_string(tok->tag), tok->val);
+    break;
 
-  case number:
-  case symbol:
-  case string:
-  case comment:        {
+  case tess_tok_number:
+  case tess_tok_symbol:
+  case tess_tok_string:
+  case tess_tok_comment: {
     char *big = alloc->malloc(strlen(tok->s) + 64);
     if (!big) return 0;
     sprintf(big, "(%s \"%s\")", tess_token_tag_to_string(tok->tag), tok->s);

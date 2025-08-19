@@ -140,22 +140,22 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
       case '/':  state = forward_slash; continue;
 
       case ';':
-        res.tag = semicolon;
+        res.tag = tess_tok_semicolon;
         state   = stop;
         break;
 
       case ',':
-        res.tag = comma;
+        res.tag = tess_tok_comma;
         state   = stop;
         break;
 
       case '(':
-        res.tag = open_round;
+        res.tag = tess_tok_open_round;
         state   = stop;
         break;
 
       case ')':
-        res.tag = close_round;
+        res.tag = tess_tok_close_round;
         state   = stop;
         break;
 
@@ -181,7 +181,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_minus: {
       if (self->pos == end) {
-        res.tag = symbol;
+        res.tag = tess_tok_symbol;
         res.s   = "-";
         state   = stop;
         goto finish;
@@ -189,7 +189,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
       char const c = self->input[self->pos++];
       switch (c) {
       case '>':
-        res.tag = arrow;
+        res.tag = tess_tok_arrow;
         state   = stop;
         break;
       default:
@@ -201,13 +201,13 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_equal: {
       if (self->pos == end) {
-        res.tag = equal_sign;
+        res.tag = tess_tok_equal_sign;
         state   = stop;
         goto finish;
       }
       char const c = self->input[self->pos++];
       if (' ' == c || '\n' == c) {
-        res.tag = equal_sign;
+        res.tag = tess_tok_equal_sign;
         state   = stop;
         goto finish;
       }
@@ -219,7 +219,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case forward_slash: {
       if (self->pos == end) {
-        res.tag = symbol;
+        res.tag = tess_tok_symbol;
         res.s   = "/";
         state   = stop;
         goto finish;
@@ -238,7 +238,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_newline: {
       if (self->pos == end) {
-        res.tag = one_newline;
+        res.tag = tess_tok_one_newline;
         state   = stop;
         goto finish;
       }
@@ -247,7 +247,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
       switch (c) {
       case '\n':
-        res.tag = two_newline;
+        res.tag = tess_tok_two_newline;
         state   = stop;
         break;
       case ' ':
@@ -256,7 +256,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
         continue; // TODO tab indent
 
       default:
-        res.tag = one_newline;
+        res.tag = tess_tok_one_newline;
         --self->pos;
         state = stop;
         break;
@@ -288,7 +288,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
         return 1;
       }
 
-      res.tag = newline_indent;
+      res.tag = tess_tok_newline_indent;
       res.val = (uint8_t)(self->pos - start_capture);
       state   = stop;
       break;
@@ -362,7 +362,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
     case stop_number: {
       assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, number, self->input + start_capture, self->pos - start_capture);
+      tess_token_init_sn(alloc, &res, tess_tok_number, self->input + start_capture,
+                         self->pos - start_capture);
       state = stop;
     } break;
 
@@ -403,7 +404,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
     case stop_symbol: {
       assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, symbol, self->input + start_capture, self->pos - start_capture);
+      tess_token_init_sn(alloc, &res, tess_tok_symbol, self->input + start_capture,
+                         self->pos - start_capture);
       state = stop;
 
     } break;
@@ -428,7 +430,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
     case stop_comment:
       assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, comment, self->input + start_capture, self->pos - start_capture);
+      tess_token_init_sn(alloc, &res, tess_tok_comment, self->input + start_capture,
+                         self->pos - start_capture);
       state = stop;
       break;
 
@@ -501,7 +504,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case stop_string: {
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, string, mos_vector_data(&self->buf), mos_vector_size(&self->buf));
+      tess_token_init_sn(alloc, &res, tess_tok_string, mos_vector_data(&self->buf),
+                         mos_vector_size(&self->buf));
       state = stop;
     } break;
 
