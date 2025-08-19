@@ -4,11 +4,11 @@
 #include <stdlib.h>
 
 int test_vector(void) {
-  int error = 0;
+  int              error = 0;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  mos_vector_t *vec = mos_vector_alloc(alloc);
+  mos_vector_t    *vec   = mos_vector_alloc(alloc);
   mos_vector_init(vec, sizeof(int));
   mos_vector_reserve(alloc, vec, 2);
 
@@ -46,29 +46,29 @@ int test_vector(void) {
 }
 
 int test_assoc(void) {
-  int error = 0;
+  int              error = 0;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  mos_vector_t *vec = mos_vector_alloc(alloc);
+  mos_vector_t    *vec   = mos_vector_alloc(alloc);
   mos_vector_init(vec, 2 * sizeof(size_t));
 
   size_t pair[2];
 
   pair[0] = 1;
   pair[1] = 2;
-  mos_vector_assoc(alloc, vec, pair);
+  mos_vector_assoc_set(alloc, vec, pair);
   error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
 
   pair[0] = 2;
   pair[1] = 3;
-  mos_vector_assoc(alloc, vec, pair);
+  mos_vector_assoc_set(alloc, vec, pair);
   error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
 
   pair[0] = 1;
   pair[1] = 99;
-  mos_vector_assoc(alloc, vec, pair);
+  mos_vector_assoc_set(alloc, vec, pair);
   error += 99 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
 
@@ -91,17 +91,17 @@ int test_assoc(void) {
 }
 
 int test_assoc_set(void) {
-  int error = 0;
+  int              error = 0;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  mos_vector_t *vec = mos_vector_alloc(alloc);
+  mos_vector_t    *vec   = mos_vector_alloc(alloc);
 
   // no payload, just the key
   mos_vector_init(vec, sizeof(size_t));
 
   size_t key = 1;
-  mos_vector_assoc(alloc, vec, &key);
+  mos_vector_assoc_set(alloc, vec, &key);
 
   error += 0 != mos_vector_assoc_get(vec, 1) ? 0 : 1;
   error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;

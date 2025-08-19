@@ -3,7 +3,6 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -38,11 +37,11 @@ int test_align(void) {
 }
 
 int test_map(void) {
-  int error = 0;
+  int              error = 0;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  mos_map_t *map = mos_map_alloc(alloc);
+  mos_map_t       *map   = mos_map_alloc(alloc);
 
   if (mos_map_init(alloc, map, sizeof(int), 8, 0)) return 1;
 
@@ -70,16 +69,16 @@ int test_map(void) {
 }
 
 int test_big_map(void) {
-  int error = 0;
+  int          error = 0;
 
-  size_t const N = 100000;
+  size_t const N     = 1000000;
 
   typedef struct pair_t {
     ptrdiff_t left, right;
   } pair_t;
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
-  mos_vector_t vec;
+  mos_vector_t     vec;
   mos_vector_init(&vec, sizeof(pair_t));
   mos_vector_reserve(alloc, &vec, N);
 
@@ -87,8 +86,11 @@ int test_big_map(void) {
   mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0);
 
   for (size_t i = 0; i < N; ++i) {
-    pair_t pair = {rand(), rand()};
-    if (mos_map_get(map, (size_t)pair.left)) continue;
+    // find unique key
+    int key = rand();
+    while (mos_map_get(map, (size_t)key)) key = rand();
+
+    pair_t pair = {key, rand()};
     if (mos_vector_push_back(alloc, &vec, &pair)) { return 1; }
     if (mos_map_set(alloc, map, (size_t)pair.left, &pair.right)) return 1;
   }
@@ -96,18 +98,16 @@ int test_big_map(void) {
   // verify
   for (size_t i = 0; i < mos_vector_size(&vec); ++i) {
     pair_t *pair = mos_vector_at(&vec, i);
-    void *res = mos_map_get(map, (size_t)pair->left);
+    void   *res  = mos_map_get(map, (size_t)pair->left);
     if (!res) {
-      fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left,
-              pair->right, res);
+      fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left, pair->right, res);
       return (error + 1);
     }
 
     error += pair->right == *(int *)res ? 0 : 1;
 
     if (error) {
-      fprintf(stderr, "verify failed %zu: %zu -> %zu (%p)\n", i, pair->left,
-              pair->right, res);
+      fprintf(stderr, "verify failed %zu: %zu -> %zu (%p)\n", i, pair->left, pair->right, res);
       fprintf(stderr, "got %i instead\n", *(int *)res);
       return (error + 1);
     }
@@ -120,20 +120,20 @@ int test_big_map(void) {
   return error;
 }
 
-#define T(name)                                                                        \
-  this_error = name();                                                                 \
-  if (this_error) {                                                                    \
-    fprintf(stderr, "FAILED: %s\n", #name);                                            \
-    error += this_error;                                                               \
+#define T(name)                                                                                            \
+  this_error = name();                                                                                     \
+  if (this_error) {                                                                                        \
+    fprintf(stderr, "FAILED: %s\n", #name);                                                                \
+    error += this_error;                                                                                   \
   }
 
 int main(void) {
-  int error = 0;
-  int this_error = 0;
+  int          error      = 0;
+  int          this_error = 0;
 
-  unsigned int seed = (unsigned int)time(0);
+  unsigned int seed       = (unsigned int)time(0);
 
-  seed = 1755508043;
+  // seed = 1755508043;
   fprintf(stderr, "Seed = %u\n\n", seed);
 
   srand(seed);

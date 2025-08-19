@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // A hash map with size_t keys and aribitrary-sized values. Note that
@@ -11,27 +12,36 @@
 
 typedef struct mos_map_t mos_map_t;
 
-mos_map_t *mos_map_alloc(mos_allocator_t *);
-void mos_map_dealloc(mos_allocator_t *, mos_map_t *);
+// -- allocation and deallocation
 
-// [max_load_factor]: between 0 and 100. If 0, map will use a default
-// value. Returns 1 on allocation error.
-int mos_map_init(mos_allocator_t *, mos_map_t *, size_t element_size, uint32_t buckets,
-                 float max_load_factor);
+mos_map_t               *mos_map_alloc(mos_allocator_t *);
+void                     mos_map_dealloc(mos_allocator_t *, mos_map_t *);
+int                      mos_map_init(mos_allocator_t *, mos_map_t *, size_t element_size, uint32_t buckets,
+                                      float max_load_factor);
+void                     mos_map_deinit(mos_allocator_t *, mos_map_t *);
 
-void mos_map_deinit(mos_allocator_t *, mos_map_t *);
+// -- read-only access --
 
-// Set map key to data, replacing if key already exists. Returns 1 on
-// allocation error.
-int mos_map_set(mos_allocator_t *, mos_map_t *, size_t key, void *data);
-void *mos_map_get(mos_map_t *, size_t);
-void mos_map_erase(mos_map_t *, size_t);
+size_t                   mos_map_size(mos_map_t const *);
+bool                     mos_map_empty(mos_map_t const *);
+float                    mos_map_load_factor(mos_map_t const *);
 
-// Returns: input if already a power of two, or else the next higher
-// power of two.
-uint32_t mos_map_next_power_of_two(uint32_t);
+// -- data and iterator access --
+//
+// Data cell includes a size_t header, which is the key used to store the item.
+//
 
-// Returns: argument aligned to next word size.
-size_t mos_align_to_word_size(size_t);
+char                    *mos_map_unchecked_at(mos_map_t *, uint32_t);
+
+// -- insertion and removal --
+
+int                      mos_map_set(mos_allocator_t *, mos_map_t *, size_t key, void *data);
+void                    *mos_map_get(mos_map_t *, size_t);
+void                     mos_map_erase(mos_map_t *, size_t);
+
+// -- utilities --
+
+uint32_t                 mos_map_next_power_of_two(uint32_t);
+size_t                   mos_align_to_word_size(size_t);
 
 #endif
