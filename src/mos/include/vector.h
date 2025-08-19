@@ -22,24 +22,25 @@ int           mos_vector_reserve(mos_allocator_t *, mos_vector_t *, size_t);
 
 // -- read-only access --
 
-size_t        mos_vector_size(mos_vector_t const *);
-size_t        mos_vector_capacity(mos_vector_t const *);
-bool          mos_vector_empty(mos_vector_t const *);
+size_t mos_vector_size(mos_vector_t const *);
+size_t mos_vector_capacity(mos_vector_t const *);
+bool   mos_vector_empty(mos_vector_t const *);
 
 // -- data and iterator access --
 
-char         *mos_vector_data(mos_vector_t *);
-char         *mos_vector_begin(mos_vector_t *);
-char         *mos_vector_end(mos_vector_t *);
-void         *mos_vector_at(mos_vector_t *, size_t);
-void         *mos_vector_back(mos_vector_t *);
+char *mos_vector_data(mos_vector_t *);
+char *mos_vector_begin(mos_vector_t *);
+char *mos_vector_end(mos_vector_t *);
+void *mos_vector_at(mos_vector_t *, size_t);
+void *mos_vector_back(mos_vector_t *);
 
 // -- insertion and removal --
 
-int           mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void const *element);
-int           mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void const *start, size_t count);
-void          mos_vector_pop_back(mos_vector_t *);
-void          mos_vector_erase(mos_vector_t *, char *);
+int  mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void const *element);
+int  mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void const *start, size_t count);
+void mos_vector_pop_back(mos_vector_t *);
+void mos_vector_erase(mos_vector_t *, char *);
+void mos_vector_clear(mos_vector_t *);
 
 // -- association lists --
 //
@@ -47,8 +48,8 @@ void          mos_vector_erase(mos_vector_t *, char *);
 // key. May contain duplicate values, but [get] and [erase] operate on
 // the first one found, searching from the back.
 
-void          mos_vector_assoc_set(mos_allocator_t *, mos_vector_t *, void const *);
-char         *mos_vector_assoc_get(mos_vector_t *, size_t);
-void          mos_vector_assoc_erase(mos_vector_t *, size_t);
+void  mos_vector_assoc_set(mos_allocator_t *, mos_vector_t *, void const *);
+char *mos_vector_assoc_get(mos_vector_t *, size_t);
+void  mos_vector_assoc_erase(mos_vector_t *, size_t);
 
 #endif

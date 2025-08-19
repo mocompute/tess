@@ -7,6 +7,7 @@
 
 #define TOKENIZER_ERROR_TAG_LIST(X)                                                                        \
   X(eof, "eof")                                                                                            \
+  X(out_of_memory, "out_of_memory")                                                                        \
   X(indent_too_long, "indent_too_long")                                                                    \
   X(invalid_token, "invalid_token")
 
@@ -22,6 +23,9 @@ typedef struct tess_tokenizer_error_t {
 typedef struct tess_tokenizer_t tess_tokenizer_t;
 
 // -- allocation and deallocation --
+//
+// Init with a buffer of input, which must outlive the tokenizer.
+//
 
 void *tess_tokenizer_alloc(mos_allocator_t *);
 void  tess_tokenizer_dealloc(mos_allocator_t *, tess_tokenizer_t *);
@@ -30,7 +34,7 @@ void  tess_tokenizer_deinit(mos_allocator_t *, tess_tokenizer_t *);
 
 // -- parsing --
 
-int tess_tokenizer_next();
+int tess_tokenizer_next(mos_allocator_t *, tess_tokenizer_t *, tess_token_t *out, tess_tokenizer_error_t *);
 
 // -- backtracking --
 

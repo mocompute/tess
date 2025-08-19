@@ -28,6 +28,18 @@ int tess_token_init_s(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_
   return 0;
 }
 
+int tess_token_init_sn(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_t tag, char const *s,
+                       size_t len) {
+
+  tok->tag = tag;
+  tok->s   = alloc->malloc(len + 1);
+  if (!tok->s) return 1;
+  memcpy(tok->s, s, len);
+  tok->s[len] = 0;
+
+  return 0;
+}
+
 void tess_token_deinit(mos_allocator_t *alloc, struct tess_token_t *tok) {
   switch (tok->tag) {
   case one_newline:

@@ -38,6 +38,7 @@ typedef struct tess_token_t {
 void tess_token_init(tess_token_t *, tess_token_tag_t);
 void tess_token_init_v(tess_token_t *, tess_token_tag_t, uint8_t);
 int  tess_token_init_s(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *);
+int  tess_token_init_sn(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *, size_t);
 void tess_token_deinit(mos_allocator_t *, tess_token_t *);
 
 // -- utilities --

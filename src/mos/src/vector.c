@@ -80,6 +80,10 @@ void mos_vector_erase(mos_vector_t *vec, char *it) {
   --vec->size;
 }
 
+void mos_vector_clear(mos_vector_t *vec) {
+  vec->size = 0;
+}
+
 char *mos_vector_data(mos_vector_t *vec) {
   return vec->data;
 }
