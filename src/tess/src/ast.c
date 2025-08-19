@@ -39,6 +39,7 @@ void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
   case tess_ty_string:   break;
   case tess_ty_tuple:    mos_vector_deinit(alloc, &ty->tuple); break;
   }
+  mos_alloc_invalidate(ty, sizeof *ty);
 }
 
 // -- tess_type_pool allocation and deallocation --
@@ -58,6 +59,7 @@ void tess_type_pool_init(mos_allocator_t *alloc, tess_type_pool_t *pool) {
 
 void tess_type_pool_deinit(mos_allocator_t *alloc, tess_type_pool_t *pool) {
   mos_vector_deinit(alloc, &pool->data);
+  mos_alloc_invalidate(pool, sizeof *pool);
 }
 
 // -- pool operations --

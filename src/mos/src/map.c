@@ -257,6 +257,7 @@ void mos_map_deinit(mos_allocator_t *alloc, mos_map_t *map) {
   alloc->free(map->tmp);
   alloc->free(map->status);
   alloc->free(map->data);
+  mos_alloc_invalidate(map, sizeof *map);
 }
 
 int mos_map_set(mos_allocator_t *alloc, mos_map_t *map, size_t key, void *data) {

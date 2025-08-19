@@ -49,6 +49,7 @@ void tess_tokenizer_init(mos_allocator_t *alloc, tess_tokenizer_t *tok, char con
 void tess_tokenizer_deinit(mos_allocator_t *alloc, tess_tokenizer_t *tok) {
   mos_vector_deinit(alloc, &tok->backtrack);
   mos_vector_deinit(alloc, &tok->buf);
+  mos_alloc_invalidate(tok, sizeof *tok);
 }
 
 // -- parsing --

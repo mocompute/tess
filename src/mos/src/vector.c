@@ -23,6 +23,7 @@ void mos_vector_init(mos_vector_t *vec, size_t element_size) {
 
 void mos_vector_deinit(mos_allocator_t *alloc, mos_vector_t *vec) {
   alloc->free(vec->data);
+  mos_alloc_invalidate(vec, sizeof *vec);
 }
 
 int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) {
