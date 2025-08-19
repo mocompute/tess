@@ -63,21 +63,25 @@ int test_tokenizer_basic(void) {
     error += 0 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
     error += open_round == tok.tag ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
 
     // expect close round
     error += 0 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
     error += close_round == tok.tag ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
 
     // expect eof
     error += 1 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
     error += eof == err.tag ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
 
     // still eof
     error += 1 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
     if (error) return error;
     error += eof == err.tag ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
 
     tess_tokenizer_deinit(alloc, t);
   }
@@ -105,6 +109,7 @@ int test_tokenizer_string(void) {
     if (error) return error;
     error += string == tok.tag ? 0 : 1;
     error += 0 == strcmp("abcdef", tok.s) ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
 
     tess_tokenizer_deinit(alloc, t);
   }
