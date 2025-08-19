@@ -119,6 +119,35 @@ int test_tokenizer_string(void) {
   return error;
 }
 
+int test_tokenizer_terminal_static_string(void) {
+  // regression test for ASAN
+  int               error = 0;
+
+  mos_allocator_t  *alloc = mos_alloc_default_allocator();
+  tess_tokenizer_t *t     = tess_tokenizer_alloc(alloc);
+
+  {
+    char const *input = "-";
+    tess_tokenizer_init(alloc, t, input, strlen(input));
+
+    tess_token_t           tok;
+    tess_tokenizer_error_t err;
+
+    // expect string
+    error += 0 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+    if (error) return error;
+    error += tess_tok_symbol == tok.tag ? 0 : 1;
+    error += 0 == strcmp("-", tok.s) ? 0 : 1;
+    tess_token_deinit(alloc, &tok);
+
+    tess_tokenizer_deinit(alloc, t);
+  }
+
+  tess_tokenizer_dealloc(alloc, t);
+
+  return error;
+}
+
 #define T(name)                                                                                            \
   this_error = name();                                                                                     \
   if (this_error) {                                                                                        \
@@ -138,6 +167,7 @@ int main(void) {
   T(test_tess_token_string);
   T(test_tokenizer_basic);
   T(test_tokenizer_string);
+  T(test_tokenizer_terminal_static_string);
 
   return error;
 }

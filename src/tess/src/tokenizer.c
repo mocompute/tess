@@ -1,6 +1,7 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
+#include "token.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -24,7 +25,7 @@ static void tok_error(tess_tokenizer_error_t *err, tess_error_tag_t tag, size_t 
   err->pos = pos;
 }
 
-//
+// -- allocation and deallocation --
 
 tess_tokenizer_t *tess_tokenizer_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(tess_tokenizer_t));
@@ -50,14 +51,28 @@ void tess_tokenizer_deinit(mos_allocator_t *alloc, tess_tokenizer_t *tok) {
   mos_vector_deinit(alloc, &tok->buf);
 }
 
-void tess_tokenizer_put_back(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_token_t const *toks,
-                             size_t n_toks) {
-  for (size_t i = n_toks; i != 0; --i) {
-    mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1]);
-  }
+// -- parsing --
+
+void replace_token(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_t tag) {
+  tess_token_deinit(alloc, tok);
+  tess_token_init(tok, tag);
 }
 
-//
+void replace_token_v(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_t tag, uint8_t val) {
+  tess_token_deinit(alloc, tok);
+  tess_token_init_v(tok, tag, val);
+}
+
+void replace_token_s(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_t tag, char const *s) {
+  tess_token_deinit(alloc, tok);
+  tess_token_init_s(alloc, tok, tag, s);
+}
+
+void replace_token_sn(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag_t tag, char const *s,
+                      size_t len) {
+  tess_token_deinit(alloc, tok);
+  tess_token_init_sn(alloc, tok, tag, s, len);
+}
 
 int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_token_t *out,
                         tess_tokenizer_error_t *out_err) {
@@ -140,23 +155,23 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
       case '/':  state = forward_slash; continue;
 
       case ';':
-        res.tag = tess_tok_semicolon;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_semicolon);
+        state = stop;
         break;
 
       case ',':
-        res.tag = tess_tok_comma;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_comma);
+        state = stop;
         break;
 
       case '(':
-        res.tag = tess_tok_open_round;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_open_round);
+        state = stop;
         break;
 
       case ')':
-        res.tag = tess_tok_close_round;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_close_round);
+        state = stop;
         break;
 
       default:
@@ -181,16 +196,15 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_minus: {
       if (self->pos == end) {
-        res.tag = tess_tok_symbol;
-        res.s   = "-";
-        state   = stop;
+        replace_token_s(alloc, &res, tess_tok_symbol, "-");
+        state = stop;
         goto finish;
       }
       char const c = self->input[self->pos++];
       switch (c) {
       case '>':
-        res.tag = tess_tok_arrow;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_arrow);
+        state = stop;
         break;
       default:
         self->pos -= 2;
@@ -201,14 +215,14 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_equal: {
       if (self->pos == end) {
-        res.tag = tess_tok_equal_sign;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_equal_sign);
+        state = stop;
         goto finish;
       }
       char const c = self->input[self->pos++];
       if (' ' == c || '\n' == c) {
-        res.tag = tess_tok_equal_sign;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_equal_sign);
+        state = stop;
         goto finish;
       }
 
@@ -219,9 +233,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case forward_slash: {
       if (self->pos == end) {
-        res.tag = tess_tok_symbol;
-        res.s   = "/";
-        state   = stop;
+        replace_token_s(alloc, &res, tess_tok_symbol, "/");
+        state = stop;
         goto finish;
       }
 
@@ -238,8 +251,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case in_newline: {
       if (self->pos == end) {
-        res.tag = tess_tok_one_newline;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_one_newline);
+        state = stop;
         goto finish;
       }
 
@@ -247,8 +260,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
       switch (c) {
       case '\n':
-        res.tag = tess_tok_two_newline;
-        state   = stop;
+        replace_token(alloc, &res, tess_tok_two_newline);
+        state = stop;
         break;
       case ' ':
         start_capture = self->pos - 1;
@@ -256,7 +269,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
         continue; // TODO tab indent
 
       default:
-        res.tag = tess_tok_one_newline;
+        replace_token(alloc, &res, tess_tok_one_newline);
         --self->pos;
         state = stop;
         break;
@@ -288,9 +301,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
         return 1;
       }
 
-      res.tag = tess_tok_newline_indent;
-      res.val = (uint8_t)(self->pos - start_capture);
-      state   = stop;
+      replace_token_v(alloc, &res, tess_tok_newline_indent, (uint8_t)(self->pos - start_capture));
+      state = stop;
       break;
 
     case start_number: {
@@ -361,9 +373,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case stop_number: {
       assert(self->pos >= start_capture);
-      tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, tess_tok_number, self->input + start_capture,
-                         self->pos - start_capture);
+      replace_token_sn(alloc, &res, tess_tok_number, self->input + start_capture,
+                       self->pos - start_capture);
       state = stop;
     } break;
 
@@ -403,9 +414,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case stop_symbol: {
       assert(self->pos >= start_capture);
-      tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, tess_tok_symbol, self->input + start_capture,
-                         self->pos - start_capture);
+      replace_token_sn(alloc, &res, tess_tok_symbol, self->input + start_capture,
+                       self->pos - start_capture);
       state = stop;
 
     } break;
@@ -429,9 +439,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
 
     case stop_comment:
       assert(self->pos >= start_capture);
-      tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, tess_tok_comment, self->input + start_capture,
-                         self->pos - start_capture);
+      replace_token_sn(alloc, &res, tess_tok_comment, self->input + start_capture,
+                       self->pos - start_capture);
       state = stop;
       break;
 
@@ -503,9 +512,8 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_tok
     } break;
 
     case stop_string: {
-      tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, tess_tok_string, mos_vector_data(&self->buf),
-                         mos_vector_size(&self->buf));
+      replace_token_sn(alloc, &res, tess_tok_string, mos_vector_data(&self->buf),
+                       mos_vector_size(&self->buf));
       state = stop;
     } break;
 
@@ -529,4 +537,13 @@ finish:
   }
 
   return 0;
+}
+
+// -- backtracking --
+
+void tess_tokenizer_put_back(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_token_t const *toks,
+                             size_t n_toks) {
+  for (size_t i = n_toks; i != 0; --i) {
+    mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1]);
+  }
 }
