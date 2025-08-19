@@ -22,10 +22,10 @@
   X(tess_tok_comment, "comment")
 
 #define ENUM_ITEM(name, str) name,
-typedef enum tess_token_tag_t { TESS_TOKEN_TAGS(ENUM_ITEM) } tess_token_tag_t;
+typedef enum tess_token_tag { TESS_TOKEN_TAGS(ENUM_ITEM) } tess_token_tag_t;
 #undef ENUM_ITEM
 
-typedef struct tess_token_t {
+typedef struct tess_token {
   union {
     char   *s;
     uint8_t val;

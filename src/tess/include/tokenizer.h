@@ -6,12 +6,12 @@
 #include "alloc.h"
 #include "error.h"
 
-typedef struct tess_tokenizer_error_t {
+typedef struct tess_tokenizer_error {
   tess_error_tag_t tag;
   size_t           pos;
 } tess_tokenizer_error_t;
 
-typedef struct tess_tokenizer_t tess_tokenizer_t;
+typedef struct tess_tokenizer tess_tokenizer_t;
 
 // -- allocation and deallocation --
 //

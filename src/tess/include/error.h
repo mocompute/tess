@@ -11,7 +11,7 @@
 #endif
 
 #define ENUM_ITEM(name, str) name,
-typedef enum tess_error_tag_t { TESS_ERROR_TAG_LIST(ENUM_ITEM) } tess_error_tag_t;
+typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(ENUM_ITEM) } tess_error_tag_t;
 #undef ENUM_ITEM
 
 // -- utilities --

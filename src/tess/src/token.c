@@ -40,7 +40,7 @@ int tess_token_init_sn(mos_allocator_t *alloc, tess_token_t *tok, tess_token_tag
   return 0;
 }
 
-void tess_token_deinit(mos_allocator_t *alloc, struct tess_token_t *tok) {
+void tess_token_deinit(mos_allocator_t *alloc, tess_token_t *tok) {
   switch (tok->tag) {
   case tess_tok_one_newline:
   case tess_tok_two_newline:

@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-struct tess_tokenizer_t {
+struct tess_tokenizer {
   char const  *input;
   size_t       input_len;
   size_t       pos;
