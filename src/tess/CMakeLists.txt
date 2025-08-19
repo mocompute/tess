@@ -4,6 +4,7 @@ add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
@@ -12,6 +13,7 @@ set(HEADERS
 set(SOURCES
   src/ast.c
   src/error.c
+  src/parser.c
   src/tess.c
   src/token.c
   src/tokenizer.c
