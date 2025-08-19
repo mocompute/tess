@@ -6,9 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TOKEN_STRING_ITEM(name, str) [name] = str,
-static char const *const token_tag_strings[] = {TOKEN_TAG_LIST(TOKEN_STRING_ITEM)};
-#undef TOKEN_STRING_ITEM
+//
 
 void tess_token_init(tess_token_t *tok, tess_token_tag_t tag) {
   tok->tag = tag;
@@ -52,7 +50,17 @@ void tess_token_deinit(mos_allocator_t *alloc, struct tess_token_t *tok) {
 }
 
 char const *tess_token_tag_to_string(tess_token_tag_t tag) {
+#define STRING_ITEM(name, str) [name]          = str,
+  static char const *const token_tag_strings[] = {TOKEN_TAG_LIST(STRING_ITEM)};
+#undef STRING_ITEM
   return token_tag_strings[tag];
+}
+
+char const *tess_tokenizer_error_tag_to_string(tess_tokenizer_error_tag_t tag) {
+#define STRING_ITEM(name, str) [name]                    = str,
+  static char const *const tokenizer_error_tag_strings[] = {TOKENIZER_ERROR_TAG_LIST(STRING_ITEM)};
+#undef STRING_ITEM
+  return tokenizer_error_tag_strings[tag];
 }
 
 char *tess_token_to_string(mos_allocator_t *alloc, tess_token_t const *tok) {

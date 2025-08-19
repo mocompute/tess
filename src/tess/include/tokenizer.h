@@ -26,23 +26,40 @@ typedef enum tess_token_tag_t { TOKEN_TAG_LIST(ENUM_ITEM) } tess_token_tag_t;
 #undef ENUM_ITEM
 
 typedef struct tess_token_t {
-  tess_token_tag_t tag;
   union {
     char   *s;
     uint8_t val;
   };
+  tess_token_tag_t tag;
 } tess_token_t;
+
+#define TOKENIZER_ERROR_TAG_LIST(X)                                                                        \
+  X(eof, "eof")                                                                                            \
+  X(indent_too_long, "indent_too_long")                                                                    \
+  X(invalid_token, "invalid_token")
+
+#define ENUM_ITEM(name, str) name,
+typedef enum tess_tokenizer_error_tag_t { TOKENIZER_ERROR_TAG_LIST(ENUM_ITEM) } tess_tokenizer_error_tag_t;
+#undef ENUM_ITEM
+
+typedef struct tess_tokenizer_error_t {
+  tess_tokenizer_error_tag_t tag;
+  size_t                     pos;
+} tess_tokenizer_error_t;
+
+typedef struct tess_tokenizer_t tess_tokenizer_t;
 
 // -- allocation and deallocation --
 
-void        tess_token_init(tess_token_t *, tess_token_tag_t);
-void        tess_token_init_v(tess_token_t *, tess_token_tag_t, uint8_t);
-int         tess_token_init_s(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *);
-void        tess_token_deinit(mos_allocator_t *, tess_token_t *);
+void tess_token_init(tess_token_t *, tess_token_tag_t);
+void tess_token_init_v(tess_token_t *, tess_token_tag_t, uint8_t);
+int  tess_token_init_s(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *);
+void tess_token_deinit(mos_allocator_t *, tess_token_t *);
 
 // -- utilities --
 
 char const *tess_token_tag_to_string(tess_token_tag_t);
+char const *tess_tokenizer_error_tag_to_string(tess_tokenizer_error_tag_t);
 char       *tess_token_to_string(mos_allocator_t *, tess_token_t const *);
 
 #endif

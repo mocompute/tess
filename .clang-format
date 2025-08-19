@@ -45,7 +45,7 @@ AllowShortNamespacesOnASingleLine: true
 
 AlignConsecutiveAssignments: AcrossEmptyLines
 AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
-AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
+AlignConsecutiveDeclarations: AcrossEmptyLines
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignConsecutiveShortCaseStatements:
   Enabled: true
