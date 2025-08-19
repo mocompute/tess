@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "alloc.h"
 #include "vector.h"
 
 #include <string.h>
@@ -57,4 +58,18 @@ void tess_type_pool_init(mos_allocator_t *alloc, tess_type_pool_t *pool) {
 
 void tess_type_pool_deinit(mos_allocator_t *alloc, tess_type_pool_t *pool) {
   mos_vector_deinit(alloc, &pool->data);
+}
+
+// -- pool operations --
+
+// takes ownership of type's buffers and invalidates caller's copy.
+int tess_type_pool_move_back(mos_allocator_t *alloc, tess_type_pool_t *pool, tess_type_t *ty,
+                             size_t *handle) {
+
+  if (mos_vector_push_back(alloc, &pool->data, ty)) return 1;
+
+  *handle = mos_vector_size(&pool->data) - 1;
+  mos_alloc_invalidate(ty, sizeof *ty);
+
+  return 0;
 }

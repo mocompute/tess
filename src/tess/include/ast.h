@@ -55,4 +55,8 @@ void              tess_type_pool_dealoc(mos_allocator_t *, tess_type_pool_t *);
 void              tess_type_pool_init(mos_allocator_t *, tess_type_pool_t *);
 void              tess_type_pool_deinit(mos_allocator_t *, tess_type_pool_t *);
 
+// -- pool operations --
+
+int tess_type_pool_move_back(mos_allocator_t *, tess_type_pool_t *, tess_type_t *, size_t *);
+
 #endif
