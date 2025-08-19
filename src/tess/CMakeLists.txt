@@ -11,7 +11,7 @@ set(SOURCES
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(tess BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
 target_include_directories(tess PUBLIC "${PROJECT_SOURCE_DIR}/src/tess/include")
-# target_link_libraries(tess PRIVATE zlibstatic PUBLIC)
+target_link_libraries(tess PRIVATE mos PUBLIC)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- tests --
