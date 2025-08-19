@@ -24,7 +24,7 @@ typedef struct tess_tokenizer_t tess_tokenizer_t;
 
 // -- allocation and deallocation --
 //
-// Init with a buffer of input, which must outlive the tokenizer.
+// init() with a buffer of input, which must outlive the tokenizer.
 //
 
 tess_tokenizer_t *tess_tokenizer_alloc(mos_allocator_t *);
@@ -33,6 +33,9 @@ void              tess_tokenizer_init(mos_allocator_t *, tess_tokenizer_t *, cha
 void              tess_tokenizer_deinit(mos_allocator_t *, tess_tokenizer_t *);
 
 // -- parsing --
+//
+// next() may allocate memory for string tokens. Caller must token_deinit the [out] token.
+//
 
 int tess_tokenizer_next(mos_allocator_t *, tess_tokenizer_t *, tess_token_t *out, tess_tokenizer_error_t *);
 
