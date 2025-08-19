@@ -46,14 +46,14 @@ int test_tess_token_string(void) {
   return error;
 }
 
-int test_tokenizer(void) {
+int test_tokenizer_basic(void) {
   int               error = 0;
 
   mos_allocator_t  *alloc = mos_alloc_default_allocator();
   tess_tokenizer_t *t     = tess_tokenizer_alloc(alloc);
 
   {
-    char const *input = "()";
+    char const *input = "  (  )  ";
     tess_tokenizer_init(alloc, t, input, strlen(input));
 
     tess_token_t           tok;
@@ -87,6 +87,33 @@ int test_tokenizer(void) {
   return error;
 }
 
+int test_tokenizer_string(void) {
+  int               error = 0;
+
+  mos_allocator_t  *alloc = mos_alloc_default_allocator();
+  tess_tokenizer_t *t     = tess_tokenizer_alloc(alloc);
+
+  {
+    char const *input = " \"abcdef\"  ";
+    tess_tokenizer_init(alloc, t, input, strlen(input));
+
+    tess_token_t           tok;
+    tess_tokenizer_error_t err;
+
+    // expect string
+    error += 0 == tess_tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+    if (error) return error;
+    error += string == tok.tag ? 0 : 1;
+    error += 0 == strcmp("abcdef", tok.s) ? 0 : 1;
+
+    tess_tokenizer_deinit(alloc, t);
+  }
+
+  tess_tokenizer_dealloc(alloc, t);
+
+  return error;
+}
+
 #define T(name)                                                                                            \
   this_error = name();                                                                                     \
   if (this_error) {                                                                                        \
@@ -104,7 +131,8 @@ int main(void) {
   srand(seed);
 
   T(test_tess_token_string);
-  T(test_tokenizer);
+  T(test_tokenizer_basic);
+  T(test_tokenizer_string);
 
   return error;
 }

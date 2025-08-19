@@ -50,23 +50,23 @@ void tess_tokenizer_deinit(mos_allocator_t *alloc, tess_tokenizer_t *tok) {
   mos_vector_deinit(alloc, &tok->buf);
 }
 
-void tess_tokenizer_put_back(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tess_token_t const *toks,
+void tess_tokenizer_put_back(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_token_t const *toks,
                              size_t n_toks) {
   for (size_t i = n_toks; i != 0; --i) {
-    mos_vector_push_back(alloc, &tokenizer->backtrack, &toks[i - 1]);
+    mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1]);
   }
 }
 
 //
 
-int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tess_token_t *out,
+int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *self, tess_token_t *out,
                         tess_tokenizer_error_t *out_err) {
   assert(out);
 
   // support backtracking by parser
-  if (!mos_vector_empty(&tokenizer->backtrack)) {
-    *out = *(tess_token_t *)mos_vector_back(&tokenizer->backtrack);
-    mos_vector_pop_back(&tokenizer->backtrack);
+  if (!mos_vector_empty(&self->backtrack)) {
+    memcpy(out, mos_vector_back(&self->backtrack), sizeof *out);
+    mos_vector_pop_back(&self->backtrack);
     return 0;
   }
 
@@ -106,7 +106,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     stop,
   } state          = start;
 
-  size_t const end = tokenizer->input_len;
+  size_t const end = self->input_len;
 
   // starting position for number or symbol or indent
   size_t start_capture = 0;
@@ -119,9 +119,9 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     switch (state) {
 
     case start: {
-      if (tokenizer->pos == end) goto finish;
+      if (self->pos == end) goto finish;
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
 
       switch (c) {
       case '=': state = in_equal; break;
@@ -129,7 +129,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
       case '-': state = in_minus; break;
 
       case '+':
-        --tokenizer->pos;
+        --self->pos;
         state = start_number_sign;
         continue;
 
@@ -162,14 +162,14 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
       default:
         if (c >= '0' && c <= '9') {
           // any digit starts a number
-          --tokenizer->pos;
+          --self->pos;
           state = start_number;
           continue;
         }
 
         if (c > 0x20 && c < 0x7f) {
           // any other printable character starts a symbol
-          --tokenizer->pos;
+          --self->pos;
           state = start_symbol;
           continue;
         }
@@ -180,56 +180,56 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case in_minus: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         res.tag = symbol;
         res.s   = "-";
         state   = stop;
         goto finish;
       }
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       switch (c) {
       case '>':
         res.tag = arrow;
         state   = stop;
         break;
       default:
-        tokenizer->pos -= 2;
+        self->pos -= 2;
         state = start_number_sign;
         break;
       }
     } break;
 
     case in_equal: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         res.tag = equal_sign;
         state   = stop;
         goto finish;
       }
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       if (' ' == c || '\n' == c) {
         res.tag = equal_sign;
         state   = stop;
         goto finish;
       }
 
-      tokenizer->pos -= 2;
+      self->pos -= 2;
       state = start_symbol;
 
     } break;
 
     case forward_slash: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         res.tag = symbol;
         res.s   = "/";
         state   = stop;
         goto finish;
       }
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       switch (c) {
       case '/': state = start_comment; continue;
       default:
-        tokenizer->pos -= 2;
+        self->pos -= 2;
         state = start_symbol;
         break;
       }
@@ -237,13 +237,13 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case in_newline: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         res.tag = one_newline;
         state   = stop;
         goto finish;
       }
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
 
       switch (c) {
       case '\n':
@@ -251,13 +251,13 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
         state   = stop;
         break;
       case ' ':
-        start_capture = tokenizer->pos - 1;
+        start_capture = self->pos - 1;
         state         = in_newline_indent;
         continue; // TODO tab indent
 
       default:
         res.tag = one_newline;
-        --tokenizer->pos;
+        --self->pos;
         state = stop;
         break;
       }
@@ -265,17 +265,17 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case in_newline_indent: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_newline_indent;
         continue;
       }
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
 
       switch (c) {
       case ' ': continue;
       default:
-        --tokenizer->pos;
+        --self->pos;
         state = stop_newline_indent;
         continue;
       }
@@ -283,35 +283,34 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case stop_newline_indent:
-      if (tokenizer->pos - start_capture > 0xff) {
-        if (out_err) tok_error(out_err, indent_too_long, tokenizer->pos);
+      if (self->pos - start_capture > 0xff) {
+        if (out_err) tok_error(out_err, indent_too_long, self->pos);
         return 1;
       }
-      // return std::unexpected(tokenizer_error_t(indent_too_long, tokenizer->pos));
 
       res.tag = newline_indent;
-      res.val = (uint8_t)(tokenizer->pos - start_capture);
+      res.val = (uint8_t)(self->pos - start_capture);
       state   = stop;
       break;
 
     case start_number: {
-      start_capture = tokenizer->pos;
+      start_capture = self->pos;
       state         = in_number;
     } break;
 
     case start_number_sign: {
-      start_capture = tokenizer->pos;
-      ++tokenizer->pos; // capture the +/-
+      start_capture = self->pos;
+      ++self->pos; // capture the +/-
       state = in_number_sign;
     } break;
 
     case in_number: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_number;
         continue;
       }
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
 
       if (c >= '0' && c <= '9') continue;
       switch (c) {
@@ -328,31 +327,31 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
       case ' ':
       case ')':
       case ',':
-        --tokenizer->pos;
+        --self->pos;
         state = stop_number;
         break;
 
       default:
         // all invisible and extended characters break a symbol
         if (c < 0x20) { // c is signed so this catches c > 0x7f
-          --tokenizer->pos;
+          --self->pos;
           state = stop_number;
         } else {
-          --tokenizer->pos;
-          if (out_err) tok_error(out_err, invalid_token, tokenizer->pos);
+          --self->pos;
+          if (out_err) tok_error(out_err, invalid_token, self->pos);
           return 1;
         }
       }
     } break;
 
     case in_number_sign: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_symbol;
         continue;
       }
 
       // + or - not start of a number
-      char const c = tokenizer->input[tokenizer->pos];
+      char const c = self->input[self->pos];
       switch (c) {
       case ' ':
       case ')': state = stop_symbol; break;
@@ -361,28 +360,24 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case stop_number: {
-      assert(tokenizer->pos >= start_capture);
+      assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, number, tokenizer->input + start_capture,
-                         tokenizer->pos - start_capture);
-      // res.tag = number;
-      // res.s =
-      //   std::string{tokenizer->input.data() + start_capture, tokenizer->input.data() + tokenizer->pos};
+      tess_token_init_sn(alloc, &res, number, self->input + start_capture, self->pos - start_capture);
       state = stop;
     } break;
 
     case start_symbol: {
-      start_capture = tokenizer->pos;
+      start_capture = self->pos;
       state         = in_symbol;
     } break;
 
     case in_symbol: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_symbol;
         continue;
       }
 
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       switch (c) {
       case '(':
       case ')':
@@ -391,13 +386,13 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
       case ';':
       case ',':
         // these tokens break a symbol
-        --tokenizer->pos;
+        --self->pos;
         state = stop_symbol;
         break;
       default:
         // all invisible and extended characters break a symbol
         if (c < 0x20) { // c is signed so this catches c > 0x7f
-          --tokenizer->pos;
+          --self->pos;
           state = stop_symbol;
         }
         break;
@@ -406,65 +401,54 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case stop_symbol: {
-      assert(tokenizer->pos >= start_capture);
+      assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, symbol, tokenizer->input + start_capture,
-                         tokenizer->pos - start_capture);
-      // res.tag = symbol;
-      // res.s   = {
-      //   std::string{tokenizer->input.data() + start_capture, tokenizer->input.data() +
-      //   tokenizer->pos}};
+      tess_token_init_sn(alloc, &res, symbol, self->input + start_capture, self->pos - start_capture);
       state = stop;
 
     } break;
 
     case start_comment:
-      start_capture = tokenizer->pos;
+      start_capture = self->pos;
       state         = in_comment;
       break;
 
     case in_comment: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_comment;
         continue;
       }
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       if (c < 0x20) { // c is signed so this catches c > 0x7f
-        --tokenizer->pos;
+        --self->pos;
         state = stop_comment;
       }
     } break;
 
     case stop_comment:
-      assert(tokenizer->pos >= start_capture);
+      assert(self->pos >= start_capture);
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, comment, tokenizer->input + start_capture,
-                         tokenizer->pos - start_capture);
-      // res.tag = comment;
-      // res.s   = {
-      //   std::string{tokenizer->input.data() + start_capture, tokenizer->input.data() + tokenizer->pos}};
+      tess_token_init_sn(alloc, &res, comment, self->input + start_capture, self->pos - start_capture);
       state = stop;
       break;
 
     case start_string: {
-      // std::string::clear() is not guaranteed to retain capacity. We
-      // don't wish to shrink buffer between calls to the tokenizer.
-      mos_vector_clear(&tokenizer->buf);
+      mos_vector_clear(&self->buf);
       state = in_string;
     } break;
 
     case in_string: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_string;
         continue;
       }
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
       switch (c) {
       case '\\': state = in_string_backslash; break;
       case '"':  state = stop_string; break;
       default:
-        if (mos_vector_push_back(alloc, &tokenizer->buf, &c)) {
-          if (out_err) tok_error(out_err, out_of_memory, tokenizer->pos);
+        if (mos_vector_push_back(alloc, &self->buf, &c)) {
+          if (out_err) tok_error(out_err, out_of_memory, self->pos);
           return 1;
         }
 
@@ -473,11 +457,11 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
     } break;
 
     case in_string_backslash: {
-      if (tokenizer->pos == end) {
+      if (self->pos == end) {
         state = stop_string;
         continue;
       }
-      char const c = tokenizer->input[tokenizer->pos++];
+      char const c = self->input[self->pos++];
 
       // https://en.cppreference.com/w/cpp/language/escape.html
       // TODO: numeric escapes, octal, hex
@@ -497,17 +481,17 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
       default:   break;
       }
       if (actual) {
-        if (mos_vector_push_back(alloc, &tokenizer->buf, &actual)) {
-          if (out_err) tok_error(out_err, out_of_memory, tokenizer->pos);
+        if (mos_vector_push_back(alloc, &self->buf, &actual)) {
+          if (out_err) tok_error(out_err, out_of_memory, self->pos);
           return 1;
         }
 
       } else {
         // unrecognised escape sequence, keep it literal
         char backslash = '\\';
-        if (mos_vector_push_back(alloc, &tokenizer->buf, &backslash) ||
-            mos_vector_push_back(alloc, &tokenizer->buf, &c)) {
-          if (out_err) tok_error(out_err, out_of_memory, tokenizer->pos);
+        if (mos_vector_push_back(alloc, &self->buf, &backslash) ||
+            mos_vector_push_back(alloc, &self->buf, &c)) {
+          if (out_err) tok_error(out_err, out_of_memory, self->pos);
           return 1;
         }
       }
@@ -517,8 +501,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
 
     case stop_string: {
       tess_token_deinit(alloc, &res);
-      tess_token_init_sn(alloc, &res, string, mos_vector_data(&tokenizer->buf),
-                         mos_vector_size(&tokenizer->buf));
+      tess_token_init_sn(alloc, &res, string, mos_vector_data(&self->buf), mos_vector_size(&self->buf));
       state = stop;
     } break;
 
@@ -529,7 +512,7 @@ int tess_tokenizer_next(mos_allocator_t *alloc, tess_tokenizer_t *tokenizer, tes
 finish:
 
   if (start == state) {
-    if (out_err) tok_error(out_err, eof, tokenizer->pos);
+    if (out_err) tok_error(out_err, eof, self->pos);
     return 1;
   }
 
@@ -544,7 +527,7 @@ finish:
   return 0;
 }
 
-//
+// -- utilities --
 
 char const *tess_tokenizer_error_tag_to_string(tess_tokenizer_error_tag_t tag) {
 #define STRING_ITEM(name, str) [name]                    = str,
