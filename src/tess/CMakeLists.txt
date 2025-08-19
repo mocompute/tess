@@ -3,11 +3,13 @@ message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
 )
 
 set(SOURCES
   src/tess.c
+  src/token.c
   src/tokenizer.c
   )
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})

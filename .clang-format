@@ -32,7 +32,7 @@ BraceWrapping:
   SplitEmptyNamespace: false
 BreakBeforeConceptDeclarations: Allowed
 
-AllowShortBlocksOnASingleLine: Always
+AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseExpressionOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortCompoundRequirementOnASingleLine: true
