@@ -11,9 +11,9 @@
 #include <time.h>
 
 int test_tess_token_string(void) {
-  int              error = 0;
+  int            error = 0;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_default_allocator();
 
   error += strcmp("comma", token_tag_to_string(tok_comma)) == 0 ? 0 : 1;
 
@@ -49,10 +49,10 @@ int test_tess_token_string(void) {
 }
 
 int test_tokenizer_basic(void) {
-  int              error = 0;
+  int            error = 0;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
-  tokenizer_t     *t     = tokenizer_alloc(alloc);
+  mos_allocator *alloc = mos_alloc_default_allocator();
+  tokenizer_t   *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "  (  )  ";
@@ -94,10 +94,10 @@ int test_tokenizer_basic(void) {
 }
 
 int test_tokenizer_string(void) {
-  int              error = 0;
+  int            error = 0;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
-  tokenizer_t     *t     = tokenizer_alloc(alloc);
+  mos_allocator *alloc = mos_alloc_default_allocator();
+  tokenizer_t   *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = " \"abcdef\"  ";
@@ -123,10 +123,10 @@ int test_tokenizer_string(void) {
 
 int test_tokenizer_terminal_static_string(void) {
   // regression test for ASAN
-  int              error = 0;
+  int            error = 0;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
-  tokenizer_t     *t     = tokenizer_alloc(alloc);
+  mos_allocator *alloc = mos_alloc_default_allocator();
+  tokenizer_t   *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "-";
@@ -151,13 +151,13 @@ int test_tokenizer_terminal_static_string(void) {
 }
 
 int test_parser_init(void) {
-  int              error = 0;
+  int            error = 0;
 
-  char const      *input = "()";
+  char const    *input = "()";
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_default_allocator();
 
-  ast_pool_t      *pool  = ast_pool_alloc(alloc);
+  ast_pool_t    *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser_t *p = parser_alloc(alloc);
@@ -172,13 +172,13 @@ int test_parser_init(void) {
 }
 
 int test_parser_basic(void) {
-  int              error = 0;
+  int            error = 0;
 
-  char const      *input = "a";
+  char const    *input = "a";
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_default_allocator();
 
-  ast_pool_t      *pool  = ast_pool_alloc(alloc);
+  ast_pool_t    *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser_t *p = parser_alloc(alloc);

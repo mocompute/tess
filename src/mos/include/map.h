@@ -25,11 +25,11 @@ typedef struct mos_map_header {
 
 // -- allocation and deallocation --
 
-mos_map_t    *mos_map_alloc(mos_allocator_t *);
-void          mos_map_dealloc(mos_allocator_t *, mos_map_t **);
-nodiscard int mos_map_init(mos_allocator_t *, mos_map_t *, size_t element_size, uint32_t buckets,
+mos_map_t    *mos_map_alloc(mos_allocator *);
+void          mos_map_dealloc(mos_allocator *, mos_map_t **);
+nodiscard int mos_map_init(mos_allocator *, mos_map_t *, size_t element_size, uint32_t buckets,
                            float max_load_factor);
-void          mos_map_deinit(mos_allocator_t *, mos_map_t *);
+void          mos_map_deinit(mos_allocator *, mos_map_t *);
 
 // -- read-only access --
 
@@ -46,7 +46,7 @@ char *mos_map_unchecked_at(mos_map_t *, uint32_t);
 
 // -- insertion and removal --
 
-nodiscard int mos_map_set(mos_allocator_t *, mos_map_t *, size_t key, void *data);
+nodiscard int mos_map_set(mos_allocator *, mos_map_t *, size_t key, void *data);
 void         *mos_map_get(mos_map_t *, size_t);
 void          mos_map_erase(mos_map_t *, size_t);
 

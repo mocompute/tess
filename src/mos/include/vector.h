@@ -20,11 +20,11 @@ typedef struct mos_vector {
 
 // -- allocation and deallocation --
 
-mos_vector_t *mos_vector_alloc(mos_allocator_t *);
-void          mos_vector_dealloc(mos_allocator_t *, mos_vector_t **);
+mos_vector_t *mos_vector_alloc(mos_allocator *);
+void          mos_vector_dealloc(mos_allocator *, mos_vector_t **);
 void          mos_vector_init(mos_vector_t *, size_t element_size);
-void          mos_vector_deinit(mos_allocator_t *, mos_vector_t *);
-nodiscard int mos_vector_reserve(mos_allocator_t *, mos_vector_t *, size_t);
+void          mos_vector_deinit(mos_allocator *, mos_vector_t *);
+nodiscard int mos_vector_reserve(mos_allocator *, mos_vector_t *, size_t);
 void          mos_vector_move(mos_vector_t *dst, mos_vector_t *src);
 
 // -- read-only access --
@@ -43,11 +43,11 @@ void       *mos_vector_back(mos_vector_t *);
 
 // -- insertion and removal --
 
-nodiscard int mos_vector_push_back(mos_allocator_t *, mos_vector_t *, void const *element);
-nodiscard int mos_vector_copy_back(mos_allocator_t *, mos_vector_t *, void const *start, size_t count);
+nodiscard int mos_vector_push_back(mos_allocator *, mos_vector_t *, void const *element);
+nodiscard int mos_vector_copy_back(mos_allocator *, mos_vector_t *, void const *start, size_t count);
 void          mos_vector_pop_back(mos_vector_t *);
 void          mos_vector_erase(mos_vector_t *, char *);
-nodiscard int mos_vector_resize(mos_allocator_t *, mos_vector_t *, size_t);
+nodiscard int mos_vector_resize(mos_allocator *, mos_vector_t *, size_t);
 void          mos_vector_clear(mos_vector_t *);
 
 // -- association lists --
@@ -56,7 +56,7 @@ void          mos_vector_clear(mos_vector_t *);
 // key. May contain duplicate values, but [get] and [erase] operate on
 // the first one found, searching from the back.
 
-nodiscard int mos_vector_assoc_set(mos_allocator_t *, mos_vector_t *, void const *);
+nodiscard int mos_vector_assoc_set(mos_allocator *, mos_vector_t *, void const *);
 char         *mos_vector_assoc_get(mos_vector_t *, size_t);
 void          mos_vector_assoc_erase(mos_vector_t *, size_t);
 

@@ -12,7 +12,7 @@
 #include <string.h>
 
 struct parser {
-  mos_allocator_t       *alloc;
+  mos_allocator         *alloc;
   tokenizer_t           *tokenizer;
   ast_pool_t            *ast_pool;
 
@@ -27,17 +27,16 @@ struct parser {
 
 // -- allocation and deallocation --
 
-parser_t *parser_alloc(mos_allocator_t *alloc) {
+parser_t *parser_alloc(mos_allocator *alloc) {
   return alloc->malloc(sizeof(struct parser));
 }
 
-void parser_dealloc(mos_allocator_t *alloc, parser_t **p) {
+void parser_dealloc(mos_allocator *alloc, parser_t **p) {
   alloc->free(*p);
   *p = 0;
 }
 
-int parser_init(mos_allocator_t *alloc, parser_t *p, ast_pool_t *pool, char const *input,
-                size_t input_len) {
+int parser_init(mos_allocator *alloc, parser_t *p, ast_pool_t *pool, char const *input, size_t input_len) {
 
   memset(p, 0, sizeof *p);
   p->alloc    = alloc;

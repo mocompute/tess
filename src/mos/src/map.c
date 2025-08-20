@@ -150,7 +150,7 @@ static int set_one_cell(mos_map_t *map, char *cell) {
   return set_one(map, *(size_t *)cell, cell + sizeof(size_t));
 }
 
-static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
+static int grow_buckets(mos_allocator *alloc, mos_map_t *map) {
   // make a new map with 1.618x the number of buckets. Copy all data to
   // the new map. Then release the old map's buffers, and overwrite
   // its struct with the new map.
@@ -222,16 +222,16 @@ uint32_t mos_map_next_power_of_two(uint32_t n) {
 
 //
 
-mos_map_t *mos_map_alloc(mos_allocator_t *alloc) {
+mos_map_t *mos_map_alloc(mos_allocator *alloc) {
   return alloc->malloc(sizeof(mos_map_t));
 }
 
-void mos_map_dealloc(mos_allocator_t *alloc, mos_map_t **p) {
+void mos_map_dealloc(mos_allocator *alloc, mos_map_t **p) {
   alloc->free(*p);
   *p = 0;
 }
 
-int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, uint32_t buckets,
+int mos_map_init(mos_allocator *alloc, mos_map_t *map, size_t element_size, uint32_t buckets,
                  float max_load_factor) {
 
   assert(element_size <= PTRDIFF_MAX);
@@ -255,7 +255,7 @@ int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, ui
   return 0;
 }
 
-void mos_map_deinit(mos_allocator_t *alloc, mos_map_t *map) {
+void mos_map_deinit(mos_allocator *alloc, mos_map_t *map) {
   alloc->free(map->to_store);
   alloc->free(map->tmp);
   alloc->free(map->status);
@@ -263,7 +263,7 @@ void mos_map_deinit(mos_allocator_t *alloc, mos_map_t *map) {
   mos_alloc_invalidate(map, sizeof *map);
 }
 
-int mos_map_set(mos_allocator_t *alloc, mos_map_t *map, size_t key, void *data) {
+int mos_map_set(mos_allocator *alloc, mos_map_t *map, size_t key, void *data) {
 
   // Must check for existing key. Replace if present.
   void *existing = mos_map_get(map, key);

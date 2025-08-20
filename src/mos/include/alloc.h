@@ -8,11 +8,11 @@ typedef struct mos_allocator {
   void *(*calloc)(size_t num, size_t size);
   void *(*realloc)(void *, size_t);
   void (*free)(void *);
-} mos_allocator_t;
+} mos_allocator;
 
 // Return the default allocator: system's malloc/free
-mos_allocator_t *mos_alloc_default_allocator();
+mos_allocator *mos_alloc_default_allocator();
 
-void             mos_alloc_invalidate(void *, size_t);
+void           mos_alloc_invalidate(void *, size_t);
 
 #endif

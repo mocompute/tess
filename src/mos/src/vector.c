@@ -7,11 +7,11 @@
 #include <stdint.h>
 #include <string.h>
 
-mos_vector_t *mos_vector_alloc(mos_allocator_t *alloc) {
+mos_vector_t *mos_vector_alloc(mos_allocator *alloc) {
   return alloc->malloc(sizeof(mos_vector_t));
 }
 
-void mos_vector_dealloc(mos_allocator_t *alloc, mos_vector_t **p) {
+void mos_vector_dealloc(mos_allocator *alloc, mos_vector_t **p) {
   alloc->free(*p);
   *p = 0;
 }
@@ -22,12 +22,12 @@ void mos_vector_init(mos_vector_t *vec, size_t element_size) {
   vec->element_size = element_size;
 }
 
-void mos_vector_deinit(mos_allocator_t *alloc, mos_vector_t *vec) {
+void mos_vector_deinit(mos_allocator *alloc, mos_vector_t *vec) {
   alloc->free(vec->data);
   mos_alloc_invalidate(vec, sizeof *vec);
 }
 
-int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) {
+int mos_vector_reserve(mos_allocator *alloc, mos_vector_t *vec, size_t count) {
 
   if (vec->capacity >= count) return 0;
 
@@ -53,14 +53,14 @@ bool mos_vector_empty(mos_vector_t const *vec) {
   return vec->size == 0;
 }
 
-int mos_vector_push_back(mos_allocator_t *alloc, mos_vector_t *vec, void const *element) {
+int mos_vector_push_back(mos_allocator *alloc, mos_vector_t *vec, void const *element) {
   if (mos_vector_reserve(alloc, vec, vec->size + 1)) return 1;
   memcpy(vec->data + vec->size * vec->element_size, element, vec->element_size);
   ++vec->size;
   return 0;
 }
 
-int mos_vector_copy_back(mos_allocator_t *alloc, mos_vector_t *vec, void const *start, size_t count) {
+int mos_vector_copy_back(mos_allocator *alloc, mos_vector_t *vec, void const *start, size_t count) {
   if (mos_vector_reserve(alloc, vec, vec->size + count)) return 1;
 
   memcpy(vec->data + vec->size * vec->element_size, start, count * vec->element_size);
@@ -88,7 +88,7 @@ void mos_vector_erase(mos_vector_t *vec, char *it) {
   --vec->size;
 }
 
-nodiscard int mos_vector_resize(mos_allocator_t *alloc, mos_vector_t *vec, size_t n) {
+nodiscard int mos_vector_resize(mos_allocator *alloc, mos_vector_t *vec, size_t n) {
 
   if (n > vec->capacity)
     if (mos_vector_reserve(alloc, vec, n)) return 1;
@@ -123,7 +123,7 @@ size_t mos_vector_capacity(mos_vector_t const *vec) {
   return vec->capacity;
 }
 
-int mos_vector_assoc_set(mos_allocator_t *alloc, mos_vector_t *vec, void const *pair) {
+int mos_vector_assoc_set(mos_allocator *alloc, mos_vector_t *vec, void const *pair) {
   assert(vec->element_size >= sizeof(size_t));
   if (mos_vector_push_back(alloc, vec, pair)) return 1;
   return 0;

@@ -38,11 +38,11 @@ int test_align(void) {
 }
 
 int test_map(void) {
-  int              error = 0;
+  int            error = 0;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_default_allocator();
 
-  mos_map_t       *map   = mos_map_alloc(alloc);
+  mos_map_t     *map   = mos_map_alloc(alloc);
 
   if (mos_map_init(alloc, map, sizeof(int), 8, 0)) return 1;
 
@@ -78,8 +78,8 @@ int test_big_map(void) {
     ptrdiff_t left, right;
   } pair_t;
 
-  mos_allocator_t *alloc = mos_alloc_default_allocator();
-  mos_vector_t     vec;
+  mos_allocator *alloc = mos_alloc_default_allocator();
+  mos_vector_t   vec;
   mos_vector_init(&vec, sizeof(pair_t));
   if (mos_vector_reserve(alloc, &vec, N)) return error + 1;
 

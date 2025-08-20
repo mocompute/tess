@@ -30,7 +30,7 @@ void tess_type_init_arrow(tess_type_t *ty) {
   ty->tag = type_arrow;
 }
 
-void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
+void tess_type_deinit(mos_allocator *alloc, tess_type_t *ty) {
   switch (ty->tag) {
   case type_nil:
   case type_bool:
@@ -46,22 +46,22 @@ void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
 
 // -- tess_type_pool allocation and deallocation --
 
-ast_pool_t *ast_pool_alloc(mos_allocator_t *alloc) {
+ast_pool_t *ast_pool_alloc(mos_allocator *alloc) {
   return alloc->malloc(sizeof(ast_pool_t));
 }
 
-void ast_pool_dealloc(mos_allocator_t *alloc, ast_pool_t **pool) {
+void ast_pool_dealloc(mos_allocator *alloc, ast_pool_t **pool) {
   alloc->free(*pool);
   *pool = 0;
 }
 
-int ast_pool_init(mos_allocator_t *alloc, ast_pool_t *pool) {
+int ast_pool_init(mos_allocator *alloc, ast_pool_t *pool) {
   mos_vector_init(&pool->data, sizeof(ast_node_t));
   if (mos_vector_reserve(alloc, &pool->data, 32)) return 1;
   return 0;
 }
 
-void ast_pool_deinit(mos_allocator_t *alloc, ast_pool_t *pool) {
+void ast_pool_deinit(mos_allocator *alloc, ast_pool_t *pool) {
   // deinit all the ast nodes
   ast_node_t       *it  = mos_vector_begin(&pool->data);
   ast_node_t const *end = mos_vector_end(&pool->data);
@@ -75,7 +75,7 @@ void ast_pool_deinit(mos_allocator_t *alloc, ast_pool_t *pool) {
 
 // -- ast_node init and deinit --
 
-void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
+void ast_node_deinit(mos_allocator *alloc, ast_node_t *node) {
 
 #define deinit(P) mos_vector_deinit(alloc, &P)
 
@@ -141,14 +141,14 @@ void ast_node_init(ast_node_t *node, ast_tag_t tag) {
 #undef init
 }
 
-void ast_node_replace(mos_allocator_t *alloc, ast_node_t *node, ast_tag_t tag) {
+void ast_node_replace(mos_allocator *alloc, ast_node_t *node, ast_tag_t tag) {
   ast_node_deinit(alloc, node);
   ast_node_init(node, tag);
 }
 
 // -- pool operations --
 
-int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *node, ast_node_h *handle) {
+int ast_pool_move_back(mos_allocator *alloc, ast_pool_t *pool, ast_node_t *node, ast_node_h *handle) {
 
   if (mos_vector_push_back(alloc, &pool->data, node)) return 1;
 
