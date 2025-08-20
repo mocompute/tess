@@ -237,6 +237,8 @@ int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, ui
   assert(element_size <= PTRDIFF_MAX);
 
   buckets = mos_map_next_power_of_two(buckets);
+  assert(buckets > 0);
+
   if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
   memset(map, 0, sizeof *map);

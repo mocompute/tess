@@ -10,4 +10,4 @@ build_dir=$1
 shift
 if [[ $build_dir == -* ]]; then usage; exit 1; fi
 
-find lib -name \*.cpp | xargs clang-tidy -p "$build_dir"
+find src -name \*.c | xargs clang-tidy -p "$build_dir"
