@@ -7,6 +7,8 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <errno.h>
+#include <stddef.h>
 #include <string.h>
 
 struct parser {
@@ -25,6 +27,37 @@ struct parser {
 };
 
 // -- statics --
+
+bool is_reserved(char const *s) {
+  static char const *strings[] = {
+    "if", "then", "else", "fun", "let", "in", "true", "false", NULL,
+  };
+  char const **it = strings;
+  while (*it != NULL)
+    if (0 == strcmp(*it++, s)) return true;
+
+  return false;
+}
+
+bool is_arithmetic_operator(char const *s) {
+  static char const *strings[] = {
+    "+", "-", "*", "/", NULL,
+  };
+  char const **it = strings;
+  while (*it != NULL)
+    if (0 == strcmp(*it++, s)) return true;
+  return false;
+}
+
+bool is_relational_operator(char const *s) {
+  static char const *strings[] = {
+    "<", "<=", "==", "<>", ">=", ">", NULL,
+  };
+  char const **it = strings;
+  while (*it != NULL)
+    if (0 == strcmp(*it++, s)) return true;
+  return false;
+}
 
 // -- allocation and deallocation --
 
@@ -101,6 +134,30 @@ void result_ast(parser_t *parser, ast_tag_t tag) {
   ast_node_init(&parser->result_ast_node, tag);
 }
 
+void result_ast_i64(parser_t *parser, int64_t val) {
+  ast_node_deinit(parser->alloc, &parser->result_ast_node);
+  ast_node_init(&parser->result_ast_node, tess_ast_i64);
+  parser->result_ast_node.i64_val = val;
+}
+
+void result_ast_u64(parser_t *parser, uint64_t val) {
+  ast_node_deinit(parser->alloc, &parser->result_ast_node);
+  ast_node_init(&parser->result_ast_node, tess_ast_u64);
+  parser->result_ast_node.u64_val = val;
+}
+
+void result_ast_f64(parser_t *parser, double val) {
+  ast_node_deinit(parser->alloc, &parser->result_ast_node);
+  ast_node_init(&parser->result_ast_node, tess_ast_f64);
+  parser->result_ast_node.f64_val = val;
+}
+
+void result_ast_bool(parser_t *parser, bool val) {
+  ast_node_deinit(parser->alloc, &parser->result_ast_node);
+  ast_node_init(&parser->result_ast_node, tess_ast_bool);
+  parser->result_ast_node.bool_val = val;
+}
+
 int result_ast_str(parser_t *parser, ast_tag_t tag, char const *s) {
 
   ast_node_deinit(parser->alloc, &parser->result_ast_node);
@@ -165,11 +222,10 @@ static int a_try(parser_t *parser, parse_fun fun) {
 }
 
 static int a_comma(parser_t *parser) {
-  if (next_token(parser, &parser->error_token)) {
-    return 1;
-  }
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_comma == parser->error_token.tag) {
+  if (tess_tok_comma == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, ",");
     return 0;
   }
@@ -178,12 +234,277 @@ static int a_comma(parser_t *parser) {
   return 1;
 }
 
+static int a_open_round(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_open_round == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, "(");
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_open_round;
+  return 1;
+}
+
+static int a_close_round(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_close_round == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, ")");
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_close_round;
+  return 1;
+}
+
+static int a_end_of_expression(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_semicolon == tok->tag || tess_tok_one_newline == tok->tag ||
+      tess_tok_two_newline == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, ";");
+    return 0;
+  }
+
+  parser->error.tag = tess_err_unfinished_expression;
+  return 1;
+}
+
+static int a_symbol(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_symbol == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, tok->s);
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_close_round;
+  return 1;
+}
+
+static int a_identifier(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_symbol == tok->tag) {
+    if (0 != strlen(tok->s) && !is_reserved(tok->s)) {
+
+      char const c = tok->s[0];
+      if (('_' == c) || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')) {
+
+        // first character good, check remaining characters
+        char const *p = &tok->s[1];
+        while (*p) {
+          if ('_' == *p || ('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') ||
+              ('0' <= *p && *p <= '9')) {
+            p++; // still good
+          } else {
+            goto error;
+          }
+        }
+
+        // check for reserved words, which are not allowed as identifiers
+        if (is_reserved(tok->s)) goto error;
+
+        result_ast_str(parser, tess_ast_symbol, tok->s);
+        return 0;
+      }
+    }
+  }
+
+error:
+  parser->error.tag = tess_err_expected_identifier;
+  return 1;
+}
+
+static int a_infix_operator(parser_t *parser) {
+  // + - * /, relationals: < <= == <> >= >
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_symbol == tok->tag) {
+
+    if (is_arithmetic_operator(tok->s) || is_relational_operator(tok->s)) {
+      result_ast_str(parser, tess_ast_symbol, tok->s);
+      return 0;
+    }
+  }
+
+  parser->error.tag = tess_err_expected_operator;
+  return 1;
+}
+
+static int the_symbol(parser_t *parser, char const *const want) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_symbol == tok->tag) {
+    if (0 == strcmp(want, tok->s)) {
+      result_ast_str(parser, tess_ast_symbol, tok->s);
+      return 0;
+    }
+  }
+
+  parser->error.tag = tess_err_expected_symbol;
+  return 1;
+}
+
+static int a_string(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_string == tok->tag) {
+    result_ast_str(parser, tess_ast_string, tok->s);
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_string;
+  return 1;
+}
+
+int string_to_number(parser_t *parser, char const *const in) {
+  errno                 = 0;
+  ptrdiff_t const len   = (ptrdiff_t)strlen(in);
+
+  char           *p_end = 0;
+  long long int   i     = strtoll(in, &p_end, 10);
+  if (p_end - in == len && !errno) {
+    result_ast_i64(parser, i);
+    return 0;
+
+  } else {
+
+    errno                    = 0;
+    p_end                    = 0;
+    unsigned long long int u = strtoull(in, &p_end, 10);
+    if (p_end - in == len && !errno) {
+      result_ast_u64(parser, u);
+      return 0;
+
+    } else {
+
+      errno    = 0;
+      p_end    = 0;
+      double d = strtod(in, &p_end);
+      if (p_end - in == len && !errno) {
+        result_ast_f64(parser, d);
+        return 0;
+      }
+    }
+  }
+
+  return 1;
+}
+
+int string_to_operator(char const *in, ast_operator_t *out) {
+  return string_to_ast_operator(in, out);
+}
+
+static int a_number(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_number == tok->tag) {
+
+    if (string_to_number(parser, tok->s)) goto error;
+    // sets parser result
+
+    return 0;
+  }
+
+error:
+  parser->error.tag = tess_err_expected_number;
+  return 1;
+}
+
+int a_bool(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_symbol == tok->tag) {
+    if (0 == strcmp("true", tok->s)) {
+      result_ast_bool(parser, true);
+      return 0;
+    }
+    if (0 == strcmp("false", tok->s)) {
+      result_ast_bool(parser, false);
+      return 0;
+    }
+  }
+
+  parser->error.tag = tess_err_expected_bool;
+  return 1;
+}
+
+int a_literal(parser_t *parser) {
+  if (0 == a_try(parser, &a_string)) return 0;
+  if (0 == a_try(parser, &a_number)) return 0;
+  if (0 == a_try(parser, &a_bool)) return 0;
+  parser->error.tag = tess_err_expected_literal;
+  return 1;
+}
+
+int a_equal_sign(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_equal_sign == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, "=");
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_equal_sign;
+  return 1;
+}
+
+int a_arrow(parser_t *parser) {
+  if (next_token(parser, &parser->error_token)) return 1;
+  token_t const *const tok = &parser->error_token;
+
+  if (tess_tok_arrow == tok->tag) {
+    result_ast_str(parser, tess_ast_symbol, "->");
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_arrow;
+  return 1;
+}
+
+int a_nil(parser_t *parser) {
+
+  if ((0 == a_try(parser, &a_open_round)) && (0 == a_try(parser, &a_close_round))) {
+    result_ast(parser, tess_ast_nil);
+    return 0;
+  }
+
+  parser->error.tag = tess_err_expected_arrow;
+  return 1;
+}
+
 static int expression(parser_t *parser) {
   if (eat_newlines(parser)) return 1;
 
-  if (a_try(parser, &a_comma)) return 1;
+  if (0 == a_try(parser, &lambda_function_application)) return 0;
+  if (0 == a_try(parser, &infix_operation)) return 0;
+  if (0 == a_try(parser, &tuple_expression)) return 0;
+  if (0 == a_try(parser, &grouped_expression)) return 0;
+  if (0 == a_try(parser, &a_nil)) return 0;
+  if (0 == a_try(parser, &lambda_function)) return 0;
+  if (0 == a_try(parser, &let_in_form)) return 0;
+  if (0 == a_try(parser, &let_form)) return 0;
+  if (0 == a_try(parser, &if_then_else)) return 0;
+  if (0 == a_try(parser, &function_application)) return 0;
+  if (0 == a_try(parser, &a_identifier)) return 0;
+  if (0 == a_try(parser, &a_number)) return 0;
+  if (0 == a_try(parser, &a_bool)) return 0;
+  if (0 == a_try(parser, &a_end_of_expression)) return 0;
 
-  return 0;
+  return 1;
 }
 
 int parser_next(parser_t *parser) {

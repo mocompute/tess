@@ -23,8 +23,8 @@ void      parser_deinit(parser_t *);
 
 // -- access --
 //
-// Error pointers returned to caller only live until the next call to
-// the parser. Error is only valid if tess_parser_next returns
+// Error pointers returned to caller are only valid until the next
+// call to the parser. Error is only valid if tess_parser_next returns
 // non-zero.
 
 parser_error_t const *parser_error(parser_t *);

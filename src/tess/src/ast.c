@@ -164,3 +164,18 @@ char const *ast_tag_to_string(ast_tag_t tag) {
 
   return strings[tag];
 }
+
+int string_to_ast_operator(char const *const s, ast_operator_t *out) {
+
+#define STRING_ITEM(name, str) [name] = str,
+  static char const *const strings[]  = {TESS_AST_OPERATOR_TAGS(STRING_ITEM)};
+#undef STRING_ITEM
+
+  for (int i = 0; strings[i] != NULL; ++i) {
+    if (0 == strcmp(strings[i], s)) {
+      *out = (ast_operator_t)i;
+      return 0;
+    }
+  }
+  return 1;
+}

@@ -60,22 +60,25 @@ typedef struct tess_type {
 
 // -- tess_ast_node --
 
-typedef enum ast_operator {
-  tess_ast_op_addition,
-  tess_ast_op_subtraction,
-  tess_ast_op_multiplication,
-  tess_ast_op_division,
+#define TESS_AST_OPERATOR_TAGS(X)                                                                          \
+  X(tess_ast_op_addition, "+")                                                                             \
+  X(tess_ast_op_subtraction, "-")                                                                          \
+  X(tess_ast_op_multiplication, "*")                                                                       \
+  X(tess_ast_op_division, "/")                                                                             \
+                                                                                                           \
+  /* NB: see is_arithmetic and is_relational */                                                            \
+                                                                                                           \
+  X(tess_ast_op_less_than, "<")                                                                            \
+  X(tess_ast_op_less_than_equal, "<=")                                                                     \
+  X(tess_ast_op_equal, "==")                                                                               \
+  X(tess_ast_op_not_equal, "<>")                                                                           \
+  X(tess_ast_op_greater_than_equal, ">=")                                                                  \
+  X(tess_ast_op_greater_than, ">")                                                                         \
+  X(tess_ast_op_sentinel, NULL)
 
-  // NB: see is_arithmetic and is_relational
-
-  tess_ast_op_less_than,
-  tess_ast_op_less_than_equal,
-  tess_ast_op_equal,
-  tess_ast_op_not_equal,
-  tess_ast_op_greater_than_equal,
-  tess_ast_op_greater_than,
-
-} ast_operator_t;
+#define TESS_ENUM(name, str) name,
+typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
+#undef TESS_ENUM
 
 typedef struct ast_node {
   union {
@@ -180,5 +183,6 @@ int ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
 
 char const *type_tag_to_string(type_tag_t);
 char const *ast_tag_to_string(ast_tag_t);
+int         string_to_ast_operator(char const *, ast_operator_t *);
 
 #endif
