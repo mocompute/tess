@@ -8,38 +8,38 @@
 #include <stdint.h>
 
 #define TESS_TYPE_TAGS(X)                                                                                  \
-  X(tess_ty_nil, "nil")                                                                                    \
-  X(tess_ty_bool, "bool")                                                                                  \
-  X(tess_ty_int, "int")                                                                                    \
-  X(tess_ty_float, "float")                                                                                \
-  X(tess_ty_string, "string")                                                                              \
-  X(tess_ty_tuple, "tuple")                                                                                \
-  X(tess_ty_arrow, "arrow")                                                                                \
-  X(tess_ty_type_var, "type_var")
+  X(type_nil, "nil")                                                                                       \
+  X(type_bool, "bool")                                                                                     \
+  X(type_int, "int")                                                                                       \
+  X(type_float, "float")                                                                                   \
+  X(type_string, "string")                                                                                 \
+  X(type_tuple, "tuple")                                                                                   \
+  X(type_arrow, "arrow")                                                                                   \
+  X(type_type_var, "type_var")
 
 #define TESS_ENUM(name, str) name,
 typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag_t;
 #undef TESS_ENUM
 
 #define TESS_AST_TAGS(X)                                                                                   \
-  X(tess_ast_eof, "eof")                                                                                   \
-  X(tess_ast_nil, "nil")                                                                                   \
-  X(tess_ast_bool, "bool")                                                                                 \
-  X(tess_ast_symbol, "symbol")                                                                             \
-  X(tess_ast_i64, "i64")                                                                                   \
-  X(tess_ast_u64, "u64")                                                                                   \
-  X(tess_ast_f64, "f64")                                                                                   \
-  X(tess_ast_string, "string")                                                                             \
-  X(tess_ast_infix, "infix")                                                                               \
-  X(tess_ast_tuple, "tuple")                                                                               \
-  X(tess_ast_let_in, "let_in")                                                                             \
-  X(tess_ast_let, "let")                                                                                   \
-  X(tess_ast_if_then_else, "if_then_else")                                                                 \
-  X(tess_ast_lambda_function, "lambda_function")                                                           \
-  X(tess_ast_function_declaration, "function_declaration")                                                 \
-  X(tess_ast_lambda_declaration, "lambda_declaration")                                                     \
-  X(tess_ast_lambda_function_application, "lambda_function_application")                                   \
-  X(tess_ast_named_function_application, "named_function_application")
+  X(ast_eof, "eof")                                                                                        \
+  X(ast_nil, "nil")                                                                                        \
+  X(ast_bool, "bool")                                                                                      \
+  X(ast_symbol, "symbol")                                                                                  \
+  X(ast_i64, "i64")                                                                                        \
+  X(ast_u64, "u64")                                                                                        \
+  X(ast_f64, "f64")                                                                                        \
+  X(ast_string, "string")                                                                                  \
+  X(ast_infix, "infix")                                                                                    \
+  X(ast_tuple, "tuple")                                                                                    \
+  X(ast_let_in, "let_in")                                                                                  \
+  X(ast_let, "let")                                                                                        \
+  X(ast_if_then_else, "if_then_else")                                                                      \
+  X(ast_lambda_function, "lambda_function")                                                                \
+  X(ast_function_declaration, "function_declaration")                                                      \
+  X(ast_lambda_declaration, "lambda_declaration")                                                          \
+  X(ast_lambda_function_application, "lambda_function_application")                                        \
+  X(ast_named_function_application, "named_function_application")
 
 #define TESS_ENUM(name, str) name,
 typedef enum ast_tag { TESS_AST_TAGS(TESS_ENUM) } ast_tag_t;
@@ -59,23 +59,23 @@ typedef struct tess_type {
   type_tag_t tag;
 } tess_type_t;
 
-// -- tess_ast_node --
+// -- ast_node --
 
 #define TESS_AST_OPERATOR_TAGS(X)                                                                          \
-  X(tess_ast_op_addition, "+")                                                                             \
-  X(tess_ast_op_subtraction, "-")                                                                          \
-  X(tess_ast_op_multiplication, "*")                                                                       \
-  X(tess_ast_op_division, "/")                                                                             \
+  X(ast_op_addition, "+")                                                                                  \
+  X(ast_op_subtraction, "-")                                                                               \
+  X(ast_op_multiplication, "*")                                                                            \
+  X(ast_op_division, "/")                                                                                  \
                                                                                                            \
   /* NB: see is_arithmetic and is_relational */                                                            \
                                                                                                            \
-  X(tess_ast_op_less_than, "<")                                                                            \
-  X(tess_ast_op_less_than_equal, "<=")                                                                     \
-  X(tess_ast_op_equal, "==")                                                                               \
-  X(tess_ast_op_not_equal, "<>")                                                                           \
-  X(tess_ast_op_greater_than_equal, ">=")                                                                  \
-  X(tess_ast_op_greater_than, ">")                                                                         \
-  X(tess_ast_op_sentinel, NULL)
+  X(ast_op_less_than, "<")                                                                                 \
+  X(ast_op_less_than_equal, "<=")                                                                          \
+  X(ast_op_equal, "==")                                                                                    \
+  X(ast_op_not_equal, "<>")                                                                                \
+  X(ast_op_greater_than_equal, ">=")                                                                       \
+  X(ast_op_greater_than, ">")                                                                              \
+  X(ast_op_sentinel, NULL)
 
 #define TESS_ENUM(name, str) name,
 typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
@@ -161,10 +161,10 @@ typedef struct ast_node {
   ast_tag_t tag;
 } ast_node_t;
 
-// -- tess_ast_pool --
+// -- ast_pool --
 
 typedef struct ast_pool {
-  struct mos_vector data; // tess_ast_node_t
+  struct mos_vector data; // ast_node_t
 } ast_pool_t;
 
 // -- allocation and deallocation --
@@ -177,14 +177,14 @@ void tess_type_init_tuple(tess_type_t *);
 void tess_type_init_arrow(tess_type_t *);
 void tess_type_deinit(mos_allocator_t *, tess_type_t *);
 
-// tess_ast_pool
+// ast_pool
 
 ast_pool_t   *ast_pool_alloc(mos_allocator_t *);
 void          ast_pool_dealloc(mos_allocator_t *, ast_pool_t **);
 nodiscard int ast_pool_init(mos_allocator_t *, ast_pool_t *);
 void          ast_pool_deinit(mos_allocator_t *, ast_pool_t *);
 
-// tess_ast_node
+// ast_node
 
 void ast_node_init(ast_node_t *, ast_tag_t);
 void ast_node_deinit(mos_allocator_t *, ast_node_t *);

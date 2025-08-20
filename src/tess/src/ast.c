@@ -15,31 +15,31 @@ void tess_type_init(tess_type_t *ty, type_tag_t tag) {
 
 void tess_type_init_type_var(tess_type_t *ty, uint32_t val) {
   memset(ty, 0, sizeof *ty);
-  ty->tag = tess_ty_type_var;
+  ty->tag = type_type_var;
   ty->val = val;
 }
 
 void tess_type_init_tuple(tess_type_t *ty) {
   memset(ty, 0, sizeof *ty);
-  ty->tag = tess_ty_tuple;
+  ty->tag = type_tuple;
   mos_vector_init(&ty->tuple, sizeof(size_t));
 }
 
 void tess_type_init_arrow(tess_type_t *ty) {
   memset(ty, 0, sizeof *ty);
-  ty->tag = tess_ty_arrow;
+  ty->tag = type_arrow;
 }
 
 void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
   switch (ty->tag) {
-  case tess_ty_nil:
-  case tess_ty_bool:
-  case tess_ty_int:
-  case tess_ty_float:
-  case tess_ty_arrow:
-  case tess_ty_type_var:
-  case tess_ty_string:   break;
-  case tess_ty_tuple:    mos_vector_deinit(alloc, &ty->tuple); break;
+  case type_nil:
+  case type_bool:
+  case type_int:
+  case type_float:
+  case type_arrow:
+  case type_type_var:
+  case type_string:   break;
+  case type_tuple:    mos_vector_deinit(alloc, &ty->tuple); break;
   }
   mos_alloc_invalidate(ty, sizeof *ty);
 }
@@ -73,37 +73,37 @@ void ast_pool_deinit(mos_allocator_t *alloc, ast_pool_t *pool) {
   mos_alloc_invalidate(pool, sizeof *pool);
 }
 
-// -- tess_ast_node init and deinit --
+// -- ast_node init and deinit --
 
 void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
 
 #define deinit(P) mos_vector_deinit(alloc, &P)
 
   switch (node->tag) {
-  case tess_ast_lambda_function:             deinit(node->lambda_function.parameters); break;
-  case tess_ast_function_declaration:        deinit(node->function_declaration.parameters); break;
-  case tess_ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
-  case tess_ast_let:                         deinit(node->let.parameters); break;
-  case tess_ast_tuple:                       deinit(node->tuple.elements); break;
-  case tess_ast_lambda_function_application: deinit(node->lambda_function_application.arguments); break;
-  case tess_ast_named_function_application:  deinit(node->named_function_application.arguments); break;
-  case tess_ast_symbol:
+  case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
+  case ast_function_declaration:        deinit(node->function_declaration.parameters); break;
+  case ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
+  case ast_let:                         deinit(node->let.parameters); break;
+  case ast_tuple:                       deinit(node->tuple.elements); break;
+  case ast_lambda_function_application: deinit(node->lambda_function_application.arguments); break;
+  case ast_named_function_application:  deinit(node->named_function_application.arguments); break;
+  case ast_symbol:
     if (node->symbol.name) {
       // TODO: intern or pool strings
       alloc->free(node->symbol.name);
       node->symbol.name = 0;
     }
     break;
-  case tess_ast_eof:
-  case tess_ast_nil:
-  case tess_ast_bool:
-  case tess_ast_i64:
-  case tess_ast_u64:
-  case tess_ast_f64:
-  case tess_ast_string:
-  case tess_ast_infix:
-  case tess_ast_let_in:
-  case tess_ast_if_then_else: break;
+  case ast_eof:
+  case ast_nil:
+  case ast_bool:
+  case ast_i64:
+  case ast_u64:
+  case ast_f64:
+  case ast_string:
+  case ast_infix:
+  case ast_let_in:
+  case ast_if_then_else: break;
   }
 
 #undef deinit
@@ -117,25 +117,25 @@ void ast_node_init(ast_node_t *node, ast_tag_t tag) {
   node->tag = tag;
 
   switch (node->tag) {
-  case tess_ast_lambda_function:             init(node->lambda_function.parameters); break;
-  case tess_ast_function_declaration:        init(node->function_declaration.parameters); break;
-  case tess_ast_lambda_declaration:          init(node->lambda_declaration.parameters); break;
-  case tess_ast_let:                         init(node->let.parameters); break;
-  case tess_ast_tuple:                       init(node->tuple.elements); break;
-  case tess_ast_lambda_function_application: init(node->lambda_function_application.arguments); break;
-  case tess_ast_named_function_application:  init(node->named_function_application.arguments); break;
+  case ast_lambda_function:             init(node->lambda_function.parameters); break;
+  case ast_function_declaration:        init(node->function_declaration.parameters); break;
+  case ast_lambda_declaration:          init(node->lambda_declaration.parameters); break;
+  case ast_let:                         init(node->let.parameters); break;
+  case ast_tuple:                       init(node->tuple.elements); break;
+  case ast_lambda_function_application: init(node->lambda_function_application.arguments); break;
+  case ast_named_function_application:  init(node->named_function_application.arguments); break;
 
-  case tess_ast_eof:
-  case tess_ast_nil:
-  case tess_ast_bool:
-  case tess_ast_symbol:
-  case tess_ast_i64:
-  case tess_ast_u64:
-  case tess_ast_f64:
-  case tess_ast_string:
-  case tess_ast_infix:
-  case tess_ast_let_in:
-  case tess_ast_if_then_else:                break;
+  case ast_eof:
+  case ast_nil:
+  case ast_bool:
+  case ast_symbol:
+  case ast_i64:
+  case ast_u64:
+  case ast_f64:
+  case ast_string:
+  case ast_infix:
+  case ast_let_in:
+  case ast_if_then_else:                break;
   }
 
 #undef init

@@ -139,28 +139,28 @@ nodiscard static int result_ast(parser_t *p, ast_tag_t tag) {
 
 nodiscard static int result_ast_i64(parser_t *p, int64_t val) {
   ast_node_t node;
-  ast_node_init(&node, tess_ast_i64);
+  ast_node_init(&node, ast_i64);
   node.i64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result_ast_node_h);
 }
 
 nodiscard static int result_ast_u64(parser_t *p, uint64_t val) {
   ast_node_t node;
-  ast_node_init(&node, tess_ast_u64);
+  ast_node_init(&node, ast_u64);
   node.u64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result_ast_node_h);
 }
 
 nodiscard static int result_ast_f64(parser_t *p, double val) {
   ast_node_t node;
-  ast_node_init(&node, tess_ast_f64);
+  ast_node_init(&node, ast_f64);
   node.f64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result_ast_node_h);
 }
 
 nodiscard static int result_ast_bool(parser_t *p, bool val) {
   ast_node_t node;
-  ast_node_init(&node, tess_ast_bool);
+  ast_node_init(&node, ast_bool);
   node.bool_.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result_ast_node_h);
 }
@@ -199,7 +199,7 @@ nodiscard static int eat_newlines(parser_t *p) {
       continue;
     } else {
       if (tokenizer_put_back(p->alloc, p->tokenizer, &p->error_token, 1)) return 1;
-      return result_ast(p, tess_ast_eof);
+      return result_ast(p, ast_eof);
     }
   }
 }
@@ -254,7 +254,7 @@ static int a_comma(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_comma == tok->tag) return result_ast_str(p, tess_ast_symbol, ",");
+  if (tok_comma == tok->tag) return result_ast_str(p, ast_symbol, ",");
 
   p->error.tag = tess_err_expected_comma;
   return 1;
@@ -264,7 +264,7 @@ static int a_open_round(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_open_round == tok->tag) return result_ast_str(p, tess_ast_symbol, "(");
+  if (tok_open_round == tok->tag) return result_ast_str(p, ast_symbol, "(");
 
   p->error.tag = tess_err_expected_open_round;
   return 1;
@@ -274,7 +274,7 @@ static int a_close_round(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_close_round == tok->tag) return result_ast_str(p, tess_ast_symbol, ")");
+  if (tok_close_round == tok->tag) return result_ast_str(p, ast_symbol, ")");
 
   p->error.tag = tess_err_expected_close_round;
   return 1;
@@ -285,7 +285,7 @@ static int a_end_of_expression(parser_t *p) {
   token_t const *const tok = &p->error_token;
 
   if (tok_semicolon == tok->tag || tok_one_newline == tok->tag || tok_two_newline == tok->tag)
-    return result_ast_str(p, tess_ast_symbol, ";");
+    return result_ast_str(p, ast_symbol, ";");
 
   p->error.tag = tess_err_unfinished_expression;
   return 1;
@@ -295,7 +295,7 @@ static int a_end_of_expression(parser_t *p) {
 //   if (next_token(p, &p->error_token)) return 1;
 //   token_t const *const tok = &p->error_token;
 
-//   if (tok_symbol == tok->tag) return result_ast_str(p, tess_ast_symbol, tok->s);
+//   if (tok_symbol == tok->tag) return result_ast_str(p, ast_symbol, tok->s);
 
 //   p->error.tag = tess_err_expected_close_round;
 //   return 1;
@@ -325,7 +325,7 @@ static int a_identifier(parser_t *parser) {
         // check for reserved words, which are not allowed as identifiers
         if (is_reserved(tok->s)) goto error;
 
-        return result_ast_str(parser, tess_ast_symbol, tok->s);
+        return result_ast_str(parser, ast_symbol, tok->s);
       }
     }
   }
@@ -343,7 +343,7 @@ static int a_infix_operator(parser_t *p) {
   if (tok_symbol == tok->tag) {
 
     if (is_arithmetic_operator(tok->s) || is_relational_operator(tok->s))
-      return result_ast_str(p, tess_ast_symbol, tok->s);
+      return result_ast_str(p, ast_symbol, tok->s);
   }
 
   p->error.tag = tess_err_expected_operator;
@@ -355,7 +355,7 @@ static int the_symbol(parser_t *p, char const *const want) {
   token_t const *const tok = &p->error_token;
 
   if (tok_symbol == tok->tag) {
-    if (0 == strcmp(want, tok->s)) return result_ast_str(p, tess_ast_symbol, tok->s);
+    if (0 == strcmp(want, tok->s)) return result_ast_str(p, ast_symbol, tok->s);
   }
 
   p->error.tag = tess_err_expected_symbol;
@@ -366,7 +366,7 @@ static int a_string(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_string == tok->tag) return result_ast_str(p, tess_ast_string, tok->s);
+  if (tok_string == tok->tag) return result_ast_str(p, ast_string, tok->s);
 
   p->error.tag = tess_err_expected_string;
   return 1;
@@ -449,7 +449,7 @@ static int a_equal_sign(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_equal_sign == tok->tag) return result_ast_str(p, tess_ast_symbol, "=");
+  if (tok_equal_sign == tok->tag) return result_ast_str(p, ast_symbol, "=");
 
   p->error.tag = tess_err_expected_equal_sign;
   return 1;
@@ -459,7 +459,7 @@ static int a_arrow(parser_t *p) {
   if (next_token(p, &p->error_token)) return 1;
   token_t const *const tok = &p->error_token;
 
-  if (tok_arrow == tok->tag) return result_ast_str(p, tess_ast_symbol, "->");
+  if (tok_arrow == tok->tag) return result_ast_str(p, ast_symbol, "->");
 
   p->error.tag = tess_err_expected_arrow;
   return 1;
@@ -467,7 +467,7 @@ static int a_arrow(parser_t *p) {
 
 static int a_nil(parser_t *p) {
 
-  if ((0 == a_try(p, &a_open_round)) && (0 == a_try(p, &a_close_round))) return result_ast(p, tess_ast_nil);
+  if ((0 == a_try(p, &a_open_round)) && (0 == a_try(p, &a_close_round))) return result_ast(p, ast_nil);
 
   p->error.tag = tess_err_expected_arrow;
   return 1;
@@ -488,7 +488,7 @@ static int function_declaration(parser_t *p) {
   if (0 == a_try(p, &a_nil)) {
 
     ast_node_t node;
-    ast_node_init(&node, tess_ast_function_declaration);
+    ast_node_init(&node, ast_function_declaration);
     node.function_declaration.name = name;
     memcpy(&node.function_declaration.parameters, &parameters, sizeof parameters);
     if (result_ast_node(p, &node)) return 1;
@@ -506,7 +506,7 @@ static int function_declaration(parser_t *p) {
     if (0 == a_try(p, &a_equal_sign)) {
 
       ast_node_t node;
-      ast_node_init(&node, tess_ast_function_declaration);
+      ast_node_init(&node, ast_function_declaration);
       node.function_declaration.name = name;
       memcpy(&node.function_declaration.parameters, &parameters, sizeof parameters);
       if (result_ast_node(p, &node)) return 1;
@@ -537,7 +537,7 @@ static int lambda_declaration(parser_t *p) {
     if (0 == a_try(p, &a_arrow)) {
 
       ast_node_t node;
-      ast_node_init(&node, tess_ast_lambda_declaration);
+      ast_node_init(&node, ast_lambda_declaration);
       memcpy(&node.lambda_declaration.parameters, &parameters, sizeof parameters);
       if (result_ast_node(p, &node)) return 1;
 
@@ -577,7 +577,7 @@ static int function_application(parser_t *p) {
     if (0 == a_try(p, &a_end_of_expression)) {
 
       ast_node_t node;
-      ast_node_init(&node, tess_ast_named_function_application);
+      ast_node_init(&node, ast_named_function_application);
       node.named_function_application.name = name;
       memcpy(&node.named_function_application.arguments, &arguments, sizeof arguments);
       if (result_ast_node(p, &node)) return 1;
@@ -625,7 +625,7 @@ static int if_then_else(parser_t *p) {
   no = p->result_ast_node_h;
 
   ast_node_t node;
-  ast_node_init(&node, tess_ast_if_then_else);
+  ast_node_init(&node, ast_if_then_else);
   node.if_then_else.condition = cond;
   node.if_then_else.yes       = yes;
   node.if_then_else.no        = no;
@@ -652,7 +652,7 @@ static int infix_operation(parser_t *p) {
   size_t const rhs = p->result_ast_node_h;
 
   ast_node_t   node;
-  ast_node_init(&node, tess_ast_infix);
+  ast_node_init(&node, ast_infix);
   node.infix.left  = lhs;
   node.infix.right = rhs;
   node.infix.op    = op;
@@ -671,7 +671,7 @@ static int lambda_function(parser_t *p) {
   size_t     defn_h = p->result_ast_node_h;
 
   ast_node_t node;
-  ast_node_init(&node, tess_ast_lambda_function);
+  ast_node_init(&node, ast_lambda_function);
   node.lambda_function.body = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
@@ -691,7 +691,7 @@ static int lambda_function_application(parser_t *p) {
   // surrouneded by round braces
   size_t lambda_h;
   parser_result(p, &lambda_h);
-  if (ast_pool_at(p->ast_pool, lambda_h)->tag != tess_ast_lambda_function) {
+  if (ast_pool_at(p->ast_pool, lambda_h)->tag != ast_lambda_function) {
     p->error.tag = tess_err_expected_lambda;
     return 1;
   }
@@ -711,7 +711,7 @@ static int lambda_function_application(parser_t *p) {
 
     if (0 == a_try(p, &a_end_of_expression)) {
       ast_node_t node;
-      ast_node_init(&node, tess_ast_lambda_function_application);
+      ast_node_init(&node, ast_lambda_function_application);
       node.lambda_function_application.lambda = lambda_h;
       memcpy(&node.lambda_function_application.arguments, &arguments, sizeof arguments);
       return result_ast_node(p, &node);
@@ -748,7 +748,7 @@ static int let_in_form(parser_t *p) {
   size_t     body = p->result_ast_node_h;
 
   ast_node_t node;
-  ast_node_init(&node, tess_ast_let_in);
+  ast_node_init(&node, ast_let_in);
   node.let_in.name  = sym;
   node.let_in.value = defn;
   node.let_in.body  = body;
@@ -765,7 +765,7 @@ static int let_form(parser_t *p) {
   size_t     defn_h = p->result_ast_node_h;
 
   ast_node_t node;
-  ast_node_init(&node, tess_ast_let);
+  ast_node_init(&node, ast_let);
 
   // get declaration out of pool to move into new node
   ast_node_t *decl = ast_pool_at(p->ast_pool, decl_h);
@@ -797,7 +797,7 @@ static int tuple_expression(parser_t *p) {
   while (true) {
     if (0 == a_try(p, &a_close_round)) {
       ast_node_t node;
-      ast_node_init(&node, tess_ast_tuple);
+      ast_node_init(&node, ast_tuple);
       memcpy(&node.tuple.elements, &elements, sizeof elements);
       return result_ast_node(p, &node);
     }

@@ -190,7 +190,7 @@ int test_parser_basic(void) {
   parser_result(p, &node_h);
   ast_node_t *node = ast_pool_at(pool, node_h);
 
-  error += tess_ast_symbol == node->tag ? 0 : 1;
+  error += ast_symbol == node->tag ? 0 : 1;
   error += 0 == strcmp(node->symbol.name, "a") ? 0 : 1;
 
   parser_deinit(p);
