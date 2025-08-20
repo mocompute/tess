@@ -56,7 +56,7 @@ int test_tokenizer_basic(void) {
 
   {
     char const *input = "  (  )  ";
-    tokenizer_init(alloc, t, input, strlen(input));
+    if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
     token_t           tok;
     tokenizer_error_t err;
@@ -101,7 +101,7 @@ int test_tokenizer_string(void) {
 
   {
     char const *input = " \"abcdef\"  ";
-    tokenizer_init(alloc, t, input, strlen(input));
+    if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
     token_t           tok;
     tokenizer_error_t err;
@@ -130,7 +130,7 @@ int test_tokenizer_terminal_static_string(void) {
 
   {
     char const *input = "-";
-    tokenizer_init(alloc, t, input, strlen(input));
+    if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
     token_t           tok;
     tokenizer_error_t err;
@@ -157,11 +157,16 @@ int test_parser_init(void) {
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  parser_t        *p     = parser_alloc(alloc);
-  parser_init(alloc, p, input, strlen(input));
+  ast_pool_t      *pool  = ast_pool_alloc(alloc);
+  if (ast_pool_init(alloc, pool)) return error + 1;
+
+  parser_t *p = parser_alloc(alloc);
+  if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
 
   parser_deinit(p);
   parser_dealloc(alloc, &p);
+  ast_pool_deinit(alloc, pool);
+  ast_pool_dealloc(alloc, &pool);
 
   return error;
 }
@@ -169,23 +174,29 @@ int test_parser_init(void) {
 int test_parser_basic(void) {
   int              error = 0;
 
-  char const      *input = ",";
+  char const      *input = "a";
 
   mos_allocator_t *alloc = mos_alloc_default_allocator();
 
-  parser_t        *p     = parser_alloc(alloc);
-  parser_init(alloc, p, input, strlen(input));
+  ast_pool_t      *pool  = ast_pool_alloc(alloc);
+  if (ast_pool_init(alloc, pool)) return error + 1;
+
+  parser_t *p = parser_alloc(alloc);
+  if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
 
   if (parser_next(p)) return error + 1;
 
-  ast_node_t *node = 0;
-  parser_result(p, &node, 0);
+  size_t node_h = 0;
+  parser_result(p, &node_h);
+  ast_node_t *node = ast_pool_at(pool, node_h);
 
   error += tess_ast_symbol == node->tag ? 0 : 1;
-  error += 0 == strcmp(node->name, ",") ? 0 : 1;
+  error += 0 == strcmp(node->symbol.name, "a") ? 0 : 1;
 
   parser_deinit(p);
   parser_dealloc(alloc, &p);
+  ast_pool_deinit(alloc, pool);
+  ast_pool_dealloc(alloc, &pool);
 
   return error;
 }

@@ -8,12 +8,6 @@ Checks:
   - -bugprone-easily-swappable-parameters
   - -bugprone-crtp-constructor-accessibility
   - performance-*
-  - cppcoreguidelines-*
-  - -cppcoreguidelines-avoid-goto
-  - -cppcoreguidelines-avoid-magic-numbers
-  - -cppcoreguidelines-avoid-const-or-ref-data-members
-  - -cppcoreguidelines-macro-usage
-  - -cppcoreguidelines-pro-type-union-access
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - ''

@@ -2,6 +2,7 @@
 #define TESS_AST_H
 
 #include "alloc.h"
+#include "nodiscard.h"
 #include "vector.h"
 
 #include <stdint.h>
@@ -82,11 +83,26 @@ typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
 
 typedef struct ast_node {
   union {
-    char    *name;
-    bool     bool_val;
-    int64_t  i64_val;
-    uint64_t u64_val;
-    double   f64_val;
+
+    struct {
+      char *name;
+    } symbol;
+
+    struct {
+      bool val;
+    } bool_;
+
+    struct {
+      int64_t val;
+    } i64;
+
+    struct {
+      uint64_t val;
+    } u64;
+
+    struct {
+      double val;
+    } f64;
 
     struct {
       ast_operator_t op;
@@ -163,10 +179,10 @@ void tess_type_deinit(mos_allocator_t *, tess_type_t *);
 
 // tess_ast_pool
 
-ast_pool_t *ast_pool_alloc(mos_allocator_t *);
-void        ast_pool_dealloc(mos_allocator_t *, ast_pool_t **);
-void        ast_pool_init(mos_allocator_t *, ast_pool_t *);
-void        ast_pool_deinit(mos_allocator_t *, ast_pool_t *);
+ast_pool_t   *ast_pool_alloc(mos_allocator_t *);
+void          ast_pool_dealloc(mos_allocator_t *, ast_pool_t **);
+nodiscard int ast_pool_init(mos_allocator_t *, ast_pool_t *);
+void          ast_pool_deinit(mos_allocator_t *, ast_pool_t *);
 
 // tess_ast_node
 
@@ -176,10 +192,10 @@ void ast_node_replace(mos_allocator_t *, ast_node_t *, ast_tag_t);
 
 // -- pool operations --
 //
-// move_back() takes ownership of ast_node(s) and invalidates caller's copy
+// [move_back] takes ownership of ast_node(s) and invalidates caller's copy
 
-int         ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
-ast_node_t *ast_pool_at(ast_pool_t *, size_t);
+nodiscard int ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
+ast_node_t   *ast_pool_at(ast_pool_t *, size_t);
 
 // -- utilities --
 

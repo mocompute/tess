@@ -36,15 +36,16 @@ void tokenizer_dealloc(mos_allocator_t *alloc, tokenizer_t **tok) {
   *tok = 0;
 }
 
-void tokenizer_init(mos_allocator_t *alloc, tokenizer_t *tok, char const *input, size_t len) {
+int tokenizer_init(mos_allocator_t *alloc, tokenizer_t *tok, char const *input, size_t len) {
   tok->input     = input;
   tok->input_len = len;
   tok->pos       = 0;
 
   mos_vector_init(&tok->buf, sizeof(char));
-  mos_vector_reserve(alloc, &tok->buf, 32);
+  if (mos_vector_reserve(alloc, &tok->buf, 32)) return 1;
   mos_vector_init(&tok->backtrack, sizeof(token_t));
-  mos_vector_reserve(alloc, &tok->backtrack, 8);
+  if (mos_vector_reserve(alloc, &tok->backtrack, 8)) return 1;
+  return 0;
 }
 
 void tokenizer_deinit(mos_allocator_t *alloc, tokenizer_t *tok) {
@@ -547,8 +548,9 @@ finish:
 
 // -- backtracking --
 
-void tokenizer_put_back(mos_allocator_t *alloc, tokenizer_t *self, token_t const *toks, size_t n_toks) {
+int tokenizer_put_back(mos_allocator_t *alloc, tokenizer_t *self, token_t const *toks, size_t n_toks) {
   for (size_t i = n_toks; i != 0; --i) {
-    mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1]);
+    if (mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1])) return 1;
   }
+  return 0;
 }

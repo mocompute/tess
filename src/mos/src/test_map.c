@@ -81,10 +81,10 @@ int test_big_map(void) {
   mos_allocator_t *alloc = mos_alloc_default_allocator();
   mos_vector_t     vec;
   mos_vector_init(&vec, sizeof(pair_t));
-  mos_vector_reserve(alloc, &vec, N);
+  if (mos_vector_reserve(alloc, &vec, N)) return error + 1;
 
   mos_map_t *map = mos_map_alloc(alloc);
-  mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0);
+  if (mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0)) return error + 1;
 
   for (size_t i = 0; i < N; ++i) {
     // find unique key

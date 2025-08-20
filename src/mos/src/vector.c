@@ -35,6 +35,7 @@ int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) 
   if (new_capacity == 0) new_capacity = 8;
   while (new_capacity < count) new_capacity *= 2;
 
+  // if vec->data is null, this is equivaluent to calling malloc
   void *p = alloc->realloc(vec->data, new_capacity * vec->element_size);
   if (!p) return 1;
 
@@ -82,23 +83,45 @@ void mos_vector_erase(mos_vector_t *vec, char *it) {
   --vec->size;
 }
 
+nodiscard int mos_vector_resize(mos_allocator_t *alloc, mos_vector_t *vec, size_t n) {
+
+  if (n > vec->capacity)
+    if (mos_vector_reserve(alloc, vec, n)) return 1;
+
+  vec->size = n;
+  return 0;
+}
+
 void mos_vector_clear(mos_vector_t *vec) {
+  // Note: Do not free data.
   vec->size = 0;
 }
 
 char *mos_vector_data(mos_vector_t *vec) {
   return vec->data;
 }
+
+void *mos_vector_begin(mos_vector_t *vec) {
+  return vec->data;
+}
+
+void const *mos_vector_end(mos_vector_t *vec) {
+  // points 1 past the end
+  return mos_vector_at(vec, vec->size);
+}
+
 size_t mos_vector_size(mos_vector_t const *vec) {
   return vec->size;
 }
+
 size_t mos_vector_capacity(mos_vector_t const *vec) {
   return vec->capacity;
 }
 
-void mos_vector_assoc_set(mos_allocator_t *alloc, mos_vector_t *vec, void const *pair) {
+int mos_vector_assoc_set(mos_allocator_t *alloc, mos_vector_t *vec, void const *pair) {
   assert(vec->element_size >= sizeof(size_t));
-  mos_vector_push_back(alloc, vec, pair);
+  if (mos_vector_push_back(alloc, vec, pair)) return 1;
+  return 0;
 }
 
 char *mos_vector_assoc_get(mos_vector_t *vec, size_t key) {

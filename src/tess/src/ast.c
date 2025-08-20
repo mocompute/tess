@@ -55,12 +55,20 @@ void ast_pool_dealloc(mos_allocator_t *alloc, ast_pool_t **pool) {
   *pool = 0;
 }
 
-void ast_pool_init(mos_allocator_t *alloc, ast_pool_t *pool) {
+int ast_pool_init(mos_allocator_t *alloc, ast_pool_t *pool) {
   mos_vector_init(&pool->data, sizeof(ast_node_t));
-  mos_vector_reserve(alloc, &pool->data, 32);
+  if (mos_vector_reserve(alloc, &pool->data, 32)) return 1;
+  return 0;
 }
 
 void ast_pool_deinit(mos_allocator_t *alloc, ast_pool_t *pool) {
+  // deinit all the ast nodes
+  ast_node_t       *it  = mos_vector_begin(&pool->data);
+  ast_node_t const *end = mos_vector_end(&pool->data);
+  while (it != end) {
+    ast_node_deinit(alloc, it++);
+  }
+
   mos_vector_deinit(alloc, &pool->data);
   mos_alloc_invalidate(pool, sizeof *pool);
 }
@@ -79,23 +87,23 @@ void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
   case tess_ast_tuple:                       deinit(node->tuple.elements); break;
   case tess_ast_lambda_function_application: deinit(node->lambda_function_application.arguments); break;
   case tess_ast_named_function_application:  deinit(node->named_function_application.arguments); break;
+  case tess_ast_symbol:
+    if (node->symbol.name) {
+      // TODO: intern or pool strings
+      alloc->free(node->symbol.name);
+      node->symbol.name = 0;
+    }
+    break;
   case tess_ast_eof:
   case tess_ast_nil:
   case tess_ast_bool:
-  case tess_ast_symbol:
   case tess_ast_i64:
   case tess_ast_u64:
   case tess_ast_f64:
   case tess_ast_string:
   case tess_ast_infix:
   case tess_ast_let_in:
-  case tess_ast_if_then_else:                break;
-  }
-
-  // TODO: intern or pool symbol strings
-  if (node->name) {
-    alloc->free(node->name);
-    node->name = 0;
+  case tess_ast_if_then_else: break;
   }
 
 #undef deinit

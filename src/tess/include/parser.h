@@ -2,6 +2,7 @@
 #define TESS_PARSER_H
 
 #include "ast.h"
+#include "nodiscard.h"
 #include "tokenizer.h"
 
 #include "alloc.h"
@@ -16,10 +17,10 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-parser_t *parser_alloc(mos_allocator_t *);
-void      parser_dealloc(mos_allocator_t *, parser_t **);
-int       parser_init(mos_allocator_t *, parser_t *, char const *, size_t);
-void      parser_deinit(parser_t *);
+parser_t     *parser_alloc(mos_allocator_t *);
+void          parser_dealloc(mos_allocator_t *, parser_t **);
+nodiscard int parser_init(mos_allocator_t *, parser_t *, ast_pool_t *, char const *, size_t);
+void          parser_deinit(parser_t *);
 
 // -- access --
 //
@@ -32,6 +33,6 @@ parser_error_t const *parser_error(parser_t *);
 // -- parser --
 
 int  parser_next(parser_t *);
-void parser_result(parser_t *, ast_node_t **, size_t *);
+void parser_result(parser_t *, size_t *);
 
 #endif
