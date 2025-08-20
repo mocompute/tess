@@ -40,7 +40,7 @@ int test_vector(void) {
   error += ((int *)mos_vector_data(vec))[2] == 654 ? 0 : 1;
 
   mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, vec);
+  mos_vector_dealloc(alloc, &vec);
 
   return error;
 }
@@ -85,7 +85,7 @@ int test_assoc(void) {
   error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
 
   mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, vec);
+  mos_vector_dealloc(alloc, &vec);
 
   return error;
 }
@@ -107,7 +107,7 @@ int test_assoc_set(void) {
   error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
 
   mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, vec);
+  mos_vector_dealloc(alloc, &vec);
   return error;
 }
 

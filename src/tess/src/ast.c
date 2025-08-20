@@ -4,6 +4,8 @@
 
 #include <string.h>
 
+// -- statics --
+
 // -- tess_type allocation and deallocation --
 
 void tess_type_init(tess_type_t *ty, tess_type_tag_t tag) {
@@ -44,34 +46,102 @@ void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
 
 // -- tess_type_pool allocation and deallocation --
 
-tess_type_pool_t *tess_type_pool_alloc(mos_allocator_t *alloc) {
-  return alloc->malloc(sizeof(tess_type_pool_t));
+tess_ast_pool_t *tess_ast_pool_alloc(mos_allocator_t *alloc) {
+  return alloc->malloc(sizeof(tess_ast_pool_t));
 }
 
-void tess_type_pool_dealloc(mos_allocator_t *alloc, tess_type_pool_t *pool) {
-  alloc->free(pool);
+void tess_ast_pool_dealloc(mos_allocator_t *alloc, tess_ast_pool_t **pool) {
+  alloc->free(*pool);
+  *pool = 0;
 }
 
-void tess_type_pool_init(mos_allocator_t *alloc, tess_type_pool_t *pool) {
-  mos_vector_init(&pool->data, sizeof(tess_type_t));
+void tess_ast_pool_init(mos_allocator_t *alloc, tess_ast_pool_t *pool) {
+  mos_vector_init(&pool->data, sizeof(tess_ast_node_t));
   mos_vector_reserve(alloc, &pool->data, 32);
 }
 
-void tess_type_pool_deinit(mos_allocator_t *alloc, tess_type_pool_t *pool) {
+void tess_ast_pool_deinit(mos_allocator_t *alloc, tess_ast_pool_t *pool) {
   mos_vector_deinit(alloc, &pool->data);
   mos_alloc_invalidate(pool, sizeof *pool);
 }
 
+// -- tess_ast_node init and deinit --
+
+void tess_ast_node_deinit(mos_allocator_t *alloc, tess_ast_node_t *node) {
+
+#define deinit(P) mos_vector_deinit(alloc, &P)
+
+  switch (node->tag) {
+  case tess_ast_lambda_function:             deinit(node->lambda_function.parameters); break;
+  case tess_ast_function_declaration:        deinit(node->function_declaration.parameters); break;
+  case tess_ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
+  case tess_ast_let:                         deinit(node->let.parameters); break;
+  case tess_ast_tuple:                       deinit(node->tuple.elements); break;
+  case tess_ast_lambda_function_application: deinit(node->lambda_function_application.arguments); break;
+  case tess_ast_named_function_application:  deinit(node->named_function_application.arguments); break;
+  case tess_ast_eof:
+  case tess_ast_nil:
+  case tess_ast_bool:
+  case tess_ast_symbol:
+  case tess_ast_i64:
+  case tess_ast_u64:
+  case tess_ast_f64:
+  case tess_ast_string:
+  case tess_ast_infix:
+  case tess_ast_let_in:
+  case tess_ast_if_then_else:                break;
+  }
+
+  // TODO: intern or pool symbol strings
+  if (node->name) {
+    alloc->free(node->name);
+    node->name = 0;
+  }
+
+#undef deinit
+}
+
+void tess_ast_node_init(tess_ast_node_t *node, tess_ast_tag_t tag) {
+
+#define init(P) mos_vector_init(&P, sizeof(size_t))
+
+  memset(node, 0, sizeof *node);
+  node->tag = tag;
+
+  switch (node->tag) {
+  case tess_ast_lambda_function:             init(node->lambda_function.parameters); break;
+  case tess_ast_function_declaration:        init(node->function_declaration.parameters); break;
+  case tess_ast_lambda_declaration:          init(node->lambda_declaration.parameters); break;
+  case tess_ast_let:                         init(node->let.parameters); break;
+  case tess_ast_tuple:                       init(node->tuple.elements); break;
+  case tess_ast_lambda_function_application: init(node->lambda_function_application.arguments); break;
+  case tess_ast_named_function_application:  init(node->named_function_application.arguments); break;
+
+  case tess_ast_eof:
+  case tess_ast_nil:
+  case tess_ast_bool:
+  case tess_ast_symbol:
+  case tess_ast_i64:
+  case tess_ast_u64:
+  case tess_ast_f64:
+  case tess_ast_string:
+  case tess_ast_infix:
+  case tess_ast_let_in:
+  case tess_ast_if_then_else:                break;
+  }
+
+#undef init
+}
+
 // -- pool operations --
 
-// takes ownership of type's buffers and invalidates caller's copy.
-int tess_type_pool_move_back(mos_allocator_t *alloc, tess_type_pool_t *pool, tess_type_t *ty,
-                             size_t *handle) {
+int tess_ast_pool_move_back(mos_allocator_t *alloc, tess_ast_pool_t *pool, tess_ast_node_t *node,
+                            size_t *handle) {
 
-  if (mos_vector_push_back(alloc, &pool->data, ty)) return 1;
+  if (mos_vector_push_back(alloc, &pool->data, node)) return 1;
 
   *handle = mos_vector_size(&pool->data) - 1;
-  mos_alloc_invalidate(ty, sizeof *ty);
+  mos_alloc_invalidate(node, sizeof *node);
 
   return 0;
 }

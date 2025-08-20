@@ -11,8 +11,9 @@ mos_vector_t *mos_vector_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(mos_vector_t));
 }
 
-void mos_vector_dealloc(mos_allocator_t *alloc, mos_vector_t *p) {
-  alloc->free(p);
+void mos_vector_dealloc(mos_allocator_t *alloc, mos_vector_t **p) {
+  alloc->free(*p);
+  *p = 0;
 }
 
 void mos_vector_init(mos_vector_t *vec, size_t element_size) {

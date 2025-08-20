@@ -25,7 +25,7 @@ typedef struct mos_map_header {
 // -- allocation and deallocation --
 
 mos_map_t *mos_map_alloc(mos_allocator_t *);
-void       mos_map_dealloc(mos_allocator_t *, mos_map_t *);
+void       mos_map_dealloc(mos_allocator_t *, mos_map_t **);
 int        mos_map_init(mos_allocator_t *, mos_map_t *, size_t element_size, uint32_t buckets,
                         float max_load_factor);
 void       mos_map_deinit(mos_allocator_t *, mos_map_t *);

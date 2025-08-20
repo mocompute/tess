@@ -151,11 +151,11 @@ static int set_one_cell(mos_map_t *map, char *cell) {
 }
 
 static int grow_buckets(mos_allocator_t *alloc, mos_map_t *map) {
-  // make a new map with 2x the number of buckets. Copy all data to
+  // make a new map with 1.618x the number of buckets. Copy all data to
   // the new map. Then release the old map's buffers, and overwrite
   // its struct with the new map.
 
-  size_t new_buckets = (size_t)map->buckets * 2U;
+  size_t new_buckets = (size_t)(map->buckets * 1.618);
 
   if (new_buckets > UINT32_MAX) return 1;
 
@@ -226,8 +226,9 @@ mos_map_t *mos_map_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(mos_map_t));
 }
 
-void mos_map_dealloc(mos_allocator_t *alloc, mos_map_t *p) {
-  alloc->free(p);
+void mos_map_dealloc(mos_allocator_t *alloc, mos_map_t **p) {
+  alloc->free(*p);
+  *p = 0;
 }
 
 int mos_map_init(mos_allocator_t *alloc, mos_map_t *map, size_t element_size, uint32_t buckets,

@@ -31,8 +31,9 @@ tess_tokenizer_t *tess_tokenizer_alloc(mos_allocator_t *alloc) {
   return alloc->malloc(sizeof(tess_tokenizer_t));
 }
 
-void tess_tokenizer_dealloc(mos_allocator_t *alloc, tess_tokenizer_t *tok) {
-  alloc->free(tok);
+void tess_tokenizer_dealloc(mos_allocator_t *alloc, tess_tokenizer_t **tok) {
+  alloc->free(*tok);
+  *tok = 0;
 }
 
 void tess_tokenizer_init(mos_allocator_t *alloc, tess_tokenizer_t *tok, char const *input, size_t len) {

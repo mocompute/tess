@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include "ast.h"
 #include "parser.h"
 #include "tokenizer.h"
 
@@ -87,7 +88,7 @@ int test_tokenizer_basic(void) {
     tess_tokenizer_deinit(alloc, t);
   }
 
-  tess_tokenizer_dealloc(alloc, t);
+  tess_tokenizer_dealloc(alloc, &t);
 
   return error;
 }
@@ -115,7 +116,7 @@ int test_tokenizer_string(void) {
     tess_tokenizer_deinit(alloc, t);
   }
 
-  tess_tokenizer_dealloc(alloc, t);
+  tess_tokenizer_dealloc(alloc, &t);
 
   return error;
 }
@@ -144,7 +145,7 @@ int test_tokenizer_terminal_static_string(void) {
     tess_tokenizer_deinit(alloc, t);
   }
 
-  tess_tokenizer_dealloc(alloc, t);
+  tess_tokenizer_dealloc(alloc, &t);
 
   return error;
 }
@@ -159,8 +160,32 @@ int test_parser_init(void) {
   tess_parser_t   *p     = tess_parser_alloc(alloc);
   tess_parser_init(alloc, p, input, strlen(input));
 
-  tess_parser_deinit(alloc, p);
-  tess_parser_dealloc(alloc, p);
+  tess_parser_deinit(p);
+  tess_parser_dealloc(alloc, &p);
+
+  return error;
+}
+
+int test_parser_basic(void) {
+  int              error = 0;
+
+  char const      *input = ",";
+
+  mos_allocator_t *alloc = mos_alloc_default_allocator();
+
+  tess_parser_t   *p     = tess_parser_alloc(alloc);
+  tess_parser_init(alloc, p, input, strlen(input));
+
+  if (tess_parser_next(p)) return error + 1;
+
+  tess_ast_node_t *node = 0;
+  tess_parser_result(p, &node, 0);
+
+  error += tess_ast_symbol == node->tag ? 0 : 1;
+  error += 0 == strcmp(node->name, ",") ? 0 : 1;
+
+  tess_parser_deinit(p);
+  tess_parser_dealloc(alloc, &p);
 
   return error;
 }
@@ -186,6 +211,7 @@ int main(void) {
   T(test_tokenizer_string);
   T(test_tokenizer_terminal_static_string);
   T(test_parser_init);
+  T(test_parser_basic);
 
   return error;
 }

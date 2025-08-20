@@ -64,7 +64,7 @@ int test_map(void) {
   error += 456 == *(int *)mos_map_get(map, 1) ? 0 : 1;
 
   mos_map_deinit(alloc, map);
-  mos_map_dealloc(alloc, map);
+  mos_map_dealloc(alloc, &map);
 
   return error;
 }
@@ -92,7 +92,9 @@ int test_big_map(void) {
     while (mos_map_get(map, (size_t)key)) key = rand();
 
     pair_t pair = {key, rand()};
-    if (mos_vector_push_back(alloc, &vec, &pair)) { return 1; }
+    if (mos_vector_push_back(alloc, &vec, &pair)) {
+      return 1;
+    }
     if (mos_map_set(alloc, map, (size_t)pair.left, &pair.right)) return 1;
   }
 
@@ -115,7 +117,7 @@ int test_big_map(void) {
   }
 
   mos_map_deinit(alloc, map);
-  mos_map_dealloc(alloc, map);
+  mos_map_dealloc(alloc, &map);
 
   mos_vector_deinit(alloc, &vec);
   return error;

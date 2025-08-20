@@ -19,7 +19,7 @@ typedef struct tess_tokenizer tess_tokenizer_t;
 //
 
 tess_tokenizer_t *tess_tokenizer_alloc(mos_allocator_t *);
-void              tess_tokenizer_dealloc(mos_allocator_t *, tess_tokenizer_t *);
+void              tess_tokenizer_dealloc(mos_allocator_t *, tess_tokenizer_t **);
 void              tess_tokenizer_init(mos_allocator_t *, tess_tokenizer_t *, char const *, size_t);
 void              tess_tokenizer_deinit(mos_allocator_t *, tess_tokenizer_t *);
 

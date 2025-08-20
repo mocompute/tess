@@ -15,7 +15,7 @@ typedef struct mos_vector {
 // -- allocation and deallocation --
 
 mos_vector_t *mos_vector_alloc(mos_allocator_t *);
-void          mos_vector_dealloc(mos_allocator_t *, mos_vector_t *);
+void          mos_vector_dealloc(mos_allocator_t *, mos_vector_t **);
 void          mos_vector_init(mos_vector_t *, size_t element_size);
 void          mos_vector_deinit(mos_allocator_t *, mos_vector_t *);
 int           mos_vector_reserve(mos_allocator_t *, mos_vector_t *, size_t);
