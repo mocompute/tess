@@ -44,6 +44,11 @@ int mos_vector_reserve(mos_allocator_t *alloc, mos_vector_t *vec, size_t count) 
   return 0;
 }
 
+void mos_vector_move(mos_vector_t *dst, mos_vector_t *src) {
+  memcpy(dst, src, sizeof *dst);
+  mos_alloc_invalidate(src, sizeof *src);
+}
+
 bool mos_vector_empty(mos_vector_t const *vec) {
   return vec->size == 0;
 }

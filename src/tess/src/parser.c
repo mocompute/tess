@@ -490,7 +490,7 @@ static int function_declaration(parser_t *p) {
     ast_node_t node;
     ast_node_init(&node, ast_function_declaration);
     node.function_declaration.name = name;
-    memcpy(&node.function_declaration.parameters, &parameters, sizeof parameters);
+    mos_vector_move(&node.function_declaration.parameters, &parameters);
     if (result_ast_node(p, &node)) return 1;
 
     return 0;
@@ -508,7 +508,7 @@ static int function_declaration(parser_t *p) {
       ast_node_t node;
       ast_node_init(&node, ast_function_declaration);
       node.function_declaration.name = name;
-      memcpy(&node.function_declaration.parameters, &parameters, sizeof parameters);
+      mos_vector_move(&node.function_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
 
       return 0;
@@ -538,7 +538,7 @@ static int lambda_declaration(parser_t *p) {
 
       ast_node_t node;
       ast_node_init(&node, ast_lambda_declaration);
-      memcpy(&node.lambda_declaration.parameters, &parameters, sizeof parameters);
+      mos_vector_move(&node.lambda_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
 
       return 0;
@@ -579,7 +579,7 @@ static int function_application(parser_t *p) {
       ast_node_t node;
       ast_node_init(&node, ast_named_function_application);
       node.named_function_application.name = name;
-      memcpy(&node.named_function_application.arguments, &arguments, sizeof arguments);
+      mos_vector_move(&node.named_function_application.arguments, &arguments);
       if (result_ast_node(p, &node)) return 1;
     }
 
@@ -676,11 +676,7 @@ static int lambda_function(parser_t *p) {
 
   // move the vector from the function_declaration node to the new ast node
   ast_node_t *decl = ast_pool_at(p->ast_pool, decl_h);
-  memcpy(&node.lambda_function.parameters, &decl->function_declaration.parameters,
-         sizeof node.lambda_function.parameters);
-  decl->function_declaration.parameters.data = 0;
-  mos_vector_clear(&decl->function_declaration.parameters);
-
+  mos_vector_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
   return result_ast_node(p, &node);
 }
 
@@ -713,7 +709,7 @@ static int lambda_function_application(parser_t *p) {
       ast_node_t node;
       ast_node_init(&node, ast_lambda_function_application);
       node.lambda_function_application.lambda = lambda_h;
-      memcpy(&node.lambda_function_application.arguments, &arguments, sizeof arguments);
+      mos_vector_move(&node.lambda_function_application.arguments, &arguments);
       return result_ast_node(p, &node);
     }
 
@@ -773,10 +769,7 @@ static int let_form(parser_t *p) {
   node.let.body    = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
-  memcpy(&node.let.parameters, &decl->function_declaration.parameters, sizeof node.let.parameters);
-  decl->function_declaration.parameters.data = 0;
-  mos_vector_clear(&decl->function_declaration.parameters);
-
+  mos_vector_move(&node.let.parameters, &decl->function_declaration.parameters);
   return result_ast_node(p, &node);
 }
 
@@ -798,7 +791,7 @@ static int tuple_expression(parser_t *p) {
     if (0 == a_try(p, &a_close_round)) {
       ast_node_t node;
       ast_node_init(&node, ast_tuple);
-      memcpy(&node.tuple.elements, &elements, sizeof elements);
+      mos_vector_move(&node.tuple.elements, &elements);
       return result_ast_node(p, &node);
     }
 

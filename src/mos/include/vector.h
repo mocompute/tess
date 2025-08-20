@@ -25,6 +25,7 @@ void          mos_vector_dealloc(mos_allocator_t *, mos_vector_t **);
 void          mos_vector_init(mos_vector_t *, size_t element_size);
 void          mos_vector_deinit(mos_allocator_t *, mos_vector_t *);
 nodiscard int mos_vector_reserve(mos_allocator_t *, mos_vector_t *, size_t);
+void          mos_vector_move(mos_vector_t *dst, mos_vector_t *src);
 
 // -- read-only access --
 
