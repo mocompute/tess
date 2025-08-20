@@ -172,12 +172,14 @@ void        ast_pool_deinit(mos_allocator_t *, ast_pool_t *);
 
 void ast_node_init(ast_node_t *, ast_tag_t);
 void ast_node_deinit(mos_allocator_t *, ast_node_t *);
+void ast_node_replace(mos_allocator_t *, ast_node_t *, ast_tag_t);
 
 // -- pool operations --
 //
 // move_back() takes ownership of ast_node(s) and invalidates caller's copy
 
-int ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
+int         ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
+ast_node_t *ast_pool_at(ast_pool_t *, size_t);
 
 // -- utilities --
 

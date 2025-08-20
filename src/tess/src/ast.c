@@ -133,6 +133,11 @@ void ast_node_init(ast_node_t *node, ast_tag_t tag) {
 #undef init
 }
 
+void ast_node_replace(mos_allocator_t *alloc, ast_node_t *node, ast_tag_t tag) {
+  ast_node_deinit(alloc, node);
+  ast_node_init(node, tag);
+}
+
 // -- pool operations --
 
 int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *node, size_t *handle) {
@@ -143,6 +148,10 @@ int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *nod
   mos_alloc_invalidate(node, sizeof *node);
 
   return 0;
+}
+
+ast_node_t *ast_pool_at(ast_pool_t *pool, size_t handle) {
+  return mos_vector_at(&pool->data, handle);
 }
 
 // -- utilities --
