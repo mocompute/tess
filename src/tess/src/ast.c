@@ -152,14 +152,14 @@ int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *nod
 
   if (mos_vector_push_back(alloc, &pool->data, node)) return 1;
 
-  *handle = mos_vector_size(&pool->data) - 1;
+  handle->val = mos_vector_size(&pool->data) - 1;
   mos_alloc_invalidate(node, sizeof *node);
 
   return 0;
 }
 
 ast_node_t *ast_pool_at(ast_pool_t *pool, ast_node_h handle) {
-  return mos_vector_at(&pool->data, handle);
+  return mos_vector_at(&pool->data, handle.val);
 }
 
 // -- utilities --

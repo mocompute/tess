@@ -81,7 +81,9 @@ typedef struct tess_type {
 typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
 #undef TESS_ENUM
 
-typedef size_t ast_node_h; // handle issued by ast_pool
+typedef struct {
+  size_t val;
+} ast_node_h;
 
 typedef struct ast_node {
   union {

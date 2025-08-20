@@ -186,7 +186,7 @@ int test_parser_basic(void) {
 
   if (parser_next(p)) return error + 1;
 
-  size_t node_h = 0;
+  ast_node_h node_h;
   parser_result(p, &node_h);
   ast_node_t *node = ast_pool_at(pool, node_h);
 
