@@ -41,20 +41,20 @@ int token_init_sn(mos_allocator_t *alloc, token_t *tok, token_tag_t tag, char co
 
 void token_deinit(mos_allocator_t *alloc, token_t *tok) {
   switch (tok->tag) {
-  case tess_tok_one_newline:
-  case tess_tok_two_newline:
-  case tess_tok_comma:
-  case tess_tok_semicolon:
-  case tess_tok_arrow:
-  case tess_tok_open_round:
-  case tess_tok_close_round:
-  case tess_tok_equal_sign:
-  case tess_tok_invalid:
-  case tess_tok_newline_indent: break;
-  case tess_tok_number:
-  case tess_tok_symbol:
-  case tess_tok_string:
-  case tess_tok_comment:        alloc->free(tok->s); break;
+  case tok_one_newline:
+  case tok_two_newline:
+  case tok_comma:
+  case tok_semicolon:
+  case tok_arrow:
+  case tok_open_round:
+  case tok_close_round:
+  case tok_equal_sign:
+  case tok_invalid:
+  case tok_newline_indent: break;
+  case tok_number:
+  case tok_symbol:
+  case tok_string:
+  case tok_comment:        alloc->free(tok->s); break;
   }
 
   mos_alloc_invalidate(tok, sizeof *tok);
@@ -71,21 +71,21 @@ char *token_to_string(mos_allocator_t *alloc, token_t const *tok) {
   char buf[64];
 
   switch (tok->tag) {
-  case tess_tok_one_newline:
-  case tess_tok_two_newline:
-  case tess_tok_comma:
-  case tess_tok_semicolon:
-  case tess_tok_arrow:
-  case tess_tok_open_round:
-  case tess_tok_close_round:
-  case tess_tok_equal_sign:
-  case tess_tok_invalid:        sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
-  case tess_tok_newline_indent: sprintf(buf, "(%s %d)", token_tag_to_string(tok->tag), tok->val); break;
+  case tok_one_newline:
+  case tok_two_newline:
+  case tok_comma:
+  case tok_semicolon:
+  case tok_arrow:
+  case tok_open_round:
+  case tok_close_round:
+  case tok_equal_sign:
+  case tok_invalid:        sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
+  case tok_newline_indent: sprintf(buf, "(%s %d)", token_tag_to_string(tok->tag), tok->val); break;
 
-  case tess_tok_number:
-  case tess_tok_symbol:
-  case tess_tok_string:
-  case tess_tok_comment:        {
+  case tok_number:
+  case tok_symbol:
+  case tok_string:
+  case tok_comment:        {
     char *big = alloc->malloc(strlen(tok->s) + 64);
     if (!big) return 0;
     sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);

@@ -92,7 +92,7 @@ int parser_init(mos_allocator_t *alloc, parser_t *parser, char const *input, siz
   mos_vector_init(&parser->good_tokens, sizeof(struct token));
 
   // error
-  token_init(&parser->error_token, tess_tok_invalid);
+  token_init(&parser->error_token, tok_invalid);
   parser->error.token     = &parser->error_token;
   parser->error.tokenizer = &parser->tokenizer_error;
 
@@ -179,8 +179,8 @@ static int eat_newlines(parser_t *parser) {
     }
 
     token_tag_t const tag = parser->error_token.tag;
-    if (tess_tok_comment == tag || tess_tok_one_newline == tag || tess_tok_two_newline == tag ||
-        tess_tok_newline_indent == tag) {
+    if (tok_comment == tag || tok_one_newline == tag || tok_two_newline == tag ||
+        tok_newline_indent == tag) {
       continue;
     } else {
       tokenizer_put_back(parser->alloc, parser->tokenizer, &parser->error_token, 1);
@@ -198,7 +198,7 @@ static int next_token(parser_t *parser, token_t *out_tok) {
       return 1;
     }
 
-    if (tess_tok_comment == out_tok->tag) continue;
+    if (tok_comment == out_tok->tag) continue;
 
     mos_vector_push_back(parser->alloc, &parser->good_tokens, out_tok);
     return 0;
@@ -225,7 +225,7 @@ static int a_comma(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_comma == tok->tag) {
+  if (tok_comma == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, ",");
     return 0;
   }
@@ -238,7 +238,7 @@ static int a_open_round(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_open_round == tok->tag) {
+  if (tok_open_round == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, "(");
     return 0;
   }
@@ -251,7 +251,7 @@ static int a_close_round(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_close_round == tok->tag) {
+  if (tok_close_round == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, ")");
     return 0;
   }
@@ -264,8 +264,7 @@ static int a_end_of_expression(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_semicolon == tok->tag || tess_tok_one_newline == tok->tag ||
-      tess_tok_two_newline == tok->tag) {
+  if (tok_semicolon == tok->tag || tok_one_newline == tok->tag || tok_two_newline == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, ";");
     return 0;
   }
@@ -278,7 +277,7 @@ static int a_symbol(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_symbol == tok->tag) {
+  if (tok_symbol == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, tok->s);
     return 0;
   }
@@ -291,7 +290,7 @@ static int a_identifier(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_symbol == tok->tag) {
+  if (tok_symbol == tok->tag) {
     if (0 != strlen(tok->s) && !is_reserved(tok->s)) {
 
       char const c = tok->s[0];
@@ -327,7 +326,7 @@ static int a_infix_operator(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_symbol == tok->tag) {
+  if (tok_symbol == tok->tag) {
 
     if (is_arithmetic_operator(tok->s) || is_relational_operator(tok->s)) {
       result_ast_str(parser, tess_ast_symbol, tok->s);
@@ -343,7 +342,7 @@ static int the_symbol(parser_t *parser, char const *const want) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_symbol == tok->tag) {
+  if (tok_symbol == tok->tag) {
     if (0 == strcmp(want, tok->s)) {
       result_ast_str(parser, tess_ast_symbol, tok->s);
       return 0;
@@ -358,7 +357,7 @@ static int a_string(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_string == tok->tag) {
+  if (tok_string == tok->tag) {
     result_ast_str(parser, tess_ast_string, tok->s);
     return 0;
   }
@@ -409,7 +408,7 @@ static int a_number(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_number == tok->tag) {
+  if (tok_number == tok->tag) {
 
     if (string_to_number(parser, tok->s)) goto error;
     // sets parser result
@@ -426,7 +425,7 @@ int a_bool(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_symbol == tok->tag) {
+  if (tok_symbol == tok->tag) {
     if (0 == strcmp("true", tok->s)) {
       result_ast_bool(parser, true);
       return 0;
@@ -453,7 +452,7 @@ int a_equal_sign(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_equal_sign == tok->tag) {
+  if (tok_equal_sign == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, "=");
     return 0;
   }
@@ -466,7 +465,7 @@ int a_arrow(parser_t *parser) {
   if (next_token(parser, &parser->error_token)) return 1;
   token_t const *const tok = &parser->error_token;
 
-  if (tess_tok_arrow == tok->tag) {
+  if (tok_arrow == tok->tag) {
     result_ast_str(parser, tess_ast_symbol, "->");
     return 0;
   }

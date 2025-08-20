@@ -6,20 +6,20 @@
 #include <stdint.h>
 
 #define TESS_TOKEN_TAGS(X)                                                                                 \
-  X(tess_tok_one_newline, "one_newline")                                                                   \
-  X(tess_tok_two_newline, "two_newline")                                                                   \
-  X(tess_tok_comma, "comma")                                                                               \
-  X(tess_tok_semicolon, "semicolon")                                                                       \
-  X(tess_tok_arrow, "arrow")                                                                               \
-  X(tess_tok_open_round, "open_round")                                                                     \
-  X(tess_tok_close_round, "close_round")                                                                   \
-  X(tess_tok_equal_sign, "equal_sign")                                                                     \
-  X(tess_tok_invalid, "invalid")                                                                           \
-  X(tess_tok_newline_indent, "newline_indent")                                                             \
-  X(tess_tok_number, "number")                                                                             \
-  X(tess_tok_symbol, "symbol")                                                                             \
-  X(tess_tok_string, "string")                                                                             \
-  X(tess_tok_comment, "comment")
+  X(tok_one_newline, "one_newline")                                                                        \
+  X(tok_two_newline, "two_newline")                                                                        \
+  X(tok_comma, "comma")                                                                                    \
+  X(tok_semicolon, "semicolon")                                                                            \
+  X(tok_arrow, "arrow")                                                                                    \
+  X(tok_open_round, "open_round")                                                                          \
+  X(tok_close_round, "close_round")                                                                        \
+  X(tok_equal_sign, "equal_sign")                                                                          \
+  X(tok_invalid, "invalid")                                                                                \
+  X(tok_newline_indent, "newline_indent")                                                                  \
+  X(tok_number, "number")                                                                                  \
+  X(tok_symbol, "symbol")                                                                                  \
+  X(tok_string, "string")                                                                                  \
+  X(tok_comment, "comment")
 
 #define TESS_ENUM(name, str) name,
 typedef enum token_tag { TESS_TOKEN_TAGS(TESS_ENUM) } token_tag_t;
