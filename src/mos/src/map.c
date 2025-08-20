@@ -36,21 +36,21 @@ struct mos_map {
 
 // -- statics --
 
-static size_t bucket_size(mos_map_t const *map) {
+static size_t bucket_size(mos_map const *map) {
   return map->aligned_element_size + sizeof(mos_map_header_t);
 }
 
-static uint32_t key_to_bucket(mos_map_t const *map, size_t key) {
+static uint32_t key_to_bucket(mos_map const *map, size_t key) {
   return key % map->buckets;
 }
 
-static uint32_t incr_index(mos_map_t const *map, uint32_t index) {
+static uint32_t incr_index(mos_map const *map, uint32_t index) {
   return (index + 1) % map->buckets;
 }
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static char *map_find(mos_map_t *map, size_t key, uint32_t *out_index) {
+static char *map_find(mos_map *map, size_t key, uint32_t *out_index) {
   uint32_t index          = key_to_bucket(map, key);
 
   uint32_t probe_distance = 0;
@@ -82,7 +82,7 @@ static char *map_find(mos_map_t *map, size_t key, uint32_t *out_index) {
   }
 }
 
-static int set_one(mos_map_t *map, size_t const key, char const *element) {
+static int set_one(mos_map *map, size_t const key, char const *element) {
 
   size_t const cell_size = sizeof(mos_map_header_t) + map->element_size;
   assert(bucket_size(map) >= cell_size);
@@ -146,11 +146,11 @@ static int set_one(mos_map_t *map, size_t const key, char const *element) {
   return 0;
 }
 
-static int set_one_cell(mos_map_t *map, char *cell) {
+static int set_one_cell(mos_map *map, char *cell) {
   return set_one(map, *(size_t *)cell, cell + sizeof(size_t));
 }
 
-static int grow_buckets(mos_allocator *alloc, mos_map_t *map) {
+static int grow_buckets(mos_allocator *alloc, mos_map *map) {
   // make a new map with 1.618x the number of buckets. Copy all data to
   // the new map. Then release the old map's buffers, and overwrite
   // its struct with the new map.
@@ -159,7 +159,7 @@ static int grow_buckets(mos_allocator *alloc, mos_map_t *map) {
 
   if (new_buckets > UINT32_MAX) return 1;
 
-  mos_map_t new_map;
+  mos_map new_map;
   if (mos_map_init(alloc, &new_map, map->element_size, (uint32_t)new_buckets, map->max_load_factor))
     return 1;
 
@@ -180,20 +180,20 @@ static int grow_buckets(mos_allocator *alloc, mos_map_t *map) {
 
 // -- externals --
 
-float mos_map_load_factor(mos_map_t const *map) {
+float mos_map_load_factor(mos_map const *map) {
   return (float)map->occupied / (float)map->buckets;
 }
 
-size_t mos_map_size(mos_map_t const *map) {
+size_t mos_map_size(mos_map const *map) {
   return map->occupied;
 }
 
-bool mos_map_empty(mos_map_t const *map) {
+bool mos_map_empty(mos_map const *map) {
   return map->occupied == 0;
 }
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
-char *mos_map_unchecked_at(mos_map_t *map, uint32_t index) {
+char *mos_map_unchecked_at(mos_map *map, uint32_t index) {
   return map->data + index * bucket_size(map);
 }
 
@@ -222,16 +222,16 @@ uint32_t mos_map_next_power_of_two(uint32_t n) {
 
 //
 
-mos_map_t *mos_map_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(mos_map_t));
+mos_map *mos_map_alloc(mos_allocator *alloc) {
+  return alloc->malloc(sizeof(mos_map));
 }
 
-void mos_map_dealloc(mos_allocator *alloc, mos_map_t **p) {
+void mos_map_dealloc(mos_allocator *alloc, mos_map **p) {
   alloc->free(*p);
   *p = 0;
 }
 
-int mos_map_init(mos_allocator *alloc, mos_map_t *map, size_t element_size, uint32_t buckets,
+int mos_map_init(mos_allocator *alloc, mos_map *map, size_t element_size, uint32_t buckets,
                  float max_load_factor) {
 
   assert(element_size <= PTRDIFF_MAX);
@@ -255,7 +255,7 @@ int mos_map_init(mos_allocator *alloc, mos_map_t *map, size_t element_size, uint
   return 0;
 }
 
-void mos_map_deinit(mos_allocator *alloc, mos_map_t *map) {
+void mos_map_deinit(mos_allocator *alloc, mos_map *map) {
   alloc->free(map->to_store);
   alloc->free(map->tmp);
   alloc->free(map->status);
@@ -263,7 +263,7 @@ void mos_map_deinit(mos_allocator *alloc, mos_map_t *map) {
   mos_alloc_invalidate(map, sizeof *map);
 }
 
-int mos_map_set(mos_allocator *alloc, mos_map_t *map, size_t key, void *data) {
+int mos_map_set(mos_allocator *alloc, mos_map *map, size_t key, void *data) {
 
   // Must check for existing key. Replace if present.
   void *existing = mos_map_get(map, key);
@@ -279,13 +279,13 @@ int mos_map_set(mos_allocator *alloc, mos_map_t *map, size_t key, void *data) {
   return set_one(map, key, data);
 }
 
-void *mos_map_get(mos_map_t *map, size_t key) {
+void *mos_map_get(mos_map *map, size_t key) {
   char *cell = map_find(map, key, 0);
   if (!cell) return 0;
   return cell + sizeof(mos_map_header_t);
 }
 
-void mos_map_erase(mos_map_t *map, size_t key) {
+void mos_map_erase(mos_map *map, size_t key) {
   uint32_t index;
   char    *p = map_find(map, key, &index);
   if (!p) return;

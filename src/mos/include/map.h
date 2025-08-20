@@ -17,7 +17,7 @@
 // Each cell places the key in a header, followed by client's
 // element_size bytes of data.
 
-typedef struct mos_map mos_map_t;
+typedef struct mos_map mos_map;
 
 typedef struct mos_map_header {
   size_t key;
@@ -25,30 +25,30 @@ typedef struct mos_map_header {
 
 // -- allocation and deallocation --
 
-mos_map_t    *mos_map_alloc(mos_allocator *);
-void          mos_map_dealloc(mos_allocator *, mos_map_t **);
-nodiscard int mos_map_init(mos_allocator *, mos_map_t *, size_t element_size, uint32_t buckets,
+mos_map      *mos_map_alloc(mos_allocator *);
+void          mos_map_dealloc(mos_allocator *, mos_map **);
+nodiscard int mos_map_init(mos_allocator *, mos_map *, size_t element_size, uint32_t buckets,
                            float max_load_factor);
-void          mos_map_deinit(mos_allocator *, mos_map_t *);
+void          mos_map_deinit(mos_allocator *, mos_map *);
 
 // -- read-only access --
 
-size_t mos_map_size(mos_map_t const *);
-bool   mos_map_empty(mos_map_t const *);
-float  mos_map_load_factor(mos_map_t const *);
+size_t mos_map_size(mos_map const *);
+bool   mos_map_empty(mos_map const *);
+float  mos_map_load_factor(mos_map const *);
 
 // -- data and iterator access --
 //
 // Data cell includes a size_t header, which is the key used to store the item.
 //
 
-char *mos_map_unchecked_at(mos_map_t *, uint32_t);
+char *mos_map_unchecked_at(mos_map *, uint32_t);
 
 // -- insertion and removal --
 
-nodiscard int mos_map_set(mos_allocator *, mos_map_t *, size_t key, void *data);
-void         *mos_map_get(mos_map_t *, size_t);
-void          mos_map_erase(mos_map_t *, size_t);
+nodiscard int mos_map_set(mos_allocator *, mos_map *, size_t key, void *data);
+void         *mos_map_get(mos_map *, size_t);
+void          mos_map_erase(mos_map *, size_t);
 
 // -- utilities --
 

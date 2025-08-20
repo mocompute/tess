@@ -42,7 +42,7 @@ int test_map(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  mos_map_t     *map   = mos_map_alloc(alloc);
+  mos_map       *map   = mos_map_alloc(alloc);
 
   if (mos_map_init(alloc, map, sizeof(int), 8, 0)) return 1;
 
@@ -83,7 +83,7 @@ int test_big_map(void) {
   mos_vector_init(&vec, sizeof(pair_t));
   if (mos_vector_reserve(alloc, &vec, N)) return error + 1;
 
-  mos_map_t *map = mos_map_alloc(alloc);
+  mos_map *map = mos_map_alloc(alloc);
   if (mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0)) return error + 1;
 
   for (size_t i = 0; i < N; ++i) {
