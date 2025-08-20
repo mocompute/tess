@@ -780,14 +780,17 @@ static int tuple_expression(parser_t *p) {
   mos_vector_t elements;
   ast_vector_init(&elements);
 
-  // first, expect an expression followed by a comma
+  // first, expect an expression, which must be followed by a comma
+  // then, zero or more expressions before a close round. So (expr,)
+  // is a valid tuple.
   if (a_try(p, &expression)) return 1;
   if (mos_vector_push_back(p->alloc, &elements, &p->result_ast_node_h)) goto cleanup;
   if (a_try(p, &a_comma)) goto cleanup;
 
-  // then, zero or more expressions before a close round. So (expr,)
-  // is a valid tuple.
+  int count = 0;
+
   while (true) {
+
     if (0 == a_try(p, &a_close_round)) {
       ast_node_t node;
       ast_node_init(&node, ast_tuple);
@@ -795,16 +798,15 @@ static int tuple_expression(parser_t *p) {
       return result_ast_node(p, &node);
     }
 
+    // comma required if this is not the first time through the loop
+    if (count++ > 0)
+      if (a_try(p, &a_comma)) goto cleanup;
+
     // expression
     if (0 == a_try(p, &expression))
       if (mos_vector_push_back(p->alloc, &elements, &p->result_ast_node_h)) goto cleanup;
 
-    // optional comma
-    // TODO this parser accepts (expr,,) as a valid tuple equivalent to (expr,)
-    if (0 == a_try(p, &a_comma))
-      ;
-
-    // loop to check for close round
+    // loop to check for close round, or else
   }
 
 cleanup:
