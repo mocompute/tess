@@ -13,7 +13,7 @@
 
 struct parser {
   mos_allocator         *alloc;
-  tokenizer_t           *tokenizer;
+  tokenizer             *tokenizer;
   ast_pool              *ast_pool;
 
   ast_node_h             result; // pool handle, don't set directly

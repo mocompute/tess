@@ -52,14 +52,14 @@ int test_tokenizer_basic(void) {
   int            error = 0;
 
   mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer_t   *t     = tokenizer_alloc(alloc);
+  tokenizer     *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "  (  )  ";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token             tok;
-    tokenizer_error_t err;
+    token           tok;
+    tokenizer_error err;
 
     // expect open_round
     error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
@@ -97,14 +97,14 @@ int test_tokenizer_string(void) {
   int            error = 0;
 
   mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer_t   *t     = tokenizer_alloc(alloc);
+  tokenizer     *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = " \"abcdef\"  ";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token             tok;
-    tokenizer_error_t err;
+    token           tok;
+    tokenizer_error err;
 
     // expect string
     error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
@@ -126,14 +126,14 @@ int test_tokenizer_terminal_static_string(void) {
   int            error = 0;
 
   mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer_t   *t     = tokenizer_alloc(alloc);
+  tokenizer     *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "-";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token             tok;
-    tokenizer_error_t err;
+    token           tok;
+    tokenizer_error err;
 
     // expect string
     error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;

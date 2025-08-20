@@ -10,9 +10,9 @@
 typedef struct parser parser;
 
 typedef struct parser_error {
-  tokenizer_error_t *tokenizer;
-  token             *token;
-  tess_error_tag     tag;
+  tokenizer_error *tokenizer;
+  token           *token;
+  tess_error_tag   tag;
 } parser_error;
 
 // -- allocation and deallocation --
