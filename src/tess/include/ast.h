@@ -18,7 +18,7 @@
   X(type_type_var, "type_var")
 
 #define TESS_ENUM(name, str) name,
-typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag_t;
+typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag;
 #undef TESS_ENUM
 
 #define TESS_AST_TAGS(X)                                                                                   \
@@ -42,9 +42,10 @@ typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag_t;
   X(ast_named_function_application, "named_function_application")
 
 #define TESS_ENUM(name, str) name,
-typedef enum ast_tag { TESS_AST_TAGS(TESS_ENUM) } ast_tag_t;
+typedef enum ast_tag { TESS_AST_TAGS(TESS_ENUM) } ast_tag;
 #undef TESS_ENUM
 
+// TODO get rid of this, use an anon type in the tess_type union
 struct arrow_type {
   size_t left;
   size_t right;
@@ -56,8 +57,8 @@ typedef struct tess_type {
     struct arrow_type arrow;
     uint32_t          val;
   };
-  type_tag_t tag;
-} tess_type_t;
+  type_tag tag;
+} tess_type;
 
 // -- ast_node --
 
@@ -78,7 +79,7 @@ typedef struct tess_type {
   X(ast_op_sentinel, NULL)
 
 #define TESS_ENUM(name, str) name,
-typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
+typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator;
 #undef TESS_ENUM
 
 typedef struct {
@@ -108,9 +109,9 @@ typedef struct ast_node {
     } f64;
 
     struct {
-      ast_operator_t op;
-      ast_node_h     left;
-      ast_node_h     right;
+      ast_operator op;
+      ast_node_h   left;
+      ast_node_h   right;
     } infix;
 
     struct {
@@ -161,44 +162,44 @@ typedef struct ast_node {
     } tuple;
   };
 
-  ast_tag_t tag;
-} ast_node_t;
+  ast_tag tag;
+} ast_node;
 
 // -- ast_pool --
 
 typedef struct ast_pool {
-  struct mos_vector data; // ast_node_t
-} ast_pool_t;
+  struct mos_vector data; // ast_node
+} ast_pool;
 
 // -- allocation and deallocation --
 
-void          tess_type_init(tess_type_t *, type_tag_t);
-void          tess_type_init_type_var(tess_type_t *, uint32_t);
-void          tess_type_init_tuple(tess_type_t *);
-void          tess_type_init_arrow(tess_type_t *);
-void          tess_type_deinit(mos_allocator *, tess_type_t *);
+void          tess_type_init(tess_type *, type_tag);
+void          tess_type_init_type_var(tess_type *, uint32_t);
+void          tess_type_init_tuple(tess_type *);
+void          tess_type_init_arrow(tess_type *);
+void          tess_type_deinit(mos_allocator *, tess_type *);
 
-ast_pool_t   *ast_pool_alloc(mos_allocator *);
-void          ast_pool_dealloc(mos_allocator *, ast_pool_t **);
-nodiscard int ast_pool_init(mos_allocator *, ast_pool_t *);
-void          ast_pool_deinit(mos_allocator *, ast_pool_t *);
+ast_pool     *ast_pool_alloc(mos_allocator *);
+void          ast_pool_dealloc(mos_allocator *, ast_pool **);
+nodiscard int ast_pool_init(mos_allocator *, ast_pool *);
+void          ast_pool_deinit(mos_allocator *, ast_pool *);
 
-void          ast_node_init(ast_node_t *, ast_tag_t);
-void          ast_node_deinit(mos_allocator *, ast_node_t *);
-void          ast_node_replace(mos_allocator *, ast_node_t *, ast_tag_t);
+void          ast_node_init(ast_node *, ast_tag);
+void          ast_node_deinit(mos_allocator *, ast_node *);
+void          ast_node_replace(mos_allocator *, ast_node *, ast_tag);
 
 // -- pool operations --
 //
 // [move_back] takes ownership of ast_node(s) and invalidates caller's copy
 
-nodiscard int ast_pool_move_back(mos_allocator *, ast_pool_t *, ast_node_t *, ast_node_h *);
-ast_node_t   *ast_pool_at(ast_pool_t *, ast_node_h);
+nodiscard int ast_pool_move_back(mos_allocator *, ast_pool *, ast_node *, ast_node_h *);
+ast_node     *ast_pool_at(ast_pool *, ast_node_h);
 
 // -- utilities --
 
-char const *type_tag_to_string(type_tag_t);
-char const *ast_tag_to_string(ast_tag_t);
-int         string_to_ast_operator(char const *, ast_operator_t *);
+char const *type_tag_to_string(type_tag);
+char const *ast_tag_to_string(ast_tag);
+int         string_to_ast_operator(char const *, ast_operator *);
 void        ast_vector_init(mos_vector *);
 
 #endif

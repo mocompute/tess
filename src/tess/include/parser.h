@@ -19,7 +19,7 @@ typedef struct parser_error {
 
 parser_t     *parser_alloc(mos_allocator *);
 void          parser_dealloc(mos_allocator *, parser_t **);
-nodiscard int parser_init(mos_allocator *, parser_t *, ast_pool_t *, char const *, size_t);
+nodiscard int parser_init(mos_allocator *, parser_t *, ast_pool *, char const *, size_t);
 void          parser_deinit(parser_t *);
 
 // -- access --

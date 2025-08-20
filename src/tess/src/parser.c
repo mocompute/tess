@@ -14,7 +14,7 @@
 struct parser {
   mos_allocator         *alloc;
   tokenizer_t           *tokenizer;
-  ast_pool_t            *ast_pool;
+  ast_pool              *ast_pool;
 
   ast_node_h             result; // pool handle, don't set directly
 
@@ -36,7 +36,7 @@ void parser_dealloc(mos_allocator *alloc, parser_t **p) {
   *p = 0;
 }
 
-int parser_init(mos_allocator *alloc, parser_t *p, ast_pool_t *pool, char const *input, size_t input_len) {
+int parser_init(mos_allocator *alloc, parser_t *p, ast_pool *pool, char const *input, size_t input_len) {
 
   memset(p, 0, sizeof *p);
   p->alloc    = alloc;
@@ -96,42 +96,42 @@ static int tuple_expression(parser_t *);
 // The parser then no longer has a valid copy of the actual ast_node,
 // it being replaced by a handle to an entry in the pool.
 
-nodiscard static int result_ast(parser_t *p, ast_tag_t tag) {
-  ast_node_t node;
+nodiscard static int result_ast(parser_t *p, ast_tag tag) {
+  ast_node node;
   ast_node_init(&node, tag);
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_i64(parser_t *p, int64_t val) {
-  ast_node_t node;
+  ast_node node;
   ast_node_init(&node, ast_i64);
   node.i64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_u64(parser_t *p, uint64_t val) {
-  ast_node_t node;
+  ast_node node;
   ast_node_init(&node, ast_u64);
   node.u64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_f64(parser_t *p, double val) {
-  ast_node_t node;
+  ast_node node;
   ast_node_init(&node, ast_f64);
   node.f64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_bool(parser_t *p, bool val) {
-  ast_node_t node;
+  ast_node node;
   ast_node_init(&node, ast_bool);
   node.bool_.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_str(parser_t *p, ast_tag_t tag, char const *s) {
-  ast_node_t node;
+nodiscard static int result_ast_str(parser_t *p, ast_tag tag, char const *s) {
+  ast_node node;
   ast_node_init(&node, tag);
 
   // TODO strings
@@ -141,7 +141,7 @@ nodiscard static int result_ast_str(parser_t *p, ast_tag_t tag, char const *s) {
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_node(parser_t *p, ast_node_t *node) {
+nodiscard static int result_ast_node(parser_t *p, ast_node *node) {
   return ast_pool_move_back(p->alloc, p->ast_pool, node, &p->result);
 }
 
@@ -390,7 +390,7 @@ static int string_to_number(parser_t *parser, char const *const in) {
   return 1;
 }
 
-// static int string_to_operator(char const *in, ast_operator_t *out) {
+// static int string_to_operator(char const *in, ast_operator *out) {
 //   return string_to_ast_operator(in, out);
 // }
 
@@ -469,7 +469,7 @@ static int function_declaration(parser_t *p) {
   // check: f () declares function with no parameters
   if (0 == a_try(p, &a_nil)) {
 
-    ast_node_t node;
+    ast_node node;
     ast_node_init(&node, ast_function_declaration);
     node.function_declaration.name = name;
     mos_vector_move(&node.function_declaration.parameters, &parameters);
@@ -487,7 +487,7 @@ static int function_declaration(parser_t *p) {
 
     if (0 == a_try(p, &a_equal_sign)) {
 
-      ast_node_t node;
+      ast_node node;
       ast_node_init(&node, ast_function_declaration);
       node.function_declaration.name = name;
       mos_vector_move(&node.function_declaration.parameters, &parameters);
@@ -517,7 +517,7 @@ static int lambda_declaration(parser_t *p) {
 
     if (0 == a_try(p, &a_arrow)) {
 
-      ast_node_t node;
+      ast_node node;
       ast_node_init(&node, ast_lambda_declaration);
       mos_vector_move(&node.lambda_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
@@ -557,7 +557,7 @@ static int function_application(parser_t *p) {
 
     if (0 == a_try(p, &a_end_of_expression)) {
 
-      ast_node_t node;
+      ast_node node;
       ast_node_init(&node, ast_named_function_application);
       node.named_function_application.name = name;
       mos_vector_move(&node.named_function_application.arguments, &arguments);
@@ -605,7 +605,7 @@ static int if_then_else(parser_t *p) {
   if (a_try(p, &expression)) return 1;
   no = p->result;
 
-  ast_node_t node;
+  ast_node node;
   ast_node_init(&node, ast_if_then_else);
   node.if_then_else.condition = cond;
   node.if_then_else.yes       = yes;
@@ -624,15 +624,15 @@ static int infix_operation(parser_t *p) {
   ast_node_h const lhs = p->result;
 
   if (a_try(p, &a_infix_operator)) return 1;
-  ast_node_t    *op_node = ast_pool_at(p->ast_pool, p->result);
+  ast_node    *op_node = ast_pool_at(p->ast_pool, p->result);
 
-  ast_operator_t op;
+  ast_operator op;
   if (string_to_ast_operator(op_node->symbol.name, &op)) return 1;
 
   if (a_try(p, &infix_operand)) return 1;
   ast_node_h const rhs = p->result;
 
-  ast_node_t       node;
+  ast_node         node;
   ast_node_init(&node, ast_infix);
   node.infix.left  = lhs;
   node.infix.right = rhs;
@@ -651,12 +651,12 @@ static int lambda_function(parser_t *p) {
   if (a_try(p, &function_definition)) return 1;
   ast_node_h defn_h = p->result;
 
-  ast_node_t node;
+  ast_node   node;
   ast_node_init(&node, ast_lambda_function);
   node.lambda_function.body = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
-  ast_node_t *decl = ast_pool_at(p->ast_pool, decl_h);
+  ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
   mos_vector_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
   return result_ast_node(p, &node);
 }
@@ -687,7 +687,7 @@ static int lambda_function_application(parser_t *p) {
     }
 
     if (0 == a_try(p, &a_end_of_expression)) {
-      ast_node_t node;
+      ast_node node;
       ast_node_init(&node, ast_lambda_function_application);
       node.lambda_function_application.lambda = lambda_h;
       mos_vector_move(&node.lambda_function_application.arguments, &arguments);
@@ -724,7 +724,7 @@ static int let_in_form(parser_t *p) {
   if (a_try(p, &expression)) return 1;
   ast_node_h body = p->result;
 
-  ast_node_t node;
+  ast_node   node;
   ast_node_init(&node, ast_let_in);
   node.let_in.name  = sym;
   node.let_in.value = defn;
@@ -741,13 +741,13 @@ static int let_form(parser_t *p) {
   if (a_try(p, &function_definition)) return 1;
   ast_node_h defn_h = p->result;
 
-  ast_node_t node;
+  ast_node   node;
   ast_node_init(&node, ast_let);
 
   // get declaration out of pool to move into new node
-  ast_node_t *decl = ast_pool_at(p->ast_pool, decl_h);
-  node.let.name    = decl->function_declaration.name;
-  node.let.body    = defn_h;
+  ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
+  node.let.name  = decl->function_declaration.name;
+  node.let.body  = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
   mos_vector_move(&node.let.parameters, &decl->function_declaration.parameters);
@@ -773,7 +773,7 @@ static int tuple_expression(parser_t *p) {
   while (true) {
 
     if (0 == a_try(p, &a_close_round)) {
-      ast_node_t node;
+      ast_node node;
       ast_node_init(&node, ast_tuple);
       mos_vector_move(&node.tuple.elements, &elements);
       return result_ast_node(p, &node);

@@ -157,7 +157,7 @@ int test_parser_init(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  ast_pool_t    *pool  = ast_pool_alloc(alloc);
+  ast_pool      *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser_t *p = parser_alloc(alloc);
@@ -178,7 +178,7 @@ int test_parser_basic(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  ast_pool_t    *pool  = ast_pool_alloc(alloc);
+  ast_pool      *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser_t *p = parser_alloc(alloc);
@@ -188,7 +188,7 @@ int test_parser_basic(void) {
 
   ast_node_h node_h;
   parser_result(p, &node_h);
-  ast_node_t *node = ast_pool_at(pool, node_h);
+  ast_node *node = ast_pool_at(pool, node_h);
 
   error += ast_symbol == node->tag ? 0 : 1;
   error += 0 == strcmp(node->symbol.name, "a") ? 0 : 1;
