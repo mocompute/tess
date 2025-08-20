@@ -199,5 +199,6 @@ ast_node_t   *ast_pool_at(ast_pool_t *, ast_node_h);
 char const *type_tag_to_string(type_tag_t);
 char const *ast_tag_to_string(ast_tag_t);
 int         string_to_ast_operator(char const *, ast_operator_t *);
+void        ast_vector_init(mos_vector_t *);
 
 #endif

@@ -482,7 +482,7 @@ static int function_declaration(parser_t *p) {
   ast_node_h const name = p->result_ast_node_h; // function name
 
   mos_vector_t     parameters;
-  mos_vector_init(&parameters, sizeof(ast_node_h));
+  ast_vector_init(&parameters);
 
   // check: f () declares function with no parameters
   if (0 == a_try(p, &a_nil)) {
@@ -525,7 +525,7 @@ static int lambda_declaration(parser_t *p) {
   // collect identifiers (or a single nil) until an arrow
 
   mos_vector_t parameters;
-  mos_vector_init(&parameters, sizeof(ast_node_h));
+  ast_vector_init(&parameters);
 
   // accumulate identifiers as parameters until an arrow is seen
   while (true) {
@@ -562,7 +562,7 @@ static int function_application(parser_t *p) {
   ast_node_h const name = p->result_ast_node_h;
 
   mos_vector_t     arguments;
-  mos_vector_init(&arguments, sizeof(ast_node_h));
+  ast_vector_init(&arguments);
 
   // must have at least one argument
   if (a_try(p, &function_argument)) return 1;
@@ -694,7 +694,7 @@ static int lambda_function_application(parser_t *p) {
 
   // there must be at least one argument
   mos_vector_t arguments;
-  mos_vector_init(&arguments, sizeof(ast_node_h));
+  ast_vector_init(&arguments);
 
   if (a_try(p, &function_argument)) return 1;
   if (mos_vector_push_back(p->alloc, &arguments, &p->result_ast_node_h)) return 1;
@@ -778,7 +778,7 @@ static int tuple_expression(parser_t *p) {
   if (a_try(p, a_open_round)) return 1;
 
   mos_vector_t elements;
-  mos_vector_init(&elements, sizeof(ast_node_h));
+  ast_vector_init(&elements);
 
   // first, expect an expression followed by a comma
   if (a_try(p, &expression)) return 1;

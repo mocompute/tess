@@ -111,7 +111,7 @@ void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
 
 void ast_node_init(ast_node_t *node, ast_tag_t tag) {
 
-#define init(P) mos_vector_init(&P, sizeof(ast_node_h))
+#define init(P) ast_vector_init(&P)
 
   memset(node, 0, sizeof *node);
   node->tag = tag;
@@ -195,4 +195,8 @@ int string_to_ast_operator(char const *const s, ast_operator_t *out) {
     }
   }
   return 1;
+}
+
+void ast_vector_init(mos_vector_t *vec) {
+  mos_vector_init(vec, sizeof(ast_node_h));
 }
