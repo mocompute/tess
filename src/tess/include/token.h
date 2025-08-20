@@ -22,28 +22,28 @@
   X(tess_tok_comment, "comment")
 
 #define TESS_ENUM(name, str) name,
-typedef enum tess_token_tag { TESS_TOKEN_TAGS(TESS_ENUM) } tess_token_tag_t;
+typedef enum token_tag { TESS_TOKEN_TAGS(TESS_ENUM) } token_tag_t;
 #undef TESS_ENUM
 
-typedef struct tess_token {
+typedef struct token {
   union {
     char   *s;
     uint8_t val;
   };
-  tess_token_tag_t tag;
-} tess_token_t;
+  token_tag_t tag;
+} token_t;
 
 // -- allocation and deallocation --
 
-void tess_token_init(tess_token_t *, tess_token_tag_t);
-void tess_token_init_v(tess_token_t *, tess_token_tag_t, uint8_t);
-int  tess_token_init_s(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *);
-int  tess_token_init_sn(mos_allocator_t *, tess_token_t *, tess_token_tag_t, char const *, size_t);
-void tess_token_deinit(mos_allocator_t *, tess_token_t *);
+void token_init(token_t *, token_tag_t);
+void token_init_v(token_t *, token_tag_t, uint8_t);
+int  token_init_s(mos_allocator_t *, token_t *, token_tag_t, char const *);
+int  token_init_sn(mos_allocator_t *, token_t *, token_tag_t, char const *, size_t);
+void token_deinit(mos_allocator_t *, token_t *);
 
 // -- utilities --
 
-char const *tess_token_tag_to_string(tess_token_tag_t);
-char       *tess_token_to_string(mos_allocator_t *, tess_token_t const *);
+char const *token_tag_to_string(token_tag_t);
+char       *token_to_string(mos_allocator_t *, token_t const *);
 
 #endif

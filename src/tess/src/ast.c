@@ -8,7 +8,7 @@
 
 // -- tess_type allocation and deallocation --
 
-void tess_type_init(tess_type_t *ty, tess_type_tag_t tag) {
+void tess_type_init(tess_type_t *ty, type_tag_t tag) {
   memset(ty, 0, sizeof *ty);
   ty->tag = tag;
 }
@@ -46,28 +46,28 @@ void tess_type_deinit(mos_allocator_t *alloc, tess_type_t *ty) {
 
 // -- tess_type_pool allocation and deallocation --
 
-tess_ast_pool_t *tess_ast_pool_alloc(mos_allocator_t *alloc) {
-  return alloc->malloc(sizeof(tess_ast_pool_t));
+ast_pool_t *ast_pool_alloc(mos_allocator_t *alloc) {
+  return alloc->malloc(sizeof(ast_pool_t));
 }
 
-void tess_ast_pool_dealloc(mos_allocator_t *alloc, tess_ast_pool_t **pool) {
+void ast_pool_dealloc(mos_allocator_t *alloc, ast_pool_t **pool) {
   alloc->free(*pool);
   *pool = 0;
 }
 
-void tess_ast_pool_init(mos_allocator_t *alloc, tess_ast_pool_t *pool) {
-  mos_vector_init(&pool->data, sizeof(tess_ast_node_t));
+void ast_pool_init(mos_allocator_t *alloc, ast_pool_t *pool) {
+  mos_vector_init(&pool->data, sizeof(ast_node_t));
   mos_vector_reserve(alloc, &pool->data, 32);
 }
 
-void tess_ast_pool_deinit(mos_allocator_t *alloc, tess_ast_pool_t *pool) {
+void ast_pool_deinit(mos_allocator_t *alloc, ast_pool_t *pool) {
   mos_vector_deinit(alloc, &pool->data);
   mos_alloc_invalidate(pool, sizeof *pool);
 }
 
 // -- tess_ast_node init and deinit --
 
-void tess_ast_node_deinit(mos_allocator_t *alloc, tess_ast_node_t *node) {
+void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
 
 #define deinit(P) mos_vector_deinit(alloc, &P)
 
@@ -101,7 +101,7 @@ void tess_ast_node_deinit(mos_allocator_t *alloc, tess_ast_node_t *node) {
 #undef deinit
 }
 
-void tess_ast_node_init(tess_ast_node_t *node, tess_ast_tag_t tag) {
+void ast_node_init(ast_node_t *node, ast_tag_t tag) {
 
 #define init(P) mos_vector_init(&P, sizeof(size_t))
 
@@ -135,8 +135,7 @@ void tess_ast_node_init(tess_ast_node_t *node, tess_ast_tag_t tag) {
 
 // -- pool operations --
 
-int tess_ast_pool_move_back(mos_allocator_t *alloc, tess_ast_pool_t *pool, tess_ast_node_t *node,
-                            size_t *handle) {
+int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *node, size_t *handle) {
 
   if (mos_vector_push_back(alloc, &pool->data, node)) return 1;
 
@@ -148,7 +147,7 @@ int tess_ast_pool_move_back(mos_allocator_t *alloc, tess_ast_pool_t *pool, tess_
 
 // -- utilities --
 
-char const *tess_type_tag_to_string(tess_type_tag_t tag) {
+char const *type_tag_to_string(type_tag_t tag) {
 
 #define STRING_ITEM(name, str) [name] = str,
   static char const *const strings[]  = {TESS_TYPE_TAGS(STRING_ITEM)};
@@ -157,7 +156,7 @@ char const *tess_type_tag_to_string(tess_type_tag_t tag) {
   return strings[tag];
 }
 
-char const *tess_ast_tag_to_string(tess_ast_tag_t tag) {
+char const *ast_tag_to_string(ast_tag_t tag) {
 
 #define STRING_ITEM(name, str) [name] = str,
   static char const *const strings[]  = {TESS_AST_TAGS(STRING_ITEM)};
