@@ -43,7 +43,7 @@ int tokenizer_init(mos_allocator *alloc, tokenizer_t *tok, char const *input, si
 
   mos_vector_init(&tok->buf, sizeof(char));
   if (mos_vector_reserve(alloc, &tok->buf, 32)) return 1;
-  mos_vector_init(&tok->backtrack, sizeof(token_t));
+  mos_vector_init(&tok->backtrack, sizeof(token));
   if (mos_vector_reserve(alloc, &tok->backtrack, 8)) return 1;
   return 0;
 }
@@ -66,27 +66,27 @@ void tokenizer_error_deinit(tokenizer_error_t *err) {
 
 // -- parsing --
 
-void replace_token(mos_allocator *alloc, token_t *tok, token_tag_t tag) {
+void replace_token(mos_allocator *alloc, token *tok, token_tag tag) {
   token_deinit(alloc, tok);
   token_init(tok, tag);
 }
 
-void replace_token_v(mos_allocator *alloc, token_t *tok, token_tag_t tag, uint8_t val) {
+void replace_token_v(mos_allocator *alloc, token *tok, token_tag tag, uint8_t val) {
   token_deinit(alloc, tok);
   token_init_v(tok, tag, val);
 }
 
-void replace_token_s(mos_allocator *alloc, token_t *tok, token_tag_t tag, char const *s) {
+void replace_token_s(mos_allocator *alloc, token *tok, token_tag tag, char const *s) {
   token_deinit(alloc, tok);
   token_init_s(alloc, tok, tag, s);
 }
 
-void replace_token_sn(mos_allocator *alloc, token_t *tok, token_tag_t tag, char const *s, size_t len) {
+void replace_token_sn(mos_allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
   token_deinit(alloc, tok);
   token_init_sn(alloc, tok, tag, s, len);
 }
 
-int tokenizer_next(mos_allocator *alloc, tokenizer_t *self, token_t *out, tokenizer_error_t *out_err) {
+int tokenizer_next(mos_allocator *alloc, tokenizer_t *self, token *out, tokenizer_error_t *out_err) {
   assert(out);
 
   // support backtracking by parser
@@ -138,7 +138,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer_t *self, token_t *out, tokeni
   size_t start_capture = 0;
 
   // return value, to be copied to *out
-  token_t res = {0};
+  token res = {0};
 
   while (true) {
 
@@ -548,7 +548,7 @@ finish:
 
 // -- backtracking --
 
-int tokenizer_put_back(mos_allocator *alloc, tokenizer_t *self, token_t const *toks, size_t n_toks) {
+int tokenizer_put_back(mos_allocator *alloc, tokenizer_t *self, token const *toks, size_t n_toks) {
   for (size_t i = n_toks; i != 0; --i) {
     if (mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1])) return 1;
   }

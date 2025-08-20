@@ -17,7 +17,7 @@ int test_tess_token_string(void) {
 
   error += strcmp("comma", token_tag_to_string(tok_comma)) == 0 ? 0 : 1;
 
-  token_t tok;
+  token tok;
 
   {
     token_init(&tok, tok_equal_sign);
@@ -58,7 +58,7 @@ int test_tokenizer_basic(void) {
     char const *input = "  (  )  ";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token_t           tok;
+    token             tok;
     tokenizer_error_t err;
 
     // expect open_round
@@ -103,7 +103,7 @@ int test_tokenizer_string(void) {
     char const *input = " \"abcdef\"  ";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token_t           tok;
+    token             tok;
     tokenizer_error_t err;
 
     // expect string
@@ -132,7 +132,7 @@ int test_tokenizer_terminal_static_string(void) {
     char const *input = "-";
     if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
-    token_t           tok;
+    token             tok;
     tokenizer_error_t err;
 
     // expect string

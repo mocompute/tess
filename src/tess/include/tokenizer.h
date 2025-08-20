@@ -32,10 +32,10 @@ void          tokenizer_error_deinit(tokenizer_error_t *);
 // next() may allocate memory for string tokens. Caller must token_deinit the [out] token.
 //
 
-int tokenizer_next(mos_allocator *, tokenizer_t *, token_t *out, tokenizer_error_t *);
+int tokenizer_next(mos_allocator *, tokenizer_t *, token *out, tokenizer_error_t *);
 
 // -- backtracking --
 
-nodiscard int tokenizer_put_back(mos_allocator *, tokenizer_t *, token_t const *, size_t);
+nodiscard int tokenizer_put_back(mos_allocator *, tokenizer_t *, token const *, size_t);
 
 #endif

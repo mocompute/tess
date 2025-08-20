@@ -8,17 +8,17 @@
 
 //
 
-void token_init(token_t *tok, token_tag_t tag) {
+void token_init(token *tok, token_tag tag) {
   tok->tag = tag;
   tok->s   = 0;
 }
 
-void token_init_v(token_t *tok, token_tag_t tag, uint8_t val) {
+void token_init_v(token *tok, token_tag tag, uint8_t val) {
   tok->tag = tag;
   tok->val = val;
 }
 
-int token_init_s(mos_allocator *alloc, token_t *tok, token_tag_t tag, char const *s) {
+int token_init_s(mos_allocator *alloc, token *tok, token_tag tag, char const *s) {
 
   tok->tag = tag;
   tok->s   = alloc->malloc(strlen(s) + 1);
@@ -28,7 +28,7 @@ int token_init_s(mos_allocator *alloc, token_t *tok, token_tag_t tag, char const
   return 0;
 }
 
-int token_init_sn(mos_allocator *alloc, token_t *tok, token_tag_t tag, char const *s, size_t len) {
+int token_init_sn(mos_allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
 
   tok->tag = tag;
   tok->s   = alloc->malloc(len + 1);
@@ -39,7 +39,7 @@ int token_init_sn(mos_allocator *alloc, token_t *tok, token_tag_t tag, char cons
   return 0;
 }
 
-void token_deinit(mos_allocator *alloc, token_t *tok) {
+void token_deinit(mos_allocator *alloc, token *tok) {
   switch (tok->tag) {
   case tok_one_newline:
   case tok_two_newline:
@@ -60,14 +60,14 @@ void token_deinit(mos_allocator *alloc, token_t *tok) {
   mos_alloc_invalidate(tok, sizeof *tok);
 }
 
-char const *token_tag_to_string(token_tag_t tag) {
+char const *token_tag_to_string(token_tag tag) {
 #define STRING_ITEM(name, str) [name] = str,
   static char const *const strings[]  = {TESS_TOKEN_TAGS(STRING_ITEM)};
 #undef STRING_ITEM
   return strings[tag];
 }
 
-char *token_to_string(mos_allocator *alloc, token_t const *tok) {
+char *token_to_string(mos_allocator *alloc, token const *tok) {
   char buf[64];
 
   switch (tok->tag) {

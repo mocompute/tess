@@ -189,7 +189,7 @@ nodiscard static int eat_newlines(parser *p) {
       return 1;
     }
 
-    token_tag_t const tag = p->token.tag;
+    token_tag const tag = p->token.tag;
     if (tok_comment == tag || tok_one_newline == tag || tok_two_newline == tag ||
         tok_newline_indent == tag) {
       continue;
@@ -219,7 +219,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
   if (fun(p)) {
     assert(mos_vector_size(&p->seen_tokens) >= save_toks);
     if (tokenizer_put_back(p->alloc, p->tokenizer,
-                           ((token_t const *)mos_vector_data(&p->seen_tokens)) + save_toks,
+                           ((token const *)mos_vector_data(&p->seen_tokens)) + save_toks,
                            mos_vector_size(&p->seen_tokens) - save_toks))
       return 2; // TODO handle oom error
 
@@ -235,7 +235,7 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
   if (fun(p, arg)) {
     assert(mos_vector_size(&p->seen_tokens) >= save_toks);
     if (tokenizer_put_back(p->alloc, p->tokenizer,
-                           ((token_t const *)mos_vector_data(&p->seen_tokens)) + save_toks,
+                           ((token const *)mos_vector_data(&p->seen_tokens)) + save_toks,
                            mos_vector_size(&p->seen_tokens) - save_toks))
       return 2; // TODO handle oom error
 
@@ -284,7 +284,7 @@ static int a_end_of_expression(parser *p) {
 
 // static int a_symbol(parser *p) {
 //   if (next_token(p, &p->error_token)) return 1;
-//   token_t const *const tok = &p->error_token;
+//   token const *const tok = &p->error_token;
 
 //   if (tok_symbol == p->token.tag) return result_ast_str(p, ast_symbol, p->token.s);
 

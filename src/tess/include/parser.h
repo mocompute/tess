@@ -11,9 +11,9 @@ typedef struct parser parser;
 
 typedef struct parser_error {
   tokenizer_error_t *tokenizer;
-  token_t           *token;
+  token             *token;
   tess_error_tag     tag;
-} parser_error_t;
+} parser_error;
 
 // -- allocation and deallocation --
 
@@ -28,7 +28,7 @@ void          parser_deinit(parser *);
 // call to the parser. Error is only valid if tess_parser_next returns
 // non-zero.
 
-parser_error_t const *parser_error(parser *);
+parser_error const *parser_get_error(parser *);
 
 // -- parser --
 
