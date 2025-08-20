@@ -20,7 +20,7 @@ struct tokenizer {
 
 // -- statics --
 
-static void tok_error(tokenizer_error_t *err, tess_error_tag_t tag, size_t pos) {
+static void tok_error(tokenizer_error_t *err, tess_error_tag tag, size_t pos) {
   err->tag = tag;
   err->pos = pos;
 }

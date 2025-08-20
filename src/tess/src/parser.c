@@ -27,16 +27,16 @@ struct parser {
 
 // -- allocation and deallocation --
 
-parser_t *parser_alloc(mos_allocator *alloc) {
+parser *parser_alloc(mos_allocator *alloc) {
   return alloc->malloc(sizeof(struct parser));
 }
 
-void parser_dealloc(mos_allocator *alloc, parser_t **p) {
+void parser_dealloc(mos_allocator *alloc, parser **p) {
   alloc->free(*p);
   *p = 0;
 }
 
-int parser_init(mos_allocator *alloc, parser_t *p, ast_pool *pool, char const *input, size_t input_len) {
+int parser_init(mos_allocator *alloc, parser *p, ast_pool *pool, char const *input, size_t input_len) {
 
   memset(p, 0, sizeof *p);
   p->alloc    = alloc;
@@ -58,7 +58,7 @@ int parser_init(mos_allocator *alloc, parser_t *p, ast_pool *pool, char const *i
   return 0;
 }
 
-void parser_deinit(parser_t *p) {
+void parser_deinit(parser *p) {
 
   // error token
   token_deinit(p->alloc, &p->token);
@@ -77,60 +77,60 @@ void parser_deinit(parser_t *p) {
 
 // -- parser --
 
-typedef int (*parse_fun)(parser_t *);
-typedef int (*parse_fun_s)(parser_t *, char const *);
+typedef int (*parse_fun)(parser *);
+typedef int (*parse_fun_s)(parser *, char const *);
 
-static int expression(parser_t *);
-static int function_argument(parser_t *);
-static int grouped_expression(parser_t *);
-static int if_then_else(parser_t *);
-static int infix_operand(parser_t *);
-static int infix_operation(parser_t *);
-static int lambda_function(parser_t *);
-static int lambda_function_application(parser_t *);
-static int let_in_form(parser_t *);
-static int let_form(parser_t *);
-static int tuple_expression(parser_t *);
+static int expression(parser *);
+static int function_argument(parser *);
+static int grouped_expression(parser *);
+static int if_then_else(parser *);
+static int infix_operand(parser *);
+static int infix_operation(parser *);
+static int lambda_function(parser *);
+static int lambda_function_application(parser *);
+static int let_in_form(parser *);
+static int let_form(parser *);
+static int tuple_expression(parser *);
 
 // result_* functions construct a new ast_node and add it to the pool.
 // The parser then no longer has a valid copy of the actual ast_node,
 // it being replaced by a handle to an entry in the pool.
 
-nodiscard static int result_ast(parser_t *p, ast_tag tag) {
+nodiscard static int result_ast(parser *p, ast_tag tag) {
   ast_node node;
   ast_node_init(&node, tag);
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_i64(parser_t *p, int64_t val) {
+nodiscard static int result_ast_i64(parser *p, int64_t val) {
   ast_node node;
   ast_node_init(&node, ast_i64);
   node.i64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_u64(parser_t *p, uint64_t val) {
+nodiscard static int result_ast_u64(parser *p, uint64_t val) {
   ast_node node;
   ast_node_init(&node, ast_u64);
   node.u64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_f64(parser_t *p, double val) {
+nodiscard static int result_ast_f64(parser *p, double val) {
   ast_node node;
   ast_node_init(&node, ast_f64);
   node.f64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_bool(parser_t *p, bool val) {
+nodiscard static int result_ast_bool(parser *p, bool val) {
   ast_node node;
   ast_node_init(&node, ast_bool);
   node.bool_.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_str(parser_t *p, ast_tag tag, char const *s) {
+nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
   ast_node node;
   ast_node_init(&node, tag);
 
@@ -141,11 +141,11 @@ nodiscard static int result_ast_str(parser_t *p, ast_tag tag, char const *s) {
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_node(parser_t *p, ast_node *node) {
+nodiscard static int result_ast_node(parser *p, ast_node *node) {
   return ast_pool_move_back(p->alloc, p->ast_pool, node, &p->result);
 }
 
-static int result_ast_node_handle(parser_t *p, ast_node_h handle) {
+static int result_ast_node_handle(parser *p, ast_node_h handle) {
   p->result = handle;
   return 0;
 }
@@ -181,7 +181,7 @@ static bool is_relational_operator(char const *s) {
   return false;
 }
 
-nodiscard static int eat_newlines(parser_t *p) {
+nodiscard static int eat_newlines(parser *p) {
 
   while (true) {
     if (tokenizer_next(p->alloc, p->tokenizer, &p->token, &p->tokenizer_error)) {
@@ -200,7 +200,7 @@ nodiscard static int eat_newlines(parser_t *p) {
   }
 }
 
-nodiscard static int next_token(parser_t *p) {
+nodiscard static int next_token(parser *p) {
   while (true) {
 
     if (tokenizer_next(p->alloc, p->tokenizer, &p->token, &p->tokenizer_error)) {
@@ -214,7 +214,7 @@ nodiscard static int next_token(parser_t *p) {
   }
 }
 
-nodiscard static int a_try(parser_t *p, parse_fun fun) {
+nodiscard static int a_try(parser *p, parse_fun fun) {
   size_t const save_toks = mos_vector_size(&p->seen_tokens);
   if (fun(p)) {
     assert(mos_vector_size(&p->seen_tokens) >= save_toks);
@@ -230,7 +230,7 @@ nodiscard static int a_try(parser_t *p, parse_fun fun) {
   return 0;
 }
 
-static int a_try_s(parser_t *p, parse_fun_s fun, char const *arg) {
+static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
   size_t const save_toks = mos_vector_size(&p->seen_tokens);
   if (fun(p, arg)) {
     assert(mos_vector_size(&p->seen_tokens) >= save_toks);
@@ -246,7 +246,7 @@ static int a_try_s(parser_t *p, parse_fun_s fun, char const *arg) {
   return 0;
 }
 
-static int a_comma(parser_t *p) {
+static int a_comma(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
@@ -255,7 +255,7 @@ static int a_comma(parser_t *p) {
   return 1;
 }
 
-static int a_open_round(parser_t *p) {
+static int a_open_round(parser *p) {
   if (next_token(p)) return 1;
   if (tok_open_round == p->token.tag) return result_ast_str(p, ast_symbol, "(");
 
@@ -263,7 +263,7 @@ static int a_open_round(parser_t *p) {
   return 1;
 }
 
-static int a_close_round(parser_t *p) {
+static int a_close_round(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_close_round == p->token.tag) return result_ast_str(p, ast_symbol, ")");
@@ -272,7 +272,7 @@ static int a_close_round(parser_t *p) {
   return 1;
 }
 
-static int a_end_of_expression(parser_t *p) {
+static int a_end_of_expression(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag || tok_two_newline == p->token.tag)
@@ -282,7 +282,7 @@ static int a_end_of_expression(parser_t *p) {
   return 1;
 }
 
-// static int a_symbol(parser_t *p) {
+// static int a_symbol(parser *p) {
 //   if (next_token(p, &p->error_token)) return 1;
 //   token_t const *const tok = &p->error_token;
 
@@ -292,7 +292,7 @@ static int a_end_of_expression(parser_t *p) {
 //   return 1;
 // }
 
-static int a_identifier(parser_t *p) {
+static int a_identifier(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_symbol == p->token.tag) {
@@ -325,7 +325,7 @@ error:
   return 1;
 }
 
-static int a_infix_operator(parser_t *p) {
+static int a_infix_operator(parser *p) {
   // + - * /, relationals: < <= == <> >= >
   if (next_token(p)) return 1;
 
@@ -339,7 +339,7 @@ static int a_infix_operator(parser_t *p) {
   return 1;
 }
 
-static int the_symbol(parser_t *p, char const *const want) {
+static int the_symbol(parser *p, char const *const want) {
   if (next_token(p)) return 1;
 
   if (tok_symbol == p->token.tag) {
@@ -350,7 +350,7 @@ static int the_symbol(parser_t *p, char const *const want) {
   return 1;
 }
 
-static int a_string(parser_t *p) {
+static int a_string(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_string == p->token.tag) return result_ast_str(p, ast_string, p->token.s);
@@ -359,7 +359,7 @@ static int a_string(parser_t *p) {
   return 1;
 }
 
-static int string_to_number(parser_t *parser, char const *const in) {
+static int string_to_number(parser *parser, char const *const in) {
   errno                 = 0;
   ptrdiff_t const len   = (ptrdiff_t)strlen(in);
 
@@ -394,7 +394,7 @@ static int string_to_number(parser_t *parser, char const *const in) {
 //   return string_to_ast_operator(in, out);
 // }
 
-static int a_number(parser_t *p) {
+static int a_number(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_number == p->token.tag) {
@@ -410,7 +410,7 @@ error:
   return 1;
 }
 
-static int a_bool(parser_t *p) {
+static int a_bool(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_symbol == p->token.tag) {
@@ -422,7 +422,7 @@ static int a_bool(parser_t *p) {
   return 1;
 }
 
-static int a_literal(parser_t *p) {
+static int a_literal(parser *p) {
   if (0 == a_try(p, &a_string)) return 0;
   if (0 == a_try(p, &a_number)) return 0;
   if (0 == a_try(p, &a_bool)) return 0;
@@ -430,7 +430,7 @@ static int a_literal(parser_t *p) {
   return 1;
 }
 
-static int a_equal_sign(parser_t *p) {
+static int a_equal_sign(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_equal_sign == p->token.tag) return result_ast_str(p, ast_symbol, "=");
@@ -439,7 +439,7 @@ static int a_equal_sign(parser_t *p) {
   return 1;
 }
 
-static int a_arrow(parser_t *p) {
+static int a_arrow(parser *p) {
   if (next_token(p)) return 1;
 
   if (tok_arrow == p->token.tag) return result_ast_str(p, ast_symbol, "->");
@@ -448,7 +448,7 @@ static int a_arrow(parser_t *p) {
   return 1;
 }
 
-static int a_nil(parser_t *p) {
+static int a_nil(parser *p) {
 
   if ((0 == a_try(p, &a_open_round)) && (0 == a_try(p, &a_close_round))) return result_ast(p, ast_nil);
 
@@ -456,7 +456,7 @@ static int a_nil(parser_t *p) {
   return 1;
 }
 
-static int function_declaration(parser_t *p) {
+static int function_declaration(parser *p) {
   // f a b c... = : only symbols allowed, terminated by =.
 
   if (a_try(p, &a_identifier)) return 1;
@@ -502,7 +502,7 @@ static int function_declaration(parser_t *p) {
   }
 }
 
-static int lambda_declaration(parser_t *p) {
+static int lambda_declaration(parser *p) {
   // a b c... -> : only symbols allowed, terminated by ->
 
   mos_vector parameters;
@@ -531,11 +531,11 @@ static int lambda_declaration(parser_t *p) {
   }
 }
 
-static int function_definition(parser_t *p) {
+static int function_definition(parser *p) {
   return expression(p);
 }
 
-static int function_application(parser_t *p) {
+static int function_application(parser *p) {
   // f a b c ..., terminated by semicolon or one_newline or two_newline
 
   if (a_try(p, &a_identifier)) return 1;
@@ -571,7 +571,7 @@ static int function_application(parser_t *p) {
 
 //
 
-static int function_argument(parser_t *p) {
+static int function_argument(parser *p) {
 
   if (0 == a_try(p, &lambda_function_application)) return 0;
   if (0 == a_try(p, &grouped_expression)) return 0;
@@ -589,7 +589,7 @@ static int function_argument(parser_t *p) {
   return 1;
 }
 
-static int if_then_else(parser_t *p) {
+static int if_then_else(parser *p) {
 
   ast_node_h cond, yes, no;
 
@@ -613,11 +613,11 @@ static int if_then_else(parser_t *p) {
   return result_ast_node(p, &node);
 }
 
-static int infix_operand(parser_t *p) {
+static int infix_operand(parser *p) {
   return function_argument(p);
 }
 
-static int infix_operation(parser_t *p) {
+static int infix_operation(parser *p) {
   // a * b
 
   if (a_try(p, &infix_operand)) return 1;
@@ -640,7 +640,7 @@ static int infix_operation(parser_t *p) {
   return result_ast_node(p, &node);
 }
 
-static int lambda_function(parser_t *p) {
+static int lambda_function(parser *p) {
   // fun a b c... -> rhs
 
   if (a_try_s(p, &the_symbol, "fun")) return 1;
@@ -661,7 +661,7 @@ static int lambda_function(parser_t *p) {
   return result_ast_node(p, &node);
 }
 
-static int lambda_function_application(parser_t *p) {
+static int lambda_function_application(parser *p) {
 
   if (a_try(p, &grouped_expression)) return 1;
   // a lambda application must be a grouped lambda function, i.e.
@@ -700,7 +700,7 @@ static int lambda_function_application(parser_t *p) {
   }
 }
 
-static int simple_declaration(parser_t *p) {
+static int simple_declaration(parser *p) {
   // a = ...
   // a single identifier followed by an equal sign
   if (a_try(p, a_identifier)) return 1;
@@ -711,7 +711,7 @@ static int simple_declaration(parser_t *p) {
   return result_ast_node_handle(p, sym);
 }
 
-static int let_in_form(parser_t *p) {
+static int let_in_form(parser *p) {
   // let a = 2 in expression
   if (a_try_s(p, &the_symbol, "let")) return 1;
   if (a_try(p, &simple_declaration)) return 1;
@@ -732,7 +732,7 @@ static int let_in_form(parser_t *p) {
   return result_ast_node(p, &node);
 }
 
-static int let_form(parser_t *p) {
+static int let_form(parser *p) {
   // let f a b c... = ...
   if (a_try_s(p, &the_symbol, "let")) return 1;
   if (a_try(p, &function_declaration)) return 1;
@@ -754,7 +754,7 @@ static int let_form(parser_t *p) {
   return result_ast_node(p, &node);
 }
 
-static int tuple_expression(parser_t *p) {
+static int tuple_expression(parser *p) {
 
   if (a_try(p, a_open_round)) return 1;
 
@@ -795,7 +795,7 @@ cleanup:
   return 1;
 }
 
-static int grouped_expression(parser_t *parser) {
+static int grouped_expression(parser *parser) {
   if (a_try(parser, &a_open_round)) return 1;
   if (a_try(parser, &expression)) return 1;
 
@@ -809,7 +809,7 @@ static int grouped_expression(parser_t *parser) {
   return 0;
 }
 
-static int expression(parser_t *parser) {
+static int expression(parser *parser) {
   if (eat_newlines(parser)) return 1;
 
   if (0 == a_try(parser, &lambda_function_application)) return 0;
@@ -830,11 +830,11 @@ static int expression(parser_t *parser) {
   return 1;
 }
 
-int parser_next(parser_t *parser) {
+int parser_next(parser *parser) {
   return expression(parser);
 }
 
-void parser_result(parser_t *p, ast_node_h *handle) {
+void parser_result(parser *p, ast_node_h *handle) {
   if (handle) {
     *handle = p->result;
   }

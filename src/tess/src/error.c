@@ -1,6 +1,6 @@
 #include "error.h"
 
-char const *tess_error_tag_to_string(tess_error_tag_t tag) {
+char const *tess_error_tag_to_string(tess_error_tag tag) {
 
 #define STRING_ITEM(name, str) [name] = str,
 

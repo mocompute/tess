@@ -8,8 +8,8 @@
 #include "nodiscard.h"
 
 typedef struct tokenizer_error {
-  tess_error_tag_t tag;
-  size_t           pos;
+  tess_error_tag tag;
+  size_t         pos;
 } tokenizer_error_t;
 
 typedef struct tokenizer tokenizer_t;

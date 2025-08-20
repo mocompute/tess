@@ -42,9 +42,9 @@
 #endif
 
 #define TESS_ENUM(name, str) name,
-typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(TESS_ENUM) } tess_error_tag_t;
+typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(TESS_ENUM) } tess_error_tag;
 #undef TESS_ENUM
 
 // -- utilities --
 
-char const *tess_error_tag_to_string(tess_error_tag_t);
+char const *tess_error_tag_to_string(tess_error_tag);

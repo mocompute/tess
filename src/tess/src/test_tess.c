@@ -160,7 +160,7 @@ int test_parser_init(void) {
   ast_pool      *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
-  parser_t *p = parser_alloc(alloc);
+  parser *p = parser_alloc(alloc);
   if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
 
   parser_deinit(p);
@@ -181,7 +181,7 @@ int test_parser_basic(void) {
   ast_pool      *pool  = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
-  parser_t *p = parser_alloc(alloc);
+  parser *p = parser_alloc(alloc);
   if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
 
   if (parser_next(p)) return error + 1;
