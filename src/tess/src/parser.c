@@ -17,7 +17,7 @@ struct parser {
   tokenizer_t           *tokenizer;
   ast_pool_t            *ast_pool;
 
-  size_t                 result_ast_node_h; // pool handle, don't set directly
+  ast_node_h             result_ast_node_h; // pool handle, don't set directly
 
   struct mos_vector      good_tokens; // for backtracking
 
@@ -180,7 +180,7 @@ nodiscard static int result_ast_node(parser_t *p, ast_node_t *node) {
   return ast_pool_move_back(p->alloc, p->ast_pool, node, &p->result_ast_node_h);
 }
 
-static int result_ast_node_handle(parser_t *p, size_t handle) {
+static int result_ast_node_handle(parser_t *p, ast_node_h handle) {
   p->result_ast_node_h = handle;
   return 0;
 }
@@ -479,10 +479,10 @@ static int function_declaration(parser_t *p) {
 
   if (a_try(p, &a_identifier)) return 1;
 
-  size_t const name = p->result_ast_node_h; // function name
+  ast_node_h const name = p->result_ast_node_h; // function name
 
-  mos_vector_t parameters;
-  mos_vector_init(&parameters, sizeof(size_t));
+  mos_vector_t     parameters;
+  mos_vector_init(&parameters, sizeof(ast_node_h));
 
   // check: f () declares function with no parameters
   if (0 == a_try(p, &a_nil)) {
@@ -525,7 +525,7 @@ static int lambda_declaration(parser_t *p) {
   // collect identifiers (or a single nil) until an arrow
 
   mos_vector_t parameters;
-  mos_vector_init(&parameters, sizeof(size_t));
+  mos_vector_init(&parameters, sizeof(ast_node_h));
 
   // accumulate identifiers as parameters until an arrow is seen
   while (true) {
@@ -559,10 +559,10 @@ static int function_application(parser_t *p) {
 
   if (a_try(p, &a_identifier)) return 1;
 
-  size_t const name = p->result_ast_node_h;
+  ast_node_h const name = p->result_ast_node_h;
 
-  mos_vector_t arguments;
-  mos_vector_init(&arguments, sizeof(size_t));
+  mos_vector_t     arguments;
+  mos_vector_init(&arguments, sizeof(ast_node_h));
 
   // must have at least one argument
   if (a_try(p, &function_argument)) return 1;
@@ -610,7 +610,7 @@ static int function_argument(parser_t *p) {
 
 static int if_then_else(parser_t *p) {
 
-  size_t cond, yes, no;
+  ast_node_h cond, yes, no;
 
   if (a_try_s(p, &the_symbol, "if")) return 1;
   if (a_try(p, &expression)) return 1;
@@ -640,7 +640,7 @@ static int infix_operation(parser_t *p) {
   // a * b
 
   if (a_try(p, &infix_operand)) return 1;
-  size_t const lhs = p->result_ast_node_h;
+  ast_node_h const lhs = p->result_ast_node_h;
 
   if (a_try(p, &a_infix_operator)) return 1;
   ast_node_t    *op_node = ast_pool_at(p->ast_pool, p->result_ast_node_h);
@@ -649,9 +649,9 @@ static int infix_operation(parser_t *p) {
   if (string_to_ast_operator(op_node->symbol.name, &op)) return 1;
 
   if (a_try(p, &infix_operand)) return 1;
-  size_t const rhs = p->result_ast_node_h;
+  ast_node_h const rhs = p->result_ast_node_h;
 
-  ast_node_t   node;
+  ast_node_t       node;
   ast_node_init(&node, ast_infix);
   node.infix.left  = lhs;
   node.infix.right = rhs;
@@ -664,11 +664,11 @@ static int lambda_function(parser_t *p) {
 
   if (a_try_s(p, &the_symbol, "fun")) return 1;
   if (a_try(p, &lambda_declaration)) return 1;
-  size_t decl_h;
+  ast_node_h decl_h;
   parser_result(p, &decl_h);
 
   if (a_try(p, &function_definition)) return 1;
-  size_t     defn_h = p->result_ast_node_h;
+  ast_node_h defn_h = p->result_ast_node_h;
 
   ast_node_t node;
   ast_node_init(&node, ast_lambda_function);
@@ -689,7 +689,7 @@ static int lambda_function_application(parser_t *p) {
   if (a_try(p, &grouped_expression)) return 1;
   // a lambda application must be a grouped lambda function, i.e.
   // surrouneded by round braces
-  size_t lambda_h;
+  ast_node_h lambda_h;
   parser_result(p, &lambda_h);
   if (ast_pool_at(p->ast_pool, lambda_h)->tag != ast_lambda_function) {
     p->error.tag = tess_err_expected_lambda;
@@ -698,7 +698,7 @@ static int lambda_function_application(parser_t *p) {
 
   // there must be at least one argument
   mos_vector_t arguments;
-  mos_vector_init(&arguments, sizeof(size_t));
+  mos_vector_init(&arguments, sizeof(ast_node_h));
 
   if (a_try(p, &function_argument)) return 1;
   if (mos_vector_push_back(p->alloc, &arguments, &p->result_ast_node_h)) return 1;
@@ -727,7 +727,7 @@ static int simple_declaration(parser_t *p) {
   // a = ...
   // a single identifier followed by an equal sign
   if (a_try(p, a_identifier)) return 1;
-  size_t sym = p->result_ast_node_h;
+  ast_node_h sym = p->result_ast_node_h;
 
   if (a_try(p, a_equal_sign)) return 1;
 
@@ -738,14 +738,14 @@ static int let_in_form(parser_t *p) {
   // let a = 2 in expression
   if (a_try_s(p, &the_symbol, "let")) return 1;
   if (a_try(p, &simple_declaration)) return 1;
-  size_t sym = p->result_ast_node_h;
+  ast_node_h sym = p->result_ast_node_h;
 
   if (a_try(p, &expression)) return 1;
-  size_t defn = p->result_ast_node_h;
+  ast_node_h defn = p->result_ast_node_h;
 
   if (a_try_s(p, &the_symbol, "in")) return 1;
   if (a_try(p, &expression)) return 1;
-  size_t     body = p->result_ast_node_h;
+  ast_node_h body = p->result_ast_node_h;
 
   ast_node_t node;
   ast_node_init(&node, ast_let_in);
@@ -759,10 +759,10 @@ static int let_form(parser_t *p) {
   // let f a b c... = ...
   if (a_try_s(p, &the_symbol, "let")) return 1;
   if (a_try(p, &function_declaration)) return 1;
-  size_t decl_h = p->result_ast_node_h;
+  ast_node_h decl_h = p->result_ast_node_h;
 
   if (a_try(p, &function_definition)) return 1;
-  size_t     defn_h = p->result_ast_node_h;
+  ast_node_h defn_h = p->result_ast_node_h;
 
   ast_node_t node;
   ast_node_init(&node, ast_let);
@@ -785,7 +785,7 @@ static int tuple_expression(parser_t *p) {
   if (a_try(p, a_open_round)) return 1;
 
   mos_vector_t elements;
-  mos_vector_init(&elements, sizeof(size_t));
+  mos_vector_init(&elements, sizeof(ast_node_h));
 
   // first, expect an expression followed by a comma
   if (a_try(p, &expression)) return 1;
@@ -824,7 +824,7 @@ static int grouped_expression(parser_t *parser) {
   if (a_try(parser, &expression)) return 1;
 
   // save expression node result
-  size_t const out_h = parser->result_ast_node_h;
+  ast_node_h const out_h = parser->result_ast_node_h;
 
   if (a_try(parser, &a_close_round)) return 1;
 
@@ -858,7 +858,7 @@ int parser_next(parser_t *parser) {
   return expression(parser);
 }
 
-void parser_result(parser_t *p, size_t *handle) {
+void parser_result(parser_t *p, ast_node_h *handle) {
   if (handle) {
     *handle = p->result_ast_node_h;
   }

@@ -33,6 +33,6 @@ parser_error_t const *parser_error(parser_t *);
 // -- parser --
 
 int  parser_next(parser_t *);
-void parser_result(parser_t *, size_t *);
+void parser_result(parser_t *, ast_node_h *);
 
 #endif

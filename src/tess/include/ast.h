@@ -81,9 +81,10 @@ typedef struct tess_type {
 typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator_t;
 #undef TESS_ENUM
 
+typedef size_t ast_node_h; // handle issued by ast_pool
+
 typedef struct ast_node {
   union {
-
     struct {
       char *name;
     } symbol;
@@ -106,24 +107,24 @@ typedef struct ast_node {
 
     struct {
       ast_operator_t op;
-      size_t         left;
-      size_t         right;
+      ast_node_h     left;
+      ast_node_h     right;
     } infix;
 
     struct {
       mos_vector_t parameters;
-      size_t       body;
+      ast_node_h   body;
     } lambda_function;
 
     struct {
-      size_t name;
-      size_t value;
-      size_t body;
+      ast_node_h name;
+      ast_node_h value;
+      ast_node_h body;
     } let_in;
 
     struct {
       mos_vector_t parameters;
-      size_t       name;
+      ast_node_h   name;
     } function_declaration;
 
     struct {
@@ -132,24 +133,24 @@ typedef struct ast_node {
 
     struct {
       mos_vector_t parameters;
-      size_t       name;
-      size_t       body;
+      ast_node_h   name;
+      ast_node_h   body;
     } let;
 
     struct {
-      size_t condition;
-      size_t yes;
-      size_t no;
+      ast_node_h condition;
+      ast_node_h yes;
+      ast_node_h no;
     } if_then_else;
 
     struct {
       mos_vector_t arguments;
-      size_t       lambda;
+      ast_node_h   lambda;
     } lambda_function_application;
 
     struct {
       mos_vector_t arguments;
-      size_t       name;
+      ast_node_h   name;
       bool         specialized;
     } named_function_application;
 
@@ -169,33 +170,27 @@ typedef struct ast_pool {
 
 // -- allocation and deallocation --
 
-// tess_type
-
-void tess_type_init(tess_type_t *, type_tag_t);
-void tess_type_init_type_var(tess_type_t *, uint32_t);
-void tess_type_init_tuple(tess_type_t *);
-void tess_type_init_arrow(tess_type_t *);
-void tess_type_deinit(mos_allocator_t *, tess_type_t *);
-
-// ast_pool
+void          tess_type_init(tess_type_t *, type_tag_t);
+void          tess_type_init_type_var(tess_type_t *, uint32_t);
+void          tess_type_init_tuple(tess_type_t *);
+void          tess_type_init_arrow(tess_type_t *);
+void          tess_type_deinit(mos_allocator_t *, tess_type_t *);
 
 ast_pool_t   *ast_pool_alloc(mos_allocator_t *);
 void          ast_pool_dealloc(mos_allocator_t *, ast_pool_t **);
 nodiscard int ast_pool_init(mos_allocator_t *, ast_pool_t *);
 void          ast_pool_deinit(mos_allocator_t *, ast_pool_t *);
 
-// ast_node
-
-void ast_node_init(ast_node_t *, ast_tag_t);
-void ast_node_deinit(mos_allocator_t *, ast_node_t *);
-void ast_node_replace(mos_allocator_t *, ast_node_t *, ast_tag_t);
+void          ast_node_init(ast_node_t *, ast_tag_t);
+void          ast_node_deinit(mos_allocator_t *, ast_node_t *);
+void          ast_node_replace(mos_allocator_t *, ast_node_t *, ast_tag_t);
 
 // -- pool operations --
 //
 // [move_back] takes ownership of ast_node(s) and invalidates caller's copy
 
-nodiscard int ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, size_t *);
-ast_node_t   *ast_pool_at(ast_pool_t *, size_t);
+nodiscard int ast_pool_move_back(mos_allocator_t *, ast_pool_t *, ast_node_t *, ast_node_h *);
+ast_node_t   *ast_pool_at(ast_pool_t *, ast_node_h);
 
 // -- utilities --
 

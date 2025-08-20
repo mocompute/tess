@@ -22,7 +22,7 @@ void tess_type_init_type_var(tess_type_t *ty, uint32_t val) {
 void tess_type_init_tuple(tess_type_t *ty) {
   memset(ty, 0, sizeof *ty);
   ty->tag = type_tuple;
-  mos_vector_init(&ty->tuple, sizeof(size_t));
+  mos_vector_init(&ty->tuple, sizeof(ast_node_h));
 }
 
 void tess_type_init_arrow(tess_type_t *ty) {
@@ -111,7 +111,7 @@ void ast_node_deinit(mos_allocator_t *alloc, ast_node_t *node) {
 
 void ast_node_init(ast_node_t *node, ast_tag_t tag) {
 
-#define init(P) mos_vector_init(&P, sizeof(size_t))
+#define init(P) mos_vector_init(&P, sizeof(ast_node_h))
 
   memset(node, 0, sizeof *node);
   node->tag = tag;
@@ -148,7 +148,7 @@ void ast_node_replace(mos_allocator_t *alloc, ast_node_t *node, ast_tag_t tag) {
 
 // -- pool operations --
 
-int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *node, size_t *handle) {
+int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *node, ast_node_h *handle) {
 
   if (mos_vector_push_back(alloc, &pool->data, node)) return 1;
 
@@ -158,7 +158,7 @@ int ast_pool_move_back(mos_allocator_t *alloc, ast_pool_t *pool, ast_node_t *nod
   return 0;
 }
 
-ast_node_t *ast_pool_at(ast_pool_t *pool, size_t handle) {
+ast_node_t *ast_pool_at(ast_pool_t *pool, ast_node_h handle) {
   return mos_vector_at(&pool->data, handle);
 }
 
