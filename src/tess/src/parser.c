@@ -463,7 +463,7 @@ static int function_declaration(parser_t *p) {
 
   ast_node_h const name = p->result; // function name
 
-  mos_vector_t     parameters;
+  mos_vector       parameters;
   ast_vector_init(&parameters);
 
   // check: f () declares function with no parameters
@@ -505,7 +505,7 @@ static int function_declaration(parser_t *p) {
 static int lambda_declaration(parser_t *p) {
   // a b c... -> : only symbols allowed, terminated by ->
 
-  mos_vector_t parameters;
+  mos_vector parameters;
   ast_vector_init(&parameters);
 
   // accumulate identifiers as parameters until an arrow is seen
@@ -542,7 +542,7 @@ static int function_application(parser_t *p) {
 
   ast_node_h const name = p->result;
 
-  mos_vector_t     arguments;
+  mos_vector       arguments;
   ast_vector_init(&arguments);
 
   // must have at least one argument
@@ -674,7 +674,7 @@ static int lambda_function_application(parser_t *p) {
   }
 
   // there must be at least one argument
-  mos_vector_t arguments;
+  mos_vector arguments;
   ast_vector_init(&arguments);
 
   if (a_try(p, &function_argument)) return 1;
@@ -758,7 +758,7 @@ static int tuple_expression(parser_t *p) {
 
   if (a_try(p, a_open_round)) return 1;
 
-  mos_vector_t elements;
+  mos_vector elements;
   ast_vector_init(&elements);
 
   // first, expect an expression, which must be followed by a comma

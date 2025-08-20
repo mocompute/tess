@@ -79,7 +79,7 @@ int test_big_map(void) {
   } pair_t;
 
   mos_allocator *alloc = mos_alloc_default_allocator();
-  mos_vector_t   vec;
+  mos_vector     vec;
   mos_vector_init(&vec, sizeof(pair_t));
   if (mos_vector_reserve(alloc, &vec, N)) return error + 1;
 

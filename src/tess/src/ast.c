@@ -197,6 +197,6 @@ int string_to_ast_operator(char const *const s, ast_operator_t *out) {
   return 1;
 }
 
-void ast_vector_init(mos_vector_t *vec) {
+void ast_vector_init(mos_vector *vec) {
   mos_vector_init(vec, sizeof(ast_node_h));
 }

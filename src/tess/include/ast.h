@@ -114,8 +114,8 @@ typedef struct ast_node {
     } infix;
 
     struct {
-      mos_vector_t parameters;
-      ast_node_h   body;
+      mos_vector parameters;
+      ast_node_h body;
     } lambda_function;
 
     struct {
@@ -125,18 +125,18 @@ typedef struct ast_node {
     } let_in;
 
     struct {
-      mos_vector_t parameters;
-      ast_node_h   name;
+      mos_vector parameters;
+      ast_node_h name;
     } function_declaration;
 
     struct {
-      mos_vector_t parameters;
+      mos_vector parameters;
     } lambda_declaration;
 
     struct {
-      mos_vector_t parameters;
-      ast_node_h   name;
-      ast_node_h   body;
+      mos_vector parameters;
+      ast_node_h name;
+      ast_node_h body;
     } let;
 
     struct {
@@ -146,18 +146,18 @@ typedef struct ast_node {
     } if_then_else;
 
     struct {
-      mos_vector_t arguments;
-      ast_node_h   lambda;
+      mos_vector arguments;
+      ast_node_h lambda;
     } lambda_function_application;
 
     struct {
-      mos_vector_t arguments;
-      ast_node_h   name;
-      bool         specialized;
+      mos_vector arguments;
+      ast_node_h name;
+      bool       specialized;
     } named_function_application;
 
     struct {
-      mos_vector_t elements;
+      mos_vector elements;
     } tuple;
   };
 
@@ -199,6 +199,6 @@ ast_node_t   *ast_pool_at(ast_pool_t *, ast_node_h);
 char const *type_tag_to_string(type_tag_t);
 char const *ast_tag_to_string(ast_tag_t);
 int         string_to_ast_operator(char const *, ast_operator_t *);
-void        ast_vector_init(mos_vector_t *);
+void        ast_vector_init(mos_vector *);
 
 #endif
