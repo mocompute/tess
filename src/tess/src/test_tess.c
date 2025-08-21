@@ -158,8 +158,8 @@ int test_parser_init(void) {
   mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
-  ast_pool *pool = ast_pool_alloc(alloc);
-  if (ast_pool_init(alloc, pool)) return error + 1;
+  ast_pool *pool = ast_pool_alloci(alloc);
+  if (NULL == pool) return error + 1;
 
   parser *p = parser_alloc(alloc);
   if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
@@ -184,8 +184,8 @@ int test_parser_basic(void) {
   mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
-  ast_pool *pool = ast_pool_alloc(alloc);
-  if (ast_pool_init(alloc, pool)) return error + 1;
+  ast_pool *pool = ast_pool_alloci(alloc);
+  if (NULL == pool) return error + 1;
 
   parser *p = parser_alloc(alloc);
   if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;

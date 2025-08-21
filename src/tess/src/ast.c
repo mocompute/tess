@@ -51,6 +51,15 @@ ast_pool *ast_pool_alloc(mos_allocator *alloc) {
   return alloc->malloc(alloc, sizeof(ast_pool));
 }
 
+ast_pool *ast_pool_alloci(mos_allocator *alloc) {
+  ast_pool *out = alloc->malloc(alloc, sizeof(ast_pool));
+  if (ast_pool_init(alloc, out)) {
+    alloc->free(alloc, out);
+    return NULL;
+  }
+  return out;
+}
+
 void ast_pool_dealloc(mos_allocator *alloc, ast_pool **pool) {
   alloc->free(alloc, *pool);
   *pool = 0;
