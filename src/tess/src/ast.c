@@ -3,6 +3,7 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
@@ -234,9 +235,10 @@ int ast_vector_init(mos_allocator *alloc, mos_vector *vec) {
   return mos_vector_init(alloc, vec, sizeof(ast_node_h), 0);
 }
 
-static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, int sz,
+static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, int const sz_,
                       char const *restrict literal) {
-  if (sz < 0) return -1;
+  if (sz_ < 0) return -1;
+  size_t const sz = (size_t)sz_;
 
   if ((NULL == node) && (NULL != literal)) {
     return snprintf(buf, sz, "%s", literal);
@@ -248,8 +250,8 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
   case ast_nil:    return snprintf(buf, sz, "(nil)");
   case ast_bool:   return snprintf(buf, sz, "(bool %d)", node->bool_.val);
   case ast_symbol: return snprintf(buf, sz, "(symbol %s)", node->symbol.name);
-  case ast_i64:    return snprintf(buf, sz, "(i64 %lli)", node->i64.val);
-  case ast_u64:    return snprintf(buf, sz, "(u64 %llu)", node->u64.val);
+  case ast_i64:    return snprintf(buf, sz, "(i64 %" PRId64 ")", node->i64.val);
+  case ast_u64:    return snprintf(buf, sz, "(u64 %" PRIu64 ")", node->u64.val);
   case ast_f64:    return snprintf(buf, sz, "(f64 %f)", node->f64.val);
   case ast_string: return snprintf(buf, sz, "(string \"%s\")", node->symbol.name);
   case ast_infix:  {
@@ -263,19 +265,19 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     if (res < 0) return res;
     offset += res;
 
-    res = print_node(pool, left, buf + offset, sz - offset, NULL);
+    res = print_node(pool, left, buf + offset, sz_ - offset, NULL);
     if (res < 0) return res;
     offset += res;
 
-    res = print_node(pool, NULL, buf + offset, sz - offset, " ");
+    res = print_node(pool, NULL, buf + offset, sz_ - offset, " ");
     if (res < 0) return res;
     offset += res;
 
-    res = print_node(pool, right, buf + offset, sz - offset, NULL);
+    res = print_node(pool, right, buf + offset, sz_ - offset, NULL);
     if (res < 0) return res;
     offset += res;
 
-    res = print_node(pool, NULL, buf + offset, sz - offset, ")");
+    res = print_node(pool, NULL, buf + offset, sz_ - offset, ")");
     if (res < 0) return res;
     offset += res;
 
@@ -292,19 +294,19 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     size_t            count = mos_vector_size(&node->tuple.elements);
     ast_node_h const *it    = mos_vector_cbegin(&node->tuple.elements);
     while (count--) {
-      res = print_node(pool, NULL, buf + offset, sz - offset, " ");
+      res = print_node(pool, NULL, buf + offset, sz_ - offset, " ");
       if (res < 0) return res;
       offset += res;
 
       ast_node *el = ast_pool_at(pool, *it);
-      res          = print_node(pool, el, buf + offset, sz - offset, NULL);
+      res          = print_node(pool, el, buf + offset, sz_ - offset, NULL);
       if (res < 0) return res;
       offset += res;
 
       ++it;
     }
 
-    res = print_node(pool, NULL, buf + offset, sz - offset, ")");
+    res = print_node(pool, NULL, buf + offset, sz_ - offset, ")");
     if (res < 0) return res;
     offset += res;
 
