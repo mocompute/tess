@@ -22,7 +22,7 @@ typedef struct mos_vector {
 
 mos_vector   *mos_vector_alloc(mos_allocator *);
 void          mos_vector_dealloc(mos_allocator *, mos_vector **);
-void          mos_vector_init(mos_vector *, size_t element_size);
+nodiscard int mos_vector_init(mos_allocator *, mos_vector *, size_t element_size, size_t initial_size);
 void          mos_vector_deinit(mos_allocator *, mos_vector *);
 nodiscard int mos_vector_reserve(mos_allocator *, mos_vector *, size_t);
 void          mos_vector_move(mos_vector *dst, mos_vector *src);

@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "vector.h"
 
+#include <assert.h>
 #include <string.h>
 
 // -- statics --
@@ -19,10 +20,10 @@ void tess_type_init_type_var(tess_type *ty, uint32_t val) {
   ty->val = val;
 }
 
-void tess_type_init_tuple(tess_type *ty) {
+int tess_type_init_tuple(mos_allocator *alloc, tess_type *ty) {
   memset(ty, 0, sizeof *ty);
   ty->tag = type_tuple;
-  mos_vector_init(&ty->tuple, sizeof(ast_node_h));
+  return mos_vector_init(alloc, &ty->tuple, sizeof(ast_node_h), 0);
 }
 
 void tess_type_init_arrow(tess_type *ty) {
@@ -56,9 +57,7 @@ void ast_pool_dealloc(mos_allocator *alloc, ast_pool **pool) {
 }
 
 int ast_pool_init(mos_allocator *alloc, ast_pool *pool) {
-  mos_vector_init(&pool->data, sizeof(ast_node));
-  if (mos_vector_reserve(alloc, &pool->data, 32)) return 1;
-  return 0;
+  return mos_vector_init(alloc, &pool->data, sizeof(ast_node), 32);
 }
 
 void ast_pool_deinit(mos_allocator *alloc, ast_pool *pool) {
@@ -109,21 +108,27 @@ void ast_node_deinit(mos_allocator *alloc, ast_node *node) {
 #undef deinit
 }
 
-void ast_node_init(ast_node *node, ast_tag tag) {
+int ast_node_init(mos_allocator *alloc, ast_node *node, ast_tag tag) {
 
-#define init(P) ast_vector_init(&P)
+  // accepts alloc = NULL in some cases
+
+#define init(P)                                                                                            \
+  do {                                                                                                     \
+    assert(alloc);                                                                                         \
+    return ast_vector_init(alloc, &P);                                                                     \
+  } while (0)
 
   memset(node, 0, sizeof *node);
   node->tag = tag;
 
   switch (node->tag) {
-  case ast_lambda_function:             init(node->lambda_function.parameters); break;
-  case ast_function_declaration:        init(node->function_declaration.parameters); break;
-  case ast_lambda_declaration:          init(node->lambda_declaration.parameters); break;
-  case ast_let:                         init(node->let.parameters); break;
-  case ast_tuple:                       init(node->tuple.elements); break;
-  case ast_lambda_function_application: init(node->lambda_function_application.arguments); break;
-  case ast_named_function_application:  init(node->named_function_application.arguments); break;
+  case ast_lambda_function:             init(node->lambda_function.parameters);
+  case ast_function_declaration:        init(node->function_declaration.parameters);
+  case ast_lambda_declaration:          init(node->lambda_declaration.parameters);
+  case ast_let:                         init(node->let.parameters);
+  case ast_tuple:                       init(node->tuple.elements);
+  case ast_lambda_function_application: init(node->lambda_function_application.arguments);
+  case ast_named_function_application:  init(node->named_function_application.arguments);
 
   case ast_eof:
   case ast_nil:
@@ -135,15 +140,15 @@ void ast_node_init(ast_node *node, ast_tag tag) {
   case ast_string:
   case ast_infix:
   case ast_let_in:
-  case ast_if_then_else:                break;
+  case ast_if_then_else:                return 0;
   }
 
 #undef init
 }
 
-void ast_node_replace(mos_allocator *alloc, ast_node *node, ast_tag tag) {
+int ast_node_replace(mos_allocator *alloc, ast_node *node, ast_tag tag) {
   ast_node_deinit(alloc, node);
-  ast_node_init(node, tag);
+  return ast_node_init(alloc, node, tag);
 }
 
 // -- pool operations --
@@ -197,6 +202,6 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
   return 1;
 }
 
-void ast_vector_init(mos_vector *vec) {
-  mos_vector_init(vec, sizeof(ast_node_h));
+int ast_vector_init(mos_allocator *alloc, mos_vector *vec) {
+  return mos_vector_init(alloc, vec, sizeof(ast_node_h), 0);
 }

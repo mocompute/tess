@@ -66,9 +66,9 @@ static void *arena_malloc(mos_allocator *alloc, size_t sz) {
   while (bucket) {
     if (bucket->capacity - bucket->size >= sz) {
 
-      size_t prev_size = bucket->size;
+      void *out = ((char *)bucket) + sizeof(arena_header) + bucket->size;
       bucket->size += sz;
-      return ((char *)bucket) + sizeof(arena_header) + prev_size;
+      return out;
     }
 
     last_capacity = bucket->capacity;
@@ -89,17 +89,34 @@ static void *arena_malloc(mos_allocator *alloc, size_t sz) {
   return ((char *)last->next) + sizeof(arena_header);
 }
 
-static void *arena_calloc(mos_allocator *, size_t num, size_t size) {
+static void *arena_calloc(mos_allocator *alloc, size_t num, size_t size) {
+  void *out = arena_malloc(alloc, num * size);
+  if (out) memset(out, 0, num * size);
+  return out;
 }
 
-static void *arena_realloc(mos_allocator *, void *, size_t) {
+static void *arena_realloc(mos_allocator *a, void *p, size_t sz) {
+  // arena does not support resizing existing block
+  if (NULL == p) return arena_malloc(a, sz);
+  return NULL;
 }
 
-static void arena_free(mos_allocator *, void *) {
+static void arena_free(mos_allocator *alloc, void *p) {
+  (void)alloc;
+  (void)p;
 }
 
 mos_allocator *mos_alloc_arena_alloc(mos_allocator *alloc) {
   return alloc->malloc(alloc, sizeof(arena_allocator));
+}
+
+mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t sz) {
+  mos_allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
+  if (mos_alloc_arena_init(out, alloc, sz)) {
+    alloc->free(alloc, out);
+    return NULL;
+  }
+  return out;
 }
 
 void mos_alloc_arena_dealloc(mos_allocator *alloc, mos_allocator **arena) {

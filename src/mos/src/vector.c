@@ -16,10 +16,17 @@ void mos_vector_dealloc(mos_allocator *alloc, mos_vector **p) {
   *p = 0;
 }
 
-void mos_vector_init(mos_vector *vec, size_t element_size) {
+int mos_vector_init(mos_allocator *alloc, mos_vector *vec, size_t element_size, size_t initial_size) {
   assert(element_size <= PTRDIFF_MAX);
   memset(vec, 0, sizeof *vec);
   vec->element_size = element_size;
+
+  if (initial_size) {
+    vec->data = alloc->malloc(alloc, initial_size * element_size);
+    if (NULL == vec->data) return 1;
+    vec->capacity = initial_size;
+  }
+  return 0;
 }
 
 void mos_vector_deinit(mos_allocator *alloc, mos_vector *vec) {

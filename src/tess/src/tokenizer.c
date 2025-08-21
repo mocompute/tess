@@ -41,10 +41,8 @@ int tokenizer_init(mos_allocator *alloc, tokenizer *tok, char const *input, size
   tok->input_len = len;
   tok->pos       = 0;
 
-  mos_vector_init(&tok->buf, sizeof(char));
-  if (mos_vector_reserve(alloc, &tok->buf, 32)) return 1;
-  mos_vector_init(&tok->backtrack, sizeof(token));
-  if (mos_vector_reserve(alloc, &tok->backtrack, 8)) return 1;
+  if (mos_vector_init(alloc, &tok->buf, sizeof(char), 32)) return 1;
+  if (mos_vector_init(alloc, &tok->backtrack, sizeof(token), 8)) return 1;
   return 0;
 }
 

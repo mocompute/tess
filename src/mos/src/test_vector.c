@@ -9,8 +9,7 @@ int test_vector(void) {
   mos_allocator *alloc = mos_alloc_default_allocator();
 
   mos_vector    *vec   = mos_vector_alloc(alloc);
-  mos_vector_init(vec, sizeof(int));
-  if (mos_vector_reserve(alloc, vec, 2)) return error + 1;
+  if (mos_vector_init(alloc, vec, sizeof(int), 2)) return error + 1;
 
   error += mos_vector_empty(vec) == 1 ? 0 : 1;
 
@@ -51,7 +50,7 @@ int test_assoc(void) {
   mos_allocator *alloc = mos_alloc_default_allocator();
 
   mos_vector    *vec   = mos_vector_alloc(alloc);
-  mos_vector_init(vec, 2 * sizeof(size_t));
+  if (mos_vector_init(alloc, vec, 2 * sizeof(size_t), 0)) return error + 1;
 
   size_t pair[2];
 
@@ -98,7 +97,7 @@ int test_assoc_set(void) {
   mos_vector    *vec   = mos_vector_alloc(alloc);
 
   // no payload, just the key
-  mos_vector_init(vec, sizeof(size_t));
+  if (mos_vector_init(alloc, vec, sizeof(size_t), 0)) return error + 1;
 
   size_t key = 1;
   if (mos_vector_assoc_set(alloc, vec, &key)) return error + 1;

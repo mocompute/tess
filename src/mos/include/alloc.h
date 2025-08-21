@@ -1,6 +1,7 @@
 #ifndef MOS_ALLOC_H
 #define MOS_ALLOC_H
 
+#include "nodiscard.h"
 #include <stdlib.h>
 
 typedef struct mos_allocator {
@@ -14,9 +15,10 @@ typedef struct mos_allocator {
 mos_allocator *mos_alloc_default_allocator();
 
 mos_allocator *mos_alloc_arena_alloc(mos_allocator *parent);
+mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t);
 void           mos_alloc_arena_dealloc(mos_allocator *parent, mos_allocator **arena);
-int            mos_alloc_arena_init(mos_allocator *, mos_allocator *parent, size_t);
-void           mos_alloc_deinit(mos_allocator *);
+nodiscard int  mos_alloc_arena_init(mos_allocator *, mos_allocator *parent, size_t);
+void           mos_alloc_arena_deinit(mos_allocator *);
 
 // -- utilities --
 

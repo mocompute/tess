@@ -48,7 +48,7 @@ int parser_init(mos_allocator *alloc, parser *p, ast_pool *pool, char const *inp
   if (tokenizer_init(alloc, p->tokenizer, input, input_len)) return 1;
 
   // good_tokens
-  mos_vector_init(&p->seen_tokens, sizeof(struct token));
+  if (mos_vector_init(alloc, &p->seen_tokens, sizeof(struct token), 0)) return 1;
 
   // error
   token_init(&p->token, tok_invalid);
@@ -98,41 +98,41 @@ static int tuple_expression(parser *);
 
 nodiscard static int result_ast(parser *p, ast_tag tag) {
   ast_node node;
-  ast_node_init(&node, tag);
+  if (ast_node_init(p->alloc, &node, tag)) return 1;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_i64(parser *p, int64_t val) {
   ast_node node;
-  ast_node_init(&node, ast_i64);
+  if (ast_node_init(NULL, &node, ast_i64)) return 1;
   node.i64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_u64(parser *p, uint64_t val) {
   ast_node node;
-  ast_node_init(&node, ast_u64);
+  if (ast_node_init(NULL, &node, ast_u64)) return 1;
   node.u64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_f64(parser *p, double val) {
   ast_node node;
-  ast_node_init(&node, ast_f64);
+  if (ast_node_init(NULL, &node, ast_f64)) return 1;
   node.f64.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_bool(parser *p, bool val) {
   ast_node node;
-  ast_node_init(&node, ast_bool);
+  if (ast_node_init(NULL, &node, ast_bool)) return 1;
   node.bool_.val = val;
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
   ast_node node;
-  ast_node_init(&node, tag);
+  if (ast_node_init(p->alloc, &node, tag)) return 1;
 
   // TODO strings
   node.symbol.name = p->alloc->malloc(p->alloc, strlen(s) + 1); // syms and strs use the symbol union
@@ -464,13 +464,13 @@ static int function_declaration(parser *p) {
   ast_node_h const name = p->result; // function name
 
   mos_vector       parameters;
-  ast_vector_init(&parameters);
+  if (ast_vector_init(p->alloc, &parameters)) return 2;
 
   // check: f () declares function with no parameters
   if (0 == a_try(p, &a_nil)) {
 
     ast_node node;
-    ast_node_init(&node, ast_function_declaration);
+    if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
     node.function_declaration.name = name;
     mos_vector_move(&node.function_declaration.parameters, &parameters);
     if (result_ast_node(p, &node)) return 1;
@@ -481,14 +481,14 @@ static int function_declaration(parser *p) {
   // accumulate identifiers as parameters until equal sign is seen
   while (true) {
     if (0 == a_try(p, &a_identifier)) {
-      if (mos_vector_push_back(p->alloc, &parameters, &p->result)) return 1;
+      if (mos_vector_push_back(p->alloc, &parameters, &p->result)) return 2;
       continue;
     }
 
     if (0 == a_try(p, &a_equal_sign)) {
 
       ast_node node;
-      ast_node_init(&node, ast_function_declaration);
+      if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
       node.function_declaration.name = name;
       mos_vector_move(&node.function_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
@@ -506,7 +506,7 @@ static int lambda_declaration(parser *p) {
   // a b c... -> : only symbols allowed, terminated by ->
 
   mos_vector parameters;
-  ast_vector_init(&parameters);
+  if (ast_vector_init(p->alloc, &parameters)) return 2;
 
   // accumulate identifiers as parameters until an arrow is seen
   while (true) {
@@ -518,7 +518,7 @@ static int lambda_declaration(parser *p) {
     if (0 == a_try(p, &a_arrow)) {
 
       ast_node node;
-      ast_node_init(&node, ast_lambda_declaration);
+      if (ast_node_init(p->alloc, &node, ast_lambda_declaration)) return 2;
       mos_vector_move(&node.lambda_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
 
@@ -543,7 +543,7 @@ static int function_application(parser *p) {
   ast_node_h const name = p->result;
 
   mos_vector       arguments;
-  ast_vector_init(&arguments);
+  if (ast_vector_init(p->alloc, &arguments)) return 2;
 
   // must have at least one argument
   if (a_try(p, &function_argument)) return 1;
@@ -558,7 +558,7 @@ static int function_application(parser *p) {
     if (0 == a_try(p, &a_end_of_expression)) {
 
       ast_node node;
-      ast_node_init(&node, ast_named_function_application);
+      if (ast_node_init(p->alloc, &node, ast_named_function_application)) return 2;
       node.named_function_application.name = name;
       mos_vector_move(&node.named_function_application.arguments, &arguments);
       if (result_ast_node(p, &node)) return 1;
@@ -606,7 +606,7 @@ static int if_then_else(parser *p) {
   no = p->result;
 
   ast_node node;
-  ast_node_init(&node, ast_if_then_else);
+  if (ast_node_init(p->alloc, &node, ast_if_then_else)) return 2;
   node.if_then_else.condition = cond;
   node.if_then_else.yes       = yes;
   node.if_then_else.no        = no;
@@ -633,7 +633,7 @@ static int infix_operation(parser *p) {
   ast_node_h const rhs = p->result;
 
   ast_node         node;
-  ast_node_init(&node, ast_infix);
+  if (ast_node_init(p->alloc, &node, ast_infix)) return 2;
   node.infix.left  = lhs;
   node.infix.right = rhs;
   node.infix.op    = op;
@@ -652,7 +652,7 @@ static int lambda_function(parser *p) {
   ast_node_h defn_h = p->result;
 
   ast_node   node;
-  ast_node_init(&node, ast_lambda_function);
+  if (ast_node_init(p->alloc, &node, ast_lambda_function)) return 2;
   node.lambda_function.body = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
@@ -675,7 +675,7 @@ static int lambda_function_application(parser *p) {
 
   // there must be at least one argument
   mos_vector arguments;
-  ast_vector_init(&arguments);
+  if (ast_vector_init(p->alloc, &arguments)) return 2;
 
   if (a_try(p, &function_argument)) return 1;
   if (mos_vector_push_back(p->alloc, &arguments, &p->result)) return 1;
@@ -688,7 +688,7 @@ static int lambda_function_application(parser *p) {
 
     if (0 == a_try(p, &a_end_of_expression)) {
       ast_node node;
-      ast_node_init(&node, ast_lambda_function_application);
+      if (ast_node_init(p->alloc, &node, ast_lambda_function_application)) return 2;
       node.lambda_function_application.lambda = lambda_h;
       mos_vector_move(&node.lambda_function_application.arguments, &arguments);
       return result_ast_node(p, &node);
@@ -725,7 +725,7 @@ static int let_in_form(parser *p) {
   ast_node_h body = p->result;
 
   ast_node   node;
-  ast_node_init(&node, ast_let_in);
+  if (ast_node_init(p->alloc, &node, ast_let_in)) return 2;
   node.let_in.name  = sym;
   node.let_in.value = defn;
   node.let_in.body  = body;
@@ -742,7 +742,7 @@ static int let_form(parser *p) {
   ast_node_h defn_h = p->result;
 
   ast_node   node;
-  ast_node_init(&node, ast_let);
+  if (ast_node_init(p->alloc, &node, ast_let)) return 2;
 
   // get declaration out of pool to move into new node
   ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
@@ -759,7 +759,7 @@ static int tuple_expression(parser *p) {
   if (a_try(p, a_open_round)) return 1;
 
   mos_vector elements;
-  ast_vector_init(&elements);
+  if (ast_vector_init(p->alloc, &elements)) return 2;
 
   // first, expect an expression, which must be followed by a comma
   // then, zero or more expressions before a close round. So (expr,)
@@ -774,7 +774,7 @@ static int tuple_expression(parser *p) {
 
     if (0 == a_try(p, &a_close_round)) {
       ast_node node;
-      ast_node_init(&node, ast_tuple);
+      if (ast_node_init(p->alloc, &node, ast_tuple)) return 2;
       mos_vector_move(&node.tuple.elements, &elements);
       return result_ast_node(p, &node);
     }

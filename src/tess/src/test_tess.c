@@ -155,18 +155,23 @@ int test_parser_init(void) {
 
   char const    *input = "()";
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  if (!alloc) return error + 1;
 
-  ast_pool      *pool  = ast_pool_alloc(alloc);
+  ast_pool *pool = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser *p = parser_alloc(alloc);
   if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
 
-  parser_deinit(p);
-  parser_dealloc(alloc, &p);
-  ast_pool_deinit(alloc, pool);
-  ast_pool_dealloc(alloc, &pool);
+  // can skip deinit/dealloc due to arena
+  // parser_deinit(p);
+  // parser_dealloc(alloc, &p);
+  // ast_pool_deinit(alloc, pool);
+  // ast_pool_dealloc(alloc, &pool);
+
+  mos_alloc_arena_deinit(alloc);
+  mos_alloc_arena_dealloc(mos_alloc_default_allocator(), &alloc);
 
   return error;
 }
@@ -176,9 +181,10 @@ int test_parser_basic(void) {
 
   char const    *input = "a";
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  if (!alloc) return error + 1;
 
-  ast_pool      *pool  = ast_pool_alloc(alloc);
+  ast_pool *pool = ast_pool_alloc(alloc);
   if (ast_pool_init(alloc, pool)) return error + 1;
 
   parser *p = parser_alloc(alloc);

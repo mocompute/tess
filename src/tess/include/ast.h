@@ -175,7 +175,7 @@ typedef struct ast_pool {
 
 void          tess_type_init(tess_type *, type_tag);
 void          tess_type_init_type_var(tess_type *, uint32_t);
-void          tess_type_init_tuple(tess_type *);
+nodiscard int tess_type_init_tuple(mos_allocator *, tess_type *);
 void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(mos_allocator *, tess_type *);
 
@@ -184,9 +184,9 @@ void          ast_pool_dealloc(mos_allocator *, ast_pool **);
 nodiscard int ast_pool_init(mos_allocator *, ast_pool *);
 void          ast_pool_deinit(mos_allocator *, ast_pool *);
 
-void          ast_node_init(ast_node *, ast_tag);
+nodiscard int ast_node_init(mos_allocator *, ast_node *, ast_tag);
 void          ast_node_deinit(mos_allocator *, ast_node *);
-void          ast_node_replace(mos_allocator *, ast_node *, ast_tag);
+nodiscard int ast_node_replace(mos_allocator *, ast_node *, ast_tag);
 
 // -- pool operations --
 //
@@ -197,9 +197,9 @@ ast_node     *ast_pool_at(ast_pool *, ast_node_h);
 
 // -- utilities --
 
-char const *type_tag_to_string(type_tag);
-char const *ast_tag_to_string(ast_tag);
-int         string_to_ast_operator(char const *, ast_operator *);
-void        ast_vector_init(mos_vector *);
+char const   *type_tag_to_string(type_tag);
+char const   *ast_tag_to_string(ast_tag);
+int           string_to_ast_operator(char const *, ast_operator *);
+nodiscard int ast_vector_init(mos_allocator *, mos_vector *);
 
 #endif
