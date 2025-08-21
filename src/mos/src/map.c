@@ -17,7 +17,7 @@ typedef struct status_t {
   uint8_t probe_distance : 6;
 } status_t;
 
-struct mos_map {
+struct map {
   size_t    element_size;
   size_t    aligned_element_size;
   char     *data;
@@ -35,21 +35,21 @@ struct mos_map {
 
 // -- statics --
 
-static size_t bucket_size(mos_map const *map) {
-  return map->aligned_element_size + sizeof(mos_map_header_t);
+static size_t bucket_size(map_t const *map) {
+  return map->aligned_element_size + sizeof(map_header);
 }
 
-static uint32_t key_to_bucket(mos_map const *map, size_t key) {
+static uint32_t key_to_bucket(map_t const *map, size_t key) {
   return key % map->buckets;
 }
 
-static uint32_t incr_index(mos_map const *map, uint32_t index) {
+static uint32_t incr_index(map_t const *map, uint32_t index) {
   return (index + 1) % map->buckets;
 }
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static char *map_find(mos_map *map, size_t key, uint32_t *out_index) {
+static char *map_find(map_t *map, size_t key, uint32_t *out_index) {
   uint32_t index          = key_to_bucket(map, key);
 
   uint32_t probe_distance = 0;
@@ -63,7 +63,7 @@ static char *map_find(mos_map *map, size_t key, uint32_t *out_index) {
       // keep looking
       index = incr_index(map, index);
     } else if (status.occupied) {
-      char *const cell      = mos_map_unchecked_at(map, index);
+      char *const cell      = map_unchecked_at(map, index);
       size_t      found_key = *(size_t *)cell;
 
       if (found_key != key) {
@@ -81,9 +81,9 @@ static char *map_find(mos_map *map, size_t key, uint32_t *out_index) {
   }
 }
 
-static int set_one(mos_map *map, size_t const key, char const *element) {
+static int set_one(map_t *map, size_t const key, char const *element) {
 
-  size_t const cell_size = sizeof(mos_map_header_t) + map->element_size;
+  size_t const cell_size = sizeof(map_header) + map->element_size;
   assert(bucket_size(map) >= cell_size);
 
   // write header and data to to_store
@@ -102,7 +102,7 @@ static int set_one(mos_map *map, size_t const key, char const *element) {
     }
     if (probe_distance > 16 && !warning_printed) {
       fprintf(stderr, "warning: high probe distance for key: %zu, load factor: %f\n",
-              *(size_t *)map->to_store, mos_map_load_factor(map));
+              *(size_t *)map->to_store, map_load_factor(map));
       warning_printed = 1;
     }
 
@@ -113,7 +113,7 @@ static int set_one(mos_map *map, size_t const key, char const *element) {
         index = incr_index(map, index);
       } else {
         // swap
-        char *const cell = mos_map_unchecked_at(map, index);
+        char *const cell = map_unchecked_at(map, index);
 
         // copy evicted cell (header + data) to tmp
         memcpy(map->tmp, cell, cell_size);
@@ -137,7 +137,7 @@ static int set_one(mos_map *map, size_t const key, char const *element) {
       map->status[index].probe_distance = probe_distance;
       map->occupied++;
 
-      char *const cell = mos_map_unchecked_at(map, index);
+      char *const cell = map_unchecked_at(map, index);
 
       // write cell (header + data) to bucket
       memcpy(cell, map->to_store, cell_size);
@@ -147,11 +147,11 @@ static int set_one(mos_map *map, size_t const key, char const *element) {
   return 0;
 }
 
-static int set_one_cell(mos_map *map, char *cell) {
+static int set_one_cell(map_t *map, char *cell) {
   return set_one(map, *(size_t *)cell, cell + sizeof(size_t));
 }
 
-static int grow_buckets(allocator *alloc, mos_map *map) {
+static int grow_buckets(allocator *alloc, map_t *map) {
   // make a new map with 1.618x the number of buckets. Copy all data to
   // the new map. Then release the old map's buffers, and overwrite
   // its struct with the new map.
@@ -163,22 +163,22 @@ static int grow_buckets(allocator *alloc, mos_map *map) {
     return 1;
   }
 
-  mos_map new_map;
-  if (mos_map_init(alloc, &new_map, map->element_size, (uint32_t)new_buckets, map->max_load_factor)) {
+  map_t new_map;
+  if (map_init(alloc, &new_map, map->element_size, (uint32_t)new_buckets, map->max_load_factor)) {
     dbg("map grow_buckets: oom\n");
     return 1;
   }
 
   for (uint32_t i = 0; i < map->buckets; ++i) {
     if (map->status[i].occupied) {
-      char *cell = mos_map_unchecked_at(map, i);
+      char *cell = map_unchecked_at(map, i);
 
       if (set_one_cell(&new_map, cell)) return 1;
     }
   }
 
   // free old map buffers and overwrite pointers with new map's pointers
-  mos_map_deinit(alloc, map);
+  map_deinit(alloc, map);
   memcpy(map, &new_map, sizeof *map);
 
   return 0;
@@ -186,26 +186,26 @@ static int grow_buckets(allocator *alloc, mos_map *map) {
 
 // -- externals --
 
-float mos_map_load_factor(mos_map const *map) {
+float map_load_factor(map_t const *map) {
   return (float)map->occupied / (float)map->buckets;
 }
 
-size_t mos_map_size(mos_map const *map) {
+size_t map_size(map_t const *map) {
   return map->occupied;
 }
 
-bool mos_map_empty(mos_map const *map) {
+bool map_empty(map_t const *map) {
   return map->occupied == 0;
 }
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
-char *mos_map_unchecked_at(mos_map *map, uint32_t index) {
+char *map_unchecked_at(map_t *map, uint32_t index) {
   return map->data + index * bucket_size(map);
 }
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
-uint32_t mos_map_next_power_of_two(uint32_t n) {
+uint32_t map_next_power_of_two(uint32_t n) {
 
   if (n > (1U << 31)) return 0; // overflow
   if (n == 0) return 1;
@@ -222,24 +222,23 @@ uint32_t mos_map_next_power_of_two(uint32_t n) {
 
 //
 
-mos_map *mos_map_alloc(allocator *alloc) {
-  return alloc->malloc(alloc, sizeof(mos_map));
+map_t *map_alloc(allocator *alloc) {
+  return alloc->malloc(alloc, sizeof(map_t));
 }
 
-void mos_map_dealloc(allocator *alloc, mos_map **p) {
+void map_dealloc(allocator *alloc, map_t **p) {
   alloc->free(alloc, *p);
   *p = 0;
 }
 
-int mos_map_init(allocator *alloc, mos_map *map, size_t element_size, uint32_t buckets,
-                 float max_load_factor) {
+int map_init(allocator *alloc, map_t *map, size_t element_size, uint32_t buckets, float max_load_factor) {
 
   assert(sizeof(status_t) == 1);
-  assert(sizeof(mos_map_header_t) == sizeof(size_t));
+  assert(sizeof(map_header) == sizeof(size_t));
 
   assert(element_size <= PTRDIFF_MAX);
 
-  buckets = mos_map_next_power_of_two(buckets);
+  buckets = map_next_power_of_two(buckets);
   assert(buckets > 0);
 
   if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
@@ -251,17 +250,17 @@ int mos_map_init(allocator *alloc, mos_map *map, size_t element_size, uint32_t b
   map->max_load_factor      = max_load_factor;
   map->data                 = alloc->malloc(alloc, buckets * bucket_size(map));
   map->status               = alloc->calloc(alloc, buckets, sizeof(status_t));
-  map->to_store             = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
-  map->tmp                  = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
+  map->to_store             = alloc->malloc(alloc, map->aligned_element_size + sizeof(map_header));
+  map->tmp                  = alloc->malloc(alloc, map->aligned_element_size + sizeof(map_header));
   if (!map->data || !map->status || !map->to_store || !map->tmp) {
-    dbg("mos_map_init: oom\n");
+    dbg("map_init: oom\n");
     return 1;
   }
 
   return 0;
 }
 
-void mos_map_deinit(allocator *alloc, mos_map *map) {
+void map_deinit(allocator *alloc, map_t *map) {
   alloc->free(alloc, map->to_store);
   alloc->free(alloc, map->tmp);
   alloc->free(alloc, map->status);
@@ -269,18 +268,18 @@ void mos_map_deinit(allocator *alloc, mos_map *map) {
   alloc_invalidate(map, sizeof *map);
 }
 
-int mos_map_set(allocator *alloc, mos_map *map, size_t key, void *data) {
+int map_set(allocator *alloc, map_t *map, size_t key, void *data) {
 
   // Must check for existing key. Replace if present.
-  void *existing = mos_map_get(map, key);
+  void *existing = map_get(map, key);
   if (existing) {
     memcpy(existing, data, map->element_size);
     return 0;
   }
 
-  if (mos_map_load_factor(map) >= map->max_load_factor) {
+  if (map_load_factor(map) >= map->max_load_factor) {
     if (grow_buckets(alloc, map)) {
-      dbg("mos_map_set: oom\n");
+      dbg("map_set: oom\n");
       return 1;
     }
   }
@@ -288,13 +287,13 @@ int mos_map_set(allocator *alloc, mos_map *map, size_t key, void *data) {
   return set_one(map, key, data);
 }
 
-void *mos_map_get(mos_map *map, size_t key) {
+void *map_get(map_t *map, size_t key) {
   char *cell = map_find(map, key, 0);
   if (!cell) return 0;
-  return cell + sizeof(mos_map_header_t);
+  return cell + sizeof(map_header);
 }
 
-void mos_map_erase(mos_map *map, size_t key) {
+void map_erase(map_t *map, size_t key) {
   uint32_t index;
   char    *p = map_find(map, key, &index);
   if (!p) return;
