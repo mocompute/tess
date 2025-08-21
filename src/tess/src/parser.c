@@ -54,7 +54,7 @@ void parser_destroy(allocator *alloc, parser **p) {
 
 int parser_init(allocator *alloc, parser *p, ast_pool *pool, char const *input, size_t input_len) {
 
-  memset(p, 0, sizeof *p);
+  alloc_zero(p);
   p->alloc    = alloc;
   p->ast_pool = pool;
 

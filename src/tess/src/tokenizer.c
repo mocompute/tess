@@ -89,7 +89,7 @@ int tokenizer_next(allocator *alloc, tokenizer *self, token *out, tokenizer_erro
 
   // support backtracking by parser
   if (!vec_empty(&self->backtrack)) {
-    memcpy(out, vec_back(&self->backtrack), sizeof *out);
+    alloc_copy(out, vec_back(&self->backtrack));
     vec_pop_back(&self->backtrack);
     return 0;
   }
@@ -533,7 +533,7 @@ finish:
   }
 
   else if (stop == state) {
-    memcpy(out, &res, sizeof *out);
+    alloc_copy(out, &res);
     return 0;
 
   } else {

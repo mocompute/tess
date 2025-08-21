@@ -19,7 +19,7 @@ void vec_dealloc(allocator *alloc, vec_t **p) {
 
 int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_size) {
   assert(element_size <= PTRDIFF_MAX);
-  memset(vec, 0, sizeof *vec);
+  alloc_zero(vec);
   vec->element_size = element_size;
 
   if (initial_size) {
@@ -59,7 +59,7 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
 }
 
 void vec_move(vec_t *dst, vec_t *src) {
-  memcpy(dst, src, sizeof *dst);
+  alloc_copy(dst, src);
   alloc_invalidate(src, sizeof *src);
 }
 

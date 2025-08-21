@@ -14,24 +14,24 @@
 // -- tess_type allocation and deallocation --
 
 void tess_type_init(tess_type *ty, type_tag tag) {
-  memset(ty, 0, sizeof *ty);
+  alloc_zero(ty);
   ty->tag = tag;
 }
 
 void tess_type_init_type_var(tess_type *ty, uint32_t val) {
-  memset(ty, 0, sizeof *ty);
+  alloc_zero(ty);
   ty->tag = type_type_var;
   ty->val = val;
 }
 
 int tess_type_init_tuple(allocator *alloc, tess_type *ty) {
-  memset(ty, 0, sizeof *ty);
+  alloc_zero(ty);
   ty->tag = type_tuple;
   return vec_init(alloc, &ty->tuple, sizeof(ast_node_h), 0);
 }
 
 void tess_type_init_arrow(tess_type *ty) {
-  memset(ty, 0, sizeof *ty);
+  alloc_zero(ty);
   ty->tag = type_arrow;
 }
 
@@ -139,7 +139,7 @@ int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
     return ast_vector_init(alloc, &P);                                                                     \
   } while (0)
 
-  memset(node, 0, sizeof *node);
+  alloc_zero(node);
   node->tag = tag;
 
   switch (node->tag) {

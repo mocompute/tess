@@ -3,6 +3,7 @@
 
 #include "nodiscard.h"
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct allocator {
   void *(*malloc)(struct allocator *, size_t);
@@ -43,5 +44,8 @@ char  *alloc_strndup(allocator *, char const *, size_t);
 
 size_t alloc_next_power_of_two(size_t);
 size_t alloc_align_to_word_size(size_t);
+
+#define alloc_zero(P)        memset((P), 0, sizeof *(P));
+#define alloc_copy(DST, SRC) memcpy((DST), (SRC), sizeof *(DST));
 
 #endif

@@ -111,7 +111,7 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
 
   bucket = last->next;
 
-  memset(bucket, 0, sizeof *bucket);
+  alloc_zero(bucket);
   bucket->capacity = new_capacity;
   return bump_alloc_assume_capacity(bucket, sz);
 }
@@ -198,7 +198,7 @@ int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
   arena->head = parent->malloc(parent, sizeof(arena_header) + sz);
   if (NULL == arena->head) return 1;
 
-  memset(arena->head, 0, sizeof *arena->head);
+  alloc_zero(arena->head);
   arena->head->capacity    = sz;
 
   arena->allocator.malloc  = &arena_malloc;

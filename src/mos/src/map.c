@@ -158,7 +158,7 @@ static int grow_buckets(allocator *alloc, map_t *map) {
 
   // free old map buffers and overwrite pointers with new map's pointers
   map_deinit(alloc, map);
-  memcpy(map, &new_map, sizeof *map);
+  alloc_copy(map, &new_map);
 
   return 0;
 }
@@ -222,7 +222,7 @@ int map_init(allocator *alloc, map_t *map, size_t element_size, uint32_t buckets
 
   if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
-  memset(map, 0, sizeof *map);
+  alloc_zero(map);
   map->element_size         = element_size;
   map->aligned_element_size = alloc_align_to_word_size(element_size);
   map->n_cells              = buckets;
