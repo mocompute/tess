@@ -53,6 +53,5 @@ void          mos_map_erase(mos_map *, size_t);
 // -- utilities --
 
 uint32_t mos_map_next_power_of_two(uint32_t);
-size_t   mos_align_to_word_size(size_t);
 
 #endif

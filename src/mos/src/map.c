@@ -197,12 +197,6 @@ char *mos_map_unchecked_at(mos_map *map, uint32_t index) {
   return map->data + index * bucket_size(map);
 }
 
-// Returns: argument aligned to next word size.
-size_t mos_align_to_word_size(size_t n) {
-  size_t mask = sizeof(void *) - 1;
-  return (n + mask) & ~mask;
-}
-
 // Returns: input if already a power of two, or else the next higher
 // power of two.
 uint32_t mos_map_next_power_of_two(uint32_t n) {
@@ -243,7 +237,7 @@ int mos_map_init(mos_allocator *alloc, mos_map *map, size_t element_size, uint32
 
   memset(map, 0, sizeof *map);
   map->element_size         = element_size;
-  map->aligned_element_size = mos_align_to_word_size(element_size);
+  map->aligned_element_size = mos_alloc_align_to_word_size(element_size);
   map->buckets              = buckets;
   map->max_load_factor      = max_load_factor;
   map->data                 = alloc->malloc(alloc, buckets * bucket_size(map));
