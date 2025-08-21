@@ -37,6 +37,7 @@ bool   mos_vector_empty(mos_vector const *);
 
 char       *mos_vector_data(mos_vector *);
 void       *mos_vector_begin(mos_vector *);
+void const *mos_vector_cbegin(mos_vector const *);
 void const *mos_vector_end(mos_vector *);
 void       *mos_vector_at(mos_vector *, size_t);
 void       *mos_vector_back(mos_vector *);

@@ -281,15 +281,50 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
 
   } break;
 
-  case ast_tuple:
-  case ast_let_in:
-  case ast_let:
-  case ast_if_then_else:
-  case ast_lambda_function:
-  case ast_function_declaration:
-  case ast_lambda_declaration:
-  case ast_lambda_function_application:
-  case ast_named_function_application:  break;
+  case ast_tuple: {
+    int res    = 0;
+    int offset = 0;
+
+    res        = snprintf(buf, sz, "(tuple");
+    if (res < 0) return 1;
+    offset += res;
+
+    size_t            count = mos_vector_size(&node->tuple.elements);
+    ast_node_h const *it    = mos_vector_cbegin(&node->tuple.elements);
+    while (count--) {
+      res = print_node(pool, NULL, buf + offset, sz - offset, " ");
+      if (res < 0) return res;
+      offset += res;
+
+      ast_node *el = ast_pool_at(pool, *it);
+      res          = print_node(pool, el, buf + offset, sz - offset, NULL);
+      if (res < 0) return res;
+      offset += res;
+
+      ++it;
+    }
+
+    res = print_node(pool, NULL, buf + offset, sz - offset, ")");
+    if (res < 0) return res;
+    offset += res;
+
+  } break;
+  case ast_let_in: {
+  } break;
+  case ast_let: {
+  } break;
+  case ast_if_then_else: {
+  } break;
+  case ast_lambda_function: {
+  } break;
+  case ast_function_declaration: {
+  } break;
+  case ast_lambda_declaration: {
+  } break;
+  case ast_lambda_function_application: {
+  } break;
+  case ast_named_function_application: {
+  } break;
   }
 
   return 0;

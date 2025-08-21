@@ -245,20 +245,41 @@ int test_parser_node_to_string(void) {
   ast_pool *pool = ast_pool_alloci(alloc);
   if (NULL == pool) return error + 1;
 
-  parser *p = parser_alloci(alloc, pool, input, strlen(input));
-  if (NULL == p) return error + 1;
+  {
+    parser *p = parser_alloci(alloc, pool, input, strlen(input));
+    if (NULL == p) return error + 1;
 
-  if (parser_next(p)) return error + 1;
-  ast_node_h node_h;
-  parser_result(p, &node_h);
-  ast_node *node = ast_pool_at(pool, node_h);
+    if (parser_next(p)) return error + 1;
+    ast_node_h node_h;
+    parser_result(p, &node_h);
+    ast_node *node = ast_pool_at(pool, node_h);
 
-  error += ast_infix == node->tag ? 0 : 1;
+    error += ast_infix == node->tag ? 0 : 1;
 
-  char buf[64];
-  if (ast_node_to_string_buf(pool, node, buf, 64)) return error + 1;
+    char buf[64];
+    if (ast_node_to_string_buf(pool, node, buf, 64)) return error + 1;
 
-  error += 0 == strcmp("(infix + (i64 1) (i64 2))", buf) ? 0 : 1;
+    error += 0 == strcmp("(infix + (i64 1) (i64 2))", buf) ? 0 : 1;
+  }
+
+  //
+  {
+    input     = "(a, b)";
+    parser *p = parser_alloci(alloc, pool, input, strlen(input));
+    if (NULL == p) return error + 1;
+
+    if (parser_next(p)) return error + 1;
+    ast_node_h node_h;
+    parser_result(p, &node_h);
+    // ast_node *node = ast_pool_at(pool, node_h);
+
+    // error += ast_tuple == node->tag ? 0 : 1;
+
+    // char buf[64];
+    // if (ast_node_to_string_buf(pool, node, buf, 64)) return error + 1;
+
+    // error += 0 == strcmp("(infix + (i64 1) (i64 2))", buf) ? 0 : 1;
+  }
 
   mos_alloc_arena_dealloci(mos_alloc_default_allocator(), &alloc);
 

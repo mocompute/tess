@@ -281,7 +281,6 @@ static int a_open_round(parser *p) {
 
 static int a_close_round(parser *p) {
   if (next_token(p)) return 1;
-
   if (tok_close_round == p->token.tag) return result_ast_str(p, ast_symbol, ")");
 
   p->error.tag = tess_err_expected_close_round;

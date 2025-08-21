@@ -117,6 +117,10 @@ void *mos_vector_begin(mos_vector *vec) {
   return vec->data;
 }
 
+void const *mos_vector_cbegin(mos_vector const *vec) {
+  return vec->data;
+}
+
 void const *mos_vector_end(mos_vector *vec) {
   // points 1 past the end
   return mos_vector_at(vec, vec->size);
