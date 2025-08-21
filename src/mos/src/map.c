@@ -33,6 +33,10 @@ struct map {
   uint32_t occupied;
 };
 
+typedef struct map_header {
+  size_t key;
+} map_header;
+
 // -- statics --
 
 static size_t bucket_size(map_t const *map) {

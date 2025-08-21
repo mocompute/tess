@@ -19,10 +19,6 @@
 
 typedef struct map map_t;
 
-typedef struct map_header {
-  size_t key;
-} map_header;
-
 // -- allocation and deallocation --
 
 map_t        *map_alloc(allocator *);
