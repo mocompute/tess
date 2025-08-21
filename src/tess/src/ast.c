@@ -47,11 +47,11 @@ void tess_type_deinit(mos_allocator *alloc, tess_type *ty) {
 // -- tess_type_pool allocation and deallocation --
 
 ast_pool *ast_pool_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(ast_pool));
+  return alloc->malloc(alloc, sizeof(ast_pool));
 }
 
 void ast_pool_dealloc(mos_allocator *alloc, ast_pool **pool) {
-  alloc->free(*pool);
+  alloc->free(alloc, *pool);
   *pool = 0;
 }
 
@@ -90,7 +90,7 @@ void ast_node_deinit(mos_allocator *alloc, ast_node *node) {
   case ast_symbol:
     if (node->symbol.name) {
       // TODO: intern or pool strings
-      alloc->free(node->symbol.name);
+      alloc->free(alloc, node->symbol.name);
       node->symbol.name = 0;
     }
     break;

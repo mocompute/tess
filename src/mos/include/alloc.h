@@ -4,10 +4,10 @@
 #include <stdlib.h>
 
 typedef struct mos_allocator {
-  void *(*malloc)(size_t);
-  void *(*calloc)(size_t num, size_t size);
-  void *(*realloc)(void *, size_t);
-  void (*free)(void *);
+  void *(*malloc)(struct mos_allocator *, size_t);
+  void *(*calloc)(struct mos_allocator *, size_t num, size_t size);
+  void *(*realloc)(struct mos_allocator *, void *, size_t);
+  void (*free)(struct mos_allocator *, void *);
 } mos_allocator;
 
 // Return the default allocator: system's malloc/free

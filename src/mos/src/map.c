@@ -223,11 +223,11 @@ uint32_t mos_map_next_power_of_two(uint32_t n) {
 //
 
 mos_map *mos_map_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(mos_map));
+  return alloc->malloc(alloc, sizeof(mos_map));
 }
 
 void mos_map_dealloc(mos_allocator *alloc, mos_map **p) {
-  alloc->free(*p);
+  alloc->free(alloc, *p);
   *p = 0;
 }
 
@@ -246,20 +246,20 @@ int mos_map_init(mos_allocator *alloc, mos_map *map, size_t element_size, uint32
   map->aligned_element_size = mos_align_to_word_size(element_size);
   map->buckets              = buckets;
   map->max_load_factor      = max_load_factor;
-  map->data                 = alloc->malloc(buckets * bucket_size(map));
-  map->status               = alloc->calloc(buckets, sizeof(status_t));
-  map->to_store             = alloc->malloc(map->aligned_element_size + sizeof(mos_map_header_t));
-  map->tmp                  = alloc->malloc(map->aligned_element_size + sizeof(mos_map_header_t));
+  map->data                 = alloc->malloc(alloc, buckets * bucket_size(map));
+  map->status               = alloc->calloc(alloc, buckets, sizeof(status_t));
+  map->to_store             = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
+  map->tmp                  = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
   if (!map->data || !map->status || !map->to_store || !map->tmp) return 1;
 
   return 0;
 }
 
 void mos_map_deinit(mos_allocator *alloc, mos_map *map) {
-  alloc->free(map->to_store);
-  alloc->free(map->tmp);
-  alloc->free(map->status);
-  alloc->free(map->data);
+  alloc->free(alloc, map->to_store);
+  alloc->free(alloc, map->tmp);
+  alloc->free(alloc, map->status);
+  alloc->free(alloc, map->data);
   mos_alloc_invalidate(map, sizeof *map);
 }
 

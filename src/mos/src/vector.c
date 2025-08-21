@@ -8,11 +8,11 @@
 #include <string.h>
 
 mos_vector *mos_vector_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(mos_vector));
+  return alloc->malloc(alloc, sizeof(mos_vector));
 }
 
 void mos_vector_dealloc(mos_allocator *alloc, mos_vector **p) {
-  alloc->free(*p);
+  alloc->free(alloc, *p);
   *p = 0;
 }
 
@@ -23,7 +23,7 @@ void mos_vector_init(mos_vector *vec, size_t element_size) {
 }
 
 void mos_vector_deinit(mos_allocator *alloc, mos_vector *vec) {
-  alloc->free(vec->data);
+  alloc->free(alloc, vec->data);
   mos_alloc_invalidate(vec, sizeof *vec);
 }
 
@@ -36,7 +36,7 @@ int mos_vector_reserve(mos_allocator *alloc, mos_vector *vec, size_t count) {
   while (new_capacity < count) new_capacity *= 2;
 
   // if vec->data is null, this is equivaluent to calling malloc
-  void *p = alloc->realloc(vec->data, new_capacity * vec->element_size);
+  void *p = alloc->realloc(alloc, vec->data, new_capacity * vec->element_size);
   if (!p) return 1;
 
   vec->data     = p;

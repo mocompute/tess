@@ -15,8 +15,28 @@
 #include <stdlib.h>
 #endif
 
+static void *default_malloc(mos_allocator *a, size_t sz) {
+  (void)a;
+  return malloc(sz);
+}
+
+static void *default_calloc(mos_allocator *a, size_t num, size_t sz) {
+  (void)a;
+  return calloc(num, sz);
+}
+
+static void *default_realloc(mos_allocator *a, void *p, size_t sz) {
+  (void)a;
+  return realloc(p, sz);
+}
+
+static void default_free(mos_allocator *a, void *p) {
+  (void)a;
+  return free(p);
+}
+
 mos_allocator *mos_alloc_default_allocator() {
-  static mos_allocator allocator = {&malloc, &calloc, &realloc, &free};
+  static mos_allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
   return &allocator;
 }
 
@@ -34,12 +54,17 @@ typedef struct arena_allocator {
   arena_header        *head;
 } arena_allocator;
 
+static void   *arena_malloc(mos_allocator *, size_t);
+static void   *arena_calloc(mos_allocator *, size_t num, size_t size);
+static void   *arena_realloc(mos_allocator *, void *, size_t);
+static void    arena_free(mos_allocator *, void *);
+
 mos_allocator *mos_alloc_arena_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(arena_allocator));
+  return alloc->malloc(alloc, sizeof(arena_allocator));
 }
 
 void mos_alloc_arena_dealloc(mos_allocator *alloc, mos_allocator **arena) {
-  alloc->free(*arena);
+  alloc->free(alloc, *arena);
   *arena = NULL;
 }
 
@@ -48,15 +73,38 @@ int mos_alloc_arena_init(mos_allocator *arena_, mos_allocator *parent, size_t sz
   arena->parent          = parent;
   sz                     = mos_alloc_next_power_of_two(sz);
   if (0 == sz) return 1;
-  arena->head = parent->malloc(sizeof(arena_header) + sz);
+  arena->head = parent->malloc(parent, sizeof(arena_header) + sz);
   if (NULL == arena->head) return 1;
+
+  memset(arena->head, 0, sizeof *arena->head);
+  arena->head->capacity    = sz;
+
+  arena->allocator.malloc  = &arena_malloc;
+  arena->allocator.calloc  = &arena_calloc;
+  arena->allocator.realloc = &arena_realloc;
+  arena->allocator.free    = &arena_free;
+  return 0;
+}
+
+void mos_alloc_arena_deinit(mos_allocator *arena_) {
+  arena_allocator *arena = (arena_allocator *)arena_;
+
+  arena_header    *next  = arena->head;
+
+  while (next) {
+    arena_header *next_next = next->next;
+    arena->parent->free(arena->parent, next);
+    next = next_next;
+  }
+
+  mos_alloc_invalidate(arena, sizeof *arena);
 }
 
 // -- utilities --
 
 char *mos_alloc_strdup(mos_allocator *alloc, char const *src) {
   size_t len = strlen(src);
-  char  *out = alloc->malloc(len + 1);
+  char  *out = alloc->malloc(alloc, len + 1);
   if (out) {
     memcpy(out, src, len);
     out[len] = '\0';
@@ -67,7 +115,7 @@ char *mos_alloc_strdup(mos_allocator *alloc, char const *src) {
 char *mos_alloc_strndup(mos_allocator *alloc, char const *src, size_t max) {
   size_t len = strlen(src);
   if (len > max) len = max;
-  char *out = alloc->malloc(len + 1);
+  char *out = alloc->malloc(alloc, len + 1);
   if (out) {
     memcpy(out, src, len);
     out[len] = '\0';

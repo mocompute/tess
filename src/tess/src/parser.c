@@ -28,11 +28,11 @@ struct parser {
 // -- allocation and deallocation --
 
 parser *parser_alloc(mos_allocator *alloc) {
-  return alloc->malloc(sizeof(struct parser));
+  return alloc->malloc(alloc, sizeof(struct parser));
 }
 
 void parser_dealloc(mos_allocator *alloc, parser **p) {
-  alloc->free(*p);
+  alloc->free(alloc, *p);
   *p = 0;
 }
 
@@ -135,7 +135,7 @@ nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
   ast_node_init(&node, tag);
 
   // TODO strings
-  node.symbol.name = p->alloc->malloc(strlen(s) + 1); // syms and strs use the symbol union
+  node.symbol.name = p->alloc->malloc(p->alloc, strlen(s) + 1); // syms and strs use the symbol union
   if (!node.symbol.name) return 1;
   strcpy(node.symbol.name, s);
   return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
