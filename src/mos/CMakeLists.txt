@@ -35,6 +35,7 @@ function(mos_create_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+mos_create_test(alloc)
 mos_create_test(map)
 mos_create_test(vector)
 
