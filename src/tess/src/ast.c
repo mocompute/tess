@@ -244,6 +244,20 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     return snprintf(buf, sz, "%s", literal);
   }
 
+#define do_print_node(NODE)                                                                                \
+  do {                                                                                                     \
+    res = print_node(pool, NODE, buf + offset, sz_ - offset, NULL);                                        \
+    if (res < 0) return res;                                                                               \
+    offset += res;                                                                                         \
+  } while (0)
+
+#define do_print_literal(LITERAL)                                                                          \
+  do {                                                                                                     \
+    res = print_node(pool, NULL, buf + offset, sz_ - offset, LITERAL);                                     \
+    if (res < 0) return res;                                                                               \
+    offset += res;                                                                                         \
+  } while (0)
+
   switch (node->tag) {
 
   case ast_eof:    return snprintf(buf, sz, "(eof)");
@@ -265,21 +279,10 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     if (res < 0) return res;
     offset += res;
 
-    res = print_node(pool, left, buf + offset, sz_ - offset, NULL);
-    if (res < 0) return res;
-    offset += res;
-
-    res = print_node(pool, NULL, buf + offset, sz_ - offset, " ");
-    if (res < 0) return res;
-    offset += res;
-
-    res = print_node(pool, right, buf + offset, sz_ - offset, NULL);
-    if (res < 0) return res;
-    offset += res;
-
-    res = print_node(pool, NULL, buf + offset, sz_ - offset, ")");
-    if (res < 0) return res;
-    offset += res;
+    do_print_node(left);
+    do_print_literal(" ");
+    do_print_node(right);
+    do_print_literal(")");
 
   } break;
 
@@ -294,27 +297,66 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     size_t            count = mos_vector_size(&node->tuple.elements);
     ast_node_h const *it    = mos_vector_cbegin(&node->tuple.elements);
     while (count--) {
-      res = print_node(pool, NULL, buf + offset, sz_ - offset, " ");
-      if (res < 0) return res;
-      offset += res;
+      do_print_literal(" ");
 
       ast_node *el = ast_pool_at(pool, *it);
-      res          = print_node(pool, el, buf + offset, sz_ - offset, NULL);
-      if (res < 0) return res;
-      offset += res;
+      do_print_node(el);
 
       ++it;
     }
 
-    res = print_node(pool, NULL, buf + offset, sz_ - offset, ")");
-    if (res < 0) return res;
-    offset += res;
+    do_print_literal(")");
 
   } break;
+
   case ast_let_in: {
+    ast_node *name, *body, *value;
+    name       = ast_pool_at(pool, node->let_in.name);
+    body       = ast_pool_at(pool, node->let_in.body);
+    value      = ast_pool_at(pool, node->let_in.value);
+
+    int res    = 0;
+    int offset = 0;
+
+    do_print_literal("(let_in ");
+    do_print_node(name);
+    do_print_literal(" ");
+    do_print_node(value);
+    do_print_literal(" ");
+    do_print_node(body);
+    do_print_literal(")");
+
   } break;
+
   case ast_let: {
+    ast_node *name, *body;
+    name       = ast_pool_at(pool, node->let.name);
+    body       = ast_pool_at(pool, node->let.body);
+
+    int res    = 0;
+    int offset = 0;
+
+    do_print_literal("(let ");
+    do_print_node(name);
+    do_print_literal(" (");
+
+    size_t            count = mos_vector_size(&node->let.parameters);
+    ast_node_h const *it    = mos_vector_cbegin(&node->let.parameters);
+    while (count--) {
+
+      ast_node *el = ast_pool_at(pool, *it);
+      do_print_node(el);
+      if (count) do_print_literal(" ");
+
+      ++it;
+    }
+
+    do_print_literal(") ");
+    do_print_node(body);
+    do_print_literal(")");
+
   } break;
+
   case ast_if_then_else: {
   } break;
   case ast_lambda_function: {
@@ -330,6 +372,9 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
   }
 
   return 0;
+
+#undef do_print_node
+#undef do_print_literal
 }
 
 int ast_node_to_string_buf(ast_pool *pool, ast_node const *node, char *buf, size_t sz_) {
