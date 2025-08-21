@@ -30,5 +30,6 @@ char  *mos_alloc_strdup(mos_allocator *, char const *);
 char  *mos_alloc_strndup(mos_allocator *, char const *, size_t);
 
 size_t mos_alloc_next_power_of_two(size_t);
+size_t mos_alloc_align_to_word_size(size_t);
 
 #endif
