@@ -1,5 +1,7 @@
 #include "map.h"
+
 #include "alloc.h"
+#include "dbg.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -97,8 +99,10 @@ static int set_one(mos_map *map, size_t const key, char const *element) {
   int           warning_printed = 0;
 
   while (1) {
-    if (probe_distance > MAX_PROBE_LEN) return 1; // overflow
-
+    if (probe_distance > MAX_PROBE_LEN) {
+      dbg("map.c set_one: overflow\n");
+      return 1; // overflow
+    }
     if (probe_distance > 16 && !warning_printed) {
       fprintf(stderr, "warning: high probe distance for key: %zu, load factor: %f\n",
               *(size_t *)map->to_store, mos_map_load_factor(map));
@@ -157,11 +161,16 @@ static int grow_buckets(mos_allocator *alloc, mos_map *map) {
 
   size_t new_buckets = (size_t)(map->buckets * 1.618);
 
-  if (new_buckets > UINT32_MAX) return 1;
+  if (new_buckets > UINT32_MAX) {
+    dbg("map grow_buckets: too many buckets\n");
+    return 1;
+  }
 
   mos_map new_map;
-  if (mos_map_init(alloc, &new_map, map->element_size, (uint32_t)new_buckets, map->max_load_factor))
+  if (mos_map_init(alloc, &new_map, map->element_size, (uint32_t)new_buckets, map->max_load_factor)) {
+    dbg("map grow_buckets: oom\n");
     return 1;
+  }
 
   for (uint32_t i = 0; i < map->buckets; ++i) {
     if (map->status[i].occupied) {
@@ -244,7 +253,10 @@ int mos_map_init(mos_allocator *alloc, mos_map *map, size_t element_size, uint32
   map->status               = alloc->calloc(alloc, buckets, sizeof(status_t));
   map->to_store             = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
   map->tmp                  = alloc->malloc(alloc, map->aligned_element_size + sizeof(mos_map_header_t));
-  if (!map->data || !map->status || !map->to_store || !map->tmp) return 1;
+  if (!map->data || !map->status || !map->to_store || !map->tmp) {
+    dbg("mos_map_init: oom\n");
+    return 1;
+  }
 
   return 0;
 }
@@ -267,7 +279,10 @@ int mos_map_set(mos_allocator *alloc, mos_map *map, size_t key, void *data) {
   }
 
   if (mos_map_load_factor(map) >= map->max_load_factor) {
-    if (grow_buckets(alloc, map)) return 1;
+    if (grow_buckets(alloc, map)) {
+      dbg("mos_map_set: oom\n");
+      return 1;
+    }
   }
 
   return set_one(map, key, data);

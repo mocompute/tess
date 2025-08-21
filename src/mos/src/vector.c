@@ -1,6 +1,7 @@
 #include "vector.h"
 
 #include "alloc.h"
+#include "dbg.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -23,7 +24,10 @@ int mos_vector_init(mos_allocator *alloc, mos_vector *vec, size_t element_size, 
 
   if (initial_size) {
     vec->data = alloc->malloc(alloc, initial_size * element_size);
-    if (NULL == vec->data) return 1;
+    if (NULL == vec->data) {
+      dbg("mos_vector_init: oom\n");
+      return 1;
+    }
     vec->capacity = initial_size;
   }
   return 0;
@@ -44,7 +48,10 @@ int mos_vector_reserve(mos_allocator *alloc, mos_vector *vec, size_t count) {
 
   // if vec->data is null, this is equivaluent to calling malloc
   void *p = alloc->realloc(alloc, vec->data, new_capacity * vec->element_size);
-  if (!p) return 1;
+  if (!p) {
+    dbg("mos_vector_reserve: oom\n");
+    return 1;
+  }
 
   vec->data     = p;
   vec->capacity = new_capacity;
@@ -61,14 +68,20 @@ bool mos_vector_empty(mos_vector const *vec) {
 }
 
 int mos_vector_push_back(mos_allocator *alloc, mos_vector *vec, void const *element) {
-  if (mos_vector_reserve(alloc, vec, vec->size + 1)) return 1;
+  if (mos_vector_reserve(alloc, vec, vec->size + 1)) {
+    dbg("mos_vector_push_back: oom\n");
+    return 1;
+  }
   memcpy(vec->data + vec->size * vec->element_size, element, vec->element_size);
   ++vec->size;
   return 0;
 }
 
 int mos_vector_copy_back(mos_allocator *alloc, mos_vector *vec, void const *start, size_t count) {
-  if (mos_vector_reserve(alloc, vec, vec->size + count)) return 1;
+  if (mos_vector_reserve(alloc, vec, vec->size + count)) {
+    dbg("mos_vector_copy_back: oom\n");
+    return 1;
+  }
 
   memcpy(vec->data + vec->size * vec->element_size, start, count * vec->element_size);
   vec->size += count;
@@ -98,7 +111,10 @@ void mos_vector_erase(mos_vector *vec, char *it) {
 nodiscard int mos_vector_resize(mos_allocator *alloc, mos_vector *vec, size_t n) {
 
   if (n > vec->capacity)
-    if (mos_vector_reserve(alloc, vec, n)) return 1;
+    if (mos_vector_reserve(alloc, vec, n)) {
+      dbg("mos_vector_resize: oom\n");
+      return 1;
+    }
 
   vec->size = n;
   return 0;
@@ -136,7 +152,10 @@ size_t mos_vector_capacity(mos_vector const *vec) {
 
 int mos_vector_assoc_set(mos_allocator *alloc, mos_vector *vec, void const *pair) {
   assert(vec->element_size >= sizeof(size_t));
-  if (mos_vector_push_back(alloc, vec, pair)) return 1;
+  if (mos_vector_push_back(alloc, vec, pair)) {
+    dbg("mos_vector_assoc_set: oom\n");
+    return 1;
+  }
   return 0;
 }
 
