@@ -10,7 +10,8 @@
 //
 // Consider the fields read-only, except for data, which clients may
 // set to 0 in certain situations. In that case, client must call
-// [clear] to set the size to zero.
+// [clear] to set the size to zero. Prefer to use vec_move instead if
+// possible.
 typedef struct vec {
   size_t element_size;
   size_t capacity;
