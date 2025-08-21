@@ -1,5 +1,6 @@
 #include "alloc.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -54,10 +55,48 @@ typedef struct arena_allocator {
   arena_header        *head;
 } arena_allocator;
 
-static void   *arena_malloc(mos_allocator *, size_t);
-static void   *arena_calloc(mos_allocator *, size_t num, size_t size);
-static void   *arena_realloc(mos_allocator *, void *, size_t);
-static void    arena_free(mos_allocator *, void *);
+static void *arena_malloc(mos_allocator *alloc, size_t sz) {
+  arena_allocator *arena         = (arena_allocator *)alloc;
+
+  arena_header    *bucket        = arena->head;
+  arena_header    *last          = NULL;
+  size_t           last_capacity = 0;
+
+  assert(bucket);
+  while (bucket) {
+    if (bucket->capacity - bucket->size >= sz) {
+
+      size_t prev_size = bucket->size;
+      bucket->size += sz;
+      return ((char *)bucket) + sizeof(arena_header) + prev_size;
+    }
+
+    last_capacity = bucket->capacity;
+    last          = bucket;
+    bucket        = bucket->next;
+  }
+
+  size_t new_capacity = last_capacity * 2;
+  if (new_capacity < sz) new_capacity = mos_alloc_next_power_of_two(sz);
+
+  last->next = arena->parent->malloc(arena->parent, new_capacity + sizeof(arena_header));
+  if (NULL == last->next) return NULL;
+
+  memset(last->next, 0, sizeof *last->next);
+  last->next->capacity = new_capacity;
+
+  last->next->size     = sz;
+  return ((char *)last->next) + sizeof(arena_header);
+}
+
+static void *arena_calloc(mos_allocator *, size_t num, size_t size) {
+}
+
+static void *arena_realloc(mos_allocator *, void *, size_t) {
+}
+
+static void arena_free(mos_allocator *, void *) {
+}
 
 mos_allocator *mos_alloc_arena_alloc(mos_allocator *alloc) {
   return alloc->malloc(alloc, sizeof(arena_allocator));
