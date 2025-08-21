@@ -55,6 +55,8 @@ typedef struct arena_allocator {
   arena_header        *head;
 } arena_allocator;
 
+static_assert(48 == sizeof(arena_allocator), "");
+
 static void *arena_malloc(mos_allocator *alloc, size_t sz) {
   arena_allocator *arena         = (arena_allocator *)alloc;
 
@@ -112,6 +114,8 @@ mos_allocator *mos_alloc_arena_alloc(mos_allocator *alloc) {
 
 mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t sz) {
   mos_allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
+  if (!out) return out;
+
   if (mos_alloc_arena_init(out, alloc, sz)) {
     alloc->free(alloc, out);
     return NULL;
@@ -120,8 +124,14 @@ mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t sz) {
 }
 
 void mos_alloc_arena_dealloc(mos_allocator *alloc, mos_allocator **arena) {
+  mos_alloc_assert_invalid(*arena, sizeof **arena);
   alloc->free(alloc, *arena);
   *arena = NULL;
+}
+
+void mos_alloc_arena_dealloci(mos_allocator *alloc, mos_allocator **arena) {
+  mos_alloc_arena_deinit(*arena);
+  mos_alloc_arena_dealloc(alloc, arena);
 }
 
 int mos_alloc_arena_init(mos_allocator *arena_, mos_allocator *parent, size_t sz) {
@@ -188,6 +198,19 @@ void mos_alloc_invalidate(void *p, size_t len) {
   }
 #else
   memset(p, 0, len);
+#endif
+}
+
+void mos_alloc_assert_invalid(void *p, size_t len) {
+#ifndef NDEBUG
+  while (len--) {
+    if ((intptr_t)p % 2 == 0) assert(*(unsigned char *)p == 0xde);
+    else assert(*(unsigned char *)p == 0xad);
+    ++p;
+  }
+#else
+  (void)p;
+  (void)len;
 #endif
 }
 

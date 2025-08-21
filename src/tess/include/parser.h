@@ -18,7 +18,9 @@ typedef struct parser_error {
 // -- allocation and deallocation --
 
 parser       *parser_alloc(mos_allocator *);
+parser       *parser_alloci(mos_allocator *, ast_pool *, char const *, size_t);
 void          parser_dealloc(mos_allocator *, parser **);
+void          parser_dealloci(mos_allocator *, parser **);
 nodiscard int parser_init(mos_allocator *, parser *, ast_pool *, char const *, size_t);
 void          parser_deinit(parser *);
 

@@ -182,6 +182,7 @@ void          tess_type_deinit(mos_allocator *, tess_type *);
 ast_pool     *ast_pool_alloc(mos_allocator *);
 ast_pool     *ast_pool_alloci(mos_allocator *);
 void          ast_pool_dealloc(mos_allocator *, ast_pool **);
+void          ast_pool_dealloci(mos_allocator *, ast_pool **);
 nodiscard int ast_pool_init(mos_allocator *, ast_pool *);
 void          ast_pool_deinit(mos_allocator *, ast_pool *);
 

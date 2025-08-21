@@ -31,9 +31,25 @@ parser *parser_alloc(mos_allocator *alloc) {
   return alloc->malloc(alloc, sizeof(struct parser));
 }
 
+parser *parser_alloci(mos_allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
+  parser *out = alloc->malloc(alloc, sizeof(struct parser));
+  if (!out) return out;
+  if (parser_init(alloc, out, pool, input, input_len)) {
+    alloc->free(alloc, out);
+    return NULL;
+  }
+  return out;
+}
+
 void parser_dealloc(mos_allocator *alloc, parser **p) {
+  mos_alloc_assert_invalid(*p, sizeof *p);
   alloc->free(alloc, *p);
-  *p = 0;
+  *p = NULL;
+}
+
+void parser_dealloci(mos_allocator *alloc, parser **p) {
+  parser_deinit(*p);
+  parser_dealloc(alloc, p);
 }
 
 int parser_init(mos_allocator *alloc, parser *p, ast_pool *pool, char const *input, size_t input_len) {

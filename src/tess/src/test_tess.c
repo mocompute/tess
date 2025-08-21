@@ -167,8 +167,7 @@ int test_parser_init(void) {
   // can skip deinit/dealloc due to arena
   // parser_deinit(p);
   // parser_dealloc(alloc, &p);
-  // ast_pool_deinit(alloc, pool);
-  // ast_pool_dealloc(alloc, &pool);
+  // ast_pool_dealloci(alloc, &pool);
 
   mos_alloc_arena_deinit(alloc);
   mos_alloc_arena_dealloc(mos_alloc_default_allocator(), &alloc);
@@ -201,8 +200,36 @@ int test_parser_basic(void) {
 
   parser_deinit(p);
   parser_dealloc(alloc, &p);
-  ast_pool_deinit(alloc, pool);
-  ast_pool_dealloc(alloc, &pool);
+  ast_pool_dealloci(alloc, &pool);
+
+  mos_alloc_arena_deinit(alloc);
+  mos_alloc_arena_dealloc(mos_alloc_default_allocator(), &alloc);
+
+  return error;
+}
+
+int test_parser_expression(void) {
+  int            error = 0;
+
+  char const    *input = "let x = 5 in x + 2";
+
+  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  if (!alloc) return error + 1;
+
+  ast_pool *pool = ast_pool_alloci(alloc);
+  if (NULL == pool) return error + 1;
+
+  parser *p = parser_alloci(alloc, pool, input, strlen(input));
+  if (NULL == p) return error + 1;
+
+  if (parser_next(p)) return error + 1;
+  ast_node_h node_h;
+  parser_result(p, &node_h);
+  ast_node *node = ast_pool_at(pool, node_h);
+
+  error += ast_let_in == node->tag ? 0 : 1;
+
+  mos_alloc_arena_dealloci(mos_alloc_default_allocator(), &alloc);
 
   return error;
 }
@@ -229,6 +256,7 @@ int main(void) {
   T(test_tokenizer_terminal_static_string);
   T(test_parser_init);
   T(test_parser_basic);
+  T(test_parser_expression);
 
   return error;
 }
