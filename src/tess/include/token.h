@@ -2,6 +2,7 @@
 #define TESS_TOKEN_H
 
 #include "alloc.h"
+#include "util.h"
 
 #include <stdint.h>
 
@@ -21,9 +22,7 @@
   X(tok_string, "string")                                                                                  \
   X(tok_comment, "comment")
 
-#define TESS_ENUM(name, str) name,
-typedef enum token_tag { TESS_TOKEN_TAGS(TESS_ENUM) } token_tag;
-#undef TESS_ENUM
+typedef enum token_tag { TESS_TOKEN_TAGS(MOS_TAG_NAME) } token_tag;
 
 typedef struct token {
   union {

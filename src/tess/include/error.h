@@ -1,6 +1,8 @@
 #ifndef TESS_ERROR_H
 #define TESS_ERROR_H
 
+#include "util.h"
+
 #define TESS_ERROR_TAG_LIST(X)                                                                             \
   X(tess_err_ok, "ok")                                                                                     \
   /* tokenizer */                                                                                          \
@@ -41,9 +43,7 @@
 
 #endif
 
-#define TESS_ENUM(name, str) name,
-typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(TESS_ENUM) } tess_error_tag;
-#undef TESS_ENUM
+typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tess_error_tag;
 
 // -- utilities --
 

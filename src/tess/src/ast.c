@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "alloc.h"
+#include "util.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -191,36 +192,28 @@ ast_node *ast_pool_at(ast_pool *pool, ast_node_h handle) {
 
 char const *type_tag_to_string(type_tag tag) {
 
-#define STRING_ITEM(name, str) [name] = str,
-  static char const *const strings[]  = {TESS_TYPE_TAGS(STRING_ITEM)};
-#undef STRING_ITEM
+  static char const *const strings[] = {TESS_TYPE_TAGS(MOS_TAG_STRING)};
 
   return strings[tag];
 }
 
 char const *ast_tag_to_string(ast_tag tag) {
 
-#define STRING_ITEM(name, str) [name] = str,
-  static char const *const strings[]  = {TESS_AST_TAGS(STRING_ITEM)};
-#undef STRING_ITEM
+  static char const *const strings[] = {TESS_AST_TAGS(MOS_TAG_STRING)};
 
   return strings[tag];
 }
 
 char const *ast_operator_to_string(ast_operator tag) {
 
-#define STRING_ITEM(name, str) [name] = str,
-  static char const *const strings[]  = {TESS_AST_OPERATOR_TAGS(STRING_ITEM)};
-#undef STRING_ITEM
+  static char const *const strings[] = {TESS_AST_OPERATOR_TAGS(MOS_TAG_STRING)};
 
   return strings[tag];
 }
 
 int string_to_ast_operator(char const *const s, ast_operator *out) {
 
-#define STRING_ITEM(name, str) [name] = str,
-  static char const *const strings[]  = {TESS_AST_OPERATOR_TAGS(STRING_ITEM)};
-#undef STRING_ITEM
+  static char const *const strings[] = {TESS_AST_OPERATOR_TAGS(MOS_TAG_STRING)};
 
   for (int i = 0; strings[i] != NULL; ++i) {
     if (0 == strcmp(strings[i], s)) {

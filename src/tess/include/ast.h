@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "nodiscard.h"
+#include "util.h"
 #include "vector.h"
 
 #include <stdint.h>
@@ -17,9 +18,7 @@
   X(type_arrow, "arrow")                                                                                   \
   X(type_type_var, "type_var")
 
-#define TESS_ENUM(name, str) name,
-typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag;
-#undef TESS_ENUM
+typedef enum type_tag { TESS_TYPE_TAGS(MOS_TAG_NAME) } type_tag;
 
 #define TESS_AST_TAGS(X)                                                                                   \
   X(ast_eof, "eof")                                                                                        \
@@ -41,9 +40,7 @@ typedef enum type_tag { TESS_TYPE_TAGS(TESS_ENUM) } type_tag;
   X(ast_lambda_function_application, "lambda_function_application")                                        \
   X(ast_named_function_application, "named_function_application")
 
-#define TESS_ENUM(name, str) name,
-typedef enum ast_tag { TESS_AST_TAGS(TESS_ENUM) } ast_tag;
-#undef TESS_ENUM
+typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;
 
 // TODO get rid of this, use an anon type in the tess_type union
 struct arrow_type {
@@ -78,9 +75,7 @@ typedef struct tess_type {
   X(ast_op_greater_than, ">")                                                                              \
   X(ast_op_sentinel, NULL)
 
-#define TESS_ENUM(name, str) name,
-typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(TESS_ENUM) } ast_operator;
-#undef TESS_ENUM
+typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(MOS_TAG_NAME) } ast_operator;
 
 typedef struct {
   size_t val;
