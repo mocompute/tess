@@ -27,9 +27,9 @@ typedef struct arena_allocator {
 allocator    *alloc_default_allocator();
 
 allocator    *alloc_arena_alloc(allocator *parent);
-allocator    *alloc_arena_alloci(allocator *alloc, size_t);
+allocator    *alloc_arena_create(allocator *alloc, size_t);
 void          alloc_arena_dealloc(allocator *parent, allocator **arena);
-void          alloc_arena_dealloci(allocator *, allocator **);
+void          alloc_arena_destroy(allocator *, allocator **);
 nodiscard int alloc_arena_init(allocator *, allocator *parent, size_t);
 void          alloc_arena_deinit(allocator *);
 

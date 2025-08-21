@@ -31,7 +31,7 @@ parser *parser_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(struct parser));
 }
 
-parser *parser_alloci(allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
+parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
   parser *out = alloc->malloc(alloc, sizeof(struct parser));
   if (!out) return out;
   if (parser_init(alloc, out, pool, input, input_len)) {
@@ -47,7 +47,7 @@ void parser_dealloc(allocator *alloc, parser **p) {
   *p = NULL;
 }
 
-void parser_dealloci(allocator *alloc, parser **p) {
+void parser_destroy(allocator *alloc, parser **p) {
   parser_deinit(*p);
   parser_dealloc(alloc, p);
 }

@@ -55,7 +55,7 @@ ast_pool *ast_pool_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(ast_pool));
 }
 
-ast_pool *ast_pool_alloci(allocator *alloc) {
+ast_pool *ast_pool_create(allocator *alloc) {
   ast_pool *out = alloc->malloc(alloc, sizeof(ast_pool));
   if (!out) return out;
 
@@ -72,7 +72,7 @@ void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
   *pool = NULL;
 }
 
-void ast_pool_dealloci(allocator *alloc, ast_pool **pool) {
+void ast_pool_destroy(allocator *alloc, ast_pool **pool) {
   ast_pool_deinit(alloc, *pool);
   ast_pool_dealloc(alloc, pool);
 }

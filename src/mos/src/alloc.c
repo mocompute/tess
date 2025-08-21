@@ -168,7 +168,7 @@ allocator *alloc_arena_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(arena_allocator));
 }
 
-allocator *alloc_arena_alloci(allocator *alloc, size_t sz) {
+allocator *alloc_arena_create(allocator *alloc, size_t sz) {
   allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
   if (!out) return out;
 
@@ -185,7 +185,7 @@ void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
   *arena = NULL;
 }
 
-void alloc_arena_dealloci(allocator *alloc, allocator **arena) {
+void alloc_arena_destroy(allocator *alloc, allocator **arena) {
   alloc_arena_deinit(*arena);
   alloc_arena_dealloc(alloc, arena);
 }
