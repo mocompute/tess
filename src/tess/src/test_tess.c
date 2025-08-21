@@ -155,7 +155,7 @@ int test_parser_init(void) {
 
   char const *input = "()";
 
-  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 4096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -169,8 +169,7 @@ int test_parser_init(void) {
   // parser_dealloc(alloc, &p);
   // ast_pool_dealloci(alloc, &pool);
 
-  alloc_arena_deinit(alloc);
-  alloc_arena_dealloc(alloc_default_allocator(), &alloc);
+  alloc_arena_dealloci(alloc_default_allocator(), &alloc);
 
   return error;
 }
@@ -180,7 +179,7 @@ int test_parser_basic(void) {
 
   char const *input = "a";
 
-  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 4096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -213,7 +212,7 @@ int test_parser_expression(void) {
 
   char const *input = "let x = 5 in x + 2";
 
-  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 4096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -239,7 +238,7 @@ int test_parser_node_to_string(void) {
 
   char const *input = "1 + 2";
 
-  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 4096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);

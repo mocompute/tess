@@ -44,18 +44,6 @@ allocator *alloc_default_allocator() {
 
 // -- arena --
 
-typedef struct arena_header {
-  struct arena_header *next;
-  size_t               capacity;
-  size_t               size;
-} arena_header;
-
-typedef struct arena_allocator {
-  struct allocator allocator;
-  allocator       *parent;
-  arena_header    *head;
-} arena_allocator;
-
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
   char *out      = ((char *)bucket) + sizeof(arena_header) + bucket->size;
   *(size_t *)out = sz;
