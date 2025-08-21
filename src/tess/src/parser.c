@@ -383,9 +383,9 @@ static int string_to_number(parser *parser, char const *const in) {
 
   } else {
 
-    errno                    = 0;
-    p_end                    = 0;
-    unsigned long long int u = strtoull(in, &p_end, 10);
+    errno                = 0;
+    p_end                = 0;
+    unsigned long long u = strtoull(in, &p_end, 10);
     if (p_end - in == len && !errno) {
       return result_ast_u64(parser, u);
 
@@ -402,10 +402,6 @@ static int string_to_number(parser *parser, char const *const in) {
 
   return 1;
 }
-
-// static int string_to_operator(char const *in, ast_operator *out) {
-//   return string_to_ast_operator(in, out);
-// }
 
 static int a_number(parser *p) {
   if (next_token(p)) return 1;
