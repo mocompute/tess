@@ -6,6 +6,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/dbg.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/map.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/map_internal.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/vector.h

@@ -1,4 +1,5 @@
 #include "map.h"
+#include "map_internal.h"
 
 #include "alloc.h"
 #include "dbg.h"
@@ -10,32 +11,6 @@
 
 #define DEFAULT_LOAD_FACTOR 0.75f
 #define MAX_PROBE_LEN       (1 << 6) - 1
-
-typedef struct status_t {
-  uint8_t occupied       : 1;
-  uint8_t tombstone      : 1;
-  uint8_t probe_distance : 6;
-} status_t;
-
-struct map {
-  size_t    element_size;
-  size_t    aligned_element_size;
-  char     *data;
-  status_t *status;
-
-  // buffers size of aligned_element_size + sizeof(header_t), used during robin hood
-  // swapping
-  char    *to_store;
-  char    *tmp;
-
-  float    max_load_factor;
-  uint32_t buckets;
-  uint32_t occupied;
-};
-
-typedef struct map_header {
-  size_t key;
-} map_header;
 
 // -- statics --
 
@@ -61,7 +36,7 @@ static char *map_find(map_t *map, size_t key, uint32_t *out_index) {
   while (1) {
     if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
-    status_t status = map->status[index];
+    map_bucket_status status = map->status[index];
 
     if (status.tombstone) {
       // keep looking
@@ -237,7 +212,7 @@ void map_dealloc(allocator *alloc, map_t **p) {
 
 int map_init(allocator *alloc, map_t *map, size_t element_size, uint32_t buckets, float max_load_factor) {
 
-  assert(sizeof(status_t) == 1);
+  assert(sizeof(map_bucket_status) == 1);
   assert(sizeof(map_header) == sizeof(size_t));
 
   assert(element_size <= PTRDIFF_MAX);
@@ -253,7 +228,7 @@ int map_init(allocator *alloc, map_t *map, size_t element_size, uint32_t buckets
   map->buckets              = buckets;
   map->max_load_factor      = max_load_factor;
   map->data                 = alloc->malloc(alloc, buckets * bucket_size(map));
-  map->status               = alloc->calloc(alloc, buckets, sizeof(status_t));
+  map->status               = alloc->calloc(alloc, buckets, sizeof(map_bucket_status));
   map->to_store             = alloc->malloc(alloc, map->aligned_element_size + sizeof(map_header));
   map->tmp                  = alloc->malloc(alloc, map->aligned_element_size + sizeof(map_header));
   if (!map->data || !map->status || !map->to_store || !map->tmp) {
