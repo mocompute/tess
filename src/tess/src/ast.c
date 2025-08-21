@@ -3,6 +3,8 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <limits.h>
+#include <stdio.h>
 #include <string.h>
 
 // -- statics --
@@ -204,6 +206,15 @@ char const *ast_tag_to_string(ast_tag tag) {
   return strings[tag];
 }
 
+char const *ast_operator_to_string(ast_operator tag) {
+
+#define STRING_ITEM(name, str) [name] = str,
+  static char const *const strings[]  = {TESS_AST_OPERATOR_TAGS(STRING_ITEM)};
+#undef STRING_ITEM
+
+  return strings[tag];
+}
+
 int string_to_ast_operator(char const *const s, ast_operator *out) {
 
 #define STRING_ITEM(name, str) [name] = str,
@@ -221,4 +232,76 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
 
 int ast_vector_init(mos_allocator *alloc, mos_vector *vec) {
   return mos_vector_init(alloc, vec, sizeof(ast_node_h), 0);
+}
+
+static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, int sz,
+                      char const *restrict literal) {
+  if (sz < 0) return -1;
+
+  if ((NULL == node) && (NULL != literal)) {
+    return snprintf(buf, sz, "%s", literal);
+  }
+
+  switch (node->tag) {
+
+  case ast_eof:    return snprintf(buf, sz, "(eof)");
+  case ast_nil:    return snprintf(buf, sz, "(nil)");
+  case ast_bool:   return snprintf(buf, sz, "(bool %d)", node->bool_.val);
+  case ast_symbol: return snprintf(buf, sz, "(symbol %s)", node->symbol.name);
+  case ast_i64:    return snprintf(buf, sz, "(i64 %lli)", node->i64.val);
+  case ast_u64:    return snprintf(buf, sz, "(u64 %llu)", node->u64.val);
+  case ast_f64:    return snprintf(buf, sz, "(f64 %f)", node->f64.val);
+  case ast_string: return snprintf(buf, sz, "(string \"%s\")", node->symbol.name);
+  case ast_infix:  {
+    ast_node *left, *right;
+    left       = ast_pool_at(pool, node->infix.left);
+    right      = ast_pool_at(pool, node->infix.right);
+
+    int res    = 0;
+    int offset = 0;
+    res        = snprintf(buf, sz, "(infix %s ", ast_operator_to_string(node->infix.op));
+    if (res < 0) return res;
+    offset += res;
+
+    res = print_node(pool, left, buf + offset, sz - offset, NULL);
+    if (res < 0) return res;
+    offset += res;
+
+    res = print_node(pool, NULL, buf + offset, sz - offset, " ");
+    if (res < 0) return res;
+    offset += res;
+
+    res = print_node(pool, right, buf + offset, sz - offset, NULL);
+    if (res < 0) return res;
+    offset += res;
+
+    res = print_node(pool, NULL, buf + offset, sz - offset, ")");
+    if (res < 0) return res;
+    offset += res;
+
+  } break;
+
+  case ast_tuple:
+  case ast_let_in:
+  case ast_let:
+  case ast_if_then_else:
+  case ast_lambda_function:
+  case ast_function_declaration:
+  case ast_lambda_declaration:
+  case ast_lambda_function_application:
+  case ast_named_function_application:  break;
+  }
+
+  return 0;
+}
+
+int ast_node_to_string_buf(ast_pool *pool, ast_node const *node, char *buf, size_t sz_) {
+  if (sz_ > INT_MAX) return 1;
+  int sz  = (int)sz_;
+
+  int res = print_node(pool, node, buf, sz, NULL);
+
+  // check error conditions from snprintf
+  if (res < 0 || res > sz) return 1;
+  return 0;
 }

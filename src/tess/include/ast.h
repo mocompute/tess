@@ -204,4 +204,6 @@ char const   *ast_tag_to_string(ast_tag);
 int           string_to_ast_operator(char const *, ast_operator *);
 nodiscard int ast_vector_init(mos_allocator *, mos_vector *);
 
+nodiscard int ast_node_to_string_buf(ast_pool *, ast_node const *, char *, size_t);
+
 #endif
