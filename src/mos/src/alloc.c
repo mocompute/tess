@@ -56,8 +56,6 @@ typedef struct arena_allocator {
   arena_header    *head;
 } arena_allocator;
 
-static_assert(48 == sizeof(arena_allocator), "");
-
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
   char *out      = ((char *)bucket) + sizeof(arena_header) + bucket->size;
   *(size_t *)out = sz;

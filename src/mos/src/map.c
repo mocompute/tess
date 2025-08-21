@@ -17,9 +17,6 @@ typedef struct status_t {
   uint8_t probe_distance : 6;
 } status_t;
 
-static_assert(sizeof(status_t) == 1, "");
-static_assert(sizeof(mos_map_header_t) == sizeof(size_t), "");
-
 struct mos_map {
   size_t    element_size;
   size_t    aligned_element_size;
@@ -236,6 +233,9 @@ void mos_map_dealloc(allocator *alloc, mos_map **p) {
 
 int mos_map_init(allocator *alloc, mos_map *map, size_t element_size, uint32_t buckets,
                  float max_load_factor) {
+
+  assert(sizeof(status_t) == 1);
+  assert(sizeof(mos_map_header_t) == sizeof(size_t));
 
   assert(element_size <= PTRDIFF_MAX);
 

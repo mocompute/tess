@@ -7,7 +7,7 @@ include(CheckIPOSupported)
 
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_EXTENSIONS ON)    # computed goto
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
