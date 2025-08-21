@@ -8,38 +8,38 @@ int test_vector(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  mos_vector    *vec   = mos_vector_alloc(alloc);
-  if (mos_vector_init(alloc, vec, sizeof(int), 2)) return error + 1;
+  vec_t         *vec   = vec_alloc(alloc);
+  if (vec_init(alloc, vec, sizeof(int), 2)) return error + 1;
 
-  error += mos_vector_empty(vec) == 1 ? 0 : 1;
+  error += vec_empty(vec) == 1 ? 0 : 1;
 
   int val = 123;
-  error += mos_vector_push_back(alloc, vec, &val) == 0 ? 0 : 1;
-  error += mos_vector_empty(vec) == 0 ? 0 : 1;
-  error += *(int *)(mos_vector_back(vec)) == 123 ? 0 : 1;
+  error += vec_push_back(alloc, vec, &val) == 0 ? 0 : 1;
+  error += vec_empty(vec) == 0 ? 0 : 1;
+  error += *(int *)(vec_back(vec)) == 123 ? 0 : 1;
 
   val = 456;
-  error += mos_vector_push_back(alloc, vec, &val) == 0 ? 0 : 1;
-  error += mos_vector_empty(vec) == 0 ? 0 : 1;
-  error += *(int *)(mos_vector_back(vec)) == 456 ? 0 : 1;
+  error += vec_push_back(alloc, vec, &val) == 0 ? 0 : 1;
+  error += vec_empty(vec) == 0 ? 0 : 1;
+  error += *(int *)(vec_back(vec)) == 456 ? 0 : 1;
 
-  mos_vector_pop_back(vec);
-  error += mos_vector_empty(vec) == 0 ? 0 : 1;
-  error += *(int *)(mos_vector_back(vec)) == 123 ? 0 : 1;
+  vec_pop_back(vec);
+  error += vec_empty(vec) == 0 ? 0 : 1;
+  error += *(int *)(vec_back(vec)) == 123 ? 0 : 1;
 
-  mos_vector_pop_back(vec);
-  error += mos_vector_empty(vec) == 1 ? 0 : 1;
+  vec_pop_back(vec);
+  error += vec_empty(vec) == 1 ? 0 : 1;
 
   int data[] = {321, 234, 654};
-  if (mos_vector_copy_back(alloc, vec, data, 3)) return error + 1;
-  error += 3 == mos_vector_size(vec) ? 0 : 1;
-  error += 3 <= mos_vector_capacity(vec) ? 0 : 1;
-  error += ((int *)mos_vector_data(vec))[0] == 321 ? 0 : 1;
-  error += ((int *)mos_vector_data(vec))[1] == 234 ? 0 : 1;
-  error += ((int *)mos_vector_data(vec))[2] == 654 ? 0 : 1;
+  if (vec_copy_back(alloc, vec, data, 3)) return error + 1;
+  error += 3 == vec_size(vec) ? 0 : 1;
+  error += 3 <= vec_capacity(vec) ? 0 : 1;
+  error += ((int *)vec_data(vec))[0] == 321 ? 0 : 1;
+  error += ((int *)vec_data(vec))[1] == 234 ? 0 : 1;
+  error += ((int *)vec_data(vec))[2] == 654 ? 0 : 1;
 
-  mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, &vec);
+  vec_deinit(alloc, vec);
+  vec_dealloc(alloc, &vec);
 
   return error;
 }
@@ -49,42 +49,42 @@ int test_assoc(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  mos_vector    *vec   = mos_vector_alloc(alloc);
-  if (mos_vector_init(alloc, vec, 2 * sizeof(size_t), 0)) return error + 1;
+  vec_t         *vec   = vec_alloc(alloc);
+  if (vec_init(alloc, vec, 2 * sizeof(size_t), 0)) return error + 1;
 
   size_t pair[2];
 
   pair[0] = 1;
   pair[1] = 2;
-  if (mos_vector_assoc_set(alloc, vec, pair)) return error + 1;
-  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
+  if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+  error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
 
   pair[0] = 2;
   pair[1] = 3;
-  if (mos_vector_assoc_set(alloc, vec, pair)) return error + 1;
-  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
-  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+  if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+  error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
 
   pair[0] = 1;
   pair[1] = 99;
-  if (mos_vector_assoc_set(alloc, vec, pair)) return error + 1;
-  error += 99 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
-  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+  if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+  error += 99 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
 
   // note that this erase only removes the first match
-  mos_vector_assoc_erase(vec, 1);
-  error += 2 == *(size_t *)mos_vector_assoc_get(vec, 1) ? 0 : 1;
-  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+  vec_assoc_erase(vec, 1);
+  error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
 
   // the second erase will remove the original value we set
-  mos_vector_assoc_erase(vec, 1);
-  error += 0 == mos_vector_assoc_get(vec, 1) ? 0 : 1;
-  error += 3 == *(size_t *)mos_vector_assoc_get(vec, 2) ? 0 : 1;
+  vec_assoc_erase(vec, 1);
+  error += 0 == vec_assoc_get(vec, 1) ? 0 : 1;
+  error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
 
-  error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
+  error += 0 == vec_assoc_get(vec, 999) ? 0 : 1;
 
-  mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, &vec);
+  vec_deinit(alloc, vec);
+  vec_dealloc(alloc, &vec);
 
   return error;
 }
@@ -94,19 +94,19 @@ int test_assoc_set(void) {
 
   mos_allocator *alloc = mos_alloc_default_allocator();
 
-  mos_vector    *vec   = mos_vector_alloc(alloc);
+  vec_t         *vec   = vec_alloc(alloc);
 
   // no payload, just the key
-  if (mos_vector_init(alloc, vec, sizeof(size_t), 0)) return error + 1;
+  if (vec_init(alloc, vec, sizeof(size_t), 0)) return error + 1;
 
   size_t key = 1;
-  if (mos_vector_assoc_set(alloc, vec, &key)) return error + 1;
+  if (vec_assoc_set(alloc, vec, &key)) return error + 1;
 
-  error += 0 != mos_vector_assoc_get(vec, 1) ? 0 : 1;
-  error += 0 == mos_vector_assoc_get(vec, 999) ? 0 : 1;
+  error += 0 != vec_assoc_get(vec, 1) ? 0 : 1;
+  error += 0 == vec_assoc_get(vec, 999) ? 0 : 1;
 
-  mos_vector_deinit(alloc, vec);
-  mos_vector_dealloc(alloc, &vec);
+  vec_deinit(alloc, vec);
+  vec_dealloc(alloc, &vec);
   return error;
 }
 

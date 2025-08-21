@@ -18,7 +18,7 @@ struct parser {
 
   ast_node_h             result; // pool handle, don't set directly
 
-  struct mos_vector      seen_tokens; // for backtracking
+  struct vec             seen_tokens; // for backtracking
 
   struct parser_error    error;
   struct tokenizer_error tokenizer_error; // does not require deinit
@@ -64,7 +64,7 @@ int parser_init(mos_allocator *alloc, parser *p, ast_pool *pool, char const *inp
   if (tokenizer_init(alloc, p->tokenizer, input, input_len)) return 1;
 
   // good_tokens
-  if (mos_vector_init(alloc, &p->seen_tokens, sizeof(struct token), 0)) return 1;
+  if (vec_init(alloc, &p->seen_tokens, sizeof(struct token), 0)) return 1;
 
   // error
   token_init(&p->token, tok_invalid);
@@ -80,7 +80,7 @@ void parser_deinit(parser *p) {
   token_deinit(p->alloc, &p->token);
 
   // good_tokens
-  mos_vector_deinit(p->alloc, &p->seen_tokens);
+  vec_deinit(p->alloc, &p->seen_tokens);
 
   // tokenizer
   if (p->tokenizer) {
@@ -226,20 +226,19 @@ nodiscard static int next_token(parser *p) {
 
     if (tok_comment == p->token.tag) continue;
 
-    return mos_vector_push_back(p->alloc, &p->seen_tokens, &p->token);
+    return vec_push_back(p->alloc, &p->seen_tokens, &p->token);
   }
 }
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
-  size_t const save_toks = mos_vector_size(&p->seen_tokens);
+  size_t const save_toks = vec_size(&p->seen_tokens);
   if (fun(p)) {
-    assert(mos_vector_size(&p->seen_tokens) >= save_toks);
-    if (tokenizer_put_back(p->alloc, p->tokenizer,
-                           ((token const *)mos_vector_data(&p->seen_tokens)) + save_toks,
-                           mos_vector_size(&p->seen_tokens) - save_toks))
+    assert(vec_size(&p->seen_tokens) >= save_toks);
+    if (tokenizer_put_back(p->alloc, p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
+                           vec_size(&p->seen_tokens) - save_toks))
       return 2; // TODO handle oom error
 
-    if (mos_vector_resize(p->alloc, &p->seen_tokens, save_toks)) return 1;
+    if (vec_resize(p->alloc, &p->seen_tokens, save_toks)) return 1;
 
     return 1;
   }
@@ -247,15 +246,14 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
 }
 
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
-  size_t const save_toks = mos_vector_size(&p->seen_tokens);
+  size_t const save_toks = vec_size(&p->seen_tokens);
   if (fun(p, arg)) {
-    assert(mos_vector_size(&p->seen_tokens) >= save_toks);
-    if (tokenizer_put_back(p->alloc, p->tokenizer,
-                           ((token const *)mos_vector_data(&p->seen_tokens)) + save_toks,
-                           mos_vector_size(&p->seen_tokens) - save_toks))
+    assert(vec_size(&p->seen_tokens) >= save_toks);
+    if (tokenizer_put_back(p->alloc, p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
+                           vec_size(&p->seen_tokens) - save_toks))
       return 2; // TODO handle oom error
 
-    if (mos_vector_resize(p->alloc, &p->seen_tokens, save_toks)) return 1;
+    if (vec_resize(p->alloc, &p->seen_tokens, save_toks)) return 1;
 
     return 1;
   }
@@ -478,7 +476,7 @@ static int function_declaration(parser *p) {
 
   ast_node_h const name = p->result; // function name
 
-  mos_vector       parameters;
+  vec_t            parameters;
   if (ast_vector_init(p->alloc, &parameters)) return 2;
 
   // check: f () declares function with no parameters
@@ -487,7 +485,7 @@ static int function_declaration(parser *p) {
     ast_node node;
     if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
     node.function_declaration.name = name;
-    mos_vector_move(&node.function_declaration.parameters, &parameters);
+    vec_move(&node.function_declaration.parameters, &parameters);
     if (result_ast_node(p, &node)) return 1;
 
     return 0;
@@ -496,7 +494,7 @@ static int function_declaration(parser *p) {
   // accumulate identifiers as parameters until equal sign is seen
   while (true) {
     if (0 == a_try(p, &a_identifier)) {
-      if (mos_vector_push_back(p->alloc, &parameters, &p->result)) return 2;
+      if (vec_push_back(p->alloc, &parameters, &p->result)) return 2;
       continue;
     }
 
@@ -505,7 +503,7 @@ static int function_declaration(parser *p) {
       ast_node node;
       if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
       node.function_declaration.name = name;
-      mos_vector_move(&node.function_declaration.parameters, &parameters);
+      vec_move(&node.function_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
 
       return 0;
@@ -520,13 +518,13 @@ static int function_declaration(parser *p) {
 static int lambda_declaration(parser *p) {
   // a b c... -> : only symbols allowed, terminated by ->
 
-  mos_vector parameters;
+  vec_t parameters;
   if (ast_vector_init(p->alloc, &parameters)) return 2;
 
   // accumulate identifiers as parameters until an arrow is seen
   while (true) {
     if (0 == a_try(p, &a_identifier)) {
-      if (mos_vector_push_back(p->alloc, &parameters, &p->result)) return 1;
+      if (vec_push_back(p->alloc, &parameters, &p->result)) return 1;
       continue;
     }
 
@@ -534,7 +532,7 @@ static int lambda_declaration(parser *p) {
 
       ast_node node;
       if (ast_node_init(p->alloc, &node, ast_lambda_declaration)) return 2;
-      mos_vector_move(&node.lambda_declaration.parameters, &parameters);
+      vec_move(&node.lambda_declaration.parameters, &parameters);
       if (result_ast_node(p, &node)) return 1;
 
       return 0;
@@ -557,16 +555,16 @@ static int function_application(parser *p) {
 
   ast_node_h const name = p->result;
 
-  mos_vector       arguments;
+  vec_t            arguments;
   if (ast_vector_init(p->alloc, &arguments)) return 2;
 
   // must have at least one argument
   if (a_try(p, &function_argument)) return 1;
-  if (mos_vector_push_back(p->alloc, &arguments, &p->result)) return 1;
+  if (vec_push_back(p->alloc, &arguments, &p->result)) return 1;
 
   while (true) {
     if (0 == a_try(p, &function_argument)) {
-      if (mos_vector_push_back(p->alloc, &arguments, &p->result)) return 1;
+      if (vec_push_back(p->alloc, &arguments, &p->result)) return 1;
       continue;
     }
 
@@ -575,7 +573,7 @@ static int function_application(parser *p) {
       ast_node node;
       if (ast_node_init(p->alloc, &node, ast_named_function_application)) return 2;
       node.named_function_application.name = name;
-      mos_vector_move(&node.named_function_application.arguments, &arguments);
+      vec_move(&node.named_function_application.arguments, &arguments);
       if (result_ast_node(p, &node)) return 1;
     }
 
@@ -672,7 +670,7 @@ static int lambda_function(parser *p) {
 
   // move the vector from the function_declaration node to the new ast node
   ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
-  mos_vector_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
+  vec_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
   return result_ast_node(p, &node);
 }
 
@@ -689,15 +687,15 @@ static int lambda_function_application(parser *p) {
   }
 
   // there must be at least one argument
-  mos_vector arguments;
+  vec_t arguments;
   if (ast_vector_init(p->alloc, &arguments)) return 2;
 
   if (a_try(p, &function_argument)) return 1;
-  if (mos_vector_push_back(p->alloc, &arguments, &p->result)) return 1;
+  if (vec_push_back(p->alloc, &arguments, &p->result)) return 1;
 
   while (true) {
     if (0 == a_try(p, &function_argument)) {
-      if (mos_vector_push_back(p->alloc, &arguments, &p->result)) return 1;
+      if (vec_push_back(p->alloc, &arguments, &p->result)) return 1;
       continue;
     }
 
@@ -705,7 +703,7 @@ static int lambda_function_application(parser *p) {
       ast_node node;
       if (ast_node_init(p->alloc, &node, ast_lambda_function_application)) return 2;
       node.lambda_function_application.lambda = lambda_h;
-      mos_vector_move(&node.lambda_function_application.arguments, &arguments);
+      vec_move(&node.lambda_function_application.arguments, &arguments);
       return result_ast_node(p, &node);
     }
 
@@ -765,7 +763,7 @@ static int let_form(parser *p) {
   node.let.body  = defn_h;
 
   // move the vector from the function_declaration node to the new ast node
-  mos_vector_move(&node.let.parameters, &decl->function_declaration.parameters);
+  vec_move(&node.let.parameters, &decl->function_declaration.parameters);
   return result_ast_node(p, &node);
 }
 
@@ -773,14 +771,14 @@ static int tuple_expression(parser *p) {
 
   if (a_try(p, a_open_round)) return 1;
 
-  mos_vector elements;
+  vec_t elements;
   if (ast_vector_init(p->alloc, &elements)) return 2;
 
   // first, expect an expression, which must be followed by a comma
   // then, zero or more expressions before a close round. So (expr,)
   // is a valid tuple.
   if (a_try(p, &expression)) return 1;
-  if (mos_vector_push_back(p->alloc, &elements, &p->result)) goto cleanup;
+  if (vec_push_back(p->alloc, &elements, &p->result)) goto cleanup;
   if (a_try(p, &a_comma)) goto cleanup;
 
   int count = 0;
@@ -790,7 +788,7 @@ static int tuple_expression(parser *p) {
     if (0 == a_try(p, &a_close_round)) {
       ast_node node;
       if (ast_node_init(p->alloc, &node, ast_tuple)) return 2;
-      mos_vector_move(&node.tuple.elements, &elements);
+      vec_move(&node.tuple.elements, &elements);
       return result_ast_node(p, &node);
     }
 
@@ -800,13 +798,13 @@ static int tuple_expression(parser *p) {
 
     // expression
     if (0 == a_try(p, &expression))
-      if (mos_vector_push_back(p->alloc, &elements, &p->result)) goto cleanup;
+      if (vec_push_back(p->alloc, &elements, &p->result)) goto cleanup;
 
     // loop to check for close round, or else
   }
 
 cleanup:
-  mos_vector_deinit(p->alloc, &elements);
+  vec_deinit(p->alloc, &elements);
   return 1;
 }
 

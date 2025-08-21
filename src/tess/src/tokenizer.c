@@ -10,12 +10,12 @@
 #include <string.h>
 
 struct tokenizer {
-  char const       *input;
-  size_t            input_len;
-  size_t            pos;
+  char const *input;
+  size_t      input_len;
+  size_t      pos;
 
-  struct mos_vector buf;
-  struct mos_vector backtrack;
+  struct vec  buf;
+  struct vec  backtrack;
 };
 
 // -- statics --
@@ -41,14 +41,14 @@ int tokenizer_init(mos_allocator *alloc, tokenizer *tok, char const *input, size
   tok->input_len = len;
   tok->pos       = 0;
 
-  if (mos_vector_init(alloc, &tok->buf, sizeof(char), 32)) return 1;
-  if (mos_vector_init(alloc, &tok->backtrack, sizeof(token), 8)) return 1;
+  if (vec_init(alloc, &tok->buf, sizeof(char), 32)) return 1;
+  if (vec_init(alloc, &tok->backtrack, sizeof(token), 8)) return 1;
   return 0;
 }
 
 void tokenizer_deinit(mos_allocator *alloc, tokenizer *tok) {
-  mos_vector_deinit(alloc, &tok->backtrack);
-  mos_vector_deinit(alloc, &tok->buf);
+  vec_deinit(alloc, &tok->backtrack);
+  vec_deinit(alloc, &tok->buf);
   mos_alloc_invalidate(tok, sizeof *tok);
 }
 
@@ -88,9 +88,9 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
   assert(out);
 
   // support backtracking by parser
-  if (!mos_vector_empty(&self->backtrack)) {
-    memcpy(out, mos_vector_back(&self->backtrack), sizeof *out);
-    mos_vector_pop_back(&self->backtrack);
+  if (!vec_empty(&self->backtrack)) {
+    memcpy(out, vec_back(&self->backtrack), sizeof *out);
+    vec_pop_back(&self->backtrack);
     return 0;
   }
 
@@ -451,7 +451,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
       break;
 
     case start_string: {
-      mos_vector_clear(&self->buf);
+      vec_clear(&self->buf);
       state = in_string;
     } break;
 
@@ -465,7 +465,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
       case '\\': state = in_string_backslash; break;
       case '"':  state = stop_string; break;
       default:
-        if (mos_vector_push_back(alloc, &self->buf, &c)) {
+        if (vec_push_back(alloc, &self->buf, &c)) {
           if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
@@ -499,7 +499,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
       default:   break;
       }
       if (actual) {
-        if (mos_vector_push_back(alloc, &self->buf, &actual)) {
+        if (vec_push_back(alloc, &self->buf, &actual)) {
           if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
@@ -507,8 +507,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
       } else {
         // unrecognised escape sequence, keep it literal
         char backslash = '\\';
-        if (mos_vector_push_back(alloc, &self->buf, &backslash) ||
-            mos_vector_push_back(alloc, &self->buf, &c)) {
+        if (vec_push_back(alloc, &self->buf, &backslash) || vec_push_back(alloc, &self->buf, &c)) {
           if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
           return 1;
         }
@@ -518,7 +517,7 @@ int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_
     } break;
 
     case stop_string: {
-      replace_token_sn(alloc, &res, tok_string, mos_vector_data(&self->buf), mos_vector_size(&self->buf));
+      replace_token_sn(alloc, &res, tok_string, vec_data(&self->buf), vec_size(&self->buf));
       state = stop;
     } break;
 
@@ -548,7 +547,7 @@ finish:
 
 int tokenizer_put_back(mos_allocator *alloc, tokenizer *self, token const *toks, size_t n_toks) {
   for (size_t i = n_toks; i != 0; --i) {
-    if (mos_vector_push_back(alloc, &self->backtrack, &toks[i - 1])) return 1;
+    if (vec_push_back(alloc, &self->backtrack, &toks[i - 1])) return 1;
   }
   return 0;
 }

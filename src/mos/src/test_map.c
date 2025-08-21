@@ -79,8 +79,8 @@ int test_big_map(void) {
   } pair_t;
 
   mos_allocator *alloc = mos_alloc_default_allocator();
-  mos_vector     vec;
-  if (mos_vector_init(alloc, &vec, sizeof(pair_t), N)) return error + 1;
+  vec_t          vec;
+  if (vec_init(alloc, &vec, sizeof(pair_t), N)) return error + 1;
 
   mos_map *map = mos_map_alloc(alloc);
   if (mos_map_init(alloc, map, sizeof(ptrdiff_t), 8, 0)) return error + 1;
@@ -91,15 +91,15 @@ int test_big_map(void) {
     while (mos_map_get(map, (size_t)key)) key = rand();
 
     pair_t pair = {key, rand()};
-    if (mos_vector_push_back(alloc, &vec, &pair)) {
+    if (vec_push_back(alloc, &vec, &pair)) {
       return 1;
     }
     if (mos_map_set(alloc, map, (size_t)pair.left, &pair.right)) return 1;
   }
 
   // verify
-  for (size_t i = 0; i < mos_vector_size(&vec); ++i) {
-    pair_t *pair = mos_vector_at(&vec, i);
+  for (size_t i = 0; i < vec_size(&vec); ++i) {
+    pair_t *pair = vec_at(&vec, i);
     void   *res  = mos_map_get(map, (size_t)pair->left);
     if (!res) {
       fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left, pair->right, res);
@@ -118,7 +118,7 @@ int test_big_map(void) {
   mos_map_deinit(alloc, map);
   mos_map_dealloc(alloc, &map);
 
-  mos_vector_deinit(alloc, &vec);
+  vec_deinit(alloc, &vec);
   return error;
 }
 

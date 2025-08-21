@@ -8,16 +8,16 @@
 #include <stdint.h>
 #include <string.h>
 
-mos_vector *mos_vector_alloc(mos_allocator *alloc) {
-  return alloc->malloc(alloc, sizeof(mos_vector));
+vec_t *vec_alloc(mos_allocator *alloc) {
+  return alloc->malloc(alloc, sizeof(vec_t));
 }
 
-void mos_vector_dealloc(mos_allocator *alloc, mos_vector **p) {
+void vec_dealloc(mos_allocator *alloc, vec_t **p) {
   alloc->free(alloc, *p);
   *p = 0;
 }
 
-int mos_vector_init(mos_allocator *alloc, mos_vector *vec, size_t element_size, size_t initial_size) {
+int vec_init(mos_allocator *alloc, vec_t *vec, size_t element_size, size_t initial_size) {
   assert(element_size <= PTRDIFF_MAX);
   memset(vec, 0, sizeof *vec);
   vec->element_size = element_size;
@@ -25,7 +25,7 @@ int mos_vector_init(mos_allocator *alloc, mos_vector *vec, size_t element_size, 
   if (initial_size) {
     vec->data = alloc->malloc(alloc, initial_size * element_size);
     if (NULL == vec->data) {
-      dbg("mos_vector_init: oom\n");
+      dbg("vec_init: oom\n");
       return 1;
     }
     vec->capacity = initial_size;
@@ -33,12 +33,12 @@ int mos_vector_init(mos_allocator *alloc, mos_vector *vec, size_t element_size, 
   return 0;
 }
 
-void mos_vector_deinit(mos_allocator *alloc, mos_vector *vec) {
+void vec_deinit(mos_allocator *alloc, vec_t *vec) {
   alloc->free(alloc, vec->data);
   mos_alloc_invalidate(vec, sizeof *vec);
 }
 
-int mos_vector_reserve(mos_allocator *alloc, mos_vector *vec, size_t count) {
+int vec_reserve(mos_allocator *alloc, vec_t *vec, size_t count) {
 
   if (vec->capacity >= count) return 0;
 
@@ -49,7 +49,7 @@ int mos_vector_reserve(mos_allocator *alloc, mos_vector *vec, size_t count) {
   // if vec->data is null, this is equivaluent to calling malloc
   void *p = alloc->realloc(alloc, vec->data, new_capacity * vec->element_size);
   if (!p) {
-    dbg("mos_vector_reserve: oom\n");
+    dbg("vec_reserve: oom\n");
     return 1;
   }
 
@@ -58,18 +58,18 @@ int mos_vector_reserve(mos_allocator *alloc, mos_vector *vec, size_t count) {
   return 0;
 }
 
-void mos_vector_move(mos_vector *dst, mos_vector *src) {
+void vec_move(vec_t *dst, vec_t *src) {
   memcpy(dst, src, sizeof *dst);
   mos_alloc_invalidate(src, sizeof *src);
 }
 
-bool mos_vector_empty(mos_vector const *vec) {
+bool vec_empty(vec_t const *vec) {
   return vec->size == 0;
 }
 
-int mos_vector_push_back(mos_allocator *alloc, mos_vector *vec, void const *element) {
-  if (mos_vector_reserve(alloc, vec, vec->size + 1)) {
-    dbg("mos_vector_push_back: oom\n");
+int vec_push_back(mos_allocator *alloc, vec_t *vec, void const *element) {
+  if (vec_reserve(alloc, vec, vec->size + 1)) {
+    dbg("vec_push_back: oom\n");
     return 1;
   }
   memcpy(vec->data + vec->size * vec->element_size, element, vec->element_size);
@@ -77,9 +77,9 @@ int mos_vector_push_back(mos_allocator *alloc, mos_vector *vec, void const *elem
   return 0;
 }
 
-int mos_vector_copy_back(mos_allocator *alloc, mos_vector *vec, void const *start, size_t count) {
-  if (mos_vector_reserve(alloc, vec, vec->size + count)) {
-    dbg("mos_vector_copy_back: oom\n");
+int vec_copy_back(mos_allocator *alloc, vec_t *vec, void const *start, size_t count) {
+  if (vec_reserve(alloc, vec, vec->size + count)) {
+    dbg("vec_copy_back: oom\n");
     return 1;
   }
 
@@ -88,19 +88,19 @@ int mos_vector_copy_back(mos_allocator *alloc, mos_vector *vec, void const *star
   return 0;
 }
 
-void *mos_vector_at(mos_vector *vec, size_t index) {
+void *vec_at(vec_t *vec, size_t index) {
   return vec->data + index * vec->element_size;
 }
 
-void *mos_vector_back(mos_vector *vec) {
+void *vec_back(vec_t *vec) {
   return vec->data + (vec->size - 1) * vec->element_size;
 }
 
-void mos_vector_pop_back(mos_vector *vec) {
+void vec_pop_back(vec_t *vec) {
   --vec->size;
 }
 
-void mos_vector_erase(mos_vector *vec, char *it) {
+void vec_erase(vec_t *vec, char *it) {
   char const *const end = vec->data + vec->size * vec->element_size;
   ptrdiff_t         len = end - it - (ptrdiff_t)vec->element_size;
 
@@ -108,11 +108,11 @@ void mos_vector_erase(mos_vector *vec, char *it) {
   --vec->size;
 }
 
-nodiscard int mos_vector_resize(mos_allocator *alloc, mos_vector *vec, size_t n) {
+nodiscard int vec_resize(mos_allocator *alloc, vec_t *vec, size_t n) {
 
   if (n > vec->capacity)
-    if (mos_vector_reserve(alloc, vec, n)) {
-      dbg("mos_vector_resize: oom\n");
+    if (vec_reserve(alloc, vec, n)) {
+      dbg("vec_resize: oom\n");
       return 1;
     }
 
@@ -120,53 +120,53 @@ nodiscard int mos_vector_resize(mos_allocator *alloc, mos_vector *vec, size_t n)
   return 0;
 }
 
-void mos_vector_clear(mos_vector *vec) {
+void vec_clear(vec_t *vec) {
   // Note: Do not free data.
   vec->size = 0;
 }
 
-char *mos_vector_data(mos_vector *vec) {
+char *vec_data(vec_t *vec) {
   return vec->data;
 }
 
-void *mos_vector_begin(mos_vector *vec) {
+void *vec_begin(vec_t *vec) {
   return vec->data;
 }
 
-void const *mos_vector_cbegin(mos_vector const *vec) {
+void const *vec_cbegin(vec_t const *vec) {
   return vec->data;
 }
 
-void const *mos_vector_end(mos_vector *vec) {
+void const *vec_end(vec_t *vec) {
   // points 1 past the end
-  return mos_vector_at(vec, vec->size);
+  return vec_at(vec, vec->size);
 }
 
-size_t mos_vector_size(mos_vector const *vec) {
+size_t vec_size(vec_t const *vec) {
   return vec->size;
 }
 
-size_t mos_vector_capacity(mos_vector const *vec) {
+size_t vec_capacity(vec_t const *vec) {
   return vec->capacity;
 }
 
-int mos_vector_assoc_set(mos_allocator *alloc, mos_vector *vec, void const *pair) {
+int vec_assoc_set(mos_allocator *alloc, vec_t *vec, void const *pair) {
   assert(vec->element_size >= sizeof(size_t));
-  if (mos_vector_push_back(alloc, vec, pair)) {
-    dbg("mos_vector_assoc_set: oom\n");
+  if (vec_push_back(alloc, vec, pair)) {
+    dbg("vec_assoc_set: oom\n");
     return 1;
   }
   return 0;
 }
 
-char *mos_vector_assoc_get(mos_vector *vec, size_t key) {
-  if (mos_vector_empty(vec)) return 0;
+char *vec_assoc_get(vec_t *vec, size_t key) {
+  if (vec_empty(vec)) return 0;
 
   // From the back, search for an element whose first size_t field
   // matches the search term.
 
   char const *const last         = vec->data;
-  char             *it           = mos_vector_back(vec);
+  char             *it           = vec_back(vec);
   size_t const      element_size = vec->element_size;
 
   while (1) {
@@ -178,13 +178,13 @@ char *mos_vector_assoc_get(mos_vector *vec, size_t key) {
   return 0;
 }
 
-void mos_vector_assoc_erase(mos_vector *vec, size_t key) {
+void vec_assoc_erase(vec_t *vec, size_t key) {
 
-  char *it = mos_vector_assoc_get(vec, key);
+  char *it = vec_assoc_get(vec, key);
   if (!it) return;
 
   // it points just past the key, so reverse it
   it -= sizeof(size_t);
 
-  mos_vector_erase(vec, it);
+  vec_erase(vec, it);
 }
