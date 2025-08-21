@@ -11,9 +11,9 @@
 #include <time.h>
 
 int test_tess_token_string(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  allocator *alloc = alloc_default_allocator();
 
   error += strcmp("comma", token_tag_to_string(tok_comma)) == 0 ? 0 : 1;
 
@@ -49,10 +49,10 @@ int test_tess_token_string(void) {
 }
 
 int test_tokenizer_basic(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer     *t     = tokenizer_alloc(alloc);
+  allocator *alloc = alloc_default_allocator();
+  tokenizer *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "  (  )  ";
@@ -94,10 +94,10 @@ int test_tokenizer_basic(void) {
 }
 
 int test_tokenizer_string(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer     *t     = tokenizer_alloc(alloc);
+  allocator *alloc = alloc_default_allocator();
+  tokenizer *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = " \"abcdef\"  ";
@@ -123,10 +123,10 @@ int test_tokenizer_string(void) {
 
 int test_tokenizer_terminal_static_string(void) {
   // regression test for ASAN
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
-  tokenizer     *t     = tokenizer_alloc(alloc);
+  allocator *alloc = alloc_default_allocator();
+  tokenizer *t     = tokenizer_alloc(alloc);
 
   {
     char const *input = "-";
@@ -151,11 +151,11 @@ int test_tokenizer_terminal_static_string(void) {
 }
 
 int test_parser_init(void) {
-  int            error = 0;
+  int         error = 0;
 
-  char const    *input = "()";
+  char const *input = "()";
 
-  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -169,18 +169,18 @@ int test_parser_init(void) {
   // parser_dealloc(alloc, &p);
   // ast_pool_dealloci(alloc, &pool);
 
-  mos_alloc_arena_deinit(alloc);
-  mos_alloc_arena_dealloc(mos_alloc_default_allocator(), &alloc);
+  alloc_arena_deinit(alloc);
+  alloc_arena_dealloc(alloc_default_allocator(), &alloc);
 
   return error;
 }
 
 int test_parser_basic(void) {
-  int            error = 0;
+  int         error = 0;
 
-  char const    *input = "a";
+  char const *input = "a";
 
-  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -202,18 +202,18 @@ int test_parser_basic(void) {
   parser_dealloc(alloc, &p);
   ast_pool_dealloci(alloc, &pool);
 
-  mos_alloc_arena_deinit(alloc);
-  mos_alloc_arena_dealloc(mos_alloc_default_allocator(), &alloc);
+  alloc_arena_deinit(alloc);
+  alloc_arena_dealloc(alloc_default_allocator(), &alloc);
 
   return error;
 }
 
 int test_parser_expression(void) {
-  int            error = 0;
+  int         error = 0;
 
-  char const    *input = "let x = 5 in x + 2";
+  char const *input = "let x = 5 in x + 2";
 
-  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -229,17 +229,17 @@ int test_parser_expression(void) {
 
   error += ast_let_in == node->tag ? 0 : 1;
 
-  mos_alloc_arena_dealloci(mos_alloc_default_allocator(), &alloc);
+  alloc_arena_dealloci(alloc_default_allocator(), &alloc);
 
   return error;
 }
 
 int test_parser_node_to_string(void) {
-  int            error = 0;
+  int         error = 0;
 
-  char const    *input = "1 + 2";
+  char const *input = "1 + 2";
 
-  mos_allocator *alloc = mos_alloc_arena_alloci(mos_alloc_default_allocator(), 5096);
+  allocator  *alloc = alloc_arena_alloci(alloc_default_allocator(), 5096);
   if (!alloc) return error + 1;
 
   ast_pool *pool = ast_pool_alloci(alloc);
@@ -281,7 +281,7 @@ int test_parser_node_to_string(void) {
     error += 0 == strcmp("(tuple (symbol a) (symbol b))", buf) ? 0 : 1;
   }
 
-  mos_alloc_arena_dealloci(mos_alloc_default_allocator(), &alloc);
+  alloc_arena_dealloci(alloc_default_allocator(), &alloc);
 
   return error;
 }

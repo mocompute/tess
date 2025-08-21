@@ -36,13 +36,13 @@ typedef struct token {
 
 void token_init(token *, token_tag);
 void token_init_v(token *, token_tag, uint8_t);
-int  token_init_s(mos_allocator *, token *, token_tag, char const *);
-int  token_init_sn(mos_allocator *, token *, token_tag, char const *, size_t);
-void token_deinit(mos_allocator *, token *);
+int  token_init_s(allocator *, token *, token_tag, char const *);
+int  token_init_sn(allocator *, token *, token_tag, char const *, size_t);
+void token_deinit(allocator *, token *);
 
 // -- utilities --
 
 char const *token_tag_to_string(token_tag);
-char       *token_to_string(mos_allocator *, token const *);
+char       *token_to_string(allocator *, token const *);
 
 #endif

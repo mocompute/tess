@@ -17,28 +17,28 @@
 #include <stdlib.h>
 #endif
 
-static void *default_malloc(mos_allocator *a, size_t sz) {
+static void *default_malloc(allocator *a, size_t sz) {
   (void)a;
   return malloc(sz);
 }
 
-static void *default_calloc(mos_allocator *a, size_t num, size_t sz) {
+static void *default_calloc(allocator *a, size_t num, size_t sz) {
   (void)a;
   return calloc(num, sz);
 }
 
-static void *default_realloc(mos_allocator *a, void *p, size_t sz) {
+static void *default_realloc(allocator *a, void *p, size_t sz) {
   (void)a;
   return realloc(p, sz);
 }
 
-static void default_free(mos_allocator *a, void *p) {
+static void default_free(allocator *a, void *p) {
   (void)a;
   return free(p);
 }
 
-mos_allocator *mos_alloc_default_allocator() {
-  static mos_allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
+allocator *alloc_default_allocator() {
+  static allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
   return &allocator;
 }
 
@@ -51,9 +51,9 @@ typedef struct arena_header {
 } arena_header;
 
 typedef struct arena_allocator {
-  struct mos_allocator allocator;
-  mos_allocator       *parent;
-  arena_header        *head;
+  struct allocator allocator;
+  allocator       *parent;
+  arena_header    *head;
 } arena_allocator;
 
 static_assert(48 == sizeof(arena_allocator), "");
@@ -95,14 +95,14 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
   return NULL;
 }
 
-static void *arena_malloc(mos_allocator *alloc, size_t sz) {
+static void *arena_malloc(allocator *alloc, size_t sz) {
   arena_allocator *arena         = (arena_allocator *)alloc;
 
   arena_header    *bucket        = arena->head;
   arena_header    *last          = NULL;
   size_t           last_capacity = 0;
 
-  sz                             = mos_alloc_align_to_word_size(sz);
+  sz                             = alloc_align_to_word_size(sz);
 
   assert(bucket);
   while (bucket) {
@@ -118,7 +118,7 @@ static void *arena_malloc(mos_allocator *alloc, size_t sz) {
   // need to allocate a new bucket
 
   size_t new_capacity = last_capacity * 2;
-  if (new_capacity < sz) new_capacity = mos_alloc_next_power_of_two(sz);
+  if (new_capacity < sz) new_capacity = alloc_next_power_of_two(sz);
 
   last->next = arena->parent->malloc(arena->parent, new_capacity + sizeof(arena_header));
   if (NULL == last->next) return NULL;
@@ -130,7 +130,7 @@ static void *arena_malloc(mos_allocator *alloc, size_t sz) {
   return bump_alloc_assume_capacity(bucket, sz);
 }
 
-static void *arena_realloc(mos_allocator *a, void *p, size_t sz) {
+static void *arena_realloc(allocator *a, void *p, size_t sz) {
   if (NULL == p) return arena_malloc(a, sz);
 
   arena_header *bucket = find_bucket((arena_allocator *)a, p);
@@ -167,47 +167,47 @@ static void *arena_realloc(mos_allocator *a, void *p, size_t sz) {
   return new_block;
 }
 
-static void *arena_calloc(mos_allocator *alloc, size_t num, size_t size) {
+static void *arena_calloc(allocator *alloc, size_t num, size_t size) {
   void *out = arena_malloc(alloc, num * size);
   if (out) memset(out, 0, num * size);
   return out;
 }
 
-static void arena_free(mos_allocator *alloc, void *p) {
+static void arena_free(allocator *alloc, void *p) {
   (void)alloc;
   (void)p;
 }
 
-mos_allocator *mos_alloc_arena_alloc(mos_allocator *alloc) {
+allocator *alloc_arena_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(arena_allocator));
 }
 
-mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t sz) {
-  mos_allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
+allocator *alloc_arena_alloci(allocator *alloc, size_t sz) {
+  allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
   if (!out) return out;
 
-  if (mos_alloc_arena_init(out, alloc, sz)) {
+  if (alloc_arena_init(out, alloc, sz)) {
     alloc->free(alloc, out);
     return NULL;
   }
   return out;
 }
 
-void mos_alloc_arena_dealloc(mos_allocator *alloc, mos_allocator **arena) {
-  mos_alloc_assert_invalid(*arena, sizeof **arena);
+void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
+  alloc_assert_invalid(*arena, sizeof **arena);
   alloc->free(alloc, *arena);
   *arena = NULL;
 }
 
-void mos_alloc_arena_dealloci(mos_allocator *alloc, mos_allocator **arena) {
-  mos_alloc_arena_deinit(*arena);
-  mos_alloc_arena_dealloc(alloc, arena);
+void alloc_arena_dealloci(allocator *alloc, allocator **arena) {
+  alloc_arena_deinit(*arena);
+  alloc_arena_dealloc(alloc, arena);
 }
 
-int mos_alloc_arena_init(mos_allocator *arena_, mos_allocator *parent, size_t sz) {
+int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
   arena_allocator *arena = (arena_allocator *)arena_;
   arena->parent          = parent;
-  sz                     = mos_alloc_next_power_of_two(sz);
+  sz                     = alloc_next_power_of_two(sz);
   if (0 == sz) return 1;
   arena->head = parent->malloc(parent, sizeof(arena_header) + sz);
   if (NULL == arena->head) return 1;
@@ -222,7 +222,7 @@ int mos_alloc_arena_init(mos_allocator *arena_, mos_allocator *parent, size_t sz
   return 0;
 }
 
-void mos_alloc_arena_deinit(mos_allocator *arena_) {
+void alloc_arena_deinit(allocator *arena_) {
   arena_allocator *arena = (arena_allocator *)arena_;
 
   arena_header    *next  = arena->head;
@@ -233,12 +233,12 @@ void mos_alloc_arena_deinit(mos_allocator *arena_) {
     next = next_next;
   }
 
-  mos_alloc_invalidate(arena, sizeof *arena);
+  alloc_invalidate(arena, sizeof *arena);
 }
 
 // -- utilities --
 
-char *mos_alloc_strdup(mos_allocator *alloc, char const *src) {
+char *alloc_strdup(allocator *alloc, char const *src) {
   size_t len = strlen(src);
   char  *out = alloc->malloc(alloc, len + 1);
   if (out) {
@@ -248,7 +248,7 @@ char *mos_alloc_strdup(mos_allocator *alloc, char const *src) {
   return out;
 }
 
-char *mos_alloc_strndup(mos_allocator *alloc, char const *src, size_t max) {
+char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
   size_t len = strlen(src);
   if (len > max) len = max;
   char *out = alloc->malloc(alloc, len + 1);
@@ -259,7 +259,7 @@ char *mos_alloc_strndup(mos_allocator *alloc, char const *src, size_t max) {
   return out;
 }
 
-void mos_alloc_invalidate(void *p, size_t len) {
+void alloc_invalidate(void *p, size_t len) {
 #ifndef NDEBUG
   while (len--) {
     if ((intptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;
@@ -271,7 +271,7 @@ void mos_alloc_invalidate(void *p, size_t len) {
 #endif
 }
 
-void mos_alloc_assert_invalid(void *p, size_t len) {
+void alloc_assert_invalid(void *p, size_t len) {
 #ifndef NDEBUG
   while (len--) {
     if ((intptr_t)p % 2 == 0) assert(*(unsigned char *)p == 0xde);
@@ -286,7 +286,7 @@ void mos_alloc_assert_invalid(void *p, size_t len) {
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
-size_t mos_alloc_next_power_of_two(size_t n) {
+size_t alloc_next_power_of_two(size_t n) {
 
   if (n > (SIZE_MAX / 2) + 1) return 0; // overflow
   if (n == 0) return 1;
@@ -302,7 +302,7 @@ size_t mos_alloc_next_power_of_two(size_t n) {
   return n + 1;
 }
 
-size_t mos_alloc_align_to_word_size(size_t n) {
+size_t alloc_align_to_word_size(size_t n) {
   size_t mask = sizeof(void *) - 1;
   return (n + mask) & ~mask;
 }

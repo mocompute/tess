@@ -24,7 +24,7 @@ void tess_type_init_type_var(tess_type *ty, uint32_t val) {
   ty->val = val;
 }
 
-int tess_type_init_tuple(mos_allocator *alloc, tess_type *ty) {
+int tess_type_init_tuple(allocator *alloc, tess_type *ty) {
   memset(ty, 0, sizeof *ty);
   ty->tag = type_tuple;
   return vec_init(alloc, &ty->tuple, sizeof(ast_node_h), 0);
@@ -35,7 +35,7 @@ void tess_type_init_arrow(tess_type *ty) {
   ty->tag = type_arrow;
 }
 
-void tess_type_deinit(mos_allocator *alloc, tess_type *ty) {
+void tess_type_deinit(allocator *alloc, tess_type *ty) {
   switch (ty->tag) {
   case type_nil:
   case type_bool:
@@ -46,16 +46,16 @@ void tess_type_deinit(mos_allocator *alloc, tess_type *ty) {
   case type_string:   break;
   case type_tuple:    vec_deinit(alloc, &ty->tuple); break;
   }
-  mos_alloc_invalidate(ty, sizeof *ty);
+  alloc_invalidate(ty, sizeof *ty);
 }
 
 // -- tess_type_pool allocation and deallocation --
 
-ast_pool *ast_pool_alloc(mos_allocator *alloc) {
+ast_pool *ast_pool_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(ast_pool));
 }
 
-ast_pool *ast_pool_alloci(mos_allocator *alloc) {
+ast_pool *ast_pool_alloci(allocator *alloc) {
   ast_pool *out = alloc->malloc(alloc, sizeof(ast_pool));
   if (!out) return out;
 
@@ -66,22 +66,22 @@ ast_pool *ast_pool_alloci(mos_allocator *alloc) {
   return out;
 }
 
-void ast_pool_dealloc(mos_allocator *alloc, ast_pool **pool) {
-  mos_alloc_assert_invalid(*pool, sizeof *pool);
+void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
+  alloc_assert_invalid(*pool, sizeof *pool);
   alloc->free(alloc, *pool);
   *pool = NULL;
 }
 
-void ast_pool_dealloci(mos_allocator *alloc, ast_pool **pool) {
+void ast_pool_dealloci(allocator *alloc, ast_pool **pool) {
   ast_pool_deinit(alloc, *pool);
   ast_pool_dealloc(alloc, pool);
 }
 
-int ast_pool_init(mos_allocator *alloc, ast_pool *pool) {
+int ast_pool_init(allocator *alloc, ast_pool *pool) {
   return vec_init(alloc, &pool->data, sizeof(ast_node), 32);
 }
 
-void ast_pool_deinit(mos_allocator *alloc, ast_pool *pool) {
+void ast_pool_deinit(allocator *alloc, ast_pool *pool) {
   // deinit all the ast nodes
   ast_node       *it  = vec_begin(&pool->data);
   ast_node const *end = vec_end(&pool->data);
@@ -90,12 +90,12 @@ void ast_pool_deinit(mos_allocator *alloc, ast_pool *pool) {
   }
 
   vec_deinit(alloc, &pool->data);
-  mos_alloc_invalidate(pool, sizeof *pool);
+  alloc_invalidate(pool, sizeof *pool);
 }
 
 // -- ast_node init and deinit --
 
-void ast_node_deinit(mos_allocator *alloc, ast_node *node) {
+void ast_node_deinit(allocator *alloc, ast_node *node) {
 
 #define deinit(P) vec_deinit(alloc, &P)
 
@@ -129,7 +129,7 @@ void ast_node_deinit(mos_allocator *alloc, ast_node *node) {
 #undef deinit
 }
 
-int ast_node_init(mos_allocator *alloc, ast_node *node, ast_tag tag) {
+int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 
   // accepts alloc = NULL in some cases
 
@@ -167,19 +167,19 @@ int ast_node_init(mos_allocator *alloc, ast_node *node, ast_tag tag) {
 #undef init
 }
 
-int ast_node_replace(mos_allocator *alloc, ast_node *node, ast_tag tag) {
+int ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
   ast_node_deinit(alloc, node);
   return ast_node_init(alloc, node, tag);
 }
 
 // -- pool operations --
 
-int ast_pool_move_back(mos_allocator *alloc, ast_pool *pool, ast_node *node, ast_node_h *handle) {
+int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_node_h *handle) {
 
   if (vec_push_back(alloc, &pool->data, node)) return 1;
 
   handle->val = vec_size(&pool->data) - 1;
-  mos_alloc_invalidate(node, sizeof *node);
+  alloc_invalidate(node, sizeof *node);
 
   return 0;
 }
@@ -224,7 +224,7 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
   return 1;
 }
 
-int ast_vector_init(mos_allocator *alloc, vec_t *vec) {
+int ast_vector_init(allocator *alloc, vec_t *vec) {
   return vec_init(alloc, vec, sizeof(ast_node_h), 0);
 }
 

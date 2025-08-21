@@ -29,20 +29,20 @@ int test_align(void) {
 
   assert(8 == sizeof(void *));
 
-  error += 8 == mos_alloc_align_to_word_size(2) ? 0 : 1;
-  error += 8 == mos_alloc_align_to_word_size(4) ? 0 : 1;
-  error += 8 == mos_alloc_align_to_word_size(6) ? 0 : 1;
-  error += 8 == mos_alloc_align_to_word_size(8) ? 0 : 1;
-  error += 16 == mos_alloc_align_to_word_size(9) ? 0 : 1;
+  error += 8 == alloc_align_to_word_size(2) ? 0 : 1;
+  error += 8 == alloc_align_to_word_size(4) ? 0 : 1;
+  error += 8 == alloc_align_to_word_size(6) ? 0 : 1;
+  error += 8 == alloc_align_to_word_size(8) ? 0 : 1;
+  error += 16 == alloc_align_to_word_size(9) ? 0 : 1;
   return error;
 }
 
 int test_map(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  allocator *alloc = alloc_default_allocator();
 
-  mos_map       *map   = mos_map_alloc(alloc);
+  mos_map   *map   = mos_map_alloc(alloc);
 
   if (mos_map_init(alloc, map, sizeof(int), 8, 0)) return 1;
 
@@ -78,8 +78,8 @@ int test_big_map(void) {
     ptrdiff_t left, right;
   } pair_t;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
-  vec_t          vec;
+  allocator *alloc = alloc_default_allocator();
+  vec_t      vec;
   if (vec_init(alloc, &vec, sizeof(pair_t), N)) return error + 1;
 
   mos_map *map = mos_map_alloc(alloc);

@@ -21,11 +21,11 @@ typedef struct vec {
 
 // -- allocation and deallocation --
 
-vec_t        *vec_alloc(mos_allocator *);
-void          vec_dealloc(mos_allocator *, vec_t **);
-nodiscard int vec_init(mos_allocator *, vec_t *, size_t element_size, size_t initial_size);
-void          vec_deinit(mos_allocator *, vec_t *);
-nodiscard int vec_reserve(mos_allocator *, vec_t *, size_t);
+vec_t        *vec_alloc(allocator *);
+void          vec_dealloc(allocator *, vec_t **);
+nodiscard int vec_init(allocator *, vec_t *, size_t element_size, size_t initial_size);
+void          vec_deinit(allocator *, vec_t *);
+nodiscard int vec_reserve(allocator *, vec_t *, size_t);
 void          vec_move(vec_t *dst, vec_t *src);
 
 // -- read-only access --
@@ -45,11 +45,11 @@ void       *vec_back(vec_t *);
 
 // -- insertion and removal --
 
-nodiscard int vec_push_back(mos_allocator *, vec_t *, void const *element);
-nodiscard int vec_copy_back(mos_allocator *, vec_t *, void const *start, size_t count);
+nodiscard int vec_push_back(allocator *, vec_t *, void const *element);
+nodiscard int vec_copy_back(allocator *, vec_t *, void const *start, size_t count);
 void          vec_pop_back(vec_t *);
 void          vec_erase(vec_t *, char *);
-nodiscard int vec_resize(mos_allocator *, vec_t *, size_t);
+nodiscard int vec_resize(allocator *, vec_t *, size_t);
 void          vec_clear(vec_t *);
 
 // -- association lists --
@@ -58,7 +58,7 @@ void          vec_clear(vec_t *);
 // key. May contain duplicate values, but [get] and [erase] operate on
 // the first one found, searching from the back.
 
-nodiscard int vec_assoc_set(mos_allocator *, vec_t *, void const *);
+nodiscard int vec_assoc_set(allocator *, vec_t *, void const *);
 char         *vec_assoc_get(vec_t *, size_t);
 void          vec_assoc_erase(vec_t *, size_t);
 

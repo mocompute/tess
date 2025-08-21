@@ -170,26 +170,26 @@ typedef struct ast_pool {
 
 void          tess_type_init(tess_type *, type_tag);
 void          tess_type_init_type_var(tess_type *, uint32_t);
-nodiscard int tess_type_init_tuple(mos_allocator *, tess_type *);
+nodiscard int tess_type_init_tuple(allocator *, tess_type *);
 void          tess_type_init_arrow(tess_type *);
-void          tess_type_deinit(mos_allocator *, tess_type *);
+void          tess_type_deinit(allocator *, tess_type *);
 
-ast_pool     *ast_pool_alloc(mos_allocator *);
-ast_pool     *ast_pool_alloci(mos_allocator *);
-void          ast_pool_dealloc(mos_allocator *, ast_pool **);
-void          ast_pool_dealloci(mos_allocator *, ast_pool **);
-nodiscard int ast_pool_init(mos_allocator *, ast_pool *);
-void          ast_pool_deinit(mos_allocator *, ast_pool *);
+ast_pool     *ast_pool_alloc(allocator *);
+ast_pool     *ast_pool_alloci(allocator *);
+void          ast_pool_dealloc(allocator *, ast_pool **);
+void          ast_pool_dealloci(allocator *, ast_pool **);
+nodiscard int ast_pool_init(allocator *, ast_pool *);
+void          ast_pool_deinit(allocator *, ast_pool *);
 
-nodiscard int ast_node_init(mos_allocator *, ast_node *, ast_tag);
-void          ast_node_deinit(mos_allocator *, ast_node *);
-nodiscard int ast_node_replace(mos_allocator *, ast_node *, ast_tag);
+nodiscard int ast_node_init(allocator *, ast_node *, ast_tag);
+void          ast_node_deinit(allocator *, ast_node *);
+nodiscard int ast_node_replace(allocator *, ast_node *, ast_tag);
 
 // -- pool operations --
 //
 // [move_back] takes ownership of ast_node(s) and invalidates caller's copy
 
-nodiscard int ast_pool_move_back(mos_allocator *, ast_pool *, ast_node *, ast_node_h *);
+nodiscard int ast_pool_move_back(allocator *, ast_pool *, ast_node *, ast_node_h *);
 ast_node     *ast_pool_at(ast_pool *, ast_node_h);
 
 // -- utilities --
@@ -197,7 +197,7 @@ ast_node     *ast_pool_at(ast_pool *, ast_node_h);
 char const   *type_tag_to_string(type_tag);
 char const   *ast_tag_to_string(ast_tag);
 int           string_to_ast_operator(char const *, ast_operator *);
-nodiscard int ast_vector_init(mos_allocator *, vec_t *);
+nodiscard int ast_vector_init(allocator *, vec_t *);
 
 nodiscard int ast_node_to_string_buf(ast_pool *, ast_node const *, char *, size_t);
 

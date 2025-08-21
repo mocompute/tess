@@ -27,16 +27,16 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 
 // -- allocation and deallocation --
 
-tokenizer *tokenizer_alloc(mos_allocator *alloc) {
+tokenizer *tokenizer_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(tokenizer));
 }
 
-void tokenizer_dealloc(mos_allocator *alloc, tokenizer **tok) {
+void tokenizer_dealloc(allocator *alloc, tokenizer **tok) {
   alloc->free(alloc, *tok);
   *tok = 0;
 }
 
-int tokenizer_init(mos_allocator *alloc, tokenizer *tok, char const *input, size_t len) {
+int tokenizer_init(allocator *alloc, tokenizer *tok, char const *input, size_t len) {
   tok->input     = input;
   tok->input_len = len;
   tok->pos       = 0;
@@ -46,10 +46,10 @@ int tokenizer_init(mos_allocator *alloc, tokenizer *tok, char const *input, size
   return 0;
 }
 
-void tokenizer_deinit(mos_allocator *alloc, tokenizer *tok) {
+void tokenizer_deinit(allocator *alloc, tokenizer *tok) {
   vec_deinit(alloc, &tok->backtrack);
   vec_deinit(alloc, &tok->buf);
-  mos_alloc_invalidate(tok, sizeof *tok);
+  alloc_invalidate(tok, sizeof *tok);
 }
 
 void tokenizer_error_init(tokenizer_error *err) {
@@ -64,27 +64,27 @@ void tokenizer_error_deinit(tokenizer_error *err) {
 
 // -- parsing --
 
-void replace_token(mos_allocator *alloc, token *tok, token_tag tag) {
+void replace_token(allocator *alloc, token *tok, token_tag tag) {
   token_deinit(alloc, tok);
   token_init(tok, tag);
 }
 
-void replace_token_v(mos_allocator *alloc, token *tok, token_tag tag, uint8_t val) {
+void replace_token_v(allocator *alloc, token *tok, token_tag tag, uint8_t val) {
   token_deinit(alloc, tok);
   token_init_v(tok, tag, val);
 }
 
-void replace_token_s(mos_allocator *alloc, token *tok, token_tag tag, char const *s) {
+void replace_token_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
   token_deinit(alloc, tok);
   token_init_s(alloc, tok, tag, s);
 }
 
-void replace_token_sn(mos_allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
+void replace_token_sn(allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
   token_deinit(alloc, tok);
   token_init_sn(alloc, tok, tag, s, len);
 }
 
-int tokenizer_next(mos_allocator *alloc, tokenizer *self, token *out, tokenizer_error *out_err) {
+int tokenizer_next(allocator *alloc, tokenizer *self, token *out, tokenizer_error *out_err) {
   assert(out);
 
   // support backtracking by parser
@@ -545,7 +545,7 @@ finish:
 
 // -- backtracking --
 
-int tokenizer_put_back(mos_allocator *alloc, tokenizer *self, token const *toks, size_t n_toks) {
+int tokenizer_put_back(allocator *alloc, tokenizer *self, token const *toks, size_t n_toks) {
   for (size_t i = n_toks; i != 0; --i) {
     if (vec_push_back(alloc, &self->backtrack, &toks[i - 1])) return 1;
   }

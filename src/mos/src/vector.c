@@ -8,16 +8,16 @@
 #include <stdint.h>
 #include <string.h>
 
-vec_t *vec_alloc(mos_allocator *alloc) {
+vec_t *vec_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(vec_t));
 }
 
-void vec_dealloc(mos_allocator *alloc, vec_t **p) {
+void vec_dealloc(allocator *alloc, vec_t **p) {
   alloc->free(alloc, *p);
   *p = 0;
 }
 
-int vec_init(mos_allocator *alloc, vec_t *vec, size_t element_size, size_t initial_size) {
+int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_size) {
   assert(element_size <= PTRDIFF_MAX);
   memset(vec, 0, sizeof *vec);
   vec->element_size = element_size;
@@ -33,12 +33,12 @@ int vec_init(mos_allocator *alloc, vec_t *vec, size_t element_size, size_t initi
   return 0;
 }
 
-void vec_deinit(mos_allocator *alloc, vec_t *vec) {
+void vec_deinit(allocator *alloc, vec_t *vec) {
   alloc->free(alloc, vec->data);
-  mos_alloc_invalidate(vec, sizeof *vec);
+  alloc_invalidate(vec, sizeof *vec);
 }
 
-int vec_reserve(mos_allocator *alloc, vec_t *vec, size_t count) {
+int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
 
   if (vec->capacity >= count) return 0;
 
@@ -60,14 +60,14 @@ int vec_reserve(mos_allocator *alloc, vec_t *vec, size_t count) {
 
 void vec_move(vec_t *dst, vec_t *src) {
   memcpy(dst, src, sizeof *dst);
-  mos_alloc_invalidate(src, sizeof *src);
+  alloc_invalidate(src, sizeof *src);
 }
 
 bool vec_empty(vec_t const *vec) {
   return vec->size == 0;
 }
 
-int vec_push_back(mos_allocator *alloc, vec_t *vec, void const *element) {
+int vec_push_back(allocator *alloc, vec_t *vec, void const *element) {
   if (vec_reserve(alloc, vec, vec->size + 1)) {
     dbg("vec_push_back: oom\n");
     return 1;
@@ -77,7 +77,7 @@ int vec_push_back(mos_allocator *alloc, vec_t *vec, void const *element) {
   return 0;
 }
 
-int vec_copy_back(mos_allocator *alloc, vec_t *vec, void const *start, size_t count) {
+int vec_copy_back(allocator *alloc, vec_t *vec, void const *start, size_t count) {
   if (vec_reserve(alloc, vec, vec->size + count)) {
     dbg("vec_copy_back: oom\n");
     return 1;
@@ -108,7 +108,7 @@ void vec_erase(vec_t *vec, char *it) {
   --vec->size;
 }
 
-nodiscard int vec_resize(mos_allocator *alloc, vec_t *vec, size_t n) {
+nodiscard int vec_resize(allocator *alloc, vec_t *vec, size_t n) {
 
   if (n > vec->capacity)
     if (vec_reserve(alloc, vec, n)) {
@@ -150,7 +150,7 @@ size_t vec_capacity(vec_t const *vec) {
   return vec->capacity;
 }
 
-int vec_assoc_set(mos_allocator *alloc, vec_t *vec, void const *pair) {
+int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
   assert(vec->element_size >= sizeof(size_t));
   if (vec_push_back(alloc, vec, pair)) {
     dbg("vec_assoc_set: oom\n");

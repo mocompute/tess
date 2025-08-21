@@ -4,32 +4,32 @@
 #include "nodiscard.h"
 #include <stdlib.h>
 
-typedef struct mos_allocator {
-  void *(*malloc)(struct mos_allocator *, size_t);
-  void *(*calloc)(struct mos_allocator *, size_t num, size_t size);
-  void *(*realloc)(struct mos_allocator *, void *, size_t);
-  void (*free)(struct mos_allocator *, void *);
-} mos_allocator;
+typedef struct allocator {
+  void *(*malloc)(struct allocator *, size_t);
+  void *(*calloc)(struct allocator *, size_t num, size_t size);
+  void *(*realloc)(struct allocator *, void *, size_t);
+  void (*free)(struct allocator *, void *);
+} allocator;
 
 // Return the default allocator: system's malloc/free
-mos_allocator *mos_alloc_default_allocator();
+allocator    *alloc_default_allocator();
 
-mos_allocator *mos_alloc_arena_alloc(mos_allocator *parent);
-mos_allocator *mos_alloc_arena_alloci(mos_allocator *alloc, size_t);
-void           mos_alloc_arena_dealloc(mos_allocator *parent, mos_allocator **arena);
-void           mos_alloc_arena_dealloci(mos_allocator *, mos_allocator **);
-nodiscard int  mos_alloc_arena_init(mos_allocator *, mos_allocator *parent, size_t);
-void           mos_alloc_arena_deinit(mos_allocator *);
+allocator    *alloc_arena_alloc(allocator *parent);
+allocator    *alloc_arena_alloci(allocator *alloc, size_t);
+void          alloc_arena_dealloc(allocator *parent, allocator **arena);
+void          alloc_arena_dealloci(allocator *, allocator **);
+nodiscard int alloc_arena_init(allocator *, allocator *parent, size_t);
+void          alloc_arena_deinit(allocator *);
 
 // -- utilities --
 
-void   mos_alloc_invalidate(void *, size_t);
-void   mos_alloc_assert_invalid(void *, size_t);
+void   alloc_invalidate(void *, size_t);
+void   alloc_assert_invalid(void *, size_t);
 
-char  *mos_alloc_strdup(mos_allocator *, char const *);
-char  *mos_alloc_strndup(mos_allocator *, char const *, size_t);
+char  *alloc_strdup(allocator *, char const *);
+char  *alloc_strndup(allocator *, char const *, size_t);
 
-size_t mos_alloc_next_power_of_two(size_t);
-size_t mos_alloc_align_to_word_size(size_t);
+size_t alloc_next_power_of_two(size_t);
+size_t alloc_align_to_word_size(size_t);
 
 #endif

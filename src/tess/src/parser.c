@@ -12,7 +12,7 @@
 #include <string.h>
 
 struct parser {
-  mos_allocator         *alloc;
+  allocator             *alloc;
   tokenizer             *tokenizer;
   ast_pool              *ast_pool;
 
@@ -27,11 +27,11 @@ struct parser {
 
 // -- allocation and deallocation --
 
-parser *parser_alloc(mos_allocator *alloc) {
+parser *parser_alloc(allocator *alloc) {
   return alloc->malloc(alloc, sizeof(struct parser));
 }
 
-parser *parser_alloci(mos_allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
+parser *parser_alloci(allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
   parser *out = alloc->malloc(alloc, sizeof(struct parser));
   if (!out) return out;
   if (parser_init(alloc, out, pool, input, input_len)) {
@@ -41,18 +41,18 @@ parser *parser_alloci(mos_allocator *alloc, ast_pool *pool, char const *input, s
   return out;
 }
 
-void parser_dealloc(mos_allocator *alloc, parser **p) {
-  mos_alloc_assert_invalid(*p, sizeof *p);
+void parser_dealloc(allocator *alloc, parser **p) {
+  alloc_assert_invalid(*p, sizeof *p);
   alloc->free(alloc, *p);
   *p = NULL;
 }
 
-void parser_dealloci(mos_allocator *alloc, parser **p) {
+void parser_dealloci(allocator *alloc, parser **p) {
   parser_deinit(*p);
   parser_dealloc(alloc, p);
 }
 
-int parser_init(mos_allocator *alloc, parser *p, ast_pool *pool, char const *input, size_t input_len) {
+int parser_init(allocator *alloc, parser *p, ast_pool *pool, char const *input, size_t input_len) {
 
   memset(p, 0, sizeof *p);
   p->alloc    = alloc;
@@ -88,7 +88,7 @@ void parser_deinit(parser *p) {
     tokenizer_dealloc(p->alloc, &p->tokenizer);
   }
 
-  mos_alloc_invalidate(p, sizeof *p);
+  alloc_invalidate(p, sizeof *p);
 }
 
 // -- parser --

@@ -4,11 +4,11 @@
 #include <stdlib.h>
 
 int test_vector(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  allocator *alloc = alloc_default_allocator();
 
-  vec_t         *vec   = vec_alloc(alloc);
+  vec_t     *vec   = vec_alloc(alloc);
   if (vec_init(alloc, vec, sizeof(int), 2)) return error + 1;
 
   error += vec_empty(vec) == 1 ? 0 : 1;
@@ -45,11 +45,11 @@ int test_vector(void) {
 }
 
 int test_assoc(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  allocator *alloc = alloc_default_allocator();
 
-  vec_t         *vec   = vec_alloc(alloc);
+  vec_t     *vec   = vec_alloc(alloc);
   if (vec_init(alloc, vec, 2 * sizeof(size_t), 0)) return error + 1;
 
   size_t pair[2];
@@ -90,11 +90,11 @@ int test_assoc(void) {
 }
 
 int test_assoc_set(void) {
-  int            error = 0;
+  int        error = 0;
 
-  mos_allocator *alloc = mos_alloc_default_allocator();
+  allocator *alloc = alloc_default_allocator();
 
-  vec_t         *vec   = vec_alloc(alloc);
+  vec_t     *vec   = vec_alloc(alloc);
 
   // no payload, just the key
   if (vec_init(alloc, vec, sizeof(size_t), 0)) return error + 1;
