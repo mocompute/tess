@@ -33,8 +33,8 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_c
             dbg("vec_init: oom\n");
             return 1;
         }
+        alloc_zero(vec->data);
         vec->data->capacity = initial_capacity;
-        vec->data->size     = 0;
     }
     return 0;
 }
@@ -54,6 +54,8 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
     if (new_capacity == 0) new_capacity = 8;
     while (new_capacity < count) new_capacity *= 2;
 
+    dbg("vec_reserve: realloc count %zu\n", count);
+    assert(count < 10000000);
     void *p = alloc->realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
     if (!p) {
         dbg("vec_reserve: oom\n");
@@ -170,7 +172,7 @@ int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
 }
 
 char *vec_assoc_get(vec_t *vec, size_t key) {
-    if (vec_empty(vec)) return 0;
+    if (vec_empty(vec)) return NULL;
 
     // From the back, search for an element whose first size_t field
     // matches the search term.
@@ -185,7 +187,7 @@ char *vec_assoc_get(vec_t *vec, size_t key) {
         if (it == last) break; // examined last pair
         it -= element_size;
     }
-    return 0;
+    return NULL;
 }
 
 void vec_assoc_erase(vec_t *vec, size_t key) {
