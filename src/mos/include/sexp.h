@@ -15,14 +15,14 @@
 // -- sexp --
 
 #define MOS_SEXP_BOXED_TAGS(X)                                                                             \
-  X(sexp_boxed_i64, "[signed]")                                                                            \
-  X(sexp_boxed_u64, "[unsigned]")                                                                          \
-  X(sexp_boxed_f64, "[double]")                                                                            \
-  X(sexp_boxed_symbol, "[symbol]")                                                                         \
-  X(sexp_boxed_string, "[string]")                                                                         \
-  X(sexp_boxed_list, "[list]")
+  X(sexp_box_i64, "[signed]")                                                                              \
+  X(sexp_box_u64, "[unsigned]")                                                                            \
+  X(sexp_box_f64, "[double]")                                                                              \
+  X(sexp_box_symbol, "[symbol]")                                                                           \
+  X(sexp_box_string, "[string]")                                                                           \
+  X(sexp_box_list, "[list]")
 
-typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_boxed_tag;
+typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_box_tag;
 
 typedef struct {
   union {
@@ -46,14 +46,14 @@ typedef struct {
     } list;
   };
 
-  sexp_boxed_tag tag;
-} sexp_boxed;
+  sexp_box_tag tag;
+} sexp_box;
 
 typedef struct {
 
   union {
-    sexp_boxed *ptr;
-    int64_t     integer;
+    sexp_box *ptr;
+    int64_t   integer;
   };
 
 } sexp;
@@ -66,16 +66,16 @@ nodiscard int sexp_init_i64(allocator *, sexp *, int64_t);
 nodiscard int sexp_init_u64(allocator *, sexp *, uint64_t);
 nodiscard int sexp_init_f64(allocator *, sexp *, double);
 
-void          sexp_boxed_init_empty(sexp_boxed *);
-void          sexp_boxed_init_move_string(sexp_boxed *, sexp_boxed_tag, string_t *);
-void          sexp_boxed_init_move_list(sexp_boxed *, vec_t *);
-void          sexp_boxed_deinit(allocator *, sexp_boxed *);
+void          sexp_box_init_empty(sexp_box *);
+void          sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
+void          sexp_box_init_move_list(sexp_box *, vec_t *);
+void          sexp_box_deinit(allocator *, sexp_box *);
 
 // -- access --
 
-bool        sexp_is_boxed(sexp);
-int64_t     sexp_unboxed_get(sexp);
-sexp_boxed *sexp_boxed_get(sexp);
+bool      sexp_is_boxed(sexp);
+int64_t   sexp_unboxed_get(sexp);
+sexp_box *sexp_box_get(sexp);
 
 // -- utilities
 

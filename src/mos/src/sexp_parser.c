@@ -439,7 +439,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                 state = error;
                 break;
               }
-              sexp_boxed_init_move_list(sexp_boxed_get(*out), &exprs);
+              sexp_box_init_move_list(sexp_box_get(*out), &exprs);
               state = stop;
             }
 
@@ -477,7 +477,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
         }
 
         if (0 != strcmp("nil", mos_string_str(&tok.s))) {
-          sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_symbol, &tok.s);
+          sexp_box_init_move_string(sexp_box_get(*out), sexp_box_symbol, &tok.s);
         }
         state = stop;
       } break;
@@ -489,7 +489,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
           continue;
         }
 
-        sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_string, &tok.s);
+        sexp_box_init_move_string(sexp_box_get(*out), sexp_box_string, &tok.s);
         state = stop;
       } break;
 

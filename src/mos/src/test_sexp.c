@@ -14,7 +14,7 @@ static int test_sexp_assert(void) {
   assert(sizeof(size_t) == 8);
   assert(sizeof(sexp) == 8);
 
-  assert(offsetof(sexp_boxed, symbol.name) == offsetof(sexp_boxed, string.name));
+  assert(offsetof(sexp_box, symbol.name) == offsetof(sexp_box, string.name));
 
   return 0;
 }

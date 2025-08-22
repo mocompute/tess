@@ -17,32 +17,32 @@ int64_t sexp_unboxed_get(sexp self) {
   return self.integer >> 1;
 }
 
-sexp_boxed *sexp_boxed_get(sexp self) {
+sexp_box *sexp_box_get(sexp self) {
   return self.ptr;
 }
 
-void sexp_boxed_init_empty(sexp_boxed *self) {
+void sexp_box_init_empty(sexp_box *self) {
   alloc_zero(self);
-  self->tag = sexp_boxed_list;
+  self->tag = sexp_box_list;
   vec_init_empty(&self->list.list, sizeof(sexp));
 }
 
-void sexp_boxed_init_move_string(sexp_boxed *self, sexp_boxed_tag tag, string_t *src) {
+void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) {
   self->tag = tag;
   mos_string_move(&self->symbol.name, src);
 }
 
-void sexp_boxed_init_move_list(sexp_boxed *self, vec_t *src) {
-  self->tag = sexp_boxed_list;
+void sexp_box_init_move_list(sexp_box *self, vec_t *src) {
+  self->tag = sexp_box_list;
   vec_move(&self->list.list, src);
 }
 
 int sexp_init_boxed(allocator *alloc, sexp *self) {
   alloc_zero(self);
-  self->ptr = alloc->malloc(alloc, sizeof(sexp_boxed));
+  self->ptr = alloc->malloc(alloc, sizeof(sexp_box));
   if (NULL == self->ptr) return 1;
 
-  sexp_boxed_init_empty(self->ptr);
+  sexp_box_init_empty(self->ptr);
 
   return 0;
 }
@@ -52,37 +52,37 @@ int sexp_init_i64(allocator *alloc, sexp *self, int64_t val) {
     sexp_init_unboxed(self, val);
   } else {
     if (sexp_init_boxed(alloc, self)) return 1;
-    sexp_boxed *box = sexp_boxed_get(*self);
-    box->tag        = sexp_boxed_i64;
-    box->i64.val    = val;
+    sexp_box *box = sexp_box_get(*self);
+    box->tag      = sexp_box_i64;
+    box->i64.val  = val;
   }
   return 0;
 }
 
 int sexp_init_u64(allocator *alloc, sexp *self, uint64_t val) {
   if (sexp_init_boxed(alloc, self)) return 1;
-  sexp_boxed *box = sexp_boxed_get(*self);
-  box->tag        = sexp_boxed_u64;
-  box->u64.val    = val;
+  sexp_box *box = sexp_box_get(*self);
+  box->tag      = sexp_box_u64;
+  box->u64.val  = val;
   return 0;
 }
 
 int sexp_init_f64(allocator *alloc, sexp *self, double val) {
   if (sexp_init_boxed(alloc, self)) return 1;
-  sexp_boxed *box = sexp_boxed_get(*self);
-  box->tag        = sexp_boxed_f64;
-  box->f64.val    = val;
+  sexp_box *box = sexp_box_get(*self);
+  box->tag      = sexp_box_f64;
+  box->f64.val  = val;
   return 0;
 }
 
-void sexp_boxed_deinit(allocator *alloc, sexp_boxed *self) {
+void sexp_box_deinit(allocator *alloc, sexp_box *self) {
   switch (self->tag) {
-  case sexp_boxed_i64:
-  case sexp_boxed_u64:
-  case sexp_boxed_f64:    break;
-  case sexp_boxed_symbol:
-  case sexp_boxed_string: mos_string_deinit(alloc, &self->symbol.name); break;
-  case sexp_boxed_list:   vec_deinit(alloc, &self->list.list); break;
+  case sexp_box_i64:
+  case sexp_box_u64:
+  case sexp_box_f64:    break;
+  case sexp_box_symbol:
+  case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
+  case sexp_box_list:   vec_deinit(alloc, &self->list.list); break;
   }
 
   alloc_invalidate(self);
@@ -134,16 +134,16 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
   } while (0)
 
   if (!sexp_is_boxed(*node)) return snprintf(buf, sz, "%" PRId64, sexp_unboxed_get(*node));
-  sexp_boxed *box = sexp_boxed_get(*node);
+  sexp_box *box = sexp_box_get(*node);
 
   switch (box->tag) {
-  case sexp_boxed_i64:    return snprintf(buf, sz, "%" PRId64, box->i64.val);
-  case sexp_boxed_u64:    return snprintf(buf, sz, "%" PRIu64, box->u64.val);
-  case sexp_boxed_f64:    return snprintf(buf, sz, "%f", box->f64.val);
-  case sexp_boxed_symbol: return snprintf(buf, sz, "%s", mos_string_str(&box->symbol.name));
-  case sexp_boxed_string: return snprintf(buf, sz, "\"%s\"", mos_string_str(&box->symbol.name));
+  case sexp_box_i64:    return snprintf(buf, sz, "%" PRId64, box->i64.val);
+  case sexp_box_u64:    return snprintf(buf, sz, "%" PRIu64, box->u64.val);
+  case sexp_box_f64:    return snprintf(buf, sz, "%f", box->f64.val);
+  case sexp_box_symbol: return snprintf(buf, sz, "%s", mos_string_str(&box->symbol.name));
+  case sexp_box_string: return snprintf(buf, sz, "\"%s\"", mos_string_str(&box->symbol.name));
 
-  case sexp_boxed_list:   {
+  case sexp_box_list:   {
     do_print_init();
     do_print_literal("(");
     do_print_list(box->list.list);
