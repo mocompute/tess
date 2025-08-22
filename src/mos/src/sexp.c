@@ -45,6 +45,34 @@ int sexp_init_boxed(allocator *alloc, sexp *self) {
   return 0;
 }
 
+int sexp_init_i64(allocator *alloc, sexp *self, int64_t val) {
+  if (val >= SEXP_MIN_UNBOXED_INT && val <= SEXP_MAX_UNBOXED_INT) {
+    sexp_init_unboxed(self, val);
+  } else {
+    if (sexp_init_boxed(alloc, self)) return 1;
+    sexp_boxed *box = sexp_boxed_get(*self);
+    box->tag        = sexp_boxed_i64;
+    box->i64.val    = val;
+  }
+  return 0;
+}
+
+int sexp_init_u64(allocator *alloc, sexp *self, uint64_t val) {
+  if (sexp_init_boxed(alloc, self)) return 1;
+  sexp_boxed *box = sexp_boxed_get(*self);
+  box->tag        = sexp_boxed_u64;
+  box->u64.val    = val;
+  return 0;
+}
+
+int sexp_init_f64(allocator *alloc, sexp *self, double val) {
+  if (sexp_init_boxed(alloc, self)) return 1;
+  sexp_boxed *box = sexp_boxed_get(*self);
+  box->tag        = sexp_boxed_f64;
+  box->f64.val    = val;
+  return 0;
+}
+
 void sexp_boxed_deinit(allocator *alloc, sexp_boxed *self) {
   switch (self->tag) {
   case sexp_boxed_i64:

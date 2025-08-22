@@ -1,9 +1,10 @@
 #include "parser.h"
-#include "ast.h"
-#include "token.h"
-#include "tokenizer.h"
 
 #include "alloc.h"
+#include "ast.h"
+#include "mos_string.h"
+#include "token.h"
+#include "tokenizer.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -373,34 +374,15 @@ static int a_string(parser *p) {
 }
 
 static int string_to_number(parser *parser, char const *const in) {
-  errno                 = 0;
-  ptrdiff_t const len   = (ptrdiff_t)strlen(in);
-
-  char           *p_end = 0;
-  long long int   i     = strtoll(in, &p_end, 10);
-  if (p_end - in == len && !errno) {
-    return result_ast_i64(parser, i);
-
-  } else {
-
-    errno                = 0;
-    p_end                = 0;
-    unsigned long long u = strtoull(in, &p_end, 10);
-    if (p_end - in == len && !errno) {
-      return result_ast_u64(parser, u);
-
-    } else {
-
-      errno    = 0;
-      p_end    = 0;
-      double d = strtod(in, &p_end);
-      if (p_end - in == len && !errno) {
-        return result_ast_f64(parser, d);
-      }
-    }
+  int64_t  i;
+  uint64_t u;
+  double   d;
+  switch (mos_string_parse_number(in, &i, &u, &d)) {
+  case 1:  return result_ast_i64(parser, i);
+  case 2:  return result_ast_u64(parser, u);
+  case 3:  return result_ast_f64(parser, d);
+  default: return 1;
   }
-
-  return 1;
 }
 
 static int a_number(parser *p) {

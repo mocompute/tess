@@ -22,6 +22,7 @@ set(SOURCES
   src/map.c
   src/mos_string.c
   src/sexp.c
+  src/sexp_parser.c
   src/vector.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})

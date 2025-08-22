@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "mos_string.h"
+#include "nodiscard.h"
 #include "util.h"
 #include "vector.h"
 
@@ -60,13 +61,16 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-void sexp_init_unboxed(sexp *, int64_t);
-int  sexp_init_boxed(allocator *, sexp *);
+void          sexp_init_unboxed(sexp *, int64_t);
+nodiscard int sexp_init_boxed(allocator *, sexp *);
+nodiscard int sexp_init_i64(allocator *, sexp *, int64_t);
+nodiscard int sexp_init_u64(allocator *, sexp *, uint64_t);
+nodiscard int sexp_init_f64(allocator *, sexp *, double);
 
-void sexp_boxed_init_empty(sexp_boxed *);
-void sexp_boxed_init_move_string(sexp_boxed *, sexp_boxed_tag, string_t *);
-void sexp_boxed_init_move_list(sexp_boxed *, vec_t *);
-void sexp_boxed_deinit(allocator *, sexp_boxed *);
+void          sexp_boxed_init_empty(sexp_boxed *);
+void          sexp_boxed_init_move_string(sexp_boxed *, sexp_boxed_tag, string_t *);
+void          sexp_boxed_init_move_list(sexp_boxed *, vec_t *);
+void          sexp_boxed_deinit(allocator *, sexp_boxed *);
 
 // -- access --
 

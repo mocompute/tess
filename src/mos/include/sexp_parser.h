@@ -16,7 +16,6 @@
   X(sexp_tok_number, "number")                                                                             \
   X(sexp_tok_string, "string")                                                                             \
   X(sexp_tok_symbol, "symbol")                                                                             \
-  X(sexp_tok_single_quote, "single-quote")                                                                 \
   X(sexp_tok_comment, "comment")
 
 typedef enum { MOS_SEXP_TOKEN_TAGS(MOS_TAG_NAME) } sexp_token_tag;

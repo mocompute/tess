@@ -37,4 +37,7 @@ char const *mos_string_str(string_t const *);
 
 bool mos_string_is_allocated(string_t const *);
 
+int  mos_string_parse_number(char const *, int64_t *, uint64_t *, double *);
+// Returns: 0, 1, 2, 3
+
 #endif

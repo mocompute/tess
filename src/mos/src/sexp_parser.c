@@ -1,5 +1,5 @@
 #include "sexp_parser.h"
-#include "sexp_token.h"
+#include "mos_string.h"
 
 #include "alloc.h"
 #include "sexp.h"
@@ -91,11 +91,6 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
 
       case ')':
         sexp_token_init(out, sexp_tok_close_round);
-        state = stop;
-        break;
-
-      case '\'':
-        sexp_token_init(out, sexp_tok_single_quote);
         state = stop;
         break;
 
@@ -374,12 +369,11 @@ nodiscard int sexp_token_init_str(allocator *alloc, sexp_token *self, sexp_token
 void sexp_token_deinit(allocator *alloc, sexp_token *self) {
   switch (self->tag) {
   case sexp_tok_open_round:
-  case sexp_tok_close_round:
-  case sexp_tok_single_quote: break;
+  case sexp_tok_close_round: break;
   case sexp_tok_number:
   case sexp_tok_string:
   case sexp_tok_symbol:
-  case sexp_tok_comment:      mos_string_deinit(alloc, &self->s); break;
+  case sexp_tok_comment:     mos_string_deinit(alloc, &self->s); break;
   }
 
   alloc_invalidate(self);
@@ -441,7 +435,11 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             // error
 
             if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
-              sexp_init_boxed(self->alloc, out);
+              if (sexp_init_boxed(self->alloc, out)) {
+                *err  = sexp_tok_err_oom;
+                state = error;
+                break;
+              }
               sexp_boxed_init_move_list(sexp_boxed_get(*out), &exprs);
               state = stop;
               break;
@@ -460,7 +458,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
               break;
             }
           }
-        }
+        } // while sub_expr
 
       } break;
 
@@ -473,40 +471,72 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
       case sexp_tok_symbol: {
 
-        if (0 == strcmp("nil", mos_string_str(&tok.s))) {
-          sexp_init_boxed(self->alloc, out);
-        } else {
-          sexp_init_boxed(self->alloc, out);
-          sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_symbol, &tok.s);
+        if (sexp_init_boxed(self->alloc, out)) {
+          *err  = sexp_tok_err_oom;
+          state = error;
+          continue;
         }
 
+        if (0 != strcmp("nil", mos_string_str(&tok.s))) {
+          sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_symbol, &tok.s);
+        }
         state = stop;
       } break;
 
-      case string_: {
-        auto tok_str = get<token::string>(tok.value());
-        res          = env.loader().str(std::move(tok_str.s));
-        state        = stop;
+      case sexp_tok_string: {
+        if (sexp_init_boxed(self->alloc, out)) {
+          *err  = sexp_tok_err_oom;
+          state = error;
+          continue;
+        }
+
+        sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_string, &tok.s);
+        state = stop;
       } break;
 
-      case number_: {
-        auto tok_num = get<token::number>(tok.value());
+      case sexp_tok_number: {
+        int64_t  xi;
+        uint64_t xu;
+        double   xd;
+        switch (mos_string_parse_number(mos_string_str(&tok.s), &xi, &xu, &xd)) {
+        case 1:
+          if (sexp_init_i64(self->alloc, out, xi)) {
+            *err  = sexp_tok_err_oom;
+            state = error;
+            continue;
+          }
+          break;
 
-        if (auto num = env.loader().make_num(tok_num.s)) {
-          res   = *num;
-          state = stop;
-        } else {
-          err   = number_error{{tok_num.s, mr}};
+        case 2:
+          if (sexp_init_u64(self->alloc, out, xu)) {
+            *err  = sexp_tok_err_oom;
+            state = error;
+            continue;
+          }
+          break;
+
+        case 3:
+          if (sexp_init_f64(self->alloc, out, xd)) {
+            *err  = sexp_tok_err_oom;
+            state = error;
+            continue;
+          }
+          break;
+
+        default:
+          *err  = sexp_tok_err_number;
           state = error;
+          continue;
         }
 
       } break;
-      case comment_:
+
+      case sexp_tok_comment:
         // ignored
         break;
       default: {
         assert(false);
-        std::unreachable();
+
       } break;
       }
     } break;
@@ -517,10 +547,11 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
   }
 
 finish:
-  if (stop == state) return res;
-  else if (error == state) return std::unexpected(err);
+  if (stop == state) return 0;
+  else if (error == state) return 1;
   else {
     assert(false);
-    std::unreachable();
+    *err = sexp_tok_err_unexpected_error;
+    return 1;
   }
 }

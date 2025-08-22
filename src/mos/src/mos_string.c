@@ -3,6 +3,8 @@
 #include "alloc.h"
 
 #include <assert.h>
+#include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -65,4 +67,40 @@ char const *mos_string_str(string_t const *s) {
 
 bool mos_string_is_allocated(string_t const *s) {
   return s->small.tag == 1;
+}
+
+int mos_string_parse_number(char const *in, int64_t *i64, uint64_t *u64, double *f64) {
+  // Returns: 0, 1, 2, 3
+
+  errno                 = 0;
+  ptrdiff_t const len   = (ptrdiff_t)strlen(in);
+
+  char           *p_end = 0;
+  long long int   i     = strtoll(in, &p_end, 10);
+  if (p_end - in == len && !errno) {
+    *i64 = i;
+    return 1;
+
+  } else {
+
+    errno                = 0;
+    p_end                = 0;
+    unsigned long long u = strtoull(in, &p_end, 10);
+    if (p_end - in == len && !errno) {
+      *u64 = u;
+      return 2;
+
+    } else {
+
+      errno    = 0;
+      p_end    = 0;
+      double d = strtod(in, &p_end);
+      if (p_end - in == len && !errno) {
+        *f64 = d;
+        return 3;
+      }
+    }
+  }
+
+  return 0;
 }
