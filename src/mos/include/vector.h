@@ -13,10 +13,10 @@
 // [clear] to set the size to zero. Prefer to use vec_move instead if
 // possible.
 typedef struct vec {
-  size_t element_size;
-  size_t capacity;
-  size_t size;
-  char  *data;
+    size_t element_size;
+    size_t capacity;
+    size_t size;
+    char  *data;
 } vec_t;
 
 // -- allocation and deallocation --

@@ -6,22 +6,22 @@
 #include <string.h>
 
 typedef struct allocator {
-  void *(*malloc)(struct allocator *, size_t);
-  void *(*calloc)(struct allocator *, size_t num, size_t size);
-  void *(*realloc)(struct allocator *, void *, size_t);
-  void (*free)(struct allocator *, void *);
+    void *(*malloc)(struct allocator *, size_t);
+    void *(*calloc)(struct allocator *, size_t num, size_t size);
+    void *(*realloc)(struct allocator *, void *, size_t);
+    void (*free)(struct allocator *, void *);
 } allocator;
 
 typedef struct arena_header {
-  struct arena_header *next;
-  size_t               capacity;
-  size_t               size;
+    struct arena_header *next;
+    size_t               capacity;
+    size_t               size;
 } arena_header;
 
 typedef struct arena_allocator {
-  struct allocator allocator;
-  allocator       *parent;
-  arena_header    *head;
+    struct allocator allocator;
+    allocator       *parent;
+    arena_header    *head;
 } arena_allocator;
 
 // Return the default allocator: system's malloc/free

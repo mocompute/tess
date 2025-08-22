@@ -8,16 +8,16 @@
 #define MOS_STRING_MAX_SMALL_LEN 14
 
 typedef struct {
-  union {
-    struct {
-      char *buf;
-      char  pad[8];
-    } allocated;
-    struct {
-      char data[MOS_STRING_MAX_SMALL_LEN + 1];
-      char tag;
-    } small;
-  };
+    union {
+        struct {
+            char *buf;
+            char  pad[8];
+        } allocated;
+        struct {
+            char data[MOS_STRING_MAX_SMALL_LEN + 1];
+            char tag;
+        } small;
+    };
 } string_t;
 
 // -- allocation and deallocation --

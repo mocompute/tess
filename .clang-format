@@ -4,7 +4,7 @@ BasedOnStyle: LLVM
 Language: Cpp
 Standard: Latest
 LineEnding: LF
-IndentWidth: 2
+IndentWidth: 4
 ColumnLimit: 108
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 2

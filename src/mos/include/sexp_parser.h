@@ -11,49 +11,49 @@
 // -- token --
 
 #define MOS_SEXP_TOKEN_TAGS(X)                                                                             \
-  X(sexp_tok_open_round, "open-round")                                                                     \
-  X(sexp_tok_close_round, "close-round")                                                                   \
-  X(sexp_tok_number, "number")                                                                             \
-  X(sexp_tok_string, "string")                                                                             \
-  X(sexp_tok_symbol, "symbol")                                                                             \
-  X(sexp_tok_comment, "comment")
+    X(sexp_tok_open_round, "open-round")                                                                   \
+    X(sexp_tok_close_round, "close-round")                                                                 \
+    X(sexp_tok_number, "number")                                                                           \
+    X(sexp_tok_string, "string")                                                                           \
+    X(sexp_tok_symbol, "symbol")                                                                           \
+    X(sexp_tok_comment, "comment")
 
 typedef enum { MOS_SEXP_TOKEN_TAGS(MOS_TAG_NAME) } sexp_token_tag;
 
 #define MOS_SEXP_ERR_TAGS(X)                                                                               \
-  X(sexp_tok_err_eof, "eof")                                                                               \
-  X(sexp_tok_err_oom, "oom")                                                                               \
-  X(sexp_tok_err_invalid_token, "invalid_token")                                                           \
-  X(sexp_tok_err_unexpected_error, "unexpected_error")                                                     \
-  X(sexp_tok_err_close_round, "close_round")                                                               \
-  X(sexp_tok_err_number, "number")
+    X(sexp_tok_err_eof, "eof")                                                                             \
+    X(sexp_tok_err_oom, "oom")                                                                             \
+    X(sexp_tok_err_invalid_token, "invalid_token")                                                         \
+    X(sexp_tok_err_unexpected_error, "unexpected_error")                                                   \
+    X(sexp_tok_err_close_round, "close_round")                                                             \
+    X(sexp_tok_err_number, "number")
 
 typedef enum { MOS_SEXP_ERR_TAGS(MOS_TAG_NAME) } sexp_err_tag;
 
 typedef struct {
-  string_t       s;
-  sexp_token_tag tag;
+    string_t       s;
+    sexp_token_tag tag;
 } sexp_token;
 
 // -- tokenizer --
 
 typedef struct {
-  allocator  *alloc;
+    allocator  *alloc;
 
-  char const *input;
-  size_t      input_len;
+    char const *input;
+    size_t      input_len;
 
-  char       *buf;
-  size_t      buf_len;
-  size_t      pos;
+    char       *buf;
+    size_t      buf_len;
+    size_t      pos;
 
 } sexp_tokenizer;
 
 // -- parser --
 
 typedef struct {
-  allocator      *alloc;
-  sexp_tokenizer *tokenizer;
+    allocator      *alloc;
+    sexp_tokenizer *tokenizer;
 } sexp_parser;
 
 // -- allocation and deallocation --

@@ -15,46 +15,46 @@
 // -- sexp --
 
 #define MOS_SEXP_BOXED_TAGS(X)                                                                             \
-  X(sexp_box_i64, "[signed]")                                                                              \
-  X(sexp_box_u64, "[unsigned]")                                                                            \
-  X(sexp_box_f64, "[double]")                                                                              \
-  X(sexp_box_symbol, "[symbol]")                                                                           \
-  X(sexp_box_string, "[string]")                                                                           \
-  X(sexp_box_list, "[list]")
+    X(sexp_box_i64, "[signed]")                                                                            \
+    X(sexp_box_u64, "[unsigned]")                                                                          \
+    X(sexp_box_f64, "[double]")                                                                            \
+    X(sexp_box_symbol, "[symbol]")                                                                         \
+    X(sexp_box_string, "[string]")                                                                         \
+    X(sexp_box_list, "[list]")
 
 typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_box_tag;
 
 typedef struct {
-  union {
-    struct {
-      int64_t val;
-    } i64;
-    struct {
-      uint64_t val;
-    } u64;
-    struct {
-      double val;
-    } f64;
-    struct {
-      string_t name;
-    } symbol;
-    struct {
-      string_t name;
-    } string;
-    struct {
-      vec_t list;
-    } list;
-  };
+    union {
+        struct {
+            int64_t val;
+        } i64;
+        struct {
+            uint64_t val;
+        } u64;
+        struct {
+            double val;
+        } f64;
+        struct {
+            string_t name;
+        } symbol;
+        struct {
+            string_t name;
+        } string;
+        struct {
+            vec_t list;
+        } list;
+    };
 
-  sexp_box_tag tag;
+    sexp_box_tag tag;
 } sexp_box;
 
 typedef struct {
 
-  union {
-    sexp_box *ptr;
-    int64_t   integer;
-  };
+    union {
+        sexp_box *ptr;
+        int64_t   integer;
+    };
 
 } sexp;
 
