@@ -19,13 +19,15 @@
 
 typedef enum { MOS_SEXP_TOKEN_TAGS(MOS_TAG_NAME) } sexp_token_tag;
 
-#define MOS_SEXP_TOKENIZER_ERR_TAGS(X)                                                                     \
+#define MOS_SEXP_ERR_TAGS(X)                                                                               \
   X(sexp_tok_err_eof, "eof")                                                                               \
   X(sexp_tok_err_oom, "oom")                                                                               \
   X(sexp_tok_err_invalid_token, "invalid_token")                                                           \
-  X(sexp_tok_err_unexpected_error, "unexpected_error")
+  X(sexp_tok_err_unexpected_error, "unexpected_error")                                                     \
+  X(sexp_tok_err_close_round, "close_round")                                                               \
+  X(sexp_tok_err_number, "number")
 
-typedef enum { MOS_SEXP_TOKENIZER_ERR_TAGS(MOS_TAG_NAME) } sexp_tokenizer_err_tag;
+typedef enum { MOS_SEXP_ERR_TAGS(MOS_TAG_NAME) } sexp_err_tag;
 
 typedef struct {
   char          *s;
@@ -46,19 +48,31 @@ typedef struct {
 
 } sexp_tokenizer;
 
+// -- parser --
+
+typedef struct {
+  allocator      *alloc;
+  sexp_tokenizer *tokenizer;
+} sexp_parser;
+
 // -- allocation and deallocation --
 
 nodiscard int sexp_tokenizer_init(allocator *, sexp_tokenizer *, char const *, size_t);
 void          sexp_tokenizer_deinit(sexp_tokenizer *);
 
+nodiscard int sexp_parser_init(allocator *, sexp_parser *, char const *, size_t);
+void          sexp_parser_deinit(sexp_parser *);
+
 void          sexp_token_init(sexp_token *, sexp_token_tag);
 nodiscard int sexp_token_init_str(allocator *, sexp_token *, sexp_token_tag, char const *, size_t);
 void          sexp_token_deinit(allocator *, sexp_token *);
 
-// -- tokenizer --
+// -- tokenizer operations --
 
-int sexp_tokenizer_next(sexp_tokenizer *, sexp_token *, sexp_tokenizer_err_tag *, size_t *err_pos);
+int sexp_tokenizer_next(sexp_tokenizer *, sexp_token *, sexp_err_tag *, size_t *err_pos);
 
-// -- parser --
+// -- parser operations --
+
+int sexp_parser_next(sexp_parser *self);
 
 #endif
