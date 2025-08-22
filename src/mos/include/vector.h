@@ -23,6 +23,7 @@ typedef struct vec {
 
 vec_t        *vec_alloc(allocator *);
 void          vec_dealloc(allocator *, vec_t **);
+void          vec_init_empty(vec_t *, size_t element_size);
 nodiscard int vec_init(allocator *, vec_t *, size_t element_size, size_t initial_size);
 void          vec_deinit(allocator *, vec_t *);
 nodiscard int vec_reserve(allocator *, vec_t *, size_t);

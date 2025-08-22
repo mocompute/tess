@@ -17,6 +17,11 @@ void vec_dealloc(allocator *alloc, vec_t **p) {
   *p = 0;
 }
 
+void vec_init_empty(vec_t *vec, size_t element_size) {
+  alloc_zero(vec);
+  vec->element_size = element_size;
+}
+
 int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_size) {
   assert(element_size <= PTRDIFF_MAX);
   alloc_zero(vec);

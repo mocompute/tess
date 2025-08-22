@@ -3,13 +3,21 @@
 #include "alloc.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <string.h>
 
-int mos_string_init(allocator *alloc, string_t *s, char const *src) {
+void mos_string_init_empty(string_t *s) {
+  alloc_zero(s);
+  s->small.tag = 1;
+}
+
+int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max) {
   assert(8 == sizeof(char *));
   assert(16 == sizeof(string_t));
 
   size_t len = strlen(src);
+  if (len > max) len = max;
+
   if (len == 0) {
     s->small.data[0] = '\0';
     s->small.tag     = 0;
@@ -29,6 +37,10 @@ int mos_string_init(allocator *alloc, string_t *s, char const *src) {
   if (NULL == s->allocated.buf) return 1;
 
   return 0;
+}
+
+int mos_string_init(allocator *alloc, string_t *s, char const *src) {
+  return mos_string_init_n(alloc, s, src, SIZE_MAX);
 }
 
 void mos_string_deinit(allocator *alloc, string_t *s) {

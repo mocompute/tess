@@ -60,15 +60,17 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-void          sexp_init_unboxed(sexp *, int64_t);
+void sexp_init_unboxed(sexp *, int64_t);
+int  sexp_init_boxed(allocator *, sexp *);
 
-nodiscard int sexp_boxed_init(allocator *, sexp_boxed_tag tag);
-void          sexp_boxed_init_move_string(sexp_boxed *, sexp_boxed_tag, string_t *);
-void          sexp_boxed_init_move_list(sexp_boxed *, vec_t *);
-void          sexp_boxed_deinit(allocator *, sexp_boxed *);
+void sexp_boxed_init_empty(sexp_boxed *);
+void sexp_boxed_init_move_string(sexp_boxed *, sexp_boxed_tag, string_t *);
+void sexp_boxed_init_move_list(sexp_boxed *, vec_t *);
+void sexp_boxed_deinit(allocator *, sexp_boxed *);
 
 // -- access --
 
-int64_t sexp_unboxed_get(sexp const *);
+int64_t     sexp_unboxed_get(sexp);
+sexp_boxed *sexp_boxed_get(sexp);
 
 #endif

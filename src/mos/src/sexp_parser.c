@@ -1,5 +1,9 @@
 #include "sexp_parser.h"
+#include "sexp_token.h"
+
 #include "alloc.h"
+#include "sexp.h"
+#include "vector.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -27,8 +31,7 @@ void sexp_tokenizer_deinit(sexp_tokenizer *t) {
   alloc_invalidate(t);
 }
 
-int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_tokenizer_err_tag *err,
-                        size_t *err_pos) {
+int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err, size_t *err_pos) {
   // state machine
   enum {
     start,
@@ -352,8 +355,9 @@ finish:
 
 // -- token --
 void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
-  self->s   = NULL;
+  alloc_zero(self);
   self->tag = tag;
+  mos_string_init_empty(&self->s);
 }
 
 // -- token --
@@ -361,9 +365,7 @@ void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
 nodiscard int sexp_token_init_str(allocator *alloc, sexp_token *self, sexp_token_tag tag, char const *src,
                                   size_t len) {
 
-  self->s = alloc_strndup(alloc, src, len);
-  if (NULL == self->s) return 1;
-
+  if (mos_string_init_n(alloc, &self->s, src, len)) return 1;
   self->tag = tag;
 
   return 0;
@@ -377,7 +379,7 @@ void sexp_token_deinit(allocator *alloc, sexp_token *self) {
   case sexp_tok_number:
   case sexp_tok_string:
   case sexp_tok_symbol:
-  case sexp_tok_comment:      alloc->free(alloc, self->s); break;
+  case sexp_tok_comment:      mos_string_deinit(alloc, &self->s); break;
   }
 
   alloc_invalidate(self);
@@ -405,5 +407,120 @@ void sexp_parser_deinit(sexp_parser *self) {
   alloc_invalidate(self);
 }
 
-int sexp_parser_next(sexp_parser *self) {
+int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *err_loc) {
+
+  enum { start, error, stop } state = start;
+
+  while (true) {
+    switch (state) {
+
+    case start: {
+      sexp_token tok;
+
+      if (sexp_tokenizer_next(self->tokenizer, &tok, err, err_loc)) {
+        state = error;
+        continue;
+      }
+
+      switch (tok.tag) {
+
+      case sexp_tok_open_round: {
+        // this state loops recursively until close_round, error or eof
+
+        vec_t exprs;
+        if (vec_init(self->alloc, &exprs, sizeof(sexp), 2)) {
+          *err  = sexp_tok_err_oom;
+          state = error;
+          continue;
+        }
+
+        while (true) {
+
+          sexp sub_expr;
+          if (sexp_parser_next(self, &sub_expr, err, err_loc)) {
+            // error
+
+            if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
+              sexp_init_boxed(self->alloc, out);
+              sexp_boxed_init_move_list(sexp_boxed_get(*out), &exprs);
+              state = stop;
+              break;
+            }
+
+            else {
+              state = error;
+              break;
+            }
+
+          } else {
+            // append to list
+            if (vec_push_back(self->alloc, &exprs, &sub_expr)) {
+              *err  = sexp_tok_err_oom;
+              state = error;
+              break;
+            }
+          }
+        }
+
+      } break;
+
+      case sexp_tok_close_round: {
+        *err  = sexp_tok_err_close_round;
+        state = error;
+        // it may seem strange to use error to signal close_round, but
+        // this is what stops the recursion in the open_round state.
+      } break;
+
+      case sexp_tok_symbol: {
+
+        if (0 == strcmp("nil", mos_string_str(&tok.s))) {
+          sexp_init_boxed(self->alloc, out);
+        } else {
+          sexp_init_boxed(self->alloc, out);
+          sexp_boxed_init_move_string(sexp_boxed_get(*out), sexp_boxed_symbol, &tok.s);
+        }
+
+        state = stop;
+      } break;
+
+      case string_: {
+        auto tok_str = get<token::string>(tok.value());
+        res          = env.loader().str(std::move(tok_str.s));
+        state        = stop;
+      } break;
+
+      case number_: {
+        auto tok_num = get<token::number>(tok.value());
+
+        if (auto num = env.loader().make_num(tok_num.s)) {
+          res   = *num;
+          state = stop;
+        } else {
+          err   = number_error{{tok_num.s, mr}};
+          state = error;
+        }
+
+      } break;
+      case comment_:
+        // ignored
+        break;
+      default: {
+        assert(false);
+        std::unreachable();
+      } break;
+      }
+    } break;
+
+    case stop:
+    case error: goto finish; break;
+    }
+  }
+
+finish:
+  if (stop == state) return res;
+  else if (error == state) return std::unexpected(err);
+  else {
+    assert(false);
+    std::unreachable();
+  }
 }

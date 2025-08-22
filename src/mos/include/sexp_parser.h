@@ -2,6 +2,8 @@
 #define MOS_SEXP_PARSER_H
 
 #include "alloc.h"
+#include "mos_string.h"
+#include "sexp.h"
 #include "util.h"
 
 #include <stddef.h>
@@ -30,7 +32,7 @@ typedef enum { MOS_SEXP_TOKEN_TAGS(MOS_TAG_NAME) } sexp_token_tag;
 typedef enum { MOS_SEXP_ERR_TAGS(MOS_TAG_NAME) } sexp_err_tag;
 
 typedef struct {
-  char          *s;
+  string_t       s;
   sexp_token_tag tag;
 } sexp_token;
 
@@ -69,10 +71,10 @@ void          sexp_token_deinit(allocator *, sexp_token *);
 
 // -- tokenizer operations --
 
-int sexp_tokenizer_next(sexp_tokenizer *, sexp_token *, sexp_err_tag *, size_t *err_pos);
+nodiscard int sexp_tokenizer_next(sexp_tokenizer *, sexp_token *, sexp_err_tag *, size_t *);
 
 // -- parser operations --
 
-int sexp_parser_next(sexp_parser *self);
+nodiscard int sexp_parser_next(sexp_parser *, sexp *, sexp_err_tag *, size_t *);
 
 #endif
