@@ -248,7 +248,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 void alloc_invalidate_n(void *p, size_t len) {
 #ifndef NDEBUG
   while (len--) {
-    if ((intptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;
+    if ((uintptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;
     else *(unsigned char *)p = 0xad;
     ++p;
   }
@@ -260,7 +260,7 @@ void alloc_invalidate_n(void *p, size_t len) {
 void alloc_assert_invalid(void *p, size_t len) {
 #ifndef NDEBUG
   while (len--) {
-    if ((intptr_t)p % 2 == 0) assert(*(unsigned char *)p == 0xde);
+    if ((uintptr_t)p % 2 == 0) assert(*(unsigned char *)p == 0xde);
     else assert(*(unsigned char *)p == 0xad);
     ++p;
   }
