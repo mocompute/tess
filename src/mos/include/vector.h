@@ -12,11 +12,16 @@
 // set to 0 in certain situations. In that case, client must call
 // [clear] to set the size to zero. Prefer to use vec_move instead if
 // possible.
-typedef struct vec {
-    size_t element_size;
+
+typedef struct {
     size_t capacity;
     size_t size;
-    char  *data;
+    char   data[];
+} vec_data_header;
+
+typedef struct vec {
+    size_t           element_size;
+    vec_data_header *data;
 } vec_t;
 
 // -- allocation and deallocation --
@@ -24,7 +29,7 @@ typedef struct vec {
 vec_t        *vec_alloc(allocator *);
 void          vec_dealloc(allocator *, vec_t **);
 void          vec_init_empty(vec_t *, size_t element_size);
-nodiscard int vec_init(allocator *, vec_t *, size_t element_size, size_t initial_size);
+nodiscard int vec_init(allocator *, vec_t *, size_t element_size, size_t initial_capacity);
 void          vec_deinit(allocator *, vec_t *);
 nodiscard int vec_reserve(allocator *, vec_t *, size_t);
 void          vec_move(vec_t *dst, vec_t *src);

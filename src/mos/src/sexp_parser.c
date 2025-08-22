@@ -317,6 +317,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
         } break;
 
         case stop_string: {
+            self->buf[self->buf_len] = '\0';
             if (sexp_token_init_str(self->alloc, out, sexp_tok_string, self->buf, self->buf_len)) {
                 *err     = sexp_tok_err_oom;
                 *err_pos = self->pos;
