@@ -90,9 +90,11 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
 
     sz                             = alloc_align_to_word_size(sz);
 
+    if (0 == sz) return NULL;
+
     assert(bucket);
     while (bucket) {
-        if (bucket->capacity - bucket->size >= sz) {
+        if (bucket->capacity - bucket->size >= sz + sizeof(size_t)) {
             return bump_alloc_assume_capacity(bucket, sz);
         }
 
@@ -235,8 +237,11 @@ char *alloc_strdup(allocator *alloc, char const *src) {
 }
 
 char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
-    size_t len = strlen(src);
-    if (len > max) len = max;
+
+    size_t      len = 0;
+    char const *ch  = src;
+    while (len < max && *ch++) len++;
+
     char *out = alloc->malloc(alloc, len + 1);
     if (out) {
         memcpy(out, src, len);

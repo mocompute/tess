@@ -151,10 +151,9 @@ nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     ast_node node;
     if (ast_node_init(p->alloc, &node, tag)) return 1;
 
-    // TODO strings
-    node.symbol.name = p->alloc->malloc(p->alloc, strlen(s) + 1); // syms and strs use the symbol union
+    node.symbol.name = alloc_strdup(p->alloc, s); // syms and strs use same union
     if (!node.symbol.name) return 1;
-    strcpy(node.symbol.name, s);
+
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
