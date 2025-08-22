@@ -20,8 +20,7 @@
   X(sexp_boxed_f64, "[double]")                                                                            \
   X(sexp_boxed_symbol, "[symbol]")                                                                         \
   X(sexp_boxed_string, "[string]")                                                                         \
-  X(sexp_boxed_list, "[list]")                                                                             \
-  X(sexp_boxed_COUNT, "COUNT")
+  X(sexp_boxed_list, "[list]")
 
 typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_boxed_tag;
 
@@ -74,7 +73,13 @@ void          sexp_boxed_deinit(allocator *, sexp_boxed *);
 
 // -- access --
 
+bool        sexp_is_boxed(sexp);
 int64_t     sexp_unboxed_get(sexp);
 sexp_boxed *sexp_boxed_get(sexp);
+
+// -- utilities
+
+char *sexp_to_string(allocator *, sexp);
+int   sexp_to_string_buf(sexp const *, char *, size_t);
 
 #endif

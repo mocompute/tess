@@ -76,4 +76,9 @@ nodiscard int sexp_tokenizer_next(sexp_tokenizer *, sexp_token *, sexp_err_tag *
 
 nodiscard int sexp_parser_next(sexp_parser *, sexp *, sexp_err_tag *, size_t *);
 
+// -- utilities --
+
+char const *sexp_token_tag_to_string(sexp_token_tag);
+char const *sexp_err_tag_to_string(sexp_err_tag);
+
 #endif

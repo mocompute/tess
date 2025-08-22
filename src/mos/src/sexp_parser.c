@@ -432,7 +432,6 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
           sexp sub_expr;
           if (sexp_parser_next(self, &sub_expr, err, err_loc)) {
-            // error
 
             if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
               if (sexp_init_boxed(self->alloc, out)) {
@@ -442,13 +441,13 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
               }
               sexp_boxed_init_move_list(sexp_boxed_get(*out), &exprs);
               state = stop;
-              break;
             }
 
             else {
               state = error;
-              break;
             }
+
+            break;
 
           } else {
             // append to list
@@ -498,6 +497,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
         int64_t  xi;
         uint64_t xu;
         double   xd;
+
         switch (mos_string_parse_number(mos_string_str(&tok.s), &xi, &xu, &xd)) {
         case 1:
           if (sexp_init_i64(self->alloc, out, xi)) {
@@ -505,6 +505,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             state = error;
             continue;
           }
+          state = stop;
           break;
 
         case 2:
@@ -513,6 +514,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             state = error;
             continue;
           }
+          state = stop;
           break;
 
         case 3:
@@ -521,6 +523,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             state = error;
             continue;
           }
+          state = stop;
           break;
 
         default:
@@ -554,4 +557,14 @@ finish:
     *err = sexp_tok_err_unexpected_error;
     return 1;
   }
+}
+
+char const *sexp_token_tag_to_string(sexp_token_tag tag) {
+  static char const *const strings[] = {MOS_SEXP_TOKEN_TAGS(MOS_TAG_STRING)};
+  return strings[tag];
+}
+
+char const *sexp_err_tag_to_string(sexp_err_tag tag) {
+  static char const *const strings[] = {MOS_SEXP_ERR_TAGS(MOS_TAG_STRING)};
+  return strings[tag];
 }

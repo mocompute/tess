@@ -191,9 +191,7 @@ ast_node *ast_pool_at(ast_pool *pool, ast_node_h handle) {
 // -- utilities --
 
 char const *type_tag_to_string(type_tag tag) {
-
   static char const *const strings[] = {TESS_TYPE_TAGS(MOS_TAG_STRING)};
-
   return strings[tag];
 }
 
