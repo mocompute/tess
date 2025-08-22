@@ -219,7 +219,7 @@ void alloc_arena_deinit(allocator *arena_) {
     next = next_next;
   }
 
-  alloc_invalidate(arena, sizeof *arena);
+  alloc_invalidate(arena);
 }
 
 // -- utilities --
@@ -245,7 +245,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
   return out;
 }
 
-void alloc_invalidate(void *p, size_t len) {
+void alloc_invalidate_n(void *p, size_t len) {
 #ifndef NDEBUG
   while (len--) {
     if ((intptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;

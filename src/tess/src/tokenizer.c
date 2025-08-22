@@ -49,7 +49,7 @@ int tokenizer_init(allocator *alloc, tokenizer *tok, char const *input, size_t l
 void tokenizer_deinit(allocator *alloc, tokenizer *tok) {
   vec_deinit(alloc, &tok->backtrack);
   vec_deinit(alloc, &tok->buf);
-  alloc_invalidate(tok, sizeof *tok);
+  alloc_invalidate(tok);
 }
 
 void tokenizer_error_init(tokenizer_error *err) {

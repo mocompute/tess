@@ -8,7 +8,9 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/map.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/map_internal.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/mos_string.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/vector.h
 )
@@ -18,6 +20,8 @@ set(SOURCES
   src/dbg.c
   src/hash.c
   src/map.c
+  src/mos_string.c
+  src/sexp.c
   src/vector.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
@@ -39,6 +43,7 @@ endfunction()
 
 mos_create_test(alloc)
 mos_create_test(map)
+mos_create_test(sexp)
 mos_create_test(vector)
 
 # -- doxygen --

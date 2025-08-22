@@ -46,7 +46,7 @@ void tess_type_deinit(allocator *alloc, tess_type *ty) {
   case type_string:   break;
   case type_tuple:    vec_deinit(alloc, &ty->tuple); break;
   }
-  alloc_invalidate(ty, sizeof *ty);
+  alloc_invalidate(ty);
 }
 
 // -- tess_type_pool allocation and deallocation --
@@ -90,7 +90,7 @@ void ast_pool_deinit(allocator *alloc, ast_pool *pool) {
   }
 
   vec_deinit(alloc, &pool->data);
-  alloc_invalidate(pool, sizeof *pool);
+  alloc_invalidate(pool);
 }
 
 // -- ast_node init and deinit --
@@ -179,7 +179,7 @@ int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_nod
   if (vec_push_back(alloc, &pool->data, node)) return 1;
 
   handle->val = vec_size(&pool->data) - 1;
-  alloc_invalidate(node, sizeof *node);
+  alloc_invalidate(node);
 
   return 0;
 }

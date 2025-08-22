@@ -58,7 +58,7 @@ void token_deinit(allocator *alloc, token *tok) {
   case tok_comment:        alloc->free(alloc, tok->s); break;
   }
 
-  alloc_invalidate(tok, sizeof *tok);
+  alloc_invalidate(tok);
 }
 
 char const *token_tag_to_string(token_tag tag) {

@@ -35,7 +35,7 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_s
 
 void vec_deinit(allocator *alloc, vec_t *vec) {
   alloc->free(alloc, vec->data);
-  alloc_invalidate(vec, sizeof *vec);
+  alloc_invalidate(vec);
 }
 
 int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
@@ -60,7 +60,7 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
 
 void vec_move(vec_t *dst, vec_t *src) {
   alloc_copy(dst, src);
-  alloc_invalidate(src, sizeof *src);
+  alloc_invalidate(src);
 }
 
 bool vec_empty(vec_t const *vec) {

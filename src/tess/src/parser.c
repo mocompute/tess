@@ -88,7 +88,7 @@ void parser_deinit(parser *p) {
     tokenizer_dealloc(p->alloc, &p->tokenizer);
   }
 
-  alloc_invalidate(p, sizeof *p);
+  alloc_invalidate(p);
 }
 
 // -- parser --

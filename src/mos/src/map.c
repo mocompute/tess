@@ -244,7 +244,7 @@ void map_deinit(allocator *alloc, map_t *map) {
   alloc->free(alloc, map->tmp);
   alloc->free(alloc, map->status_array);
   alloc->free(alloc, map->data);
-  alloc_invalidate(map, sizeof *map);
+  alloc_invalidate(map);
 }
 
 int map_set(allocator *alloc, map_t *map, size_t key, void *data) {
