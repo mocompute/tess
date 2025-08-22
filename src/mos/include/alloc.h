@@ -12,10 +12,16 @@ typedef struct allocator {
     void (*free)(struct allocator *, void *);
 } allocator;
 
+typedef struct {
+    size_t size;
+    char   data[];
+} arena_allocation;
+
 typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
+    char                 data[];
 } arena_header;
 
 typedef struct arena_allocator {

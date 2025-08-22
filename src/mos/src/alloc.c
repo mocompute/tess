@@ -43,6 +43,10 @@ allocator *alloc_default_allocator() {
 }
 
 // -- arena --
+//
+// Each bucket has an arena_header struct. Size and capacity fields do
+// not include size of the header. Each allocated block has a size_t
+// header to record its size (struct arena_allocation).
 
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
     char *out      = ((char *)bucket) + sizeof(arena_header) + bucket->size;
@@ -62,9 +66,11 @@ static bool is_last_block(arena_header const *bucket, void const *p) {
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
-    if (is_last_block(bucket, ptr)) {
-        bucket->size -= *block_size(ptr) + sizeof(size_t);
-    }
+    if (is_last_block(bucket, ptr)) bucket->size -= *block_size(ptr) + sizeof(size_t);
+}
+
+static bool bucket_has_capacity(arena_header const *bucket, size_t size) {
+    return (bucket->capacity - bucket->size >= sizeof(arena_allocation) + size);
 }
 
 static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) {
@@ -94,7 +100,7 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
 
     assert(bucket);
     while (bucket) {
-        if (bucket->capacity - bucket->size >= sz + sizeof(size_t)) {
+        if (bucket_has_capacity(bucket, sz)) {
             return bump_alloc_assume_capacity(bucket, sz);
         }
 
@@ -138,7 +144,7 @@ static void *arena_realloc(allocator *a, void *p, size_t sz) {
         }
 
         // grow block if there is room in its bucket
-        if (sz <= (bucket->capacity - bucket->size) + cur_size) {
+        if (bucket_has_capacity(bucket, sz - cur_size)) {
             *cur_size_p = sz;
             bucket->size += sz - cur_size;
             return p;
