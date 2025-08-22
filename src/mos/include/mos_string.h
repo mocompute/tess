@@ -25,6 +25,7 @@ typedef struct {
 nodiscard int mos_string_init(allocator *, string_t *, char const *);
 void          mos_string_deinit(allocator *, string_t *);
 nodiscard int mos_string_replace(allocator *, string_t *, char const *);
+void          mos_string_move(string_t *, string_t *);
 
 // -- access --
 

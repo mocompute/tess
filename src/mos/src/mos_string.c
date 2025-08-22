@@ -41,6 +41,11 @@ int mos_string_replace(allocator *alloc, string_t *s, char const *src) {
   return mos_string_init(alloc, s, src);
 }
 
+void mos_string_move(string_t *dst, string_t *src) {
+  alloc_copy(dst, src);
+  alloc_zero(src);
+}
+
 char const *mos_string_str(string_t const *s) {
   if (mos_string_is_allocated(s)) return s->allocated.buf;
   return &s->small.data[0];
