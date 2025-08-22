@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-int test_power_of_two(void) {
+static int test_power_of_two(void) {
   int error = 0;
 
   error += 1 == map_next_power_of_two(0) ? 0 : 1;
@@ -24,7 +24,7 @@ int test_power_of_two(void) {
   return error;
 }
 
-int test_align(void) {
+static int test_align(void) {
   int error = 0;
 
   assert(8 == sizeof(void *));
@@ -37,7 +37,7 @@ int test_align(void) {
   return error;
 }
 
-int test_map(void) {
+static int test_map(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -69,7 +69,7 @@ int test_map(void) {
   return error;
 }
 
-int test_big_map(void) {
+static int test_big_map(void) {
   int          error = 0;
 
   size_t const N     = 1000000;

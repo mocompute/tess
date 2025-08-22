@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <time.h>
 
-int test_string(void) {
+static int test_string(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();

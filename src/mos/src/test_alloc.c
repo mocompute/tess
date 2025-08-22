@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-int test_align_next_power_of_two(void) {
+static int test_align_next_power_of_two(void) {
   int error = 0;
 
   error += 1 == alloc_next_power_of_two(0) ? 0 : 1;
@@ -15,7 +15,7 @@ int test_align_next_power_of_two(void) {
   return error;
 }
 
-int test_align_to_word_size(void) {
+static int test_align_to_word_size(void) {
   int    error = 0;
 
   size_t word  = sizeof(void *);

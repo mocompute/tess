@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int test_vector(void) {
+static int test_vector(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -44,7 +44,7 @@ int test_vector(void) {
   return error;
 }
 
-int test_assoc(void) {
+static int test_assoc(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -89,7 +89,7 @@ int test_assoc(void) {
   return error;
 }
 
-int test_assoc_set(void) {
+static int test_assoc_set(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();

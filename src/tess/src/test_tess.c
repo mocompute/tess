@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-int test_tess_token_string(void) {
+static int test_tess_token_string(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -48,7 +48,7 @@ int test_tess_token_string(void) {
   return error;
 }
 
-int test_tokenizer_basic(void) {
+static int test_tokenizer_basic(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -93,7 +93,7 @@ int test_tokenizer_basic(void) {
   return error;
 }
 
-int test_tokenizer_string(void) {
+static int test_tokenizer_string(void) {
   int        error = 0;
 
   allocator *alloc = alloc_default_allocator();
@@ -121,7 +121,7 @@ int test_tokenizer_string(void) {
   return error;
 }
 
-int test_tokenizer_terminal_static_string(void) {
+static int test_tokenizer_terminal_static_string(void) {
   // regression test for ASAN
   int        error = 0;
 
@@ -150,7 +150,7 @@ int test_tokenizer_terminal_static_string(void) {
   return error;
 }
 
-int test_parser_init(void) {
+static int test_parser_init(void) {
   int         error = 0;
 
   char const *input = "()";
@@ -174,7 +174,7 @@ int test_parser_init(void) {
   return error;
 }
 
-int test_parser_basic(void) {
+static int test_parser_basic(void) {
   int         error = 0;
 
   char const *input = "a";
@@ -207,7 +207,7 @@ int test_parser_basic(void) {
   return error;
 }
 
-int test_parser_expression(void) {
+static int test_parser_expression(void) {
   int         error = 0;
 
   char const *input = "let x = 5 in x + 2";
@@ -233,7 +233,7 @@ int test_parser_expression(void) {
   return error;
 }
 
-int test_parser_node_to_string(void) {
+static int test_parser_node_to_string(void) {
   int         error = 0;
 
   char const *input = "1 + 2";
