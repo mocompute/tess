@@ -106,7 +106,7 @@ void vec_pop_back(vec_t *vec) {
 }
 
 void vec_erase(vec_t *vec, void *it_) {
-    byte *const       it  = (typeof(it))it_;
+    byte *const       it  = it_;
     byte const *const end = vec->data->data + vec->data->size * vec->element_size;
     ptrdiff_t         len = end - it - (ptrdiff_t)vec->element_size;
 

@@ -103,7 +103,7 @@ void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {
 // header to record its size (struct arena_allocation).
 
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
-    arena_block *out = (typeof(out))(((byte *)bucket) + sizeof(arena_header) + bucket->size);
+    arena_block *out = (void *)(((byte *)bucket) + sizeof(arena_header) + bucket->size);
 
     out->size        = sz;
     bucket->size += sz + sizeof(arena_block);
@@ -111,7 +111,7 @@ static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
 }
 
 static size_t *block_size(byte const *p) {
-    arena_block *block = (typeof(block))(p - sizeof(size_t));
+    arena_block *block = (void *)(p - sizeof(size_t));
     return &block->size;
 }
 
