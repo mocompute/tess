@@ -29,7 +29,7 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_c
 
     if (initial_capacity) {
         vec->data = alloc->malloc(alloc, sizeof(vec_data_header) + initial_capacity * element_size);
-        if (NULL == vec->data) {
+        if (null == vec->data) {
             dbg("vec_init: oom\n");
             return 1;
         }
@@ -46,7 +46,7 @@ void vec_deinit(allocator *alloc, vec_t *vec) {
 
 int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
 
-    if (NULL == vec->data) return vec_init(alloc, vec, vec->element_size, count);
+    if (null == vec->data) return vec_init(alloc, vec, vec->element_size, count);
 
     if (vec->data->capacity >= count) return 0;
 
@@ -72,7 +72,7 @@ void vec_move(vec_t *dst, vec_t *src) {
 }
 
 bool vec_empty(vec_t const *vec) {
-    return vec->data == NULL || vec->data->size == 0;
+    return vec->data == null || vec->data->size == 0;
 }
 
 int vec_push_back(allocator *alloc, vec_t *vec, void const *element) {
@@ -114,7 +114,7 @@ void vec_erase(vec_t *vec, void *it_) {
 }
 
 nodiscard int vec_resize(allocator *alloc, vec_t *vec, size_t n) {
-    if (NULL == vec->data) return vec_init(alloc, vec, vec->element_size, n);
+    if (null == vec->data) return vec_init(alloc, vec, vec->element_size, n);
 
     if (n > vec->data->capacity)
         if (vec_reserve(alloc, vec, n)) {
@@ -132,23 +132,23 @@ void vec_clear(vec_t *vec) {
 }
 
 void *vec_data(vec_t *vec) {
-    if (vec_empty(vec)) return NULL;
+    if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
 void *vec_begin(vec_t *vec) {
-    if (vec_empty(vec)) return NULL;
+    if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
 void const *vec_cbegin(vec_t const *vec) {
-    if (vec_empty(vec)) return NULL;
+    if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
 void const *vec_end(vec_t *vec) {
     // points 1 past the end
-    if (vec_empty(vec)) return NULL;
+    if (vec_empty(vec)) return null;
     return vec->data->data + vec->data->size * vec->element_size;
 }
 
@@ -172,7 +172,7 @@ int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
 }
 
 void *vec_assoc_get(vec_t *vec, size_t key) {
-    if (vec_empty(vec)) return NULL;
+    if (vec_empty(vec)) return null;
 
     // From the back, search for an element whose first size_t field
     // matches the search term.
@@ -187,7 +187,7 @@ void *vec_assoc_get(vec_t *vec, size_t key) {
         if (it == last) break; // examined last pair
         it -= element_size;
     }
-    return NULL;
+    return null;
 }
 
 void vec_assoc_erase(vec_t *vec, size_t key) {

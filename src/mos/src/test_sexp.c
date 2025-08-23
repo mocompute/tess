@@ -39,7 +39,7 @@ static int test_sexp_parse(void) {
         dbg("error: %s\n", sexp_err_tag_to_string(err));
     } else {
         char *s = sexp_to_string(alloc, expr);
-        if (NULL == s) return error + 1;
+        if (null == s) return error + 1;
         dbg("parsed: %s\n", s);
         error += 0 == strcmp(s, "(a (b \"str\" c) d -123)") ? 0 : 1;
         alloc->free(alloc, s);

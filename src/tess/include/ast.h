@@ -73,7 +73,7 @@ typedef struct tess_type {
     X(ast_op_not_equal, "<>")                                                                              \
     X(ast_op_greater_than_equal, ">=")                                                                     \
     X(ast_op_greater_than, ">")                                                                            \
-    X(ast_op_sentinel, NULL)
+    X(ast_op_sentinel, null)
 
 typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(MOS_TAG_NAME) } ast_operator;
 

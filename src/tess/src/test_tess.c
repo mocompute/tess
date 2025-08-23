@@ -159,7 +159,7 @@ static int test_parser_init(void) {
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
-    if (NULL == pool) return error + 1;
+    if (null == pool) return error + 1;
 
     parser *p = parser_alloc(alloc);
     if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
@@ -183,7 +183,7 @@ static int test_parser_basic(void) {
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
-    if (NULL == pool) return error + 1;
+    if (null == pool) return error + 1;
 
     parser *p = parser_alloc(alloc);
     if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
@@ -216,10 +216,10 @@ static int test_parser_expression(void) {
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
-    if (NULL == pool) return error + 1;
+    if (null == pool) return error + 1;
 
     parser *p = parser_create(alloc, pool, input, strlen(input));
-    if (NULL == p) return error + 1;
+    if (null == p) return error + 1;
 
     if (parser_next(p)) return error + 1;
     ast_node_h node_h;
@@ -242,11 +242,11 @@ static int test_parser_node_to_string(void) {
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
-    if (NULL == pool) return error + 1;
+    if (null == pool) return error + 1;
 
     {
         parser *p = parser_create(alloc, pool, input, strlen(input));
-        if (NULL == p) return error + 1;
+        if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;
         ast_node_h node_h;
@@ -265,7 +265,7 @@ static int test_parser_node_to_string(void) {
     {
         input     = "(a, b)";
         parser *p = parser_create(alloc, pool, input, strlen(input));
-        if (NULL == p) return error + 1;
+        if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;
         ast_node_h node_h;

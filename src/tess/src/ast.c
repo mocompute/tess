@@ -61,7 +61,7 @@ ast_pool *ast_pool_create(allocator *alloc) {
 
     if (ast_pool_init(alloc, out)) {
         alloc->free(alloc, out);
-        return NULL;
+        return null;
     }
     return out;
 }
@@ -69,7 +69,7 @@ ast_pool *ast_pool_create(allocator *alloc) {
 void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
     alloc_assert_invalid(*pool, sizeof *pool);
     alloc->free(alloc, *pool);
-    *pool = NULL;
+    *pool = null;
 }
 
 void ast_pool_destroy(allocator *alloc, ast_pool **pool) {
@@ -131,7 +131,7 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
 
 int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 
-    // accepts alloc = NULL in some cases
+    // accepts alloc = null in some cases
 
 #define init(P)                                                                                            \
     do {                                                                                                   \
@@ -213,7 +213,7 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
 
     static char const *const strings[] = {TESS_AST_OPERATOR_TAGS(MOS_TAG_STRING)};
 
-    for (int i = 0; strings[i] != NULL; ++i) {
+    for (int i = 0; strings[i] != null; ++i) {
         if (0 == strcmp(strings[i], s)) {
             *out = (ast_operator)i;
             return 0;
@@ -231,7 +231,7 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     if (sz_ < 0) return -1;
     size_t const sz = (size_t)sz_;
 
-    if ((NULL == node) && (NULL != literal)) {
+    if ((null == node) && (null != literal)) {
         return snprintf(buf, sz, "%s", literal);
     }
 
@@ -241,14 +241,14 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
 
 #define do_print_node(NODE)                                                                                \
     do {                                                                                                   \
-        res = print_node(pool, NODE, buf + offset, sz_ - offset, NULL);                                    \
+        res = print_node(pool, NODE, buf + offset, sz_ - offset, null);                                    \
         if (res < 0) return res;                                                                           \
         offset += res;                                                                                     \
     } while (0)
 
 #define do_print_literal(LITERAL)                                                                          \
     do {                                                                                                   \
-        res = print_node(pool, NULL, buf + offset, sz_ - offset, LITERAL);                                 \
+        res = print_node(pool, null, buf + offset, sz_ - offset, LITERAL);                                 \
         if (res < 0) return res;                                                                           \
         offset += res;                                                                                     \
     } while (0)
@@ -425,7 +425,7 @@ int ast_node_to_string_buf(ast_pool *pool, ast_node const *node, char *buf, size
     if (sz_ > INT_MAX) return 1;
     int sz  = (int)sz_;
 
-    int res = print_node(pool, node, buf, sz, NULL);
+    int res = print_node(pool, node, buf, sz, null);
 
     // check error conditions from snprintf
     if (res < 0 || res > sz) return 1;

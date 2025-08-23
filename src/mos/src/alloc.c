@@ -89,19 +89,19 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
         bucket = bucket->next;
     }
 
-    return NULL;
+    return null;
 }
 
 static void *arena_malloc(allocator *alloc, size_t sz) {
     arena_allocator *arena         = (arena_allocator *)alloc;
 
     arena_header    *bucket        = arena->head;
-    arena_header    *last          = NULL;
+    arena_header    *last          = null;
     size_t           last_capacity = 0;
 
     sz                             = alloc_align_to_word_size(sz);
 
-    if (0 == sz) return NULL;
+    if (0 == sz) return null;
 
     assert(bucket);
     while (bucket) {
@@ -120,7 +120,7 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
     if (new_capacity < sz) new_capacity = alloc_next_power_of_two(sz);
 
     last->next = arena->parent->malloc(arena->parent, new_capacity + sizeof(arena_header));
-    if (NULL == last->next) return NULL;
+    if (null == last->next) return null;
 
     bucket = last->next;
 
@@ -130,10 +130,10 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
 }
 
 static void *arena_realloc(allocator *a, void *p, size_t sz) {
-    if (NULL == p) return arena_malloc(a, sz);
+    if (null == p) return arena_malloc(a, sz);
 
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
-    if (NULL == bucket) return NULL;
+    if (null == bucket) return null;
 
     size_t *cur_size_p = block_size(p);
     size_t  cur_size   = *cur_size_p;
@@ -187,7 +187,7 @@ allocator *alloc_arena_create(allocator *alloc, size_t sz) {
 
     if (alloc_arena_init(out, alloc, sz)) {
         alloc->free(alloc, out);
-        return NULL;
+        return null;
     }
     return out;
 }
@@ -195,7 +195,7 @@ allocator *alloc_arena_create(allocator *alloc, size_t sz) {
 void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
     alloc_assert_invalid(*arena, sizeof **arena);
     alloc->free(alloc, *arena);
-    *arena = NULL;
+    *arena = null;
 }
 
 void alloc_arena_destroy(allocator *alloc, allocator **arena) {
@@ -209,7 +209,7 @@ int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     sz                     = alloc_next_power_of_two(sz);
     if (0 == sz) return 1;
     arena->head = parent->malloc(parent, sizeof(arena_header) + sz);
-    if (NULL == arena->head) return 1;
+    if (null == arena->head) return 1;
 
     alloc_zero(arena->head);
     arena->head->capacity    = sz;

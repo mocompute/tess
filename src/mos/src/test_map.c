@@ -58,7 +58,7 @@ static int test_map(void) {
 
     map_t     *map   = map_create(alloc, sizeof(int), 8, 0);
 
-    error += NULL == map_get(map, 0) ? 0 : 1;
+    error += null == map_get(map, 0) ? 0 : 1;
 
     int data = 0;
     data     = 123;

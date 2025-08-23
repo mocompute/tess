@@ -46,7 +46,7 @@ void sexp_box_init_move_list(sexp_box *self, vec_t *src) {
 int sexp_init_boxed(allocator *alloc, sexp *self) {
     alloc_zero(self);
     self->ptr = alloc->malloc(alloc, sizeof(sexp_box));
-    if (NULL == self->ptr) return 1;
+    if (null == self->ptr) return 1;
 
     sexp_box_init_empty(self->ptr);
 
@@ -115,7 +115,7 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
     if (sz_ < 0) return -1;
     size_t const sz = (size_t)sz_;
 
-    if (NULL != literal) {
+    if (null != literal) {
         return snprintf(buf, sz, "%s", literal);
     }
 
@@ -125,16 +125,16 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
 
 #define do_print_node(NODE)                                                                                \
     do {                                                                                                   \
-        if (buf) res = print_node(NODE, buf + offset, sz_ - offset, NULL);                                 \
-        else res = print_node(NODE, NULL, 0, NULL);                                                        \
+        if (buf) res = print_node(NODE, buf + offset, sz_ - offset, null);                                 \
+        else res = print_node(NODE, null, 0, null);                                                        \
         if (res < 0) return res;                                                                           \
         offset += res;                                                                                     \
     } while (0)
 
 #define do_print_literal(LITERAL)                                                                          \
     do {                                                                                                   \
-        if (buf) res = print_node(NULL, buf + offset, sz_ - offset, LITERAL);                              \
-        else res = print_node(NULL, NULL, 0, LITERAL);                                                     \
+        if (buf) res = print_node(null, buf + offset, sz_ - offset, LITERAL);                              \
+        else res = print_node(null, null, 0, LITERAL);                                                     \
         if (res < 0) return res;                                                                           \
         offset += res;                                                                                     \
     } while (0)
@@ -180,7 +180,7 @@ int sexp_to_string_buf(sexp const *node, char *buf, size_t sz_) {
     if (sz_ > INT_MAX) return 1;
     int sz  = (int)sz_;
 
-    int res = print_node(node, buf, sz, NULL);
+    int res = print_node(node, buf, sz, null);
 
     // check error conditions from snprintf
     if (res < 0 || res > sz) return 1;
@@ -188,12 +188,12 @@ int sexp_to_string_buf(sexp const *node, char *buf, size_t sz_) {
 }
 
 char *sexp_to_string(allocator *alloc, sexp node) {
-    int sz = print_node(&node, NULL, 0, NULL);
-    if (sz < 0) return NULL;
+    int sz = print_node(&node, null, 0, null);
+    if (sz < 0) return null;
 
     char *out = alloc->malloc(alloc, (size_t)sz + 1);
-    if (NULL == out) return out;
+    if (null == out) return out;
 
-    print_node(&node, out, sz + 1, NULL);
+    print_node(&node, out, sz + 1, null);
     return out;
 }

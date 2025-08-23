@@ -86,7 +86,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_string:
     case tok_comment:        {
         char *big = alloc->malloc(alloc, strlen(tok->s) + 64);
-        if (!big) return 0;
+        if (!big) return big;
         sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);
         big = alloc->realloc(alloc, big, strlen(big) + 1);
         return big;
@@ -94,7 +94,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     }
 
     char *out = alloc->malloc(alloc, strlen(buf) + 1);
-    if (!out) return 0;
+    if (!out) return out;
     strcpy(out, buf);
     return out;
 }

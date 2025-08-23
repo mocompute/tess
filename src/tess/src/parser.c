@@ -37,7 +37,7 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
     if (!out) return out;
     if (parser_init(alloc, out, pool, input, input_len)) {
         alloc->free(alloc, out);
-        return NULL;
+        return null;
     }
     return out;
 }
@@ -45,7 +45,7 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
 void parser_dealloc(allocator *alloc, parser **p) {
     alloc_assert_invalid(*p, sizeof *p);
     alloc->free(alloc, *p);
-    *p = NULL;
+    *p = null;
 }
 
 void parser_destroy(allocator *alloc, parser **p) {
@@ -121,28 +121,28 @@ nodiscard static int result_ast(parser *p, ast_tag tag) {
 
 nodiscard static int result_ast_i64(parser *p, i64 val) {
     ast_node node;
-    if (ast_node_init(NULL, &node, ast_i64)) return 1;
+    if (ast_node_init(null, &node, ast_i64)) return 1;
     node.i64.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_u64(parser *p, u64 val) {
     ast_node node;
-    if (ast_node_init(NULL, &node, ast_u64)) return 1;
+    if (ast_node_init(null, &node, ast_u64)) return 1;
     node.u64.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_f64(parser *p, f64 val) {
     ast_node node;
-    if (ast_node_init(NULL, &node, ast_f64)) return 1;
+    if (ast_node_init(null, &node, ast_f64)) return 1;
     node.f64.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_bool(parser *p, bool val) {
     ast_node node;
-    if (ast_node_init(NULL, &node, ast_bool)) return 1;
+    if (ast_node_init(null, &node, ast_bool)) return 1;
     node.bool_.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
@@ -168,10 +168,10 @@ static int result_ast_node_handle(parser *p, ast_node_h handle) {
 
 static bool is_reserved(char const *s) {
     static char const *strings[] = {
-      "if", "then", "else", "fun", "let", "in", "true", "false", NULL,
+      "if", "then", "else", "fun", "let", "in", "true", "false", null,
     };
     char const **it = strings;
-    while (*it != NULL)
+    while (*it != null)
         if (0 == strcmp(*it++, s)) return true;
 
     return false;
@@ -179,20 +179,20 @@ static bool is_reserved(char const *s) {
 
 static bool is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
-      "+", "-", "*", "/", NULL,
+      "+", "-", "*", "/", null,
     };
     char const **it = strings;
-    while (*it != NULL)
+    while (*it != null)
         if (0 == strcmp(*it++, s)) return true;
     return false;
 }
 
 static bool is_relational_operator(char const *s) {
     static char const *strings[] = {
-      "<", "<=", "==", "<>", ">=", ">", NULL,
+      "<", "<=", "==", "<>", ">=", ">", null,
     };
     char const **it = strings;
-    while (*it != NULL)
+    while (*it != null)
         if (0 == strcmp(*it++, s)) return true;
     return false;
 }

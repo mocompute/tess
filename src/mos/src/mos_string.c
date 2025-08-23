@@ -37,7 +37,7 @@ int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max
 
     s->small.tag     = 1;
     s->allocated.buf = alloc_strndup(alloc, src, len);
-    if (NULL == s->allocated.buf) return 1;
+    if (null == s->allocated.buf) return 1;
 
     return 0;
 }

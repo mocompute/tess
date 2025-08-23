@@ -22,7 +22,7 @@ int sexp_tokenizer_init(allocator *alloc, sexp_tokenizer *t, char const *input, 
     t->buf       = alloc->malloc(alloc, TOKENIZER_BUF_SIZE);
     t->buf_len   = 0;
 
-    if (NULL == t->buf) return 1;
+    if (null == t->buf) return 1;
     return 0;
 }
 
@@ -386,7 +386,7 @@ nodiscard int sexp_parser_init(allocator *alloc, sexp_parser *self, char const *
     self->alloc     = alloc;
 
     self->tokenizer = alloc->malloc(alloc, sizeof *self->tokenizer);
-    if (NULL == self->tokenizer) return 1;
+    if (null == self->tokenizer) return 1;
 
     if (sexp_tokenizer_init(alloc, self->tokenizer, input, len)) goto cleanup;
     return 0;
