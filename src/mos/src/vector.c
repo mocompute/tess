@@ -12,9 +12,10 @@ vec_t *vec_alloc(allocator *alloc) {
     return alloc->malloc(alloc, sizeof(vec_t));
 }
 
-void vec_dealloc(allocator *alloc, vec_t **p) {
-    alloc->free(alloc, *p);
-    *p = 0;
+void vec_dealloc(allocator *alloc, vec_t **vec) {
+    alloc_assert_invalid(*vec);
+    alloc->free(alloc, *vec);
+    *vec = null;
 }
 
 void vec_init_empty(vec_t *vec, size_t element_size) {

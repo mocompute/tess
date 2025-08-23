@@ -67,7 +67,7 @@ ast_pool *ast_pool_create(allocator *alloc) {
 }
 
 void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
-    alloc_assert_invalid(*pool, sizeof *pool);
+    alloc_assert_invalid(*pool);
     alloc->free(alloc, *pool);
     *pool = null;
 }

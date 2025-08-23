@@ -45,7 +45,7 @@ void          alloc_arena_deinit(allocator *);
 // -- utilities --
 
 void   alloc_invalidate_n(void *, size_t);
-void   alloc_assert_invalid(void *, size_t);
+void   alloc_assert_invalid_n(void *, size_t);
 
 char  *alloc_strdup(allocator *, char const *) mallocfun;
 char  *alloc_strndup(allocator *, char const *, size_t) mallocfun;
@@ -53,8 +53,9 @@ char  *alloc_strndup(allocator *, char const *, size_t) mallocfun;
 size_t alloc_next_power_of_two(size_t);
 size_t alloc_align_to_word_size(size_t);
 
-#define alloc_invalidate(P)  alloc_invalidate_n((P), sizeof *(P))
-#define alloc_zero(P)        memset((P), 0, sizeof *(P));
-#define alloc_copy(DST, SRC) memcpy((DST), (SRC), sizeof *(DST));
+#define alloc_invalidate(P)     alloc_invalidate_n((P), sizeof *(P))
+#define alloc_assert_invalid(P) alloc_assert_invalid_n((P), sizeof *(P))
+#define alloc_zero(P)           memset((P), 0, sizeof *(P));
+#define alloc_copy(DST, SRC)    memcpy((DST), (SRC), sizeof *(DST));
 
 #endif

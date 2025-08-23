@@ -32,8 +32,9 @@ tokenizer *tokenizer_alloc(allocator *alloc) {
 }
 
 void tokenizer_dealloc(allocator *alloc, tokenizer **tok) {
+    alloc_assert_invalid(*tok);
     alloc->free(alloc, *tok);
-    *tok = 0;
+    *tok = null;
 }
 
 int tokenizer_init(allocator *alloc, tokenizer *tok, char const *input, size_t len) {

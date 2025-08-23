@@ -43,7 +43,7 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
 }
 
 void parser_dealloc(allocator *alloc, parser **p) {
-    alloc_assert_invalid(*p, sizeof *p);
+    alloc_assert_invalid(*p);
     alloc->free(alloc, *p);
     *p = null;
 }

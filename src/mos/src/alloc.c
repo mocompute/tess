@@ -193,7 +193,7 @@ allocator *alloc_arena_create(allocator *alloc, size_t sz) {
 }
 
 void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
-    alloc_assert_invalid(*arena, sizeof **arena);
+    alloc_assert_invalid(*arena);
     alloc->free(alloc, *arena);
     *arena = null;
 }
@@ -273,7 +273,7 @@ void alloc_invalidate_n(void *p, size_t len) {
 #endif
 }
 
-void alloc_assert_invalid(void *p, size_t len) {
+void alloc_assert_invalid_n(void *p, size_t len) {
 #ifndef NDEBUG
     while (len--) {
         if ((uintptr_t)p % 2 == 0) assert(*(byte *)p == 0xde);
