@@ -9,8 +9,8 @@
 
 #include <stdint.h>
 
-#define SEXP_MAX_UNBOXED_INT (INT64_MAX >> 1)
-#define SEXP_MIN_UNBOXED_INT (INT64_MIN >> 1)
+#define SEXP_MAX_UNBOXED_INT (INT64_MAX / 2)
+#define SEXP_MIN_UNBOXED_INT (INT64_MIN / 2) // negative shift is UB
 
 // -- sexp --
 

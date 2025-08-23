@@ -65,9 +65,9 @@ int main(void) {
     printf("INT64_MAX / 2         = %lli\n", INT64_MAX / 2);
     printf("INT64_MIN / 2         = %lli\n", INT64_MIN / 2);
     printf("INT64_MAX >> 1        = %lli\n", INT64_MAX >> 1);
-    printf("INT64_MIN >> 1        = %lli\n", INT64_MIN >> 1);
-    printf("INT64_MAX/2 << 1 >> 1 = %lli\n", ((INT64_MAX >> 1) << 1) >> 1);
-    printf("INT64_MIN/2 << 1 >> 1 = %lli\n", ((INT64_MIN >> 1) << 1) >> 1);
+    printf("INT64_MIN / 2        = %lli\n", INT64_MIN / 2);
+    printf("INT64_MAX/2 << 1 >> 1 = %lli\n", ((INT64_MAX >> 1) * 2) >> 1);
+    printf("INT64_MIN/2 << 1 >> 1 = %lli\n", ((INT64_MIN / 2) * 2) >> 1);
 
     T(test_sexp_assert);
     T(test_sexp_parse);

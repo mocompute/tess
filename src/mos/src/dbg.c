@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifndef dbg
 void dbg(char const *restrict fmt, ...) {
     va_list args;
 
@@ -12,3 +13,4 @@ void dbg(char const *restrict fmt, ...) {
 
     va_end(args);
 }
+#endif
