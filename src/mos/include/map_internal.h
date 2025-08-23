@@ -8,16 +8,10 @@
 #define MAP_MAX_ELEMENT_SIZE 24
 
 typedef struct {
-    u8 occupied       : 1;
-    u8 tombstone      : 1;
-    u8 probe_distance : 6;
-} map_cell_status;
-
-typedef struct {
-    u32             key;
-    map_cell_status status;
-    byte            pad[3];
-    byte            data[];
+    u32  key;
+    u8   status;
+    byte pad[3];
+    byte data[];
     // size = 8
 } map_element_header;
 

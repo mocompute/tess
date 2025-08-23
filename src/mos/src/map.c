@@ -14,16 +14,42 @@
 
 // -- statics --
 
-static size_t bucket_size(map_t const *map) {
+static inline bool is_occupied(u8 status) constfun;
+static inline bool is_tombstone(u8 status) constfun;
+static inline u8   get_probe_distance(u8 status) constfun;
+
+static inline bool is_occupied(u8 status) {
+    return status & 1;
+}
+
+static inline bool is_tombstone(u8 status) {
+    return status & 2;
+}
+
+static inline u8 get_probe_distance(u8 status) {
+    return status >> 2;
+}
+
+static inline void set_status(u8 *status, bool occupied, u8 probe_distance) {
+    assert(probe_distance <= MAX_PROBE_LEN);
+    *status = (u8)(probe_distance << 2) | (occupied ? 1 : 0);
+}
+
+static inline void set_tombstone(u8 *status) {
+    *status |= 2;  // set tombstone
+    *status &= ~1; // clear occupied
+}
+
+static inline size_t bucket_size(map_t const *map) {
     return map->aligned_element_size + sizeof(map_element_header);
 }
 
-static u32 key_to_bucket(map_t const *map, map_key key) {
+static inline u32 key_to_bucket(map_t const *map, map_key key) {
     assert(map);
     return key % map->n_cells;
 }
 
-static u32 incr_index(map_t const *map, u32 index) {
+static inline u32 incr_index(map_t const *map, u32 index) {
     return (index + 1) % map->n_cells;
 }
 
@@ -39,14 +65,13 @@ static map_element_header *map_find(map_t *map, map_key key) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
         map_element_header *const cell   = map_unchecked_at(map, index);
+        u8                        status = cell->status;
 
-        map_cell_status           status = cell->status;
-
-        if (status.tombstone) {
+        if (is_tombstone(status)) {
 
             index = incr_index(map, index);
 
-        } else if (status.occupied) {
+        } else if (is_occupied(status)) {
 
             if (cell->key == key) return cell;
 
@@ -91,8 +116,8 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
 
         map_element_header *const cell = map_unchecked_at(map, index);
 
-        if (cell->status.occupied) {
-            if (probe_distance <= cell->status.probe_distance) {
+        if (is_occupied(cell->status)) {
+            if (probe_distance <= get_probe_distance(cell->status)) {
                 // continue probing
                 ++probe_distance;
                 index = incr_index(map, index);
@@ -100,7 +125,7 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
                 // swap
 
                 // save relevant status of cell to be evicted
-                u8 evicted_probe_distance = cell->status.probe_distance;
+                u8 evicted_probe_distance = get_probe_distance(cell->status);
 
                 // copy evicted cell (header + data) to tmp
                 memcpy(tmp, cell, cell_size);
@@ -109,11 +134,7 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
                 memcpy(cell, to_store, cell_size);
 
                 // set correct status for installed cell
-                cell->status = (map_cell_status){
-                  .occupied       = 1,
-                  .tombstone      = 0,
-                  .probe_distance = probe_distance,
-                };
+                set_status(&cell->status, true, probe_distance);
 
                 // write evicted cell (header + data) into to_store
                 memcpy(to_store, tmp, cell_size);
@@ -129,11 +150,7 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
             // write cell (header + data) to bucket and set status
             memcpy(cell, to_store, cell_size);
 
-            cell->status = (map_cell_status){
-              .occupied       = 1,
-              .tombstone      = 0,
-              .probe_distance = probe_distance,
-            };
+            set_status(&cell->status, true, probe_distance);
             map->n_occupied++;
 
             return 0;
@@ -167,7 +184,7 @@ static int grow_buckets(allocator *alloc, map_t **map) {
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
         map_element_header *cell = map_unchecked_at(*map, i);
-        if (cell->status.occupied) {
+        if (is_occupied(cell->status)) {
             if (set_one_cell(new_map, cell)) return 1;
         }
     }
@@ -259,7 +276,7 @@ int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
         }
     }
 
-    map_element_header header = {.key = key, {0}};
+    map_element_header header = {.key = key, .status = 0};
     return set_one(*map, &header, data);
 }
 
@@ -273,7 +290,6 @@ void map_erase(map_t *map, map_key key) {
     map_element_header *cell = map_find(map, key);
     if (!cell) return;
 
-    cell->status.occupied  = 0;
-    cell->status.tombstone = 1;
+    set_tombstone(&cell->status);
     map->n_occupied--;
 }
