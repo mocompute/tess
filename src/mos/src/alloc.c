@@ -17,6 +17,9 @@
 #include <stdlib.h>
 #endif
 
+static void *default_malloc(allocator *a, size_t sz) mallocfun;
+static void *default_calloc(allocator *a, size_t num, size_t sz) mallocfun;
+
 static void *default_malloc(allocator *a, size_t sz) {
     (void)a;
     return malloc(sz);
@@ -49,14 +52,16 @@ allocator *alloc_default_allocator() {
 // header to record its size (struct arena_allocation).
 
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
-    char *out      = ((char *)bucket) + sizeof(arena_header) + bucket->size;
-    *(size_t *)out = sz;
-    bucket->size += sz + sizeof(size_t);
-    return out + sizeof(size_t);
+    arena_allocation *out = (typeof(out))(((char *)bucket) + sizeof(arena_header) + bucket->size);
+
+    out->size             = sz;
+    bucket->size += sz + sizeof(arena_allocation);
+    return &out->data;
 }
 
 static size_t *block_size(char const *p) {
-    return (size_t *)(p - sizeof(size_t));
+    arena_allocation *block = (typeof(block))(p - sizeof(size_t));
+    return &block->size;
 }
 
 static bool is_last_block(arena_header const *bucket, void const *p) {
@@ -66,7 +71,7 @@ static bool is_last_block(arena_header const *bucket, void const *p) {
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
-    if (is_last_block(bucket, ptr)) bucket->size -= *block_size(ptr) + sizeof(size_t);
+    if (is_last_block(bucket, ptr)) bucket->size -= *block_size(ptr) + sizeof(arena_allocation);
 }
 
 static bool bucket_has_capacity(arena_header const *bucket, size_t size) {
@@ -246,7 +251,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 
     size_t      len = 0;
     char const *ch  = src;
-    while (len < max && *ch++) len++;
+    while (len < max && *ch++) len++; // don't use strlen
 
     char *out = alloc->malloc(alloc, len + 1);
     if (out) {
