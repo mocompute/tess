@@ -3,7 +3,7 @@
 
 #ifndef NDEBUG
 
-void dbg(char const *restrict fmt, ...);
+void dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
 
 #else
 

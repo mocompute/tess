@@ -8,12 +8,7 @@ void dbg(char const *restrict fmt, ...) {
 
     va_start(args, fmt);
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
-
     vfprintf(stderr, fmt, args);
-
-#pragma clang diagnostic pop
 
     va_end(args);
 }
