@@ -2,6 +2,7 @@
 #define MOS_ALLOC_H
 
 #include "nodiscard.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -45,8 +46,8 @@ void          alloc_arena_deinit(allocator *);
 void   alloc_invalidate_n(void *, size_t);
 void   alloc_assert_invalid(void *, size_t);
 
-char  *alloc_strdup(allocator *, char const *);
-char  *alloc_strndup(allocator *, char const *, size_t);
+char  *alloc_strdup(allocator *, char const *) mallocfun;
+char  *alloc_strndup(allocator *, char const *, size_t) mallocfun;
 
 size_t alloc_next_power_of_two(size_t);
 size_t alloc_align_to_word_size(size_t);
