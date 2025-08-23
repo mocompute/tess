@@ -22,13 +22,9 @@ struct map {
     map_cell_status *status_array;
     char            *data;
 
-    // buffers used during robin hood swapping
-    char     to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
-    char     tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
-
-    float    max_load_factor;
-    uint32_t n_cells;
-    uint32_t n_occupied;
+    float            max_load_factor;
+    uint32_t         n_cells;
+    uint32_t         n_occupied;
 };
 
 #endif

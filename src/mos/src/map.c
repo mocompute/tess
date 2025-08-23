@@ -62,12 +62,15 @@ static char *map_find(map_t *map, map_key key, uint32_t *out_index) {
 
 static int set_one(map_t *map, map_key const key, char const *element) {
 
+    char         to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
+    char         tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
+
     size_t const cell_size = sizeof(map_header) + map->element_size;
     assert(bucket_size(map) >= cell_size);
 
     // write header and data to to_store
-    memcpy(map->to_store, &key, sizeof key);
-    memcpy(map->to_store + sizeof key, element, map->element_size);
+    memcpy(to_store, &key, sizeof key);
+    memcpy(to_store + sizeof key, element, map->element_size);
 
     uint32_t      index           = key_to_bucket(map, key);
     unsigned char probe_distance  = 0;
@@ -81,7 +84,7 @@ static int set_one(map_t *map, map_key const key, char const *element) {
         }
         if (probe_distance > 16 && !warning_printed) {
             fprintf(stderr, "warning: high probe distance for key: %u, load factor: %f\n",
-                    *(map_key *)map->to_store, map_load_factor(map));
+                    *(map_key *)to_store, map_load_factor(map));
             warning_printed = 1;
         }
 
@@ -95,11 +98,11 @@ static int set_one(map_t *map, map_key const key, char const *element) {
                 char *const cell = map_unchecked_at(map, index);
 
                 // copy evicted cell (header + data) to tmp
-                memcpy(map->tmp, cell, cell_size);
+                memcpy(tmp, cell, cell_size);
                 // write header (from to_store) in place of evicted cell
-                memcpy(cell, map->to_store, cell_size);
+                memcpy(cell, to_store, cell_size);
                 // write evicted cell (header + data) into to_store
-                memcpy(map->to_store, map->tmp, cell_size);
+                memcpy(to_store, tmp, cell_size);
 
                 uint8_t evicted_probe_distance          = map->status_array[index].probe_distance;
                 map->status_array[index].probe_distance = probe_distance;
@@ -119,7 +122,7 @@ static int set_one(map_t *map, map_key const key, char const *element) {
             char *const cell = map_unchecked_at(map, index);
 
             // write cell (header + data) to bucket
-            memcpy(cell, map->to_store, cell_size);
+            memcpy(cell, to_store, cell_size);
             return 0;
         }
     }
@@ -213,7 +216,6 @@ void map_dealloc(allocator *alloc, map_t **p) {
 int map_init(allocator *alloc, map_t *map, uint8_t element_size, uint32_t buckets, float max_load_factor) {
 
     assert(sizeof(map_cell_status) == 1);
-    assert(sizeof(map_header) == sizeof(map_key));
 
     if (element_size > MAP_MAX_ELEMENT_SIZE) return 1;
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
