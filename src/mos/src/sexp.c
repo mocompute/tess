@@ -8,6 +8,12 @@
 #include <limits.h>
 #include <stdio.h>
 
+static bool is_boxed(sexp) constfun;
+
+static bool is_boxed(sexp self) {
+    return (self.integer & 1) == 0;
+}
+
 void sexp_init_unboxed(sexp *self, int64_t val) {
     assert(val <= SEXP_MAX_UNBOXED_INT && val >= SEXP_MIN_UNBOXED_INT);
     self->integer = (val << 1) | 1;
@@ -47,6 +53,14 @@ int sexp_init_boxed(allocator *alloc, sexp *self) {
     return 0;
 }
 
+void sexp_deinit(allocator *alloc, sexp *self) {
+    if (is_boxed(*self)) {
+        sexp_box_deinit(alloc, self->ptr);
+        alloc->free(alloc, self->ptr);
+    }
+    alloc_invalidate(self);
+}
+
 int sexp_init_i64(allocator *alloc, sexp *self, int64_t val) {
     if (val >= SEXP_MIN_UNBOXED_INT && val <= SEXP_MAX_UNBOXED_INT) {
         sexp_init_unboxed(self, val);
@@ -82,7 +96,12 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_f64:    break;
     case sexp_box_symbol:
     case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
-    case sexp_box_list:   vec_deinit(alloc, &self->list.list); break;
+    case sexp_box_list:   {
+        sexp       *it  = vec_begin(&self->list.list);
+        sexp const *end = vec_end(&self->list.list);
+        while (it != end) sexp_deinit(alloc, it++);
+        vec_deinit(alloc, &self->list.list);
+    } break;
     }
 
     alloc_invalidate(self);

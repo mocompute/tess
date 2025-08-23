@@ -398,6 +398,7 @@ cleanup:
 
 void sexp_parser_deinit(sexp_parser *self) {
     sexp_tokenizer_deinit(self->tokenizer);
+    self->alloc->free(self->alloc, self->tokenizer);
     alloc_invalidate(self);
 }
 

@@ -65,6 +65,7 @@ nodiscard int sexp_init_boxed(allocator *, sexp *);
 nodiscard int sexp_init_i64(allocator *, sexp *, int64_t);
 nodiscard int sexp_init_u64(allocator *, sexp *, uint64_t);
 nodiscard int sexp_init_f64(allocator *, sexp *, double);
+void          sexp_deinit(allocator *, sexp *);
 
 void          sexp_box_init_empty(sexp_box *);
 void          sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
