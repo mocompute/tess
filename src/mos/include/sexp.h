@@ -27,13 +27,13 @@ typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_box_tag;
 typedef struct {
     union {
         struct {
-            int64_t val;
+            i64 val;
         } i64;
         struct {
-            uint64_t val;
+            u64 val;
         } u64;
         struct {
-            double val;
+            f64 val;
         } f64;
         struct {
             string_t name;
@@ -53,18 +53,18 @@ typedef struct {
 
     union {
         sexp_box *ptr;
-        int64_t   integer;
+        i64       integer;
     };
 
 } sexp;
 
 // -- allocation and deallocation --
 
-void          sexp_init_unboxed(sexp *, int64_t);
+void          sexp_init_unboxed(sexp *, i64);
 nodiscard int sexp_init_boxed(allocator *, sexp *);
-nodiscard int sexp_init_i64(allocator *, sexp *, int64_t);
-nodiscard int sexp_init_u64(allocator *, sexp *, uint64_t);
-nodiscard int sexp_init_f64(allocator *, sexp *, double);
+nodiscard int sexp_init_i64(allocator *, sexp *, i64);
+nodiscard int sexp_init_u64(allocator *, sexp *, u64);
+nodiscard int sexp_init_f64(allocator *, sexp *, f64);
 void          sexp_deinit(allocator *, sexp *);
 
 void          sexp_box_init_empty(sexp_box *);
@@ -75,7 +75,7 @@ void          sexp_box_deinit(allocator *, sexp_box *);
 // -- access --
 
 bool      sexp_is_boxed(sexp);
-int64_t   sexp_unboxed_get(sexp);
+i64       sexp_unboxed_get(sexp);
 sexp_box *sexp_box_get(sexp);
 
 // -- utilities

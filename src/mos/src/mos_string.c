@@ -1,6 +1,7 @@
 #include "mos_string.h"
 
 #include "alloc.h"
+#include "types.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -69,7 +70,7 @@ bool mos_string_is_allocated(string_t const *s) {
     return s->small.tag == 1;
 }
 
-int mos_string_parse_number(char const *in, int64_t *i64, uint64_t *u64, double *f64) {
+int mos_string_parse_number(char const *in, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0, 1, 2, 3
 
     errno                 = 0;
@@ -78,7 +79,7 @@ int mos_string_parse_number(char const *in, int64_t *i64, uint64_t *u64, double 
     char           *p_end = 0;
     long long int   i     = strtoll(in, &p_end, 10);
     if (p_end - in == len && !errno) {
-        *i64 = i;
+        *out_i64 = i;
         return 1;
 
     } else {
@@ -87,16 +88,16 @@ int mos_string_parse_number(char const *in, int64_t *i64, uint64_t *u64, double 
         p_end                = 0;
         unsigned long long u = strtoull(in, &p_end, 10);
         if (p_end - in == len && !errno) {
-            *u64 = u;
+            *out_u64 = u;
             return 2;
 
         } else {
 
-            errno    = 0;
-            p_end    = 0;
-            double d = strtod(in, &p_end);
+            errno = 0;
+            p_end = 0;
+            f64 d = strtod(in, &p_end);
             if (p_end - in == len && !errno) {
-                *f64 = d;
+                *out_f64 = d;
                 return 3;
             }
         }

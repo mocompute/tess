@@ -119,21 +119,21 @@ nodiscard static int result_ast(parser *p, ast_tag tag) {
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_i64(parser *p, int64_t val) {
+nodiscard static int result_ast_i64(parser *p, i64 val) {
     ast_node node;
     if (ast_node_init(NULL, &node, ast_i64)) return 1;
     node.i64.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_u64(parser *p, uint64_t val) {
+nodiscard static int result_ast_u64(parser *p, u64 val) {
     ast_node node;
     if (ast_node_init(NULL, &node, ast_u64)) return 1;
     node.u64.val = val;
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
 
-nodiscard static int result_ast_f64(parser *p, double val) {
+nodiscard static int result_ast_f64(parser *p, f64 val) {
     ast_node node;
     if (ast_node_init(NULL, &node, ast_f64)) return 1;
     node.f64.val = val;
@@ -375,9 +375,9 @@ static int a_string(parser *p) {
 }
 
 static int string_to_number(parser *parser, char const *const in) {
-    int64_t  i;
-    uint64_t u;
-    double   d;
+    i64 i;
+    u64 u;
+    f64 d;
     switch (mos_string_parse_number(in, &i, &u, &d)) {
     case 1:  return result_ast_i64(parser, i);
     case 2:  return result_ast_u64(parser, u);

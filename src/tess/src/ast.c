@@ -18,7 +18,7 @@ void tess_type_init(tess_type *ty, type_tag tag) {
     ty->tag = tag;
 }
 
-void tess_type_init_type_var(tess_type *ty, uint32_t val) {
+void tess_type_init_type_var(tess_type *ty, u32 val) {
     alloc_zero(ty);
     ty->tag = type_type_var;
     ty->val = val;

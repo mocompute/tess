@@ -26,8 +26,8 @@ typedef enum token_tag { TESS_TOKEN_TAGS(MOS_TAG_NAME) } token_tag;
 
 typedef struct token {
     union {
-        char   *s;
-        uint8_t val;
+        char *s;
+        u8    val;
     };
     token_tag tag;
 } token;
@@ -35,7 +35,7 @@ typedef struct token {
 // -- allocation and deallocation --
 
 void token_init(token *, token_tag);
-void token_init_v(token *, token_tag, uint8_t);
+void token_init_v(token *, token_tag, u8);
 int  token_init_s(allocator *, token *, token_tag, char const *);
 int  token_init_sn(allocator *, token *, token_tag, char const *, size_t);
 void token_deinit(allocator *, token *);

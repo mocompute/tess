@@ -52,7 +52,7 @@ typedef struct tess_type {
     union {
         struct vec        tuple;
         struct arrow_type arrow;
-        uint32_t          val;
+        u32               val;
     };
     type_tag tag;
 } tess_type;
@@ -92,15 +92,15 @@ typedef struct ast_node {
         } bool_;
 
         struct {
-            int64_t val;
+            i64 val;
         } i64;
 
         struct {
-            uint64_t val;
+            u64 val;
         } u64;
 
         struct {
-            double val;
+            f64 val;
         } f64;
 
         struct {
@@ -169,7 +169,7 @@ typedef struct ast_pool {
 // -- allocation and deallocation --
 
 void          tess_type_init(tess_type *, type_tag);
-void          tess_type_init_type_var(tess_type *, uint32_t);
+void          tess_type_init_type_var(tess_type *, u32);
 nodiscard int tess_type_init_tuple(allocator *, tess_type *);
 void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(allocator *, tess_type *);

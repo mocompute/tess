@@ -14,12 +14,12 @@ static bool is_boxed(sexp self) {
     return (self.integer & 1) == 0;
 }
 
-void sexp_init_unboxed(sexp *self, int64_t val) {
+void sexp_init_unboxed(sexp *self, i64 val) {
     assert(val <= SEXP_MAX_UNBOXED_INT && val >= SEXP_MIN_UNBOXED_INT);
     self->integer = (val << 1) | 1;
 }
 
-int64_t sexp_unboxed_get(sexp self) {
+i64 sexp_unboxed_get(sexp self) {
     return self.integer >> 1;
 }
 
@@ -61,7 +61,7 @@ void sexp_deinit(allocator *alloc, sexp *self) {
     alloc_invalidate(self);
 }
 
-int sexp_init_i64(allocator *alloc, sexp *self, int64_t val) {
+int sexp_init_i64(allocator *alloc, sexp *self, i64 val) {
     if (val >= SEXP_MIN_UNBOXED_INT && val <= SEXP_MAX_UNBOXED_INT) {
         sexp_init_unboxed(self, val);
     } else {
@@ -73,7 +73,7 @@ int sexp_init_i64(allocator *alloc, sexp *self, int64_t val) {
     return 0;
 }
 
-int sexp_init_u64(allocator *alloc, sexp *self, uint64_t val) {
+int sexp_init_u64(allocator *alloc, sexp *self, u64 val) {
     if (sexp_init_boxed(alloc, self)) return 1;
     sexp_box *box = sexp_box_get(*self);
     box->tag      = sexp_box_u64;
@@ -81,7 +81,7 @@ int sexp_init_u64(allocator *alloc, sexp *self, uint64_t val) {
     return 0;
 }
 
-int sexp_init_f64(allocator *alloc, sexp *self, double val) {
+int sexp_init_f64(allocator *alloc, sexp *self, f64 val) {
     if (sexp_init_boxed(alloc, self)) return 1;
     sexp_box *box = sexp_box_get(*self);
     box->tag      = sexp_box_f64;

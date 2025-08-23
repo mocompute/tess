@@ -69,7 +69,7 @@ void replace_token(allocator *alloc, token *tok, token_tag tag) {
     token_init(tok, tag);
 }
 
-void replace_token_v(allocator *alloc, token *tok, token_tag tag, uint8_t val) {
+void replace_token_v(allocator *alloc, token *tok, token_tag tag, u8 val) {
     token_deinit(alloc, tok);
     token_init_v(tok, tag, val);
 }
@@ -310,7 +310,7 @@ int tokenizer_next(allocator *alloc, tokenizer *self, token *out, tokenizer_erro
                 return 1;
             }
 
-            replace_token_v(alloc, &res, tok_newline_indent, (uint8_t)(self->pos - start_capture));
+            replace_token_v(alloc, &res, tok_newline_indent, (u8)(self->pos - start_capture));
             state = stop;
             break;
 

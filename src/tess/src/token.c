@@ -14,7 +14,7 @@ void token_init(token *tok, token_tag tag) {
     tok->s   = 0;
 }
 
-void token_init_v(token *tok, token_tag tag, uint8_t val) {
+void token_init_v(token *tok, token_tag tag, u8 val) {
     tok->tag = tag;
     tok->val = val;
 }

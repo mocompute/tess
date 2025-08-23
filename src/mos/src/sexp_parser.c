@@ -125,7 +125,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 continue;
             }
 
-            int8_t const c = self->input[self->pos++]; // require signed
+            i8 const c = self->input[self->pos++]; // require signed
             switch (c) {
             case '(':
             case ')':
@@ -167,8 +167,8 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 state = stop_comment;
                 continue;
             }
-            int8_t const c = self->input[self->pos++]; // require signed
-            if (c < 0x20) {                            // c is signed so this catches c > 0x7f
+            i8 const c = self->input[self->pos++]; // require signed
+            if (c < 0x20) {                        // c is signed so this catches c > 0x7f
                 --self->pos;
                 state = stop_comment;
             }
@@ -201,7 +201,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 continue;
             }
 
-            int8_t const c = self->input[self->pos++];
+            i8 const c = self->input[self->pos++];
 
             if (c >= '0' && c <= '9') continue;
             switch (c) {
@@ -495,9 +495,9 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             } break;
 
             case sexp_tok_number: {
-                int64_t  xi;
-                uint64_t xu;
-                double   xd;
+                i64 xi;
+                u64 xu;
+                f64 xd;
 
                 switch (mos_string_parse_number(mos_string_str(&tok.s), &xi, &xu, &xd)) {
                 case 1:
