@@ -17,6 +17,31 @@
 #include <stdlib.h>
 #endif
 
+struct allocator {
+    void *(*malloc)(struct allocator *, size_t, char const *, int);
+    void *(*calloc)(struct allocator *, size_t num, size_t size, char const *, int);
+    void *(*realloc)(struct allocator *, void *, size_t, char const *, int);
+    void (*free)(struct allocator *, void *, char const *, int);
+};
+
+typedef struct {
+    size_t size;
+    byte   data[];
+} arena_block;
+
+typedef struct arena_header {
+    struct arena_header *next;
+    size_t               capacity;
+    size_t               size;
+    byte                 data[];
+} arena_header;
+
+struct arena_allocator {
+    struct allocator allocator;
+    allocator       *parent;
+    arena_header    *head;
+};
+
 static void *default_malloc(allocator *a, size_t sz, char const *, int) mallocfun;
 static void *default_calloc(allocator *a, size_t num, size_t sz, char const *, int) mallocfun;
 
