@@ -23,7 +23,7 @@ static int test_sexp_assert(void) {
 static int test_sexp_parse(void) {
     int         error = 0;
 
-    char const *input = "(a (b \"str\"  c)  d 123)";
+    char const *input = "(a (b \"str\"  c)  d -123)";
 
     allocator  *alloc = alloc_default_allocator();
 
@@ -41,7 +41,7 @@ static int test_sexp_parse(void) {
         char *s = sexp_to_string(alloc, expr);
         if (NULL == s) return error + 1;
         dbg("parsed: %s\n", s);
-        error += 0 == strcmp(s, "(a (b \"str\" c) d 123)") ? 0 : 1;
+        error += 0 == strcmp(s, "(a (b \"str\" c) d -123)") ? 0 : 1;
         alloc->free(alloc, s);
 
         sexp_deinit(alloc, &expr);

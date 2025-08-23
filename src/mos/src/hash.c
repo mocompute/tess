@@ -2,7 +2,7 @@
 
 #include "assert.h"
 
-size_t mos_hash64(char const *data, size_t len) {
+size_t mos_hash64(byte const *data, size_t len) {
 
     // https://datatracker.ietf.org/doc/draft-eastlake-fnv/35/
 
@@ -16,7 +16,7 @@ size_t mos_hash64(char const *data, size_t len) {
     return hash;
 }
 
-size_t mos_hash32(char const *data, size_t len) {
+size_t mos_hash32(byte const *data, size_t len) {
 
     // https://datatracker.ietf.org/doc/draft-eastlake-fnv/35/
 

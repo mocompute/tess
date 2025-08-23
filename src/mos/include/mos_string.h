@@ -2,6 +2,7 @@
 #define MOS_STRING_H
 
 #include "alloc.h"
+#include "types.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,7 +17,7 @@ typedef struct {
         } allocated;
         struct {
             char data[MOS_STRING_MAX_SMALL_LEN + 1];
-            char tag;
+            byte tag;
         } small;
     };
 } string_t;

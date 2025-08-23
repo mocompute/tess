@@ -439,7 +439,7 @@ int tokenizer_next(allocator *alloc, tokenizer *self, token *out, tokenizer_erro
                 state = stop_comment;
                 continue;
             }
-            char const c = self->input[self->pos++];
+            i8 const c = self->input[self->pos++];
             if (c < 0x20) { // c is signed so this catches c > 0x7f
                 --self->pos;
                 state = stop_comment;

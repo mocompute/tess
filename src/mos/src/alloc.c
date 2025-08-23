@@ -52,22 +52,22 @@ allocator *alloc_default_allocator() {
 // header to record its size (struct arena_allocation).
 
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
-    arena_block *out = (typeof(out))(((char *)bucket) + sizeof(arena_header) + bucket->size);
+    arena_block *out = (typeof(out))(((byte *)bucket) + sizeof(arena_header) + bucket->size);
 
     out->size        = sz;
     bucket->size += sz + sizeof(arena_block);
     return &out->data;
 }
 
-static size_t *block_size(char const *p) {
+static size_t *block_size(byte const *p) {
     arena_block *block = (typeof(block))(p - sizeof(size_t));
     return &block->size;
 }
 
 static bool is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
-    if (((char *)p) < ((char *)bucket)) return false;
-    return (size_t)(((char *)p) - ((char *)bucket)) + sz == bucket->size;
+    if (((byte *)p) < ((byte *)bucket)) return false;
+    return (size_t)(((byte *)p) - ((byte *)bucket)) + sz == bucket->size;
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
@@ -82,8 +82,8 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
     arena_header *bucket = arena->head;
     assert(bucket);
     while (bucket) {
-        if (((char *)ptr) > ((char *)bucket) + sizeof(arena_header) &&
-            ((char *)ptr) < ((char *)bucket + sizeof(arena_header) + bucket->size))
+        if (((byte *)ptr) > ((byte *)bucket) + sizeof(arena_header) &&
+            ((byte *)ptr) < ((byte *)bucket + sizeof(arena_header) + bucket->size))
             return bucket;
 
         bucket = bucket->next;
@@ -264,8 +264,8 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 void alloc_invalidate_n(void *p, size_t len) {
 #ifndef NDEBUG
     while (len--) {
-        if ((uintptr_t)p % 2 == 0) *(unsigned char *)p = 0xde;
-        else *(unsigned char *)p = 0xad;
+        if ((uintptr_t)p % 2 == 0) *(byte *)p = 0xde;
+        else *(byte *)p = 0xad;
         ++p;
     }
 #else
@@ -276,8 +276,8 @@ void alloc_invalidate_n(void *p, size_t len) {
 void alloc_assert_invalid(void *p, size_t len) {
 #ifndef NDEBUG
     while (len--) {
-        if ((uintptr_t)p % 2 == 0) assert(*(unsigned char *)p == 0xde);
-        else assert(*(unsigned char *)p == 0xad);
+        if ((uintptr_t)p % 2 == 0) assert(*(byte *)p == 0xde);
+        else assert(*(byte *)p == 0xad);
         ++p;
     }
 #else
