@@ -1,6 +1,8 @@
 #ifndef MOS_MAP_H
 #define MOS_MAP_H
 
+#include "map_internal.h"
+
 #include "alloc.h"
 #include "nodiscard.h"
 
@@ -22,10 +24,8 @@ typedef uint32_t   map_key;
 
 // -- allocation and deallocation --
 
-map_t        *map_alloc(allocator *);
-void          map_dealloc(allocator *, map_t **);
-nodiscard int map_init(allocator *, map_t *, uint8_t element_size, uint32_t buckets, float max_load_factor);
-void          map_deinit(allocator *, map_t *);
+nodiscard map_t *map_create(allocator *, uint8_t element_size, uint32_t buckets, float max_load_factor);
+void             map_destroy(allocator *, map_t **);
 
 // -- read-only access --
 
@@ -35,15 +35,13 @@ float  map_load_factor(map_t const *);
 
 // -- data and iterator access --
 //
-// Data cell includes a header which is the key used to store the
-// item.
-//
+// Data cell includes header struct.
 
-char *map_unchecked_at(map_t *, map_key);
+map_header *map_unchecked_at(map_t *, map_key);
 
 // -- insertion and removal --
 
-nodiscard int map_set(allocator *, map_t *, uint32_t key, void *data);
+nodiscard int map_set(allocator *, map_t **, uint32_t key, void *data);
 void         *map_get(map_t *, map_key);
 void          map_erase(map_t *, map_key);
 

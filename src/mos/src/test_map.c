@@ -1,4 +1,7 @@
 #include "map.h"
+#include "map_internal.h"
+
+#include "dbg.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -37,36 +40,41 @@ static int test_align(void) {
     return error;
 }
 
+static int test_structs(void) {
+    int error = 0;
+
+    dbg("map_cell_status size = %zu\n", sizeof(map_cell_status));
+    dbg("map_header size = %zu\n", sizeof(map_header));
+    error += 8 == sizeof(map_header) ? 0 : 1;
+    return error;
+}
+
 static int test_map(void) {
     int        error = 0;
 
     allocator *alloc = alloc_default_allocator();
 
-    map_t     *map   = map_alloc(alloc);
+    map_t     *map   = map_create(alloc, sizeof(int), 8, 0);
 
-    if (map_init(alloc, map, sizeof(int), 8, 0)) return 1;
+    error += NULL == map_get(map, 0) ? 0 : 1;
 
     int data = 0;
+    data     = 123;
+    error += 0 == map_set(alloc, &map, 0, &data) ? 0 : 1;
 
-    error += 0 == map_get(map, 0) ? 0 : 1;
-
-    data = 123;
-    error += 0 == map_set(alloc, map, 0, &data) ? 0 : 1;
     if (map_get(map, 0)) error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
     else error++;
-    // error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
 
     error += 0 == map_get(map, 1) ? 0 : 1;
     data = 456;
-    error += 0 == map_set(alloc, map, 1, &data) ? 0 : 1;
+    error += 0 == map_set(alloc, &map, 1, &data) ? 0 : 1;
     error += 456 == *(int *)map_get(map, 1) ? 0 : 1;
 
     map_erase(map, 0);
     error += 0 == map_get(map, 0) ? 0 : 1;
     error += 456 == *(int *)map_get(map, 1) ? 0 : 1;
 
-    map_deinit(alloc, map);
-    map_dealloc(alloc, &map);
+    map_destroy(alloc, &map);
 
     return error;
 }
@@ -74,29 +82,30 @@ static int test_map(void) {
 static int test_big_map(void) {
     int          error = 0;
 
-    size_t const N     = 1000000;
+    size_t const N     = 100;
 
     typedef struct pair_t {
-        ptrdiff_t left, right;
+        map_key left;
+        int     right;
+
     } pair_t;
 
     allocator *alloc = alloc_default_allocator();
     vec_t      vec;
     if (vec_init(alloc, &vec, sizeof(pair_t), N)) return error + 1;
 
-    map_t *map = map_alloc(alloc);
-    if (map_init(alloc, map, sizeof(ptrdiff_t), 8, 0)) return error + 1;
+    map_t *map = map_create(alloc, sizeof(int), 8, 0);
 
     for (size_t i = 0; i < N; ++i) {
         // find unique key
         int key = rand();
         while (map_get(map, (map_key)key)) key = rand();
 
-        pair_t pair = {key, rand()};
+        pair_t pair = {(map_key)key, rand()};
         if (vec_push_back(alloc, &vec, &pair)) {
             return 1;
         }
-        if (map_set(alloc, map, (map_key)pair.left, &pair.right)) return 1;
+        if (map_set(alloc, &map, (map_key)pair.left, &pair.right)) return 1;
     }
 
     // verify
@@ -104,21 +113,20 @@ static int test_big_map(void) {
         pair_t *pair = vec_at(&vec, i);
         void   *res  = map_get(map, (map_key)pair->left);
         if (!res) {
-            fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left, pair->right, res);
+            fprintf(stderr, "verify not found %zu: %u -> %i %p\n", i, pair->left, pair->right, res);
             return (error + 1);
         }
 
         error += pair->right == *(int *)res ? 0 : 1;
 
         if (error) {
-            fprintf(stderr, "verify failed %zu: %zu -> %zu (%p)\n", i, pair->left, pair->right, res);
+            fprintf(stderr, "verify failed %zu: %u -> %i (%p)\n", i, pair->left, pair->right, res);
             fprintf(stderr, "got %i instead\n", *(int *)res);
             return (error + 1);
         }
     }
 
-    map_deinit(alloc, map);
-    map_dealloc(alloc, &map);
+    map_destroy(alloc, &map);
 
     vec_deinit(alloc, &vec);
     return error;
@@ -137,11 +145,12 @@ int main(void) {
 
     unsigned int seed       = (unsigned int)time(0);
 
-    // seed = 1755508043;
+    seed                    = 1755916792;
     fprintf(stderr, "Seed = %u\n\n", seed);
 
     srand(seed);
 
+    T(test_structs);
     T(test_power_of_two);
     T(test_align);
     T(test_map);

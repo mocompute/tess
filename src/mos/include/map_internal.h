@@ -13,18 +13,21 @@ typedef struct {
 } map_cell_status;
 
 typedef struct {
-    uint32_t key;
+    uint32_t        key;
+    map_cell_status status;
+    char            pad[3];
+    char            data[];
+    // size = 8
 } map_header;
 
 struct map {
-    uint8_t          element_size;
-    uint8_t          aligned_element_size;
-    map_cell_status *status_array;
-    char            *data;
+    uint8_t    element_size;
+    uint8_t    aligned_element_size;
 
-    float            max_load_factor;
-    uint32_t         n_cells;
-    uint32_t         n_occupied;
+    float      max_load_factor;
+    uint32_t   n_cells;
+    uint32_t   n_occupied;
+    map_header data[];
 };
 
 #endif
