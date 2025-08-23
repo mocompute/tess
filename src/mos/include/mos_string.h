@@ -4,6 +4,7 @@
 #include "alloc.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define MOS_STRING_MAX_SMALL_LEN 14
 

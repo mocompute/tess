@@ -5,6 +5,7 @@
 #include "sexp_parser.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -60,14 +61,14 @@ int main(void) {
     int error      = 0;
     int this_error = 0;
 
-    printf("INT64_MAX             = %lli\n", INT64_MAX);
-    printf("INT64_MIN             = %lli\n", INT64_MIN);
-    printf("INT64_MAX / 2         = %lli\n", INT64_MAX / 2);
-    printf("INT64_MIN / 2         = %lli\n", INT64_MIN / 2);
-    printf("INT64_MAX >> 1        = %lli\n", INT64_MAX >> 1);
-    printf("INT64_MIN / 2        = %lli\n", INT64_MIN / 2);
-    printf("INT64_MAX/2 << 1 >> 1 = %lli\n", ((INT64_MAX >> 1) * 2) >> 1);
-    printf("INT64_MIN/2 << 1 >> 1 = %lli\n", ((INT64_MIN / 2) * 2) >> 1);
+    printf("INT64_MAX             = %" PRIi64 "\n", INT64_MAX);
+    printf("INT64_MIN             = %" PRIi64 "\n", INT64_MIN);
+    printf("INT64_MAX / 2         = %" PRIi64 "\n", INT64_MAX / 2);
+    printf("INT64_MIN / 2         = %" PRIi64 "\n", INT64_MIN / 2);
+    printf("INT64_MAX >> 1        = %" PRIi64 "\n", INT64_MAX >> 1);
+    printf("INT64_MIN / 2         = %" PRIi64 "\n", INT64_MIN / 2);
+    printf("INT64_MAX/2 << 1 >> 1 = %" PRIi64 "\n", ((INT64_MAX >> 1) * 2) >> 1);
+    printf("INT64_MIN/2 << 1 >> 1 = %" PRIi64 "\n", ((INT64_MIN / 2) * 2) >> 1);
 
     T(test_sexp_assert);
     T(test_sexp_parse);
