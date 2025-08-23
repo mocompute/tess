@@ -551,8 +551,8 @@ static int function_application(parser *p) {
 
             ast_node node;
             if (ast_node_init(p->alloc, &node, ast_named_function_application)) return 2;
-            node.named_function_application.name = name;
-            vec_move(&node.named_function_application.arguments, &arguments);
+            node.named_application.name = name;
+            vec_move(&node.named_application.arguments, &arguments);
             if (result_ast_node(p, &node)) return 1;
         }
 
@@ -681,8 +681,8 @@ static int lambda_function_application(parser *p) {
         if (0 == a_try(p, &a_end_of_expression)) {
             ast_node node;
             if (ast_node_init(p->alloc, &node, ast_lambda_function_application)) return 2;
-            node.lambda_function_application.lambda = lambda_h;
-            vec_move(&node.lambda_function_application.arguments, &arguments);
+            node.lambda_application.lambda = lambda_h;
+            vec_move(&node.lambda_application.arguments, &arguments);
             return result_ast_node(p, &node);
         }
 

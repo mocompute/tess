@@ -105,8 +105,8 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
     case ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
     case ast_let:                         deinit(node->let.parameters); break;
     case ast_tuple:                       deinit(node->tuple.elements); break;
-    case ast_lambda_function_application: deinit(node->lambda_function_application.arguments); break;
-    case ast_named_function_application:  deinit(node->named_function_application.arguments); break;
+    case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
+    case ast_named_function_application:  deinit(node->named_application.arguments); break;
     case ast_symbol:
         if (node->symbol.name) {
             // TODO: intern or pool strings
@@ -148,8 +148,8 @@ int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
     case ast_lambda_declaration:          init(node->lambda_declaration.parameters);
     case ast_let:                         init(node->let.parameters);
     case ast_tuple:                       init(node->tuple.elements);
-    case ast_lambda_function_application: init(node->lambda_function_application.arguments);
-    case ast_named_function_application:  init(node->named_function_application.arguments);
+    case ast_lambda_function_application: init(node->lambda_application.arguments);
+    case ast_named_function_application:  init(node->named_application.arguments);
 
     case ast_eof:
     case ast_nil:
@@ -392,24 +392,24 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     } break;
 
     case ast_lambda_function_application: {
-        ast_node *lambda = ast_pool_at(pool, node->lambda_function_application.lambda);
+        ast_node *lambda = ast_pool_at(pool, node->lambda_application.lambda);
 
         do_print_init();
         do_print_literal("(lambda_application ");
         do_print_node(lambda);
         do_print_literal(" ");
-        do_print_list(node->lambda_function_application.arguments);
+        do_print_list(node->lambda_application.arguments);
         do_print_literal(")");
 
     } break;
     case ast_named_function_application: {
-        ast_node *name = ast_pool_at(pool, node->named_function_application.name);
+        ast_node *name = ast_pool_at(pool, node->named_application.name);
 
         do_print_init();
         do_print_literal("(application ");
         do_print_node(name);
         do_print_literal(" ");
-        do_print_list(node->named_function_application.arguments);
+        do_print_list(node->named_application.arguments);
         do_print_literal(")");
 
     } break;

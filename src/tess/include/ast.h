@@ -144,13 +144,13 @@ typedef struct ast_node {
         struct {
             vec_t      arguments;
             ast_node_h lambda;
-        } lambda_function_application;
+        } lambda_application;
 
         struct {
             vec_t      arguments;
             ast_node_h name;
             bool       specialized;
-        } named_function_application;
+        } named_application;
 
         struct {
             vec_t elements;
