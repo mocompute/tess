@@ -5,7 +5,6 @@
 #include "types.h"
 
 #include <stdbool.h>
-#include <stdint.h>
 
 #define MOS_STRING_MAX_SMALL_LEN 14
 
@@ -13,7 +12,7 @@ typedef struct {
     union {
         struct {
             char *buf;
-            char  pad[8];
+            byte  pad[8];
         } allocated;
         struct {
             char data[MOS_STRING_MAX_SMALL_LEN + 1];
