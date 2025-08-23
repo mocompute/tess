@@ -18,10 +18,10 @@
 #endif
 
 struct allocator {
-    void *(*malloc)(struct allocator *, size_t, char const *, int);
-    void *(*calloc)(struct allocator *, size_t num, size_t size, char const *, int);
-    void *(*realloc)(struct allocator *, void *, size_t, char const *, int);
-    void (*free)(struct allocator *, void *, char const *, int);
+    void *(*malloc)(allocator *, size_t, char const *, int);
+    void *(*calloc)(allocator *, size_t num, size_t size, char const *, int);
+    void *(*realloc)(allocator *, void *, size_t, char const *, int);
+    void (*free)(allocator *, void *, char const *, int);
 };
 
 typedef struct {
@@ -33,7 +33,7 @@ typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
-    byte                 data[];
+    arena_block          data[];
 } arena_header;
 
 struct arena_allocator {
