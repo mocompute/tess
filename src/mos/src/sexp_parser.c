@@ -125,7 +125,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 continue;
             }
 
-            char const c = self->input[self->pos++];
+            int8_t const c = self->input[self->pos++]; // require signed
             switch (c) {
             case '(':
             case ')':
@@ -167,8 +167,8 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 state = stop_comment;
                 continue;
             }
-            char const c = self->input[self->pos++];
-            if (c < 0x20) { // c is signed so this catches c > 0x7f
+            int8_t const c = self->input[self->pos++]; // require signed
+            if (c < 0x20) {                            // c is signed so this catches c > 0x7f
                 --self->pos;
                 state = stop_comment;
             }
@@ -201,7 +201,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
                 continue;
             }
 
-            char const c = self->input[self->pos++];
+            int8_t const c = self->input[self->pos++];
 
             if (c >= '0' && c <= '9') continue;
             switch (c) {
