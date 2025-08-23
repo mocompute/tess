@@ -46,6 +46,7 @@ mos_create_test(alloc)
 mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(string)
+mos_create_test(types)
 mos_create_test(vector)
 
 # -- doxygen --

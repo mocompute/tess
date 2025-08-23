@@ -2,6 +2,7 @@
 #define MOS_ALLOC_H
 
 #include "nodiscard.h"
+#include "types.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,14 +16,14 @@ typedef struct allocator {
 
 typedef struct {
     size_t size;
-    char   data[];
+    byte   data[];
 } arena_block;
 
 typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
-    char                 data[];
+    byte                 data[];
 } arena_header;
 
 typedef struct arena_allocator {
