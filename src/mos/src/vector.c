@@ -104,8 +104,9 @@ void vec_pop_back(vec_t *vec) {
     vec->data->size -= 1;
 }
 
-void vec_erase(vec_t *vec, char *it) {
-    char const *const end = vec->data->data + vec->data->size * vec->element_size;
+void vec_erase(vec_t *vec, void *it_) {
+    byte *const       it  = (typeof(it))it_;
+    byte const *const end = vec->data->data + vec->data->size * vec->element_size;
     ptrdiff_t         len = end - it - (ptrdiff_t)vec->element_size;
 
     memmove(it, it + vec->element_size, (size_t)len);
@@ -130,7 +131,7 @@ void vec_clear(vec_t *vec) {
     if (!vec_empty(vec)) vec->data->size = 0;
 }
 
-char *vec_data(vec_t *vec) {
+void *vec_data(vec_t *vec) {
     if (vec_empty(vec)) return NULL;
     return vec->data->data;
 }
@@ -170,14 +171,14 @@ int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
     return 0;
 }
 
-char *vec_assoc_get(vec_t *vec, size_t key) {
+void *vec_assoc_get(vec_t *vec, size_t key) {
     if (vec_empty(vec)) return NULL;
 
     // From the back, search for an element whose first size_t field
     // matches the search term.
 
-    char const *const last         = vec->data->data;
-    char             *it           = vec_back(vec);
+    byte const *const last         = vec->data->data;
+    byte             *it           = vec_back(vec);
     size_t const      element_size = vec->element_size;
 
     while (1) {

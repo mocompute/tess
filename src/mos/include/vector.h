@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "nodiscard.h"
+#include "types.h"
 
 #include <stdbool.h>
 
@@ -16,7 +17,7 @@
 typedef struct {
     size_t capacity;
     size_t size;
-    char   data[];
+    byte   data[];
 } vec_data_header;
 
 typedef struct vec {
@@ -42,7 +43,7 @@ bool   vec_empty(vec_t const *);
 
 // -- data and iterator access --
 
-char       *vec_data(vec_t *);
+void       *vec_data(vec_t *);
 void       *vec_begin(vec_t *);
 void const *vec_cbegin(vec_t const *);
 void const *vec_end(vec_t *);
@@ -54,7 +55,7 @@ void       *vec_back(vec_t *);
 nodiscard int vec_push_back(allocator *, vec_t *, void const *element);
 nodiscard int vec_copy_back(allocator *, vec_t *, void const *start, size_t count);
 void          vec_pop_back(vec_t *);
-void          vec_erase(vec_t *, char *);
+void          vec_erase(vec_t *, void *);
 nodiscard int vec_resize(allocator *, vec_t *, size_t);
 void          vec_clear(vec_t *);
 
@@ -65,7 +66,7 @@ void          vec_clear(vec_t *);
 // the first one found, searching from the back.
 
 nodiscard int vec_assoc_set(allocator *, vec_t *, void const *);
-char         *vec_assoc_get(vec_t *, size_t);
+void         *vec_assoc_get(vec_t *, size_t);
 void          vec_assoc_erase(vec_t *, size_t);
 
 #endif
