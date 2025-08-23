@@ -46,7 +46,7 @@ void vec_deinit(allocator *alloc, vec_t *vec) {
 
 int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
 
-    if (vec_empty(vec)) return vec_init(alloc, vec, vec->element_size, count);
+    if (NULL == vec->data) return vec_init(alloc, vec, vec->element_size, count);
 
     if (vec->data->capacity >= count) return 0;
 
@@ -54,15 +54,14 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
     if (new_capacity == 0) new_capacity = 8;
     while (new_capacity < count) new_capacity *= 2;
 
-    dbg("vec_reserve: realloc count %zu\n", count);
-    assert(count < 10000000);
-    void *p = alloc->realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
-    if (!p) {
+    void *resized =
+      alloc->realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
+    if (!resized) {
         dbg("vec_reserve: oom\n");
         return 1;
     }
 
-    vec->data           = p;
+    vec->data           = resized;
     vec->data->capacity = new_capacity;
     return 0;
 }
@@ -114,7 +113,7 @@ void vec_erase(vec_t *vec, char *it) {
 }
 
 nodiscard int vec_resize(allocator *alloc, vec_t *vec, size_t n) {
-    if (vec_empty(vec)) return vec_init(alloc, vec, vec->element_size, n);
+    if (NULL == vec->data) return vec_init(alloc, vec, vec->element_size, n);
 
     if (n > vec->data->capacity)
         if (vec_reserve(alloc, vec, n)) {

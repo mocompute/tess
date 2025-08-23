@@ -80,6 +80,7 @@ static int test_map(void) {
 }
 
 static int test_big_map(void) {
+
     int          error = 0;
 
     size_t const N     = 100000;
@@ -92,7 +93,10 @@ static int test_big_map(void) {
 
     allocator *alloc = alloc_default_allocator();
     vec_t      vec;
-    if (vec_init(alloc, &vec, sizeof(pair_t), N)) return error + 1;
+    if (vec_init(alloc, &vec, sizeof(pair_t), N)) {
+        error++;
+        goto cleanup;
+    }
 
     map_t *map = map_create(alloc, sizeof(int), 8, 0);
 
@@ -103,9 +107,12 @@ static int test_big_map(void) {
 
         pair_t pair = {(map_key)key, rand()};
         if (vec_push_back(alloc, &vec, &pair)) {
-            return 1;
+            goto cleanup;
         }
-        if (map_set(alloc, &map, (map_key)pair.left, &pair.right)) return 1;
+        if (map_set(alloc, &map, (map_key)pair.left, &pair.right)) {
+            error++;
+            goto cleanup;
+        }
     }
 
     // verify
@@ -114,7 +121,8 @@ static int test_big_map(void) {
         void   *res  = map_get(map, (map_key)pair->left);
         if (!res) {
             fprintf(stderr, "verify not found %zu: %u -> %i %p\n", i, pair->left, pair->right, res);
-            return (error + 1);
+            error++;
+            goto cleanup;
         }
 
         error += pair->right == *(int *)res ? 0 : 1;
@@ -122,12 +130,14 @@ static int test_big_map(void) {
         if (error) {
             fprintf(stderr, "verify failed %zu: %u -> %i (%p)\n", i, pair->left, pair->right, res);
             fprintf(stderr, "got %i instead\n", *(int *)res);
-            return (error + 1);
+            error++;
+            goto cleanup;
         }
     }
 
     map_destroy(alloc, &map);
 
+cleanup:
     vec_deinit(alloc, &vec);
     return error;
 }
