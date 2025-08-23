@@ -5,6 +5,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc_internal.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/dbg.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/map.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/map_internal.h
@@ -19,6 +20,7 @@ set(SOURCES
   src/alloc.c
   src/dbg.c
   src/hash.c
+  src/file.c
   src/map.c
   src/mos_string.c
   src/sexp.c
