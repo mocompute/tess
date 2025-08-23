@@ -18,12 +18,12 @@ static size_t bucket_size(map_t const *map) {
     return map->aligned_element_size + sizeof(map_header);
 }
 
-static uint32_t key_to_bucket(map_t const *map, map_key key) {
+static u32 key_to_bucket(map_t const *map, map_key key) {
     assert(map);
     return key % map->n_cells;
 }
 
-static uint32_t incr_index(map_t const *map, uint32_t index) {
+static u32 incr_index(map_t const *map, u32 index) {
     return (index + 1) % map->n_cells;
 }
 
@@ -32,8 +32,8 @@ static uint32_t incr_index(map_t const *map, uint32_t index) {
 static map_header *map_find(map_t *map, map_key key) {
     assert(map);
 
-    uint32_t index          = key_to_bucket(map, key);
-    uint32_t probe_distance = 0;
+    u32 index          = key_to_bucket(map, key);
+    u32 probe_distance = 0;
 
     while (1) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
@@ -42,28 +42,26 @@ static map_header *map_find(map_t *map, map_key key) {
         map_cell_status   status = cell->status;
 
         if (status.tombstone) {
-            // keep looking
+
             index = incr_index(map, index);
+
         } else if (status.occupied) {
 
-            if (cell->key != key) {
-                // keep looking
-                index = incr_index(map, index);
-            } else {
-                // found
-                return cell;
-            }
+            if (cell->key == key) return cell;
+
+            index = incr_index(map, index);
+
         } else {
-            // target bucket is empty and not a tombstone
-            return 0;
+
+            return null;
         }
     }
 }
 
-static int set_one(map_t *map, map_header const *header, char const *element) {
+static int set_one(map_t *map, map_header const *header, byte const *element) {
 
-    char to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
-    char tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
+    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
+    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
 
     assert(map);
 
@@ -75,9 +73,9 @@ static int set_one(map_t *map, map_header const *header, char const *element) {
     memcpy(to_store, header, sizeof *header);
     memcpy(to_store + sizeof *header, element, map->element_size);
 
-    uint32_t      index           = key_to_bucket(map, header->key);
-    unsigned char probe_distance  = 0;
-    int           warning_printed = 0;
+    u32 index           = key_to_bucket(map, header->key);
+    u8  probe_distance  = 0;
+    int warning_printed = 0;
 
     while (1) {
         if (probe_distance > MAX_PROBE_LEN) {
@@ -101,7 +99,7 @@ static int set_one(map_t *map, map_header const *header, char const *element) {
                 // swap
 
                 // save relevant status of cell to be evicted
-                uint8_t evicted_probe_distance = cell->status.probe_distance;
+                u8 evicted_probe_distance = cell->status.probe_distance;
 
                 // copy evicted cell (header + data) to tmp
                 memcpy(tmp, cell, cell_size);
@@ -159,15 +157,14 @@ static int grow_buckets(allocator *alloc, map_t **map) {
         return 1;
     }
 
-    map_t *new_map =
-      map_create(alloc, (*map)->element_size, (uint32_t)new_buckets, (*map)->max_load_factor);
+    map_t *new_map = map_create(alloc, (*map)->element_size, (u32)new_buckets, (*map)->max_load_factor);
 
     if (!new_map) {
         dbg("map grow_buckets: oom\n");
         return 1;
     }
 
-    for (uint32_t i = 0; i < (*map)->n_cells; ++i) {
+    for (u32 i = 0; i < (*map)->n_cells; ++i) {
         map_header *cell = map_unchecked_at(*map, i);
         if (cell->status.occupied) {
             if (set_one_cell(new_map, cell)) return 1;
@@ -183,8 +180,8 @@ static int grow_buckets(allocator *alloc, map_t **map) {
 
 // -- externals --
 
-float map_load_factor(map_t const *map) {
-    return (float)map->n_occupied / (float)map->n_cells;
+f32 map_load_factor(map_t const *map) {
+    return (f32)map->n_occupied / (f32)map->n_cells;
 }
 
 size_t map_size(map_t const *map) {
@@ -196,13 +193,13 @@ bool map_empty(map_t const *map) {
 }
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
-map_header *map_unchecked_at(map_t *map, uint32_t index) {
-    return (map_header *)(((char *)map->data) + index * bucket_size(map));
+map_header *map_unchecked_at(map_t *map, u32 index) {
+    return (map_header *)(((byte *)map->data) + index * bucket_size(map));
 }
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
-uint32_t map_next_power_of_two(uint32_t n) {
+u32 map_next_power_of_two(u32 n) {
 
     if (n > (1U << 31)) return 0; // overflow
     if (n == 0) return 1;
@@ -219,23 +216,23 @@ uint32_t map_next_power_of_two(uint32_t n) {
 
 //
 
-map_t *map_create(allocator *alloc, uint8_t element_size, uint32_t n_buckets, float max_load_factor) {
+map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load_factor) {
 
     assert(sizeof(map_cell_status) == 1);
 
-    if (element_size > MAP_MAX_ELEMENT_SIZE) return NULL;
+    if (element_size > MAP_MAX_ELEMENT_SIZE) return null;
     if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
     n_buckets = map_next_power_of_two(n_buckets);
     assert(n_buckets > 0);
 
-    uint8_t aligned_element_size = (uint8_t)alloc_align_to_word_size(element_size);
+    u8 aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
     size_t bucket_size        = aligned_element_size + sizeof(map_header);
 
     map_t *map                = alloc->calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
     map->element_size         = element_size;
-    map->aligned_element_size = (uint8_t)alloc_align_to_word_size(element_size);
+    map->aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     map->n_cells              = n_buckets;
     map->max_load_factor      = max_load_factor;
 
@@ -244,7 +241,7 @@ map_t *map_create(allocator *alloc, uint8_t element_size, uint32_t n_buckets, fl
 
 void map_destroy(allocator *alloc, map_t **map) {
     alloc->free(alloc, *map);
-    *map = NULL;
+    *map = null;
 }
 
 int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
@@ -269,7 +266,7 @@ int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
 
 void *map_get(map_t *map, map_key key) {
     map_header *cell = map_find(map, key);
-    if (!cell) return 0;
+    if (!cell) return null;
     return cell->data;
 }
 
