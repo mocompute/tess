@@ -151,8 +151,8 @@ nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     ast_node node;
     if (ast_node_init(p->alloc, &node, tag)) return 1;
 
-    node.symbol.name = alloc_strdup(p->alloc, s); // syms and strs use same union
-    if (!node.symbol.name) return 1;
+    if (mos_string_init(p->alloc, &node.symbol.name, s)) return 1;
+    // syms and strs use same union
 
     return ast_pool_move_back(p->alloc, p->ast_pool, &node, &p->result);
 }
@@ -619,7 +619,7 @@ static int infix_operation(parser *p) {
     ast_node    *op_node = ast_pool_at(p->ast_pool, p->result);
 
     ast_operator op;
-    if (string_to_ast_operator(op_node->symbol.name, &op)) return 1;
+    if (string_to_ast_operator(mos_string_str(&op_node->symbol.name), &op)) return 1;
 
     if (a_try(p, &infix_operand)) return 1;
     ast_node_h const rhs = p->result;

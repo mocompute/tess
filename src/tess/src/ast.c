@@ -107,13 +107,7 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
     case ast_tuple:                       deinit(node->tuple.elements); break;
     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
     case ast_named_function_application:  deinit(node->named_application.arguments); break;
-    case ast_symbol:
-        if (node->symbol.name) {
-            // TODO: intern or pool strings
-            alloc->free(alloc, node->symbol.name);
-            node->symbol.name = 0;
-        }
-        break;
+    case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -123,7 +117,7 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
     case ast_string:
     case ast_infix:
     case ast_let_in:
-    case ast_if_then_else: break;
+    case ast_if_then_else:                break;
     }
 
 #undef deinit
@@ -272,11 +266,11 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     case ast_eof:    return snprintf(buf, sz, "(eof)");
     case ast_nil:    return snprintf(buf, sz, "(nil)");
     case ast_bool:   return snprintf(buf, sz, "(bool %d)", node->bool_.val);
-    case ast_symbol: return snprintf(buf, sz, "(symbol %s)", node->symbol.name);
+    case ast_symbol: return snprintf(buf, sz, "(symbol %s)", mos_string_str(&node->symbol.name));
     case ast_i64:    return snprintf(buf, sz, "(i64 %" PRId64 ")", node->i64.val);
     case ast_u64:    return snprintf(buf, sz, "(u64 %" PRIu64 ")", node->u64.val);
     case ast_f64:    return snprintf(buf, sz, "(f64 %f)", node->f64.val);
-    case ast_string: return snprintf(buf, sz, "(string \"%s\")", node->symbol.name);
+    case ast_string: return snprintf(buf, sz, "(string \"%s\")", mos_string_str(&node->symbol.name));
 
     case ast_infix:  {
         ast_node *left, *right;

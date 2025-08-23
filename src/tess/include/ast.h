@@ -2,6 +2,7 @@
 #define TESS_AST_H
 
 #include "alloc.h"
+#include "mos_string.h"
 #include "nodiscard.h"
 #include "util.h"
 #include "vector.h"
@@ -84,7 +85,7 @@ typedef struct {
 typedef struct ast_node {
     union {
         struct {
-            char *name;
+            string_t name;
         } symbol;
 
         struct {

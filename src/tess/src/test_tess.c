@@ -195,7 +195,7 @@ static int test_parser_basic(void) {
     ast_node *node = ast_pool_at(pool, node_h);
 
     error += ast_symbol == node->tag ? 0 : 1;
-    error += 0 == strcmp(node->symbol.name, "a") ? 0 : 1;
+    error += 0 == strcmp(mos_string_str(&node->symbol.name), "a") ? 0 : 1;
 
     parser_deinit(p);
     parser_dealloc(alloc, &p);
