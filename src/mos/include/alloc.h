@@ -16,7 +16,7 @@ typedef struct allocator {
 typedef struct {
     size_t size;
     char   data[];
-} arena_allocation;
+} arena_block;
 
 typedef struct arena_header {
     struct arena_header *next;
