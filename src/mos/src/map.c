@@ -29,31 +29,28 @@ static uint32_t incr_index(map_t const *map, uint32_t index) {
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static map_header *map_find(map_t *map, map_key key, uint32_t *out_index) {
+static map_header *map_find(map_t *map, map_key key) {
     assert(map);
 
     uint32_t index          = key_to_bucket(map, key);
-
     uint32_t probe_distance = 0;
 
     while (1) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
-        map_cell_status status = map->data[index].status;
+        map_header *const cell   = map_unchecked_at(map, index);
+        map_cell_status   status = cell->status;
 
         if (status.tombstone) {
             // keep looking
             index = incr_index(map, index);
         } else if (status.occupied) {
-            map_header *const cell      = map_unchecked_at(map, index);
-            map_key           found_key = cell->key;
 
-            if (found_key != key) {
+            if (cell->key != key) {
                 // keep looking
                 index = incr_index(map, index);
             } else {
                 // found
-                if (out_index) *out_index = (uint32_t)index;
                 return cell;
             }
         } else {
@@ -74,12 +71,12 @@ static int set_one(map_t *map, map_header const *header, char const *element) {
     assert(bucket_size(map) >= cell_size);
 
     // write header and data to to_store
+    assert(MAP_MAX_ELEMENT_SIZE >= map->element_size);
     memcpy(to_store, header, sizeof *header);
     memcpy(to_store + sizeof *header, element, map->element_size);
 
     uint32_t      index           = key_to_bucket(map, header->key);
     unsigned char probe_distance  = 0;
-
     int           warning_printed = 0;
 
     while (1) {
@@ -93,24 +90,34 @@ static int set_one(map_t *map, map_header const *header, char const *element) {
             warning_printed = 1;
         }
 
-        if (map->data[index].status.occupied) {
-            if (probe_distance <= map->data[index].status.probe_distance) {
+        map_header *const cell = map_unchecked_at(map, index);
+
+        if (cell->status.occupied) {
+            if (probe_distance <= cell->status.probe_distance) {
                 // continue probing
                 ++probe_distance;
                 index = incr_index(map, index);
             } else {
                 // swap
-                map_header *const cell = map_unchecked_at(map, index);
+
+                // save relevant status of cell to be evicted
+                uint8_t evicted_probe_distance = cell->status.probe_distance;
 
                 // copy evicted cell (header + data) to tmp
                 memcpy(tmp, cell, cell_size);
-                // write header (from to_store) in place of evicted cell
+
+                // write header and data (from to_store) in place of evicted cell
                 memcpy(cell, to_store, cell_size);
+
+                // set correct status for installed cell
+                cell->status = (map_cell_status){
+                  .occupied       = 1,
+                  .tombstone      = 0,
+                  .probe_distance = probe_distance,
+                };
+
                 // write evicted cell (header + data) into to_store
                 memcpy(to_store, tmp, cell_size);
-
-                uint8_t evicted_probe_distance         = map->data[index].status.probe_distance;
-                map->data[index].status.probe_distance = probe_distance;
 
                 // continue probing with swapped element, using evicted key
                 warning_printed = 0;
@@ -119,14 +126,15 @@ static int set_one(map_t *map, map_header const *header, char const *element) {
             }
         } else {
             // found an empty slot
-            map_header *const cell = map_unchecked_at(map, index);
 
             // write cell (header + data) to bucket and set status
             memcpy(cell, to_store, cell_size);
 
-            map->data[index].status.occupied       = 1;
-            map->data[index].status.tombstone      = 0;
-            map->data[index].status.probe_distance = probe_distance;
+            cell->status = (map_cell_status){
+              .occupied       = 1,
+              .tombstone      = 0,
+              .probe_distance = probe_distance,
+            };
             map->n_occupied++;
 
             return 0;
@@ -160,9 +168,8 @@ static int grow_buckets(allocator *alloc, map_t **map) {
     }
 
     for (uint32_t i = 0; i < (*map)->n_cells; ++i) {
-        if ((*map)->data[i].status.occupied) {
-            map_header *cell = map_unchecked_at(*map, i);
-
+        map_header *cell = map_unchecked_at(*map, i);
+        if (cell->status.occupied) {
             if (set_one_cell(new_map, cell)) return 1;
         }
     }
@@ -190,7 +197,7 @@ bool map_empty(map_t const *map) {
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
 map_header *map_unchecked_at(map_t *map, uint32_t index) {
-    return (map_header *)(((char *)&map->data) + index * bucket_size(map));
+    return (map_header *)(((char *)map->data) + index * bucket_size(map));
 }
 
 // Returns: input if already a power of two, or else the next higher
@@ -212,24 +219,24 @@ uint32_t map_next_power_of_two(uint32_t n) {
 
 //
 
-map_t *map_create(allocator *alloc, uint8_t element_size, uint32_t buckets, float max_load_factor) {
+map_t *map_create(allocator *alloc, uint8_t element_size, uint32_t n_buckets, float max_load_factor) {
 
     assert(sizeof(map_cell_status) == 1);
 
     if (element_size > MAP_MAX_ELEMENT_SIZE) return NULL;
     if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
-    buckets = map_next_power_of_two(buckets);
-    assert(buckets > 0);
+    n_buckets = map_next_power_of_two(n_buckets);
+    assert(n_buckets > 0);
 
     uint8_t aligned_element_size = (uint8_t)alloc_align_to_word_size(element_size);
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
     size_t bucket_size        = aligned_element_size + sizeof(map_header);
 
-    map_t *map                = alloc->calloc(alloc, 1, sizeof(struct map) + buckets * bucket_size);
+    map_t *map                = alloc->calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
     map->element_size         = element_size;
     map->aligned_element_size = (uint8_t)alloc_align_to_word_size(element_size);
-    map->n_cells              = buckets;
+    map->n_cells              = n_buckets;
     map->max_load_factor      = max_load_factor;
 
     return map;
@@ -261,17 +268,16 @@ int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
 }
 
 void *map_get(map_t *map, map_key key) {
-    map_header *cell = map_find(map, key, 0);
+    map_header *cell = map_find(map, key);
     if (!cell) return 0;
     return cell->data;
 }
 
 void map_erase(map_t *map, map_key key) {
-    uint32_t    index;
-    map_header *p = map_find(map, key, &index);
-    if (!p) return;
+    map_header *cell = map_find(map, key);
+    if (!cell) return;
 
-    map->data[index].status.occupied  = 0;
-    map->data[index].status.tombstone = 1;
+    cell->status.occupied  = 0;
+    cell->status.tombstone = 1;
     map->n_occupied--;
 }

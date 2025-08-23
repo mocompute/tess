@@ -82,7 +82,7 @@ static int test_map(void) {
 static int test_big_map(void) {
     int          error = 0;
 
-    size_t const N     = 100;
+    size_t const N     = 100000;
 
     typedef struct pair_t {
         map_key left;
