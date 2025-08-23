@@ -44,8 +44,10 @@ static int test_structs(void) {
     int error = 0;
 
     dbg("map_cell_status size = %zu\n", sizeof(map_cell_status));
-    dbg("map_header size = %zu\n", sizeof(map_header));
-    error += 8 == sizeof(map_header) ? 0 : 1;
+    dbg("map_header size = %zu\n", sizeof(map_element_header));
+
+    assert(8 == sizeof(map_element_header));
+
     return error;
 }
 

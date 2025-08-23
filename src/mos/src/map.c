@@ -15,7 +15,7 @@
 // -- statics --
 
 static size_t bucket_size(map_t const *map) {
-    return map->aligned_element_size + sizeof(map_header);
+    return map->aligned_element_size + sizeof(map_element_header);
 }
 
 static u32 key_to_bucket(map_t const *map, map_key key) {
@@ -29,7 +29,7 @@ static u32 incr_index(map_t const *map, u32 index) {
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static map_header *map_find(map_t *map, map_key key) {
+static map_element_header *map_find(map_t *map, map_key key) {
     assert(map);
 
     u32 index          = key_to_bucket(map, key);
@@ -38,8 +38,9 @@ static map_header *map_find(map_t *map, map_key key) {
     while (1) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
-        map_header *const cell   = map_unchecked_at(map, index);
-        map_cell_status   status = cell->status;
+        map_element_header *const cell   = map_unchecked_at(map, index);
+
+        map_cell_status           status = cell->status;
 
         if (status.tombstone) {
 
@@ -58,14 +59,14 @@ static map_header *map_find(map_t *map, map_key key) {
     }
 }
 
-static int set_one(map_t *map, map_header const *header, byte const *element) {
+static int set_one(map_t *map, map_element_header const *header, byte const *element) {
 
-    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
-    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_header)];
+    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_element_header)];
+    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_element_header)];
 
     assert(map);
 
-    size_t const cell_size = sizeof(map_header) + map->element_size;
+    size_t const cell_size = sizeof(map_element_header) + map->element_size;
     assert(bucket_size(map) >= cell_size);
 
     // write header and data to to_store
@@ -84,11 +85,11 @@ static int set_one(map_t *map, map_header const *header, byte const *element) {
         }
         if (probe_distance > 16 && !warning_printed) {
             fprintf(stderr, "warning: high probe distance for key: %u, load factor: %f\n",
-                    ((map_header *)to_store)->key, map_load_factor(map));
+                    ((map_element_header *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
         }
 
-        map_header *const cell = map_unchecked_at(map, index);
+        map_element_header *const cell = map_unchecked_at(map, index);
 
         if (cell->status.occupied) {
             if (probe_distance <= cell->status.probe_distance) {
@@ -141,7 +142,7 @@ static int set_one(map_t *map, map_header const *header, byte const *element) {
     return 0;
 }
 
-static int set_one_cell(map_t *map, map_header *cell) {
+static int set_one_cell(map_t *map, map_element_header *cell) {
     return set_one(map, cell, cell->data);
 }
 
@@ -165,7 +166,7 @@ static int grow_buckets(allocator *alloc, map_t **map) {
     }
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
-        map_header *cell = map_unchecked_at(*map, i);
+        map_element_header *cell = map_unchecked_at(*map, i);
         if (cell->status.occupied) {
             if (set_one_cell(new_map, cell)) return 1;
         }
@@ -193,8 +194,8 @@ bool map_empty(map_t const *map) {
 }
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
-map_header *map_unchecked_at(map_t *map, u32 index) {
-    return (map_header *)(((byte *)map->data) + index * bucket_size(map));
+map_element_header *map_unchecked_at(map_t *map, u32 index) {
+    return (map_element_header *)(((byte *)map->data) + index * bucket_size(map));
 }
 
 // Returns: input if already a power of two, or else the next higher
@@ -218,8 +219,6 @@ u32 map_next_power_of_two(u32 n) {
 
 map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load_factor) {
 
-    assert(sizeof(map_cell_status) == 1);
-
     if (element_size > MAP_MAX_ELEMENT_SIZE) return null;
     if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
@@ -228,7 +227,7 @@ map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load
 
     u8 aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
-    size_t bucket_size        = aligned_element_size + sizeof(map_header);
+    size_t bucket_size        = aligned_element_size + sizeof(map_element_header);
 
     map_t *map                = alloc->calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
     map->element_size         = element_size;
@@ -260,18 +259,18 @@ int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
         }
     }
 
-    map_header header = {.key = key, {0}};
+    map_element_header header = {.key = key, {0}};
     return set_one(*map, &header, data);
 }
 
 void *map_get(map_t *map, map_key key) {
-    map_header *cell = map_find(map, key);
+    map_element_header *cell = map_find(map, key);
     if (!cell) return null;
     return cell->data;
 }
 
 void map_erase(map_t *map, map_key key) {
-    map_header *cell = map_find(map, key);
+    map_element_header *cell = map_find(map, key);
     if (!cell) return;
 
     cell->status.occupied  = 0;

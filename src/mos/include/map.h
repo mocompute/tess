@@ -38,7 +38,7 @@ f32    map_load_factor(map_t const *);
 //
 // Data cell includes header struct.
 
-map_header *map_unchecked_at(map_t *, map_key);
+map_element_header *map_unchecked_at(map_t *, map_key);
 
 // -- insertion and removal --
 

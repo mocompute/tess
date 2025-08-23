@@ -19,14 +19,18 @@ typedef struct {
     byte            pad[3];
     byte            data[];
     // size = 8
-} map_header;
+} map_element_header;
 
 struct map {
-    u32  n_cells;
-    u32  n_occupied;
-    f32  max_load_factor;
-    u8   element_size;
-    u8   aligned_element_size;
+    struct {
+        u32 n_cells;
+        u32 n_occupied;
+        f32 max_load_factor;
+        u8  element_size;
+        u8  aligned_element_size;
+        // aligned size = 16
+    };
+
     byte data[]; // map_header + aligned_element_size
 };
 
