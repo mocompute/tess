@@ -130,7 +130,6 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
             case '(':
             case ')':
             case ' ':
-            case '\'':
             case '"':
                 // these tokens break a symbol
                 --self->pos;
