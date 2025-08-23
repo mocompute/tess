@@ -109,8 +109,8 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
             return 1; // overflow
         }
         if (probe_distance > 16 && !warning_printed) {
-            fprintf(stderr, "warning: high probe distance for key: %u, load factor: %f\n",
-                    ((map_element_header *)to_store)->key, map_load_factor(map));
+            dbg("warning: high probe distance for key: %u, load factor: %f\n",
+                ((map_element_header *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
         }
 
