@@ -52,7 +52,9 @@ static int test_map(void) {
 
     data = 123;
     error += 0 == map_set(alloc, map, 0, &data) ? 0 : 1;
-    error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
+    if (map_get(map, 0)) error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
+    else error++;
+    // error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
 
     error += 0 == map_get(map, 1) ? 0 : 1;
     data = 456;
@@ -88,19 +90,19 @@ static int test_big_map(void) {
     for (size_t i = 0; i < N; ++i) {
         // find unique key
         int key = rand();
-        while (map_get(map, (size_t)key)) key = rand();
+        while (map_get(map, (map_key)key)) key = rand();
 
         pair_t pair = {key, rand()};
         if (vec_push_back(alloc, &vec, &pair)) {
             return 1;
         }
-        if (map_set(alloc, map, (size_t)pair.left, &pair.right)) return 1;
+        if (map_set(alloc, map, (map_key)pair.left, &pair.right)) return 1;
     }
 
     // verify
     for (size_t i = 0; i < vec_size(&vec); ++i) {
         pair_t *pair = vec_at(&vec, i);
-        void   *res  = map_get(map, (size_t)pair->left);
+        void   *res  = map_get(map, (map_key)pair->left);
         if (!res) {
             fprintf(stderr, "verify not found %zu: %zu -> %zu %p\n", i, pair->left, pair->right, res);
             return (error + 1);

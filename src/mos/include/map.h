@@ -10,20 +10,21 @@
 
 // -- hash map --
 //
-// A hash map with size_t keys and aribitrary-sized values. Note that
-// keys are size_t because they should be a good hash selected by the
-// client.
+// A hash map with uint32_t keys and smallish (up to 24 byte) values.
+// Note that keys are uint32_t because they should be a good hash
+// selected by the client.
 //
 // Each cell places the key in a header, followed by client's
 // element_size bytes of data.
 
 typedef struct map map_t;
+typedef uint32_t   map_key;
 
 // -- allocation and deallocation --
 
 map_t        *map_alloc(allocator *);
 void          map_dealloc(allocator *, map_t **);
-nodiscard int map_init(allocator *, map_t *, size_t element_size, uint32_t buckets, float max_load_factor);
+nodiscard int map_init(allocator *, map_t *, uint8_t element_size, uint32_t buckets, float max_load_factor);
 void          map_deinit(allocator *, map_t *);
 
 // -- read-only access --
@@ -34,16 +35,17 @@ float  map_load_factor(map_t const *);
 
 // -- data and iterator access --
 //
-// Data cell includes a size_t header, which is the key used to store the item.
+// Data cell includes a header which is the key used to store the
+// item.
 //
 
-char *map_unchecked_at(map_t *, uint32_t);
+char *map_unchecked_at(map_t *, map_key);
 
 // -- insertion and removal --
 
-nodiscard int map_set(allocator *, map_t *, size_t key, void *data);
-void         *map_get(map_t *, size_t);
-void          map_erase(map_t *, size_t);
+nodiscard int map_set(allocator *, map_t *, uint32_t key, void *data);
+void         *map_get(map_t *, map_key);
+void          map_erase(map_t *, map_key);
 
 // -- utilities --
 
