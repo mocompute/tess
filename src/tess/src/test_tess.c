@@ -23,14 +23,14 @@ static int test_tess_token_string(void) {
         token_init(&tok, tok_equal_sign);
         char *s = token_to_string(alloc, &tok);
         error += 0 == strcmp("(equal_sign)", s) ? 0 : 1;
-        alloc->free(alloc, s);
+        alloc_free(alloc, s);
     }
 
     {
         token_init_v(&tok, tok_newline_indent, 4);
         char *s = token_to_string(alloc, &tok);
         error += 0 == strcmp("(newline_indent 4)", s) ? 0 : 1;
-        alloc->free(alloc, s);
+        alloc_free(alloc, s);
     }
 
     {
@@ -40,7 +40,7 @@ static int test_tess_token_string(void) {
         char *s = token_to_string(alloc, &tok);
 
         error += 0 == strcmp("(number \"123\")", s) ? 0 : 1;
-        alloc->free(alloc, s);
+        alloc_free(alloc, s);
 
         token_deinit(alloc, &tok);
     }

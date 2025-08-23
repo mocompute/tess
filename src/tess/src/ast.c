@@ -52,15 +52,15 @@ void tess_type_deinit(allocator *alloc, tess_type *ty) {
 // -- tess_type_pool allocation and deallocation --
 
 ast_pool *ast_pool_alloc(allocator *alloc) {
-    return alloc->malloc(alloc, sizeof(ast_pool));
+    return alloc_malloc(alloc, sizeof(ast_pool));
 }
 
 ast_pool *ast_pool_create(allocator *alloc) {
-    ast_pool *out = alloc->malloc(alloc, sizeof(ast_pool));
+    ast_pool *out = alloc_malloc(alloc, sizeof(ast_pool));
     if (!out) return out;
 
     if (ast_pool_init(alloc, out)) {
-        alloc->free(alloc, out);
+        alloc_free(alloc, out);
         return null;
     }
     return out;
@@ -68,7 +68,7 @@ ast_pool *ast_pool_create(allocator *alloc) {
 
 void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
     alloc_assert_invalid(*pool);
-    alloc->free(alloc, *pool);
+    alloc_free(alloc, *pool);
     *pool = null;
 }
 

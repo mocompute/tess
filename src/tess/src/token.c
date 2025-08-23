@@ -22,7 +22,7 @@ void token_init_v(token *tok, token_tag tag, u8 val) {
 int token_init_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
 
     tok->tag = tag;
-    tok->s   = alloc->malloc(alloc, strlen(s) + 1);
+    tok->s   = alloc_malloc(alloc, strlen(s) + 1);
     if (!tok->s) return 1;
     strcpy(tok->s, s);
 
@@ -32,7 +32,7 @@ int token_init_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
 int token_init_sn(allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
 
     tok->tag = tag;
-    tok->s   = alloc->malloc(alloc, len + 1);
+    tok->s   = alloc_malloc(alloc, len + 1);
     if (!tok->s) return 1;
     memcpy(tok->s, s, len);
     tok->s[len] = 0;
@@ -55,7 +55,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_number:
     case tok_symbol:
     case tok_string:
-    case tok_comment:        alloc->free(alloc, tok->s); break;
+    case tok_comment:        alloc_free(alloc, tok->s); break;
     }
 
     alloc_invalidate(tok);
@@ -85,15 +85,15 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_symbol:
     case tok_string:
     case tok_comment:        {
-        char *big = alloc->malloc(alloc, strlen(tok->s) + 64);
+        char *big = alloc_malloc(alloc, strlen(tok->s) + 64);
         if (!big) return big;
         sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);
-        big = alloc->realloc(alloc, big, strlen(big) + 1);
+        big = alloc_realloc(alloc, big, strlen(big) + 1);
         return big;
     }
     }
 
-    char *out = alloc->malloc(alloc, strlen(buf) + 1);
+    char *out = alloc_malloc(alloc, strlen(buf) + 1);
     if (!out) return out;
     strcpy(out, buf);
     return out;

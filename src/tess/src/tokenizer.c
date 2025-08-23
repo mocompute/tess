@@ -28,12 +28,12 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 // -- allocation and deallocation --
 
 tokenizer *tokenizer_alloc(allocator *alloc) {
-    return alloc->malloc(alloc, sizeof(tokenizer));
+    return alloc_malloc(alloc, sizeof(tokenizer));
 }
 
 void tokenizer_dealloc(allocator *alloc, tokenizer **tok) {
     alloc_assert_invalid(*tok);
-    alloc->free(alloc, *tok);
+    alloc_free(alloc, *tok);
     *tok = null;
 }
 

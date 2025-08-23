@@ -9,12 +9,12 @@
 #include <string.h>
 
 vec_t *vec_alloc(allocator *alloc) {
-    return alloc->malloc(alloc, sizeof(vec_t));
+    return alloc_malloc(alloc, sizeof(vec_t));
 }
 
 void vec_dealloc(allocator *alloc, vec_t **vec) {
     alloc_assert_invalid(*vec);
-    alloc->free(alloc, *vec);
+    alloc_free(alloc, *vec);
     *vec = null;
 }
 
@@ -29,7 +29,7 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_c
     vec->element_size = element_size;
 
     if (initial_capacity) {
-        vec->data = alloc->malloc(alloc, sizeof(vec_data_header) + initial_capacity * element_size);
+        vec->data = alloc_malloc(alloc, sizeof(vec_data_header) + initial_capacity * element_size);
         if (null == vec->data) {
             dbg("vec_init: oom\n");
             return 1;
@@ -41,7 +41,7 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_c
 }
 
 void vec_deinit(allocator *alloc, vec_t *vec) {
-    alloc->free(alloc, vec->data);
+    alloc_free(alloc, vec->data);
     alloc_invalidate(vec);
 }
 
@@ -56,7 +56,7 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
     while (new_capacity < count) new_capacity *= 2;
 
     void *resized =
-      alloc->realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
+      alloc_realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
     if (!resized) {
         dbg("vec_reserve: oom\n");
         return 1;

@@ -29,14 +29,14 @@ struct parser {
 // -- allocation and deallocation --
 
 parser *parser_alloc(allocator *alloc) {
-    return alloc->malloc(alloc, sizeof(struct parser));
+    return alloc_malloc(alloc, sizeof(struct parser));
 }
 
 parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
-    parser *out = alloc->malloc(alloc, sizeof(struct parser));
+    parser *out = alloc_malloc(alloc, sizeof(struct parser));
     if (!out) return out;
     if (parser_init(alloc, out, pool, input, input_len)) {
-        alloc->free(alloc, out);
+        alloc_free(alloc, out);
         return null;
     }
     return out;
@@ -44,7 +44,7 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
 
 void parser_dealloc(allocator *alloc, parser **p) {
     alloc_assert_invalid(*p);
-    alloc->free(alloc, *p);
+    alloc_free(alloc, *p);
     *p = null;
 }
 

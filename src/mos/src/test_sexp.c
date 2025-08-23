@@ -42,7 +42,7 @@ static int test_sexp_parse(void) {
         if (null == s) return error + 1;
         dbg("parsed: %s\n", s);
         error += 0 == strcmp(s, "(a (b \"str\" c) d -123)") ? 0 : 1;
-        alloc->free(alloc, s);
+        alloc_free(alloc, s);
 
         sexp_deinit(alloc, &expr);
     }

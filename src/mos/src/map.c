@@ -229,7 +229,7 @@ map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
     size_t bucket_size        = aligned_element_size + sizeof(map_element_header);
 
-    map_t *map                = alloc->calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
+    map_t *map                = alloc_calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
     map->element_size         = element_size;
     map->aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     map->n_cells              = n_buckets;
@@ -239,7 +239,7 @@ map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load
 }
 
 void map_destroy(allocator *alloc, map_t **map) {
-    alloc->free(alloc, *map);
+    alloc_free(alloc, *map);
     *map = null;
 }
 

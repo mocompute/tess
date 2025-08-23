@@ -17,25 +17,33 @@
 #include <stdlib.h>
 #endif
 
-static void *default_malloc(allocator *a, size_t sz) mallocfun;
-static void *default_calloc(allocator *a, size_t num, size_t sz) mallocfun;
+static void *default_malloc(allocator *a, size_t sz, char const *, int) mallocfun;
+static void *default_calloc(allocator *a, size_t num, size_t sz, char const *, int) mallocfun;
 
-static void *default_malloc(allocator *a, size_t sz) {
+static void *default_malloc(allocator *a, size_t sz, char const *file, int line) {
+    (void)file;
+    (void)line;
     (void)a;
     return malloc(sz);
 }
 
-static void *default_calloc(allocator *a, size_t num, size_t sz) {
+static void *default_calloc(allocator *a, size_t num, size_t sz, char const *file, int line) {
+    (void)file;
+    (void)line;
     (void)a;
     return calloc(num, sz);
 }
 
-static void *default_realloc(allocator *a, void *p, size_t sz) {
+static void *default_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
+    (void)file;
+    (void)line;
     (void)a;
     return realloc(p, sz);
 }
 
-static void default_free(allocator *a, void *p) {
+static void default_free(allocator *a, void *p, char const *file, int line) {
+    (void)file;
+    (void)line;
     (void)a;
     return free(p);
 }
@@ -43,6 +51,24 @@ static void default_free(allocator *a, void *p) {
 allocator *alloc_default_allocator() {
     static allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
     return &allocator;
+}
+
+// -- allocator malloc and friends --
+
+void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
+    return alloc->malloc(alloc, sz, file, line);
+}
+
+void *alloc_calloc_i(allocator *alloc, size_t count, size_t size, char const *file, int line) {
+    return alloc->calloc(alloc, count, size, file, line);
+}
+
+void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
+    return alloc->realloc(alloc, ptr, sz, file, line);
+}
+
+void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {
+    alloc->free(alloc, ptr, file, line);
 }
 
 // -- arena --
@@ -92,14 +118,17 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
     return null;
 }
 
-static void *arena_malloc(allocator *alloc, size_t sz) {
-    arena_allocator *arena         = (arena_allocator *)alloc;
+static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int line) {
+    arena_allocator *arena = (arena_allocator *)alloc;
 
-    arena_header    *bucket        = arena->head;
-    arena_header    *last          = null;
-    size_t           last_capacity = 0;
+    (void)file;
+    (void)line;
 
-    sz                             = alloc_align_to_word_size(sz);
+    arena_header *bucket        = arena->head;
+    arena_header *last          = null;
+    size_t        last_capacity = 0;
+
+    sz                          = alloc_align_to_word_size(sz);
 
     if (0 == sz) return null;
 
@@ -119,7 +148,7 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
     size_t new_capacity = last_capacity * 2;
     if (new_capacity < sz) new_capacity = alloc_next_power_of_two(sz);
 
-    last->next = arena->parent->malloc(arena->parent, new_capacity + sizeof(arena_header));
+    last->next = alloc_malloc(arena->parent, new_capacity + sizeof(arena_header));
     if (null == last->next) return null;
 
     bucket = last->next;
@@ -129,8 +158,11 @@ static void *arena_malloc(allocator *alloc, size_t sz) {
     return bump_alloc_assume_capacity(bucket, sz);
 }
 
-static void *arena_realloc(allocator *a, void *p, size_t sz) {
-    if (null == p) return arena_malloc(a, sz);
+static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
+    (void)file;
+    (void)line;
+
+    if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
     if (null == bucket) return null;
@@ -159,34 +191,35 @@ static void *arena_realloc(allocator *a, void *p, size_t sz) {
     // need to allocate a new block, copy data and release old block if
     // possible
 
-    void *new_block = arena_malloc(a, sz);
+    void *new_block = arena_malloc(a, sz, __FILE__, __LINE__);
     assert(sz >= cur_size);
     memcpy(new_block, p, cur_size);
     maybe_free_block(bucket, p);
     return new_block;
 }
 
-static void *arena_calloc(allocator *alloc, size_t num, size_t size) {
-    void *out = arena_malloc(alloc, num * size);
+static void *arena_calloc(allocator *alloc, size_t num, size_t size, char const *file, int line) {
+    (void)file;
+    (void)line;
+
+    void *out = arena_malloc(alloc, num * size, __FILE__, __LINE__);
     if (out) memset(out, 0, num * size);
     return out;
 }
 
-static void arena_free(allocator *alloc, void *p) {
+static void arena_free(allocator *alloc, void *p, char const *file, int line) {
+    (void)file;
+    (void)line;
     (void)alloc;
     (void)p;
 }
 
-allocator *alloc_arena_alloc(allocator *alloc) {
-    return alloc->malloc(alloc, sizeof(arena_allocator));
-}
-
 allocator *alloc_arena_create(allocator *alloc, size_t sz) {
-    allocator *out = alloc->malloc(alloc, sizeof(arena_allocator));
+    allocator *out = alloc_malloc(alloc, sizeof(arena_allocator));
     if (!out) return out;
 
     if (alloc_arena_init(out, alloc, sz)) {
-        alloc->free(alloc, out);
+        alloc_free(alloc, out);
         return null;
     }
     return out;
@@ -194,7 +227,7 @@ allocator *alloc_arena_create(allocator *alloc, size_t sz) {
 
 void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
     alloc_assert_invalid(*arena);
-    alloc->free(alloc, *arena);
+    alloc_free(alloc, *arena);
     *arena = null;
 }
 
@@ -208,7 +241,7 @@ int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sz);
     if (0 == sz) return 1;
-    arena->head = parent->malloc(parent, sizeof(arena_header) + sz);
+    arena->head = alloc_malloc(parent, sizeof(arena_header) + sz);
     if (null == arena->head) return 1;
 
     alloc_zero(arena->head);
@@ -228,7 +261,7 @@ void alloc_arena_deinit(allocator *arena_) {
 
     while (next) {
         arena_header *next_next = next->next;
-        arena->parent->free(arena->parent, next);
+        alloc_free(arena->parent, next);
         next = next_next;
     }
 
@@ -239,7 +272,7 @@ void alloc_arena_deinit(allocator *arena_) {
 
 char *alloc_strdup(allocator *alloc, char const *src) {
     size_t len = strlen(src);
-    char  *out = alloc->malloc(alloc, len + 1);
+    char  *out = alloc_malloc(alloc, len + 1);
     if (out) {
         memcpy(out, src, len);
         out[len] = '\0';
@@ -253,7 +286,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
     char const *ch  = src;
     while (len < max && *ch++) len++; // don't use strlen
 
-    char *out = alloc->malloc(alloc, len + 1);
+    char *out = alloc_malloc(alloc, len + 1);
     if (out) {
         memcpy(out, src, len);
         out[len] = '\0';

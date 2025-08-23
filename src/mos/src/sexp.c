@@ -45,7 +45,7 @@ void sexp_box_init_move_list(sexp_box *self, vec_t *src) {
 
 int sexp_init_boxed(allocator *alloc, sexp *self) {
     alloc_zero(self);
-    self->ptr = alloc->malloc(alloc, sizeof(sexp_box));
+    self->ptr = alloc_malloc(alloc, sizeof(sexp_box));
     if (null == self->ptr) return 1;
 
     sexp_box_init_empty(self->ptr);
@@ -56,7 +56,7 @@ int sexp_init_boxed(allocator *alloc, sexp *self) {
 void sexp_deinit(allocator *alloc, sexp *self) {
     if (is_boxed(*self)) {
         sexp_box_deinit(alloc, self->ptr);
-        alloc->free(alloc, self->ptr);
+        alloc_free(alloc, self->ptr);
     }
     alloc_invalidate(self);
 }
@@ -191,7 +191,7 @@ char *sexp_to_string(allocator *alloc, sexp node) {
     int sz = print_node(&node, null, 0, null);
     if (sz < 0) return null;
 
-    char *out = alloc->malloc(alloc, (size_t)sz + 1);
+    char *out = alloc_malloc(alloc, (size_t)sz + 1);
     if (null == out) return out;
 
     print_node(&node, out, sz + 1, null);

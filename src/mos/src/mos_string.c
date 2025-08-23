@@ -47,12 +47,12 @@ int mos_string_init(allocator *alloc, string_t *s, char const *src) {
 }
 
 void mos_string_deinit(allocator *alloc, string_t *s) {
-    if (mos_string_is_allocated(s)) alloc->free(alloc, s->allocated.buf);
+    if (mos_string_is_allocated(s)) alloc_free(alloc, s->allocated.buf);
     alloc_invalidate(s);
 }
 
 int mos_string_replace(allocator *alloc, string_t *s, char const *src) {
-    if (mos_string_is_allocated(s)) alloc->free(alloc, s->allocated.buf);
+    if (mos_string_is_allocated(s)) alloc_free(alloc, s->allocated.buf);
     return mos_string_init(alloc, s, src);
 }
 

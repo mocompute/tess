@@ -19,7 +19,7 @@ int sexp_tokenizer_init(allocator *alloc, sexp_tokenizer *t, char const *input, 
     t->input     = input;
     t->input_len = len;
 
-    t->buf       = alloc->malloc(alloc, TOKENIZER_BUF_SIZE);
+    t->buf       = alloc_malloc(alloc, TOKENIZER_BUF_SIZE);
     t->buf_len   = 0;
 
     if (null == t->buf) return 1;
@@ -27,7 +27,7 @@ int sexp_tokenizer_init(allocator *alloc, sexp_tokenizer *t, char const *input, 
 }
 
 void sexp_tokenizer_deinit(sexp_tokenizer *t) {
-    t->alloc->free(t->alloc, t->buf);
+    alloc_free(t->alloc, t->buf);
     alloc_invalidate(t);
 }
 
@@ -385,20 +385,20 @@ nodiscard int sexp_parser_init(allocator *alloc, sexp_parser *self, char const *
     alloc_zero(self);
     self->alloc     = alloc;
 
-    self->tokenizer = alloc->malloc(alloc, sizeof *self->tokenizer);
+    self->tokenizer = alloc_malloc(alloc, sizeof *self->tokenizer);
     if (null == self->tokenizer) return 1;
 
     if (sexp_tokenizer_init(alloc, self->tokenizer, input, len)) goto cleanup;
     return 0;
 
 cleanup:
-    alloc->free(alloc, self->tokenizer);
+    alloc_free(alloc, self->tokenizer);
     return 1;
 }
 
 void sexp_parser_deinit(sexp_parser *self) {
     sexp_tokenizer_deinit(self->tokenizer);
-    self->alloc->free(self->alloc, self->tokenizer);
+    alloc_free(self->alloc, self->tokenizer);
     alloc_invalidate(self);
 }
 
