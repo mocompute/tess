@@ -18,6 +18,7 @@ int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max
 
     size_t len = strlen(src);
     if (len > max) len = max;
+    if (len > MOS_STRING_MAX_LEN) return 1;
 
     if (len == 0) {
         s->small.data[0] = '\0';
@@ -36,6 +37,7 @@ int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max
     s->small.tag     = 1;
     s->allocated.buf = alloc_strndup(alloc, src, len);
     if (null == s->allocated.buf) return 1;
+    s->allocated.size = (u32)len;
 
     return 0;
 }
@@ -75,6 +77,11 @@ char const *mos_string_str(string_t const *s) {
     return &s->small.data[0];
 }
 
+u32 mos_string_size(string_t const *s) {
+    if (mos_string_is_allocated(s)) return s->allocated.size;
+    return (u32)strlen(s->small.data);
+}
+
 bool mos_string_is_allocated(string_t const *s) {
     return s->small.tag == 1;
 }
@@ -102,9 +109,9 @@ int mos_string_parse_number(char const *in, i64 *out_i64, u64 *out_u64, f64 *out
 
         } else {
 
-            errno = 0;
-            p_end = 0;
-            f64 d = strtod(in, &p_end);
+            errno    = 0;
+            p_end    = 0;
+            double d = strtod(in, &p_end);
             if (p_end - in == len && !errno) {
                 *out_f64 = d;
                 return 3;
@@ -117,5 +124,6 @@ int mos_string_parse_number(char const *in, i64 *out_i64, u64 *out_u64, f64 *out
 
 u32 mos_string_hash32(string_t const *self) {
     char const *str = mos_string_str(self);
-    return hash32((u8 const *)str, strlen(str));
+    u32         len = mos_string_size(self);
+    return hash32((u8 const *)str, len);
 }

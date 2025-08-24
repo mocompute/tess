@@ -7,12 +7,14 @@
 #include <stdbool.h>
 
 #define MOS_STRING_MAX_SMALL_LEN 14
+#define MOS_STRING_MAX_LEN       UINT32_MAX
 
 typedef struct {
     union {
         struct {
             char *buf;
-            byte  pad[8];
+            u32   size;
+            byte  pad[4];
         } allocated;
         struct {
             char data[MOS_STRING_MAX_SMALL_LEN + 1];
@@ -34,6 +36,7 @@ nodiscard int mos_string_copy(allocator *, string_t *, string_t const *);
 // -- access --
 
 char const *mos_string_str(string_t const *);
+u32         mos_string_size(string_t const *);
 
 // -- utilities --
 
