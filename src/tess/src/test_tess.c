@@ -344,17 +344,17 @@ static int test_parse_to_c(void) {
         vec_t compiler_output;
         if (vec_init(vec_alloc, &compiler_output, 1, 1024)) return error + 1;
 
-        tess_compiler *compiler = tess_compiler_create(compiler_alloc, pool, &compiler_output, vec_alloc);
+        transpiler *compiler = transpiler_create(compiler_alloc, pool, &compiler_output, vec_alloc);
         if (!compiler) return error + 1;
 
-        if (tess_compiler_compile(compiler, &nodes)) return error + 1;
+        if (transpiler_compile(compiler, &nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
         if (vec_push_back_byte(vec_alloc, &compiler_output, '\0')) return error + 1;
 
         printf("Output:\n%s\n", (char const *)vec_cbegin(&compiler_output));
 
-        tess_compiler_destroy(&compiler);
+        transpiler_destroy(&compiler);
         vec_deinit(vec_alloc, &nodes);
     }
 

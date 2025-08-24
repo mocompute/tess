@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <string.h>
 
-struct tess_compiler {
+struct transpiler {
     allocator      *alloc;
     ast_pool const *pool;
     vec_t          *bytes;
@@ -22,34 +22,34 @@ extern char const *embed_std;
 
 // -- static forwards --
 
-typedef int (*compile_fun_t)(tess_compiler *, ast_node const *);
-static int     a_toplevel(tess_compiler *, ast_node const *);
-static int     a_body(tess_compiler *, ast_node const *);
-static int     a_let(tess_compiler *, ast_node const *);
-static int     a_fun_apply(tess_compiler *, ast_node const *);
-static int     a_std_apply(tess_compiler *, ast_node const *, char const *);
-static int     a_string(tess_compiler *, ast_node const *);
+typedef int (*compile_fun_t)(transpiler *, ast_node const *);
+static int  a_toplevel(transpiler *, ast_node const *);
+static int  a_body(transpiler *, ast_node const *);
+static int  a_let(transpiler *, ast_node const *);
+static int  a_fun_apply(transpiler *, ast_node const *);
+static int  a_std_apply(transpiler *, ast_node const *, char const *);
+static int  a_string(transpiler *, ast_node const *);
 
-static int     out_put(tess_compiler *, char const *);
+static int  out_put(transpiler *, char const *);
 
-tess_compiler *tess_compiler_create(allocator *alloc, ast_pool const *pool, vec_t *bytes,
-                                    allocator *bytes_alloc) {
+transpiler *transpiler_create(allocator *alloc, ast_pool const *pool, vec_t *bytes,
+                              allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
 
-    tess_compiler *self = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc         = alloc;
-    self->pool          = pool;
-    self->bytes         = bytes;
-    self->bytes_alloc   = bytes_alloc;
+    transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc       = alloc;
+    self->pool        = pool;
+    self->bytes       = bytes;
+    self->bytes_alloc = bytes_alloc;
     return self;
 }
 
-void tess_compiler_destroy(tess_compiler **self) {
+void transpiler_destroy(transpiler **self) {
     alloc_free((*self)->alloc, *self);
     *self = null;
 }
 
-int tess_compiler_compile(tess_compiler *self, vec_t const *nodes) {
+int transpiler_compile(transpiler *self, vec_t const *nodes) {
     (void)self;
     assert(sizeof(ast_node_h) == nodes->element_size);
 
@@ -74,11 +74,11 @@ int tess_compiler_compile(tess_compiler *self, vec_t const *nodes) {
 
 // -- statics --
 
-int out_put(tess_compiler *self, char const *str) {
+int out_put(transpiler *self, char const *str) {
     return vec_copy_back_c_string(self->bytes_alloc, self->bytes, str);
 }
 
-int out_put_start(tess_compiler *self, char const *str) {
+int out_put_start(transpiler *self, char const *str) {
 
     int indent = self->indent_level * 4;
     if (indent < 0) indent = 0;
@@ -88,7 +88,7 @@ int out_put_start(tess_compiler *self, char const *str) {
     return out_put(self, str);
 }
 
-static int a_toplevel(tess_compiler *self, ast_node const *node) {
+static int a_toplevel(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_let:                         return a_let(self, node);
@@ -113,7 +113,7 @@ static int a_toplevel(tess_compiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_body(tess_compiler *self, ast_node const *node) {
+static int a_body(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_let:                         return a_let(self, node);
@@ -138,7 +138,7 @@ static int a_body(tess_compiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_fun_apply(tess_compiler *self, ast_node const *node) {
+static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
     static char const *const std_prefix     = "std_";
@@ -154,7 +154,7 @@ static int a_fun_apply(tess_compiler *self, ast_node const *node) {
     return 1;
 }
 
-static int a_string(tess_compiler *self, ast_node const *node) {
+static int a_string(transpiler *self, ast_node const *node) {
     assert(ast_string == node->tag);
     if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"")) return 1;
     if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node))) return 1;
@@ -162,7 +162,7 @@ static int a_string(tess_compiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_std_dbg(tess_compiler *self, ast_node const *node) {
+static int a_std_dbg(transpiler *self, ast_node const *node) {
 
     vec_t const *const arguments = &node->named_application.arguments;
 
@@ -176,7 +176,7 @@ static int a_std_dbg(tess_compiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_std_apply(tess_compiler *self, ast_node const *node, char const *name) {
+static int a_std_apply(transpiler *self, ast_node const *node, char const *name) {
     static char const *const std_names[] = {
       "std_dbg",
     };
@@ -193,7 +193,7 @@ static int a_std_apply(tess_compiler *self, ast_node const *node, char const *na
     return 1;
 }
 
-static int a_let(tess_compiler *self, ast_node const *node) {
+static int a_let(transpiler *self, ast_node const *node) {
 
     ast_node const *name = ast_pool_cat(self->pool, node->let.name);
     assert(name);
