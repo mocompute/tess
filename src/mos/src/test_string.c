@@ -3,11 +3,15 @@
 #include "alloc.h"
 #include "dbg.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <time.h>
 
 static int test_string(void) {
-    int        error = 0;
+    int error = 0;
+
+    assert(8 == sizeof(char *));
+    assert(16 == sizeof(string_t));
 
     allocator *alloc = alloc_default_allocator();
 

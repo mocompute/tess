@@ -4,7 +4,6 @@
 #include "hash.h"
 #include "types.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -16,8 +15,6 @@ void mos_string_init_empty(string_t *s) {
 }
 
 int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max) {
-    assert(8 == sizeof(char *));
-    assert(16 == sizeof(string_t));
 
     size_t len = strlen(src);
     if (len > max) len = max;
