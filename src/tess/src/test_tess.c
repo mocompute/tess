@@ -329,8 +329,8 @@ static int test_parse_to_c(void) {
     if (null == pool) return error + 1;
 
     {
-        char const *input = "let main = \n"
-                            "  1 + 2\n";
+        char const *input = "let main () = \n"
+                            "  std_dbg \"hello world!\"\n\n\n";
 
         parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
         if (null == p) return error + 1;
@@ -348,6 +348,11 @@ static int test_parse_to_c(void) {
         if (!compiler) return error + 1;
 
         if (tess_compiler_compile(compiler, &nodes)) return error + 1;
+
+        // print out the output byte array: add string terminator
+        if (vec_push_back_byte(vec_alloc, &compiler_output, '\0')) return error + 1;
+
+        printf("Output:\n%s\n", (char const *)vec_cbegin(&compiler_output));
 
         tess_compiler_destroy(&compiler);
         vec_deinit(vec_alloc, &nodes);

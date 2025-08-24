@@ -110,6 +110,10 @@ int vec_copy_back_bytes(allocator *alloc, vec_t *vec, u8 const *start, size_t co
     return 0;
 }
 
+int vec_copy_back_c_string(allocator *alloc, vec_t *vec, char const *str) {
+    return vec_copy_back_bytes(alloc, vec, (u8 const *)str, strlen(str));
+}
+
 void *vec_at(vec_t *vec, size_t index) {
     return vec->data->data + index * vec->element_size;
 }

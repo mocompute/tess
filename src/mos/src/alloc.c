@@ -213,6 +213,8 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
         }
     }
 
+    if (sz < cur_size) return p; // cannot shrink block
+
     // need to allocate a new block, copy data and release old block if
     // possible
 

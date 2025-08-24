@@ -173,7 +173,7 @@ char const *ast_node_name_string(ast_node const *node) {
     return mos_string_str(&node->symbol.name);
 }
 
-int ast_node_name_cmp(ast_node const *node, char const *target) {
+int ast_node_name_strcmp(ast_node const *node, char const *target) {
     char const *name = ast_node_name_string(node);
     if (!name) return false;
     return strcmp(name, target);

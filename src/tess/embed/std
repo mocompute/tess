@@ -1,6 +1,7 @@
 // -*- C -*-
 
 #include <stdint.h>
+#include <stdio.h>
 
 typedef unsigned char byte;
 

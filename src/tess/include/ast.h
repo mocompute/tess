@@ -187,7 +187,7 @@ void          ast_node_deinit(allocator *, ast_node *);
 nodiscard int ast_node_replace(allocator *, ast_node *, ast_tag);
 
 char const   *ast_node_name_string(ast_node const *);
-int           ast_node_name_cmp(ast_node const *, char const *);
+int           ast_node_name_strcmp(ast_node const *, char const *);
 
 // -- pool operations --
 //

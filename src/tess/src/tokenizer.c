@@ -144,7 +144,10 @@ int tokenizer_next(allocator *alloc, tokenizer *self, token *out, tokenizer_erro
         switch (state) {
 
         case start: {
-            if (self->pos == end) goto finish;
+            if (self->pos >= end) {
+                tok_error(out_err, tess_err_eof, self->pos);
+                goto finish;
+            }
 
             char const c = self->input[self->pos++];
 

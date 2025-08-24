@@ -298,7 +298,10 @@ static int a_close_round(parser *p) {
 }
 
 static int a_end_of_expression(parser *p) {
-    if (next_token(p)) return 1;
+    if (next_token(p)) {
+        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
+        return 1;
+    }
 
     if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag || tok_two_newline == p->token.tag)
         return result_ast_str(p, ast_symbol, ";");
@@ -471,13 +474,18 @@ static int function_declaration(parser *p) {
     // check: f () declares function with no parameters
     if (0 == a_try(p, &a_nil)) {
 
-        ast_node node;
-        if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
-        node.function_declaration.name = name;
-        vec_move(&node.function_declaration.parameters, &parameters);
-        if (result_ast_node(p, &node)) return 1;
+        // next token must be equal sign
+        if (0 == a_try(p, &a_equal_sign)) {
+            ast_node node;
+            if (ast_node_init(p->alloc, &node, ast_function_declaration)) return 2;
+            node.function_declaration.name = name;
+            vec_move(&node.function_declaration.parameters, &parameters);
+            if (result_ast_node(p, &node)) return 1;
 
-        return 0;
+            return 0;
+        }
+
+        return 1;
     }
 
     // accumulate identifiers as parameters until equal sign is seen
@@ -557,13 +565,13 @@ static int function_application(parser *p) {
             continue;
         }
 
-        if (0 == a_try(p, &a_end_of_expression)) {
+        if ((tess_err_eof == p->error.tag) || 0 == a_try(p, &a_end_of_expression)) {
 
             ast_node node;
             if (ast_node_init(p->alloc, &node, ast_named_function_application)) return 2;
             node.named_application.name = name;
             vec_move(&node.named_application.arguments, &arguments);
-            if (result_ast_node(p, &node)) return 1;
+            return result_ast_node(p, &node);
         }
 
         p->error.tag = tess_err_expected_argument;
@@ -844,11 +852,8 @@ int parser_parse_all(allocator *alloc, parser *p, vec_t *out) {
         ast_node_h handle;
         parser_result(p, &handle);
         if (vec_push_back(alloc, out, &handle)) return 2;
-
-        dbg("ast tag: %s\n", ast_tag_to_string(ast_pool_at(p->ast_pool, handle)->tag));
     }
 
-    dbg("parser_next returned 0\n");
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
 
     return res;

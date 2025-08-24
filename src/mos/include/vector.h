@@ -75,5 +75,6 @@ void          vec_assoc_erase(vec_t *, size_t);
 // optimized for the case where element_size == 1
 nodiscard int vec_push_back_byte(allocator *, vec_t *, u8);
 nodiscard int vec_copy_back_bytes(allocator *, vec_t *, u8 const *, size_t);
+nodiscard int vec_copy_back_c_string(allocator *alloc, vec_t *, char const *);
 
 #endif
