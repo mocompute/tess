@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "alloc.h"
+#include "dbg.h"
 #include "mos_string.h"
 #include "util.h"
 #include "vector.h"
@@ -246,9 +247,13 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
         return snprintf(buf, sz, "%s", literal);
     }
 
-#define do_print_init()                                                                                    \
-    int res    = 0;                                                                                        \
-    int offset = 0
+    if (null == node) {
+        return snprintf(buf, sz, "NULL");
+    }
+
+    int offset = 0;
+
+#define do_print_init() int res = 0
 
 #define do_print_node(NODE)                                                                                \
     do {                                                                                                   \
@@ -320,10 +325,10 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     } break;
 
     case ast_let_in: {
-        ast_node *name, *body, *value;
+        ast_node *name, *value, *body;
         name  = ast_pool_at(pool, node->let_in.name);
-        body  = ast_pool_at(pool, node->let_in.body);
         value = ast_pool_at(pool, node->let_in.value);
+        body  = ast_pool_at(pool, node->let_in.body);
 
         do_print_init();
         do_print_literal("(let_in ");
@@ -426,7 +431,7 @@ static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, 
     } break;
     }
 
-    return 0;
+    return offset;
 
 #undef do_print_node
 #undef do_print_literal
