@@ -24,6 +24,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/transpiler.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/syntax.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
@@ -34,6 +35,7 @@ set(SOURCES
   src/transpiler.c
   src/error.c
   src/parser.c
+  src/syntax.c
   src/tess.c
   src/token.c
   src/tokenizer.c

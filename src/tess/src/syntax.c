@@ -168,6 +168,21 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
 
     } break;
 
+    case ast_lambda_function_application: {
+        ast_node_h       *it  = vec_begin(&node->lambda_application.arguments);
+        ast_node_h const *end = vec_end(&node->lambda_application.arguments);
+        while (it != end)
+            if (rename_variables(self, *it++)) return 1;
+
+    } break;
+
+    case ast_named_function_application: {
+        ast_node_h       *it  = vec_begin(&node->named_application.arguments);
+        ast_node_h const *end = vec_end(&node->named_application.arguments);
+        while (it != end)
+            if (rename_variables(self, *it++)) return 1;
+    } break;
+
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -176,21 +191,30 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
     case ast_f64:
     case ast_string:
     case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-    case ast_named_function_application:  break;
+    case ast_lambda_declaration:   break;
     }
+
+    return 0;
 }
 
 int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes, size_t len) {
+
+    rename_variable_ctx ctx;
+    if (rename_variable_ctx_init(&ctx, alloc, pool)) return 1;
+
     map_t *map = map_create(alloc, sizeof(string_t), 1024, 0);
     if (!map) return 1;
 
     ast_node_h *node = nodes;
 
     while (len--) {
+        if (rename_variables(&ctx, *node++)) goto cleanup;
+
         node++;
     }
+
+cleanup:
+    rename_variable_ctx_deinit(&ctx);
 
     return 0;
 }
