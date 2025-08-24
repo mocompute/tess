@@ -8,28 +8,28 @@
 #include <stdint.h>
 #include <string.h>
 
-vec_t *vec_alloc(allocator *alloc) {
-    return alloc_malloc(alloc, sizeof(vec_t));
+vector *vec_alloc(allocator *alloc) {
+    return alloc_malloc(alloc, sizeof(vector));
 }
 
-void vec_dealloc(allocator *alloc, vec_t **vec) {
+void vec_dealloc(allocator *alloc, vector **vec) {
     alloc_assert_invalid(*vec);
     alloc_free(alloc, *vec);
     *vec = null;
 }
 
-void vec_init_empty(vec_t *vec, size_t element_size) {
+void vec_init_empty(vector *vec, size_t element_size) {
     alloc_zero(vec);
     vec->element_size = element_size;
 }
 
-int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_capacity) {
+int vec_init(allocator *alloc, vector *vec, size_t element_size, size_t initial_capacity) {
     assert(element_size <= PTRDIFF_MAX);
     alloc_zero(vec);
     vec->element_size = element_size;
 
     if (initial_capacity) {
-        vec->data = alloc_malloc(alloc, sizeof(vec_data_header) + initial_capacity * element_size);
+        vec->data = alloc_malloc(alloc, sizeof(vector_data_header) + initial_capacity * element_size);
         if (null == vec->data) {
             dbg("vec_init: oom\n");
             return 1;
@@ -40,12 +40,12 @@ int vec_init(allocator *alloc, vec_t *vec, size_t element_size, size_t initial_c
     return 0;
 }
 
-void vec_deinit(allocator *alloc, vec_t *vec) {
+void vec_deinit(allocator *alloc, vector *vec) {
     alloc_free(alloc, vec->data);
     alloc_invalidate(vec);
 }
 
-int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
+int vec_reserve(allocator *alloc, vector *vec, size_t count) {
 
     if (null == vec->data) return vec_init(alloc, vec, vec->element_size, count);
 
@@ -56,7 +56,7 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
     while (new_capacity < count) new_capacity *= 2;
 
     void *resized =
-      alloc_realloc(alloc, vec->data, sizeof(vec_data_header) + new_capacity * vec->element_size);
+      alloc_realloc(alloc, vec->data, sizeof(vector_data_header) + new_capacity * vec->element_size);
     if (!resized) {
         dbg("vec_reserve: oom\n");
         return 1;
@@ -67,16 +67,16 @@ int vec_reserve(allocator *alloc, vec_t *vec, size_t count) {
     return 0;
 }
 
-void vec_move(vec_t *dst, vec_t *src) {
+void vec_move(vector *dst, vector *src) {
     alloc_copy(dst, src);
     alloc_invalidate(src);
 }
 
-bool vec_empty(vec_t const *vec) {
+bool vec_empty(vector const *vec) {
     return vec->data == null || vec->data->size == 0;
 }
 
-int vec_push_back(allocator *alloc, vec_t *vec, void const *element) {
+int vec_push_back(allocator *alloc, vector *vec, void const *element) {
 
     if (vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1)) return 1;
 
@@ -85,7 +85,7 @@ int vec_push_back(allocator *alloc, vec_t *vec, void const *element) {
     return 0;
 }
 
-int vec_copy_back(allocator *alloc, vec_t *vec, void const *start, size_t count) {
+int vec_copy_back(allocator *alloc, vector *vec, void const *start, size_t count) {
     if (vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count)) return 1;
 
     memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
@@ -93,7 +93,7 @@ int vec_copy_back(allocator *alloc, vec_t *vec, void const *start, size_t count)
     return 0;
 }
 
-int vec_push_back_byte(allocator *alloc, vec_t *vec, u8 b) {
+int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     assert(1 == vec->element_size);
     if (vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1)) return 1;
     *(vec->data->data + vec->data->size) = b;
@@ -101,7 +101,7 @@ int vec_push_back_byte(allocator *alloc, vec_t *vec, u8 b) {
     return 0;
 }
 
-int vec_copy_back_bytes(allocator *alloc, vec_t *vec, u8 const *start, size_t count) {
+int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, size_t count) {
     assert(1 == vec->element_size);
     if (vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count)) return 1;
 
@@ -110,27 +110,27 @@ int vec_copy_back_bytes(allocator *alloc, vec_t *vec, u8 const *start, size_t co
     return 0;
 }
 
-int vec_copy_back_c_string(allocator *alloc, vec_t *vec, char const *str) {
+int vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
     return vec_copy_back_bytes(alloc, vec, (u8 const *)str, strlen(str));
 }
 
-void *vec_at(vec_t *vec, size_t index) {
+void *vec_at(vector *vec, size_t index) {
     return vec->data->data + index * vec->element_size;
 }
 
-void const *vec_cat(vec_t const *vec, size_t index) {
+void const *vec_cat(vector const *vec, size_t index) {
     return vec->data->data + index * vec->element_size;
 }
 
-void *vec_back(vec_t *vec) {
+void *vec_back(vector *vec) {
     return vec->data->data + (vec->data->size - 1) * vec->element_size;
 }
 
-void vec_pop_back(vec_t *vec) {
+void vec_pop_back(vector *vec) {
     vec->data->size -= 1;
 }
 
-void vec_erase(vec_t *vec, void *it_) {
+void vec_erase(vector *vec, void *it_) {
     byte *const       it  = it_;
     byte const *const end = vec->data->data + vec->data->size * vec->element_size;
     ptrdiff_t         len = end - it - (ptrdiff_t)vec->element_size;
@@ -139,7 +139,7 @@ void vec_erase(vec_t *vec, void *it_) {
     vec->data->size -= 1;
 }
 
-nodiscard int vec_resize(allocator *alloc, vec_t *vec, size_t n) {
+nodiscard int vec_resize(allocator *alloc, vector *vec, size_t n) {
     if (null == vec->data) return vec_init(alloc, vec, vec->element_size, n);
 
     if (n > vec->data->capacity)
@@ -152,43 +152,43 @@ nodiscard int vec_resize(allocator *alloc, vec_t *vec, size_t n) {
     return 0;
 }
 
-void vec_clear(vec_t *vec) {
+void vec_clear(vector *vec) {
     // Note: Do not free data.
     if (!vec_empty(vec)) vec->data->size = 0;
 }
 
-void *vec_data(vec_t *vec) {
+void *vec_data(vector *vec) {
     if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
-void *vec_begin(vec_t *vec) {
+void *vec_begin(vector *vec) {
     if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
-void const *vec_cbegin(vec_t const *vec) {
+void const *vec_cbegin(vector const *vec) {
     if (vec_empty(vec)) return null;
     return vec->data->data;
 }
 
-void const *vec_end(vec_t const *vec) {
+void const *vec_end(vector const *vec) {
     // points 1 past the end
     if (vec_empty(vec)) return null;
     return vec->data->data + vec->data->size * vec->element_size;
 }
 
-size_t vec_size(vec_t const *vec) {
+size_t vec_size(vector const *vec) {
     if (vec_empty(vec)) return 0;
     return vec->data->size;
 }
 
-size_t vec_capacity(vec_t const *vec) {
+size_t vec_capacity(vector const *vec) {
     if (vec_empty(vec)) return 0;
     return vec->data->capacity;
 }
 
-int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
+int vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
     assert(vec->element_size >= sizeof(size_t));
     if (vec_push_back(alloc, vec, pair)) {
         dbg("vec_assoc_set: oom\n");
@@ -197,7 +197,7 @@ int vec_assoc_set(allocator *alloc, vec_t *vec, void const *pair) {
     return 0;
 }
 
-void *vec_assoc_get(vec_t *vec, size_t key) {
+void *vec_assoc_get(vector *vec, size_t key) {
     if (vec_empty(vec)) return null;
 
     // From the back, search for an element whose first size_t field
@@ -216,7 +216,7 @@ void *vec_assoc_get(vec_t *vec, size_t key) {
     return null;
 }
 
-void vec_assoc_erase(vec_t *vec, size_t key) {
+void vec_assoc_erase(vector *vec, size_t key) {
 
     char *it = vec_assoc_get(vec, key);
     if (!it) return;

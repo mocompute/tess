@@ -19,7 +19,7 @@ struct parser {
 
     ast_node_h             result; // pool handle, don't set directly
 
-    struct vec             seen_tokens; // for backtracking
+    struct vector          seen_tokens; // for backtracking
 
     struct parser_error    error;
     struct tokenizer_error tokenizer_error; // does not require deinit
@@ -468,7 +468,7 @@ static int function_declaration(parser *p) {
 
     ast_node_h const name = p->result; // function name
 
-    vec_t            parameters;
+    vector           parameters;
     if (ast_vector_init(p->alloc, &parameters)) return 2;
 
     // check: f () declares function with no parameters
@@ -515,7 +515,7 @@ static int function_declaration(parser *p) {
 static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
-    vec_t parameters;
+    vector parameters;
     if (ast_vector_init(p->alloc, &parameters)) return 2;
 
     // accumulate identifiers as parameters until an arrow is seen
@@ -552,7 +552,7 @@ static int function_application(parser *p) {
 
     ast_node_h const name = p->result;
 
-    vec_t            arguments;
+    vector           arguments;
     if (ast_vector_init(p->alloc, &arguments)) return 2;
 
     // must have at least one argument
@@ -684,7 +684,7 @@ static int lambda_function_application(parser *p) {
     }
 
     // there must be at least one argument
-    vec_t arguments;
+    vector arguments;
     if (ast_vector_init(p->alloc, &arguments)) return 2;
 
     if (a_try(p, &function_argument)) return 1;
@@ -768,7 +768,7 @@ static int tuple_expression(parser *p) {
 
     if (a_try(p, a_open_round)) return 1;
 
-    vec_t elements;
+    vector elements;
     if (ast_vector_init(p->alloc, &elements)) return 2;
 
     // first, expect an expression, which must be followed by a comma
@@ -844,7 +844,7 @@ int parser_next(parser *parser) {
     return expression(parser);
 }
 
-int parser_parse_all(allocator *alloc, parser *p, vec_t *out) {
+int parser_parse_all(allocator *alloc, parser *p, vector *out) {
     assert(sizeof(ast_node_h) == out->element_size);
 
     int res = 0;

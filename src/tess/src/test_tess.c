@@ -309,7 +309,7 @@ static int test_parse_all(void) {
         parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
         if (null == p) return error + 1;
 
-        vec_t nodes;
+        vector nodes;
         if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
         if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
 
@@ -356,13 +356,13 @@ static int test_parse_to_c(void) {
         parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
         if (null == p) return error + 1;
 
-        vec_t nodes;
+        vector nodes;
         if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
         if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 
-        vec_t transpiler_output;
+        vector transpiler_output;
         if (vec_init(vec_alloc, &transpiler_output, 1, 1024)) return error + 1;
 
         transpiler *transpiler = transpiler_create(compiler_alloc, pool, &transpiler_output, vec_alloc);

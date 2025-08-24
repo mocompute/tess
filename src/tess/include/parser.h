@@ -38,6 +38,6 @@ parser_error const *parser_get_error(parser *);
 int  parser_next(parser *);
 void parser_result(parser *, ast_node_h *);
 
-int  parser_parse_all(allocator *, parser *, vec_t *out);
+int  parser_parse_all(allocator *, parser *, vector *out);
 
 #endif

@@ -49,7 +49,7 @@ struct arrow_type {
 
 typedef struct tess_type {
     union {
-        struct vec        tuple;
+        struct vector     tuple;
         struct arrow_type arrow;
         u32               val;
     };
@@ -110,7 +110,7 @@ typedef struct ast_node {
         } infix;
 
         struct {
-            vec_t      parameters;
+            vector     parameters;
             ast_node_h body;
         } lambda_function;
 
@@ -121,16 +121,16 @@ typedef struct ast_node {
         } let_in;
 
         struct {
-            vec_t      parameters;
+            vector     parameters;
             ast_node_h name;
         } function_declaration;
 
         struct {
-            vec_t parameters;
+            vector parameters;
         } lambda_declaration;
 
         struct {
-            vec_t      parameters;
+            vector     parameters;
             ast_node_h name;
             ast_node_h body;
         } let;
@@ -142,18 +142,18 @@ typedef struct ast_node {
         } if_then_else;
 
         struct {
-            vec_t      arguments;
+            vector     arguments;
             ast_node_h lambda;
         } lambda_application;
 
         struct {
-            vec_t      arguments;
+            vector     arguments;
             ast_node_h name;
             bool       specialized;
         } named_application;
 
         struct {
-            vec_t elements;
+            vector elements;
         } tuple;
     };
 
@@ -163,7 +163,7 @@ typedef struct ast_node {
 // -- ast_pool --
 
 typedef struct ast_pool {
-    struct vec data; // ast_node
+    struct vector data; // ast_node
 } ast_pool;
 
 // -- allocation and deallocation --
@@ -201,7 +201,7 @@ ast_node const *ast_pool_cat(ast_pool const *, ast_node_h);
 char const   *type_tag_to_string(type_tag);
 char const   *ast_tag_to_string(ast_tag);
 int           string_to_ast_operator(char const *, ast_operator *);
-nodiscard int ast_vector_init(allocator *, vec_t *);
+nodiscard int ast_vector_init(allocator *, vector *);
 
 nodiscard int ast_node_to_string_buf(ast_pool *, ast_node const *, char *, size_t);
 

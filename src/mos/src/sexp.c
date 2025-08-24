@@ -38,7 +38,7 @@ void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) 
     mos_string_move(&self->symbol.name, src);
 }
 
-void sexp_box_init_move_list(sexp_box *self, vec_t *src) {
+void sexp_box_init_move_list(sexp_box *self, vector *src) {
     self->tag = sexp_box_list;
     vec_move(&self->list.list, src);
 }

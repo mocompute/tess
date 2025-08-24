@@ -8,7 +8,7 @@ static int test_vector(void) {
 
     allocator *alloc = alloc_default_allocator();
 
-    vec_t     *vec   = vec_alloc(alloc);
+    vector    *vec   = vec_alloc(alloc);
     if (vec_init(alloc, vec, sizeof(int), 2)) return error + 1;
 
     error += vec_empty(vec) == 1 ? 0 : 1;
@@ -49,7 +49,7 @@ static int test_assoc(void) {
 
     allocator *alloc = alloc_default_allocator();
 
-    vec_t     *vec   = vec_alloc(alloc);
+    vector    *vec   = vec_alloc(alloc);
     if (vec_init(alloc, vec, 2 * sizeof(size_t), 0)) return error + 1;
 
     size_t pair[2];
@@ -94,7 +94,7 @@ static int test_assoc_set(void) {
 
     allocator *alloc = alloc_default_allocator();
 
-    vec_t     *vec   = vec_alloc(alloc);
+    vector    *vec   = vec_alloc(alloc);
 
     // no payload, just the key
     if (vec_init(alloc, vec, sizeof(size_t), 0)) return error + 1;

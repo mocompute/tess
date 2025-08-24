@@ -234,7 +234,7 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
     return 1;
 }
 
-int ast_vector_init(allocator *alloc, vec_t *vec) {
+int ast_vector_init(allocator *alloc, vector *vec) {
     return vec_init(alloc, vec, sizeof(ast_node_h), 0);
 }
 

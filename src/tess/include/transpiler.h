@@ -10,12 +10,12 @@ typedef struct transpiler transpiler;
 
 // -- allocation and deallocation --
 
-nodiscard transpiler *transpiler_create(allocator *, ast_pool const *, vec_t *bytes,
+nodiscard transpiler *transpiler_create(allocator *, ast_pool const *, vector *bytes,
                                         allocator *bytes_alloc) mallocfun;
 void                  transpiler_destroy(transpiler **);
 
 // -- operation --
 
-int transpiler_compile(transpiler *, vec_t const *nodes);
+int transpiler_compile(transpiler *, vector const *nodes);
 
 #endif

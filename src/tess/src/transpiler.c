@@ -1,6 +1,6 @@
+#include "transpiler.h"
 #include "alloc.h"
 #include "ast.h"
-#include "transpiler.h"
 
 #include "dbg.h"
 #include "vector.h"
@@ -11,7 +11,7 @@
 struct transpiler {
     allocator      *alloc;
     ast_pool const *pool;
-    vec_t          *bytes;
+    vector         *bytes;
     allocator      *bytes_alloc;
     int             indent_level;
 };
@@ -32,7 +32,7 @@ static int  a_string(transpiler *, ast_node const *);
 
 static int  out_put(transpiler *, char const *);
 
-transpiler *transpiler_create(allocator *alloc, ast_pool const *pool, vec_t *bytes,
+transpiler *transpiler_create(allocator *alloc, ast_pool const *pool, vector *bytes,
                               allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
 
@@ -49,7 +49,7 @@ void transpiler_destroy(transpiler **self) {
     *self = null;
 }
 
-int transpiler_compile(transpiler *self, vec_t const *nodes) {
+int transpiler_compile(transpiler *self, vector const *nodes) {
     (void)self;
     assert(sizeof(ast_node_h) == nodes->element_size);
 
@@ -164,7 +164,7 @@ static int a_string(transpiler *self, ast_node const *node) {
 
 static int a_std_dbg(transpiler *self, ast_node const *node) {
 
-    vec_t const *const arguments = &node->named_application.arguments;
+    vector const *const arguments = &node->named_application.arguments;
 
     // FIXME for now only one string argument is valid
     if (1 != vec_size(arguments)) return 1;

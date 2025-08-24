@@ -10,12 +10,12 @@
 #include <string.h>
 
 struct tokenizer {
-    char const *input;
-    size_t      input_len;
-    size_t      pos;
+    char const   *input;
+    size_t        input_len;
+    size_t        pos;
 
-    struct vec  buf;
-    struct vec  backtrack;
+    struct vector buf;
+    struct vector backtrack;
 };
 
 // -- statics --

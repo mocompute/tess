@@ -93,7 +93,7 @@ static int test_big_map(void) {
     } pair_t;
 
     allocator *alloc = alloc_default_allocator();
-    vec_t      vec;
+    vector     vec;
     if (vec_init(alloc, &vec, sizeof(pair_t), N)) {
         error++;
         goto cleanup;
