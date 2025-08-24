@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 
-#define MAP_MAX_ELEMENT_SIZE 24
+#define HASHMAP_MAX_ELEMENT_SIZE 24
 
 typedef struct {
     u32  key;

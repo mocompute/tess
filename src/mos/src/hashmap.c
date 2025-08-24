@@ -86,8 +86,8 @@ static hashmap_element_header *map_find(hashmap *map, hashmap_key key) {
 
 static int set_one(hashmap *map, hashmap_element_header const *header, byte const *element) {
 
-    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
-    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
+    byte to_store[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
+    byte tmp[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
 
     assert(map);
 
@@ -95,7 +95,7 @@ static int set_one(hashmap *map, hashmap_element_header const *header, byte cons
     assert(bucket_size(map) >= cell_size);
 
     // write header and data to to_store
-    assert(MAP_MAX_ELEMENT_SIZE >= map->element_size);
+    assert(HASHMAP_MAX_ELEMENT_SIZE >= map->element_size);
     memcpy(to_store, header, sizeof *header);
     memcpy(to_store + sizeof *header, element, map->element_size);
 
@@ -236,14 +236,14 @@ u32 map_next_power_of_two(u32 n) {
 
 hashmap *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load_factor) {
 
-    if (element_size > MAP_MAX_ELEMENT_SIZE) return null;
+    if (element_size > HASHMAP_MAX_ELEMENT_SIZE) return null;
     if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
 
     n_buckets = map_next_power_of_two(n_buckets);
     assert(n_buckets > 0);
 
     u8 aligned_element_size = (u8)alloc_align_to_word_size(element_size);
-    assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
+    assert(alloc_align_to_word_size(element_size) <= HASHMAP_MAX_ELEMENT_SIZE);
     size_t   bucket_size      = aligned_element_size + sizeof(hashmap_element_header);
 
     hashmap *map              = alloc_calloc(alloc, 1, sizeof(struct hashmap) + n_buckets * bucket_size);
