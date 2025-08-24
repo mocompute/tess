@@ -80,11 +80,14 @@ static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out
     return mos_string_init(self->alloc, out, buf);
 }
 
-static nodiscard int rename_if_match(allocator *alloc, string_t *string, map_t *map) {
+static nodiscard int rename_if_match(allocator *alloc, string_t *string, map_t *map, string_t *copy_to) {
     u32             hash  = mos_string_hash32(string);
     string_t const *found = map_get(map, hash);
 
-    if (found) return mos_string_copy(alloc, string, found);
+    if (found) {
+        if (mos_string_copy(alloc, copy_to, string)) return 1; // preserve original name for errors
+        return mos_string_copy(alloc, string, found);
+    }
     return 0;
 }
 
@@ -93,7 +96,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
     if (!node) return 1;
 
     switch (node->tag) {
-    case ast_symbol: return rename_if_match(self->alloc, &node->symbol.name, self->map);
+    case ast_symbol:
+        return rename_if_match(self->alloc, &node->symbol.name, self->map, &node->symbol.original);
 
     case ast_infix:
         if (rename_variables(self, node->infix.left)) return 1;

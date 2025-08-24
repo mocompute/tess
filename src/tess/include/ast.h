@@ -4,10 +4,8 @@
 #include "alloc.h"
 #include "mos_string.h"
 #include "nodiscard.h"
-#include "util.h"
+#include "util.h" // needed for MOS_TAG_NAME
 #include "vector.h"
-
-#include <stdint.h>
 
 #define TESS_TYPE_TAGS(X)                                                                                  \
     X(type_nil, "nil")                                                                                     \
@@ -86,6 +84,7 @@ typedef struct ast_node {
     union {
         struct {
             string_t name;
+            string_t original; // set by syntax_rename_variable
         } symbol;
 
         struct {
