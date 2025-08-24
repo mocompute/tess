@@ -1,5 +1,23 @@
 message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 
+# -- embed --
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
+  COMMAND mos_embed
+    ${CMAKE_CURRENT_SOURCE_DIR}/embed
+    ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
+  DEPENDS $<TARGET_FILE:mos_embed>
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMENT "Running embed generator"
+)
+
+add_custom_target(tess_generate_embed
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
+)
+
+# -- library --
+
 add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast.h
@@ -17,12 +35,14 @@ set(SOURCES
   src/tess.c
   src/token.c
   src/tokenizer.c
+  ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
   )
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(tess BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
 target_include_directories(tess PUBLIC "${PROJECT_SOURCE_DIR}/src/tess/include")
 target_link_libraries(tess PRIVATE PUBLIC mos)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
+
 
 # -- tests --
 

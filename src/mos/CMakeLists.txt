@@ -33,6 +33,13 @@ target_include_directories(mos PUBLIC "${PROJECT_SOURCE_DIR}/src/mos/include")
 # target_link_libraries(mos PRIVATE zlibstatic PUBLIC)
 target_link_options(mos PRIVATE ${MOS_C_LINK_OPTIONS})
 
+# -- embed program --
+
+add_executable(mos_embed src/embed.c)
+target_compile_options(mos_embed BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
+target_include_directories(mos_embed PUBLIC "${PROJECT_SOURCE_DIR}/src/mos/include")
+target_link_options(mos_embed PRIVATE ${MOS_C_LINK_OPTIONS})
+
 # -- tests --
 
 function(mos_create_test NAME)
