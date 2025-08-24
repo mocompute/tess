@@ -341,20 +341,20 @@ static int test_parse_to_c(void) {
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 
-        vec_t compiler_output;
-        if (vec_init(vec_alloc, &compiler_output, 1, 1024)) return error + 1;
+        vec_t transpiler_output;
+        if (vec_init(vec_alloc, &transpiler_output, 1, 1024)) return error + 1;
 
-        transpiler *compiler = transpiler_create(compiler_alloc, pool, &compiler_output, vec_alloc);
-        if (!compiler) return error + 1;
+        transpiler *transpiler = transpiler_create(compiler_alloc, pool, &transpiler_output, vec_alloc);
+        if (!transpiler) return error + 1;
 
-        if (transpiler_compile(compiler, &nodes)) return error + 1;
+        if (transpiler_compile(transpiler, &nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
-        if (vec_push_back_byte(vec_alloc, &compiler_output, '\0')) return error + 1;
+        if (vec_push_back_byte(vec_alloc, &transpiler_output, '\0')) return error + 1;
 
-        printf("Output:\n%s\n", (char const *)vec_cbegin(&compiler_output));
+        printf("Output:\n%s\n", (char const *)vec_cbegin(&transpiler_output));
 
-        transpiler_destroy(&compiler);
+        transpiler_destroy(&transpiler);
         vec_deinit(vec_alloc, &nodes);
     }
 
