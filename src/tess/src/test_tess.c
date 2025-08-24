@@ -1,6 +1,8 @@
 #include "alloc.h"
 #include "ast.h"
+#include "dbg.h"
 #include "parser.h"
+#include "syntax.h"
 #include "tokenizer.h"
 #include "transpiler.h"
 #include "vector.h"
@@ -298,7 +300,11 @@ static int test_parse_all(void) {
     if (null == pool) return error + 1;
 
     {
-        char const *input = "a\nb\nc";
+        char const *input = "let a = 1 in\n"
+                            "let b = 2 in\n"
+                            "let a = b in\n"
+                            "let b = a in\n"
+                            "b           \n";
 
         parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
         if (null == p) return error + 1;
@@ -307,11 +313,26 @@ static int test_parse_all(void) {
         if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
         if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
 
+        allocator      *syntax_alloc = alloc_default_allocator();
+        syntax_checker *syntax       = syntax_checker_create(syntax_alloc, pool);
+
         // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
         // is not a correct program, it is just 3 symbol nodes
 
-        error += 3 == vec_size(&nodes) ? 0 : 1;
+        error += 1 == vec_size(&nodes) ? 0 : 1;
+        if (error) return error;
+
+        if (syntax_checker_run(syntax, vec_data(&nodes), vec_size(&nodes))) return error + 1;
+
+        char buf[1024];
+        for (size_t i = 0; i < 1; ++i) {
+            ast_node const *node = ast_pool_cat(pool, *(ast_node_h *)vec_cat(&nodes, i));
+            if (ast_node_to_string_buf(pool, node, buf, sizeof buf)) return ++error;
+            dbg("node: %s\n", buf);
+        }
+
         vec_deinit(vec_alloc, &nodes);
+        syntax_checker_destroy(&syntax);
     }
 
     return error;
@@ -330,7 +351,7 @@ static int test_parse_to_c(void) {
 
     {
         char const *input = "let main () = \n"
-                            "  std_dbg \"hello world!\"\n\n\n";
+                            "  std_dbg \"hello world!\"";
 
         parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
         if (null == p) return error + 1;

@@ -2,17 +2,60 @@
 
 #include "alloc.h"
 #include "ast.h"
-#include "hash.h"
 #include "map.h"
 #include "mos_string.h"
+
 #include <stdio.h>
 
-typedef struct {
+// -- forwards --
+
+typedef struct rename_variable_ctx rename_variable_ctx;
+static nodiscard int               rename_variable_ctx_init(rename_variable_ctx *, allocator *, ast_pool *);
+nodiscard static int               syntax_rename_variables(allocator *, ast_pool *, ast_node_h *, size_t);
+
+// -- syntax_checker --
+
+struct syntax_checker {
+    allocator *alloc;
+    ast_pool  *pool;
+};
+
+// -- allocation and deallocation --
+
+syntax_checker *syntax_checker_create(allocator *alloc, ast_pool *pool) {
+    syntax_checker *self = alloc_calloc(alloc, 1, sizeof *self);
+    if (!self) return self;
+
+    self->alloc = alloc;
+    self->pool  = pool;
+    return self;
+}
+
+void syntax_checker_destroy(syntax_checker **self) {
+    alloc_free((*self)->alloc, *self);
+    *self = null;
+}
+
+// -- syntax_checker operation --
+
+int syntax_checker_run(syntax_checker *self, ast_node_h *nodes, size_t count) {
+
+    int res = 0;
+    if ((res = syntax_rename_variables(self->alloc, self->pool, nodes, count))) return res;
+
+    // TODO more to come...
+
+    return res;
+}
+
+// -- rename_variable --
+
+struct rename_variable_ctx {
     allocator *alloc;
     ast_pool  *pool;
     map_t     *map;
     size_t     next;
-} rename_variable_ctx;
+};
 
 static nodiscard int rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc, ast_pool *pool) {
 
@@ -33,7 +76,7 @@ static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
 
 static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out) {
     char buf[64];
-    snprintf(buf, sizeof buf, "v%zu", self->next++);
+    snprintf(buf, sizeof buf, "__v%zu", self->next++);
     return mos_string_init(self->alloc, out, buf);
 }
 
@@ -47,6 +90,7 @@ static nodiscard int rename_if_match(allocator *alloc, string_t *string, map_t *
 
 static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h handle) {
     ast_node *node = ast_pool_at(self->pool, handle);
+    if (!node) return 1;
 
     switch (node->tag) {
     case ast_symbol: return rename_if_match(self->alloc, &node->symbol.name, self->map);
@@ -73,7 +117,6 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         if (rename_variables(self, node->let_in.value)) return 1;
 
         ast_node const *name = ast_pool_at(self->pool, node->let_in.name);
-
         assert(ast_symbol == name->tag);
         u32       name_hash = mos_string_hash32(&name->symbol.name);
         string_t *save      = map_get(self->map, name_hash);
@@ -197,7 +240,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
     return 0;
 }
 
-int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes, size_t len) {
+int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes, size_t count) {
 
     rename_variable_ctx ctx;
     if (rename_variable_ctx_init(&ctx, alloc, pool)) return 1;
@@ -205,12 +248,10 @@ int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes,
     map_t *map = map_create(alloc, sizeof(string_t), 1024, 0);
     if (!map) return 1;
 
-    ast_node_h *node = nodes;
+    ast_node_h *handle = nodes;
 
-    while (len--) {
-        if (rename_variables(&ctx, *node++)) goto cleanup;
-
-        node++;
+    while (count--) {
+        if (rename_variables(&ctx, *handle++)) goto cleanup;
     }
 
 cleanup:

@@ -5,6 +5,15 @@
 
 #include "alloc.h"
 
-int syntax_rename_variables(allocator *, ast_pool *, ast_node_h *, size_t);
+typedef struct syntax_checker syntax_checker;
+
+// -- allocation and deallocation --
+
+nodiscard syntax_checker *syntax_checker_create(allocator *, ast_pool *) mallocfun;
+void                      syntax_checker_destroy(syntax_checker **);
+
+// -- operation --
+
+nodiscard int syntax_checker_run(syntax_checker *, ast_node_h *, size_t);
 
 #endif
