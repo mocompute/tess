@@ -1,7 +1,7 @@
-#ifndef MOS_MAP_H
-#define MOS_MAP_H
+#ifndef MOS_HASHMAP_H
+#define MOS_HASHMAP_H
 
-#include "map_internal.h"
+#include "hashmap_internal.h"
 
 #include "alloc.h"
 #include "nodiscard.h"

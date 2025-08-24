@@ -1,5 +1,5 @@
-#ifndef MOS_MAP_INTERNAL_H
-#define MOS_MAP_INTERNAL_H
+#ifndef MOS_HASHMAP_INTERNAL_H
+#define MOS_HASHMAP_INTERNAL_H
 
 #include "types.h"
 

@@ -2,7 +2,7 @@
 
 #include "alloc.h"
 #include "ast.h"
-#include "map.h"
+#include "hashmap.h"
 #include "mos_string.h"
 
 #include <stdio.h>

@@ -1,5 +1,5 @@
-#include "map.h"
-#include "map_internal.h"
+#include "hashmap.h"
+#include "hashmap_internal.h"
 
 #include "alloc.h"
 #include "dbg.h"

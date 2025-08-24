@@ -7,8 +7,8 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/dbg.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/map.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/map_internal.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap_internal.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/mos_string.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
@@ -21,7 +21,7 @@ set(SOURCES
   src/dbg.c
   src/hash.c
   src/file.c
-  src/map.c
+  src/hashmap.c
   src/mos_string.c
   src/sexp.c
   src/sexp_parser.c
