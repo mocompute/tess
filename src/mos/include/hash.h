@@ -7,7 +7,8 @@
 #include <stddef.h>
 
 // Returns: FNV-1a hash of data
-size_t mos_hash64(byte const *, size_t) purefun;
-size_t mos_hash32(byte const *, size_t) purefun;
+
+u64 hash64(byte const *, size_t) purefun;
+u32 hash32(byte const *, size_t) purefun;
 
 #endif

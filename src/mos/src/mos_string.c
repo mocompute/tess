@@ -1,6 +1,7 @@
 #include "mos_string.h"
 
 #include "alloc.h"
+#include "hash.h"
 #include "types.h"
 
 #include <assert.h>
@@ -61,6 +62,17 @@ void mos_string_move(string_t *dst, string_t *src) {
     alloc_zero(src);
 }
 
+int mos_string_copy(allocator *alloc, string_t *dst, string_t const *src) {
+    alloc_copy(dst, src);
+
+    if (mos_string_is_allocated(dst)) {
+        dst->allocated.buf = alloc_strdup(alloc, dst->allocated.buf);
+        if (!dst) return 1;
+    }
+
+    return 0;
+}
+
 char const *mos_string_str(string_t const *s) {
     if (mos_string_is_allocated(s)) return s->allocated.buf;
     return &s->small.data[0];
@@ -104,4 +116,9 @@ int mos_string_parse_number(char const *in, i64 *out_i64, u64 *out_u64, f64 *out
     }
 
     return 0;
+}
+
+u32 mos_string_hash32(string_t const *self) {
+    char const *str = mos_string_str(self);
+    return hash32((u8 const *)str, strlen(str));
 }

@@ -25,8 +25,9 @@ typedef u32        map_key;
 
 // -- allocation and deallocation --
 
-nodiscard map_t *map_create(allocator *, u8 element_size, u32 buckets, f32 max_load_factor);
+nodiscard map_t *map_create(allocator *, u8 element_size, u32 buckets, f32 max_load_factor) mallocfun;
 void             map_destroy(allocator *, map_t **);
+nodiscard map_t *map_copy(allocator *, map_t const *) mallocfun;
 
 // -- read-only access --
 

@@ -29,6 +29,7 @@ void          mos_string_init_empty(string_t *);
 void          mos_string_deinit(allocator *, string_t *);
 nodiscard int mos_string_replace(allocator *, string_t *, char const *);
 void          mos_string_move(string_t *, string_t *);
+nodiscard int mos_string_copy(allocator *, string_t *, string_t const *);
 
 // -- access --
 
@@ -36,9 +37,10 @@ char const *mos_string_str(string_t const *);
 
 // -- utilities --
 
-bool mos_string_is_allocated(string_t const *);
-
-int  mos_string_parse_number(char const *, i64 *, u64 *, f64 *);
+int mos_string_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
+
+bool mos_string_is_allocated(string_t const *);
+u32  mos_string_hash32(string_t const *);
 
 #endif

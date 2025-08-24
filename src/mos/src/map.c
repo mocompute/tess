@@ -260,6 +260,14 @@ void map_destroy(allocator *alloc, map_t **map) {
     *map = null;
 }
 
+map_t *map_copy(allocator *alloc, map_t const *src) {
+    size_t size = sizeof(struct map) + src->n_cells * bucket_size(src);
+    map_t *dst  = alloc_malloc(alloc, size);
+    if (!dst) return dst;
+    memcpy(dst, src, size);
+    return dst;
+}
+
 int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
 
     // Must check for existing key. Replace if present.
