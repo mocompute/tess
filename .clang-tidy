@@ -9,6 +9,7 @@ Checks:
   - -bugprone-macro-parentheses
   - -bugprone-easily-swappable-parameters
   - -bugprone-crtp-constructor-accessibility
+  - -bugprone-assignment-in-if-condition
   - performance-*
 WarningsAsErrors: ''
 HeaderFileExtensions:

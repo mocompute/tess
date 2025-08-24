@@ -114,6 +114,10 @@ void *vec_at(vec_t *vec, size_t index) {
     return vec->data->data + index * vec->element_size;
 }
 
+void const *vec_cat(vec_t const *vec, size_t index) {
+    return vec->data->data + index * vec->element_size;
+}
+
 void *vec_back(vec_t *vec) {
     return vec->data->data + (vec->data->size - 1) * vec->element_size;
 }
@@ -164,7 +168,7 @@ void const *vec_cbegin(vec_t const *vec) {
     return vec->data->data;
 }
 
-void const *vec_end(vec_t *vec) {
+void const *vec_end(vec_t const *vec) {
     // points 1 past the end
     if (vec_empty(vec)) return null;
     return vec->data->data + vec->data->size * vec->element_size;

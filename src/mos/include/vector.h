@@ -46,8 +46,9 @@ bool   vec_empty(vec_t const *);
 void       *vec_data(vec_t *);
 void       *vec_begin(vec_t *);
 void const *vec_cbegin(vec_t const *);
-void const *vec_end(vec_t *);
+void const *vec_end(vec_t const *);
 void       *vec_at(vec_t *, size_t);
+void const *vec_cat(vec_t const *, size_t);
 void       *vec_back(vec_t *);
 
 // -- insertion and removal --

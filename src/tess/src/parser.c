@@ -2,13 +2,13 @@
 
 #include "alloc.h"
 #include "ast.h"
+#include "dbg.h"
 #include "mos_string.h"
 #include "token.h"
 #include "tokenizer.h"
 #include "vector.h"
 
 #include <assert.h>
-#include <errno.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -261,6 +261,16 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     }
     return 0;
 }
+
+// static int a_eof(parser *p) {
+//     if (next_token(p)) {
+//         if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
+//             return result_ast(p, ast_eof);
+//     }
+
+//     p->error.tag = tess_err_expected_eof;
+//     return 1;
+// }
 
 static int a_comma(parser *p) {
     if (next_token(p)) return 1;
@@ -824,6 +834,24 @@ static int expression(parser *parser) {
 
 int parser_next(parser *parser) {
     return expression(parser);
+}
+
+int parser_parse_all(allocator *alloc, parser *p, vec_t *out) {
+    assert(sizeof(ast_node_h) == out->element_size);
+
+    int res = 0;
+    while (0 == (res = parser_next(p))) {
+        ast_node_h handle;
+        parser_result(p, &handle);
+        if (vec_push_back(alloc, out, &handle)) return 2;
+
+        dbg("ast tag: %s\n", ast_tag_to_string(ast_pool_at(p->ast_pool, handle)->tag));
+    }
+
+    dbg("parser_next returned 0\n");
+    if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
+
+    return res;
 }
 
 void parser_result(parser *p, ast_node_h *handle) {

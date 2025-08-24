@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "alloc.h"
+#include "mos_string.h"
 #include "util.h"
 #include "vector.h"
 
@@ -166,6 +167,18 @@ int ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
     return ast_node_init(alloc, node, tag);
 }
 
+char const *ast_node_name_string(ast_node const *node) {
+    if (ast_symbol != node->tag && ast_string != node->tag) return null;
+
+    return mos_string_str(&node->symbol.name);
+}
+
+int ast_node_name_cmp(ast_node const *node, char const *target) {
+    char const *name = ast_node_name_string(node);
+    if (!name) return false;
+    return strcmp(name, target);
+}
+
 // -- pool operations --
 
 int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_node_h *handle) {
@@ -180,6 +193,10 @@ int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_nod
 
 ast_node *ast_pool_at(ast_pool *pool, ast_node_h handle) {
     return vec_at(&pool->data, handle.val);
+}
+
+ast_node const *ast_pool_cat(ast_pool const *pool, ast_node_h handle) {
+    return vec_cat(&pool->data, handle.val);
 }
 
 // -- utilities --

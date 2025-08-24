@@ -1,7 +1,9 @@
 #include "alloc.h"
 #include "ast.h"
+#include "compiler.h"
 #include "parser.h"
 #include "tokenizer.h"
+#include "vector.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -285,6 +287,76 @@ static int test_parser_node_to_string(void) {
     return error;
 }
 
+static int test_parse_all(void) {
+    int        error     = 0;
+
+    allocator *vec_alloc = alloc_default_allocator();
+    allocator *ast_alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    if (!ast_alloc) return error + 1;
+
+    ast_pool *pool = ast_pool_create(ast_alloc);
+    if (null == pool) return error + 1;
+
+    {
+        char const *input = "a\nb\nc";
+
+        parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
+        if (null == p) return error + 1;
+
+        vec_t nodes;
+        if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
+        if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
+
+        // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
+        // is not a correct program, it is just 3 symbol nodes
+
+        error += 3 == vec_size(&nodes) ? 0 : 1;
+        vec_deinit(vec_alloc, &nodes);
+    }
+
+    return error;
+}
+
+static int test_parse_to_c(void) {
+    int        error          = 0;
+
+    allocator *vec_alloc      = alloc_default_allocator();
+    allocator *compiler_alloc = alloc_default_allocator();
+    allocator *ast_alloc      = alloc_arena_create(alloc_default_allocator(), 4096);
+    if (!ast_alloc) return error + 1;
+
+    ast_pool *pool = ast_pool_create(ast_alloc);
+    if (null == pool) return error + 1;
+
+    {
+        char const *input = "let main = \n"
+                            "  1 + 2\n";
+
+        parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
+        if (null == p) return error + 1;
+
+        vec_t nodes;
+        if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
+        if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
+        error += 1 == vec_size(&nodes) ? 0 : 1;
+        if (error) return error;
+
+        vec_t compiler_output;
+        if (vec_init(vec_alloc, &compiler_output, 1, 1024)) return error + 1;
+
+        tess_compiler *compiler = tess_compiler_create(compiler_alloc, pool, &compiler_output, vec_alloc);
+        if (!compiler) return error + 1;
+
+        if (tess_compiler_compile(compiler, &nodes)) return error + 1;
+
+        tess_compiler_destroy(&compiler);
+        vec_deinit(vec_alloc, &nodes);
+    }
+
+    return 1;
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -309,6 +381,8 @@ int main(void) {
     T(test_parser_basic);
     T(test_parser_expression);
     T(test_parser_node_to_string);
+    T(test_parse_all);
+    T(test_parse_to_c);
 
     return error;
 }
