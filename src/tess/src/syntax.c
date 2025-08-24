@@ -249,17 +249,15 @@ int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes,
     rename_variable_ctx ctx;
     if (rename_variable_ctx_init(&ctx, alloc, pool)) return 1;
 
-    hashmap *map = map_create(alloc, sizeof(string_t), 1024, 0);
-    if (!map) return 1;
-
     ast_node_h *handle = nodes;
 
     while (count--) {
-        if (rename_variables(&ctx, *handle++)) goto cleanup;
+        if (rename_variables(&ctx, *handle++)) {
+            rename_variable_ctx_deinit(&ctx);
+            return 1;
+        }
     }
 
-cleanup:
     rename_variable_ctx_deinit(&ctx);
-
     return 0;
 }

@@ -58,7 +58,7 @@ int mos_string_replace(allocator *alloc, string_t *s, char const *src) {
 
 void mos_string_move(string_t *dst, string_t *src) {
     alloc_copy(dst, src);
-    alloc_zero(src);
+    mos_string_init_empty(src);
 }
 
 int mos_string_copy(allocator *alloc, string_t *dst, string_t const *src) {

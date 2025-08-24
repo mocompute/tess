@@ -183,6 +183,7 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
 // -- pool operations --
 
 int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_node_h *handle) {
+    assert(handle);
 
     if (vec_push_back(alloc, &pool->data, node)) return 1;
 

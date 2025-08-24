@@ -335,6 +335,9 @@ static int test_parse_all(void) {
         syntax_checker_destroy(&syntax);
     }
 
+    ast_pool_destroy(ast_alloc, &pool);
+    alloc_arena_destroy(alloc_default_allocator(), &ast_alloc);
+
     return error;
 }
 
@@ -375,9 +378,15 @@ static int test_parse_to_c(void) {
 
         printf("Output:\n%s\n", (char const *)vec_cbegin(&transpiler_output));
 
+        vec_deinit(vec_alloc, &transpiler_output);
         transpiler_destroy(&transpiler);
         vec_deinit(vec_alloc, &nodes);
+
+        parser_destroy(ast_alloc, &p);
     }
+
+    ast_pool_destroy(ast_alloc, &pool);
+    alloc_arena_destroy(alloc_default_allocator(), &ast_alloc);
 
     return 1;
     return error;

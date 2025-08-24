@@ -668,6 +668,11 @@ static int lambda_function(parser *p) {
     // move the vector from the function_declaration node to the new ast node
     ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
     vec_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
+
+    // reset moved-from vector to an empty vector so the node in the
+    // ast_pool is still valid.
+    // TODO: better would be to remove the node from the pool
+    vec_init_empty(&decl->function_declaration.parameters, node.lambda_function.parameters.element_size);
     return result_ast_node(p, &node);
 }
 
@@ -761,6 +766,10 @@ static int let_form(parser *p) {
 
     // move the vector from the function_declaration node to the new ast node
     vec_move(&node.let.parameters, &decl->function_declaration.parameters);
+    // reset moved-from vector to an empty vector so the node in the
+    // ast_pool is still valid.
+    // TODO: better would be to remove the node from the pool
+    vec_init_empty(&decl->function_declaration.parameters, node.let.parameters.element_size);
     return result_ast_node(p, &node);
 }
 
