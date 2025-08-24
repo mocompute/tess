@@ -1,8 +1,8 @@
 #include "alloc.h"
 #include "ast.h"
-#include "compiler.h"
 #include "parser.h"
 #include "tokenizer.h"
+#include "transpiler.h"
 #include "vector.h"
 
 #include <assert.h>

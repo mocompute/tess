@@ -1,5 +1,5 @@
-#ifndef TESS_COMPILER_H
-#define TESS_COMPILER_H
+#ifndef TESS_TRANSPILER_H
+#define TESS_TRANSPILER_H
 
 #include "alloc.h"
 #include "ast.h"

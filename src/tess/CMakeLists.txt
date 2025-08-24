@@ -21,7 +21,7 @@ add_custom_command(
 add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/compiler.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/transpiler.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
@@ -31,7 +31,7 @@ set(HEADERS
 
 set(SOURCES
   src/ast.c
-  src/compiler.c
+  src/transpiler.c
   src/error.c
   src/parser.c
   src/tess.c
