@@ -16,7 +16,7 @@ allocator *alloc_default_allocator();
 
 // -- arena bump allocator --
 
-allocator    *alloc_arena_create(allocator *alloc, size_t);
+allocator    *alloc_arena_create(allocator *alloc, size_t) mallocfun;
 void          alloc_arena_dealloc(allocator *parent, allocator **arena);
 void          alloc_arena_destroy(allocator *, allocator **);
 nodiscard int alloc_arena_init(allocator *, allocator *parent, size_t);
