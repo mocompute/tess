@@ -36,6 +36,10 @@ void generate_c_string(FILE *out, char const *var_name, FILE *in) {
         case '\n':
             fprintf(out, "\\n");
             line_length += 2;
+
+            fprintf(out, "\"\n    \"");
+            line_length = 0;
+
             break;
         case '\r':
             fprintf(out, "\\r");
