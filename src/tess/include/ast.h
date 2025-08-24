@@ -166,6 +166,9 @@ typedef struct ast_pool {
     struct vector data; // ast_node
 } ast_pool;
 
+typedef void (*ast_op_fun)(ast_pool *, ast_node *);
+typedef void (*ast_op_cfun)(ast_pool const *, ast_node const *);
+
 // -- allocation and deallocation --
 
 void          tess_type_init(tess_type *, type_tag);
@@ -175,7 +178,7 @@ void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(allocator *, tess_type *);
 
 ast_pool     *ast_pool_alloc(allocator *);
-ast_pool     *ast_pool_create(allocator *);
+ast_pool     *ast_pool_create(allocator *) mallocfun;
 void          ast_pool_dealloc(allocator *, ast_pool **);
 void          ast_pool_destroy(allocator *, ast_pool **);
 nodiscard int ast_pool_init(allocator *, ast_pool *);
@@ -195,6 +198,9 @@ int           ast_node_name_strcmp(ast_node const *, char const *);
 nodiscard int   ast_pool_move_back(allocator *, ast_pool *, ast_node *, ast_node_h *);
 ast_node       *ast_pool_at(ast_pool *, ast_node_h);
 ast_node const *ast_pool_cat(ast_pool const *, ast_node_h);
+
+void            ast_pool_dfs(ast_pool *, ast_node_h, ast_op_fun);
+void            ast_pool_cdfs(ast_pool const *, ast_node_h, ast_op_cfun);
 
 // -- utilities --
 

@@ -201,6 +201,116 @@ ast_node const *ast_pool_cat(ast_pool const *pool, ast_node_h handle) {
     return vec_cat(&pool->data, handle.val);
 }
 
+void ast_pool_dfs(ast_pool *pool, ast_node_h start, ast_op_fun fun) {
+    ast_node *node = ast_pool_at(pool, start);
+    assert(node);
+
+    // Note: const dfs also uses this function.
+
+    switch (node->tag) {
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string: return fun(pool, node);
+
+    case ast_infix:
+        ast_pool_dfs(pool, node->infix.left, fun);
+        ast_pool_dfs(pool, node->infix.right, fun);
+        return fun(pool, node);
+
+    case ast_tuple: {
+        ast_node_h       *it  = vec_begin(&node->tuple.elements);
+        ast_node_h const *end = vec_end(&node->tuple.elements);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        return fun(pool, node);
+    } break;
+
+    case ast_let_in:
+        ast_pool_dfs(pool, node->let_in.name, fun);
+        ast_pool_dfs(pool, node->let_in.value, fun);
+        ast_pool_dfs(pool, node->let_in.body, fun);
+
+        return fun(pool, node);
+
+    case ast_let: {
+        ast_pool_dfs(pool, node->let.name, fun);
+
+        ast_node_h       *it  = vec_begin(&node->let.parameters);
+        ast_node_h const *end = vec_end(&node->let.parameters);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        ast_pool_dfs(pool, node->let.body, fun);
+
+        return fun(pool, node);
+    } break;
+
+    case ast_if_then_else:
+        ast_pool_dfs(pool, node->if_then_else.condition, fun);
+        ast_pool_dfs(pool, node->if_then_else.yes, fun);
+        ast_pool_dfs(pool, node->if_then_else.no, fun);
+
+        return fun(pool, node);
+
+    case ast_lambda_function: {
+        ast_node_h       *it  = vec_begin(&node->lambda_function.parameters);
+        ast_node_h const *end = vec_end(&node->lambda_function.parameters);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        ast_pool_dfs(pool, node->lambda_function.body, fun);
+
+        return fun(pool, node);
+    } break;
+
+    case ast_function_declaration: {
+        ast_pool_dfs(pool, node->function_declaration.name, fun);
+
+        ast_node_h       *it  = vec_begin(&node->function_declaration.parameters);
+        ast_node_h const *end = vec_end(&node->function_declaration.parameters);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        return fun(pool, node);
+    } break;
+
+    case ast_lambda_declaration: {
+        ast_node_h       *it  = vec_begin(&node->lambda_declaration.parameters);
+        ast_node_h const *end = vec_end(&node->lambda_declaration.parameters);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        return fun(pool, node);
+
+    } break;
+
+    case ast_lambda_function_application: {
+        ast_pool_dfs(pool, node->lambda_application.lambda, fun);
+
+        ast_node_h       *it  = vec_begin(&node->lambda_application.arguments);
+        ast_node_h const *end = vec_end(&node->lambda_application.arguments);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        return fun(pool, node);
+    } break;
+
+    case ast_named_function_application: {
+        ast_pool_dfs(pool, node->named_application.name, fun);
+
+        ast_node_h       *it  = vec_begin(&node->named_application.arguments);
+        ast_node_h const *end = vec_end(&node->named_application.arguments);
+        while (it != end) ast_pool_dfs(pool, *it++, fun);
+
+        return fun(pool, node);
+    } break;
+    }
+}
+
+void ast_pool_cdfs(ast_pool const *pool, ast_node_h start, ast_op_cfun fun) {
+    ast_pool_dfs((ast_pool *)pool, start, (ast_op_fun)fun);
+}
+
 // -- utilities --
 
 char const *type_tag_to_string(type_tag tag) {
