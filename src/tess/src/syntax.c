@@ -53,7 +53,7 @@ int syntax_checker_run(syntax_checker *self, ast_node_h *nodes, size_t count) {
 struct rename_variable_ctx {
     allocator *alloc;
     ast_pool  *pool;
-    map_t     *map;
+    hashmap   *map;
     size_t     next;
 };
 
@@ -80,7 +80,7 @@ static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out
     return mos_string_init(self->alloc, out, buf);
 }
 
-static nodiscard int rename_if_match(allocator *alloc, string_t *string, map_t *map, string_t *copy_to) {
+static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
     u32             hash  = mos_string_hash32(string);
     string_t const *found = map_get(map, hash);
 
@@ -147,7 +147,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         // make new variables for all function parameters. save existing
         // map in case any of them shadow.
 
-        map_t *save = map_copy(self->alloc, self->map);
+        hashmap *save = map_copy(self->alloc, self->map);
         if (!save) return 1;
 
         ast_node_h       *it  = vec_begin(&node->let.parameters);
@@ -186,7 +186,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         // make new variable for function parameters, saving map in case of
         // shadowing.
 
-        map_t *save = map_copy(self->alloc, self->map);
+        hashmap *save = map_copy(self->alloc, self->map);
         if (!save) return 1;
 
         ast_node_h       *it  = vec_begin(&node->lambda_function.parameters);
@@ -249,7 +249,7 @@ int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes,
     rename_variable_ctx ctx;
     if (rename_variable_ctx_init(&ctx, alloc, pool)) return 1;
 
-    map_t *map = map_create(alloc, sizeof(string_t), 1024, 0);
+    hashmap *map = map_create(alloc, sizeof(string_t), 1024, 0);
     if (!map) return 1;
 
     ast_node_h *handle = nodes;

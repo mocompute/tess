@@ -20,32 +20,32 @@
 // Each cell places the key in a header, followed by client's
 // element_size bytes of data.
 
-typedef struct map map_t;
-typedef u32        map_key;
+typedef struct hashmap hashmap;
+typedef u32            hashmap_key;
 
 // -- allocation and deallocation --
 
-nodiscard map_t *map_create(allocator *, u8 element_size, u32 buckets, f32 max_load_factor) mallocfun;
-void             map_destroy(allocator *, map_t **);
-nodiscard map_t *map_copy(allocator *, map_t const *) mallocfun;
+nodiscard hashmap *map_create(allocator *, u8 element_size, u32 buckets, f32 max_load_factor) mallocfun;
+void               map_destroy(allocator *, hashmap **);
+nodiscard hashmap *map_copy(allocator *, hashmap const *) mallocfun;
 
 // -- read-only access --
 
-size_t map_size(map_t const *);
-bool   map_empty(map_t const *);
-f32    map_load_factor(map_t const *);
+size_t map_size(hashmap const *);
+bool   map_empty(hashmap const *);
+f32    map_load_factor(hashmap const *);
 
 // -- data and iterator access --
 //
 // Data cell includes header struct.
 
-map_element_header *map_unchecked_at(map_t *, map_key);
+hashmap_element_header *map_unchecked_at(hashmap *, hashmap_key);
 
 // -- insertion and removal --
 
-nodiscard int map_set(allocator *, map_t **, u32 key, void *data);
-void         *map_get(map_t *, map_key);
-void          map_erase(map_t *, map_key);
+nodiscard int map_set(allocator *, hashmap **, u32 key, void *data);
+void         *map_get(hashmap *, hashmap_key);
+void          map_erase(hashmap *, hashmap_key);
 
 // -- utilities --
 

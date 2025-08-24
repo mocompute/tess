@@ -13,9 +13,9 @@ typedef struct {
     byte pad[3];
     byte data[];
     // size = 8
-} map_element_header;
+} hashmap_element_header;
 
-struct map {
+struct hashmap {
     struct {
         u32 n_cells;
         u32 n_occupied;

@@ -43,9 +43,9 @@ static int test_align(void) {
 static int test_structs(void) {
     int error = 0;
 
-    dbg("map_header size = %zu\n", sizeof(map_element_header));
+    dbg("map_header size = %zu\n", sizeof(hashmap_element_header));
 
-    assert(8 == sizeof(map_element_header));
+    assert(8 == sizeof(hashmap_element_header));
 
     return error;
 }
@@ -55,7 +55,7 @@ static int test_map(void) {
 
     allocator *alloc = alloc_default_allocator();
 
-    map_t     *map   = map_create(alloc, sizeof(int), 8, 0);
+    hashmap   *map   = map_create(alloc, sizeof(int), 8, 0);
 
     error += null == map_get(map, 0) ? 0 : 1;
 
@@ -87,8 +87,8 @@ static int test_big_map(void) {
     size_t const N     = 100000;
 
     typedef struct pair_t {
-        map_key left;
-        int     right;
+        hashmap_key left;
+        int         right;
 
     } pair_t;
 
@@ -99,18 +99,18 @@ static int test_big_map(void) {
         goto cleanup;
     }
 
-    map_t *map = map_create(alloc, sizeof(int), 8, 0);
+    hashmap *map = map_create(alloc, sizeof(int), 8, 0);
 
     for (size_t i = 0; i < N; ++i) {
         // find unique key
         int key = rand();
-        while (map_get(map, (map_key)key)) key = rand();
+        while (map_get(map, (hashmap_key)key)) key = rand();
 
-        pair_t pair = {(map_key)key, rand()};
+        pair_t pair = {(hashmap_key)key, rand()};
         if (vec_push_back(alloc, &vec, &pair)) {
             goto cleanup;
         }
-        if (map_set(alloc, &map, (map_key)pair.left, &pair.right)) {
+        if (map_set(alloc, &map, (hashmap_key)pair.left, &pair.right)) {
             error++;
             goto cleanup;
         }
@@ -119,7 +119,7 @@ static int test_big_map(void) {
     // verify
     for (size_t i = 0; i < vec_size(&vec); ++i) {
         pair_t *pair = vec_at(&vec, i);
-        void   *res  = map_get(map, (map_key)pair->left);
+        void   *res  = map_get(map, (hashmap_key)pair->left);
         if (!res) {
             fprintf(stderr, "verify not found %zu: %u -> %i %p\n", i, pair->left, pair->right, res);
             error++;

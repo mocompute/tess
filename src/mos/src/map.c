@@ -40,22 +40,22 @@ static inline void set_tombstone(u8 *status) {
     *status &= ~1; // clear occupied
 }
 
-static inline size_t bucket_size(map_t const *map) {
-    return map->aligned_element_size + sizeof(map_element_header);
+static inline size_t bucket_size(hashmap const *map) {
+    return map->aligned_element_size + sizeof(hashmap_element_header);
 }
 
-static inline u32 key_to_bucket(map_t const *map, map_key key) {
+static inline u32 key_to_bucket(hashmap const *map, hashmap_key key) {
     assert(map);
     return key % map->n_cells;
 }
 
-static inline u32 incr_index(map_t const *map, u32 index) {
+static inline u32 incr_index(hashmap const *map, u32 index) {
     return (index + 1) % map->n_cells;
 }
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static map_element_header *map_find(map_t *map, map_key key) {
+static hashmap_element_header *map_find(hashmap *map, hashmap_key key) {
     assert(map);
 
     u32 index          = key_to_bucket(map, key);
@@ -64,8 +64,8 @@ static map_element_header *map_find(map_t *map, map_key key) {
     while (1) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
-        map_element_header *const cell   = map_unchecked_at(map, index);
-        u8                        status = cell->status;
+        hashmap_element_header *const cell   = map_unchecked_at(map, index);
+        u8                            status = cell->status;
 
         if (is_tombstone(status)) {
 
@@ -84,14 +84,14 @@ static map_element_header *map_find(map_t *map, map_key key) {
     }
 }
 
-static int set_one(map_t *map, map_element_header const *header, byte const *element) {
+static int set_one(hashmap *map, hashmap_element_header const *header, byte const *element) {
 
-    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(map_element_header)];
-    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(map_element_header)];
+    byte to_store[MAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
+    byte tmp[MAP_MAX_ELEMENT_SIZE + sizeof(hashmap_element_header)];
 
     assert(map);
 
-    size_t const cell_size = sizeof(map_element_header) + map->element_size;
+    size_t const cell_size = sizeof(hashmap_element_header) + map->element_size;
     assert(bucket_size(map) >= cell_size);
 
     // write header and data to to_store
@@ -110,11 +110,11 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
         }
         if (probe_distance > 16 && !warning_printed) {
             dbg("warning: high probe distance for key: %u, load factor: %f\n",
-                ((map_element_header *)to_store)->key, map_load_factor(map));
+                ((hashmap_element_header *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
         }
 
-        map_element_header *const cell = map_unchecked_at(map, index);
+        hashmap_element_header *const cell = map_unchecked_at(map, index);
 
         if (is_occupied(cell->status)) {
             if (probe_distance <= get_probe_distance(cell->status)) {
@@ -159,11 +159,11 @@ static int set_one(map_t *map, map_element_header const *header, byte const *ele
     return 0;
 }
 
-static int set_one_cell(map_t *map, map_element_header *cell) {
+static int set_one_cell(hashmap *map, hashmap_element_header *cell) {
     return set_one(map, cell, cell->data);
 }
 
-static int grow_buckets(allocator *alloc, map_t **map) {
+static int grow_buckets(allocator *alloc, hashmap **map) {
     // make a new map with 1.618x the number of buckets. Copy all data to
     // the new map. Then release the old map's buffers, and overwrite
     // its struct with the new map.
@@ -175,7 +175,7 @@ static int grow_buckets(allocator *alloc, map_t **map) {
         return 1;
     }
 
-    map_t *new_map = map_create(alloc, (*map)->element_size, (u32)new_buckets, (*map)->max_load_factor);
+    hashmap *new_map = map_create(alloc, (*map)->element_size, (u32)new_buckets, (*map)->max_load_factor);
 
     if (!new_map) {
         dbg("map grow_buckets: oom\n");
@@ -183,7 +183,7 @@ static int grow_buckets(allocator *alloc, map_t **map) {
     }
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
-        map_element_header *cell = map_unchecked_at(*map, i);
+        hashmap_element_header *cell = map_unchecked_at(*map, i);
         if (is_occupied(cell->status)) {
             if (set_one_cell(new_map, cell)) return 1;
         }
@@ -198,21 +198,21 @@ static int grow_buckets(allocator *alloc, map_t **map) {
 
 // -- externals --
 
-f32 map_load_factor(map_t const *map) {
+f32 map_load_factor(hashmap const *map) {
     return (f32)map->n_occupied / (f32)map->n_cells;
 }
 
-size_t map_size(map_t const *map) {
+size_t map_size(hashmap const *map) {
     return map->n_occupied;
 }
 
-bool map_empty(map_t const *map) {
+bool map_empty(hashmap const *map) {
     return map->n_occupied == 0;
 }
 
 // Returns pointer to cell, whether or not it is valid, occupied, etc.
-map_element_header *map_unchecked_at(map_t *map, u32 index) {
-    return (map_element_header *)(((byte *)map->data) + index * bucket_size(map));
+hashmap_element_header *map_unchecked_at(hashmap *map, u32 index) {
+    return (hashmap_element_header *)(((byte *)map->data) + index * bucket_size(map));
 }
 
 // Returns: input if already a power of two, or else the next higher
@@ -234,7 +234,7 @@ u32 map_next_power_of_two(u32 n) {
 
 //
 
-map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load_factor) {
+hashmap *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load_factor) {
 
     if (element_size > MAP_MAX_ELEMENT_SIZE) return null;
     if (max_load_factor < 0.01) max_load_factor = DEFAULT_LOAD_FACTOR;
@@ -244,9 +244,9 @@ map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load
 
     u8 aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     assert(alloc_align_to_word_size(element_size) <= MAP_MAX_ELEMENT_SIZE);
-    size_t bucket_size        = aligned_element_size + sizeof(map_element_header);
+    size_t   bucket_size      = aligned_element_size + sizeof(hashmap_element_header);
 
-    map_t *map                = alloc_calloc(alloc, 1, sizeof(struct map) + n_buckets * bucket_size);
+    hashmap *map              = alloc_calloc(alloc, 1, sizeof(struct hashmap) + n_buckets * bucket_size);
     map->element_size         = element_size;
     map->aligned_element_size = (u8)alloc_align_to_word_size(element_size);
     map->n_cells              = n_buckets;
@@ -255,20 +255,20 @@ map_t *map_create(allocator *alloc, u8 element_size, u32 n_buckets, f32 max_load
     return map;
 }
 
-void map_destroy(allocator *alloc, map_t **map) {
+void map_destroy(allocator *alloc, hashmap **map) {
     alloc_free(alloc, *map);
     *map = null;
 }
 
-map_t *map_copy(allocator *alloc, map_t const *src) {
-    size_t size = sizeof(struct map) + src->n_cells * bucket_size(src);
-    map_t *dst  = alloc_malloc(alloc, size);
+hashmap *map_copy(allocator *alloc, hashmap const *src) {
+    size_t   size = sizeof(struct hashmap) + src->n_cells * bucket_size(src);
+    hashmap *dst  = alloc_malloc(alloc, size);
     if (!dst) return dst;
     memcpy(dst, src, size);
     return dst;
 }
 
-int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
+int map_set(allocator *alloc, hashmap **map, hashmap_key key, void *data) {
 
     // Must check for existing key. Replace if present.
     void *existing = map_get(*map, key);
@@ -284,18 +284,18 @@ int map_set(allocator *alloc, map_t **map, map_key key, void *data) {
         }
     }
 
-    map_element_header header = {.key = key, .status = 0};
+    hashmap_element_header header = {.key = key, .status = 0};
     return set_one(*map, &header, data);
 }
 
-void *map_get(map_t *map, map_key key) {
-    map_element_header *cell = map_find(map, key);
+void *map_get(hashmap *map, hashmap_key key) {
+    hashmap_element_header *cell = map_find(map, key);
     if (!cell) return null;
     return cell->data;
 }
 
-void map_erase(map_t *map, map_key key) {
-    map_element_header *cell = map_find(map, key);
+void map_erase(hashmap *map, hashmap_key key) {
+    hashmap_element_header *cell = map_find(map, key);
     if (!cell) return;
 
     set_tombstone(&cell->status);
