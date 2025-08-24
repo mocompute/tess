@@ -93,6 +93,23 @@ int vec_copy_back(allocator *alloc, vec_t *vec, void const *start, size_t count)
     return 0;
 }
 
+int vec_push_back_byte(allocator *alloc, vec_t *vec, u8 b) {
+    assert(1 == vec->element_size);
+    if (vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1)) return 1;
+    *(vec->data->data + vec->data->size) = b;
+    vec->data->size += 1;
+    return 0;
+}
+
+int vec_copy_back_bytes(allocator *alloc, vec_t *vec, u8 const *start, size_t count) {
+    assert(1 == vec->element_size);
+    if (vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count)) return 1;
+
+    memcpy(vec->data->data + vec->data->size, start, count);
+    vec->data->size += count;
+    return 0;
+}
+
 void *vec_at(vec_t *vec, size_t index) {
     return vec->data->data + index * vec->element_size;
 }

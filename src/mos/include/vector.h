@@ -52,8 +52,8 @@ void       *vec_back(vec_t *);
 
 // -- insertion and removal --
 
-nodiscard int vec_push_back(allocator *, vec_t *, void const *element);
-nodiscard int vec_copy_back(allocator *, vec_t *, void const *start, size_t count);
+nodiscard int vec_push_back(allocator *, vec_t *, void const *);
+nodiscard int vec_copy_back(allocator *, vec_t *, void const *, size_t);
 void          vec_pop_back(vec_t *);
 void          vec_erase(vec_t *, void *);
 nodiscard int vec_resize(allocator *, vec_t *, size_t);
@@ -68,5 +68,11 @@ void          vec_clear(vec_t *);
 nodiscard int vec_assoc_set(allocator *, vec_t *, void const *);
 void         *vec_assoc_get(vec_t *, size_t);
 void          vec_assoc_erase(vec_t *, size_t);
+
+// -- byte vectors --
+//
+// optimized for the case where element_size == 1
+nodiscard int vec_push_back_byte(allocator *, vec_t *, u8);
+nodiscard int vec_copy_back_bytes(allocator *, vec_t *, u8 const *, size_t);
 
 #endif
