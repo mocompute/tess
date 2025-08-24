@@ -9,7 +9,7 @@ add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
   DEPENDS $<TARGET_FILE:mos_embed>
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMENT "Running embed generator"
+  COMMENT "Processing embedded files from directory ${CMAKE_CURRENT_SOURCE_DIR}/embed"
 )
 
 add_custom_target(tess_generate_embed

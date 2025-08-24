@@ -25,7 +25,7 @@ static void make_c_identifier(char *dest, char const *src, size_t len) {
 
 void generate_c_string(FILE *out, char const *var_name, FILE *in) {
     fprintf(out, "// Original file: %s\n", var_name);
-    fprintf(out, "const char %s[] = \n", var_name);
+    fprintf(out, "char const *%s = \n", var_name);
 
     int c;
     int line_length = 0;
@@ -94,16 +94,16 @@ int process_file(FILE *out, char const *path, char const *filename) {
 }
 
 // Process directory
-void process_directory(const char *dir_path, const char *output_file) {
+void process_directory(char const *progname, char const *dir_path, char const *output_file) {
     DIR *dir = opendir(dir_path);
     if (!dir) {
-        fprintf(stderr, "Error: Cannot open directory %s\n", dir_path);
+        fprintf(stderr, "%s: Error: Cannot open directory %s\n", progname, dir_path);
         exit(1);
     }
 
     FILE *out = fopen(output_file, "w");
     if (!out) {
-        fprintf(stderr, "Error: Cannot create output file %s\n", output_file);
+        fprintf(stderr, "%s: Error: Cannot create output file %s\n", progname, output_file);
         closedir(dir);
         exit(1);
     }
@@ -124,7 +124,7 @@ void process_directory(const char *dir_path, const char *output_file) {
 
         struct stat st;
         if (stat(filepath, &st) == 0 && S_ISREG(st.st_mode)) {
-            printf("Processing: %s\n", entry->d_name);
+            printf("%s: Processing: %s\n", progname, entry->d_name);
 
             if (0 == process_file(out, filepath, entry->d_name)) {
                 file_count++;
@@ -135,7 +135,7 @@ void process_directory(const char *dir_path, const char *output_file) {
     fclose(out);
     closedir(dir);
 
-    printf("\nGenerated %s with %zu embedded files\n", output_file, file_count);
+    printf("%s: Generated %s with %zu embedded files\n", progname, output_file, file_count);
 }
 
 int main(int argc, char *argv[]) {
@@ -145,6 +145,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    process_directory(argv[1], argv[2]);
+    char *progname = strrchr(argv[0], '/');
+    if (progname) progname++;
+    else progname = argv[0];
+
+    process_directory(progname, argv[1], argv[2]);
     return 0;
 }
