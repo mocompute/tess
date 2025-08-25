@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include "types.h"
 
 #include <assert.h>
 #include <stdalign.h>
@@ -82,15 +83,24 @@ allocator *alloc_default_allocator() {
 // -- allocator malloc and friends --
 
 void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
-    return alloc->malloc(alloc, sz, file, line);
+    void *ptr = alloc->malloc(alloc, sz, file, line);
+    assert(ptr);
+    if (!ptr) exit(1);
+    return ptr;
 }
 
 void *alloc_calloc_i(allocator *alloc, size_t count, size_t size, char const *file, int line) {
-    return alloc->calloc(alloc, count, size, file, line);
+    void *ptr = alloc->calloc(alloc, count, size, file, line);
+    assert(ptr);
+    if (!ptr) exit(1);
+    return ptr;
 }
 
 void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
-    return alloc->realloc(alloc, ptr, sz, file, line);
+    void *out = alloc->realloc(alloc, ptr, sz, file, line);
+    assert(out);
+    if (!out) exit(1);
+    return out;
 }
 
 void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {

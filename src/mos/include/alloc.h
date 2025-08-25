@@ -2,7 +2,6 @@
 #define MOS_ALLOC_H
 
 #include "nodiscard.h"
-#include "types.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +26,8 @@ nodiscard int alloc_arena_init(allocator *, allocator *parent, size_t);
 void          alloc_arena_deinit(allocator *);
 
 // -- allocator malloc and friends --
+//
+// these allocations never fail: failures call exit the program.
 
 void *alloc_malloc_i(allocator *, size_t, char const *, int) mallocfun;
 void *alloc_calloc_i(allocator *, size_t, size_t, char const *, int) mallocfun;

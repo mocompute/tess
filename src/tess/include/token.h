@@ -2,9 +2,8 @@
 #define TESS_TOKEN_H
 
 #include "alloc.h"
+#include "types.h"
 #include "util.h"
-
-#include <stdint.h>
 
 #define TESS_TOKEN_TAGS(X)                                                                                 \
     X(tok_one_newline, "one_newline")                                                                      \

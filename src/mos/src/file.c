@@ -1,4 +1,5 @@
 #include "file.h"
+#include "types.h"
 
 #include <stdio.h>
 
