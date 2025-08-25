@@ -306,7 +306,8 @@ enum leak_status {
     leak_status_alloc_matched,
     leak_status_realloc_matched,
     leak_status_free_matched,
-    leak_status_extra_free,
+    leak_error_extra_free,
+    leak_error_alloc_leak,
 };
 struct leak_allocation {
     void            *ptr;
@@ -320,8 +321,8 @@ struct leak_allocation {
 typedef struct {
     struct allocator        allocator;
     struct leak_allocation *data;
-    size_t                  capacity;
-    size_t                  size;
+    i64                     capacity;
+    i64                     size;
 } leak_detector;
 
 static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file, int line) mallocfun;
@@ -342,7 +343,7 @@ allocator   *alloc_leak_detector_create() {
 
     self->capacity          = 1024;
     self->size              = 0;
-    self->data              = calloc(self->capacity, sizeof(struct leak_allocation));
+    self->data              = calloc((size_t)self->capacity, sizeof(struct leak_allocation));
 
     return (allocator *)self;
 }
@@ -357,69 +358,124 @@ void alloc_leak_detector_destroy(allocator **alloc) {
 }
 
 void alloc_leak_detector_report(allocator *alloc) {
-    leak_detector *self = (leak_detector *)alloc;
+    leak_detector          *self    = (leak_detector *)alloc;
+
+    struct leak_allocation *records = malloc(sizeof *records * (size_t)self->size);
+    if (!records) {
+        fprintf(stderr, "alloc_leak_detector_report: out of memory\n");
+        goto cleanup;
+    }
+    memcpy(records, self->data, (size_t)self->size * sizeof *records);
 
     // match reallocs with previous allocs
-    for (size_t i = 0; i < self->size; ++i) {
-        if (leak_action_realloc != self->data[i].status) continue;
+    for (i64 i = 0; i < self->size; ++i) {
+        if (leak_action_realloc != records[i].status) continue;
 
         if (i == 0) {
-            // realloc as first action is impossible. backward search
-            // requires this.
             fprintf(stderr, "alloc_leak_detector_report: invariant violated.\n");
-            return;
+            goto cleanup;
         }
 
         // realloc_ptr is original pointer; go back to prior
         // allocations and mark it as reallocated
-        void *const ptr = self->data[i].realloc_ptr;
-        for (size_t j = i - 1; j >= 0; --j) {
-            if (ptr == self->data[j].ptr) {
-                self->data[j].status = leak_status_reallocated;
+        void *const ptr = records[i].realloc_ptr;
+        for (i64 j = i - 1; j >= 0; --j) {
+            if (ptr == records[j].ptr) {
+                records[j].status = leak_status_reallocated;
                 break;
             }
         }
     }
 
     // try to match frees with prior allocs
-    for (size_t i = 0; i < self->size; ++i) {
-        if (leak_action_free != self->data[i].status) continue;
+    for (i64 i = 0; i < self->size; ++i) {
+        if (leak_action_free != records[i].status) continue;
 
         if (i == 0) {
-            // free as first action is impossible
             fprintf(stderr, "alloc_leak_detector_report: invariant violated.\n");
-            return;
+            goto cleanup;
         }
 
-        void *const ptr = self->data[i].ptr;
-        for (size_t j = i - 1; j >= 0; --j) {
-            if (ptr == self->data[j].ptr) {
+        void *const ptr = records[i].ptr;
+        for (i64 j = i - 1; j >= 0; --j) {
+            if (ptr == records[j].ptr) {
 
-                if (self->data[j].status == leak_action_alloc) {
-                    self->data[j].status = leak_status_alloc_matched;
-                    self->data[i].status = leak_status_free_matched;
+                if (records[j].status == leak_action_alloc) {
+                    records[j].status = leak_status_alloc_matched;
+                    records[i].status = leak_status_free_matched;
 
-                } else if (self->data[j].status == leak_action_realloc) {
-                    self->data[j].status = leak_status_realloc_matched;
-                    self->data[i].status = leak_status_free_matched;
+                } else if (records[j].status == leak_action_realloc) {
+                    records[j].status = leak_status_realloc_matched;
+                    records[i].status = leak_status_free_matched;
                 } else {
                     // double-free
-                    self->data[i].status = leak_status_extra_free;
+                    records[i].status = leak_error_extra_free;
                 }
             }
         }
     }
 
-    // FIXME incomplete
+    // mark remaining unmatched allocs
+    for (i64 i = 0; i < self->size; ++i) {
+        if (leak_action_alloc == records[i].status) records[i].status = leak_error_alloc_leak;
+    }
+
+    // report
+    for (i64 i = 0; i < self->size; ++i) {
+        if (leak_error_alloc_leak == records[i].status) {
+            if (records[i].realloc_ptr) {
+                bool found = false;
+                for (i64 j = i - 1; j >= 0; --j) {
+                    if (records[i].realloc_ptr == records[j].ptr) {
+                        fprintf(stderr,
+                                "leak_detector: leak of %zu bytes at %p reallocated by %s:%i, original "
+                                "allocation at %p %s:%i\n",
+                                records[i].size, records[i].ptr, records[i].file, records[i].line,
+                                records[j].ptr, records[j].file, records[j].line);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    fprintf(stderr, "leak_detector: leak of %zu bytes at %p reallocated by %s:%i\n",
+                            records[i].size, records[i].ptr, records[i].file, records[i].line);
+                }
+
+            } else {
+                fprintf(stderr, "leak_detector: leak of %zu bytes at %p allocated by %s:%i\n",
+                        records[i].size, records[i].ptr, records[i].file, records[i].line);
+            }
+        }
+    }
+
+cleanup:
+    free(records);
+}
+
+static void leak_detector_ensure_good_free(leak_detector *self, void *ptr) {
+    // ensure the attempted free of ptr is valid.
+    if (0 == self->size) {
+        fprintf(stderr, "leak_detector: attempt to free %p before any malloc\n", ptr);
+        exit(1);
+    }
+
+    for (i64 i = self->size - 1; i >= 0; --i) {
+        if (ptr == self->data[i].ptr &&
+            (leak_action_alloc == self->data[i].status || leak_action_realloc == self->data[i].status))
+            return;
+    }
+
+    fprintf(stderr, "leak_detector: attempt to free unknown pointer %p\n", ptr);
+    exit(1);
 }
 
 static void leak_detector_reserve_one(leak_detector *self) {
     if (self->size < self->capacity) return;
 
-    size_t new_capacity = self->capacity * 2;
-    void  *resized      = realloc(self->data, new_capacity);
+    i64   new_capacity = self->capacity * 2;
+    void *resized      = realloc(self->data, (size_t)new_capacity);
     if (!resized) {
-        fprintf(stderr, "leak_detector: out of memory: %zu\n", new_capacity);
+        fprintf(stderr, "leak_detector: out of memory: %zu\n", (size_t)new_capacity);
         exit(1);
     }
     self->data     = resized;
@@ -458,6 +514,7 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
 
 static void leak_detector_free(allocator *alloc, void *ptr, char const *file, int line) {
     leak_detector *self = (leak_detector *)alloc;
+    leak_detector_ensure_good_free(self, ptr);
     leak_detector_reserve_one(self);
 
     self->data[self->size++] = (struct leak_allocation){

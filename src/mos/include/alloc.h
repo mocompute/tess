@@ -16,7 +16,7 @@ allocator *alloc_default_allocator();
 // -- leak detection --
 allocator *alloc_leak_detector_create() mallocfun;
 void       alloc_leak_detector_destroy(allocator **);
-void       alloc_leak_detector_report(allocator *); // undefined if already called
+void       alloc_leak_detector_report(allocator *);
 
 // -- arena bump allocator --
 
