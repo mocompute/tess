@@ -178,9 +178,8 @@ static int test_parser_basic(void) {
 
     if (parser_next(p)) return error + 1;
 
-    ast_node_h node_h;
-    parser_result(p, &node_h);
-    ast_node *node = ast_pool_at(parser_ast_pool(p), node_h);
+    ast_node *node;
+    parser_result(p, &node);
 
     error += ast_symbol == node->tag ? 0 : 1;
     error += 0 == strcmp(mos_string_str(&node->symbol.name), "a") ? 0 : 1;
@@ -203,9 +202,8 @@ static int test_parser_expression(void) {
     if (null == p) return error + 1;
 
     if (parser_next(p)) return error + 1;
-    ast_node_h node_h;
-    parser_result(p, &node_h);
-    ast_node *node = ast_pool_at(parser_ast_pool(p), node_h);
+    ast_node *node;
+    parser_result(p, &node);
 
     error += ast_let_in == node->tag ? 0 : 1;
 
@@ -228,14 +226,13 @@ static int test_parser_node_to_string(void) {
         if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;
-        ast_node_h node_h;
-        parser_result(p, &node_h);
-        ast_node *node = ast_pool_at(parser_ast_pool(p), node_h);
+        ast_node *node;
+        parser_result(p, &node);
 
         error += ast_infix == node->tag ? 0 : 1;
 
         char buf[64];
-        if (ast_node_to_string_buf(parser_ast_pool(p), node, buf, 64)) return error + 1;
+        if (ast_node_to_string_buf(node, buf, 64)) return error + 1;
 
         error += 0 == strcmp("(infix + (i64 1) (i64 2))", buf) ? 0 : 1;
 
@@ -249,14 +246,13 @@ static int test_parser_node_to_string(void) {
         if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;
-        ast_node_h node_h;
-        parser_result(p, &node_h);
-        ast_node *node = ast_pool_at(parser_ast_pool(p), node_h);
+        ast_node *node;
+        parser_result(p, &node);
 
         error += ast_tuple == node->tag ? 0 : 1;
 
         char buf[64];
-        if (ast_node_to_string_buf(parser_ast_pool(p), node, buf, 64)) return error + 1;
+        if (ast_node_to_string_buf(node, buf, 64)) return error + 1;
 
         error += 0 == strcmp("(tuple (symbol a) (symbol b))", buf) ? 0 : 1;
         parser_destroy(&p);
@@ -285,11 +281,11 @@ static int test_parse_all(void) {
         if (null == p) return error + 1;
 
         vector nodes;
-        vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024);
+        vec_init(vec_alloc, &nodes, sizeof(ast_node *), 1024);
         if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
 
         allocator      *syntax_alloc = alloc_default_allocator();
-        syntax_checker *syntax       = syntax_checker_create(syntax_alloc, parser_ast_pool(p));
+        syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
 
         // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
         // is not a correct program, it is just 3 symbol nodes
@@ -297,12 +293,12 @@ static int test_parse_all(void) {
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 
-        if (syntax_checker_run(syntax, vec_data(&nodes), vec_size(&nodes))) return error + 1;
+        if (syntax_checker_run(syntax, (ast_node **)vec_data(&nodes), vec_size(&nodes))) return error + 1;
 
         char buf[1024];
         for (u32 i = 0; i < 1; ++i) {
-            ast_node const *node = ast_pool_cat(parser_ast_pool(p), *(ast_node_h *)vec_cat(&nodes, i));
-            if (ast_node_to_string_buf(parser_ast_pool(p), node, buf, sizeof buf)) return ++error;
+            ast_node const *node = *(ast_node **)vec_cat(&nodes, i);
+            if (ast_node_to_string_buf(node, buf, sizeof buf)) return ++error;
             dbg("node: %s\n", buf);
         }
 
@@ -330,7 +326,7 @@ static int test_parse_to_c(void) {
         if (null == p) return error + 1;
 
         vector nodes;
-        vec_init(alloc, &nodes, sizeof(ast_node_h), 1024);
+        vec_init(alloc, &nodes, sizeof(ast_node *), 1024);
         if (parser_parse_all(alloc, p, &nodes)) return error + 1;
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
@@ -338,7 +334,7 @@ static int test_parse_to_c(void) {
         vector transpiler_output;
         vec_init(alloc, &transpiler_output, 1, 1024);
 
-        transpiler *transpiler = transpiler_create(alloc, parser_ast_pool(p), &transpiler_output, alloc);
+        transpiler *transpiler = transpiler_create(alloc, &transpiler_output, alloc);
         if (!transpiler) return error + 1;
 
         if (transpiler_compile(transpiler, &nodes)) return error + 1;

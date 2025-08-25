@@ -39,6 +39,10 @@ void vec_init(allocator *alloc, vector *vec, u32 element_size, u32 initial_capac
         vec->data = alloc_malloc(alloc, sizeof(vector_data_header) + initial_capacity * element_size);
         alloc_zero(vec->data);
         vec->data->capacity = initial_capacity;
+
+#ifndef NDEBUG
+        vec->data->alloc = alloc;
+#endif
     }
 }
 
@@ -77,12 +81,14 @@ void vec_push_back(allocator *alloc, vector *vec, void const *element) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
     memcpy(vec->data->data + vec->data->size * vec->element_size, element, vec->element_size);
     vec->data->size += 1;
+    assert(alloc == vec->data->alloc);
 }
 
 void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
     memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
     vec->data->size += count;
+    assert(alloc == vec->data->alloc);
 }
 
 int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
@@ -90,6 +96,7 @@ int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
     *(vec->data->data + vec->data->size) = b;
     vec->data->size += 1;
+    assert(alloc == vec->data->alloc);
     return 0;
 }
 
@@ -99,6 +106,7 @@ int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 coun
 
     memcpy(vec->data->data + vec->data->size, start, count);
     vec->data->size += count;
+    assert(alloc == vec->data->alloc);
     return 0;
 }
 
@@ -106,6 +114,7 @@ int vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
     size_t len = strlen(str);
     if (len > UINT32_MAX) fatal("vec_copy_back_c_string: overflow size = %zu\n", len);
 
+    assert(alloc == vec->data->alloc);
     return vec_copy_back_bytes(alloc, vec, (u8 const *)str, (u32)len);
 }
 
@@ -138,6 +147,7 @@ void vec_resize(allocator *alloc, vector *vec, u32 n) {
     if (null == vec->data) return vec_init(alloc, vec, vec->element_size, n);
     if (n > vec->data->capacity) vec_reserve(alloc, vec, n);
     vec->data->size = n;
+    assert(alloc == vec->data->alloc);
 }
 
 void vec_clear(vector *vec) {
@@ -160,7 +170,13 @@ void const *vec_cbegin(vector const *vec) {
     return vec->data->data;
 }
 
-void const *vec_end(vector const *vec) {
+void *vec_end(vector const *vec) {
+    // points 1 past the end
+    if (vec_empty(vec)) return null;
+    return vec->data->data + vec->data->size * vec->element_size;
+}
+
+void const *vec_cend(vector const *vec) {
     // points 1 past the end
     if (vec_empty(vec)) return null;
     return vec->data->data + vec->data->size * vec->element_size;

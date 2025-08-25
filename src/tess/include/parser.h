@@ -23,12 +23,10 @@ void    parser_destroy(parser **);
 
 // -- access --
 
-ast_pool *parser_ast_pool(parser *);
-
 // -- parser --
 
 int  parser_next(parser *);
-void parser_result(parser *, ast_node_h *);
+void parser_result(parser *, ast_node **);
 
 int  parser_parse_all(allocator *, parser *, vector *out);
 

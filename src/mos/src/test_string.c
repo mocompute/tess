@@ -27,10 +27,7 @@ static int test_string(void) {
         data[n] = '\0';
 
         string_t s;
-        if (mos_string_init(alloc, &s, data)) {
-            free(data);
-            return error + 1;
-        }
+        mos_string_init(alloc, &s, data);
 
         error += (strlen(data) > MOS_STRING_MAX_SMALL_LEN) == mos_string_is_allocated(&s) ? 0 : 1;
         error += 0 == strcmp(mos_string_str(&s), data) ? 0 : 1;

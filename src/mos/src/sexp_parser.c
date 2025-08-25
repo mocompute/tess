@@ -360,7 +360,7 @@ void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
 nodiscard int sexp_token_init_str(allocator *alloc, sexp_token *self, sexp_token_tag tag, char const *src,
                                   size_t len) {
 
-    if (mos_string_init_n(alloc, &self->s, src, len)) return 1;
+    mos_string_init_n(alloc, &self->s, src, len);
     self->tag = tag;
 
     return 0;

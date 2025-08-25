@@ -10,24 +10,22 @@
 // -- forwards --
 
 typedef struct rename_variable_ctx rename_variable_ctx;
-static void                        rename_variable_ctx_init(rename_variable_ctx *, allocator *, ast_pool *);
-nodiscard static int               syntax_rename_variables(allocator *, ast_pool *, ast_node_h *, size_t);
+static void                        rename_variable_ctx_init(rename_variable_ctx *, allocator *);
+nodiscard static int               syntax_rename_variables(allocator *, ast_node **, size_t);
 
 // -- syntax_checker --
 
 struct syntax_checker {
     allocator *alloc;
-    ast_pool  *pool;
 };
 
 // -- allocation and deallocation --
 
-syntax_checker *syntax_checker_create(allocator *alloc, ast_pool *pool) {
+syntax_checker *syntax_checker_create(allocator *alloc) {
     syntax_checker *self = alloc_calloc(alloc, 1, sizeof *self);
     if (!self) return self;
 
     self->alloc = alloc;
-    self->pool  = pool;
     return self;
 }
 
@@ -38,10 +36,10 @@ void syntax_checker_destroy(syntax_checker **self) {
 
 // -- syntax_checker operation --
 
-int syntax_checker_run(syntax_checker *self, ast_node_h *nodes, size_t count) {
+int syntax_checker_run(syntax_checker *self, ast_node **nodes, size_t count) {
 
     int res = 0;
-    if ((res = syntax_rename_variables(self->alloc, self->pool, nodes, count))) return res;
+    if ((res = syntax_rename_variables(self->alloc, nodes, count))) return res;
 
     // TODO more to come...
 
@@ -52,15 +50,13 @@ int syntax_checker_run(syntax_checker *self, ast_node_h *nodes, size_t count) {
 
 struct rename_variable_ctx {
     allocator *alloc;
-    ast_pool  *pool;
     hashmap   *map;
     size_t     next;
 };
 
-static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc, ast_pool *pool) {
+static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc) {
 
     self->alloc = alloc;
-    self->pool  = pool;
     self->next  = 1;
 
     self->map   = map_create(alloc, sizeof(string_t), 1024, 0);
@@ -74,7 +70,8 @@ static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
 static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "__v%zu", self->next++);
-    return mos_string_init(self->alloc, out, buf);
+    mos_string_init(self->alloc, out, buf);
+    return 0;
 }
 
 static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
@@ -82,14 +79,13 @@ static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap
     string_t const *found = map_get(map, hash);
 
     if (found) {
-        if (mos_string_copy(alloc, copy_to, string)) return 1; // preserve original name for errors
-        return mos_string_copy(alloc, string, found);
+        mos_string_copy(alloc, copy_to, string); // preserve original name for errors
+        mos_string_copy(alloc, string, found);
     }
     return 0;
 }
 
-static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h handle) {
-    ast_node *node = ast_pool_at(self->pool, handle);
+static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node) {
     if (!node) return 1;
 
     switch (node->tag) {
@@ -102,8 +98,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         break;
 
     case ast_tuple: {
-        ast_node_h       *it  = vec_begin(&node->tuple.elements);
-        ast_node_h const *end = vec_end(&node->tuple.elements);
+        ast_node **it  = vec_begin(&node->tuple.elements);
+        ast_node **end = vec_end(&node->tuple.elements);
         while (it != end)
             if (rename_variables(self, *it++)) return 1;
     } break;
@@ -117,7 +113,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         // But it may refer to an outer let-in binding of the same name.
         if (rename_variables(self, node->let_in.value)) return 1;
 
-        ast_node const *name = ast_pool_at(self->pool, node->let_in.name);
+        ast_node const *name = node->let_in.name;
         assert(ast_symbol == name->tag);
         u32       name_hash = mos_string_hash32(&name->symbol.name);
         string_t *save      = map_get(self->map, name_hash);
@@ -147,11 +143,11 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         hashmap *save = map_copy(self->alloc, self->map);
         if (!save) return 1;
 
-        ast_node_h       *it  = vec_begin(&node->let.parameters);
-        ast_node_h const *end = vec_end(&node->let.parameters);
+        ast_node **it  = (ast_node **)vec_begin(&node->let.parameters);
+        ast_node **end = (ast_node **)vec_end(&node->let.parameters);
 
         while (it != end) {
-            ast_node const *name = ast_pool_at(self->pool, *it);
+            ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
             u32      name_hash = mos_string_hash32(&name->symbol.name);
@@ -186,11 +182,11 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
         hashmap *save = map_copy(self->alloc, self->map);
         if (!save) return 1;
 
-        ast_node_h       *it  = vec_begin(&node->lambda_function.parameters);
-        ast_node_h const *end = vec_end(&node->lambda_function.parameters);
+        ast_node **it  = (ast_node **)vec_begin(&node->lambda_function.parameters);
+        ast_node **end = (ast_node **)vec_end(&node->lambda_function.parameters);
 
         while (it != end) {
-            ast_node const *name = ast_pool_at(self->pool, *it);
+            ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
             u32      name_hash = mos_string_hash32(&name->symbol.name);
@@ -213,16 +209,16 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
     } break;
 
     case ast_lambda_function_application: {
-        ast_node_h       *it  = vec_begin(&node->lambda_application.arguments);
-        ast_node_h const *end = vec_end(&node->lambda_application.arguments);
+        ast_node **it  = (ast_node **)vec_begin(&node->lambda_application.arguments);
+        ast_node **end = (ast_node **)vec_end(&node->lambda_application.arguments);
         while (it != end)
             if (rename_variables(self, *it++)) return 1;
 
     } break;
 
     case ast_named_function_application: {
-        ast_node_h       *it  = vec_begin(&node->named_application.arguments);
-        ast_node_h const *end = vec_end(&node->named_application.arguments);
+        ast_node **it  = (ast_node **)vec_begin(&node->named_application.arguments);
+        ast_node **end = (ast_node **)vec_end(&node->named_application.arguments);
         while (it != end)
             if (rename_variables(self, *it++)) return 1;
     } break;
@@ -241,15 +237,13 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
     return 0;
 }
 
-int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes, size_t count) {
+int syntax_rename_variables(allocator *alloc, ast_node **nodes, size_t count) {
 
     rename_variable_ctx ctx;
-    rename_variable_ctx_init(&ctx, alloc, pool);
-
-    ast_node_h *handle = nodes;
+    rename_variable_ctx_init(&ctx, alloc);
 
     while (count--) {
-        if (rename_variables(&ctx, *handle++)) {
+        if (rename_variables(&ctx, *nodes++)) {
             rename_variable_ctx_deinit(&ctx);
             return 1;
         }

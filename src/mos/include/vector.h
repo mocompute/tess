@@ -18,6 +18,9 @@
 // function names are shortened.
 
 typedef struct {
+#ifndef NDEBUG
+    allocator *alloc;
+#endif
     u32  capacity;
     u32  size;
     byte data[];
@@ -49,7 +52,8 @@ bool vec_empty(vector const *);
 void       *vec_data(vector *);
 void       *vec_begin(vector *);
 void const *vec_cbegin(vector const *);
-void const *vec_end(vector const *);
+void       *vec_end(vector const *);
+void const *vec_cend(vector const *);
 void       *vec_at(vector *, u32);
 void const *vec_cat(vector const *, u32);
 void       *vec_back(vector *);

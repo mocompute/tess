@@ -4,20 +4,18 @@
 #include "alloc.h"
 #include "types.h"
 
-typedef struct ast_node ast_node;
+// typedef struct ast_node ast_node;
 
-typedef struct {
-    u32 val;
-} ast_node_h;
+// typedef struct {
+//     u32 val;
+// } ast_node_h;
 
-typedef struct ast_pool ast_pool;
-typedef void (*ast_op_fun)(ast_pool *, ast_node *);
-typedef void (*ast_op_cfun)(ast_pool const *, ast_node const *);
+// typedef struct ast_pool ast_pool;
 
 // -- allocation and deallocation --
 
-ast_pool *ast_pool_create(allocator *) mallocfun;
-void      ast_pool_destroy(ast_pool **);
+// ast_pool *ast_pool_create(allocator *) mallocfun;
+// void      ast_pool_destroy(ast_pool **);
 
 // -- pool operations --
 //
@@ -26,8 +24,5 @@ void      ast_pool_destroy(ast_pool **);
 nodiscard int   ast_pool_move_back(ast_pool *, ast_node *, ast_node_h *);
 ast_node       *ast_pool_at(ast_pool *, ast_node_h);
 ast_node const *ast_pool_cat(ast_pool const *, ast_node_h);
-
-void            ast_pool_dfs(ast_pool *, ast_node_h, ast_op_fun);
-void            ast_pool_cdfs(ast_pool const *, ast_node_h, ast_op_cfun);
 
 #endif

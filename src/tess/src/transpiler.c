@@ -9,11 +9,10 @@
 #include <string.h>
 
 struct transpiler {
-    allocator      *alloc;
-    ast_pool const *pool;
-    vector         *bytes;
-    allocator      *bytes_alloc;
-    int             indent_level;
+    allocator *alloc;
+    vector    *bytes;
+    allocator *bytes_alloc;
+    int        indent_level;
 };
 
 // -- embed externs --
@@ -32,13 +31,11 @@ static int  a_string(transpiler *, ast_node const *);
 
 static int  out_put(transpiler *, char const *);
 
-transpiler *transpiler_create(allocator *alloc, ast_pool const *pool, vector *bytes,
-                              allocator *bytes_alloc) {
+transpiler *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
 
     transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc       = alloc;
-    self->pool        = pool;
     self->bytes       = bytes;
     self->bytes_alloc = bytes_alloc;
     return self;
@@ -51,16 +48,16 @@ void transpiler_destroy(transpiler **self) {
 
 int transpiler_compile(transpiler *self, vector const *nodes) {
     (void)self;
-    assert(sizeof(ast_node_h) == nodes->element_size);
+    assert(sizeof(ast_node *) == nodes->element_size);
 
     // output std header
     out_put(self, embed_std);
 
-    ast_node_h const *it  = vec_cbegin(nodes);
-    ast_node_h const *end = vec_end(nodes);
+    ast_node const *const *it  = (typeof(it))vec_cbegin(nodes);
+    ast_node const *const *end = (typeof(it))vec_cend(nodes);
     while (it != end) {
 
-        ast_node const *node = ast_pool_cat(self->pool, *it);
+        ast_node const *node = *it;
         assert(node);
 
         int res = 0;
@@ -144,7 +141,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     static char const *const std_prefix     = "std_";
     static u8 const          std_prefix_len = strlen(std_prefix);
 
-    ast_node const          *name           = ast_pool_cat(self->pool, node->named_application.name);
+    ast_node const          *name           = node->named_application.name;
     char const              *name_str       = ast_node_name_string(name);
     if (0 == strncmp(name_str, std_prefix, std_prefix_len)) {
         return a_std_apply(self, node, name_str);
@@ -170,8 +167,8 @@ static int a_std_dbg(transpiler *self, ast_node const *node) {
     if (1 != vec_size(arguments)) return 1;
 
     if (out_put_start(self, "fprintf(stderr, \"%s\", ")) return 1;
-    ast_node_h const *arg = vec_cat(arguments, 0);
-    if (a_string(self, ast_pool_cat(self->pool, *arg))) return 1;
+    ast_node const *const *arg = (typeof(arg))vec_cat(arguments, 0);
+    if (a_string(self, *arg)) return 1;
     if (out_put(self, ");\n")) return 1;
     return 0;
 }
@@ -195,7 +192,7 @@ static int a_std_apply(transpiler *self, ast_node const *node, char const *name)
 
 static int a_let(transpiler *self, ast_node const *node) {
 
-    ast_node const *name = ast_pool_cat(self->pool, node->let.name);
+    ast_node const *name = node->let.name;
     assert(name);
 
     if (0 == ast_node_name_strcmp(name, "main")) {
@@ -205,7 +202,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
         self->indent_level++;
         int res = 0;
-        if ((res = a_body(self, ast_pool_cat(self->pool, node->let.body)))) return res;
+        if ((res = a_body(self, node->let.body))) return res;
         self->indent_level--;
 
         if (out_put(self, "\n    return 0;\n}")) return 1;

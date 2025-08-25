@@ -4,6 +4,7 @@
 #include "hash.h"
 #include "types.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,16 +15,16 @@ void mos_string_init_empty(string_t *s) {
     s->small.tag = 1;
 }
 
-int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max) {
+void mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max) {
 
     size_t len = strlen(src);
     if (len > max) len = max;
-    if (len > MOS_STRING_MAX_LEN) return 1;
+    assert(len <= MOS_STRING_MAX_LEN);
 
     if (len == 0) {
         s->small.data[0] = '\0';
         s->small.tag     = 0;
-        return 0;
+        return;
     }
 
     if (len <= MOS_STRING_MAX_SMALL_LEN) {
@@ -31,18 +32,15 @@ int mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max
         memset(s->small.data, 0, MOS_STRING_MAX_SMALL_LEN);
         memcpy(s->small.data, src, len);
         s->small.data[len] = '\0';
-        return 0;
+        return;
     }
 
-    s->small.tag     = 1;
-    s->allocated.buf = alloc_strndup(alloc, src, len);
-    if (null == s->allocated.buf) return 1;
+    s->small.tag      = 1;
+    s->allocated.buf  = alloc_strndup(alloc, src, len);
     s->allocated.size = (u32)len;
-
-    return 0;
 }
 
-int mos_string_init(allocator *alloc, string_t *s, char const *src) {
+void mos_string_init(allocator *alloc, string_t *s, char const *src) {
     return mos_string_init_n(alloc, s, src, SIZE_MAX);
 }
 
@@ -51,7 +49,7 @@ void mos_string_deinit(allocator *alloc, string_t *s) {
     alloc_invalidate(s);
 }
 
-int mos_string_replace(allocator *alloc, string_t *s, char const *src) {
+void mos_string_replace(allocator *alloc, string_t *s, char const *src) {
     if (mos_string_is_allocated(s)) alloc_free(alloc, s->allocated.buf);
     return mos_string_init(alloc, s, src);
 }
@@ -61,15 +59,12 @@ void mos_string_move(string_t *dst, string_t *src) {
     mos_string_init_empty(src);
 }
 
-int mos_string_copy(allocator *alloc, string_t *dst, string_t const *src) {
+void mos_string_copy(allocator *alloc, string_t *dst, string_t const *src) {
     alloc_copy(dst, src);
 
     if (mos_string_is_allocated(dst)) {
         dst->allocated.buf = alloc_strdup(alloc, dst->allocated.buf);
-        if (!dst) return 1;
     }
-
-    return 0;
 }
 
 char const *mos_string_str(string_t const *s) {

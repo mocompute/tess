@@ -16,11 +16,11 @@
 
 struct parser {
     allocator             *parent_alloc;
-    allocator             *arena;
+    allocator             *parser_arena;
+    allocator             *ast_arena;
     tokenizer             *tokenizer;
-    ast_pool              *ast_pool;
 
-    ast_node_h             result; // pool handle, don't set directly
+    ast_node              *result;
 
     struct vector          seen_tokens; // for backtracking
 
@@ -36,17 +36,14 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
 
     alloc_zero(self);
     self->parent_alloc = alloc;
-    self->arena        = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    if (!self->arena) goto cleanup;
-
-    // ast pool
-    self->ast_pool = ast_pool_create(self->arena);
+    self->parser_arena = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
 
     // tokenizer
-    self->tokenizer = tokenizer_create(self->arena, input, input_len);
+    self->tokenizer = tokenizer_create(self->parser_arena, input, input_len);
 
     // good_tokens
-    vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0);
+    vec_init(self->parser_arena, &self->seen_tokens, sizeof(struct token), 0);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -54,28 +51,18 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->error.tokenizer = &self->tokenizer_error;
 
     return self;
-
-cleanup:
-
-    alloc_arena_destroy(self->parent_alloc, &self->arena);
-    alloc_free(self->parent_alloc, self);
-    return null;
 }
 
 void parser_destroy(parser **self) {
     // error token: arena
     // good_tokens: arena
     // tokenizer: arena
-    // ast pool: arena
 
     // arena
-    alloc_arena_destroy((*self)->parent_alloc, &(*self)->arena);
+    alloc_arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
+    alloc_arena_destroy((*self)->parent_alloc, &(*self)->parser_arena);
     alloc_free((*self)->parent_alloc, *self);
     *self = null;
-}
-
-ast_pool *parser_ast_pool(parser *self) {
-    return self->ast_pool;
 }
 
 // -- parser --
@@ -99,56 +86,46 @@ static int tuple_expression(parser *);
 // The parser then no longer has a valid copy of the actual ast_node,
 // it being replaced by a handle to an entry in the pool.
 
-nodiscard static int result_ast(parser *p, ast_tag tag) {
-    ast_node node;
-    if (ast_node_init(p->ast_pool, &node, tag)) return 1;
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+static int result_ast(parser *p, ast_tag tag) {
+    p->result = ast_node_create(p->ast_arena, tag);
+    return 0;
 }
 
-nodiscard static int result_ast_i64(parser *p, i64 val) {
-    ast_node node;
-    if (ast_node_init(null, &node, ast_i64)) return 1;
-    node.i64.val = val;
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+static int result_ast_i64(parser *p, i64 val) {
+    p->result          = ast_node_create(p->ast_arena, ast_i64);
+    p->result->i64.val = val;
+    return 0;
 }
 
-nodiscard static int result_ast_u64(parser *p, u64 val) {
-    ast_node node;
-    if (ast_node_init(null, &node, ast_u64)) return 1;
-    node.u64.val = val;
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+static int result_ast_u64(parser *p, u64 val) {
+    p->result          = ast_node_create(p->ast_arena, ast_u64);
+    p->result->u64.val = val;
+    return 0;
 }
 
-nodiscard static int result_ast_f64(parser *p, f64 val) {
-    ast_node node;
-    if (ast_node_init(null, &node, ast_f64)) return 1;
-    node.f64.val = val;
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+static int result_ast_f64(parser *p, f64 val) {
+    p->result          = ast_node_create(p->ast_arena, ast_f64);
+    p->result->f64.val = val;
+    return 0;
 }
 
-nodiscard static int result_ast_bool(parser *p, bool val) {
-    ast_node node;
-    if (ast_node_init(null, &node, ast_bool)) return 1;
-    node.bool_.val = val;
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+static int result_ast_bool(parser *p, bool val) {
+    p->result            = ast_node_create(p->ast_arena, ast_bool);
+    p->result->bool_.val = val;
+    return 0;
 }
 
-nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    ast_node node;
-    if (ast_node_init(p->ast_pool, &node, tag)) return 1;
+static int result_ast_str(parser *p, ast_tag tag, char const *s) {
+    p->result = ast_node_create(p->ast_arena, tag);
 
-    if (mos_string_init(p->arena, &node.symbol.name, s)) return 1;
+    mos_string_init(p->ast_arena, &p->result->symbol.name, s);
     // syms and strs use same union
 
-    return ast_pool_move_back(p->ast_pool, &node, &p->result);
+    return 0;
 }
 
-nodiscard static int result_ast_node(parser *p, ast_node *node) {
-    return ast_pool_move_back(p->ast_pool, node, &p->result);
-}
-
-static int result_ast_node_handle(parser *p, ast_node_h handle) {
-    p->result = handle;
+static int result_ast_node(parser *p, ast_node *node) {
+    p->result = node;
     return 0;
 }
 
@@ -212,7 +189,7 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        vec_push_back(p->arena, &p->seen_tokens, &p->token);
+        vec_push_back(p->parser_arena, &p->seen_tokens, &p->token);
         return 0;
     }
 }
@@ -225,7 +202,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 
-        vec_resize(p->arena, &p->seen_tokens, save_toks);
+        vec_resize(p->parser_arena, &p->seen_tokens, save_toks);
 
         return 1;
     }
@@ -240,7 +217,7 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 
-        vec_resize(p->arena, &p->seen_tokens, save_toks);
+        vec_resize(p->parser_arena, &p->seen_tokens, save_toks);
 
         return 1;
     }
@@ -431,23 +408,20 @@ static int function_declaration(parser *p) {
 
     if (a_try(p, &a_identifier)) return 1;
 
-    ast_node_h const name = p->result; // function name
+    ast_node *const name = p->result; // function name
 
-    vector           parameters;
-    if (ast_vector_init(p->ast_pool, &parameters)) return 2;
+    vector          parameters;
+    ast_vector_init(p->ast_arena, &parameters);
 
     // check: f () declares function with no parameters
     if (0 == a_try(p, &a_nil)) {
 
         // next token must be equal sign
         if (0 == a_try(p, &a_equal_sign)) {
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_function_declaration)) return 2;
-            node.function_declaration.name = name;
-            vec_move(&node.function_declaration.parameters, &parameters);
-            if (result_ast_node(p, &node)) return 1;
-
-            return 0;
+            ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
+            node->function_declaration.name = name;
+            vec_move(&node->function_declaration.parameters, &parameters);
+            return result_ast_node(p, node);
         }
 
         return 1;
@@ -456,19 +430,16 @@ static int function_declaration(parser *p) {
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            vec_push_back(p->arena, &parameters, &p->result);
+            vec_push_back(p->parser_arena, &parameters, &p->result);
             continue;
         }
 
         if (0 == a_try(p, &a_equal_sign)) {
 
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_function_declaration)) return 2;
-            node.function_declaration.name = name;
-            vec_move(&node.function_declaration.parameters, &parameters);
-            if (result_ast_node(p, &node)) return 1;
-
-            return 0;
+            ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
+            node->function_declaration.name = name;
+            vec_move(&node->function_declaration.parameters, &parameters);
+            return result_ast_node(p, node);
         }
 
         // anything else is an error
@@ -481,23 +452,19 @@ static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
     vector parameters;
-    if (ast_vector_init(p->ast_pool, &parameters)) return 2;
+    ast_vector_init(p->ast_arena, &parameters);
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            vec_push_back(p->arena, &parameters, &p->result);
+            vec_push_back(p->parser_arena, &parameters, &p->result);
             continue;
         }
 
         if (0 == a_try(p, &a_arrow)) {
-
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_lambda_declaration)) return 2;
-            vec_move(&node.lambda_declaration.parameters, &parameters);
-            if (result_ast_node(p, &node)) return 1;
-
-            return 0;
+            ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
+            vec_move(&node->lambda_declaration.parameters, &parameters);
+            return result_ast_node(p, node);
         }
 
         // anything else is an error
@@ -515,28 +482,27 @@ static int function_application(parser *p) {
 
     if (a_try(p, &a_identifier)) return 1;
 
-    ast_node_h const name = p->result;
+    ast_node *const name = p->result;
 
-    vector           arguments;
-    if (ast_vector_init(p->ast_pool, &arguments)) return 2;
+    vector          arguments;
+    ast_vector_init(p->ast_arena, &arguments);
 
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
-    vec_push_back(p->arena, &arguments, &p->result);
+    vec_push_back(p->parser_arena, &arguments, &p->result);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            vec_push_back(p->arena, &arguments, &p->result);
+            vec_push_back(p->parser_arena, &arguments, &p->result);
             continue;
         }
 
         if ((tess_err_eof == p->error.tag) || 0 == a_try(p, &a_end_of_expression)) {
 
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_named_function_application)) return 2;
-            node.named_application.name = name;
-            vec_move(&node.named_application.arguments, &arguments);
-            return result_ast_node(p, &node);
+            ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
+            node->named_application.name = name;
+            vec_move(&node->named_application.arguments, &arguments);
+            return result_ast_node(p, node);
         }
 
         p->error.tag = tess_err_expected_argument;
@@ -566,7 +532,7 @@ static int function_argument(parser *p) {
 
 static int if_then_else(parser *p) {
 
-    ast_node_h cond, yes, no;
+    ast_node *cond, *yes, *no;
 
     if (a_try_s(p, &the_symbol, "if")) return 1;
     if (a_try(p, &expression)) return 1;
@@ -578,14 +544,13 @@ static int if_then_else(parser *p) {
 
     if (a_try_s(p, &the_symbol, "else")) return 1;
     if (a_try(p, &expression)) return 1;
-    no = p->result;
+    no                           = p->result;
 
-    ast_node node;
-    if (ast_node_init(p->ast_pool, &node, ast_if_then_else)) return 2;
-    node.if_then_else.condition = cond;
-    node.if_then_else.yes       = yes;
-    node.if_then_else.no        = no;
-    return result_ast_node(p, &node);
+    ast_node *node               = ast_node_create(p->ast_arena, ast_if_then_else);
+    node->if_then_else.condition = cond;
+    node->if_then_else.yes       = yes;
+    node->if_then_else.no        = no;
+    return result_ast_node(p, node);
 }
 
 static int infix_operand(parser *p) {
@@ -596,23 +561,22 @@ static int infix_operation(parser *p) {
     // a * b
 
     if (a_try(p, &infix_operand)) return 1;
-    ast_node_h const lhs = p->result;
+    ast_node *const lhs = p->result;
 
     if (a_try(p, &a_infix_operator)) return 1;
-    ast_node    *op_node = ast_pool_at(p->ast_pool, p->result);
+    ast_node    *op_node = p->result;
 
     ast_operator op;
     if (string_to_ast_operator(mos_string_str(&op_node->symbol.name), &op)) return 1;
 
     if (a_try(p, &infix_operand)) return 1;
-    ast_node_h const rhs = p->result;
+    ast_node *const rhs  = p->result;
 
-    ast_node         node;
-    if (ast_node_init(p->ast_pool, &node, ast_infix)) return 2;
-    node.infix.left  = lhs;
-    node.infix.right = rhs;
-    node.infix.op    = op;
-    return result_ast_node(p, &node);
+    ast_node       *node = ast_node_create(p->ast_arena, ast_infix);
+    node->infix.left     = lhs;
+    node->infix.right    = rhs;
+    node->infix.op       = op;
+    return result_ast_node(p, node);
 }
 
 static int lambda_function(parser *p) {
@@ -620,25 +584,22 @@ static int lambda_function(parser *p) {
 
     if (a_try_s(p, &the_symbol, "fun")) return 1;
     if (a_try(p, &lambda_declaration)) return 1;
-    ast_node_h decl_h;
-    parser_result(p, &decl_h);
+    ast_node *decl = p->result;
 
     if (a_try(p, &function_definition)) return 1;
-    ast_node_h defn_h = p->result;
+    ast_node *defn_h           = p->result;
 
-    ast_node   node;
-    if (ast_node_init(p->ast_pool, &node, ast_lambda_function)) return 2;
-    node.lambda_function.body = defn_h;
+    ast_node *node             = ast_node_create(p->ast_arena, ast_lambda_function);
+    node->lambda_function.body = defn_h;
 
     // move the vector from the function_declaration node to the new ast node
-    ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
-    vec_move(&node.lambda_function.parameters, &decl->function_declaration.parameters);
+    vec_move(&node->lambda_function.parameters, &decl->function_declaration.parameters);
 
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    vec_init_empty(&decl->function_declaration.parameters, node.lambda_function.parameters.element_size);
-    return result_ast_node(p, &node);
+    vec_init_empty(&decl->function_declaration.parameters, node->lambda_function.parameters.element_size);
+    return result_ast_node(p, node);
 }
 
 static int lambda_function_application(parser *p) {
@@ -646,32 +607,31 @@ static int lambda_function_application(parser *p) {
     if (a_try(p, &grouped_expression)) return 1;
     // a lambda application must be a grouped lambda function, i.e.
     // surrouneded by round braces
-    ast_node_h lambda_h;
-    parser_result(p, &lambda_h);
-    if (ast_pool_at(p->ast_pool, lambda_h)->tag != ast_lambda_function) {
+    ast_node *lambda = p->result;
+
+    if (lambda->tag != ast_lambda_function) {
         p->error.tag = tess_err_expected_lambda;
         return 1;
     }
 
     // there must be at least one argument
     vector arguments;
-    if (ast_vector_init(p->ast_pool, &arguments)) return 2;
+    ast_vector_init(p->ast_arena, &arguments);
 
     if (a_try(p, &function_argument)) return 1;
-    vec_push_back(p->arena, &arguments, &p->result);
+    vec_push_back(p->parser_arena, &arguments, (void *)&p->result);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            vec_push_back(p->arena, &arguments, &p->result);
+            vec_push_back(p->parser_arena, &arguments, (void *)&p->result);
             continue;
         }
 
         if (0 == a_try(p, &a_end_of_expression)) {
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_lambda_function_application)) return 2;
-            node.lambda_application.lambda = lambda_h;
-            vec_move(&node.lambda_application.arguments, &arguments);
-            return result_ast_node(p, &node);
+            ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
+            node->lambda_application.lambda = lambda;
+            vec_move(&node->lambda_application.arguments, &arguments);
+            return result_ast_node(p, node);
         }
 
         // anything else is an error
@@ -684,58 +644,55 @@ static int simple_declaration(parser *p) {
     // a = ...
     // a single identifier followed by an equal sign
     if (a_try(p, a_identifier)) return 1;
-    ast_node_h sym = p->result;
+    ast_node *sym = p->result;
 
     if (a_try(p, a_equal_sign)) return 1;
 
-    return result_ast_node_handle(p, sym);
+    return result_ast_node(p, sym);
 }
 
 static int let_in_form(parser *p) {
     // let a = 2 in expression
     if (a_try_s(p, &the_symbol, "let")) return 1;
     if (a_try(p, &simple_declaration)) return 1;
-    ast_node_h sym = p->result;
+    ast_node *sym = p->result;
 
     if (a_try(p, &expression)) return 1;
-    ast_node_h defn = p->result;
+    ast_node *defn = p->result;
 
     if (a_try_s(p, &the_symbol, "in")) return 1;
     if (a_try(p, &expression)) return 1;
-    ast_node_h body = p->result;
+    ast_node *body     = p->result;
 
-    ast_node   node;
-    if (ast_node_init(p->ast_pool, &node, ast_let_in)) return 2;
-    node.let_in.name  = sym;
-    node.let_in.value = defn;
-    node.let_in.body  = body;
-    return result_ast_node(p, &node);
+    ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
+    node->let_in.name  = sym;
+    node->let_in.value = defn;
+    node->let_in.body  = body;
+    return result_ast_node(p, node);
 }
 
 static int let_form(parser *p) {
     // let f a b c... = ...
     if (a_try_s(p, &the_symbol, "let")) return 1;
     if (a_try(p, &function_declaration)) return 1;
-    ast_node_h decl_h = p->result;
+    ast_node *decl = p->result;
 
     if (a_try(p, &function_definition)) return 1;
-    ast_node_h defn_h = p->result;
+    ast_node *defn = p->result;
 
-    ast_node   node;
-    if (ast_node_init(p->ast_pool, &node, ast_let)) return 2;
+    ast_node *node = ast_node_create(p->ast_arena, ast_let);
 
     // get declaration out of pool to move into new node
-    ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
-    node.let.name  = decl->function_declaration.name;
-    node.let.body  = defn_h;
+    node->let.name = decl->function_declaration.name;
+    node->let.body = defn;
 
     // move the vector from the function_declaration node to the new ast node
-    vec_move(&node.let.parameters, &decl->function_declaration.parameters);
+    vec_move(&node->let.parameters, &decl->function_declaration.parameters);
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    vec_init_empty(&decl->function_declaration.parameters, node.let.parameters.element_size);
-    return result_ast_node(p, &node);
+    vec_init_empty(&decl->function_declaration.parameters, node->let.parameters.element_size);
+    return result_ast_node(p, node);
 }
 
 static int tuple_expression(parser *p) {
@@ -743,13 +700,13 @@ static int tuple_expression(parser *p) {
     if (a_try(p, a_open_round)) return 1;
 
     vector elements;
-    if (ast_vector_init(p->ast_pool, &elements)) return 2;
+    ast_vector_init(p->ast_arena, &elements);
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
     if (a_try(p, &expression)) return 1;
-    vec_push_back(p->arena, &elements, &p->result);
+    vec_push_back(p->ast_arena, &elements, (void *)&p->result);
     if (a_try(p, &a_comma)) goto cleanup;
 
     int count = 0;
@@ -757,10 +714,9 @@ static int tuple_expression(parser *p) {
     while (true) {
 
         if (0 == a_try(p, &a_close_round)) {
-            ast_node node;
-            if (ast_node_init(p->ast_pool, &node, ast_tuple)) return 2;
-            vec_move(&node.tuple.elements, &elements);
-            return result_ast_node(p, &node);
+            ast_node *node = ast_node_create(p->ast_arena, ast_tuple);
+            vec_move(&node->tuple.elements, &elements);
+            return result_ast_node(p, node);
         }
 
         // comma required if this is not the first time through the loop
@@ -768,13 +724,13 @@ static int tuple_expression(parser *p) {
             if (a_try(p, &a_comma)) goto cleanup;
 
         // expression
-        if (0 == a_try(p, &expression)) vec_push_back(p->arena, &elements, &p->result);
+        if (0 == a_try(p, &expression)) vec_push_back(p->ast_arena, &elements, (void *)&p->result);
 
         // loop to check for close round, or else
     }
 
 cleanup:
-    vec_deinit(p->arena, &elements);
+    vec_deinit(p->parser_arena, &elements);
     return 1;
 }
 
@@ -783,12 +739,12 @@ static int grouped_expression(parser *parser) {
     if (a_try(parser, &expression)) return 1;
 
     // save expression node result
-    ast_node_h const out_h = parser->result;
+    ast_node *const out = parser->result;
 
     if (a_try(parser, &a_close_round)) return 1;
 
     // replace parser result with expression node
-    parser->result = out_h;
+    parser->result = out;
     return 0;
 }
 
@@ -818,13 +774,13 @@ int parser_next(parser *parser) {
 }
 
 int parser_parse_all(allocator *alloc, parser *p, vector *out) {
-    assert(sizeof(ast_node_h) == out->element_size);
+    assert(sizeof(ast_node *) == out->element_size);
 
     int res = 0;
     while (0 == (res = parser_next(p))) {
-        ast_node_h handle;
-        parser_result(p, &handle);
-        vec_push_back(alloc, out, &handle);
+        ast_node *node;
+        parser_result(p, &node);
+        vec_push_back(alloc, out, (void *)&node);
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
@@ -832,7 +788,7 @@ int parser_parse_all(allocator *alloc, parser *p, vector *out) {
     return res;
 }
 
-void parser_result(parser *p, ast_node_h *handle) {
+void parser_result(parser *p, ast_node **handle) {
     if (handle) {
         *handle = p->result;
     }
