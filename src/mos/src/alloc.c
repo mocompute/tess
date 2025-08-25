@@ -269,11 +269,7 @@ static void arena_free(allocator *alloc, void *p, char const *file, int line) {
 
 allocator *alloc_arena_create(allocator *alloc, size_t sz) {
     allocator *out = alloc_malloc(alloc, sizeof(arena_allocator));
-
-    if (alloc_arena_init(out, alloc, sz)) {
-        alloc_free(alloc, out);
-        return null;
-    }
+    alloc_arena_init(out, alloc, sz);
     return out;
 }
 
@@ -288,13 +284,12 @@ void alloc_arena_destroy(allocator *alloc, allocator **arena) {
     alloc_arena_dealloc(alloc, arena);
 }
 
-int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
+void alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sz);
-    if (0 == sz) return 1;
+    if (0 == sz) sz = 16;
     arena->head = alloc_malloc(parent, sizeof(arena_header) + sz);
-    if (null == arena->head) return 1;
 
     alloc_zero(arena->head);
     arena->head->capacity    = sz;
@@ -303,7 +298,6 @@ int alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena->allocator.calloc  = &arena_calloc;
     arena->allocator.realloc = &arena_realloc;
     arena->allocator.free    = &arena_free;
-    return 0;
 }
 
 void alloc_arena_deinit(allocator *arena_) {
