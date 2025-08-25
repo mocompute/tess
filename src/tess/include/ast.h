@@ -163,6 +163,7 @@ typedef struct ast_node {
 // -- ast_pool --
 
 typedef struct ast_pool {
+    allocator    *alloc;
     struct vector data; // ast_node
 } ast_pool;
 
@@ -178,11 +179,11 @@ void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(allocator *, tess_type *);
 
 ast_pool     *ast_pool_create(allocator *) mallocfun;
-void          ast_pool_destroy(allocator *, ast_pool **);
+void          ast_pool_destroy(ast_pool **);
 
-nodiscard int ast_node_init(allocator *, ast_node *, ast_tag);
-void          ast_node_deinit(allocator *, ast_node *);
-nodiscard int ast_node_replace(allocator *, ast_node *, ast_tag);
+nodiscard int ast_node_init(ast_pool *, ast_node *, ast_tag);
+void          ast_node_deinit(ast_pool *, ast_node *);
+nodiscard int ast_node_replace(ast_pool *, ast_node *, ast_tag);
 
 char const   *ast_node_name_string(ast_node const *);
 int           ast_node_name_strcmp(ast_node const *, char const *);
@@ -191,7 +192,7 @@ int           ast_node_name_strcmp(ast_node const *, char const *);
 //
 // [move_back] takes ownership of ast_node(s) and invalidates caller's copy
 
-nodiscard int   ast_pool_move_back(allocator *, ast_pool *, ast_node *, ast_node_h *);
+nodiscard int   ast_pool_move_back(ast_pool *, ast_node *, ast_node_h *);
 ast_node       *ast_pool_at(ast_pool *, ast_node_h);
 ast_node const *ast_pool_cat(ast_pool const *, ast_node_h);
 
@@ -203,7 +204,7 @@ void            ast_pool_cdfs(ast_pool const *, ast_node_h, ast_op_cfun);
 char const   *type_tag_to_string(type_tag);
 char const   *ast_tag_to_string(ast_tag);
 int           string_to_ast_operator(char const *, ast_operator *);
-nodiscard int ast_vector_init(allocator *, vector *);
+nodiscard int ast_vector_init(ast_pool *, vector *);
 
 nodiscard int ast_node_to_string_buf(ast_pool *, ast_node const *, char *, size_t);
 

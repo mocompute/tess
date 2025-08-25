@@ -54,8 +54,10 @@ void tess_type_deinit(allocator *alloc, tess_type *ty) {
 // -- tess_type_pool allocation and deallocation --
 
 ast_pool *ast_pool_create(allocator *alloc) {
-    ast_pool *self = alloc_malloc(alloc, sizeof(ast_pool));
+    ast_pool *self = alloc_calloc(alloc, 1, sizeof(ast_pool));
     if (!self) return self;
+
+    self->alloc = alloc;
 
     if (vec_init(alloc, &self->data, sizeof(ast_node), 32)) {
         alloc_free(alloc, self);
@@ -65,25 +67,25 @@ ast_pool *ast_pool_create(allocator *alloc) {
     return self;
 }
 
-void ast_pool_destroy(allocator *alloc, ast_pool **self) {
+void ast_pool_destroy(ast_pool **self) {
 
     // deinit all the ast nodes
     ast_node       *it  = vec_begin(&(*self)->data);
     ast_node const *end = vec_end(&(*self)->data);
     while (it != end) {
-        ast_node_deinit(alloc, it++);
+        ast_node_deinit(*self, it++);
     }
 
-    vec_deinit(alloc, &(*self)->data);
-    alloc_free(alloc, *self);
+    vec_deinit((*self)->alloc, &(*self)->data);
+    alloc_free((*self)->alloc, *self);
     *self = null;
 }
 
 // -- ast_node init and deinit --
 
-void ast_node_deinit(allocator *alloc, ast_node *node) {
+void ast_node_deinit(ast_pool *pool, ast_node *node) {
 
-#define deinit(P) vec_deinit(alloc, &P)
+#define deinit(P) vec_deinit(pool->alloc, &P)
 
     switch (node->tag) {
     case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
@@ -93,7 +95,7 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
     case ast_tuple:                       deinit(node->tuple.elements); break;
     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
     case ast_named_function_application:  deinit(node->named_application.arguments); break;
-    case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
+    case ast_symbol:                      mos_string_deinit(pool->alloc, &node->symbol.name); break;
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -109,14 +111,14 @@ void ast_node_deinit(allocator *alloc, ast_node *node) {
 #undef deinit
 }
 
-int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
+int ast_node_init(ast_pool *pool, ast_node *node, ast_tag tag) {
 
-    // accepts alloc = null in some cases
+    // accepts pool = null in some cases
 
 #define init(P)                                                                                            \
     do {                                                                                                   \
-        assert(alloc);                                                                                     \
-        return ast_vector_init(alloc, &P);                                                                 \
+        assert(pool);                                                                                      \
+        return ast_vector_init(pool, &P);                                                                  \
     } while (0)
 
     alloc_zero(node);
@@ -147,9 +149,9 @@ int ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 #undef init
 }
 
-int ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
-    ast_node_deinit(alloc, node);
-    return ast_node_init(alloc, node, tag);
+int ast_node_replace(ast_pool *pool, ast_node *node, ast_tag tag) {
+    ast_node_deinit(pool, node);
+    return ast_node_init(pool, node, tag);
 }
 
 char const *ast_node_name_string(ast_node const *node) {
@@ -166,12 +168,12 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
 
 // -- pool operations --
 
-int ast_pool_move_back(allocator *alloc, ast_pool *pool, ast_node *node, ast_node_h *handle) {
+int ast_pool_move_back(ast_pool *self, ast_node *node, ast_node_h *handle) {
     assert(handle);
 
-    if (vec_push_back(alloc, &pool->data, node)) return 1;
+    if (vec_push_back(self->alloc, &self->data, node)) return 1;
 
-    handle->val = vec_size(&pool->data) - 1;
+    handle->val = vec_size(&self->data) - 1;
     alloc_invalidate(node);
 
     return 0;
@@ -329,8 +331,9 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
     return 1;
 }
 
-int ast_vector_init(allocator *alloc, vector *vec) {
-    return vec_init(alloc, vec, sizeof(ast_node_h), 0);
+int ast_vector_init(ast_pool *self, vector *vec) {
+    // init a vector for use with this pool
+    return vec_init(self->alloc, vec, sizeof(ast_node_h), 0);
 }
 
 static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, int const sz_,

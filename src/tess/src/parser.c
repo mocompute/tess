@@ -76,7 +76,7 @@ void parser_destroy(parser **self) {
     tokenizer_destroy(&(*self)->tokenizer);
 
     // ast pool
-    ast_pool_destroy((*self)->arena, &(*self)->ast_pool);
+    ast_pool_destroy(&(*self)->ast_pool);
 
     // arena
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->arena);
@@ -111,50 +111,50 @@ static int tuple_expression(parser *);
 
 nodiscard static int result_ast(parser *p, ast_tag tag) {
     ast_node node;
-    if (ast_node_init(p->arena, &node, tag)) return 1;
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    if (ast_node_init(p->ast_pool, &node, tag)) return 1;
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_i64(parser *p, i64 val) {
     ast_node node;
     if (ast_node_init(null, &node, ast_i64)) return 1;
     node.i64.val = val;
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_u64(parser *p, u64 val) {
     ast_node node;
     if (ast_node_init(null, &node, ast_u64)) return 1;
     node.u64.val = val;
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_f64(parser *p, f64 val) {
     ast_node node;
     if (ast_node_init(null, &node, ast_f64)) return 1;
     node.f64.val = val;
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_bool(parser *p, bool val) {
     ast_node node;
     if (ast_node_init(null, &node, ast_bool)) return 1;
     node.bool_.val = val;
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     ast_node node;
-    if (ast_node_init(p->arena, &node, tag)) return 1;
+    if (ast_node_init(p->ast_pool, &node, tag)) return 1;
 
     if (mos_string_init(p->arena, &node.symbol.name, s)) return 1;
     // syms and strs use same union
 
-    return ast_pool_move_back(p->arena, p->ast_pool, &node, &p->result);
+    return ast_pool_move_back(p->ast_pool, &node, &p->result);
 }
 
 nodiscard static int result_ast_node(parser *p, ast_node *node) {
-    return ast_pool_move_back(p->arena, p->ast_pool, node, &p->result);
+    return ast_pool_move_back(p->ast_pool, node, &p->result);
 }
 
 static int result_ast_node_handle(parser *p, ast_node_h handle) {
@@ -443,7 +443,7 @@ static int function_declaration(parser *p) {
     ast_node_h const name = p->result; // function name
 
     vector           parameters;
-    if (ast_vector_init(p->arena, &parameters)) return 2;
+    if (ast_vector_init(p->ast_pool, &parameters)) return 2;
 
     // check: f () declares function with no parameters
     if (0 == a_try(p, &a_nil)) {
@@ -451,7 +451,7 @@ static int function_declaration(parser *p) {
         // next token must be equal sign
         if (0 == a_try(p, &a_equal_sign)) {
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_function_declaration)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_function_declaration)) return 2;
             node.function_declaration.name = name;
             vec_move(&node.function_declaration.parameters, &parameters);
             if (result_ast_node(p, &node)) return 1;
@@ -472,7 +472,7 @@ static int function_declaration(parser *p) {
         if (0 == a_try(p, &a_equal_sign)) {
 
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_function_declaration)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_function_declaration)) return 2;
             node.function_declaration.name = name;
             vec_move(&node.function_declaration.parameters, &parameters);
             if (result_ast_node(p, &node)) return 1;
@@ -490,7 +490,7 @@ static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
     vector parameters;
-    if (ast_vector_init(p->arena, &parameters)) return 2;
+    if (ast_vector_init(p->ast_pool, &parameters)) return 2;
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
@@ -502,7 +502,7 @@ static int lambda_declaration(parser *p) {
         if (0 == a_try(p, &a_arrow)) {
 
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_lambda_declaration)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_lambda_declaration)) return 2;
             vec_move(&node.lambda_declaration.parameters, &parameters);
             if (result_ast_node(p, &node)) return 1;
 
@@ -527,7 +527,7 @@ static int function_application(parser *p) {
     ast_node_h const name = p->result;
 
     vector           arguments;
-    if (ast_vector_init(p->arena, &arguments)) return 2;
+    if (ast_vector_init(p->ast_pool, &arguments)) return 2;
 
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
@@ -542,7 +542,7 @@ static int function_application(parser *p) {
         if ((tess_err_eof == p->error.tag) || 0 == a_try(p, &a_end_of_expression)) {
 
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_named_function_application)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_named_function_application)) return 2;
             node.named_application.name = name;
             vec_move(&node.named_application.arguments, &arguments);
             return result_ast_node(p, &node);
@@ -590,7 +590,7 @@ static int if_then_else(parser *p) {
     no = p->result;
 
     ast_node node;
-    if (ast_node_init(p->arena, &node, ast_if_then_else)) return 2;
+    if (ast_node_init(p->ast_pool, &node, ast_if_then_else)) return 2;
     node.if_then_else.condition = cond;
     node.if_then_else.yes       = yes;
     node.if_then_else.no        = no;
@@ -617,7 +617,7 @@ static int infix_operation(parser *p) {
     ast_node_h const rhs = p->result;
 
     ast_node         node;
-    if (ast_node_init(p->arena, &node, ast_infix)) return 2;
+    if (ast_node_init(p->ast_pool, &node, ast_infix)) return 2;
     node.infix.left  = lhs;
     node.infix.right = rhs;
     node.infix.op    = op;
@@ -636,7 +636,7 @@ static int lambda_function(parser *p) {
     ast_node_h defn_h = p->result;
 
     ast_node   node;
-    if (ast_node_init(p->arena, &node, ast_lambda_function)) return 2;
+    if (ast_node_init(p->ast_pool, &node, ast_lambda_function)) return 2;
     node.lambda_function.body = defn_h;
 
     // move the vector from the function_declaration node to the new ast node
@@ -664,7 +664,7 @@ static int lambda_function_application(parser *p) {
 
     // there must be at least one argument
     vector arguments;
-    if (ast_vector_init(p->arena, &arguments)) return 2;
+    if (ast_vector_init(p->ast_pool, &arguments)) return 2;
 
     if (a_try(p, &function_argument)) return 1;
     if (vec_push_back(p->arena, &arguments, &p->result)) return 1;
@@ -677,7 +677,7 @@ static int lambda_function_application(parser *p) {
 
         if (0 == a_try(p, &a_end_of_expression)) {
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_lambda_function_application)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_lambda_function_application)) return 2;
             node.lambda_application.lambda = lambda_h;
             vec_move(&node.lambda_application.arguments, &arguments);
             return result_ast_node(p, &node);
@@ -714,7 +714,7 @@ static int let_in_form(parser *p) {
     ast_node_h body = p->result;
 
     ast_node   node;
-    if (ast_node_init(p->arena, &node, ast_let_in)) return 2;
+    if (ast_node_init(p->ast_pool, &node, ast_let_in)) return 2;
     node.let_in.name  = sym;
     node.let_in.value = defn;
     node.let_in.body  = body;
@@ -731,7 +731,7 @@ static int let_form(parser *p) {
     ast_node_h defn_h = p->result;
 
     ast_node   node;
-    if (ast_node_init(p->arena, &node, ast_let)) return 2;
+    if (ast_node_init(p->ast_pool, &node, ast_let)) return 2;
 
     // get declaration out of pool to move into new node
     ast_node *decl = ast_pool_at(p->ast_pool, decl_h);
@@ -752,7 +752,7 @@ static int tuple_expression(parser *p) {
     if (a_try(p, a_open_round)) return 1;
 
     vector elements;
-    if (ast_vector_init(p->arena, &elements)) return 2;
+    if (ast_vector_init(p->ast_pool, &elements)) return 2;
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
@@ -767,7 +767,7 @@ static int tuple_expression(parser *p) {
 
         if (0 == a_try(p, &a_close_round)) {
             ast_node node;
-            if (ast_node_init(p->arena, &node, ast_tuple)) return 2;
+            if (ast_node_init(p->ast_pool, &node, ast_tuple)) return 2;
             vec_move(&node.tuple.elements, &elements);
             return result_ast_node(p, &node);
         }
