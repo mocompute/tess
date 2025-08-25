@@ -177,11 +177,6 @@ static int grow_buckets(allocator *alloc, hashmap **map) {
 
     hashmap *new_map = map_create(alloc, (*map)->element_size, (u32)new_buckets, (*map)->max_load_factor);
 
-    if (!new_map) {
-        dbg("map grow_buckets: oom\n");
-        return 1;
-    }
-
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
         hashmap_element_header *cell = map_unchecked_at(*map, i);
         if (is_occupied(cell->status)) {
@@ -263,7 +258,6 @@ void map_destroy(allocator *alloc, hashmap **map) {
 hashmap *map_copy(allocator *alloc, hashmap const *src) {
     size_t   size = sizeof(struct hashmap) + src->n_cells * bucket_size(src);
     hashmap *dst  = alloc_malloc(alloc, size);
-    if (!dst) return dst;
     memcpy(dst, src, size);
     return dst;
 }
