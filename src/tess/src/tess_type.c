@@ -1,5 +1,4 @@
 #include "tess_type.h"
-#include "type_pool.h"
 
 // -- tess_type allocation and deallocation --
 
@@ -17,7 +16,7 @@ void tess_type_init_type_var(tess_type *self, u32 val) {
 int tess_type_init_tuple(allocator *alloc, struct tess_type *self) {
     alloc_zero(self);
     self->tag = type_tuple;
-    vec_init(alloc, &self->tuple, sizeof(tess_type_h), 0);
+    vec_init(alloc, &self->tuple, sizeof(tess_type *), 0);
     return 0;
 }
 

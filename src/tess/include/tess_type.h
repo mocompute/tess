@@ -19,7 +19,7 @@
 
 typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
 
-struct tess_type {
+typedef struct tess_type {
     union {
         struct vector tuple;
         struct {
@@ -29,12 +29,12 @@ struct tess_type {
         u32 val;
     };
     tess_type_tag tag;
-};
+} tess_type;
 
-void          tess_type_init(struct tess_type *, tess_type_tag);
-void          tess_type_init_type_var(struct tess_type *, u32);
+void          tess_type_init(tess_type *, tess_type_tag);
+void          tess_type_init_type_var(tess_type *, u32);
 nodiscard int tess_type_init_tuple(allocator *, struct tess_type *);
-void          tess_type_init_arrow(struct tess_type *);
+void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(allocator *, struct tess_type *);
 
 char const   *type_tag_to_string(tess_type_tag);
