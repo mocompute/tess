@@ -1,6 +1,8 @@
 #include "type_pool.h"
 #include "tess_type.h"
 
+#include <assert.h>
+
 // -- pool allocation and deallocation --
 
 tess_type_pool *tess_type_pool_create(allocator *alloc) {
@@ -23,4 +25,18 @@ void tess_type_pool_destroy(tess_type_pool **self) {
     vec_deinit((*self)->alloc, &(*self)->data);
     alloc_free((*self)->alloc, *self);
     *self = null;
+}
+
+int tess_type_pool_move_back(tess_type_pool *self, tess_type *ty, tess_type_h *handle) {
+
+    assert(handle);
+    assert(self->data.element_size == sizeof(*ty));
+
+    vec_push_back(self->alloc, &self->data, ty);
+
+    handle->val = vec_size(&self->data) - 1;
+    if (handle->val == UINT32_MAX) return 1; // overflow
+    alloc_invalidate(ty);
+
+    return 0;
 }
