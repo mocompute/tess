@@ -191,7 +191,10 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
-    if (null == bucket) return null;
+    if (null == bucket) {
+        assert(false);
+        return null;
+    }
 
     size_t *cur_size_p = block_size(p);
     size_t  cur_size   = *cur_size_p;

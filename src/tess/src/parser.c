@@ -31,7 +31,7 @@ struct parser {
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_t input_len) {
+parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
     if (!self) return self;
 
@@ -40,15 +40,17 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
     self->arena        = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     if (!self->arena) goto cleanup;
 
-    self->ast_pool = pool;
+    // ast pool
+    self->ast_pool = ast_pool_create(self->arena);
+    if (!self->ast_pool) goto cleanup;
 
     // tokenizer
-    self->tokenizer = tokenizer_alloc(alloc);
+    self->tokenizer = tokenizer_alloc(self->arena);
     if (!self->tokenizer) goto cleanup;
-    if (tokenizer_init(alloc, self->tokenizer, input, input_len)) goto cleanup;
+    if (tokenizer_init(self->arena, self->tokenizer, input, input_len)) goto cleanup;
 
     // good_tokens
-    if (vec_init(alloc, &self->seen_tokens, sizeof(struct token), 0)) goto cleanup;
+    if (vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0)) goto cleanup;
 
     // error
     token_init(&self->token, tok_invalid);
@@ -59,29 +61,35 @@ parser *parser_create(allocator *alloc, ast_pool *pool, char const *input, size_
 
 cleanup:
 
-    alloc_free(alloc, self->tokenizer);
-    alloc_free(alloc, self);
+    alloc_arena_destroy(self->parent_alloc, &self->arena);
+    alloc_free(self->parent_alloc, self);
     return null;
 }
 
 void parser_destroy(parser **self) {
     // error token
-    token_deinit((*self)->parent_alloc, &(*self)->token);
+    // token_deinit((*self)->arena, &(*self)->token);
 
     // good_tokens
-    vec_deinit((*self)->parent_alloc, &(*self)->seen_tokens);
+    // vec_deinit((*self)->arena, &(*self)->seen_tokens);
 
     // tokenizer
     if ((*self)->tokenizer) {
-        tokenizer_deinit((*self)->parent_alloc, (*self)->tokenizer);
-        tokenizer_dealloc((*self)->parent_alloc, &(*self)->tokenizer);
+        tokenizer_deinit((*self)->arena, (*self)->tokenizer);
+        tokenizer_dealloc((*self)->arena, &(*self)->tokenizer);
     }
+
+    // ast pool
+    ast_pool_destroy((*self)->arena, &(*self)->ast_pool);
 
     // arena
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->arena);
-
     alloc_free((*self)->parent_alloc, *self);
     *self = null;
+}
+
+ast_pool *parser_ast_pool(parser *self) {
+    return self->ast_pool;
 }
 
 // -- parser --

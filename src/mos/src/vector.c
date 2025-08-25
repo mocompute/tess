@@ -59,6 +59,7 @@ int vec_reserve(allocator *alloc, vector *vec, size_t count) {
       alloc_realloc(alloc, vec->data, sizeof(vector_data_header) + new_capacity * vec->element_size);
     if (!resized) {
         dbg("vec_reserve: oom\n");
+        assert(false);
         return 1;
     }
 

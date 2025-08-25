@@ -18,20 +18,12 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *, ast_pool *, char const *, size_t) mallocfun;
+parser *parser_create(allocator *, char const *, size_t) mallocfun;
 void    parser_destroy(parser **);
-// parser *parser_alloc(allocator *);
-// void    parser_dealloc(allocator *, parser **);
-// nodiscard int parser_init(allocator *, parser *, ast_pool *, char const *, size_t);
-// void          parser_deinit(parser *);
 
 // -- access --
-//
-// Error pointers returned to caller are only valid until the next
-// call to the parser. Error is only valid if tess_parser_next returns
-// non-zero.
 
-parser_error const *parser_get_error(parser *);
+ast_pool *parser_ast_pool(parser *);
 
 // -- parser --
 
