@@ -53,46 +53,30 @@ void tess_type_deinit(allocator *alloc, tess_type *ty) {
 
 // -- tess_type_pool allocation and deallocation --
 
-ast_pool *ast_pool_alloc(allocator *alloc) {
-    return alloc_malloc(alloc, sizeof(ast_pool));
-}
-
 ast_pool *ast_pool_create(allocator *alloc) {
-    ast_pool *out = alloc_malloc(alloc, sizeof(ast_pool));
-    if (!out) return out;
+    ast_pool *self = alloc_malloc(alloc, sizeof(ast_pool));
+    if (!self) return self;
 
-    if (ast_pool_init(alloc, out)) {
-        alloc_free(alloc, out);
+    if (vec_init(alloc, &self->data, sizeof(ast_node), 32)) {
+        alloc_free(alloc, self);
         return null;
     }
-    return out;
+
+    return self;
 }
 
-void ast_pool_dealloc(allocator *alloc, ast_pool **pool) {
-    alloc_assert_invalid(*pool);
-    alloc_free(alloc, *pool);
-    *pool = null;
-}
+void ast_pool_destroy(allocator *alloc, ast_pool **self) {
 
-void ast_pool_destroy(allocator *alloc, ast_pool **pool) {
-    ast_pool_deinit(alloc, *pool);
-    ast_pool_dealloc(alloc, pool);
-}
-
-int ast_pool_init(allocator *alloc, ast_pool *pool) {
-    return vec_init(alloc, &pool->data, sizeof(ast_node), 32);
-}
-
-void ast_pool_deinit(allocator *alloc, ast_pool *pool) {
     // deinit all the ast nodes
-    ast_node       *it  = vec_begin(&pool->data);
-    ast_node const *end = vec_end(&pool->data);
+    ast_node       *it  = vec_begin(&(*self)->data);
+    ast_node const *end = vec_end(&(*self)->data);
     while (it != end) {
         ast_node_deinit(alloc, it++);
     }
 
-    vec_deinit(alloc, &pool->data);
-    alloc_invalidate(pool);
+    vec_deinit(alloc, &(*self)->data);
+    alloc_free(alloc, *self);
+    *self = null;
 }
 
 // -- ast_node init and deinit --

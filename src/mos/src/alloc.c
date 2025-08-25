@@ -323,6 +323,7 @@ typedef struct {
     struct leak_allocation *data;
     i64                     capacity;
     i64                     size;
+    bool                    reported;
 } leak_detector;
 
 static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file, int line) mallocfun;
@@ -344,12 +345,15 @@ allocator   *alloc_leak_detector_create() {
     self->capacity          = 1024;
     self->size              = 0;
     self->data              = calloc((size_t)self->capacity, sizeof(struct leak_allocation));
+    self->reported          = false;
 
     return (allocator *)self;
 }
 
 void alloc_leak_detector_destroy(allocator **alloc) {
     leak_detector *self = (leak_detector *)*alloc;
+
+    if (!self->reported) alloc_leak_detector_report(*alloc);
 
     free(self->data);
 
@@ -366,6 +370,8 @@ void alloc_leak_detector_report(allocator *alloc) {
         goto cleanup;
     }
     memcpy(records, self->data, (size_t)self->size * sizeof *records);
+
+    self->reported = true;
 
     // match reallocs with previous allocs
     for (i64 i = 0; i < self->size; ++i) {
@@ -452,8 +458,11 @@ cleanup:
     free(records);
 }
 
-static void leak_detector_ensure_good_free(leak_detector *self, void *ptr) {
+static void leak_detector_ensure_good_free(leak_detector *self, void *ptr, char const *file, int line) {
     // ensure the attempted free of ptr is valid.
+
+    if (null == ptr) return; // always valid
+
     if (0 == self->size) {
         fprintf(stderr, "leak_detector: attempt to free %p before any malloc\n", ptr);
         exit(1);
@@ -465,7 +474,8 @@ static void leak_detector_ensure_good_free(leak_detector *self, void *ptr) {
             return;
     }
 
-    fprintf(stderr, "leak_detector: attempt to free unknown pointer %p\n", ptr);
+    fprintf(stderr, "leak_detector: attempt to free unknown pointer %p: %s:%i\n", ptr, file, line);
+    assert(false);
     exit(1);
 }
 
@@ -514,11 +524,13 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
 
 static void leak_detector_free(allocator *alloc, void *ptr, char const *file, int line) {
     leak_detector *self = (leak_detector *)alloc;
-    leak_detector_ensure_good_free(self, ptr);
+    leak_detector_ensure_good_free(self, ptr, file, line);
     leak_detector_reserve_one(self);
 
     self->data[self->size++] = (struct leak_allocation){
       .ptr = ptr, .realloc_ptr = null, .size = 0, .file = file, .line = line, .status = leak_action_free};
+
+    free(ptr);
 }
 
 // -- utilities --

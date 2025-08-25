@@ -177,12 +177,8 @@ nodiscard int tess_type_init_tuple(allocator *, tess_type *);
 void          tess_type_init_arrow(tess_type *);
 void          tess_type_deinit(allocator *, tess_type *);
 
-ast_pool     *ast_pool_alloc(allocator *);
 ast_pool     *ast_pool_create(allocator *) mallocfun;
-void          ast_pool_dealloc(allocator *, ast_pool **);
 void          ast_pool_destroy(allocator *, ast_pool **);
-nodiscard int ast_pool_init(allocator *, ast_pool *);
-void          ast_pool_deinit(allocator *, ast_pool *);
 
 nodiscard int ast_node_init(allocator *, ast_node *, ast_tag);
 void          ast_node_deinit(allocator *, ast_node *);

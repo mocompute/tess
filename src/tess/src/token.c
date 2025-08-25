@@ -22,9 +22,8 @@ void token_init_v(token *tok, token_tag tag, u8 val) {
 int token_init_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
 
     tok->tag = tag;
-    tok->s   = alloc_malloc(alloc, strlen(s) + 1);
+    tok->s   = alloc_strdup(alloc, s);
     if (!tok->s) return 1;
-    strcpy(tok->s, s);
 
     return 0;
 }

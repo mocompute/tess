@@ -159,22 +159,18 @@ static int test_parser_init(void) {
 
     char const *input = "()";
 
-    allocator  *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator  *alloc = alloc_leak_detector_create();
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
     if (null == pool) return error + 1;
 
-    parser *p = parser_alloc(alloc);
-    if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
+    parser *p = parser_create(alloc, pool, input, strlen(input));
+    if (!p) return ++error;
 
-    // can skip deinit/dealloc due to arena
-    // parser_deinit(p);
-    // parser_dealloc(alloc, &p);
-    // ast_pool_destroy(alloc, &pool);
-
-    alloc_arena_destroy(alloc_default_allocator(), &alloc);
-
+    parser_destroy(&p);
+    ast_pool_destroy(alloc, &pool);
+    alloc_leak_detector_destroy(&alloc);
     return error;
 }
 
@@ -183,14 +179,15 @@ static int test_parser_basic(void) {
 
     char const *input = "a";
 
-    allocator  *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator  *alloc = alloc_leak_detector_create();
+
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
     if (null == pool) return error + 1;
 
-    parser *p = parser_alloc(alloc);
-    if (parser_init(alloc, p, pool, input, strlen(input))) return error + 1;
+    parser *p = parser_create(alloc, pool, input, strlen(input));
+    if (!p) return error + 1;
 
     if (parser_next(p)) return error + 1;
 
@@ -201,12 +198,10 @@ static int test_parser_basic(void) {
     error += ast_symbol == node->tag ? 0 : 1;
     error += 0 == strcmp(mos_string_str(&node->symbol.name), "a") ? 0 : 1;
 
-    parser_deinit(p);
-    parser_dealloc(alloc, &p);
+    parser_destroy(&p);
     ast_pool_destroy(alloc, &pool);
 
-    alloc_arena_deinit(alloc);
-    alloc_arena_dealloc(alloc_default_allocator(), &alloc);
+    alloc_leak_detector_destroy(&alloc);
 
     return error;
 }
@@ -216,7 +211,7 @@ static int test_parser_expression(void) {
 
     char const *input = "let x = 5 in x + 2";
 
-    allocator  *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator  *alloc = alloc_leak_detector_create();
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
@@ -232,7 +227,7 @@ static int test_parser_expression(void) {
 
     error += ast_let_in == node->tag ? 0 : 1;
 
-    alloc_arena_destroy(alloc_default_allocator(), &alloc);
+    alloc_leak_detector_destroy(&alloc);
 
     return error;
 }
@@ -242,7 +237,7 @@ static int test_parser_node_to_string(void) {
 
     char const *input = "1 + 2";
 
-    allocator  *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator  *alloc = alloc_leak_detector_create();
     if (!alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(alloc);
@@ -284,7 +279,7 @@ static int test_parser_node_to_string(void) {
         error += 0 == strcmp("(tuple (symbol a) (symbol b))", buf) ? 0 : 1;
     }
 
-    alloc_arena_destroy(alloc_default_allocator(), &alloc);
+    alloc_leak_detector_destroy(&alloc);
 
     return error;
 }
@@ -292,8 +287,8 @@ static int test_parser_node_to_string(void) {
 static int test_parse_all(void) {
     int        error     = 0;
 
-    allocator *vec_alloc = alloc_default_allocator();
-    allocator *ast_alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator *vec_alloc = alloc_leak_detector_create();
+    allocator *ast_alloc = alloc_leak_detector_create();
     if (!ast_alloc) return error + 1;
 
     ast_pool *pool = ast_pool_create(ast_alloc);
@@ -333,60 +328,59 @@ static int test_parse_all(void) {
 
         vec_deinit(vec_alloc, &nodes);
         syntax_checker_destroy(&syntax);
+        parser_destroy(&p);
     }
 
     ast_pool_destroy(ast_alloc, &pool);
-    alloc_arena_destroy(alloc_default_allocator(), &ast_alloc);
+
+    alloc_leak_detector_destroy(&ast_alloc);
+    alloc_leak_detector_destroy(&vec_alloc);
 
     return error;
 }
 
 static int test_parse_to_c(void) {
-    int        error          = 0;
+    int        error = 0;
 
-    allocator *vec_alloc      = alloc_default_allocator();
-    allocator *compiler_alloc = alloc_default_allocator();
-    allocator *ast_alloc      = alloc_arena_create(alloc_default_allocator(), 4096);
-    if (!ast_alloc) return error + 1;
+    allocator *alloc = alloc_leak_detector_create();
 
-    ast_pool *pool = ast_pool_create(ast_alloc);
+    ast_pool  *pool  = ast_pool_create(alloc);
     if (null == pool) return error + 1;
 
     {
         char const *input = "let main () = \n"
                             "  std_dbg \"hello world!\"";
 
-        parser     *p     = parser_create(ast_alloc, pool, input, strlen(input));
+        parser     *p     = parser_create(alloc, pool, input, strlen(input));
         if (null == p) return error + 1;
 
         vector nodes;
-        if (vec_init(vec_alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
-        if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
+        if (vec_init(alloc, &nodes, sizeof(ast_node_h), 1024)) return error + 1;
+        if (parser_parse_all(alloc, p, &nodes)) return error + 1;
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 
         vector transpiler_output;
-        if (vec_init(vec_alloc, &transpiler_output, 1, 1024)) return error + 1;
+        if (vec_init(alloc, &transpiler_output, 1, 1024)) return error + 1;
 
-        transpiler *transpiler = transpiler_create(compiler_alloc, pool, &transpiler_output, vec_alloc);
+        transpiler *transpiler = transpiler_create(alloc, pool, &transpiler_output, alloc);
         if (!transpiler) return error + 1;
 
         if (transpiler_compile(transpiler, &nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
-        if (vec_push_back_byte(vec_alloc, &transpiler_output, '\0')) return error + 1;
+        if (vec_push_back_byte(alloc, &transpiler_output, '\0')) return error + 1;
 
         printf("Output:\n%s\n", (char const *)vec_cbegin(&transpiler_output));
 
-        vec_deinit(vec_alloc, &transpiler_output);
+        vec_deinit(alloc, &transpiler_output);
         transpiler_destroy(&transpiler);
-        vec_deinit(vec_alloc, &nodes);
+        vec_deinit(alloc, &nodes);
 
-        parser_destroy(ast_alloc, &p);
+        parser_destroy(&p);
     }
 
-    ast_pool_destroy(ast_alloc, &pool);
-    alloc_arena_destroy(alloc_default_allocator(), &ast_alloc);
+    ast_pool_destroy(alloc, &pool);
 
     return 1;
     return error;

@@ -18,12 +18,12 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-parser       *parser_alloc(allocator *);
-parser       *parser_create(allocator *, ast_pool *, char const *, size_t) mallocfun;
-void          parser_dealloc(allocator *, parser **);
-void          parser_destroy(allocator *, parser **);
-nodiscard int parser_init(allocator *, parser *, ast_pool *, char const *, size_t);
-void          parser_deinit(parser *);
+parser *parser_create(allocator *, ast_pool *, char const *, size_t) mallocfun;
+void    parser_destroy(parser **);
+// parser *parser_alloc(allocator *);
+// void    parser_dealloc(allocator *, parser **);
+// nodiscard int parser_init(allocator *, parser *, ast_pool *, char const *, size_t);
+// void          parser_deinit(parser *);
 
 // -- access --
 //
