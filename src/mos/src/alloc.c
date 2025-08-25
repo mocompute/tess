@@ -202,6 +202,7 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
 
     alloc_zero(bucket);
     bucket->capacity = new_capacity;
+
     return bump_alloc_assume_capacity(bucket, sz);
 }
 
@@ -579,24 +580,15 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 }
 
 void alloc_invalidate_n(void *p, size_t len) {
-#ifndef NDEBUG
-    while (len--) {
-        if ((uintptr_t)p % 2 == 0) *(byte *)p = 0xde;
-        else *(byte *)p = 0xad;
-        ++p;
-    }
-#else
-    memset(p, 0, len);
-#endif
+    memset(p, 0xCD, len);
 }
 
 void alloc_assert_invalid_n(void *p, size_t len) {
 #ifndef NDEBUG
     while (len--) {
-        if ((uintptr_t)p % 2 == 0) assert(*(byte *)p == 0xde);
-        else assert(*(byte *)p == 0xad);
-        ++p;
-    }
+        assert(*(byte *)p == 0xCD);
+        p++;
+    };
 #else
     (void)p;
     (void)len;
