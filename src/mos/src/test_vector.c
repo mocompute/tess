@@ -52,34 +52,34 @@ static int test_assoc(void) {
     vector    *vec   = vec_alloc(alloc);
     vec_init(alloc, vec, 2 * sizeof(size_t), 0);
 
-    size_t pair[2];
+    u32 pair[2];
 
     pair[0] = 1;
     pair[1] = 2;
     if (vec_assoc_set(alloc, vec, pair)) return error + 1;
-    error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
+    error += 2 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
 
     pair[0] = 2;
     pair[1] = 3;
     if (vec_assoc_set(alloc, vec, pair)) return error + 1;
-    error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
-    error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
+    error += 2 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
+    error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
     pair[0] = 1;
     pair[1] = 99;
     if (vec_assoc_set(alloc, vec, pair)) return error + 1;
-    error += 99 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
-    error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
+    error += 99 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
+    error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
     // note that this erase only removes the first match
     vec_assoc_erase(vec, 1);
-    error += 2 == *(size_t *)vec_assoc_get(vec, 1) ? 0 : 1;
-    error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
+    error += 2 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
+    error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
     // the second erase will remove the original value we set
     vec_assoc_erase(vec, 1);
     error += 0 == vec_assoc_get(vec, 1) ? 0 : 1;
-    error += 3 == *(size_t *)vec_assoc_get(vec, 2) ? 0 : 1;
+    error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
     error += 0 == vec_assoc_get(vec, 999) ? 0 : 1;
 
