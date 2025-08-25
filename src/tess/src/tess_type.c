@@ -1,11 +1,9 @@
 #include "tess_type.h"
 #include "type_pool.h"
 
-#include "util.h"
-
 // -- tess_type allocation and deallocation --
 
-void tess_type_init(tess_type *self, type_tag tag) {
+void tess_type_init(tess_type *self, tess_type_tag tag) {
     alloc_zero(self);
     self->tag = tag;
 }
@@ -42,8 +40,11 @@ void tess_type_deinit(allocator *alloc, tess_type *self) {
     alloc_invalidate(self);
 }
 
+#ifndef MOS_TAG_STRING
 #define MOS_TAG_STRING(name, str) [name] = str,
-char const *type_tag_to_string(type_tag tag) {
+#endif
+
+char const *type_tag_to_string(tess_type_tag tag) {
     static char const *const strings[] = {TESS_TYPE_TAGS(MOS_TAG_STRING)};
     return strings[tag];
 }

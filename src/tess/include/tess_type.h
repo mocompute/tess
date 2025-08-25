@@ -17,7 +17,7 @@
     X(type_arrow, "arrow")                                                                                 \
     X(type_type_var, "type_var")
 
-typedef enum type_tag { TESS_TYPE_TAGS(MOS_TAG_NAME) } type_tag;
+typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
 
 struct tess_type {
     union {
@@ -28,15 +28,15 @@ struct tess_type {
         } arrow;
         u32 val;
     };
-    type_tag tag;
+    tess_type_tag tag;
 };
 
-void          tess_type_init(struct tess_type *, type_tag);
+void          tess_type_init(struct tess_type *, tess_type_tag);
 void          tess_type_init_type_var(struct tess_type *, u32);
 nodiscard int tess_type_init_tuple(allocator *, struct tess_type *);
 void          tess_type_init_arrow(struct tess_type *);
 void          tess_type_deinit(allocator *, struct tess_type *);
 
-char const   *type_tag_to_string(type_tag);
+char const   *type_tag_to_string(tess_type_tag);
 
 #endif
