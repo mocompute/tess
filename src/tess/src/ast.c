@@ -8,28 +8,39 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+struct tess_type_pool {
+    allocator    *alloc;
+    struct vector data; // tess_type
+};
+
+struct ast_pool {
+    allocator    *alloc;
+    struct vector data; // ast_node
+};
 
 // -- statics --
 
 // -- tess_type allocation and deallocation --
 
-void tess_type_init(tess_type *ty, type_tag tag) {
-    alloc_zero(ty);
-    ty->tag = tag;
+void tess_type_init(tess_type *self, type_tag tag) {
+    alloc_zero(self);
+    self->tag = tag;
 }
 
-void tess_type_init_type_var(tess_type *ty, u32 val) {
-    alloc_zero(ty);
-    ty->tag = type_type_var;
-    ty->val = val;
+void tess_type_init_type_var(tess_type *self, u32 val) {
+    alloc_zero(self);
+    self->tag = type_type_var;
+    self->val = val;
 }
 
-int tess_type_init_tuple(allocator *alloc, tess_type *ty) {
-    alloc_zero(ty);
-    ty->tag = type_tuple;
-    return vec_init(alloc, &ty->tuple, sizeof(ast_node_h), 0);
+int tess_type_init_tuple(allocator *alloc, tess_type *self) {
+    alloc_zero(self);
+    self->tag = type_tuple;
+    return vec_init(alloc, &self->tuple, sizeof(ast_node_h), 0);
 }
 
 void tess_type_init_arrow(tess_type *ty) {
@@ -37,8 +48,8 @@ void tess_type_init_arrow(tess_type *ty) {
     ty->tag = type_arrow;
 }
 
-void tess_type_deinit(allocator *alloc, tess_type *ty) {
-    switch (ty->tag) {
+void tess_type_deinit(allocator *alloc, tess_type *self) {
+    switch (self->tag) {
     case type_nil:
     case type_bool:
     case type_int:
@@ -46,12 +57,38 @@ void tess_type_deinit(allocator *alloc, tess_type *ty) {
     case type_arrow:
     case type_type_var:
     case type_string:   break;
-    case type_tuple:    vec_deinit(alloc, &ty->tuple); break;
+    case type_tuple:    vec_deinit(alloc, &self->tuple); break;
     }
-    alloc_invalidate(ty);
+    alloc_invalidate(self);
 }
 
-// -- tess_type_pool allocation and deallocation --
+// -- pool allocation and deallocation --
+
+tess_type_pool *tess_type_pool_create(allocator *alloc) {
+    tess_type_pool *self = alloc_calloc(alloc, 1, sizeof(tess_type));
+    if (!self) return self;
+
+    self->alloc = alloc;
+
+    if (vec_init(alloc, &self->data, sizeof(tess_type), 32)) {
+        alloc_free(alloc, self);
+        return null;
+    }
+
+    return self;
+}
+
+void tess_type_pool_destroy(tess_type_pool **self) {
+
+    // deinit all the types
+    tess_type       *it  = vec_begin(&(*self)->data);
+    tess_type const *end = vec_end(&(*self)->data);
+    while (it != end) tess_type_deinit((*self)->alloc, it++);
+
+    vec_deinit((*self)->alloc, &(*self)->data);
+    alloc_free((*self)->alloc, *self);
+    *self = null;
+}
 
 ast_pool *ast_pool_create(allocator *alloc) {
     ast_pool *self = alloc_calloc(alloc, 1, sizeof(ast_pool));
@@ -72,9 +109,7 @@ void ast_pool_destroy(ast_pool **self) {
     // deinit all the ast nodes
     ast_node       *it  = vec_begin(&(*self)->data);
     ast_node const *end = vec_end(&(*self)->data);
-    while (it != end) {
-        ast_node_deinit(*self, it++);
-    }
+    while (it != end) ast_node_deinit(*self, it++);
 
     vec_deinit((*self)->alloc, &(*self)->data);
     alloc_free((*self)->alloc, *self);
@@ -173,7 +208,8 @@ int ast_pool_move_back(ast_pool *self, ast_node *node, ast_node_h *handle) {
 
     if (vec_push_back(self->alloc, &self->data, node)) return 1;
 
-    handle->val = vec_size(&self->data) - 1;
+    handle->val = (u32)(vec_size(&self->data) - 1);
+    if (handle->val == UINT32_MAX) return 1; // overflow
     alloc_invalidate(node);
 
     return 0;

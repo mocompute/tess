@@ -41,20 +41,23 @@ typedef enum type_tag { TESS_TYPE_TAGS(MOS_TAG_NAME) } type_tag;
 
 typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;
 
-// TODO get rid of this, use an anon type in the tess_type union
-struct arrow_type {
-    size_t left;
-    size_t right;
-};
-
 typedef struct tess_type {
     union {
-        struct vector     tuple;
-        struct arrow_type arrow;
-        u32               val;
+        struct vector tuple;
+        struct {
+            u32 left;
+            u32 right;
+        } arrow;
+        u32 val;
     };
     type_tag tag;
 } tess_type;
+
+typedef struct {
+    u32 val;
+} tess_type_h;
+
+typedef struct tess_type_pool tess_type_pool;
 
 // -- ast_node --
 
@@ -77,7 +80,7 @@ typedef struct tess_type {
 typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(MOS_TAG_NAME) } ast_operator;
 
 typedef struct {
-    size_t val;
+    u32 val;
 } ast_node_h;
 
 typedef struct ast_node {
@@ -162,35 +165,37 @@ typedef struct ast_node {
 
 // -- ast_pool --
 
-typedef struct ast_pool {
-    allocator    *alloc;
-    struct vector data; // ast_node
-} ast_pool;
+typedef struct ast_pool ast_pool;
 
 typedef void (*ast_op_fun)(ast_pool *, ast_node *);
 typedef void (*ast_op_cfun)(ast_pool const *, ast_node const *);
 
 // -- allocation and deallocation --
 
-void          tess_type_init(tess_type *, type_tag);
-void          tess_type_init_type_var(tess_type *, u32);
-nodiscard int tess_type_init_tuple(allocator *, tess_type *);
-void          tess_type_init_arrow(tess_type *);
-void          tess_type_deinit(allocator *, tess_type *);
+void            tess_type_init(tess_type *, type_tag);
+void            tess_type_init_type_var(tess_type *, u32);
+nodiscard int   tess_type_init_tuple(allocator *, tess_type *);
+void            tess_type_init_arrow(tess_type *);
+void            tess_type_deinit(allocator *, tess_type *);
 
-ast_pool     *ast_pool_create(allocator *) mallocfun;
-void          ast_pool_destroy(ast_pool **);
+tess_type_pool *tess_type_pool_create(allocator *) mallocfun;
+void            tess_type_pool_destroy(tess_type_pool **);
 
-nodiscard int ast_node_init(ast_pool *, ast_node *, ast_tag);
-void          ast_node_deinit(ast_pool *, ast_node *);
-nodiscard int ast_node_replace(ast_pool *, ast_node *, ast_tag);
+ast_pool       *ast_pool_create(allocator *) mallocfun;
+void            ast_pool_destroy(ast_pool **);
 
-char const   *ast_node_name_string(ast_node const *);
-int           ast_node_name_strcmp(ast_node const *, char const *);
+nodiscard int   ast_node_init(ast_pool *, ast_node *, ast_tag);
+void            ast_node_deinit(ast_pool *, ast_node *);
+nodiscard int   ast_node_replace(ast_pool *, ast_node *, ast_tag);
+
+char const     *ast_node_name_string(ast_node const *);
+int             ast_node_name_strcmp(ast_node const *, char const *);
 
 // -- pool operations --
 //
 // [move_back] takes ownership of ast_node(s) and invalidates caller's copy
+
+nodiscard int   tess_type_pool_move_back(ast_pool *, ast_node *, tess_type_h *);
 
 nodiscard int   ast_pool_move_back(ast_pool *, ast_node *, ast_node_h *);
 ast_node       *ast_pool_at(ast_pool *, ast_node_h);
