@@ -45,9 +45,8 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     if (!self->ast_pool) goto cleanup;
 
     // tokenizer
-    self->tokenizer = tokenizer_alloc(self->arena);
+    self->tokenizer = tokenizer_create(self->arena, input, input_len);
     if (!self->tokenizer) goto cleanup;
-    if (tokenizer_init(self->arena, self->tokenizer, input, input_len)) goto cleanup;
 
     // good_tokens
     if (vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0)) goto cleanup;
@@ -74,10 +73,7 @@ void parser_destroy(parser **self) {
     // vec_deinit((*self)->arena, &(*self)->seen_tokens);
 
     // tokenizer
-    if ((*self)->tokenizer) {
-        tokenizer_deinit((*self)->arena, (*self)->tokenizer);
-        tokenizer_dealloc((*self)->arena, &(*self)->tokenizer);
-    }
+    tokenizer_destroy(&(*self)->tokenizer);
 
     // ast pool
     ast_pool_destroy((*self)->arena, &(*self)->ast_pool);
@@ -200,7 +196,7 @@ static bool is_relational_operator(char const *s) {
 nodiscard static int eat_newlines(parser *p) {
 
     while (true) {
-        if (tokenizer_next(p->arena, p->tokenizer, &p->token, &p->tokenizer_error)) {
+        if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             p->error.tag = tess_err_tokenizer_error;
             return 1;
         }
@@ -210,7 +206,7 @@ nodiscard static int eat_newlines(parser *p) {
             tok_newline_indent == tag) {
             continue;
         } else {
-            if (tokenizer_put_back(p->arena, p->tokenizer, &p->token, 1)) return 1;
+            if (tokenizer_put_back(p->tokenizer, &p->token, 1)) return 1;
             return result_ast(p, ast_eof);
         }
     }
@@ -219,7 +215,7 @@ nodiscard static int eat_newlines(parser *p) {
 nodiscard static int next_token(parser *p) {
     while (true) {
 
-        if (tokenizer_next(p->arena, p->tokenizer, &p->token, &p->tokenizer_error)) {
+        if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             p->error.tag = tess_err_tokenizer_error;
             return 1;
         }
@@ -234,8 +230,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     size_t const save_toks = vec_size(&p->seen_tokens);
     if (fun(p)) {
         assert(vec_size(&p->seen_tokens) >= save_toks);
-        if (tokenizer_put_back(p->arena, p->tokenizer,
-                               ((token const *)vec_data(&p->seen_tokens)) + save_toks,
+        if (tokenizer_put_back(p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 
@@ -250,8 +245,7 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     size_t const save_toks = vec_size(&p->seen_tokens);
     if (fun(p, arg)) {
         assert(vec_size(&p->seen_tokens) >= save_toks);
-        if (tokenizer_put_back(p->arena, p->tokenizer,
-                               ((token const *)vec_data(&p->seen_tokens)) + save_toks,
+        if (tokenizer_put_back(p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 

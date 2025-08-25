@@ -53,103 +53,97 @@ static int test_tess_token_string(void) {
 }
 
 static int test_tokenizer_basic(void) {
-    int        error = 0;
+    int         error = 0;
 
-    allocator *alloc = alloc_default_allocator();
-    tokenizer *t     = tokenizer_alloc(alloc);
+    char const *input = "  (  )  ";
+
+    allocator  *alloc = alloc_default_allocator();
+    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    if (!t) return ++error;
 
     {
-        char const *input = "  (  )  ";
-        if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
 
         token           tok;
         tokenizer_error err;
 
         // expect open_round
-        error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 0 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tok_open_round == tok.tag ? 0 : 1;
         token_deinit(alloc, &tok);
 
         // expect close round
-        error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 0 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tok_close_round == tok.tag ? 0 : 1;
         token_deinit(alloc, &tok);
 
         // expect eof
-        error += 1 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tess_err_eof == err.tag ? 0 : 1;
         token_deinit(alloc, &tok);
 
         // still eof
-        error += 1 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tess_err_eof == err.tag ? 0 : 1;
         token_deinit(alloc, &tok);
-
-        tokenizer_deinit(alloc, t);
     }
 
-    tokenizer_dealloc(alloc, &t);
+    tokenizer_destroy(&t);
 
     return error;
 }
 
 static int test_tokenizer_string(void) {
-    int        error = 0;
+    int         error = 0;
 
-    allocator *alloc = alloc_default_allocator();
-    tokenizer *t     = tokenizer_alloc(alloc);
+    char const *input = " \"abcdef\"  ";
+
+    allocator  *alloc = alloc_default_allocator();
+    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    if (!t) return ++error;
 
     {
-        char const *input = " \"abcdef\"  ";
-        if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
-
         token           tok;
         tokenizer_error err;
 
         // expect string
-        error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 0 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tok_string == tok.tag ? 0 : 1;
         error += 0 == strcmp("abcdef", tok.s) ? 0 : 1;
         token_deinit(alloc, &tok);
-
-        tokenizer_deinit(alloc, t);
     }
 
-    tokenizer_dealloc(alloc, &t);
+    tokenizer_destroy(&t);
 
     return error;
 }
 
 static int test_tokenizer_terminal_static_string(void) {
     // regression test for ASAN
-    int        error = 0;
+    int         error = 0;
 
-    allocator *alloc = alloc_default_allocator();
-    tokenizer *t     = tokenizer_alloc(alloc);
+    char const *input = "-";
+    allocator  *alloc = alloc_default_allocator();
+    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    if (!t) return ++error;
 
     {
-        char const *input = "-";
-        if (tokenizer_init(alloc, t, input, strlen(input))) return error + 1;
-
         token           tok;
         tokenizer_error err;
 
         // expect string
-        error += 0 == tokenizer_next(alloc, t, &tok, &err) ? 0 : 1;
+        error += 0 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tok_symbol == tok.tag ? 0 : 1;
         error += 0 == strcmp("-", tok.s) ? 0 : 1;
         token_deinit(alloc, &tok);
-
-        tokenizer_deinit(alloc, t);
     }
 
-    tokenizer_dealloc(alloc, &t);
+    tokenizer_destroy(&t);
 
     return error;
 }
