@@ -3,31 +3,34 @@
 
 #include <stdio.h>
 
-char *file_read(allocator *alloc, char const *filename) {
+void file_read(allocator *alloc, char const *filename, char **out, size_t *out_size) {
 
-    FILE *f = fopen(filename, "rb");
+    *out      = null;
+    *out_size = 0;
+
+    FILE *f   = fopen(filename, "rb");
     if (!f) {
         perror("failed to open file");
-        return null;
+        return;
     }
 
     if (fseek(f, 0, SEEK_END)) {
         perror("seek failed");
         fclose(f);
-        return null;
+        return;
     }
 
     long const size = ftell(f);
     if (size < 0) {
         perror("failed to read file position");
         fclose(f);
-        return null;
+        return;
     }
 
     if (fseek(f, 0, SEEK_SET)) {
         perror("failed to rewind");
         fclose(f);
-        return null;
+        return;
     }
 
     char *buf = alloc_malloc(alloc, (size_t)size);
@@ -43,5 +46,6 @@ char *file_read(allocator *alloc, char const *filename) {
 
 cleanup:
     fclose(f);
-    return buf;
+    *out      = buf;
+    *out_size = (size_t)size;
 }

@@ -3,6 +3,6 @@
 
 #include "alloc.h"
 
-char *file_read(allocator *, char const *);
+void file_read(allocator *, char const *, char **, size_t *);
 
 #endif
