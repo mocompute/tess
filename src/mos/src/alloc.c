@@ -3,9 +3,11 @@
 
 #include <assert.h>
 #include <stdalign.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdnoreturn.h>
 #include <string.h>
 
 // use LSAN's allocators if we can detect they are present
@@ -18,6 +20,15 @@
 #else
 #include <stdlib.h>
 #endif
+
+static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
+static noreturn void fatal(char const *restrict fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    exit(1);
+}
 
 struct allocator {
     void *(*malloc)(allocator *, size_t, char const *, int);
@@ -85,21 +96,21 @@ allocator *alloc_default_allocator() {
 void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
     void *ptr = alloc->malloc(alloc, sz, file, line);
     assert(ptr);
-    if (!ptr) exit(1);
+    if (!ptr) fatal("malloc failed\n");
     return ptr;
 }
 
 void *alloc_calloc_i(allocator *alloc, size_t count, size_t size, char const *file, int line) {
     void *ptr = alloc->calloc(alloc, count, size, file, line);
     assert(ptr);
-    if (!ptr) exit(1);
+    if (!ptr) fatal("calloc failed\n");
     return ptr;
 }
 
 void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
     void *out = alloc->realloc(alloc, ptr, sz, file, line);
     assert(out);
-    if (!out) exit(1);
+    if (!out) fatal("realloc failed\n");
     return out;
 }
 
@@ -348,7 +359,7 @@ allocator   *alloc_leak_detector_create() {
 
     leak_detector *self = malloc(sizeof *self);
     assert(self);
-    if (!self) exit(1);
+    if (!self) fatal("malloc failed\n");
 
     self->allocator.malloc  = &leak_detector_malloc;
     self->allocator.calloc  = &leak_detector_calloc;
@@ -477,8 +488,7 @@ static void leak_detector_ensure_good_free(leak_detector *self, void *ptr, char 
     if (null == ptr) return; // always valid
 
     if (0 == self->size) {
-        fprintf(stderr, "leak_detector: attempt to free %p before any malloc\n", ptr);
-        exit(1);
+        fatal("leak_detector: attempt to free %p before any malloc\n", ptr);
     }
 
     for (i64 i = self->size - 1; i >= 0; --i) {
@@ -487,9 +497,7 @@ static void leak_detector_ensure_good_free(leak_detector *self, void *ptr, char 
             return;
     }
 
-    fprintf(stderr, "leak_detector: attempt to free unknown pointer %p: %s:%i\n", ptr, file, line);
-    assert(false);
-    exit(1);
+    fatal("leak_detector: attempt to free unknown pointer %p: %s:%i\n", ptr, file, line);
 }
 
 static void leak_detector_reserve_one(leak_detector *self) {
@@ -497,10 +505,8 @@ static void leak_detector_reserve_one(leak_detector *self) {
 
     i64   new_capacity = self->capacity * 2;
     void *resized      = realloc(self->data, (size_t)new_capacity);
-    if (!resized) {
-        fprintf(stderr, "leak_detector: out of memory: %zu\n", (size_t)new_capacity);
-        exit(1);
-    }
+    if (!resized) fatal("leak_detector: out of memory: %zu\n", (size_t)new_capacity);
+
     self->data     = resized;
     self->capacity = new_capacity;
 }
