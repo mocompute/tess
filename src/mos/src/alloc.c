@@ -4,6 +4,7 @@
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 // use LSAN's allocators if we can detect they are present
@@ -36,11 +37,11 @@ typedef struct arena_header {
     arena_block          data[];
 } arena_header;
 
-struct arena_allocator {
+typedef struct arena_allocator {
     struct allocator allocator;
     allocator       *parent;
     arena_header    *head;
-};
+} arena_allocator;
 
 static void *default_malloc(allocator *a, size_t sz, char const *, int) mallocfun;
 static void *default_calloc(allocator *a, size_t num, size_t sz, char const *, int) mallocfun;
@@ -293,6 +294,174 @@ void alloc_arena_deinit(allocator *arena_) {
     }
 
     alloc_invalidate(arena);
+}
+
+// -- leak detector allocator --
+
+enum leak_status {
+    leak_action_alloc = 1,
+    leak_action_realloc,
+    leak_action_free,
+    leak_status_reallocated,
+    leak_status_alloc_matched,
+    leak_status_realloc_matched,
+    leak_status_free_matched,
+    leak_status_extra_free,
+};
+struct leak_allocation {
+    void            *ptr;
+    void            *realloc_ptr; // original ptr
+    size_t           size;
+    char const      *file;
+    int              line;
+    enum leak_status status;
+};
+
+typedef struct {
+    struct allocator        allocator;
+    struct leak_allocation *data;
+    size_t                  capacity;
+    size_t                  size;
+} leak_detector;
+
+static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file, int line) mallocfun;
+static void *leak_detector_calloc(allocator *alloc, size_t num, size_t sz, char const *file,
+                                  int line) mallocfun;
+static void *leak_detector_realloc(allocator *a, void *p, size_t sz, char const *file, int line);
+static void  leak_detector_free(allocator *alloc, void *p, char const *file, int line);
+
+allocator   *alloc_leak_detector_create() {
+
+    leak_detector *self = malloc(sizeof *self);
+    if (!self) return null;
+
+    self->allocator.malloc  = &leak_detector_malloc;
+    self->allocator.calloc  = &leak_detector_calloc;
+    self->allocator.realloc = &leak_detector_realloc;
+    self->allocator.free    = &leak_detector_free;
+
+    self->capacity          = 1024;
+    self->size              = 0;
+    self->data              = calloc(self->capacity, sizeof(struct leak_allocation));
+
+    return (allocator *)self;
+}
+
+void alloc_leak_detector_destroy(allocator **alloc) {
+    leak_detector *self = (leak_detector *)*alloc;
+
+    free(self->data);
+
+    free(*alloc);
+    *alloc = null;
+}
+
+void alloc_leak_detector_report(allocator *alloc) {
+    leak_detector *self = (leak_detector *)alloc;
+
+    // match reallocs with previous allocs
+    for (size_t i = 0; i < self->size; ++i) {
+        if (leak_action_realloc != self->data[i].status) continue;
+
+        if (i == 0) {
+            // realloc as first action is impossible. backward search
+            // requires this.
+            fprintf(stderr, "alloc_leak_detector_report: invariant violated.\n");
+            return;
+        }
+
+        // realloc_ptr is original pointer; go back to prior
+        // allocations and mark it as reallocated
+        void *const ptr = self->data[i].realloc_ptr;
+        for (size_t j = i - 1; j >= 0; --j) {
+            if (ptr == self->data[j].ptr) {
+                self->data[j].status = leak_status_reallocated;
+                break;
+            }
+        }
+    }
+
+    // try to match frees with prior allocs
+    for (size_t i = 0; i < self->size; ++i) {
+        if (leak_action_free != self->data[i].status) continue;
+
+        if (i == 0) {
+            // free as first action is impossible
+            fprintf(stderr, "alloc_leak_detector_report: invariant violated.\n");
+            return;
+        }
+
+        void *const ptr = self->data[i].ptr;
+        for (size_t j = i - 1; j >= 0; --j) {
+            if (ptr == self->data[j].ptr) {
+
+                if (self->data[j].status == leak_action_alloc) {
+                    self->data[j].status = leak_status_alloc_matched;
+                    self->data[i].status = leak_status_free_matched;
+
+                } else if (self->data[j].status == leak_action_realloc) {
+                    self->data[j].status = leak_status_realloc_matched;
+                    self->data[i].status = leak_status_free_matched;
+                } else {
+                    // double-free
+                    self->data[i].status = leak_status_extra_free;
+                }
+            }
+        }
+    }
+
+    // FIXME incomplete
+}
+
+static void leak_detector_reserve_one(leak_detector *self) {
+    if (self->size < self->capacity) return;
+
+    size_t new_capacity = self->capacity * 2;
+    void  *resized      = realloc(self->data, new_capacity);
+    if (!resized) {
+        fprintf(stderr, "leak_detector: out of memory: %zu\n", new_capacity);
+        exit(1);
+    }
+    self->data     = resized;
+    self->capacity = new_capacity;
+}
+
+static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file, int line) {
+    leak_detector *self = (leak_detector *)alloc;
+    leak_detector_reserve_one(self);
+
+    void *ptr                = malloc(sz);
+    self->data[self->size++] = (struct leak_allocation){
+      .ptr = ptr, .realloc_ptr = null, .size = sz, .file = file, .line = line, .status = leak_action_alloc};
+    return ptr;
+}
+
+static void *leak_detector_calloc(allocator *alloc, size_t num, size_t sz, char const *file, int line) {
+    leak_detector *self = (leak_detector *)alloc;
+    leak_detector_reserve_one(self);
+
+    void *ptr                = calloc(num, sz);
+    self->data[self->size++] = (struct leak_allocation){
+      .ptr = ptr, .realloc_ptr = null, .size = sz, .file = file, .line = line, .status = leak_action_alloc};
+    return ptr;
+}
+
+static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char const *file, int line) {
+    leak_detector *self = (leak_detector *)alloc;
+    leak_detector_reserve_one(self);
+
+    void *ptr                = realloc(p, sz);
+    self->data[self->size++] = (struct leak_allocation){
+      .ptr = ptr, .realloc_ptr = p, .size = sz, .file = file, .line = line, .status = leak_action_realloc};
+    return ptr;
+}
+
+static void leak_detector_free(allocator *alloc, void *ptr, char const *file, int line) {
+    leak_detector *self = (leak_detector *)alloc;
+    leak_detector_reserve_one(self);
+
+    self->data[self->size++] = (struct leak_allocation){
+      .ptr = ptr, .realloc_ptr = null, .size = 0, .file = file, .line = line, .status = leak_action_free};
 }
 
 // -- utilities --

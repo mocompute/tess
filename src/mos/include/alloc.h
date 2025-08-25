@@ -7,12 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct allocator       allocator;
-typedef struct arena_allocator arena_allocator;
+typedef struct allocator allocator;
 
 // -- default allocator --
 
 allocator *alloc_default_allocator();
+
+// -- leak detection --
+allocator *alloc_leak_detector_create() mallocfun;
+void       alloc_leak_detector_destroy(allocator **);
+void       alloc_leak_detector_report(allocator *); // undefined if already called
 
 // -- arena bump allocator --
 
