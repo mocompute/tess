@@ -1,8 +1,11 @@
 #ifndef TESS_TYPE_H
 #define TESS_TYPE_H
 
-#include "util.h"
 #include "vector.h"
+
+#ifndef MOS_TAG_NAME
+#define MOS_TAG_NAME(name, str) name,
+#endif
 
 #define TESS_TYPE_TAGS(X)                                                                                  \
     X(type_nil, "nil")                                                                                     \
@@ -16,7 +19,7 @@
 
 typedef enum type_tag { TESS_TYPE_TAGS(MOS_TAG_NAME) } type_tag;
 
-typedef struct tess_type {
+struct tess_type {
     union {
         struct vector tuple;
         struct {
@@ -26,25 +29,14 @@ typedef struct tess_type {
         u32 val;
     };
     type_tag tag;
-} tess_type;
+};
 
-typedef struct {
-    u32 val;
-} tess_type_h;
+void          tess_type_init(struct tess_type *, type_tag);
+void          tess_type_init_type_var(struct tess_type *, u32);
+nodiscard int tess_type_init_tuple(allocator *, struct tess_type *);
+void          tess_type_init_arrow(struct tess_type *);
+void          tess_type_deinit(allocator *, struct tess_type *);
 
-typedef struct tess_type_pool tess_type_pool;
-
-void                          tess_type_init(tess_type *, type_tag);
-void                          tess_type_init_type_var(tess_type *, u32);
-nodiscard int                 tess_type_init_tuple(allocator *, tess_type *);
-void                          tess_type_init_arrow(tess_type *);
-void                          tess_type_deinit(allocator *, tess_type *);
-
-tess_type_pool               *tess_type_pool_create(allocator *) mallocfun;
-void                          tess_type_pool_destroy(tess_type_pool **);
-
-nodiscard int                 tess_type_pool_move_back(tess_type_pool *, tess_type *, tess_type_h *);
-
-char const                   *type_tag_to_string(type_tag);
+char const   *type_tag_to_string(type_tag);
 
 #endif

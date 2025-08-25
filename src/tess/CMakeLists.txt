@@ -21,12 +21,14 @@ add_custom_command(
 add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/ast_tags.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/transpiler.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/syntax.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess_type.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/type_pool.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
 )
@@ -39,6 +41,7 @@ set(SOURCES
   src/syntax.c
   src/tess.c
   src/tess_type.c
+  src/type_pool.c
   src/token.c
   src/tokenizer.c
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
