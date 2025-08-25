@@ -4,6 +4,7 @@
 #include "ast_tags.h"
 #include "mos_string.h"
 #include "nodiscard.h"
+#include "tess_type.h"
 
 #include "vector.h"
 
@@ -84,8 +85,8 @@ typedef struct ast_node {
         } tuple;
     };
 
-    struct tess_type *type;
-    ast_tag           tag;
+    tess_type *type;
+    ast_tag    tag;
 } ast_node;
 
 // -- ast_node --

@@ -23,20 +23,21 @@ typedef struct tess_type {
     union {
         struct vector tuple;
         struct {
-            u32 left;
-            u32 right;
+            struct tess_type *left;
+            struct tess_type *right;
         } arrow;
-        u32 val;
+
+        u32 type_var;
     };
     tess_type_tag tag;
 } tess_type;
 
-void          tess_type_init(tess_type *, tess_type_tag);
-void          tess_type_init_type_var(tess_type *, u32);
-nodiscard int tess_type_init_tuple(allocator *, struct tess_type *);
-void          tess_type_init_arrow(tess_type *);
-void          tess_type_deinit(allocator *, struct tess_type *);
+void        tess_type_init(tess_type *, tess_type_tag);
+void        tess_type_init_type_var(tess_type *, u32);
+void        tess_type_init_tuple(allocator *, tess_type *);
+void        tess_type_init_arrow(tess_type *, tess_type *, tess_type *);
+void        tess_type_deinit(allocator *, tess_type *);
 
-char const   *type_tag_to_string(tess_type_tag);
+char const *type_tag_to_string(tess_type_tag);
 
 #endif
