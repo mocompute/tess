@@ -91,26 +91,24 @@ void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) 
     assert(alloc == vec->data->alloc);
 }
 
-int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
+void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     assert(1 == vec->element_size);
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
     *(vec->data->data + vec->data->size) = b;
     vec->data->size += 1;
     assert(alloc == vec->data->alloc);
-    return 0;
 }
 
-int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 count) {
+void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 count) {
     assert(1 == vec->element_size);
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
 
     memcpy(vec->data->data + vec->data->size, start, count);
     vec->data->size += count;
     assert(alloc == vec->data->alloc);
-    return 0;
 }
 
-int vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
+void vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
     size_t len = strlen(str);
     if (len > UINT32_MAX) fatal("vec_copy_back_c_string: overflow size = %zu\n", len);
 

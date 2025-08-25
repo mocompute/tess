@@ -29,7 +29,7 @@ static int  a_fun_apply(transpiler *, ast_node const *);
 static int  a_std_apply(transpiler *, ast_node const *, char const *);
 static int  a_string(transpiler *, ast_node const *);
 
-static int  out_put(transpiler *, char const *);
+static void out_put(transpiler *, char const *);
 
 transpiler *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
@@ -71,16 +71,15 @@ int transpiler_compile(transpiler *self, vector const *nodes) {
 
 // -- statics --
 
-int out_put(transpiler *self, char const *str) {
-    return vec_copy_back_c_string(self->bytes_alloc, self->bytes, str);
+void out_put(transpiler *self, char const *str) {
+    vec_copy_back_c_string(self->bytes_alloc, self->bytes, str);
 }
 
-int out_put_start(transpiler *self, char const *str) {
+void out_put_start(transpiler *self, char const *str) {
 
     int indent = self->indent_level * 4;
     if (indent < 0) indent = 0;
-    while (indent--)
-        if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, " ")) return 1;
+    while (indent--) vec_copy_back_c_string(self->bytes_alloc, self->bytes, " ");
 
     return out_put(self, str);
 }
@@ -153,9 +152,9 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
 static int a_string(transpiler *self, ast_node const *node) {
     assert(ast_string == node->tag);
-    if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"")) return 1;
-    if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node))) return 1;
-    if (vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"")) return 1;
+    vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
+    vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node));
+    vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
     return 0;
 }
 
@@ -166,10 +165,10 @@ static int a_std_dbg(transpiler *self, ast_node const *node) {
     // FIXME for now only one string argument is valid
     if (1 != vec_size(arguments)) return 1;
 
-    if (out_put_start(self, "fprintf(stderr, \"%s\", ")) return 1;
+    out_put_start(self, "fprintf(stderr, \"%s\", ");
     ast_node const *const *arg = (typeof(arg))vec_cat(arguments, 0);
     if (a_string(self, *arg)) return 1;
-    if (out_put(self, ");\n")) return 1;
+    out_put(self, ");\n");
     return 0;
 }
 
@@ -198,14 +197,14 @@ static int a_let(transpiler *self, ast_node const *node) {
     if (0 == ast_node_name_strcmp(name, "main")) {
 
         dbg("found main\n");
-        if (out_put(self, "\nint main(int argc, char* argv[]) {\n")) return 1;
+        out_put(self, "\nint main(int argc, char* argv[]) {\n");
 
         self->indent_level++;
         int res = 0;
         if ((res = a_body(self, node->let.body))) return res;
         self->indent_level--;
 
-        if (out_put(self, "\n    return 0;\n}")) return 1;
+        out_put(self, "\n    return 0;\n}");
     }
 
     return 0;

@@ -2,7 +2,6 @@
 #define MOS_VECTOR_H
 
 #include "alloc.h"
-#include "nodiscard.h"
 #include "types.h"
 
 #include <stdbool.h>
@@ -80,8 +79,8 @@ void  vec_assoc_erase(vector *, u32);
 // -- byte vectors --
 //
 // optimized for the case where element_size == 1
-nodiscard int vec_push_back_byte(allocator *, vector *, u8);
-nodiscard int vec_copy_back_bytes(allocator *, vector *, u8 const *, u32);
-nodiscard int vec_copy_back_c_string(allocator *alloc, vector *, char const *);
+void vec_push_back_byte(allocator *, vector *, u8);
+void vec_copy_back_bytes(allocator *, vector *, u8 const *, u32);
+void vec_copy_back_c_string(allocator *alloc, vector *, char const *);
 
 #endif

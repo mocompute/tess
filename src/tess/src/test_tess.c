@@ -340,7 +340,7 @@ static int test_parse_to_c(void) {
         if (transpiler_compile(transpiler, &nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
-        if (vec_push_back_byte(alloc, &transpiler_output, '\0')) return error + 1;
+        vec_push_back_byte(alloc, &transpiler_output, '\0');
 
         printf("Output:\n%s\n", (char const *)vec_cbegin(&transpiler_output));
 
