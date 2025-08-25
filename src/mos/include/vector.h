@@ -18,13 +18,13 @@
 // function names are shortened.
 
 typedef struct {
-    size_t capacity;
-    size_t size;
-    byte   data[];
+    u32  capacity;
+    u32  size;
+    byte data[];
 } vector_data_header;
 
 typedef struct vector {
-    size_t              element_size;
+    u32                 element_size;
     vector_data_header *data;
 } vector;
 
@@ -32,17 +32,17 @@ typedef struct vector {
 
 vector *vec_alloc(allocator *);
 void    vec_dealloc(allocator *, vector **);
-void    vec_init_empty(vector *, size_t el_size);
-void    vec_init(allocator *, vector *, size_t el_size, size_t capacity); // never fails
+void    vec_init_empty(vector *, u32 el_size);
+void    vec_init(allocator *, vector *, u32 el_size, u32 capacity); // never fails
 void    vec_deinit(allocator *, vector *);
-void    vec_reserve(allocator *, vector *, size_t); // never fails
+void    vec_reserve(allocator *, vector *, u32); // never fails
 void    vec_move(vector *dst, vector *src);
 
 // -- read-only access --
 
-size_t vec_size(vector const *);
-size_t vec_capacity(vector const *);
-bool   vec_empty(vector const *);
+u32  vec_size(vector const *);
+u32  vec_capacity(vector const *);
+bool vec_empty(vector const *);
 
 // -- data and iterator access --
 
@@ -50,34 +50,34 @@ void       *vec_data(vector *);
 void       *vec_begin(vector *);
 void const *vec_cbegin(vector const *);
 void const *vec_end(vector const *);
-void       *vec_at(vector *, size_t);
-void const *vec_cat(vector const *, size_t);
+void       *vec_at(vector *, u32);
+void const *vec_cat(vector const *, u32);
 void       *vec_back(vector *);
 
 // -- insertion and removal --
 
 nodiscard int vec_push_back(allocator *, vector *, void const *);
-nodiscard int vec_copy_back(allocator *, vector *, void const *, size_t);
+nodiscard int vec_copy_back(allocator *, vector *, void const *, u32);
 void          vec_pop_back(vector *);
 void          vec_erase(vector *, void *);
-void          vec_resize(allocator *, vector *, size_t); // never fails
+void          vec_resize(allocator *, vector *, u32); // never fails
 void          vec_clear(vector *);
 
 // -- association lists --
 //
-// element_size must be >= sizeof(size_t), which is the association
+// element_size must be >= sizeof(u32), which is the association
 // key. May contain duplicate values, but [get] and [erase] operate on
 // the first one found, searching from the back.
 
 nodiscard int vec_assoc_set(allocator *, vector *, void const *);
-void         *vec_assoc_get(vector *, size_t);
-void          vec_assoc_erase(vector *, size_t);
+void         *vec_assoc_get(vector *, u32);
+void          vec_assoc_erase(vector *, u32);
 
 // -- byte vectors --
 //
 // optimized for the case where element_size == 1
 nodiscard int vec_push_back_byte(allocator *, vector *, u8);
-nodiscard int vec_copy_back_bytes(allocator *, vector *, u8 const *, size_t);
+nodiscard int vec_copy_back_bytes(allocator *, vector *, u8 const *, u32);
 nodiscard int vec_copy_back_c_string(allocator *alloc, vector *, char const *);
 
 #endif

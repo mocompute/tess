@@ -114,11 +114,11 @@ static int test_big_map(void) {
     }
 
     // verify
-    for (size_t i = 0; i < vec_size(&vec); ++i) {
+    for (u32 i = 0; i < vec_size(&vec); ++i) {
         pair_t *pair = vec_at(&vec, i);
         void   *res  = map_get(map, (hashmap_key)pair->left);
         if (!res) {
-            fprintf(stderr, "verify not found %zu: %u -> %i %p\n", i, pair->left, pair->right, res);
+            fprintf(stderr, "verify not found %u: %u -> %i %p\n", i, pair->left, pair->right, res);
             error++;
             goto cleanup;
         }
@@ -126,7 +126,7 @@ static int test_big_map(void) {
         error += pair->right == *(int *)res ? 0 : 1;
 
         if (error) {
-            fprintf(stderr, "verify failed %zu: %u -> %i (%p)\n", i, pair->left, pair->right, res);
+            fprintf(stderr, "verify failed %u: %u -> %i (%p)\n", i, pair->left, pair->right, res);
             fprintf(stderr, "got %i instead\n", *(int *)res);
             error++;
             goto cleanup;

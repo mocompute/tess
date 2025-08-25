@@ -4,9 +4,16 @@
 #include "dbg.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdnoreturn.h>
 #include <string.h>
+
+static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
+
+//
 
 vector *vec_alloc(allocator *alloc) {
     return alloc_malloc(alloc, sizeof(vector));
@@ -18,13 +25,13 @@ void vec_dealloc(allocator *alloc, vector **vec) {
     *vec = null;
 }
 
-void vec_init_empty(vector *vec, size_t element_size) {
+void vec_init_empty(vector *vec, u32 element_size) {
     alloc_zero(vec);
     vec->element_size = element_size;
 }
 
-void vec_init(allocator *alloc, vector *vec, size_t element_size, size_t initial_capacity) {
-    assert(element_size <= PTRDIFF_MAX);
+void vec_init(allocator *alloc, vector *vec, u32 element_size, u32 initial_capacity) {
+
     alloc_zero(vec);
     vec->element_size = element_size;
 
@@ -40,13 +47,13 @@ void vec_deinit(allocator *alloc, vector *vec) {
     alloc_invalidate(vec);
 }
 
-void vec_reserve(allocator *alloc, vector *vec, size_t count) {
+void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 
     if (null == vec->data) return vec_init(alloc, vec, vec->element_size, count);
 
     if (vec->data->capacity >= count) return;
 
-    size_t new_capacity = vec->data->capacity * 2;
+    u32 new_capacity = vec->data->capacity * 2;
     if (new_capacity == 0) new_capacity = 8;
     while (new_capacity < count) new_capacity *= 2;
 
@@ -75,7 +82,7 @@ int vec_push_back(allocator *alloc, vector *vec, void const *element) {
     return 0;
 }
 
-int vec_copy_back(allocator *alloc, vector *vec, void const *start, size_t count) {
+int vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
 
     memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
@@ -91,7 +98,7 @@ int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     return 0;
 }
 
-int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, size_t count) {
+int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 count) {
     assert(1 == vec->element_size);
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
 
@@ -101,14 +108,17 @@ int vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, size_t c
 }
 
 int vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
-    return vec_copy_back_bytes(alloc, vec, (u8 const *)str, strlen(str));
+    size_t len = strlen(str);
+    if (len > UINT32_MAX) fatal("vec_copy_back_c_string: overflow size = %zu\n", len);
+
+    return vec_copy_back_bytes(alloc, vec, (u8 const *)str, (u32)len);
 }
 
-void *vec_at(vector *vec, size_t index) {
+void *vec_at(vector *vec, u32 index) {
     return vec->data->data + index * vec->element_size;
 }
 
-void const *vec_cat(vector const *vec, size_t index) {
+void const *vec_cat(vector const *vec, u32 index) {
     return vec->data->data + index * vec->element_size;
 }
 
@@ -129,7 +139,7 @@ void vec_erase(vector *vec, void *it_) {
     vec->data->size -= 1;
 }
 
-void vec_resize(allocator *alloc, vector *vec, size_t n) {
+void vec_resize(allocator *alloc, vector *vec, u32 n) {
     if (null == vec->data) return vec_init(alloc, vec, vec->element_size, n);
     if (n > vec->data->capacity) vec_reserve(alloc, vec, n);
     vec->data->size = n;
@@ -161,18 +171,18 @@ void const *vec_end(vector const *vec) {
     return vec->data->data + vec->data->size * vec->element_size;
 }
 
-size_t vec_size(vector const *vec) {
+u32 vec_size(vector const *vec) {
     if (vec_empty(vec)) return 0;
     return vec->data->size;
 }
 
-size_t vec_capacity(vector const *vec) {
+u32 vec_capacity(vector const *vec) {
     if (vec_empty(vec)) return 0;
     return vec->data->capacity;
 }
 
 int vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
-    assert(vec->element_size >= sizeof(size_t));
+    assert(vec->element_size >= sizeof(u32));
     if (vec_push_back(alloc, vec, pair)) {
         dbg("vec_assoc_set: oom\n");
         return 1;
@@ -180,18 +190,18 @@ int vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
     return 0;
 }
 
-void *vec_assoc_get(vector *vec, size_t key) {
+void *vec_assoc_get(vector *vec, u32 key) {
     if (vec_empty(vec)) return null;
 
-    // From the back, search for an element whose first size_t field
+    // From the back, search for an element whose first u32 field
     // matches the search term.
 
     byte const *const last         = vec->data->data;
     byte             *it           = vec_back(vec);
-    size_t const      element_size = vec->element_size;
+    u32 const         element_size = vec->element_size;
 
     while (1) {
-        if (key == *(size_t *)it) return (it + sizeof(size_t)); // return second element of pair
+        if (key == *(u32 *)it) return (it + sizeof(u32)); // return second element of pair
 
         if (it == last) break; // examined last pair
         it -= element_size;
@@ -199,13 +209,21 @@ void *vec_assoc_get(vector *vec, size_t key) {
     return null;
 }
 
-void vec_assoc_erase(vector *vec, size_t key) {
+void vec_assoc_erase(vector *vec, u32 key) {
 
     char *it = vec_assoc_get(vec, key);
     if (!it) return;
 
     // it points just past the key, so reverse it
-    it -= sizeof(size_t);
+    it -= sizeof(u32);
 
     vec_erase(vec, it);
+}
+
+static noreturn void fatal(char const *restrict fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    exit(1);
 }

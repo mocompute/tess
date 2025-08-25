@@ -300,7 +300,7 @@ static int test_parse_all(void) {
         if (syntax_checker_run(syntax, vec_data(&nodes), vec_size(&nodes))) return error + 1;
 
         char buf[1024];
-        for (size_t i = 0; i < 1; ++i) {
+        for (u32 i = 0; i < 1; ++i) {
             ast_node const *node = ast_pool_cat(parser_ast_pool(p), *(ast_node_h *)vec_cat(&nodes, i));
             if (ast_node_to_string_buf(parser_ast_pool(p), node, buf, sizeof buf)) return ++error;
             dbg("node: %s\n", buf);

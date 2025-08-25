@@ -217,7 +217,7 @@ nodiscard static int next_token(parser *p) {
 }
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
-    size_t const save_toks = vec_size(&p->seen_tokens);
+    u32 const save_toks = vec_size(&p->seen_tokens);
     if (fun(p)) {
         assert(vec_size(&p->seen_tokens) >= save_toks);
         if (tokenizer_put_back(p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
@@ -232,7 +232,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
 }
 
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
-    size_t const save_toks = vec_size(&p->seen_tokens);
+    u32 const save_toks = vec_size(&p->seen_tokens);
     if (fun(p, arg)) {
         assert(vec_size(&p->seen_tokens) >= save_toks);
         if (tokenizer_put_back(p->tokenizer, ((token const *)vec_data(&p->seen_tokens)) + save_toks,
