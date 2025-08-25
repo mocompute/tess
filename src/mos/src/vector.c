@@ -73,21 +73,16 @@ bool vec_empty(vector const *vec) {
     return vec->data == null || vec->data->size == 0;
 }
 
-int vec_push_back(allocator *alloc, vector *vec, void const *element) {
-
+void vec_push_back(allocator *alloc, vector *vec, void const *element) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
-
     memcpy(vec->data->data + vec->data->size * vec->element_size, element, vec->element_size);
     vec->data->size += 1;
-    return 0;
 }
 
-int vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
+void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
-
     memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
     vec->data->size += count;
-    return 0;
 }
 
 int vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
@@ -181,13 +176,9 @@ u32 vec_capacity(vector const *vec) {
     return vec->data->capacity;
 }
 
-int vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
+void vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
     assert(vec->element_size >= sizeof(u32));
-    if (vec_push_back(alloc, vec, pair)) {
-        dbg("vec_assoc_set: oom\n");
-        return 1;
-    }
-    return 0;
+    vec_push_back(alloc, vec, pair);
 }
 
 void *vec_assoc_get(vector *vec, u32 key) {

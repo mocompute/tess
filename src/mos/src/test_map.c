@@ -104,9 +104,7 @@ static int test_big_map(void) {
         while (map_get(map, (hashmap_key)key)) key = rand();
 
         pair_t pair = {(hashmap_key)key, rand()};
-        if (vec_push_back(alloc, &vec, &pair)) {
-            goto cleanup;
-        }
+        vec_push_back(alloc, &vec, &pair);
         if (map_set(alloc, &map, (hashmap_key)pair.left, &pair.right)) {
             error++;
             goto cleanup;

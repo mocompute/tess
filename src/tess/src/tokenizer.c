@@ -467,13 +467,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
-            default:
-                if (vec_push_back(self->alloc, &self->buf, &c)) {
-                    if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
-                    return 1;
-                }
-
-                break;
+            default:   vec_push_back(self->alloc, &self->buf, &c); break;
             }
         } break;
 
@@ -502,19 +496,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                if (vec_push_back(self->alloc, &self->buf, &actual)) {
-                    if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
-                    return 1;
-                }
-
+                vec_push_back(self->alloc, &self->buf, &actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                if (vec_push_back(self->alloc, &self->buf, &backslash) ||
-                    vec_push_back(self->alloc, &self->buf, &c)) {
-                    if (out_err) tok_error(out_err, tess_err_out_of_memory, self->pos);
-                    return 1;
-                }
+                vec_push_back(self->alloc, &self->buf, &backslash);
+                vec_push_back(self->alloc, &self->buf, &c);
             }
             state = in_string;
 
@@ -550,8 +537,7 @@ finish:
 // -- backtracking --
 
 int tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
-    for (size_t i = n_toks; i != 0; --i) {
-        if (vec_push_back(self->alloc, &self->backtrack, &toks[i - 1])) return 1;
-    }
+    for (size_t i = n_toks; i != 0; --i) vec_push_back(self->alloc, &self->backtrack, &toks[i - 1]);
+
     return 0;
 }

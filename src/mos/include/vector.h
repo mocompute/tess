@@ -56,12 +56,12 @@ void       *vec_back(vector *);
 
 // -- insertion and removal --
 
-nodiscard int vec_push_back(allocator *, vector *, void const *);
-nodiscard int vec_copy_back(allocator *, vector *, void const *, u32);
-void          vec_pop_back(vector *);
-void          vec_erase(vector *, void *);
-void          vec_resize(allocator *, vector *, u32); // never fails
-void          vec_clear(vector *);
+void vec_push_back(allocator *, vector *, void const *);
+void vec_copy_back(allocator *, vector *, void const *, u32);
+void vec_pop_back(vector *);
+void vec_erase(vector *, void *);
+void vec_resize(allocator *, vector *, u32); // never fails
+void vec_clear(vector *);
 
 // -- association lists --
 //
@@ -69,9 +69,9 @@ void          vec_clear(vector *);
 // key. May contain duplicate values, but [get] and [erase] operate on
 // the first one found, searching from the back.
 
-nodiscard int vec_assoc_set(allocator *, vector *, void const *);
-void         *vec_assoc_get(vector *, u32);
-void          vec_assoc_erase(vector *, u32);
+void  vec_assoc_set(allocator *, vector *, void const *);
+void *vec_assoc_get(vector *, u32);
+void  vec_assoc_erase(vector *, u32);
 
 // -- byte vectors --
 //

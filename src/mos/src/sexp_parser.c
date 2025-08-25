@@ -448,11 +448,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                     } else {
                         // append to list
-                        if (vec_push_back(self->alloc, &exprs, &sub_expr)) {
-                            *err  = sexp_tok_err_oom;
-                            state = error;
-                            break;
-                        }
+                        vec_push_back(self->alloc, &exprs, &sub_expr);
                     }
                 } // while sub_expr
 

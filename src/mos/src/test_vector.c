@@ -14,12 +14,12 @@ static int test_vector(void) {
     error += vec_empty(vec) == 1 ? 0 : 1;
 
     int val = 123;
-    error += vec_push_back(alloc, vec, &val) == 0 ? 0 : 1;
+    vec_push_back(alloc, vec, &val);
     error += vec_empty(vec) == 0 ? 0 : 1;
     error += *(int *)(vec_back(vec)) == 123 ? 0 : 1;
 
     val = 456;
-    error += vec_push_back(alloc, vec, &val) == 0 ? 0 : 1;
+    vec_push_back(alloc, vec, &val);
     error += vec_empty(vec) == 0 ? 0 : 1;
     error += *(int *)(vec_back(vec)) == 456 ? 0 : 1;
 
@@ -31,7 +31,7 @@ static int test_vector(void) {
     error += vec_empty(vec) == 1 ? 0 : 1;
 
     int data[] = {321, 234, 654};
-    if (vec_copy_back(alloc, vec, data, 3)) return error + 1;
+    vec_copy_back(alloc, vec, data, 3);
     error += 3 == vec_size(vec) ? 0 : 1;
     error += 3 <= vec_capacity(vec) ? 0 : 1;
     error += ((int *)vec_data(vec))[0] == 321 ? 0 : 1;
@@ -56,18 +56,18 @@ static int test_assoc(void) {
 
     pair[0] = 1;
     pair[1] = 2;
-    if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+    vec_assoc_set(alloc, vec, pair);
     error += 2 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
 
     pair[0] = 2;
     pair[1] = 3;
-    if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+    vec_assoc_set(alloc, vec, pair);
     error += 2 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
     error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
     pair[0] = 1;
     pair[1] = 99;
-    if (vec_assoc_set(alloc, vec, pair)) return error + 1;
+    vec_assoc_set(alloc, vec, pair);
     error += 99 == *(u32 *)vec_assoc_get(vec, 1) ? 0 : 1;
     error += 3 == *(u32 *)vec_assoc_get(vec, 2) ? 0 : 1;
 
@@ -100,7 +100,7 @@ static int test_assoc_set(void) {
     vec_init(alloc, vec, sizeof(size_t), 0);
 
     size_t key = 1;
-    if (vec_assoc_set(alloc, vec, &key)) return error + 1;
+    vec_assoc_set(alloc, vec, &key);
 
     error += 0 != vec_assoc_get(vec, 1) ? 0 : 1;
     error += 0 == vec_assoc_get(vec, 999) ? 0 : 1;

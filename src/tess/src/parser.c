@@ -212,7 +212,8 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        return vec_push_back(p->arena, &p->seen_tokens, &p->token);
+        vec_push_back(p->arena, &p->seen_tokens, &p->token);
+        return 0;
     }
 }
 
@@ -455,7 +456,7 @@ static int function_declaration(parser *p) {
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            if (vec_push_back(p->arena, &parameters, &p->result)) return 2;
+            vec_push_back(p->arena, &parameters, &p->result);
             continue;
         }
 
@@ -485,7 +486,7 @@ static int lambda_declaration(parser *p) {
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            if (vec_push_back(p->arena, &parameters, &p->result)) return 1;
+            vec_push_back(p->arena, &parameters, &p->result);
             continue;
         }
 
@@ -521,11 +522,11 @@ static int function_application(parser *p) {
 
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
-    if (vec_push_back(p->arena, &arguments, &p->result)) return 1;
+    vec_push_back(p->arena, &arguments, &p->result);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            if (vec_push_back(p->arena, &arguments, &p->result)) return 1;
+            vec_push_back(p->arena, &arguments, &p->result);
             continue;
         }
 
@@ -657,11 +658,11 @@ static int lambda_function_application(parser *p) {
     if (ast_vector_init(p->ast_pool, &arguments)) return 2;
 
     if (a_try(p, &function_argument)) return 1;
-    if (vec_push_back(p->arena, &arguments, &p->result)) return 1;
+    vec_push_back(p->arena, &arguments, &p->result);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            if (vec_push_back(p->arena, &arguments, &p->result)) return 1;
+            vec_push_back(p->arena, &arguments, &p->result);
             continue;
         }
 
@@ -748,7 +749,7 @@ static int tuple_expression(parser *p) {
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
     if (a_try(p, &expression)) return 1;
-    if (vec_push_back(p->arena, &elements, &p->result)) goto cleanup;
+    vec_push_back(p->arena, &elements, &p->result);
     if (a_try(p, &a_comma)) goto cleanup;
 
     int count = 0;
@@ -767,8 +768,7 @@ static int tuple_expression(parser *p) {
             if (a_try(p, &a_comma)) goto cleanup;
 
         // expression
-        if (0 == a_try(p, &expression))
-            if (vec_push_back(p->arena, &elements, &p->result)) goto cleanup;
+        if (0 == a_try(p, &expression)) vec_push_back(p->arena, &elements, &p->result);
 
         // loop to check for close round, or else
     }
@@ -824,7 +824,7 @@ int parser_parse_all(allocator *alloc, parser *p, vector *out) {
     while (0 == (res = parser_next(p))) {
         ast_node_h handle;
         parser_result(p, &handle);
-        if (vec_push_back(alloc, out, &handle)) return 2;
+        vec_push_back(alloc, out, &handle);
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;

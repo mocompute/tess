@@ -128,7 +128,7 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
 int ast_pool_move_back(ast_pool *self, ast_node *node, ast_node_h *handle) {
     assert(handle);
 
-    if (vec_push_back(self->alloc, &self->data, node)) return 1;
+    vec_push_back(self->alloc, &self->data, node);
 
     handle->val = (u32)(vec_size(&self->data) - 1);
     if (handle->val == UINT32_MAX) return 1; // overflow
