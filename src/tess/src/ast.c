@@ -2,7 +2,6 @@
 #include "alloc.h"
 #include "dbg.h"
 #include "mos_string.h"
-#include "util.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -257,6 +256,10 @@ void ast_pool_cdfs(ast_pool const *pool, ast_node_h start, ast_op_cfun fun) {
 }
 
 // -- utilities --
+
+#ifndef MOS_TAG_STRING
+#define MOS_TAG_STRING(name, str) [name] = str,
+#endif
 
 char const *ast_tag_to_string(ast_tag tag) {
 

@@ -3,7 +3,10 @@
 
 #include "alloc.h"
 #include "types.h"
-#include "util.h"
+
+#ifndef MOS_TAG_NAME
+#define MOS_TAG_NAME(name, str) name,
+#endif
 
 #define TESS_TOKEN_TAGS(X)                                                                                 \
     X(tok_one_newline, "one_newline")                                                                      \

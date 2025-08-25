@@ -4,7 +4,6 @@
 #include "alloc.h"
 #include "mos_string.h"
 #include "nodiscard.h"
-#include "util.h"
 #include "vector.h"
 
 #include <stdint.h>
@@ -13,6 +12,10 @@
 #define SEXP_MIN_UNBOXED_INT (INT64_MIN / 2) // negative shift is UB
 
 // -- sexp --
+
+#ifndef MOS_TAG_NAME
+#define MOS_TAG_NAME(name, str) name,
+#endif
 
 #define MOS_SEXP_BOXED_TAGS(X)                                                                             \
     X(sexp_box_i64, "[signed]")                                                                            \

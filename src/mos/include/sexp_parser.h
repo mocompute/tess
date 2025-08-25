@@ -4,11 +4,14 @@
 #include "alloc.h"
 #include "mos_string.h"
 #include "sexp.h"
-#include "util.h"
 
 #include <stddef.h>
 
 // -- token --
+
+#ifndef MOS_TAG_NAME
+#define MOS_TAG_NAME(name, str) name,
+#endif
 
 #define MOS_SEXP_TOKEN_TAGS(X)                                                                             \
     X(sexp_tok_open_round, "open-round")                                                                   \

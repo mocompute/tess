@@ -1,7 +1,9 @@
 #ifndef TESS_ERROR_H
 #define TESS_ERROR_H
 
-#include "util.h"
+#ifndef MOS_TAG_NAME
+#define MOS_TAG_NAME(name, str) name,
+#endif
 
 #define TESS_ERROR_TAG_LIST(X)                                                                             \
     X(tess_err_ok, "ok")                                                                                   \

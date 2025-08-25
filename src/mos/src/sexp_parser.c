@@ -556,6 +556,10 @@ finish:
     }
 }
 
+#ifndef MOS_TAG_STRING
+#define MOS_TAG_STRING(name, str) [name] = str,
+#endif
+
 char const *sexp_token_tag_to_string(sexp_token_tag tag) {
     static char const *const strings[] = {MOS_SEXP_TOKEN_TAGS(MOS_TAG_STRING)};
     return strings[tag];

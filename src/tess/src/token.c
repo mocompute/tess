@@ -1,7 +1,6 @@
 #include "token.h"
 
 #include "alloc.h"
-#include "util.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -57,6 +56,10 @@ void token_deinit(allocator *alloc, token *tok) {
 
     alloc_invalidate(tok);
 }
+
+#ifndef MOS_TAG_STRING
+#define MOS_TAG_STRING(name, str) [name] = str,
+#endif
 
 char const *token_tag_to_string(token_tag tag) {
     static char const *const strings[] = {TESS_TOKEN_TAGS(MOS_TAG_STRING)};
