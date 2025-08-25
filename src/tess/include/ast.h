@@ -85,7 +85,8 @@ struct ast_node {
         } tuple;
     };
 
-    ast_tag tag;
+    struct tess_type *type;
+    ast_tag           tag;
 };
 
 // -- ast_node --
