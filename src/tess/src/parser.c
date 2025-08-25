@@ -49,7 +49,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     if (!self->tokenizer) goto cleanup;
 
     // good_tokens
-    if (vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0)) goto cleanup;
+    vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -234,7 +234,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 
-        if (vec_resize(p->arena, &p->seen_tokens, save_toks)) return 1;
+        vec_resize(p->arena, &p->seen_tokens, save_toks);
 
         return 1;
     }
@@ -249,7 +249,7 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
                                vec_size(&p->seen_tokens) - save_toks))
             return 2; // TODO handle oom error
 
-        if (vec_resize(p->arena, &p->seen_tokens, save_toks)) return 1;
+        vec_resize(p->arena, &p->seen_tokens, save_toks);
 
         return 1;
     }

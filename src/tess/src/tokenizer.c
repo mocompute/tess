@@ -37,16 +37,10 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     self->input_len = len;
     self->pos       = 0;
 
-    if (vec_init(alloc, &self->buf, sizeof(char), 32)) goto cleanup;
-    if (vec_init(alloc, &self->backtrack, sizeof(token), 8)) goto cleanup;
+    vec_init(alloc, &self->buf, sizeof(char), 32);
+    vec_init(alloc, &self->backtrack, sizeof(token), 8);
 
     return self;
-
-cleanup:
-    vec_deinit(alloc, &self->buf);
-    vec_deinit(alloc, &self->backtrack);
-    alloc_free(alloc, self);
-    return null;
 }
 
 void tokenizer_destroy(tokenizer **self) {

@@ -30,13 +30,13 @@ typedef struct vector {
 
 // -- allocation and deallocation --
 
-vector       *vec_alloc(allocator *);
-void          vec_dealloc(allocator *, vector **);
-void          vec_init_empty(vector *, size_t el_size);
-nodiscard int vec_init(allocator *, vector *, size_t el_size, size_t capacity);
-void          vec_deinit(allocator *, vector *);
-nodiscard int vec_reserve(allocator *, vector *, size_t);
-void          vec_move(vector *dst, vector *src);
+vector *vec_alloc(allocator *);
+void    vec_dealloc(allocator *, vector **);
+void    vec_init_empty(vector *, size_t el_size);
+void    vec_init(allocator *, vector *, size_t el_size, size_t capacity); // never fails
+void    vec_deinit(allocator *, vector *);
+void    vec_reserve(allocator *, vector *, size_t); // never fails
+void    vec_move(vector *dst, vector *src);
 
 // -- read-only access --
 
@@ -60,7 +60,7 @@ nodiscard int vec_push_back(allocator *, vector *, void const *);
 nodiscard int vec_copy_back(allocator *, vector *, void const *, size_t);
 void          vec_pop_back(vector *);
 void          vec_erase(vector *, void *);
-nodiscard int vec_resize(allocator *, vector *, size_t);
+void          vec_resize(allocator *, vector *, size_t); // never fails
 void          vec_clear(vector *);
 
 // -- association lists --

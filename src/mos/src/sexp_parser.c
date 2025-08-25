@@ -423,11 +423,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                 // this state loops recursively until close_round, error or eof
 
                 vector exprs;
-                if (vec_init(self->alloc, &exprs, sizeof(sexp), 2)) {
-                    *err  = sexp_tok_err_oom;
-                    state = error;
-                    continue;
-                }
+                vec_init(self->alloc, &exprs, sizeof(sexp), 2);
 
                 while (true) {
 

@@ -40,7 +40,8 @@ void tess_type_init_type_var(tess_type *self, u32 val) {
 int tess_type_init_tuple(allocator *alloc, tess_type *self) {
     alloc_zero(self);
     self->tag = type_tuple;
-    return vec_init(alloc, &self->tuple, sizeof(ast_node_h), 0);
+    vec_init(alloc, &self->tuple, sizeof(ast_node_h), 0);
+    return 0;
 }
 
 void tess_type_init_arrow(tess_type *ty) {
@@ -66,14 +67,10 @@ void tess_type_deinit(allocator *alloc, tess_type *self) {
 
 tess_type_pool *tess_type_pool_create(allocator *alloc) {
     tess_type_pool *self = alloc_calloc(alloc, 1, sizeof(tess_type));
-    if (!self) return self;
 
-    self->alloc = alloc;
+    self->alloc          = alloc;
 
-    if (vec_init(alloc, &self->data, sizeof(tess_type), 32)) {
-        alloc_free(alloc, self);
-        return null;
-    }
+    vec_init(alloc, &self->data, sizeof(tess_type), 32);
 
     return self;
 }
@@ -96,10 +93,7 @@ ast_pool *ast_pool_create(allocator *alloc) {
 
     self->alloc = alloc;
 
-    if (vec_init(alloc, &self->data, sizeof(ast_node), 32)) {
-        alloc_free(alloc, self);
-        return null;
-    }
+    vec_init(alloc, &self->data, sizeof(ast_node), 32);
 
     return self;
 }
@@ -369,7 +363,8 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
 
 int ast_vector_init(ast_pool *self, vector *vec) {
     // init a vector for use with this pool
-    return vec_init(self->alloc, vec, sizeof(ast_node_h), 0);
+    vec_init(self->alloc, vec, sizeof(ast_node_h), 0);
+    return 0;
 }
 
 static int print_node(ast_pool *pool, ast_node const *node, char *restrict buf, int const sz_,
