@@ -30,7 +30,6 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 
 tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
-    if (!self) return self;
 
     self->alloc     = alloc;
     self->input     = input;

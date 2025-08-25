@@ -89,9 +89,8 @@ void tess_type_pool_destroy(tess_type_pool **self) {
 
 ast_pool *ast_pool_create(allocator *alloc) {
     ast_pool *self = alloc_calloc(alloc, 1, sizeof(ast_pool));
-    if (!self) return self;
 
-    self->alloc = alloc;
+    self->alloc    = alloc;
 
     vec_init(alloc, &self->data, sizeof(ast_node), 32);
 

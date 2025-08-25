@@ -257,7 +257,6 @@ static void arena_free(allocator *alloc, void *p, char const *file, int line) {
 
 allocator *alloc_arena_create(allocator *alloc, size_t sz) {
     allocator *out = alloc_malloc(alloc, sizeof(arena_allocator));
-    if (!out) return out;
 
     if (alloc_arena_init(out, alloc, sz)) {
         alloc_free(alloc, out);
@@ -348,7 +347,8 @@ static void  leak_detector_free(allocator *alloc, void *p, char const *file, int
 allocator   *alloc_leak_detector_create() {
 
     leak_detector *self = malloc(sizeof *self);
-    if (!self) return null;
+    assert(self);
+    if (!self) exit(1);
 
     self->allocator.malloc  = &leak_detector_malloc;
     self->allocator.calloc  = &leak_detector_calloc;

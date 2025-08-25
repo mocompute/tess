@@ -33,7 +33,6 @@ struct parser {
 
 parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
-    if (!self) return self;
 
     alloc_zero(self);
     self->parent_alloc = alloc;
@@ -42,11 +41,9 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
 
     // ast pool
     self->ast_pool = ast_pool_create(self->arena);
-    if (!self->ast_pool) goto cleanup;
 
     // tokenizer
     self->tokenizer = tokenizer_create(self->arena, input, input_len);
-    if (!self->tokenizer) goto cleanup;
 
     // good_tokens
     vec_init(self->arena, &self->seen_tokens, sizeof(struct token), 0);
@@ -66,17 +63,10 @@ cleanup:
 }
 
 void parser_destroy(parser **self) {
-    // error token
-    // token_deinit((*self)->arena, &(*self)->token);
-
-    // good_tokens
-    // vec_deinit((*self)->arena, &(*self)->seen_tokens);
-
-    // tokenizer
-    tokenizer_destroy(&(*self)->tokenizer);
-
-    // ast pool
-    ast_pool_destroy(&(*self)->ast_pool);
+    // error token: arena
+    // good_tokens: arena
+    // tokenizer: arena
+    // ast pool: arena
 
     // arena
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->arena);

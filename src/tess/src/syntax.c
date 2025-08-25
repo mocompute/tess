@@ -10,7 +10,7 @@
 // -- forwards --
 
 typedef struct rename_variable_ctx rename_variable_ctx;
-static nodiscard int               rename_variable_ctx_init(rename_variable_ctx *, allocator *, ast_pool *);
+static void                        rename_variable_ctx_init(rename_variable_ctx *, allocator *, ast_pool *);
 nodiscard static int               syntax_rename_variables(allocator *, ast_pool *, ast_node_h *, size_t);
 
 // -- syntax_checker --
@@ -57,16 +57,13 @@ struct rename_variable_ctx {
     size_t     next;
 };
 
-static nodiscard int rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc, ast_pool *pool) {
+static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc, ast_pool *pool) {
 
     self->alloc = alloc;
     self->pool  = pool;
     self->next  = 1;
 
     self->map   = map_create(alloc, sizeof(string_t), 1024, 0);
-    if (!self->map) return 1;
-
-    return 0;
 }
 
 static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
@@ -247,7 +244,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node_h hand
 int syntax_rename_variables(allocator *alloc, ast_pool *pool, ast_node_h *nodes, size_t count) {
 
     rename_variable_ctx ctx;
-    if (rename_variable_ctx_init(&ctx, alloc, pool)) return 1;
+    rename_variable_ctx_init(&ctx, alloc, pool);
 
     ast_node_h *handle = nodes;
 
