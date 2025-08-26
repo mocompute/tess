@@ -22,9 +22,6 @@ typedef struct tokenizer tokenizer;
 nodiscard tokenizer *tokenizer_create(allocator *, char const *, size_t) mallocfun;
 void                 tokenizer_destroy(tokenizer **);
 
-void                 tokenizer_error_init(tokenizer_error *);
-void                 tokenizer_error_deinit(tokenizer_error *);
-
 // -- parsing --
 
 int tokenizer_next(tokenizer *, token *out, tokenizer_error *);

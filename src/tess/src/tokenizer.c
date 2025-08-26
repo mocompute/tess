@@ -57,16 +57,6 @@ void tokenizer_destroy(tokenizer **self) {
     *self = null;
 }
 
-void tokenizer_error_init(tokenizer_error *err) {
-    // future
-    (void)err;
-}
-
-void tokenizer_error_deinit(tokenizer_error *err) {
-    // future
-    (void)err;
-}
-
 // -- parsing --
 
 static void replace_token(allocator *alloc, token *tok, token_tag tag) {
