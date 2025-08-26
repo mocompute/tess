@@ -24,10 +24,10 @@ void                 tokenizer_destroy(tokenizer **);
 
 // -- parsing --
 
-int tokenizer_next(tokenizer *, token *out, tokenizer_error *);
+nodiscard int tokenizer_next(tokenizer *, token *out, tokenizer_error *);
 
 // -- backtracking --
 
-nodiscard int tokenizer_put_back(tokenizer *, token const *, size_t);
+void tokenizer_put_back(tokenizer *, token const *, size_t);
 
 #endif

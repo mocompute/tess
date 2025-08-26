@@ -534,8 +534,6 @@ finish:
 
 // -- backtracking --
 
-int tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
+void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
     for (size_t i = n_toks; i != 0; --i) vec_push_back(self->parent, &self->backtrack, &toks[i - 1]);
-
-    return 0;
 }
