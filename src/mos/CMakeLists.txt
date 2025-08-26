@@ -42,22 +42,28 @@ target_link_options(mos_embed PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- tests --
 
-function(mos_create_test NAME)
+function(mos_create_exe NAME)
   set(TEST_NAME test-${NAME})
   add_executable(${TEST_NAME} "src/test_${NAME}.c")
   target_link_libraries(${TEST_NAME} PRIVATE mos)
   target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC} -Wunused)
   target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
+endfunction()
+
+function(mos_create_test NAME)
+  mos_create_exe(${NAME})
+  set(TEST_NAME test-${NAME})
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
 mos_create_test(alloc)
-mos_create_test(hash)
 mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(string)
 mos_create_test(types)
 mos_create_test(vector)
+
+mos_create_exe(hash)
 
 # -- doxygen --
 
