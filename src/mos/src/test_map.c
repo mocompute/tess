@@ -151,7 +151,6 @@ int main(void) {
 
     unsigned int seed       = (unsigned int)time(0);
 
-    seed                    = 1755916792;
     fprintf(stderr, "Seed = %u\n\n", seed);
 
     srand(seed);
