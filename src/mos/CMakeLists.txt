@@ -52,6 +52,7 @@ function(mos_create_test NAME)
 endfunction()
 
 mos_create_test(alloc)
+mos_create_test(hash)
 mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(string)
