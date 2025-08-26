@@ -48,13 +48,13 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     return self;
 }
 
-void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
+void ast_node_init(ast_node *node, ast_tag tag) {
 
     // accepts pool = null in some cases
 
 #define init(P)                                                                                            \
     do {                                                                                                   \
-        return ast_vector_init(alloc, &P);                                                                 \
+        return ast_vector_init(&P);                                                                        \
     } while (0)
 
     alloc_zero(node);
@@ -87,7 +87,7 @@ void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 
 void ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
     ast_node_deinit(alloc, node);
-    return ast_node_init(alloc, node, tag);
+    return ast_node_init(node, tag);
 }
 
 void ast_node_move(ast_node *dst, ast_node *src) {
@@ -406,8 +406,8 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
     return 1;
 }
 
-void ast_vector_init(allocator *alloc, vector *vec) {
-    vec_init(alloc, vec, 0, sizeof(ast_node *));
+void ast_vector_init(vector *vec) {
+    *vec = VEC(ast_node *);
 }
 
 char *ast_node_to_string(allocator *alloc, ast_node const *node) {

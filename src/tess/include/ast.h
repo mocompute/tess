@@ -92,7 +92,7 @@ typedef struct ast_node {
 // -- ast_node --
 
 ast_node   *ast_node_create(allocator *, ast_tag) mallocfun;
-void        ast_node_init(allocator *, ast_node *, ast_tag);
+void        ast_node_init(ast_node *, ast_tag);
 void        ast_node_deinit(allocator *, ast_node *);
 void        ast_node_replace(allocator *, ast_node *, ast_tag);
 void        ast_node_move(ast_node *dst, ast_node *src);
@@ -103,7 +103,7 @@ int         ast_node_name_strcmp(ast_node const *, char const *);
 // -- utilities --
 
 char       *ast_node_to_string(allocator *alloc, ast_node const *node);
-void        ast_vector_init(allocator *, vector *);
+void        ast_vector_init(vector *);
 
 char const *ast_tag_to_string(ast_tag);
 int         string_to_ast_operator(char const *, ast_operator *);

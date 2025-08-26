@@ -16,6 +16,8 @@
 // As an exception due to how common is the use of this module, the
 // function names are shortened.
 
+#define VEC(T) vec_init(sizeof(T))
+
 struct vector_data_header {
 #ifndef NDEBUG
     allocator *alloc;
@@ -35,8 +37,7 @@ typedef struct vector {
 struct vector *vec_create(allocator *, u32 num, u32 size);
 void           vec_destroy(allocator *, vector **);
 
-struct vector  vec_init_empty(u32 el_size);
-void           vec_init(allocator *, vector *, u32 num, u32 size);
+struct vector  vec_init(u32 el_size);
 void           vec_deinit(allocator *, vector *);
 void           vec_reserve(allocator *, vector *, u32);
 void           vec_move(vector *dst, vector *src);

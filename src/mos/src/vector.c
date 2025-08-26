@@ -12,12 +12,13 @@
 #include <string.h>
 
 static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
+static void          init_vector(allocator *, vector *, u32 num, u32 size);
 
 //
 
 vector *vec_create(allocator *alloc, u32 num, u32 size) {
-    vector *self = alloc_malloc(alloc, sizeof(vector));
-    vec_init(alloc, self, num, size);
+    vector *self = alloc_malloc(alloc, sizeof(*self));
+    init_vector(alloc, self, num, size);
     return self;
 }
 
@@ -27,14 +28,14 @@ void vec_destroy(allocator *alloc, vector **vec) {
     *vec = null;
 }
 
-struct vector vec_init_empty(u32 element_size) {
+struct vector vec_init(u32 element_size) {
     struct vector self;
     alloc_zero(&self);
     self.element_size = element_size;
     return self;
 }
 
-void vec_init(allocator *alloc, vector *vec, u32 num, u32 size) {
+void init_vector(allocator *alloc, vector *vec, u32 num, u32 size) {
 
     alloc_zero(vec);
     vec->element_size = size;
@@ -57,7 +58,7 @@ void vec_deinit(allocator *alloc, vector *vec) {
 
 void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 
-    if (null == vec->data) return vec_init(alloc, vec, count, vec->element_size);
+    if (null == vec->data) return init_vector(alloc, vec, count, vec->element_size);
 
     if (vec->data->capacity >= count) return;
 
@@ -148,7 +149,7 @@ void vec_erase(vector *vec, void *it_) {
 }
 
 void vec_resize(allocator *alloc, vector *vec, u32 n) {
-    if (null == vec->data) return vec_init(alloc, vec, n, vec->element_size);
+    if (null == vec->data) return init_vector(alloc, vec, n, vec->element_size);
     if (n > vec->data->capacity) vec_reserve(alloc, vec, n);
     vec->data->size = n;
     assert(alloc == vec->data->alloc);

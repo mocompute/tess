@@ -3,8 +3,6 @@
 #include "tess_type.h"
 #include "vector.h"
 
-#define VEC(T) vec_init_empty(sizeof(T))
-
 struct ti_inferer {
     allocator *type_arena;
     ast_node **nodes;

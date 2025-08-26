@@ -422,8 +422,8 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             case sexp_tok_open_round: {
                 // this state loops recursively until close_round, error or eof
 
-                vector exprs;
-                vec_init(self->alloc, &exprs, 2, sizeof(sexp));
+                vector exprs = VEC(sexp);
+                vec_reserve(self->alloc, &exprs, 2);
 
                 while (true) {
 

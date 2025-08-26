@@ -43,7 +43,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->tokenizer = tokenizer_create(self->parser_arena, input, input_len);
 
     // good_tokens
-    vec_init(self->parser_arena, &self->seen_tokens, 0, sizeof(struct token));
+    self->seen_tokens = VEC(struct token);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -410,7 +410,7 @@ static int function_declaration(parser *p) {
     ast_node *const name = p->result; // function name
 
     vector          parameters;
-    ast_vector_init(p->ast_arena, &parameters);
+    ast_vector_init(&parameters);
 
     // check: f () declares function with no parameters
     if (0 == a_try(p, &a_nil)) {
@@ -451,7 +451,7 @@ static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
     vector parameters;
-    ast_vector_init(p->ast_arena, &parameters);
+    ast_vector_init(&parameters);
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
@@ -484,7 +484,7 @@ static int function_application(parser *p) {
     ast_node *const name = p->result;
 
     vector          arguments;
-    ast_vector_init(p->ast_arena, &arguments);
+    ast_vector_init(&arguments);
 
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
@@ -597,7 +597,7 @@ static int lambda_function(parser *p) {
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    decl->function_declaration.parameters = vec_init_empty(node->lambda_function.parameters.element_size);
+    decl->function_declaration.parameters = vec_init(node->lambda_function.parameters.element_size);
     return result_ast_node(p, node);
 }
 
@@ -615,7 +615,7 @@ static int lambda_function_application(parser *p) {
 
     // there must be at least one argument
     vector arguments;
-    ast_vector_init(p->ast_arena, &arguments);
+    ast_vector_init(&arguments);
 
     if (a_try(p, &function_argument)) return 1;
     vec_push_back(p->parser_arena, &arguments, (void *)&p->result);
@@ -690,7 +690,7 @@ static int let_form(parser *p) {
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    decl->function_declaration.parameters = vec_init_empty(node->let.parameters.element_size);
+    decl->function_declaration.parameters = vec_init(node->let.parameters.element_size);
     return result_ast_node(p, node);
 }
 
@@ -699,7 +699,7 @@ static int tuple_expression(parser *p) {
     if (a_try(p, a_open_round)) return 1;
 
     vector elements;
-    ast_vector_init(p->ast_arena, &elements);
+    ast_vector_init(&elements);
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
