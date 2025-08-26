@@ -283,7 +283,7 @@ static int test_parse_all(void) {
         if (null == p) return error + 1;
 
         vector nodes;
-        vec_init(vec_alloc, &nodes, sizeof(ast_node *), 1024);
+        vec_init(vec_alloc, &nodes, 1024, sizeof(ast_node *));
         if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
 
         allocator      *syntax_alloc = alloc_default_allocator();
@@ -335,13 +335,13 @@ static int test_parse_to_c(void) {
         if (null == p) return error + 1;
 
         vector nodes;
-        vec_init(alloc, &nodes, sizeof(ast_node *), 1024);
+        vec_init(alloc, &nodes, 1024, sizeof(ast_node *));
         if (parser_parse_all(alloc, p, &nodes)) return error + 1;
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 
         vector transpiler_output;
-        vec_init(alloc, &transpiler_output, 1, 1024);
+        vec_init(alloc, &transpiler_output, 1024, 1);
 
         transpiler *transpiler = transpiler_create(alloc, &transpiler_output, alloc);
         if (!transpiler) return error + 1;

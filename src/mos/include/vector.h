@@ -16,29 +16,30 @@
 // As an exception due to how common is the use of this module, the
 // function names are shortened.
 
-typedef struct {
+struct vector_data_header {
 #ifndef NDEBUG
     allocator *alloc;
 #endif
     u32  capacity;
     u32  size;
     byte data[];
-} vector_data_header;
+};
 
 typedef struct vector {
-    u32                 element_size;
-    vector_data_header *data;
+    u32                        element_size;
+    struct vector_data_header *data;
 } vector;
 
 // -- allocation and deallocation --
 
-vector *vec_alloc(allocator *);
-void    vec_dealloc(allocator *, vector **);
-void    vec_init_empty(vector *, u32 el_size);
-void    vec_init(allocator *, vector *, u32 el_size, u32 capacity); // never fails
-void    vec_deinit(allocator *, vector *);
-void    vec_reserve(allocator *, vector *, u32); // never fails
-void    vec_move(vector *dst, vector *src);
+struct vector *vec_create(allocator *, u32 num, u32 size);
+void           vec_destroy(allocator *, vector **);
+
+struct vector  vec_init_empty(u32 el_size);
+void           vec_init(allocator *, vector *, u32 num, u32 size);
+void           vec_deinit(allocator *, vector *);
+void           vec_reserve(allocator *, vector *, u32);
+void           vec_move(vector *dst, vector *src);
 
 // -- read-only access --
 

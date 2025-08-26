@@ -43,7 +43,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->tokenizer = tokenizer_create(self->parser_arena, input, input_len);
 
     // good_tokens
-    vec_init(self->parser_arena, &self->seen_tokens, sizeof(struct token), 0);
+    vec_init(self->parser_arena, &self->seen_tokens, 0, sizeof(struct token));
 
     // error
     token_init(&self->token, tok_invalid);
@@ -597,7 +597,7 @@ static int lambda_function(parser *p) {
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    vec_init_empty(&decl->function_declaration.parameters, node->lambda_function.parameters.element_size);
+    decl->function_declaration.parameters = vec_init_empty(node->lambda_function.parameters.element_size);
     return result_ast_node(p, node);
 }
 
@@ -690,7 +690,7 @@ static int let_form(parser *p) {
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
-    vec_init_empty(&decl->function_declaration.parameters, node->let.parameters.element_size);
+    decl->function_declaration.parameters = vec_init_empty(node->let.parameters.element_size);
     return result_ast_node(p, node);
 }
 

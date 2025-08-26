@@ -36,8 +36,8 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     self->input_len = len;
     self->pos       = 0;
 
-    vec_init(alloc, &self->buf, sizeof(char), 32);
-    vec_init(alloc, &self->backtrack, sizeof(token), 8);
+    vec_init(alloc, &self->buf, 32, sizeof(char));
+    vec_init(alloc, &self->backtrack, 8, sizeof(token));
 
     return self;
 }

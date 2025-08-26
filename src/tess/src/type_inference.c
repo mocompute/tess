@@ -3,6 +3,8 @@
 #include "tess_type.h"
 #include "vector.h"
 
+#define VEC(T) vec_init_empty(sizeof(T))
+
 struct ti_inferer {
     allocator *type_arena;
     ast_node **nodes;
@@ -45,9 +47,9 @@ void ti_inferer_run(ti_inferer *self) {
 // -- solver --
 
 void solver_init(allocator *alloc, struct solver *self) {
-    self->alloc = alloc;
-    vec_init_empty(&self->constraints, sizeof(struct constraint));
-    vec_init_empty(&self->substitutions, sizeof(struct constraint));
+    self->alloc         = alloc;
+    self->constraints   = VEC(struct constraint);
+    self->substitutions = VEC(struct constraint);
 }
 
 void solver_deinit(struct solver *self) {

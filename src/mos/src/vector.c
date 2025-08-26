@@ -15,30 +15,34 @@ static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(
 
 //
 
-vector *vec_alloc(allocator *alloc) {
-    return alloc_malloc(alloc, sizeof(vector));
+vector *vec_create(allocator *alloc, u32 num, u32 size) {
+    vector *self = alloc_malloc(alloc, sizeof(vector));
+    vec_init(alloc, self, num, size);
+    return self;
 }
 
-void vec_dealloc(allocator *alloc, vector **vec) {
-    alloc_assert_invalid(*vec);
+void vec_destroy(allocator *alloc, vector **vec) {
+    vec_deinit(alloc, *vec);
     alloc_free(alloc, *vec);
     *vec = null;
 }
 
-void vec_init_empty(vector *vec, u32 element_size) {
-    alloc_zero(vec);
-    vec->element_size = element_size;
+struct vector vec_init_empty(u32 element_size) {
+    struct vector self;
+    alloc_zero(&self);
+    self.element_size = element_size;
+    return self;
 }
 
-void vec_init(allocator *alloc, vector *vec, u32 element_size, u32 initial_capacity) {
+void vec_init(allocator *alloc, vector *vec, u32 num, u32 size) {
 
     alloc_zero(vec);
-    vec->element_size = element_size;
+    vec->element_size = size;
 
-    if (initial_capacity) {
-        vec->data = alloc_malloc(alloc, sizeof(vector_data_header) + initial_capacity * element_size);
+    if (num) {
+        vec->data = alloc_malloc(alloc, sizeof(struct vector_data_header) + num * size);
         alloc_zero(vec->data);
-        vec->data->capacity = initial_capacity;
+        vec->data->capacity = num;
 
 #ifndef NDEBUG
         vec->data->alloc = alloc;
@@ -53,7 +57,7 @@ void vec_deinit(allocator *alloc, vector *vec) {
 
 void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 
-    if (null == vec->data) return vec_init(alloc, vec, vec->element_size, count);
+    if (null == vec->data) return vec_init(alloc, vec, count, vec->element_size);
 
     if (vec->data->capacity >= count) return;
 
@@ -62,7 +66,7 @@ void vec_reserve(allocator *alloc, vector *vec, u32 count) {
     while (new_capacity < count) new_capacity *= 2;
 
     void *resized =
-      alloc_realloc(alloc, vec->data, sizeof(vector_data_header) + new_capacity * vec->element_size);
+      alloc_realloc(alloc, vec->data, sizeof(struct vector_data_header) + new_capacity * vec->element_size);
 
     vec->data           = resized;
     vec->data->capacity = new_capacity;
@@ -144,7 +148,7 @@ void vec_erase(vector *vec, void *it_) {
 }
 
 void vec_resize(allocator *alloc, vector *vec, u32 n) {
-    if (null == vec->data) return vec_init(alloc, vec, vec->element_size, n);
+    if (null == vec->data) return vec_init(alloc, vec, n, vec->element_size);
     if (n > vec->data->capacity) vec_reserve(alloc, vec, n);
     vec->data->size = n;
     assert(alloc == vec->data->alloc);

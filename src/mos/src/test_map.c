@@ -94,7 +94,7 @@ static int test_big_map(void) {
 
     allocator *alloc = alloc_default_allocator();
     vector     vec;
-    vec_init(alloc, &vec, sizeof(pair_t), N);
+    vec_init(alloc, &vec, N, sizeof(pair_t));
 
     hashmap *map = map_create(alloc, sizeof(int), 8, 0);
 

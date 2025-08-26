@@ -407,7 +407,7 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
 }
 
 void ast_vector_init(allocator *alloc, vector *vec) {
-    vec_init(alloc, vec, sizeof(ast_node *), 0);
+    vec_init(alloc, vec, 0, sizeof(ast_node *));
 }
 
 char *ast_node_to_string(allocator *alloc, ast_node const *node) {

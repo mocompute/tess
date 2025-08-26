@@ -31,8 +31,8 @@ sexp_box *sexp_box_get(sexp self) {
 
 void sexp_box_init_empty(sexp_box *self) {
     alloc_zero(self);
-    self->tag = sexp_box_list;
-    vec_init_empty(&self->list.list, sizeof(sexp));
+    self->tag       = sexp_box_list;
+    self->list.list = vec_init_empty(sizeof(sexp));
 }
 
 void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) {
