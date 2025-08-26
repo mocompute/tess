@@ -102,11 +102,11 @@ int         ast_node_name_strcmp(ast_node const *, char const *);
 
 // -- utilities --
 
-void          ast_vector_init(allocator *, vector *);
+char       *ast_node_to_string(allocator *alloc, ast_node const *node);
+void        ast_vector_init(allocator *, vector *);
 
-char const   *ast_tag_to_string(ast_tag);
-nodiscard int ast_node_to_string_buf(ast_node const *, char *, size_t);
-int           string_to_ast_operator(char const *, ast_operator *);
+char const *ast_tag_to_string(ast_tag);
+int         string_to_ast_operator(char const *, ast_operator *);
 
 typedef void (*ast_op_fun)(ast_node *);
 typedef void (*ast_op_cfun)(ast_node const *);

@@ -2,12 +2,12 @@
 #include "alloc.h"
 #include "dbg.h"
 #include "mos_string.h"
+#include "sexp.h"
 #include "vector.h"
 
 #include <assert.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -104,6 +104,150 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
     char const *name = ast_node_name_string(node);
     if (!name) return false;
     return strcmp(name, target);
+}
+
+char const *ast_operator_to_string(ast_operator);
+
+sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
+
+    if (null == node) return sexp_init_boxed(alloc);
+
+    switch (node->tag) {
+
+    case ast_eof:  return sexp_init_sym(alloc, "eof");
+    case ast_nil:  return sexp_init_sym(alloc, "nil");
+    case ast_bool: return node->bool_.val ? sexp_init_sym(alloc, "true") : sexp_init_sym(alloc, "false");
+
+    case ast_symbol:
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "symbol"),
+                                          sexp_init_sym(alloc, mos_string_str(&node->symbol.name)));
+
+    case ast_i64:
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "i64"), sexp_init_i64(alloc, node->i64.val));
+    case ast_u64:
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "u64"), sexp_init_u64(alloc, node->u64.val));
+    case ast_f64:
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "f64"), sexp_init_f64(alloc, node->f64.val));
+
+    case ast_string:
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "string"),
+                                          sexp_init_sym(alloc, mos_string_str(&node->symbol.name)));
+
+    case ast_infix:
+        return sexp_init_list_quad(alloc, sexp_init_sym(alloc, "infix"),
+                                          sexp_init_sym(alloc, ast_operator_to_string(node->infix.op)),
+                                          ast_node_to_sexp(alloc, node->infix.left),
+                                          ast_node_to_sexp(alloc, node->infix.right));
+
+    case ast_tuple: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->tuple.elements));
+        sexp *es_it    = elements;
+        ast_node const *const *it  = vec_cbegin(&node->tuple.elements);
+        ast_node const *const *end = vec_cend(&node->tuple.elements);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->tuple.elements));
+        alloc_free(alloc, elements);
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "tuple"), list);
+
+    } break;
+
+    case ast_let_in:
+        return sexp_init_list_quad(
+          alloc, sexp_init_sym(alloc, "let-in"), ast_node_to_sexp(alloc, node->let_in.name),
+          ast_node_to_sexp(alloc, node->let_in.value), ast_node_to_sexp(alloc, node->let_in.body));
+
+    case ast_let: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->let.parameters));
+        sexp *es_it    = elements;
+        ast_node const *const *it  = vec_cbegin(&node->let.parameters);
+        ast_node const *const *end = vec_cend(&node->let.parameters);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->let.parameters));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_quad(alloc, sexp_init_sym(alloc, "let"),
+                                          ast_node_to_sexp(alloc, node->let.name), list,
+                                          ast_node_to_sexp(alloc, node->let_in.body));
+
+    } break;
+
+    case ast_if_then_else:
+        return sexp_init_list_quad(alloc, sexp_init_sym(alloc, "if-then-else"),
+                                          ast_node_to_sexp(alloc, node->if_then_else.condition),
+                                          ast_node_to_sexp(alloc, node->if_then_else.yes),
+                                          ast_node_to_sexp(alloc, node->if_then_else.no));
+
+    case ast_lambda_function: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_function.parameters));
+        sexp *es_it                = elements;
+        ast_node const *const *it  = vec_cbegin(&node->lambda_function.parameters);
+        ast_node const *const *end = vec_cend(&node->lambda_function.parameters);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_function.parameters));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "lambda"), list,
+                                            ast_node_to_sexp(alloc, node->lambda_function.body));
+
+    } break;
+
+    case ast_function_declaration: {
+
+        sexp *elements =
+          alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->function_declaration.parameters));
+        sexp                  *es_it = elements;
+        ast_node const *const *it    = vec_cbegin(&node->function_declaration.parameters);
+        ast_node const *const *end   = vec_cend(&node->function_declaration.parameters);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->function_declaration.parameters));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "function-declaration"), list,
+                                            ast_node_to_sexp(alloc, node->lambda_function.body));
+
+    } break;
+
+    case ast_lambda_declaration: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_declaration.parameters));
+        sexp *es_it                = elements;
+        ast_node const *const *it  = vec_cbegin(&node->lambda_declaration.parameters);
+        ast_node const *const *end = vec_cend(&node->lambda_declaration.parameters);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_declaration.parameters));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "lambda-declaration"), list);
+
+    } break;
+
+    case ast_lambda_function_application: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_application.arguments));
+        sexp *es_it                = elements;
+        ast_node const *const *it  = vec_cbegin(&node->lambda_application.arguments);
+        ast_node const *const *end = vec_cend(&node->lambda_application.arguments);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_application.arguments));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "lambda-application"),
+                                            ast_node_to_sexp(alloc, node->lambda_application.lambda), list);
+
+    } break;
+    case ast_named_function_application: {
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->named_application.arguments));
+        sexp *es_it                = elements;
+        ast_node const *const *it  = vec_cbegin(&node->named_application.arguments);
+        ast_node const *const *end = vec_cend(&node->named_application.arguments);
+        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        sexp list = sexp_init_list(alloc, elements, vec_size(&node->named_application.arguments));
+        alloc_free(alloc, elements);
+
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "named-application"),
+                                            ast_node_to_sexp(alloc, node->named_application.name), list);
+
+    } break;
+    }
 }
 
 // -- pool operations --
@@ -253,210 +397,9 @@ void ast_vector_init(allocator *alloc, vector *vec) {
     vec_init(alloc, vec, sizeof(ast_node *), 0);
 }
 
-static int print_node(ast_node const *node, char *restrict buf, int const sz_,
-                      char const *restrict literal) {
-    if (sz_ < 0) return -1;
-    size_t const sz = (size_t)sz_;
-
-    if ((null == node) && (null != literal)) {
-        return snprintf(buf, sz, "%s", literal);
-    }
-
-    if (null == node) {
-        return snprintf(buf, sz, "NULL");
-    }
-
-    int offset = 0;
-
-#define do_print_init() int res = 0
-
-#define do_print_node(NODE)                                                                                \
-    do {                                                                                                   \
-        res = print_node(NODE, buf + offset, sz_ - offset, null);                                          \
-        if (res < 0) return res;                                                                           \
-        offset += res;                                                                                     \
-    } while (0)
-
-#define do_print_literal(LITERAL)                                                                          \
-    do {                                                                                                   \
-        res = print_node(null, buf + offset, sz_ - offset, LITERAL);                                       \
-        if (res < 0) return res;                                                                           \
-        offset += res;                                                                                     \
-    } while (0)
-
-#define do_print_list(FIELD)                                                                               \
-    do {                                                                                                   \
-        size_t           count = vec_size(&FIELD);                                                         \
-        ast_node const **it    = (ast_node const **)vec_cbegin(&FIELD);                                    \
-        while (count--) {                                                                                  \
-            do_print_node(*it);                                                                            \
-            if (count) do_print_literal(" ");                                                              \
-                                                                                                           \
-            ++it;                                                                                          \
-        }                                                                                                  \
-    } while (0)
-
-    switch (node->tag) {
-
-    case ast_eof:    return snprintf(buf, sz, "(eof)");
-    case ast_nil:    return snprintf(buf, sz, "(nil)");
-    case ast_bool:   return snprintf(buf, sz, "(bool %d)", node->bool_.val);
-    case ast_symbol: return snprintf(buf, sz, "(symbol %s)", mos_string_str(&node->symbol.name));
-    case ast_i64:    return snprintf(buf, sz, "(i64 %" PRId64 ")", node->i64.val);
-    case ast_u64:    return snprintf(buf, sz, "(u64 %" PRIu64 ")", node->u64.val);
-    case ast_f64:    return snprintf(buf, sz, "(f64 %f)", node->f64.val);
-    case ast_string: return snprintf(buf, sz, "(string \"%s\")", mos_string_str(&node->symbol.name));
-
-    case ast_infix:  {
-        ast_node *left, *right;
-        left  = node->infix.left;
-        right = node->infix.right;
-
-        do_print_init();
-
-        res = snprintf(buf, sz, "(infix %s ", ast_operator_to_string(node->infix.op));
-        if (res < 0) return res;
-        offset += res;
-
-        do_print_node(left);
-        do_print_literal(" ");
-        do_print_node(right);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_tuple: {
-        do_print_init();
-
-        res = snprintf(buf, sz, "(tuple ");
-        if (res < 0) return 1;
-        offset += res;
-
-        do_print_list(node->tuple.elements);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_let_in: {
-        ast_node *name, *value, *body;
-        name  = node->let_in.name;
-        value = node->let_in.value;
-        body  = node->let_in.body;
-
-        do_print_init();
-        do_print_literal("(let_in ");
-        do_print_node(name);
-        do_print_literal(" ");
-        do_print_node(value);
-        do_print_literal(" ");
-        do_print_node(body);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_let: {
-        ast_node *name, *body;
-        name = node->let.name;
-        body = node->let.body;
-
-        do_print_init();
-        do_print_literal("(let ");
-        do_print_node(name);
-        do_print_literal(" (");
-        do_print_list(node->let.parameters);
-        do_print_literal(") ");
-        do_print_node(body);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_if_then_else: {
-        ast_node *cond, *yes, *no;
-        cond = node->if_then_else.condition;
-        yes  = node->if_then_else.yes;
-        no   = node->if_then_else.no;
-
-        do_print_init();
-        do_print_literal("(if_then_else ");
-        do_print_node(cond);
-        do_print_literal(" ");
-        do_print_node(yes);
-        do_print_literal(" ");
-        do_print_node(no);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_lambda_function: {
-        ast_node *body = node->lambda_function.body;
-
-        do_print_init();
-        do_print_literal("(lambda (");
-        do_print_list(node->lambda_function.parameters);
-        do_print_literal(") ");
-        do_print_node(body);
-        do_print_literal(")");
-
-    } break;
-
-    case ast_function_declaration: {
-        ast_node *name = node->function_declaration.name;
-
-        do_print_init();
-        do_print_literal("(function_declaration (");
-        do_print_node(name);
-        do_print_literal(" ");
-        do_print_list(node->function_declaration.parameters);
-        do_print_literal("))");
-
-    } break;
-
-    case ast_lambda_declaration: {
-
-        do_print_init();
-        do_print_literal("(lambda_declaration (");
-        do_print_list(node->lambda_declaration.parameters);
-        do_print_literal("))");
-
-    } break;
-
-    case ast_lambda_function_application: {
-        ast_node *lambda = node->lambda_application.lambda;
-
-        do_print_init();
-        do_print_literal("(lambda_application ");
-        do_print_node(lambda);
-        do_print_literal(" ");
-        do_print_list(node->lambda_application.arguments);
-        do_print_literal(")");
-
-    } break;
-    case ast_named_function_application: {
-        ast_node *name = node->named_application.name;
-
-        do_print_init();
-        do_print_literal("(application ");
-        do_print_node(name);
-        do_print_literal(" ");
-        do_print_list(node->named_application.arguments);
-        do_print_literal(")");
-
-    } break;
-    }
-
-    return offset;
-
-#undef do_print_node
-#undef do_print_literal
-}
-
-int ast_node_to_string_buf(ast_node const *node, char *buf, size_t sz_) {
-    if (sz_ > INT_MAX) return 1;
-    int sz  = (int)sz_;
-
-    int res = print_node(node, buf, sz, null);
-
-    // check error conditions from snprintf
-    if (res < 0 || res > sz) return 1;
-    return 0;
+char *ast_node_to_string(allocator *alloc, ast_node const *node) {
+    sexp  expr = ast_node_to_sexp(alloc, node);
+    char *out  = sexp_to_string(alloc, expr);
+    sexp_deinit(alloc, &expr);
+    return out;
 }

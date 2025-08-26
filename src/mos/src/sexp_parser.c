@@ -352,7 +352,7 @@ finish:
 void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
     alloc_zero(self);
     self->tag = tag;
-    mos_string_init_empty(&self->s);
+    self->s   = mos_string_init_empty();
 }
 
 // -- token --
@@ -360,7 +360,7 @@ void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
 nodiscard int sexp_token_init_str(allocator *alloc, sexp_token *self, sexp_token_tag tag, char const *src,
                                   size_t len) {
 
-    mos_string_init_n(alloc, &self->s, src, len);
+    self->s   = mos_string_init_n(alloc, src, len);
     self->tag = tag;
 
     return 0;
@@ -431,11 +431,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                     if (sexp_parser_next(self, &sub_expr, err, err_loc)) {
 
                         if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
-                            if (sexp_init_boxed(self->alloc, out)) {
-                                *err  = sexp_tok_err_oom;
-                                state = error;
-                                break;
-                            }
+                            *out = sexp_init_boxed(self->alloc);
                             sexp_box_init_move_list(sexp_box_get(*out), &exprs);
                             state = stop;
                         }
@@ -463,11 +459,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
             case sexp_tok_symbol: {
 
-                if (sexp_init_boxed(self->alloc, out)) {
-                    *err  = sexp_tok_err_oom;
-                    state = error;
-                    continue;
-                }
+                *out = sexp_init_boxed(self->alloc);
 
                 if (0 != strcmp("nil", mos_string_str(&tok.s))) {
                     sexp_box_init_move_string(sexp_box_get(*out), sexp_box_symbol, &tok.s);
@@ -476,12 +468,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             } break;
 
             case sexp_tok_string: {
-                if (sexp_init_boxed(self->alloc, out)) {
-                    *err  = sexp_tok_err_oom;
-                    state = error;
-                    continue;
-                }
-
+                *out = sexp_init_boxed(self->alloc);
                 sexp_box_init_move_string(sexp_box_get(*out), sexp_box_string, &tok.s);
                 state = stop;
             } break;
@@ -493,29 +480,17 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                 switch (mos_string_parse_number(mos_string_str(&tok.s), &xi, &xu, &xd)) {
                 case 1:
-                    if (sexp_init_i64(self->alloc, out, xi)) {
-                        *err  = sexp_tok_err_oom;
-                        state = error;
-                        continue;
-                    }
+                    *out  = sexp_init_i64(self->alloc, xi);
                     state = stop;
                     break;
 
                 case 2:
-                    if (sexp_init_u64(self->alloc, out, xu)) {
-                        *err  = sexp_tok_err_oom;
-                        state = error;
-                        continue;
-                    }
+                    *out  = sexp_init_u64(self->alloc, xu);
                     state = stop;
                     break;
 
                 case 3:
-                    if (sexp_init_f64(self->alloc, out, xd)) {
-                        *err  = sexp_tok_err_oom;
-                        state = error;
-                        continue;
-                    }
+                    *out  = sexp_init_f64(self->alloc, xd);
                     state = stop;
                     break;
 

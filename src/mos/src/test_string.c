@@ -24,10 +24,9 @@ static int test_string(void) {
         for (int j = 0; j < n; ++j) {
             data[j] = (char)rand();
         }
-        data[n] = '\0';
+        data[n]    = '\0';
 
-        string_t s;
-        mos_string_init(alloc, &s, data);
+        string_t s = mos_string_init(alloc, data);
 
         error += (strlen(data) > MOS_STRING_MAX_SMALL_LEN) == mos_string_is_allocated(&s) ? 0 : 1;
         error += 0 == strcmp(mos_string_str(&s), data) ? 0 : 1;

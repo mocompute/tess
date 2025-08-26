@@ -231,10 +231,9 @@ static int test_parser_node_to_string(void) {
 
         error += ast_infix == node->tag ? 0 : 1;
 
-        char buf[64];
-        if (ast_node_to_string_buf(node, buf, 64)) return error + 1;
-
-        error += 0 == strcmp("(infix + (i64 1) (i64 2))", buf) ? 0 : 1;
+        char *str = ast_node_to_string(alloc, node);
+        error += 0 == strcmp("(infix + (i64 1) (i64 2))", str) ? 0 : 1;
+        alloc_free(alloc, str);
 
         parser_destroy(&p);
     }
@@ -251,10 +250,9 @@ static int test_parser_node_to_string(void) {
 
         error += ast_tuple == node->tag ? 0 : 1;
 
-        char buf[64];
-        if (ast_node_to_string_buf(node, buf, 64)) return error + 1;
-
-        error += 0 == strcmp("(tuple (symbol a) (symbol b))", buf) ? 0 : 1;
+        char *str = ast_node_to_string(alloc, node);
+        error += 0 == strcmp("(tuple (symbol a) (symbol b))", str) ? 0 : 1;
+        alloc_free(alloc, str);
         parser_destroy(&p);
     }
 
@@ -295,11 +293,11 @@ static int test_parse_all(void) {
 
         if (syntax_checker_run(syntax, (ast_node **)vec_data(&nodes), vec_size(&nodes))) return error + 1;
 
-        char buf[1024];
         for (u32 i = 0; i < 1; ++i) {
             ast_node const *node = *(ast_node **)vec_cat(&nodes, i);
-            if (ast_node_to_string_buf(node, buf, sizeof buf)) return ++error;
-            dbg("node: %s\n", buf);
+            char           *str  = ast_node_to_string(alloc_default_allocator(), node);
+            dbg("node: %s\n", str);
+            alloc_free(alloc_default_allocator(), str);
         }
 
         vec_deinit(vec_alloc, &nodes);

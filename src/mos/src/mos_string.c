@@ -10,38 +10,42 @@
 #include <stdint.h>
 #include <string.h>
 
-void mos_string_init_empty(string_t *s) {
-    alloc_zero(s);
-    s->small.tag = 1;
+string_t mos_string_init_empty() {
+    string_t s;
+    alloc_zero(&s);
+    s.small.tag = 1;
+    return s;
 }
 
-void mos_string_init_n(allocator *alloc, string_t *s, char const *src, size_t max) {
+string_t mos_string_init_n(allocator *alloc, char const *src, size_t max) {
+    string_t s;
 
-    size_t len = strlen(src);
+    size_t   len = strlen(src);
     if (len > max) len = max;
     assert(len <= MOS_STRING_MAX_LEN);
 
     if (len == 0) {
-        s->small.data[0] = '\0';
-        s->small.tag     = 0;
-        return;
+        s.small.data[0] = '\0';
+        s.small.tag     = 0;
+        return s;
     }
 
     if (len <= MOS_STRING_MAX_SMALL_LEN) {
-        s->small.tag = 0;
-        memset(s->small.data, 0, MOS_STRING_MAX_SMALL_LEN);
-        memcpy(s->small.data, src, len);
-        s->small.data[len] = '\0';
-        return;
+        s.small.tag = 0;
+        memset(s.small.data, 0, MOS_STRING_MAX_SMALL_LEN);
+        memcpy(s.small.data, src, len);
+        s.small.data[len] = '\0';
+        return s;
     }
 
-    s->small.tag      = 1;
-    s->allocated.buf  = alloc_strndup(alloc, src, len);
-    s->allocated.size = (u32)len;
+    s.small.tag      = 1;
+    s.allocated.buf  = alloc_strndup(alloc, src, len);
+    s.allocated.size = (u32)len;
+    return s;
 }
 
-void mos_string_init(allocator *alloc, string_t *s, char const *src) {
-    return mos_string_init_n(alloc, s, src, SIZE_MAX);
+string_t mos_string_init(allocator *alloc, char const *src) {
+    return mos_string_init_n(alloc, src, SIZE_MAX);
 }
 
 void mos_string_deinit(allocator *alloc, string_t *s) {
@@ -51,12 +55,12 @@ void mos_string_deinit(allocator *alloc, string_t *s) {
 
 void mos_string_replace(allocator *alloc, string_t *s, char const *src) {
     if (mos_string_is_allocated(s)) alloc_free(alloc, s->allocated.buf);
-    return mos_string_init(alloc, s, src);
+    *s = mos_string_init(alloc, src);
 }
 
 void mos_string_move(string_t *dst, string_t *src) {
     alloc_copy(dst, src);
-    mos_string_init_empty(src);
+    *src = mos_string_init_empty();
 }
 
 void mos_string_copy(allocator *alloc, string_t *dst, string_t const *src) {

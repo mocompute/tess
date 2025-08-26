@@ -116,9 +116,8 @@ static int result_ast_bool(parser *p, bool val) {
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    p->result = ast_node_create(p->ast_arena, tag);
-
-    mos_string_init(p->ast_arena, &p->result->symbol.name, s);
+    p->result              = ast_node_create(p->ast_arena, tag);
+    p->result->symbol.name = mos_string_init(p->ast_arena, s);
     // syms and strs use same union
 
     return 0;

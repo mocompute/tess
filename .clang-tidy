@@ -10,6 +10,7 @@ Checks:
   - -bugprone-easily-swappable-parameters
   - -bugprone-crtp-constructor-accessibility
   - -bugprone-assignment-in-if-condition
+  - -bugprone-multi-level-implicit-pointer-conversion
   - performance-*
 WarningsAsErrors: ''
 HeaderFileExtensions:

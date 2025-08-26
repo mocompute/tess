@@ -70,7 +70,7 @@ static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
 static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "__v%zu", self->next++);
-    mos_string_init(self->alloc, out, buf);
+    *out = mos_string_init(self->alloc, buf);
     return 0;
 }
 

@@ -63,17 +63,23 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-void          sexp_init_unboxed(sexp *, i64);
-nodiscard int sexp_init_boxed(allocator *, sexp *);
-nodiscard int sexp_init_i64(allocator *, sexp *, i64);
-nodiscard int sexp_init_u64(allocator *, sexp *, u64);
-nodiscard int sexp_init_f64(allocator *, sexp *, f64);
-void          sexp_deinit(allocator *, sexp *);
+sexp sexp_init_unboxed(i64);
+sexp sexp_init_boxed(allocator *);
+sexp sexp_init_i64(allocator *, i64);
+sexp sexp_init_u64(allocator *, u64);
+sexp sexp_init_f64(allocator *, f64);
+sexp sexp_init_sym(allocator *, char const *);
+sexp sexp_init_list(allocator *, sexp *, u32);
+sexp sexp_init_list_single(allocator *, sexp);
+sexp sexp_init_list_pair(allocator *, sexp, sexp);
+sexp sexp_init_list_triple(allocator *, sexp, sexp, sexp);
+sexp sexp_init_list_quad(allocator *, sexp, sexp, sexp, sexp);
+void sexp_deinit(allocator *, sexp *);
 
-void          sexp_box_init_empty(sexp_box *);
-void          sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
-void          sexp_box_init_move_list(sexp_box *, vector *);
-void          sexp_box_deinit(allocator *, sexp_box *);
+void sexp_box_init_empty(sexp_box *);
+void sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
+void sexp_box_init_move_list(sexp_box *, vector *);
+void sexp_box_deinit(allocator *, sexp_box *);
 
 // -- access --
 

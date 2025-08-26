@@ -14,9 +14,11 @@ static bool is_boxed(sexp self) {
     return (self.integer & 1) == 0;
 }
 
-void sexp_init_unboxed(sexp *self, i64 val) {
+sexp sexp_init_unboxed(i64 val) {
     assert(val <= SEXP_MAX_UNBOXED_INT && val >= SEXP_MIN_UNBOXED_INT);
-    self->integer = (val << 1) | 1;
+    sexp out;
+    out.integer = (val << 1) | 1;
+    return out;
 }
 
 i64 sexp_unboxed_get(sexp self) {
@@ -43,14 +45,11 @@ void sexp_box_init_move_list(sexp_box *self, vector *src) {
     vec_move(&self->list.list, src);
 }
 
-int sexp_init_boxed(allocator *alloc, sexp *self) {
-    alloc_zero(self);
-    self->ptr = alloc_malloc(alloc, sizeof(sexp_box));
-    if (null == self->ptr) return 1;
-
-    sexp_box_init_empty(self->ptr);
-
-    return 0;
+sexp sexp_init_boxed(allocator *alloc) {
+    sexp out;
+    out.ptr = alloc_malloc(alloc, sizeof(sexp_box));
+    sexp_box_init_empty(out.ptr);
+    return out;
 }
 
 void sexp_deinit(allocator *alloc, sexp *self) {
@@ -61,32 +60,68 @@ void sexp_deinit(allocator *alloc, sexp *self) {
     alloc_invalidate(self);
 }
 
-int sexp_init_i64(allocator *alloc, sexp *self, i64 val) {
+sexp sexp_init_i64(allocator *alloc, i64 val) {
+    sexp out;
     if (val >= SEXP_MIN_UNBOXED_INT && val <= SEXP_MAX_UNBOXED_INT) {
-        sexp_init_unboxed(self, val);
+        out = sexp_init_unboxed(val);
     } else {
-        if (sexp_init_boxed(alloc, self)) return 1;
-        sexp_box *box = sexp_box_get(*self);
+        out           = sexp_init_boxed(alloc);
+        sexp_box *box = sexp_box_get(out);
         box->tag      = sexp_box_i64;
         box->i64.val  = val;
     }
-    return 0;
+    return out;
 }
 
-int sexp_init_u64(allocator *alloc, sexp *self, u64 val) {
-    if (sexp_init_boxed(alloc, self)) return 1;
-    sexp_box *box = sexp_box_get(*self);
+sexp sexp_init_u64(allocator *alloc, u64 val) {
+    sexp      out = sexp_init_boxed(alloc);
+    sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_u64;
     box->u64.val  = val;
-    return 0;
+    return out;
 }
 
-int sexp_init_f64(allocator *alloc, sexp *self, f64 val) {
-    if (sexp_init_boxed(alloc, self)) return 1;
-    sexp_box *box = sexp_box_get(*self);
+sexp sexp_init_f64(allocator *alloc, f64 val) {
+    sexp      out = sexp_init_boxed(alloc);
+    sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_f64;
     box->f64.val  = val;
-    return 0;
+    return out;
+}
+
+sexp sexp_init_sym(allocator *alloc, char const *str) {
+    sexp      out    = sexp_init_boxed(alloc);
+    sexp_box *box    = sexp_box_get(out);
+    box->tag         = sexp_box_symbol;
+    box->symbol.name = mos_string_init(alloc, str);
+    return out;
+}
+
+sexp sexp_init_list(allocator *alloc, sexp *elements, u32 count) {
+    sexp      out = sexp_init_boxed(alloc);
+    sexp_box *box = sexp_box_get(out);
+    box->tag      = sexp_box_list;
+    vec_copy_back(alloc, &box->list.list, elements, count);
+    return out;
+}
+
+sexp sexp_init_list_single(allocator *alloc, sexp element) {
+    return sexp_init_list(alloc, &element, 1);
+}
+
+sexp sexp_init_list_pair(allocator *alloc, sexp left, sexp right) {
+    sexp pair[2] = {left, right};
+    return sexp_init_list(alloc, pair, sizeof pair / sizeof *pair);
+}
+
+sexp sexp_init_list_triple(allocator *alloc, sexp first, sexp second, sexp third) {
+    sexp triple[3] = {first, second, third};
+    return sexp_init_list(alloc, triple, sizeof triple / sizeof *triple);
+}
+
+sexp sexp_init_list_quad(allocator *alloc, sexp first, sexp second, sexp third, sexp fourth) {
+    sexp quad[4] = {first, second, third, fourth};
+    return sexp_init_list(alloc, quad, sizeof quad / sizeof *quad);
 }
 
 void sexp_box_deinit(allocator *alloc, sexp_box *self) {

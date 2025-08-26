@@ -25,13 +25,13 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-void mos_string_init(allocator *, string_t *, char const *);
-void mos_string_init_n(allocator *, string_t *, char const *, size_t);
-void mos_string_init_empty(string_t *);
-void mos_string_deinit(allocator *, string_t *);
-void mos_string_replace(allocator *, string_t *, char const *);
-void mos_string_move(string_t *, string_t *);
-void mos_string_copy(allocator *, string_t *, string_t const *);
+string_t mos_string_init(allocator *, char const *);
+string_t mos_string_init_n(allocator *, char const *, size_t);
+string_t mos_string_init_empty();
+void     mos_string_deinit(allocator *, string_t *);
+void     mos_string_replace(allocator *, string_t *, char const *);
+void     mos_string_move(string_t *, string_t *);
+void     mos_string_copy(allocator *, string_t *, string_t const *);
 
 // -- access --
 
