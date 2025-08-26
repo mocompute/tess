@@ -10,7 +10,7 @@ struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
-    char                *data[];
+    char                 data[];
 };
 
 struct string_arena {
@@ -155,23 +155,18 @@ static void arena_free(allocator *alloc, void *p, char const *file, int line) {
     (void)p;
 }
 
-void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
-    alloc_assert_invalid(*arena);
-    alloc_free(alloc, *arena);
-    *arena = null;
-}
-
-void alloc_string_arena_destroy(allocator *parent, allocator **arena) {
-    struct arena_header *next = ((struct string_arena *)arena)->head;
+void alloc_string_arena_destroy(allocator *parent, allocator **arena_) {
+    struct string_arena *arena = *(struct string_arena **)arena_;
+    struct arena_header *next  = arena->head;
 
     while (next) {
         struct arena_header *next_next = next->next;
-        alloc_free(((struct string_arena *)arena)->parent, next);
+        alloc_free(arena->parent, next);
         next = next_next;
     }
 
-    alloc_free(parent, *arena);
-    *arena = null;
+    alloc_free(parent, *arena_);
+    *arena_ = null;
 }
 
 allocator *alloc_string_arena_create(allocator *parent, size_t sz) {
@@ -179,9 +174,9 @@ allocator *alloc_string_arena_create(allocator *parent, size_t sz) {
 
     arena->parent              = parent;
     sz                         = alloc_next_power_of_two(sz);
+
     if (0 == sz) sz = 16;
     arena->head = alloc_malloc(parent, sizeof(struct arena_header) + sz);
-
     alloc_zero(arena->head);
     arena->head->capacity    = sz;
 
