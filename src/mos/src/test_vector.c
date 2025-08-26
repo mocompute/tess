@@ -50,7 +50,7 @@ static int test_assoc(void) {
     allocator *alloc = alloc_default_allocator();
 
     vector    *vec   = vec_alloc(alloc);
-    vec_init(alloc, vec, 2 * sizeof(size_t), 0);
+    vec_init(alloc, vec, 2 * sizeof(u32), 0);
 
     u32 pair[2];
 
