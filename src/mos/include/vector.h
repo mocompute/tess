@@ -2,6 +2,7 @@
 #define MOS_VECTOR_H
 
 #include "alloc.h"
+#include "nodiscard.h"
 #include "types.h"
 
 #include <stdbool.h>
@@ -34,13 +35,13 @@ typedef struct vector {
 
 // -- allocation and deallocation --
 
-struct vector *vec_create(allocator *, u32 num, u32 size);
-void           vec_destroy(allocator *, vector **);
+nodiscard struct vector *vec_create(allocator *, u32 num, u32 size);
+void                     vec_destroy(allocator *, vector **);
 
-struct vector  vec_init(u32 el_size);
-void           vec_deinit(allocator *, vector *);
-void           vec_reserve(allocator *, vector *, u32);
-void           vec_move(vector *dst, vector *src);
+struct vector            vec_init(u32 el_size);
+void                     vec_deinit(allocator *, vector *);
+void                     vec_reserve(allocator *, vector *, u32);
+void                     vec_move(vector *dst, vector *src);
 
 // -- read-only access --
 

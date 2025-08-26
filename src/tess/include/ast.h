@@ -91,14 +91,14 @@ typedef struct ast_node {
 
 // -- ast_node --
 
-ast_node   *ast_node_create(allocator *, ast_tag) mallocfun;
-void        ast_node_init(ast_node *, ast_tag);
-void        ast_node_deinit(allocator *, ast_node *);
-void        ast_node_replace(allocator *, ast_node *, ast_tag);
-void        ast_node_move(ast_node *dst, ast_node *src);
+nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
+void                ast_node_init(ast_node *, ast_tag);
+void                ast_node_deinit(allocator *, ast_node *);
+void                ast_node_replace(allocator *, ast_node *, ast_tag);
+void                ast_node_move(ast_node *dst, ast_node *src);
 
-char const *ast_node_name_string(ast_node const *);
-int         ast_node_name_strcmp(ast_node const *, char const *);
+char const         *ast_node_name_string(ast_node const *);
+int                 ast_node_name_strcmp(ast_node const *, char const *);
 
 // -- utilities --
 

@@ -115,7 +115,6 @@ static int test_tokenizer_string(void) {
         if (error) return error;
         error += tok_string == tok.tag ? 0 : 1;
         error += 0 == strcmp("abcdef", tok.s) ? 0 : 1;
-        token_deinit(alloc, &tok);
     }
 
     tokenizer_destroy(&t);
@@ -141,7 +140,6 @@ static int test_tokenizer_terminal_static_string(void) {
         if (error) return error;
         error += tok_symbol == tok.tag ? 0 : 1;
         error += 0 == strcmp("-", tok.s) ? 0 : 1;
-        token_deinit(alloc, &tok);
     }
 
     tokenizer_destroy(&t);
