@@ -1,4 +1,6 @@
 #include "alloc.h"
+#include "alloc_internal.h"
+
 #include "types.h"
 
 #include <assert.h>
@@ -29,13 +31,6 @@ static noreturn void fatal(char const *restrict fmt, ...) {
     va_end(args);
     exit(1);
 }
-
-struct allocator {
-    void *(*malloc)(allocator *, size_t, char const *, int);
-    void *(*calloc)(allocator *, size_t num, size_t size, char const *, int);
-    void *(*realloc)(allocator *, void *, size_t, char const *, int);
-    void (*free)(allocator *, void *, char const *, int);
-};
 
 typedef struct {
     size_t size;
@@ -268,7 +263,7 @@ static void arena_free(allocator *alloc, void *p, char const *file, int line) {
 }
 
 allocator *alloc_arena_create(allocator *alloc, size_t sz) {
-    allocator *out = alloc_malloc(alloc, sizeof(arena_allocator));
+    allocator *out = alloc_malloc(alloc, sizeof(struct arena_allocator));
     alloc_arena_init(out, alloc, sz);
     return out;
 }
