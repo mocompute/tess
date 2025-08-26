@@ -447,29 +447,29 @@ void alloc_leak_detector_report(allocator *alloc) {
 
     // report
     for (i64 i = 0; i < self->size; ++i) {
-        if (leak_error_alloc_leak == records[i].status) {
-            if (records[i].realloc_ptr) {
-                bool found = false;
-                for (i64 j = i - 1; j >= 0; --j) {
-                    if (records[i].realloc_ptr == records[j].ptr) {
-                        fprintf(stderr,
-                                "leak_detector: leak of %zu bytes at %p reallocated by %s:%i, original "
-                                "allocation at %p %s:%i\n",
-                                records[i].size, records[i].ptr, records[i].file, records[i].line,
-                                records[j].ptr, records[j].file, records[j].line);
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    fprintf(stderr, "leak_detector: leak of %zu bytes at %p reallocated by %s:%i\n",
-                            records[i].size, records[i].ptr, records[i].file, records[i].line);
-                }
+        if (leak_error_alloc_leak != records[i].status) continue;
 
-            } else {
-                fprintf(stderr, "leak_detector: leak of %zu bytes at %p allocated by %s:%i\n",
+        if (records[i].realloc_ptr) {
+            bool found = false;
+            for (i64 j = i - 1; j >= 0; --j) {
+                if (records[i].realloc_ptr == records[j].ptr) {
+                    fprintf(stderr,
+                            "leak_detector: leak of %zu bytes at %p reallocated by %s:%i, original "
+                            "allocation at %p %s:%i\n",
+                            records[i].size, records[i].ptr, records[i].file, records[i].line,
+                            records[j].ptr, records[j].file, records[j].line);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                fprintf(stderr, "leak_detector: leak of %zu bytes at %p reallocated by %s:%i\n",
                         records[i].size, records[i].ptr, records[i].file, records[i].line);
             }
+
+        } else {
+            fprintf(stderr, "leak_detector: leak of %zu bytes at %p allocated by %s:%i\n", records[i].size,
+                    records[i].ptr, records[i].file, records[i].line);
         }
     }
 
@@ -477,10 +477,10 @@ cleanup:
     free(records);
 }
 
-static void leak_detector_ensure_good_free(leak_detector *self, void *ptr, char const *file, int line) {
+static size_t leak_detector_ensure_good_free(leak_detector *self, void *ptr, char const *file, int line) {
     // ensure the attempted free of ptr is valid.
 
-    if (null == ptr) return; // always valid
+    if (null == ptr) return 0; // always valid
 
     if (0 == self->size) {
         fatal("leak_detector: attempt to free %p before any malloc\n", ptr);
@@ -489,7 +489,7 @@ static void leak_detector_ensure_good_free(leak_detector *self, void *ptr, char 
     for (i64 i = self->size - 1; i >= 0; --i) {
         if (ptr == self->data[i].ptr &&
             (leak_action_alloc == self->data[i].status || leak_action_realloc == self->data[i].status))
-            return;
+            return self->data[i].size;
     }
 
     fatal("leak_detector: attempt to free unknown pointer %p: %s:%i\n", ptr, file, line);
@@ -538,11 +538,13 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
 
 static void leak_detector_free(allocator *alloc, void *ptr, char const *file, int line) {
     leak_detector *self = (leak_detector *)alloc;
-    leak_detector_ensure_good_free(self, ptr, file, line);
+    size_t         size = leak_detector_ensure_good_free(self, ptr, file, line);
     leak_detector_reserve_one(self);
 
     self->data[self->size++] = (struct leak_allocation){
       .ptr = ptr, .realloc_ptr = null, .size = 0, .file = file, .line = line, .status = leak_action_free};
+
+    alloc_invalidate_n(ptr, size);
 
     free(ptr);
 }
