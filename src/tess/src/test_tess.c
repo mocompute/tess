@@ -5,6 +5,7 @@
 #include "syntax.h"
 #include "tokenizer.h"
 #include "transpiler.h"
+#include "type_inference.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -268,6 +269,7 @@ static int test_parse_all(void) {
 
     allocator *vec_alloc = alloc_leak_detector_create();
     allocator *ast_alloc = alloc_leak_detector_create();
+    allocator *ti_alloc  = alloc_leak_detector_create();
     if (!ast_alloc) return error + 1;
 
     {
@@ -295,6 +297,11 @@ static int test_parse_all(void) {
 
         if (syntax_checker_run(syntax, (ast_node **)vec_data(&nodes), vec_size(&nodes))) return error + 1;
 
+        ti_inferer *ti =
+          ti_inferer_create(ti_alloc, (ast_node **)vec_data(&nodes), vec_size(&nodes), ast_alloc);
+
+        ti_inferer_run(ti);
+
         for (u32 i = 0; i < 1; ++i) {
             ast_node const *node = *(ast_node **)vec_cat(&nodes, i);
             char           *str  = ast_node_to_string(alloc_default_allocator(), node);
@@ -302,11 +309,14 @@ static int test_parse_all(void) {
             alloc_free(alloc_default_allocator(), str);
         }
 
+        ti_inferer_destroy(ti_alloc, &ti);
+
         vec_deinit(vec_alloc, &nodes);
         syntax_checker_destroy(&syntax);
         parser_destroy(&p);
     }
 
+    alloc_leak_detector_destroy(&ti_alloc);
     alloc_leak_detector_destroy(&ast_alloc);
     alloc_leak_detector_destroy(&vec_alloc);
 

@@ -32,11 +32,14 @@ typedef struct tess_type {
     tess_type_tag tag;
 } tess_type;
 
-void        tess_type_init(tess_type *, tess_type_tag);
-void        tess_type_init_type_var(tess_type *, u32);
-void        tess_type_init_tuple(allocator *, tess_type *);
-void        tess_type_init_arrow(tess_type *, tess_type *, tess_type *);
+tess_type   tess_type_init(tess_type_tag);
+tess_type   tess_type_init_type_var(u32);
+tess_type   tess_type_init_tuple(allocator *);
+tess_type   tess_type_init_arrow(tess_type *, tess_type *);
 void        tess_type_deinit(allocator *, tess_type *);
+
+int         tess_type_snprint(char *, int, tess_type const *);
+char       *tess_type_to_string(allocator *, tess_type const *);
 
 char const *type_tag_to_string(tess_type_tag);
 

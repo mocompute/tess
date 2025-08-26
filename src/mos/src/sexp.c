@@ -124,6 +124,11 @@ sexp sexp_init_list_quad(allocator *alloc, sexp first, sexp second, sexp third, 
     return sexp_init_list(alloc, quad, sizeof quad / sizeof *quad);
 }
 
+sexp sexp_init_list_penta(allocator *alloc, sexp first, sexp second, sexp third, sexp fourth, sexp fifth) {
+    sexp penta[5] = {first, second, third, fourth, fifth};
+    return sexp_init_list(alloc, penta, sizeof penta / sizeof *penta);
+}
+
 void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     switch (self->tag) {
     case sexp_box_i64:

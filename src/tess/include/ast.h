@@ -85,8 +85,8 @@ typedef struct ast_node {
         } tuple;
     };
 
-    tess_type *type;
-    ast_tag    tag;
+    tess_type type;
+    ast_tag   tag;
 } ast_node;
 
 // -- ast_node --
@@ -108,10 +108,10 @@ void        ast_vector_init(allocator *, vector *);
 char const *ast_tag_to_string(ast_tag);
 int         string_to_ast_operator(char const *, ast_operator *);
 
-typedef void (*ast_op_fun)(ast_node *);
-typedef void (*ast_op_cfun)(ast_node const *);
+typedef void (*ast_op_fun)(void *, ast_node *);
+typedef void (*ast_op_cfun)(void *, ast_node const *);
 
-void ast_pool_dfs(ast_node *, ast_op_fun);
-void ast_pool_cdfs(ast_node const *, ast_op_cfun);
+void ast_pool_dfs(void *, ast_node *, ast_op_fun);
+void ast_pool_cdfs(void *, ast_node const *, ast_op_cfun);
 
 #endif

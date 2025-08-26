@@ -191,11 +191,23 @@ u32 vec_capacity(vector const *vec) {
 }
 
 //
+
 void vec_map(vector const *self, vec_map_fun fun, void *ctx, void *out) {
     u32 const   element_size = self->element_size;
     void const *it           = vec_cbegin(self);
     void const *end          = vec_cend(self);
     while (it != end) {
+        fun(ctx, out, it);
+        out += element_size;
+        it += element_size;
+    }
+}
+
+void vec_map_n(vector const *self, vec_map_fun fun, void *ctx, void *out, u32 max) {
+    u32 const   element_size = self->element_size;
+    void const *it           = vec_cbegin(self);
+    void const *end          = vec_cend(self);
+    while (max-- && it != end) {
         fun(ctx, out, it);
         out += element_size;
         it += element_size;

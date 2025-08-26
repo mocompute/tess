@@ -74,6 +74,7 @@ sexp sexp_init_list_single(allocator *, sexp);
 sexp sexp_init_list_pair(allocator *, sexp, sexp);
 sexp sexp_init_list_triple(allocator *, sexp, sexp, sexp);
 sexp sexp_init_list_quad(allocator *, sexp, sexp, sexp, sexp);
+sexp sexp_init_list_penta(allocator *, sexp, sexp, sexp, sexp, sexp);
 void sexp_deinit(allocator *, sexp *);
 
 void sexp_box_init_empty(sexp_box *);

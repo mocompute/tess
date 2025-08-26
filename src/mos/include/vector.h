@@ -62,6 +62,7 @@ void       *vec_back(vector *);
 typedef void (*vec_map_fun)(void *ctx, void *out, void const *el);
 
 void vec_map(vector const *, vec_map_fun, void *ctx, void *out);
+void vec_map_n(vector const *, vec_map_fun, void *ctx, void *out, u32);
 
 // -- insertion and removal --
 
