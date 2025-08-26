@@ -14,6 +14,6 @@ void                      syntax_checker_destroy(syntax_checker **);
 
 // -- operation --
 
-nodiscard int syntax_checker_run(syntax_checker *, ast_node **, size_t);
+nodiscard int syntax_checker_run(syntax_checker *, ast_node **, u32);
 
 #endif

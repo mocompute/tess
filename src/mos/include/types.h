@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 typedef unsigned char byte;
+typedef unsigned int  uint;
 
 typedef int8_t        i8;
 typedef int16_t       i16;
