@@ -108,6 +108,10 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
 
 char const *ast_operator_to_string(ast_operator);
 
+//
+
+static void map_ast_node_to_sexp(void *, void *, void const *); // vec_map_fun
+
 sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     if (null == node) return sexp_init_boxed(alloc);
@@ -140,12 +144,9 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                                           ast_node_to_sexp(alloc, node->infix.right));
 
     case ast_tuple: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->tuple.elements));
-        sexp *es_it    = elements;
-        ast_node const *const *it  = vec_cbegin(&node->tuple.elements);
-        ast_node const *const *end = vec_cend(&node->tuple.elements);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
 
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->tuple.elements));
+        vec_map(&node->tuple.elements, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->tuple.elements));
         alloc_free(alloc, elements);
         return sexp_init_list_pair(alloc, sexp_init_sym(alloc, "tuple"), list);
@@ -159,10 +160,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_let: {
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->let.parameters));
-        sexp *es_it    = elements;
-        ast_node const *const *it  = vec_cbegin(&node->let.parameters);
-        ast_node const *const *end = vec_cend(&node->let.parameters);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->let.parameters, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->let.parameters));
         alloc_free(alloc, elements);
 
@@ -180,10 +178,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_lambda_function: {
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_function.parameters));
-        sexp *es_it                = elements;
-        ast_node const *const *it  = vec_cbegin(&node->lambda_function.parameters);
-        ast_node const *const *end = vec_cend(&node->lambda_function.parameters);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->lambda_function.parameters, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_function.parameters));
         alloc_free(alloc, elements);
 
@@ -196,10 +191,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
         sexp *elements =
           alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->function_declaration.parameters));
-        sexp                  *es_it = elements;
-        ast_node const *const *it    = vec_cbegin(&node->function_declaration.parameters);
-        ast_node const *const *end   = vec_cend(&node->function_declaration.parameters);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->function_declaration.parameters, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->function_declaration.parameters));
         alloc_free(alloc, elements);
 
@@ -210,10 +202,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_lambda_declaration: {
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_declaration.parameters));
-        sexp *es_it                = elements;
-        ast_node const *const *it  = vec_cbegin(&node->lambda_declaration.parameters);
-        ast_node const *const *end = vec_cend(&node->lambda_declaration.parameters);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->lambda_declaration.parameters, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_declaration.parameters));
         alloc_free(alloc, elements);
 
@@ -223,10 +212,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_lambda_function_application: {
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_application.arguments));
-        sexp *es_it                = elements;
-        ast_node const *const *it  = vec_cbegin(&node->lambda_application.arguments);
-        ast_node const *const *end = vec_cend(&node->lambda_application.arguments);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->lambda_application.arguments, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_application.arguments));
         alloc_free(alloc, elements);
 
@@ -236,10 +222,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
     } break;
     case ast_named_function_application: {
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->named_application.arguments));
-        sexp *es_it                = elements;
-        ast_node const *const *it  = vec_cbegin(&node->named_application.arguments);
-        ast_node const *const *end = vec_cend(&node->named_application.arguments);
-        while (it != end) *es_it++ = ast_node_to_sexp(alloc, *it++);
+        vec_map(&node->named_application.arguments, map_ast_node_to_sexp, alloc, elements);
         sexp list = sexp_init_list(alloc, elements, vec_size(&node->named_application.arguments));
         alloc_free(alloc, elements);
 
@@ -248,6 +231,10 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     } break;
     }
+}
+
+void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {
+    *(sexp *)out = ast_node_to_sexp(alloc, *(ast_node const **)node_ptr);
 }
 
 // -- pool operations --

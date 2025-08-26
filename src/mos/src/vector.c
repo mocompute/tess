@@ -190,6 +190,20 @@ u32 vec_capacity(vector const *vec) {
     return vec->data->capacity;
 }
 
+//
+void vec_map(vector const *self, vec_map_fun fun, void *ctx, void *out) {
+    u32 const   element_size = self->element_size;
+    void const *it           = vec_cbegin(self);
+    void const *end          = vec_cend(self);
+    while (it != end) {
+        fun(ctx, out, it);
+        out += element_size;
+        it += element_size;
+    }
+}
+
+//
+
 void vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
     assert(vec->element_size >= sizeof(u32));
     vec_push_back(alloc, vec, pair);

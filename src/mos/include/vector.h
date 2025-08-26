@@ -57,6 +57,12 @@ void       *vec_at(vector *, u32);
 void const *vec_cat(vector const *, u32);
 void       *vec_back(vector *);
 
+// -- map --
+
+typedef void (*vec_map_fun)(void *ctx, void *out, void const *el);
+
+void vec_map(vector const *, vec_map_fun, void *ctx, void *out);
+
 // -- insertion and removal --
 
 void vec_push_back(allocator *, vector *, void const *);

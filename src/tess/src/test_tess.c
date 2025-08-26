@@ -232,6 +232,7 @@ static int test_parser_node_to_string(void) {
         error += ast_infix == node->tag ? 0 : 1;
 
         char *str = ast_node_to_string(alloc, node);
+        dbg("str 1 = %s\n", str);
         error += 0 == strcmp("(infix + (i64 1) (i64 2))", str) ? 0 : 1;
         alloc_free(alloc, str);
 
@@ -251,7 +252,8 @@ static int test_parser_node_to_string(void) {
         error += ast_tuple == node->tag ? 0 : 1;
 
         char *str = ast_node_to_string(alloc, node);
-        error += 0 == strcmp("(tuple (symbol a) (symbol b))", str) ? 0 : 1;
+        dbg("str 2 = %s\n", str);
+        error += 0 == strcmp("(tuple ((symbol a) (symbol b)))", str) ? 0 : 1;
         alloc_free(alloc, str);
         parser_destroy(&p);
     }
