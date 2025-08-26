@@ -15,6 +15,9 @@ typedef struct tokenizer_error {
 typedef struct tokenizer tokenizer;
 
 // -- allocation and deallocation --
+//
+// Memory buffers of tokens created by the tokenizer are managed by
+// the tokenizer and are freed by tokenizer_destroy.
 
 nodiscard tokenizer *tokenizer_create(allocator *, char const *, size_t) mallocfun;
 void                 tokenizer_destroy(tokenizer **);

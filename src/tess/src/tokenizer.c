@@ -1,6 +1,7 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
+#include "alloc_string.h"
 #include "token.h"
 #include "vector.h"
 
@@ -10,7 +11,8 @@
 #include <string.h>
 
 struct tokenizer {
-    allocator    *alloc;
+    allocator    *parent;
+    allocator    *strings;
     char const   *input;
     size_t        input_len;
     size_t        pos;
@@ -31,7 +33,8 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
-    self->alloc     = alloc;
+    self->parent    = alloc;
+    self->strings   = alloc_string_arena_create(alloc, 4096);
     self->input     = input;
     self->input_len = len;
     self->pos       = 0;
@@ -46,9 +49,11 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
 }
 
 void tokenizer_destroy(tokenizer **self) {
-    vec_deinit((*self)->alloc, &(*self)->backtrack);
-    vec_deinit((*self)->alloc, &(*self)->buf);
-    alloc_free((*self)->alloc, *self);
+    alloc_string_arena_destroy((*self)->parent, &(*self)->strings);
+
+    vec_deinit((*self)->parent, &(*self)->backtrack);
+    vec_deinit((*self)->parent, &(*self)->buf);
+    alloc_free((*self)->parent, *self);
     *self = null;
 }
 
@@ -167,22 +172,22 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '/':  state = forward_slash; continue;
 
             case ';':
-                replace_token(self->alloc, &res, tok_semicolon);
+                replace_token(self->strings, &res, tok_semicolon);
                 state = stop;
                 break;
 
             case ',':
-                replace_token(self->alloc, &res, tok_comma);
+                replace_token(self->strings, &res, tok_comma);
                 state = stop;
                 break;
 
             case '(':
-                replace_token(self->alloc, &res, tok_open_round);
+                replace_token(self->strings, &res, tok_open_round);
                 state = stop;
                 break;
 
             case ')':
-                replace_token(self->alloc, &res, tok_close_round);
+                replace_token(self->strings, &res, tok_close_round);
                 state = stop;
                 break;
 
@@ -208,14 +213,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case in_minus: {
             if (self->pos == end) {
-                replace_token_s(self->alloc, &res, tok_symbol, "-");
+                replace_token_s(self->strings, &res, tok_symbol, "-");
                 state = stop;
                 goto finish;
             }
             char const c = self->input[self->pos++];
             switch (c) {
             case '>':
-                replace_token(self->alloc, &res, tok_arrow);
+                replace_token(self->strings, &res, tok_arrow);
                 state = stop;
                 break;
             default:
@@ -227,13 +232,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case in_equal: {
             if (self->pos == end) {
-                replace_token(self->alloc, &res, tok_equal_sign);
+                replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
                 goto finish;
             }
             char const c = self->input[self->pos++];
             if (' ' == c || '\n' == c) {
-                replace_token(self->alloc, &res, tok_equal_sign);
+                replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
                 goto finish;
             }
@@ -245,7 +250,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case forward_slash: {
             if (self->pos == end) {
-                replace_token_s(self->alloc, &res, tok_symbol, "/");
+                replace_token_s(self->strings, &res, tok_symbol, "/");
                 state = stop;
                 goto finish;
             }
@@ -263,7 +268,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case in_newline: {
             if (self->pos == end) {
-                replace_token(self->alloc, &res, tok_one_newline);
+                replace_token(self->strings, &res, tok_one_newline);
                 state = stop;
                 goto finish;
             }
@@ -272,7 +277,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             switch (c) {
             case '\n':
-                replace_token(self->alloc, &res, tok_two_newline);
+                replace_token(self->strings, &res, tok_two_newline);
                 state = stop;
                 break;
             case ' ':
@@ -281,7 +286,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue; // TODO tab indent
 
             default:
-                replace_token(self->alloc, &res, tok_one_newline);
+                replace_token(self->strings, &res, tok_one_newline);
                 --self->pos;
                 state = stop;
                 break;
@@ -313,7 +318,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 return 1;
             }
 
-            replace_token_v(self->alloc, &res, tok_newline_indent, (u8)(self->pos - start_capture));
+            replace_token_v(self->strings, &res, tok_newline_indent, (u8)(self->pos - start_capture));
             state = stop;
             break;
 
@@ -385,7 +390,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_number: {
             assert(self->pos >= start_capture);
-            replace_token_sn(self->alloc, &res, tok_number, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_number, self->input + start_capture,
                              self->pos - start_capture);
             state = stop;
         } break;
@@ -426,7 +431,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_symbol: {
             assert(self->pos >= start_capture);
-            replace_token_sn(self->alloc, &res, tok_symbol, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_symbol, self->input + start_capture,
                              self->pos - start_capture);
             state = stop;
 
@@ -451,7 +456,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_comment:
             assert(self->pos >= start_capture);
-            replace_token_sn(self->alloc, &res, tok_comment, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_comment, self->input + start_capture,
                              self->pos - start_capture);
             state = stop;
             break;
@@ -470,7 +475,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
-            default:   vec_push_back(self->alloc, &self->buf, &c); break;
+            default:   vec_push_back(self->parent, &self->buf, &c); break;
             }
         } break;
 
@@ -499,19 +504,19 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                vec_push_back(self->alloc, &self->buf, &actual);
+                vec_push_back(self->parent, &self->buf, &actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                vec_push_back(self->alloc, &self->buf, &backslash);
-                vec_push_back(self->alloc, &self->buf, &c);
+                vec_push_back(self->parent, &self->buf, &backslash);
+                vec_push_back(self->parent, &self->buf, &c);
             }
             state = in_string;
 
         } break;
 
         case stop_string: {
-            replace_token_sn(self->alloc, &res, tok_string, vec_data(&self->buf), vec_size(&self->buf));
+            replace_token_sn(self->strings, &res, tok_string, vec_data(&self->buf), vec_size(&self->buf));
             state = stop;
         } break;
 
@@ -540,7 +545,7 @@ finish:
 // -- backtracking --
 
 int tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
-    for (size_t i = n_toks; i != 0; --i) vec_push_back(self->alloc, &self->backtrack, &toks[i - 1]);
+    for (size_t i = n_toks; i != 0; --i) vec_push_back(self->parent, &self->backtrack, &toks[i - 1]);
 
     return 0;
 }
