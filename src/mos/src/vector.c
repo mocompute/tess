@@ -135,7 +135,9 @@ void vec_pop_back(vector *vec) {
 void vec_erase(vector *vec, void *it_) {
     byte *const       it  = it_;
     byte const *const end = vec->data->data + vec->data->size * vec->element_size;
-    ptrdiff_t         len = end - it - (ptrdiff_t)vec->element_size;
+
+    assert(end > it);
+    ptrdiff_t len = end - it - (ptrdiff_t)vec->element_size;
 
     memmove(it, it + vec->element_size, (size_t)len);
     vec->data->size -= 1;

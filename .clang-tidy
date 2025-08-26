@@ -11,6 +11,7 @@ Checks:
   - -bugprone-crtp-constructor-accessibility
   - -bugprone-assignment-in-if-condition
   - -bugprone-multi-level-implicit-pointer-conversion
+  - -bugprone-implicit-widening-of-multiplication-result
   - performance-*
 WarningsAsErrors: ''
 HeaderFileExtensions:

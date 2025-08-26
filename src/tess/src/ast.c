@@ -124,7 +124,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     sexp type;
     {
-        char *str = tess_type_to_string(alloc, &node->type);
+        char *str = tess_type_to_string(alloc, node->type);
         type      = sexp_init_sym(alloc, str);
         alloc_free(alloc, str);
     }
@@ -255,7 +255,7 @@ sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
 
     sexp  expr = ast_node_to_sexp(alloc, node);
 
-    char *type = tess_type_to_string(alloc, &node->type);
+    char *type = tess_type_to_string(alloc, node->type);
 
     sexp  list = sexp_init_list_pair(alloc, expr, sexp_init_sym(alloc, type));
 

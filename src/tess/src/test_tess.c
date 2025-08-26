@@ -297,8 +297,7 @@ static int test_parse_all(void) {
 
         if (syntax_checker_run(syntax, (ast_node **)vec_data(&nodes), vec_size(&nodes))) return error + 1;
 
-        ti_inferer *ti =
-          ti_inferer_create(ti_alloc, (ast_node **)vec_data(&nodes), vec_size(&nodes), ast_alloc);
+        ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)vec_data(&nodes), vec_size(&nodes));
 
         ti_inferer_run(ti);
 
