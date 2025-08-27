@@ -120,20 +120,8 @@ void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 }
 
 void veca_reserve(vectora *vec, u32 count) {
-
-    if (null == vec->data) return init_vectora(vec->data->alloc, vec, count, vec->element_size);
-
-    if (vec->data->capacity >= count) return;
-
-    u32 new_capacity = vec->data->capacity * 2;
-    if (new_capacity == 0) new_capacity = 8;
-    while (new_capacity < count) new_capacity *= 2;
-
-    void *resized       = alloc_realloc(vec->data->alloc, vec->data,
-                                        sizeof(struct vector_data_header) + new_capacity * vec->element_size);
-
-    vec->data           = resized;
-    vec->data->capacity = new_capacity;
+    assert(vec->data);
+    return vec_reserve(vec->data->alloc, (vector *)vec, count);
 }
 
 void vec_move(vector *dst, vector *src) {
@@ -142,8 +130,7 @@ void vec_move(vector *dst, vector *src) {
 }
 
 void veca_move(vectora *dst, vectora *src) {
-    alloc_copy(dst, src);
-    alloc_invalidate(src);
+    return vec_move((vector *)dst, ((vector *)src));
 }
 
 bool vec_empty(vector const *vec) {
@@ -151,7 +138,7 @@ bool vec_empty(vector const *vec) {
 }
 
 bool veca_empty(vectora const *vec) {
-    return vec->data == null || vec->data->size == 0;
+    return vec->data->size == 0;
 }
 
 void vec_push_back(allocator *alloc, vector *vec, void const *element) {
@@ -161,9 +148,7 @@ void vec_push_back(allocator *alloc, vector *vec, void const *element) {
 }
 
 void veca_push_back(vectora *vec, void const *element) {
-    veca_reserve(vec, vec->data ? vec->data->size + 1 : 1);
-    memcpy(vec->data->data + vec->data->size * vec->element_size, element, vec->element_size);
-    vec->data->size += 1;
+    return vec_push_back(vec->data->alloc, (vector *)vec, element);
 }
 
 void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
@@ -173,9 +158,7 @@ void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) 
 }
 
 void veca_copy_back(vectora *vec, void const *start, u32 count) {
-    veca_reserve(vec, vec->data ? vec->data->size + count : count);
-    memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
-    vec->data->size += count;
+    return vec_copy_back(vec->data->alloc, (vector *)vec, start, count);
 }
 
 void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
@@ -186,10 +169,7 @@ void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
 }
 
 void veca_push_back_byte(vectora *vec, u8 b) {
-    assert(1 == vec->element_size);
-    veca_reserve(vec, vec->data ? vec->data->size + 1 : 1);
-    *(vec->data->data + vec->data->size) = b;
-    vec->data->size += 1;
+    return vec_push_back_byte(vec->data->alloc, (vector *)vec, b);
 }
 
 void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 count) {
@@ -201,11 +181,7 @@ void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 cou
 }
 
 void veca_copy_back_bytes(vectora *vec, u8 const *start, u32 count) {
-    assert(1 == vec->element_size);
-    veca_reserve(vec, vec->data ? vec->data->size + count : count);
-
-    memcpy(vec->data->data + vec->data->size, start, count);
-    vec->data->size += count;
+    return vec_copy_back_bytes(vec->data->alloc, (vector *)vec, start, count);
 }
 
 void vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
@@ -216,10 +192,7 @@ void vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
 }
 
 void veca_copy_back_c_string(vectora *vec, char const *str) {
-    size_t len = strlen(str);
-    if (len > UINT32_MAX) fatal("vec_copy_back_c_string: overflow size = %zu\n", len);
-
-    return veca_copy_back_bytes(vec, (u8 const *)str, (u32)len);
+    return vec_copy_back_c_string(vec->data->alloc, (vector *)vec, str);
 }
 
 void *vec_at(vector *vec, u32 index) {
@@ -227,7 +200,7 @@ void *vec_at(vector *vec, u32 index) {
 }
 
 void *veca_at(vectora *vec, u32 index) {
-    return vec->data->data + index * vec->element_size;
+    return vec_at((vector *)vec, index);
 }
 
 void const *vec_cat(vector const *vec, u32 index) {
@@ -235,7 +208,7 @@ void const *vec_cat(vector const *vec, u32 index) {
 }
 
 void const *veca_cat(vectora const *vec, u32 index) {
-    return vec->data->data + index * vec->element_size;
+    return vec_cat((vector *)vec, index);
 }
 
 void *vec_back(vector *vec) {
@@ -243,7 +216,7 @@ void *vec_back(vector *vec) {
 }
 
 void *veca_back(vectora *vec) {
-    return vec->data->data + (vec->data->size - 1) * vec->element_size;
+    return vec_back((vector *)vec);
 }
 
 void vec_pop_back(vector *vec) {
@@ -251,7 +224,7 @@ void vec_pop_back(vector *vec) {
 }
 
 void veca_pop_back(vectora *vec) {
-    vec->data->size -= 1;
+    return vec_pop_back((vector *)vec);
 }
 
 void vec_erase(vector *vec, void *it_) {
@@ -265,15 +238,8 @@ void vec_erase(vector *vec, void *it_) {
     vec->data->size -= 1;
 }
 
-void veca_erase(vectora *vec, void *it_) {
-    byte *const       it  = it_;
-    byte const *const end = vec->data->data + vec->data->size * vec->element_size;
-
-    assert(end > it);
-    ptrdiff_t len = end - it - (ptrdiff_t)vec->element_size;
-
-    memmove(it, it + vec->element_size, (size_t)len);
-    vec->data->size -= 1;
+void veca_erase(vectora *vec, void *it) {
+    return vec_erase((vector *)vec, it);
 }
 
 void vec_resize(allocator *alloc, vector *vec, u32 n) {
@@ -283,9 +249,7 @@ void vec_resize(allocator *alloc, vector *vec, u32 n) {
 }
 
 void veca_resize(vectora *vec, u32 n) {
-    if (null == vec->data) return init_vectora(vec->data->alloc, vec, n, vec->element_size);
-    if (n > vec->data->capacity) veca_reserve(vec, n);
-    vec->data->size = n;
+    return vec_resize(vec->data->alloc, (vector *)vec, n);
 }
 
 void vec_clear(vector *vec) {
@@ -294,8 +258,7 @@ void vec_clear(vector *vec) {
 }
 
 void veca_clear(vectora *vec) {
-    // Note: Do not free data.
-    if (!veca_empty(vec)) vec->data->size = 0;
+    return vec_clear((vector *)vec);
 }
 
 void *vec_data(vector *vec) {
@@ -304,8 +267,7 @@ void *vec_data(vector *vec) {
 }
 
 void *veca_data(vectora *vec) {
-    if (veca_empty(vec)) return null;
-    return vec->data->data;
+    return vec_data((vector *)vec);
 }
 
 void *vec_begin(vector *vec) {
@@ -314,8 +276,7 @@ void *vec_begin(vector *vec) {
 }
 
 void *veca_begin(vectora *vec) {
-    if (veca_empty(vec)) return null;
-    return vec->data->data;
+    return vec_begin((vector *)vec);
 }
 
 void const *vec_cbegin(vector const *vec) {
@@ -324,8 +285,7 @@ void const *vec_cbegin(vector const *vec) {
 }
 
 void const *veca_cbegin(vectora const *vec) {
-    if (veca_empty(vec)) return null;
-    return vec->data->data;
+    return vec_cbegin((vector *)vec);
 }
 
 void *vec_end(vector const *vec) {
@@ -335,9 +295,7 @@ void *vec_end(vector const *vec) {
 }
 
 void *veca_end(vectora const *vec) {
-    // points 1 past the end
-    if (veca_empty(vec)) return null;
-    return vec->data->data + vec->data->size * vec->element_size;
+    return vec_end((vector *)vec);
 }
 
 void const *vec_cend(vector const *vec) {
@@ -347,9 +305,7 @@ void const *vec_cend(vector const *vec) {
 }
 
 void const *veca_cend(vectora const *vec) {
-    // points 1 past the end
-    if (veca_empty(vec)) return null;
-    return vec->data->data + vec->data->size * vec->element_size;
+    return vec_cend((vector *)vec);
 }
 
 u32 vec_size(vector const *vec) {
@@ -358,8 +314,7 @@ u32 vec_size(vector const *vec) {
 }
 
 u32 veca_size(vectora const *vec) {
-    if (veca_empty(vec)) return 0;
-    return vec->data->size;
+    return vec_size((vector *)vec);
 }
 
 u32 vec_capacity(vector const *vec) {
@@ -368,8 +323,7 @@ u32 vec_capacity(vector const *vec) {
 }
 
 u32 veca_capacity(vectora const *vec) {
-    if (veca_empty(vec)) return 0;
-    return vec->data->capacity;
+    return vec_capacity((vector const *)vec);
 }
 
 //
@@ -386,14 +340,7 @@ void vec_map(vector const *self, vec_map_fun fun, void *ctx, void *out) {
 }
 
 void veca_map(vectora const *self, vec_map_fun fun, void *ctx, void *out) {
-    u32 const   element_size = self->element_size;
-    void const *it           = veca_cbegin(self);
-    void const *end          = veca_cend(self);
-    while (it != end) {
-        fun(ctx, out, it);
-        out += element_size;
-        it += element_size;
-    }
+    return vec_map((vector const *)self, fun, ctx, out);
 }
 
 void vec_map_n(vector const *self, vec_map_fun fun, void *ctx, void *out, u32 max) {
@@ -408,14 +355,7 @@ void vec_map_n(vector const *self, vec_map_fun fun, void *ctx, void *out, u32 ma
 }
 
 void veca_map_n(vectora const *self, vec_map_fun fun, void *ctx, void *out, u32 max) {
-    u32 const   element_size = self->element_size;
-    void const *it           = veca_cbegin(self);
-    void const *end          = veca_cend(self);
-    while (max-- && it != end) {
-        fun(ctx, out, it);
-        out += element_size;
-        it += element_size;
-    }
+    return vec_map_n((vector const *)self, fun, ctx, out, max);
 }
 
 //
@@ -426,8 +366,7 @@ void vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
 }
 
 void veca_assoc_set(vectora *vec, void const *pair) {
-    assert(vec->element_size >= sizeof(u32));
-    veca_push_back(vec, pair);
+    return vec_assoc_set(vec->data->alloc, (vector *)vec, pair);
 }
 
 void *vec_assoc_get(vector *vec, u32 key) {
@@ -450,22 +389,7 @@ void *vec_assoc_get(vector *vec, u32 key) {
 }
 
 void *veca_assoc_get(vectora *vec, u32 key) {
-    if (veca_empty(vec)) return null;
-
-    // From the back, search for an element whose first u32 field
-    // matches the search term.
-
-    byte const *const last         = vec->data->data;
-    byte             *it           = veca_back(vec);
-    u32 const         element_size = vec->element_size;
-
-    while (1) {
-        if (key == *(u32 *)it) return (it + sizeof(u32)); // return second element of pair
-
-        if (it == last) break; // examined last pair
-        it -= element_size;
-    }
-    return null;
+    return vec_assoc_get((vector *)vec, key);
 }
 
 void vec_assoc_erase(vector *vec, u32 key) {
@@ -480,14 +404,7 @@ void vec_assoc_erase(vector *vec, u32 key) {
 }
 
 void veca_assoc_erase(vectora *vec, u32 key) {
-
-    char *it = veca_assoc_get(vec, key);
-    if (!it) return;
-
-    // it points just past the key, so reverse it
-    it -= sizeof(u32);
-
-    veca_erase(vec, it);
+    return vec_assoc_erase((vector *)vec, key);
 }
 
 static noreturn void fatal(char const *restrict fmt, ...) {
