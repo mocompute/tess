@@ -1,6 +1,9 @@
 #include "type_inference.h"
+
 #include "alloc.h"
+#include "alloc_string.h"
 #include "ast_tags.h"
+#include "dbg.h"
 #include "tess_type.h"
 #include "vector.h"
 
@@ -8,8 +11,11 @@
 
 struct ti_inferer {
     allocator *type_arena;
+    allocator *strings;
     ast_node **nodes;
     u32        count;
+
+    vectora    constraints;
 };
 
 struct constraint {
@@ -25,15 +31,20 @@ struct solver {
 
 // -- ti_inferer --
 
-ti_inferer *ti_inferer_create(allocator *alloc, ast_node **nodes, u32 count) {
+static void    ti_assign_type_variables(allocator *, ast_node **, u32);
+static vectora ti_collect_constraints(allocator *alloc, ast_node *const *, u32);
+
+ti_inferer    *ti_inferer_create(allocator *alloc, ast_node **nodes, u32 count) {
     ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena = alloc_arena_create(alloc, 4096);
+    self->strings    = alloc_string_arena_create(alloc, 1024);
     self->nodes      = nodes;
     self->count      = count;
     return self;
 }
 
 void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
+    alloc_string_arena_destroy(alloc, &(*self)->strings);
     alloc_arena_destroy(alloc, &(*self)->type_arena);
     alloc_free(alloc, *self);
     *self = null;
@@ -41,6 +52,7 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 
 void ti_inferer_run(ti_inferer *self) {
     ti_assign_type_variables(self->type_arena, self->nodes, self->count);
+    self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->count);
 
     // TODO ...
 }
@@ -95,7 +107,7 @@ struct assign_type_variables_ctx {
 void assign_type_variables(void *ctx_, ast_node *node) {
     struct assign_type_variables_ctx *ctx = ctx_;
 
-    if (ast_lambda_function == node->tag) {
+    if (ast_lambda_function == node->tag || ast_let == node->tag) {
         struct tess_type *left  = alloc_malloc(ctx->alloc, sizeof *left);
         struct tess_type *right = alloc_malloc(ctx->alloc, sizeof *right);
         struct tess_type *arrow = alloc_malloc(ctx->alloc, sizeof *arrow);
@@ -127,9 +139,24 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const 
     return tuple;
 }
 
+static ast_node const *find_let_node(char const *name, ast_node const *const *nodes, u32 count) {
+    // TODO profile linear search versus hashmap
+    while (count--) {
+        ast_node const *const node = *nodes++;
+        if (ast_let == node->tag) {
+            assert(ast_symbol == node->let.name->tag);
+            char const *node_name = mos_string_str(&node->let.name->symbol.name);
+            if (0 == strcmp(name, node_name)) return node;
+        }
+    }
+    return null;
+}
+
 struct collect_constraints_ctx {
-    allocator     *alloc;
-    struct vectora constraints;
+    allocator             *alloc;
+    ast_node const *const *nodes;
+    u32                    count;
+    struct vectora         constraints;
 };
 
 void collect_constraints(void *ctx_, ast_node *node) {
@@ -171,25 +198,41 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_lambda_declaration:   break;
 
     case ast_infix:
+        // operands same type
         c = (struct constraint){node->infix.left->type, node->infix.right->type};
         veca_push_back(&ctx->constraints, &c);
+
+        // node same type as operands
+        c = (struct constraint){node->type, node->infix.right->type};
+        veca_push_back(&ctx->constraints, &c);
+
         break;
 
     case ast_let_in:
+        // variable name same type as value
         c = (struct constraint){node->let_in.name->type, node->let_in.value->type};
         veca_push_back(&ctx->constraints, &c);
         break;
 
     case ast_let:
-        c = (struct constraint){node->let.name->type, node->let.body->type};
+        // function name same type as node's arrow type
+        c = (struct constraint){node->let.name->type, node->type};
         veca_push_back(&ctx->constraints, &c);
         break;
+
     case ast_if_then_else:
+        // yes and no arms same type, node same type
         c = (struct constraint){node->if_then_else.yes->type, node->if_then_else.no->type};
+        veca_push_back(&ctx->constraints, &c);
+
+        c = (struct constraint){node->type, node->if_then_else.yes->type};
         veca_push_back(&ctx->constraints, &c);
         break;
 
     case ast_lambda_function: {
+        // node type is lambda's arrow type, lambda's arrow's left
+        // type is same as tuple of parameters, and right is same as
+        // function body.
         struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, &node->lambda_function.parameters);
         c                     = (struct constraint){node->type->arrow.left, tup};
         veca_push_back(&ctx->constraints, &c);
@@ -199,7 +242,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         break;
 
     } break;
+
     case ast_lambda_function_application: {
+        // arguments must match parameters, and node type must match arrow right
         ast_node const *lambda = node->lambda_application.lambda;
         assert(ast_lambda_function == lambda->tag);
 
@@ -213,16 +258,49 @@ void collect_constraints(void *ctx_, ast_node *node) {
         veca_push_back(&ctx->constraints, &c);
     } break;
 
-    case ast_named_function_application:
-        // FIXME need function lookup table
+    case ast_named_function_application: {
+        // arguments must match parameters, and node type must match arrow right
 
-        break;
+        assert(ast_symbol == node->named_application.name->tag);
+        char const     *name = mos_string_str(&node->named_application.name->symbol.name);
+        ast_node const *let  = find_let_node(name, ctx->nodes, ctx->count);
+        if (null == let) break;
+
+        struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->named_application.arguments);
+        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &let->let.parameters);
+        c                        = (struct constraint){args, params};
+        veca_push_back(&ctx->constraints, &c);
+
+        assert(type_arrow == let->type->tag);
+        c = (struct constraint){node->type, let->type->arrow.right};
+        veca_push_back(&ctx->constraints, &c);
+    }
+
+    break;
     }
 }
 
-void ti_collect_constraints(allocator *alloc, ast_node **nodes, u32 count) {
-    struct collect_constraints_ctx ctx = {alloc, VECA(alloc, struct constraint)};
+vectora ti_collect_constraints(allocator *alloc, ast_node *const *nodes, u32 count) {
+    struct collect_constraints_ctx ctx = {alloc, (ast_node const *const *)nodes, count,
+                                          VECA(alloc, struct constraint)};
 
-    ast_node                     **it  = nodes;
+    ast_node *const               *it  = nodes;
     while (count--) ast_pool_dfs(&ctx, *it++, collect_constraints);
+    return ctx.constraints;
+}
+
+// typedef void (*vec_map_fun)(void *ctx, void *out, void const *el);
+
+// void vec_map(vector const *, vec_map_fun, void *ctx, void *out);
+
+void dbg_constraint(void *ctx, void *out, void const *el) {
+    (void)out;
+    char const *left  = tess_type_to_string(ctx, ((struct constraint *)el)->left);
+    char const *right = tess_type_to_string(ctx, ((struct constraint *)el)->right);
+
+    dbg("%s = %s\n", left, right);
+}
+
+void ti_inferer_dbg_constraints(ti_inferer const *self) {
+    veca_map(&self->constraints, dbg_constraint, self->strings, null);
 }

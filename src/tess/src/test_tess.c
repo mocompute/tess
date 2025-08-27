@@ -307,6 +307,7 @@ static int test_parse_all(void) {
             alloc_free(alloc_default_allocator(), str);
         }
 
+        ti_inferer_dbg_constraints(ti);
         ti_inferer_destroy(ti_alloc, &ti);
 
         syntax_checker_destroy(&syntax);

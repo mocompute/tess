@@ -16,6 +16,6 @@ void                  ti_inferer_destroy(allocator *, ti_inferer **);
 
 void ti_inferer_run(ti_inferer *);
 
-void ti_assign_type_variables(allocator *, ast_node **, u32);
+void ti_inferer_dbg_constraints(ti_inferer const *);
 
 #endif
