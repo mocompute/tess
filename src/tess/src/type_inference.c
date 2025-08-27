@@ -90,8 +90,14 @@ void solver_run(struct solver *self) {
         struct constraint *it  = veca_begin(self->constraints);
         struct constraint *end = veca_end(self->constraints);
         while (it != end) {
-            dbg("constraint %p: %s = %s\n", it, tess_type_to_string(self->strings, it->left),
-                tess_type_to_string(self->strings, it->right));
+            int  len_left  = tess_type_snprint(null, 0, it->left) + 1;
+            int  len_right = tess_type_snprint(null, 0, it->right) + 1;
+            char buf_left[len_left];
+            char buf_right[len_right];
+            tess_type_snprint(buf_left, len_left, it->left);
+            tess_type_snprint(buf_right, len_right, it->right);
+
+            dbg("constraint %p: %s = %s\n", it, buf_left, buf_right);
 
             // delete a = a constraints
             if (it->left == it->right) {
@@ -309,13 +315,17 @@ vectora ti_collect_constraints(allocator *alloc, ast_node *const *nodes, u32 cou
 }
 
 static void dbg_constraint(void *ctx, void *out, void const *el) {
+    (void)ctx;
     (void)out;
-    char const *left  = tess_type_to_string(ctx, ((struct constraint *)el)->left);
-    char const *right = tess_type_to_string(ctx, ((struct constraint *)el)->right);
-
-    dbg("%s = %s\n", left, right);
+    struct constraint const *c         = el;
+    int                      len_left  = tess_type_snprint(null, 0, c->left) + 1;
+    int                      len_right = tess_type_snprint(null, 0, c->right) + 1;
+    char                     buf_left[len_left], buf_right[len_right];
+    tess_type_snprint(buf_left, len_left, c->left);
+    tess_type_snprint(buf_right, len_right, c->right);
+    dbg("%s = %s\n", buf_left, buf_right);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
-    veca_map(&self->constraints, dbg_constraint, self->strings, null);
+    veca_map(&self->constraints, dbg_constraint, null, null);
 }

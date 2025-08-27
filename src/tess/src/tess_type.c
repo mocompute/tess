@@ -126,18 +126,6 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     return len;
 }
 
-char *tess_type_to_string(allocator *alloc, struct tess_type const *self) {
-    int len = tess_type_snprint(null, 0, self);
-    if (len <= 0) return null;
-    char *out = alloc_malloc(alloc, (size_t)len + 1);
-    if (tess_type_snprint(out, len + 1, self) < 0) {
-        alloc_free(alloc, out);
-        return null;
-    }
-
-    return out;
-}
-
 #ifndef MOS_TAG_STRING
 #define MOS_TAG_STRING(name, str) [name] = str,
 #endif
