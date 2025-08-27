@@ -127,8 +127,6 @@ void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 
     if (vec_capacity(vec) >= count) return;
 
-    dbg("vec_reserve: %p, %u, %u\n", vec, count, vec->data->capacity_);
-
     u32 new_capacity = vec_capacity(vec) * 2;
     if (new_capacity == 0) new_capacity = 8;
     while (new_capacity < count) new_capacity *= 2;
@@ -165,17 +163,6 @@ bool veca_empty(vectora const *vec) {
 void vec_push_back(allocator *alloc, vector *vec, void const *element) {
     u32 size = vec->size;
     vec_reserve(alloc, vec, size + 1);
-    assert(vec->data);
-
-    if (size >= vec_capacity(vec))
-        dbg("hmm: size: %u, capacity: %u, _: %u\n", size, vec_capacity(vec), vec->data->capacity_);
-
-    if (!vec_at(vec, size)) dbg("oops: size: %u, capacity:%u\n", vec->size, vec->data->capacity_);
-
-    assert(size < vec_capacity(vec));
-    assert(vec_at(vec, size));
-
-    assert(size < vec_capacity(vec));
     memcpy(vec_at(vec, size), element, vec->element_size);
     vec->size += 1;
 }
@@ -296,8 +283,9 @@ void veca_clear(vectora *vec) {
 
 void *vec_data(vector *vec) {
     assert(vec->data);
-    u32 offset = sizeof(struct vector_data_header) + ((vec->data->capacity_ % 2 == 1) ? sizeof(void *) : 0);
-    return vec->data->buffer + offset;
+
+    // account for expanded header
+    return vec->data->buffer + (vec->data->capacity_ % 2 == 1 ? sizeof(void *) : 0);
 }
 
 void *veca_data(vectora *vec) {
