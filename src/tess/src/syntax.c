@@ -1,6 +1,7 @@
 #include "syntax.h"
 
 #include "alloc.h"
+#include "alloc_string.h"
 #include "ast.h"
 #include "hashmap.h"
 #include "mos_string.h"
@@ -50,27 +51,30 @@ int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
 
 struct rename_variable_ctx {
     allocator *alloc;
+    allocator *strings;
     hashmap   *map;
     size_t     next;
 };
 
 static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc) {
 
-    self->alloc = alloc;
-    self->next  = 1;
+    self->alloc   = alloc;
+    self->strings = alloc_string_arena_create(alloc, 2048);
+    self->next    = 1;
 
-    self->map   = map_create(alloc, sizeof(string_t), 1024, 0);
+    self->map     = map_create(alloc, sizeof(string_t), 1024, 0);
 }
 
 static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
     map_destroy(self->alloc, &self->map);
+    alloc_string_arena_destroy(self->alloc, &self->strings);
     alloc_invalidate(self);
 }
 
 static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "__v%zu", self->next++);
-    *out = mos_string_init(self->alloc, buf);
+    *out = mos_string_init(self->strings, buf);
     return 0;
 }
 
@@ -90,7 +94,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
     switch (node->tag) {
     case ast_symbol:
-        return rename_if_match(self->alloc, &node->symbol.name, self->map, &node->symbol.original);
+        return rename_if_match(self->strings, &node->symbol.name, self->map, &node->symbol.original);
 
     case ast_infix:
         if (rename_variables(self, node->infix.left)) return 1;

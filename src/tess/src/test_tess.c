@@ -285,7 +285,7 @@ static int test_parse_all(void) {
 
         if (parser_parse_all(p, &nodes)) return error + 1;
 
-        allocator      *syntax_alloc = alloc_default_allocator();
+        allocator      *syntax_alloc = alloc_leak_detector_create();
         syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
 
         // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
@@ -309,8 +309,10 @@ static int test_parse_all(void) {
 
         ti_inferer_destroy(ti_alloc, &ti);
 
-        veca_deinit(&nodes);
         syntax_checker_destroy(&syntax);
+        alloc_leak_detector_destroy(&syntax_alloc);
+
+        veca_deinit(&nodes);
         parser_destroy(&p);
     }
 
