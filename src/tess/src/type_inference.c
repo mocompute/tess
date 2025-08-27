@@ -25,7 +25,8 @@ struct constraint {
 
 struct solver {
     allocator *alloc;
-    vectora    constraints;
+    allocator *strings;
+    vectora   *constraints;
     vectora    substitutions;
 };
 
@@ -33,6 +34,10 @@ struct solver {
 
 static void    ti_assign_type_variables(allocator *, ast_node **, u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *const *, u32);
+
+struct solver  solver_init(allocator *, vectora *constraints);
+void           solver_deinit(struct solver *);
+void           solver_run(struct solver *);
 
 ti_inferer    *ti_inferer_create(allocator *alloc, ast_node **nodes, u32 count) {
     ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
@@ -52,21 +57,29 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 
 void ti_inferer_run(ti_inferer *self) {
     ti_assign_type_variables(self->type_arena, self->nodes, self->count);
-    self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->count);
+    self->constraints    = ti_collect_constraints(self->type_arena, self->nodes, self->count);
+
+    struct solver solver = solver_init(self->type_arena, &self->constraints);
+    solver_run(&solver);
+
+    solver_deinit(&solver);
 
     // TODO ...
 }
 
 // -- solver --
 
-void solver_init(allocator *alloc, struct solver *self) {
-    self->alloc         = alloc;
-    self->constraints   = VECA(alloc, struct constraint);
-    self->substitutions = VECA(alloc, struct constraint);
+struct solver solver_init(allocator *alloc, vectora *constraints) {
+    struct solver self;
+    self.alloc         = alloc;
+    self.strings       = alloc_string_arena_create(alloc, 1024);
+    self.constraints   = constraints;
+    self.substitutions = VECA(alloc, struct constraint);
+    return self;
 }
 
 void solver_deinit(struct solver *self) {
-    veca_deinit(&self->constraints);
+    alloc_string_arena_destroy(self->alloc, &self->strings);
     veca_deinit(&self->substitutions);
 }
 
@@ -74,21 +87,27 @@ void solver_run(struct solver *self) {
     u32 loop_count = 10;
     while (loop_count--) {
 
-        struct constraint *it  = veca_begin(&self->constraints);
-        struct constraint *end = veca_end(&self->constraints);
+        struct constraint *it  = veca_begin(self->constraints);
+        struct constraint *end = veca_end(self->constraints);
         while (it != end) {
+            dbg("constraint %p: %s = %s\n", it, tess_type_to_string(self->strings, it->left),
+                tess_type_to_string(self->strings, it->right));
+
             // delete a = a constraints
             if (it->left == it->right) {
-                veca_erase(&self->constraints, it); // it points to next item
+                dbg("deleting constraint %p\n", it);
+                veca_erase(self->constraints, it); // it points to next item
                 continue;
             }
-        }
 
-        // tuple constraints of equal size
-        if (type_tuple == it->left->tag && type_tuple == it->right->tag &&
-            vec_size(&it->left->tuple) == vec_size(&it->right->tuple)) {
+            // tuple constraints of equal size
+            if (type_tuple == it->left->tag && type_tuple == it->right->tag &&
+                vec_size(&it->left->tuple) == vec_size(&it->right->tuple)) {
 
-            // FIXME ...
+                // FIXME ...
+            }
+
+            ++it;
         }
 
         bool did_substitute = false;
@@ -289,11 +308,7 @@ vectora ti_collect_constraints(allocator *alloc, ast_node *const *nodes, u32 cou
     return ctx.constraints;
 }
 
-// typedef void (*vec_map_fun)(void *ctx, void *out, void const *el);
-
-// void vec_map(vector const *, vec_map_fun, void *ctx, void *out);
-
-void dbg_constraint(void *ctx, void *out, void const *el) {
+static void dbg_constraint(void *ctx, void *out, void const *el) {
     (void)out;
     char const *left  = tess_type_to_string(ctx, ((struct constraint *)el)->left);
     char const *right = tess_type_to_string(ctx, ((struct constraint *)el)->right);
