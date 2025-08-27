@@ -127,15 +127,15 @@ void assign_type_variables(void *ctx_, ast_node *node) {
     struct assign_type_variables_ctx *ctx = ctx_;
 
     if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        struct tess_type *left  = alloc_malloc(ctx->alloc, sizeof *left);
-        struct tess_type *right = alloc_malloc(ctx->alloc, sizeof *right);
-        struct tess_type *arrow = alloc_malloc(ctx->alloc, sizeof *arrow);
+        struct tess_type *left  = alloc_struct(ctx->alloc, left);
+        struct tess_type *right = alloc_struct(ctx->alloc, right);
+        struct tess_type *arrow = alloc_struct(ctx->alloc, arrow);
         *left                   = tess_type_init_type_var(ctx->next++);
         *right                  = tess_type_init_type_var(ctx->next++);
         *arrow                  = tess_type_init_arrow(left, right);
         node->type              = arrow;
     } else {
-        node->type  = alloc_malloc(ctx->alloc, sizeof *node->type);
+        node->type  = alloc_struct(ctx->alloc, node->type);
         *node->type = tess_type_init_type_var(ctx->next++);
     }
 }
@@ -149,7 +149,7 @@ void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
 // -- collect_constraints --
 
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
-    struct tess_type *tuple    = alloc_malloc(alloc, sizeof *tuple);
+    struct tess_type *tuple    = alloc_struct(alloc, tuple);
     *tuple                     = tess_type_init_tuple();
 
     ast_node const *const *it  = vec_cbegin(arguments);

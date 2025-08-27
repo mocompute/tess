@@ -54,5 +54,5 @@ size_t alloc_align_to_word_size(size_t);
 #define alloc_assert_invalid(P) alloc_assert_invalid_n((P), sizeof *(P))
 #define alloc_zero(P)           memset((P), 0, sizeof *(P));
 #define alloc_copy(DST, SRC)    memcpy((DST), (SRC), sizeof *(DST));
-
+#define alloc_struct(A, NAME)   alloc_malloc((A), sizeof *NAME)
 #endif
