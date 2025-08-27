@@ -16,8 +16,8 @@
 
 struct parser {
     allocator             *parent_alloc;
-    allocator             *parser_arena;
-    allocator             *ast_arena;
+    allocator             *parser_arena; // for tokens
+    allocator             *ast_arena;    // for ast nodes
     tokenizer             *tokenizer;
 
     ast_node              *result;
@@ -25,8 +25,8 @@ struct parser {
     struct vectora         seen_tokens; // for backtracking
 
     struct parser_error    error;
-    struct tokenizer_error tokenizer_error; // does not require deinit
-    struct token           token;           // requires deinit
+    struct tokenizer_error tokenizer_error;
+    struct token           token;
 };
 
 // -- allocation and deallocation --
@@ -496,7 +496,7 @@ static int function_application(parser *p) {
             continue;
         }
 
-        if ((tess_err_eof == p->error.tag) || 0 == a_try(p, &a_end_of_expression)) {
+        if (0 == a_try(p, &a_end_of_expression)) {
 
             ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
             node->named_application.name = name;
@@ -520,12 +520,6 @@ static int function_argument(parser *p) {
     if (0 == a_try(p, &a_nil)) return 0;
     if (0 == a_try(p, &a_identifier)) return 0;
     if (0 == a_try(p, &a_literal)) return 0;
-    if (0 == a_try(p, &a_end_of_expression)) {
-        // if looking for a function argument, consider end of expression as an eof error
-        p->error.tag = tess_err_eof;
-        return 1;
-    }
-
     return 1;
 }
 
