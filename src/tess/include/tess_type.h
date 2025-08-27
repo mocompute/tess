@@ -32,15 +32,17 @@ struct tess_type {
     tess_type_tag tag;
 };
 
-struct tess_type tess_type_init(tess_type_tag);
-struct tess_type tess_type_init_type_var(u32);
-struct tess_type tess_type_init_tuple();
-struct tess_type tess_type_init_arrow(struct tess_type *, struct tess_type *);
-void             tess_type_deinit(allocator *, struct tess_type *);
+struct tess_type        tess_type_init(tess_type_tag);
+struct tess_type        tess_type_init_type_var(u32);
+struct tess_type        tess_type_init_tuple();
+struct tess_type        tess_type_init_arrow(struct tess_type *, struct tess_type *);
+void                    tess_type_deinit(allocator *, struct tess_type *);
 
-int              tess_type_snprint(char *, int, struct tess_type const *);
-char            *tess_type_to_string(allocator *, struct tess_type const *);
+struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 
-char const      *type_tag_to_string(tess_type_tag);
+int                     tess_type_snprint(char *, int, struct tess_type const *);
+char                   *tess_type_to_string(allocator *, struct tess_type const *);
+
+char const             *type_tag_to_string(tess_type_tag);
 
 #endif

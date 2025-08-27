@@ -1,5 +1,7 @@
 #include "tess_type.h"
 #include "vector.h"
+
+#include <assert.h>
 #include <stdio.h>
 
 // -- tess_type allocation and deallocation --
@@ -49,6 +51,28 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     }
 
     alloc_invalidate(self);
+}
+
+struct tess_type const *tess_type_prim(tess_type_tag tag) {
+    static struct tess_type nil_type    = {{0}, type_nil};
+    static struct tess_type bool_type   = {{0}, type_bool};
+    static struct tess_type int_type    = {{0}, type_int};
+    static struct tess_type float_type  = {{0}, type_float};
+    static struct tess_type string_type = {{0}, type_string};
+
+    switch (tag) {
+    case type_nil:    return &nil_type;
+    case type_bool:   return &bool_type;
+    case type_int:    return &int_type;
+    case type_float:  return &float_type;
+    case type_string: return &string_type;
+    case type_tuple:
+    case type_arrow:
+    case type_type_var:
+        assert(false);
+        exit(1);
+        break;
+    }
 }
 
 int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {

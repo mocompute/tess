@@ -1,26 +1,10 @@
-// -*- C -*-
+// -*- mode: c -*-
+
 // -- begin std --
 #include <stdint.h>
 #include <stdio.h>
 
-typedef unsigned char byte;
-
-typedef int8_t        i8;
-typedef int16_t       i16;
-typedef int32_t       i32;
-typedef int64_t       i64;
-
-typedef uint8_t       u8;
-typedef uint16_t      u16;
-typedef uint32_t      u32;
-typedef uint64_t      u64;
-
-typedef float         f32;
-typedef double        f64;
-
-//
-
-i64 add_i64(i64 a, i64 b) {
+int64_t add_int64_t(int64_t a, int64_t b) {
     return a + b;
 }
 
