@@ -4,6 +4,7 @@
 #include "dbg.h"
 
 #include <assert.h>
+#include <stdalign.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -17,19 +18,19 @@
 // Lowest bit indicates whether or not an additional pointer-sized
 // field exists before the start of data. Valid capacity must be an
 // even number. An odd number indicates the additional field exists.
+// The correct offset to the flexible array member [buffer] is added
+// in [vec_data]
 //
 
 struct vector_data_header {
-    u32  capacity_; // bitfield
-    u32  pad;
-    char buffer[];
+    u32 capacity_;                 // bitfield
+    alignas(void *) char buffer[]; // buffer must be max aligned
 };
 
 struct vectora_data_header {
     u32        capacity_; // bitfield
-    u32        pad;
     allocator *alloc;
-    char       buffer[];
+    alignas(void *) char buffer[];
 };
 
 static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
