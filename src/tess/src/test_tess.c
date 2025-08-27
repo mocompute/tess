@@ -232,7 +232,7 @@ static int test_parser_node_to_string(void) {
 
         char *str = ast_node_to_string(alloc, node);
         dbg("str 1 = %s\n", str);
-        error += 0 == strcmp("(infix + (i64 1) (i64 2))", str) ? 0 : 1;
+        error += 0 == strcmp("(infix + (i64 1 [null]) (i64 2 [null]) [null])", str) ? 0 : 1;
         alloc_free(alloc, str);
 
         parser_destroy(&p);
@@ -252,7 +252,7 @@ static int test_parser_node_to_string(void) {
 
         char *str = ast_node_to_string(alloc, node);
         dbg("str 2 = %s\n", str);
-        error += 0 == strcmp("(tuple ((symbol a) (symbol b)))", str) ? 0 : 1;
+        error += 0 == strcmp("(tuple ((symbol a [null]) (symbol b [null])) [null])", str) ? 0 : 1;
         alloc_free(alloc, str);
         parser_destroy(&p);
     }
@@ -280,10 +280,10 @@ static int test_parse_all(void) {
         parser     *p     = parser_create(ast_alloc, input, strlen(input));
         if (null == p) return error + 1;
 
-        vector nodes = VEC(ast_node *);
-        vec_reserve(vec_alloc, &nodes, 1024);
+        vectora nodes = VECA(vec_alloc, ast_node *);
+        veca_reserve(&nodes, 1024);
 
-        if (parser_parse_all(p, &nodes, vec_alloc)) return error + 1;
+        if (parser_parse_all(p, &nodes)) return error + 1;
 
         allocator      *syntax_alloc = alloc_default_allocator();
         syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
@@ -291,17 +291,17 @@ static int test_parse_all(void) {
         // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
         // is not a correct program, it is just 3 symbol nodes
 
-        error += 1 == vec_size(&nodes) ? 0 : 1;
+        error += 1 == veca_size(&nodes) ? 0 : 1;
         if (error) return error;
 
-        if (syntax_checker_run(syntax, (ast_node **)vec_data(&nodes), vec_size(&nodes))) return error + 1;
+        if (syntax_checker_run(syntax, (ast_node **)veca_data(&nodes), veca_size(&nodes))) return error + 1;
 
-        ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)vec_data(&nodes), vec_size(&nodes));
+        ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)veca_data(&nodes), veca_size(&nodes));
 
         ti_inferer_run(ti);
 
         for (u32 i = 0; i < 1; ++i) {
-            ast_node const *node = *(ast_node **)vec_cat(&nodes, i);
+            ast_node const *node = *(ast_node **)veca_cat(&nodes, i);
             char           *str  = ast_node_to_string(alloc_default_allocator(), node);
             dbg("node: %s\n", str);
             alloc_free(alloc_default_allocator(), str);
@@ -309,7 +309,7 @@ static int test_parse_all(void) {
 
         ti_inferer_destroy(ti_alloc, &ti);
 
-        vec_deinit(vec_alloc, &nodes);
+        veca_deinit(&nodes);
         syntax_checker_destroy(&syntax);
         parser_destroy(&p);
     }
@@ -333,11 +333,11 @@ static int test_parse_to_c(void) {
         parser     *p     = parser_create(alloc, input, strlen(input));
         if (null == p) return error + 1;
 
-        vector nodes = VEC(ast_node *);
-        vec_reserve(alloc, &nodes, 1024);
+        vectora nodes = VECA(alloc, ast_node *);
+        veca_reserve(&nodes, 1024);
 
-        if (parser_parse_all(p, &nodes, alloc)) return error + 1;
-        error += 1 == vec_size(&nodes) ? 0 : 1;
+        if (parser_parse_all(p, &nodes)) return error + 1;
+        error += 1 == veca_size(&nodes) ? 0 : 1;
         if (error) return error;
 
         vector transpiler_output = VEC(char);
@@ -346,7 +346,7 @@ static int test_parse_to_c(void) {
         transpiler *transpiler = transpiler_create(alloc, &transpiler_output, alloc);
         if (!transpiler) return error + 1;
 
-        if (transpiler_compile(transpiler, &nodes)) return error + 1;
+        if (transpiler_compile(transpiler, (vector *)&nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
         vec_push_back_byte(alloc, &transpiler_output, '\0');
@@ -355,7 +355,7 @@ static int test_parse_to_c(void) {
 
         vec_deinit(alloc, &transpiler_output);
         transpiler_destroy(&transpiler);
-        vec_deinit(alloc, &nodes);
+        veca_deinit(&nodes);
 
         parser_destroy(&p);
     }

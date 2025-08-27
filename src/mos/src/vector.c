@@ -12,12 +12,17 @@
 #include <string.h>
 
 struct vector_data_header {
-#ifndef NDEBUG
+    u32   capacity;
+    u32   size;
+    void *extra; // for subtypes
+    byte  data[];
+};
+
+struct vectora_data_header {
+    u32        capacity;
+    u32        size;
     allocator *alloc;
-#endif
-    u32  capacity;
-    u32  size;
-    byte data[];
+    byte       data[];
 };
 
 static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -46,7 +51,7 @@ void vec_destroy(allocator *alloc, vector **vec) {
 
 void veca_destroy(vectora **vec) {
     veca_deinit(*vec);
-    alloc_free((*vec)->alloc, *vec);
+    alloc_free((*vec)->data->alloc, *vec);
     *vec = null;
 }
 
@@ -60,8 +65,7 @@ struct vector vec_init(u32 element_size) {
 struct vectora veca_init(allocator *alloc, u32 element_size) {
     struct vectora self;
     alloc_zero(&self);
-    self.alloc        = alloc;
-    self.element_size = element_size;
+    init_vectora(alloc, &self, 0, element_size);
     return self;
 }
 
@@ -74,28 +78,18 @@ void init_vector(allocator *alloc, vector *vec, u32 num, u32 size) {
         vec->data = alloc_malloc(alloc, sizeof(struct vector_data_header) + num * size);
         alloc_zero(vec->data);
         vec->data->capacity = num;
-
-#ifndef NDEBUG
-        vec->data->alloc = alloc;
-#endif
     }
 }
 
 void init_vectora(allocator *alloc, vectora *vec, u32 num, u32 size) {
 
     alloc_zero(vec);
-    vec->alloc        = alloc;
     vec->element_size = size;
 
-    if (num) {
-        vec->data = alloc_malloc(alloc, sizeof(struct vector_data_header) + num * size);
-        alloc_zero(vec->data);
-        vec->data->capacity = num;
-
-#ifndef NDEBUG
-        vec->data->alloc = alloc;
-#endif
-    }
+    vec->data         = alloc_malloc(alloc, sizeof(struct vectora_data_header) + num * size);
+    alloc_zero(vec->data);
+    vec->data->capacity = num;
+    vec->data->alloc    = alloc;
 }
 
 void vec_deinit(allocator *alloc, vector *vec) {
@@ -104,7 +98,7 @@ void vec_deinit(allocator *alloc, vector *vec) {
 }
 
 void veca_deinit(vectora *vec) {
-    alloc_free(vec->alloc, vec->data);
+    alloc_free(vec->data->alloc, vec->data);
     alloc_invalidate(vec);
 }
 
@@ -127,7 +121,7 @@ void vec_reserve(allocator *alloc, vector *vec, u32 count) {
 
 void veca_reserve(vectora *vec, u32 count) {
 
-    if (null == vec->data) return init_vectora(vec->alloc, vec, count, vec->element_size);
+    if (null == vec->data) return init_vectora(vec->data->alloc, vec, count, vec->element_size);
 
     if (vec->data->capacity >= count) return;
 
@@ -135,7 +129,7 @@ void veca_reserve(vectora *vec, u32 count) {
     if (new_capacity == 0) new_capacity = 8;
     while (new_capacity < count) new_capacity *= 2;
 
-    void *resized       = alloc_realloc(vec->alloc, vec->data,
+    void *resized       = alloc_realloc(vec->data->alloc, vec->data,
                                         sizeof(struct vector_data_header) + new_capacity * vec->element_size);
 
     vec->data           = resized;
@@ -164,7 +158,6 @@ void vec_push_back(allocator *alloc, vector *vec, void const *element) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
     memcpy(vec->data->data + vec->data->size * vec->element_size, element, vec->element_size);
     vec->data->size += 1;
-    assert(alloc == vec->data->alloc);
 }
 
 void veca_push_back(vectora *vec, void const *element) {
@@ -177,7 +170,6 @@ void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) 
     vec_reserve(alloc, vec, vec->data ? vec->data->size + count : count);
     memcpy(vec->data->data + vec->data->size * vec->element_size, start, count * vec->element_size);
     vec->data->size += count;
-    assert(alloc == vec->data->alloc);
 }
 
 void veca_copy_back(vectora *vec, void const *start, u32 count) {
@@ -191,7 +183,6 @@ void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     vec_reserve(alloc, vec, vec->data ? vec->data->size + 1 : 1);
     *(vec->data->data + vec->data->size) = b;
     vec->data->size += 1;
-    assert(alloc == vec->data->alloc);
 }
 
 void veca_push_back_byte(vectora *vec, u8 b) {
@@ -207,7 +198,6 @@ void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 cou
 
     memcpy(vec->data->data + vec->data->size, start, count);
     vec->data->size += count;
-    assert(alloc == vec->data->alloc);
 }
 
 void veca_copy_back_bytes(vectora *vec, u8 const *start, u32 count) {
@@ -222,7 +212,6 @@ void vec_copy_back_c_string(allocator *alloc, vector *vec, char const *str) {
     size_t len = strlen(str);
     if (len > UINT32_MAX) fatal("vec_copy_back_c_string: overflow size = %zu\n", len);
 
-    assert(alloc == vec->data->alloc);
     return vec_copy_back_bytes(alloc, vec, (u8 const *)str, (u32)len);
 }
 
@@ -291,11 +280,10 @@ void vec_resize(allocator *alloc, vector *vec, u32 n) {
     if (null == vec->data) return init_vector(alloc, vec, n, vec->element_size);
     if (n > vec->data->capacity) vec_reserve(alloc, vec, n);
     vec->data->size = n;
-    assert(alloc == vec->data->alloc);
 }
 
 void veca_resize(vectora *vec, u32 n) {
-    if (null == vec->data) return init_vectora(vec->alloc, vec, n, vec->element_size);
+    if (null == vec->data) return init_vectora(vec->data->alloc, vec, n, vec->element_size);
     if (n > vec->data->capacity) veca_reserve(vec, n);
     vec->data->size = n;
 }

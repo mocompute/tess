@@ -17,7 +17,8 @@
 // As an exception due to how common is the use of this module, the
 // function names are shortened.
 
-#define VEC(T) vec_init(sizeof(T))
+#define VEC(T)     vec_init(sizeof(T))
+#define VECA(A, T) veca_init((A), sizeof(T))
 
 typedef struct vector {
     u32                        element_size;
@@ -25,10 +26,9 @@ typedef struct vector {
 } vector;
 
 typedef struct vectora {
-    allocator                 *alloc; // this variant stores its own allocator
-    u32                        element_size;
-    struct vector_data_header *data;
-} vectora;
+    u32                         element_size;
+    struct vectora_data_header *data;
+} vectora; // can cast to vector
 
 // -- allocation and deallocation --
 

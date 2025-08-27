@@ -28,6 +28,6 @@ void              parser_destroy(parser **);
 int  parser_next(parser *);
 void parser_result(parser *, ast_node **);
 
-int  parser_parse_all(parser *, vector *out, allocator *out_alloc);
+int  parser_parse_all(parser *, vectora *out);
 
 #endif
