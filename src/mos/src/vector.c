@@ -185,7 +185,7 @@ void veca_copy_back(vectora *vec, void const *start, u32 count) {
 void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     assert(1 == vec->element_size);
     vec_reserve(alloc, vec, vec->data ? vec->size + 1 : 1);
-    *(byte *)(vec_data(vec) + vec->size) = b;
+    *(byte *)(&vec_data(vec)[vec->size]) = b;
     vec->size += 1;
 }
 
@@ -197,7 +197,7 @@ void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 cou
     assert(1 == vec->element_size);
     vec_reserve(alloc, vec, vec->data ? vec->size + count : count);
 
-    memcpy(vec_data(vec) + vec->size, start, count);
+    memcpy(&vec_data(vec)[vec->size], start, count);
     vec->size += count;
 }
 
@@ -217,7 +217,7 @@ void veca_copy_back_c_string(vectora *vec, char const *str) {
 }
 
 void *vec_at(vector *vec, u32 index) {
-    return vec_data(vec) + index * vec->element_size;
+    return &vec_data(vec)[index * vec->element_size];
 }
 
 void *veca_at(vectora *vec, u32 index) {
@@ -255,7 +255,7 @@ void vec_erase(vector *vec, void *it_) {
     assert(end > it);
     ptrdiff_t len = end - it - (ptrdiff_t)vec->element_size;
 
-    memmove(it, it + vec->element_size, (size_t)len);
+    memmove(&it[0], &it[vec->element_size], (size_t)len);
     vec->size -= 1;
 }
 
@@ -284,9 +284,7 @@ void veca_clear(vectora *vec) {
 
 void *vec_data(vector *vec) {
     assert(vec->data);
-
-    // account for expanded header
-    return vec->data->buffer + (vec->data->capacity_ % 2 == 1 ? sizeof(void *) : 0);
+    return &vec->data->buffer[(vec->data->capacity_ % 2 == 1 ? sizeof(void *) : 0)]; // expanded header
 }
 
 void *veca_data(vectora *vec) {
@@ -413,7 +411,7 @@ void *vec_assoc_get(vector *vec, u32 key) {
     u32 const         element_size = vec->element_size;
 
     while (1) {
-        if (key == *(u32 *)it) return (it + sizeof(u32)); // return second element of pair
+        if (key == *(u32 *)it) return (&it[sizeof(u32)]); // return second element of pair
 
         if (it == last) break; // examined last pair
         it -= element_size;
