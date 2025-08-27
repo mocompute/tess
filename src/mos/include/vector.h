@@ -9,11 +9,6 @@
 
 // -- vector struct --
 //
-// Consider the fields read-only, except for data, which clients may
-// set to 0 in certain situations. In that case, client must call
-// [clear] to set the size to zero. Prefer to use vec_move instead if
-// possible.
-//
 // As an exception due to how common is the use of this module, the
 // function names are shortened.
 
@@ -21,13 +16,15 @@
 #define VECA(A, T) veca_init((A), sizeof(T))
 
 typedef struct vector {
-    u32                        element_size;
     struct vector_data_header *data;
+    u32                        element_size;
+    u32                        size;
 } vector;
 
 typedef struct vectora {
-    u32                         element_size;
     struct vectora_data_header *data;
+    u32                         element_size;
+    u32                         size;
 } vectora; // can cast to vector
 
 // -- allocation and deallocation --
@@ -64,8 +61,8 @@ void       *vec_begin(vector *);
 void       *veca_begin(vectora *);
 void const *vec_cbegin(vector const *);
 void const *veca_cbegin(vectora const *);
-void       *vec_end(vector const *);
-void       *veca_end(vectora const *);
+void       *vec_end(vector *);
+void       *veca_end(vectora *);
 void const *vec_cend(vector const *);
 void const *veca_cend(vectora const *);
 void       *vec_at(vector *, u32);

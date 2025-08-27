@@ -1,5 +1,6 @@
 #include "vector.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -112,6 +113,8 @@ static int test_assoc_set(void) {
 int main(void) {
     int error      = 0;
     int this_error = 0;
+
+    assert(16 == sizeof(struct vector));
 
     T(test_vector);
     T(test_assoc);
