@@ -19,15 +19,6 @@
 
 #define VEC(T) vec_init(sizeof(T))
 
-struct vector_data_header {
-#ifndef NDEBUG
-    allocator *alloc;
-#endif
-    u32  capacity;
-    u32  size;
-    byte data[];
-};
-
 typedef struct vector {
     u32                        element_size;
     struct vector_data_header *data;

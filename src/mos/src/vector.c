@@ -11,6 +11,15 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+struct vector_data_header {
+#ifndef NDEBUG
+    allocator *alloc;
+#endif
+    u32  capacity;
+    u32  size;
+    byte data[];
+};
+
 static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
 static void          init_vector(allocator *, vector *, u32 num, u32 size);
 

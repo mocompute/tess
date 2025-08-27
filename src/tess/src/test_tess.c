@@ -283,7 +283,7 @@ static int test_parse_all(void) {
         vector nodes = VEC(ast_node *);
         vec_reserve(vec_alloc, &nodes, 1024);
 
-        if (parser_parse_all(vec_alloc, p, &nodes)) return error + 1;
+        if (parser_parse_all(p, &nodes, vec_alloc)) return error + 1;
 
         allocator      *syntax_alloc = alloc_default_allocator();
         syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
@@ -336,7 +336,7 @@ static int test_parse_to_c(void) {
         vector nodes = VEC(ast_node *);
         vec_reserve(alloc, &nodes, 1024);
 
-        if (parser_parse_all(alloc, p, &nodes)) return error + 1;
+        if (parser_parse_all(p, &nodes, alloc)) return error + 1;
         error += 1 == vec_size(&nodes) ? 0 : 1;
         if (error) return error;
 

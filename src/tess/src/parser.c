@@ -40,7 +40,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
 
     // tokenizer
-    self->tokenizer = tokenizer_create(self->parser_arena, input, input_len);
+    self->tokenizer = tokenizer_create(alloc, input, input_len);
 
     // good_tokens
     self->seen_tokens = VEC(struct token);
@@ -56,7 +56,9 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
 void parser_destroy(parser **self) {
     // error token: arena
     // good_tokens: arena
-    // tokenizer: arena
+
+    // tokenizer
+    tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
@@ -770,14 +772,14 @@ int parser_next(parser *parser) {
     return expression(parser);
 }
 
-int parser_parse_all(allocator *alloc, parser *p, vector *out) {
+int parser_parse_all(parser *p, vector *out, allocator *out_alloc) {
     assert(sizeof(ast_node *) == out->element_size);
 
     int res = 0;
     while (0 == (res = parser_next(p))) {
         ast_node *node;
         parser_result(p, &node);
-        vec_push_back(alloc, out, (void *)&node);
+        vec_push_back(out_alloc, out, (void *)&node);
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
