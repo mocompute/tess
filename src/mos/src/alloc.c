@@ -494,7 +494,7 @@ static void leak_detector_reserve_one(leak_detector *self) {
     if (self->size < self->capacity) return;
 
     i64   new_capacity = self->capacity * 2;
-    void *resized      = realloc(self->data, (size_t)new_capacity);
+    void *resized      = realloc(self->data, (size_t)new_capacity * sizeof(struct leak_allocation));
     if (!resized) fatal("leak_detector: out of memory: %zu\n", (size_t)new_capacity);
 
     self->data     = resized;
