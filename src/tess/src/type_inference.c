@@ -310,18 +310,24 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, tess_type_prim(type_int)); // TODO unsigned
         break;
 
-    case ast_f64:                  push(node->type, tess_type_prim(type_float)); break;
-    case ast_string:               push(node->type, tess_type_prim(type_string)); break;
+    case ast_f64:    push(node->type, tess_type_prim(type_float)); break;
+    case ast_string: push(node->type, tess_type_prim(type_string)); break;
 
-    case ast_tuple:
+    case ast_tuple:  {
+        struct tess_type *els = arguments_to_tuple_type(ctx->alloc, &node->tuple.elements);
+        push(node->type, els);
+    } break;
+
     case ast_function_declaration:
-    case ast_lambda_declaration:   break;
+    case ast_lambda_declaration:
+        /* function_declaration and lambda_declaration only appear during compilation */
+        break;
 
     case ast_infix:
-        // operands same type
+        // operands must be same type
         push(node->infix.left->type, node->infix.right->type);
 
-        // node same type as operands
+        // result must be same type
         push(node->type, node->infix.right->type);
 
         break;
@@ -330,57 +336,71 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // variable name same type as value
         push(node->let_in.name->type, node->let_in.value->type);
 
-        // node same type as value
+        // result must be same type as value
         push(node->type, node->let_in.value->type);
         break;
 
     case ast_let:
         // function name same type as node's arrow type
         push(node->let.name->type, node->type);
+
+        // result is nil
+        push(node->type, tess_type_prim(type_nil));
         break;
 
     case ast_if_then_else:
-        // yes and no arms same type, node same type
+        // yes and no arms same type
         push(node->if_then_else.yes->type, node->if_then_else.no->type);
+
+        // result is same type as arms
         push(node->type, node->if_then_else.yes->type);
         break;
 
     case ast_lambda_function: {
-        // node type is lambda's arrow type, lambda's arrow's left
-        // type is same as tuple of parameters, and right is same as
-        // function body.
+        // argument tuple must be same type as parameter tuple
+        assert(type_arrow == node->type->tag);
+
         struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, &node->lambda_function.parameters);
         push(node->type->arrow.left, tup);
+
+        // body type must be same as right hand of arrow
         push(node->type->arrow.right, node->lambda_function.body->type);
+
+        // result must be same as right hand of arrow
+        push(node->type, node->type->arrow.right);
         break;
 
     } break;
 
     case ast_lambda_function_application: {
-        // arguments must match parameters, and node type must match arrow right
+        // lambda must be a ast_lambda_functoin
         ast_node const *lambda = node->lambda_application.lambda;
         assert(ast_lambda_function == lambda->tag);
 
+        // arguments must match parameters
         struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->lambda_application.arguments);
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &lambda->lambda_function.parameters);
         push(args, params);
 
+        // result must be same as right hand of arrow
         assert(type_arrow == lambda->type->tag);
         push(node->type, lambda->type->arrow.right);
     } break;
 
     case ast_named_function_application: {
-        // arguments must match parameters, and node type must match arrow right
-
+        // must find function definition in a prior ast_let node. Look
+        // for matching symbol name.
         assert(ast_symbol == node->named_application.name->tag);
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
         ast_node const *let  = find_let_node(name, ctx->nodes, ctx->count);
         if (null == let) fatal("collect_constraints: can't find let node for function application.");
 
+        // arguments must match parameters
         struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->named_application.arguments);
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &let->let.parameters);
         push(args, params);
 
+        // result must be same as right hand of arrow
         assert(type_arrow == let->type->tag);
         push(node->type, let->type->arrow.right);
     }
