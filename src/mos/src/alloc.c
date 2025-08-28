@@ -571,6 +571,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 }
 
 void alloc_invalidate_n(void *p, size_t len) {
+    if (!p) return;
     memset(p, 0xCD, len);
 }
 

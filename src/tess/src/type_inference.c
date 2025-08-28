@@ -190,8 +190,8 @@ void assign_type_variables(void *ctx_, ast_node *node) {
 
     if (ast_symbol == node->tag) {
 
-        u32                h     = mos_string_hash32(&node->symbol.name);
-        struct tess_type **found = map_get(ctx->symbols, h);
+        struct tess_type **found = map_get(ctx->symbols, mos_string_str(&node->symbol.name),
+                                           (u16)mos_string_size(&node->symbol.name));
         if (found) {
             node->type = *found;
             dbg("copied %u to %s\n", (*found)->type_var, mos_string_str(&node->symbol.name));
@@ -201,11 +201,8 @@ void assign_type_variables(void *ctx_, ast_node *node) {
             *assign                  = tess_type_init_type_var(ctx->next++);
 
             node->type               = assign;
-            if (map_set(ctx->alloc, &ctx->symbols, h, &assign)) {
-                dbg("map_set failed.\n");
-                assert(false);
-                return;
-            }
+            map_set(ctx->alloc, &ctx->symbols, mos_string_str(&node->symbol.name),
+                    (u16)mos_string_size(&node->symbol.name), &assign);
 
             dbg("assigned %u to %s\n", ctx->next - 1, mos_string_str(&node->symbol.name));
             assert(node->type->tag != type_nil);
@@ -229,7 +226,7 @@ void assign_type_variables(void *ctx_, ast_node *node) {
 void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
     struct assign_type_variables_ctx ctx = {
       .alloc   = alloc,
-      .symbols = map_create(alloc, sizeof(struct tess_type *), 256, 0),
+      .symbols = map_create(alloc, sizeof(struct tess_type *)),
       .next    = 1, // 0 not valid
     };
 

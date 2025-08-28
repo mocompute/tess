@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "alloc_string.h"
 #include "ast.h"
+#include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
 
@@ -62,7 +63,7 @@ static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc
     self->strings = alloc_string_arena_create(alloc, 2048);
     self->next    = 1;
 
-    self->map     = map_create(alloc, sizeof(string_t), 1024, 0);
+    self->map     = map_create(alloc, sizeof(string_t));
 }
 
 static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
@@ -79,8 +80,8 @@ static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out
 }
 
 static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
-    u32             hash  = mos_string_hash32(string);
-    string_t const *found = map_get(map, hash);
+
+    string_t const *found = map_get(map, mos_string_str(string), (u16)mos_string_size(string));
 
     if (found) {
         mos_string_copy(alloc, copy_to, string); // preserve original name for errors
@@ -117,26 +118,23 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         // But it may refer to an outer let-in binding of the same name.
         if (rename_variables(self, node->let_in.value)) return 1;
 
-        ast_node const *name = node->let_in.name;
-        assert(ast_symbol == name->tag);
-        u32       name_hash = mos_string_hash32(&name->symbol.name);
-        string_t *save      = map_get(self->map, name_hash);
-        string_t  save_data;
-        if (save) mos_string_move(&save_data, save); // zero-inits the struct at *save
-
         string_t var_name;
         if (next_variable_name(self, &var_name)) return 1;
-        if (map_set(self->alloc, &self->map, name_hash, &var_name)) return 1;
+
+        hashmap *save = map_copy(self->alloc, self->map);
+        assert(save);
+
+        ast_node const *name = node->let_in.name;
+        assert(ast_symbol == name->tag);
+
+        map_set(self->alloc, &self->map, mos_string_str(&name->symbol.name),
+                (u16)mos_string_size(&name->symbol.name), &var_name);
 
         if (rename_variables(self, node->let_in.name)) return 1;
         if (rename_variables(self, node->let_in.body)) return 1;
 
-        if (save) {
-            // could have moved by map_set
-            string_t *found = map_get(self->map, name_hash);
-            assert(found);
-            mos_string_move(found, save);
-        }
+        map_destroy(self->alloc, &self->map);
+        self->map = save;
 
     } break;
 
@@ -145,7 +143,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         // map in case any of them shadow.
 
         hashmap *save = map_copy(self->alloc, self->map);
-        if (!save) return 1;
+        assert(save);
 
         ast_node **it  = (ast_node **)vec_begin(&node->let.parameters);
         ast_node **end = (ast_node **)vec_end(&node->let.parameters);
@@ -154,11 +152,11 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
             ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
-            u32      name_hash = mos_string_hash32(&name->symbol.name);
 
             string_t var_name;
             if (next_variable_name(self, &var_name)) return 1;
-            if (map_set(self->alloc, &self->map, name_hash, &var_name)) return 1;
+            map_set(self->alloc, &self->map, mos_string_str(&name->symbol.name),
+                    (u16)mos_string_size(&name->symbol.name), &var_name);
 
             // rename the actual parameter symbol
             if (rename_variables(self, *it)) return 1;
@@ -193,11 +191,11 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
             ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
-            u32      name_hash = mos_string_hash32(&name->symbol.name);
 
             string_t var_name;
             if (next_variable_name(self, &var_name)) return 1;
-            if (map_set(self->alloc, &self->map, name_hash, &var_name)) return 1;
+            map_set(self->alloc, &self->map, mos_string_str(&name->symbol.name),
+                    (u16)mos_string_size(&name->symbol.name), &var_name);
 
             // rename the actual parameter symbol
             if (rename_variables(self, *it)) return 1;

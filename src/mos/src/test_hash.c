@@ -11,15 +11,15 @@
 #define ERR(FMT, ...) fprintf(stderr, FMT "\n", ##__VA_ARGS__)
 #define OUT(FMT, ...) printf(FMT "\n", ##__VA_ARGS__)
 
-static noreturn void fatal(char const *msg) {
-    ERR("%s\n", msg);
-    exit(1);
-}
+// static noreturn void fatal(char const *msg) {
+//     ERR("%s\n", msg);
+//     exit(1);
+// }
 
 void test_hash32(int n, int word_size) {
 
     allocator *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
-    hashmap   *map   = map_create(alloc, sizeof(char *), 1024, 0);
+    hashmap   *map   = map_create(alloc, sizeof(char *));
     char      *buf   = alloc_malloc(alloc, (size_t)(n * (word_size + 1)));
 
     char      *ptr   = buf;
@@ -39,13 +39,13 @@ void test_hash32(int n, int word_size) {
         u32   h = hash32((byte *)ptr, (size_t)word_size);
 
         char *found;
-        if ((found = map_get(map, h))) {
+        if ((found = map_get(map, &h, sizeof h))) {
             // only consider a collision if the actual string is the
             // same, so we don't cound collisions caused by poor
             // random generation.
             if (0 != strcmp(ptr, found)) collisions++;
         }
-        if (map_set(alloc, &map, h, ptr)) fatal("map_set failed");
+        map_set(alloc, &map, &h, sizeof h, ptr);
         ptr += word_size + 1;
     }
 

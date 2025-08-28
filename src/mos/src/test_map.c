@@ -40,40 +40,32 @@ static int test_align(void) {
     return error;
 }
 
-static int test_structs(void) {
-    int error = 0;
-
-    dbg("map_header size = %zu\n", sizeof(hashmap_element_header));
-
-    assert(8 == sizeof(hashmap_element_header));
-
-    return error;
-}
-
 static int test_map(void) {
     int        error = 0;
 
     allocator *alloc = alloc_default_allocator();
 
-    hashmap   *map   = map_create(alloc, sizeof(int), 8, 0);
+    hashmap   *map   = map_create(alloc, sizeof(int));
 
-    error += null == map_get(map, 0) ? 0 : 1;
+    int        key0  = 0;
+    error += null == map_get(map, &key0, sizeof key0) ? 0 : 1;
 
     int data = 0;
     data     = 123;
-    error += 0 == map_set(alloc, &map, 0, &data) ? 0 : 1;
+    map_set(alloc, &map, &key0, sizeof key0, &data);
 
-    if (map_get(map, 0)) error += 123 == *(int *)map_get(map, 0) ? 0 : 1;
+    if (map_get(map, &key0, sizeof key0)) error += 123 == *(int *)map_get(map, &key0, sizeof key0) ? 0 : 1;
     else error++;
 
-    error += 0 == map_get(map, 1) ? 0 : 1;
+    int key1 = 1;
+    error += 0 == map_get(map, &key1, sizeof key1) ? 0 : 1;
     data = 456;
-    error += 0 == map_set(alloc, &map, 1, &data) ? 0 : 1;
-    error += 456 == *(int *)map_get(map, 1) ? 0 : 1;
+    map_set(alloc, &map, &key1, sizeof key1, &data);
+    error += 456 == *(int *)map_get(map, &key1, sizeof key1) ? 0 : 1;
 
-    map_erase(map, 0);
-    error += 0 == map_get(map, 0) ? 0 : 1;
-    error += 456 == *(int *)map_get(map, 1) ? 0 : 1;
+    map_erase(map, &key0, sizeof key0);
+    error += 0 == map_get(map, &key0, sizeof key0) ? 0 : 1;
+    error += 456 == *(int *)map_get(map, &key1, sizeof key1) ? 0 : 1;
 
     map_destroy(alloc, &map);
 
@@ -87,8 +79,8 @@ static int test_big_map(void) {
     size_t const N     = 100000;
 
     typedef struct pair_t {
-        hashmap_key left;
-        int         right;
+        int left;
+        int right;
 
     } pair_t;
 
@@ -96,25 +88,22 @@ static int test_big_map(void) {
     vector     vec   = VEC(pair_t);
     vec_reserve(alloc, &vec, N);
 
-    hashmap *map = map_create(alloc, sizeof(int), 8, 0);
+    hashmap *map = map_create(alloc, sizeof(int));
 
     for (size_t i = 0; i < N; ++i) {
         // find unique key
         int key = rand();
-        while (map_get(map, (hashmap_key)key)) key = rand();
+        while (map_contains(map, &key, sizeof key)) key = rand();
 
-        pair_t pair = {(hashmap_key)key, rand()};
+        pair_t pair = {key, rand()};
         vec_push_back(alloc, &vec, &pair);
-        if (map_set(alloc, &map, (hashmap_key)pair.left, &pair.right)) {
-            error++;
-            goto cleanup;
-        }
+        map_set(alloc, &map, &pair.left, sizeof pair.left, &pair.right);
     }
 
     // verify
     for (u32 i = 0; i < vec_size(&vec); ++i) {
         pair_t *pair = vec_at(&vec, i);
-        void   *res  = map_get(map, (hashmap_key)pair->left);
+        void   *res  = map_get(map, &pair->left, sizeof pair->left);
         if (!res) {
             fprintf(stderr, "verify not found %u: %u -> %i %p\n", i, pair->left, pair->right, res);
             error++;
@@ -155,7 +144,6 @@ int main(void) {
 
     srand(seed);
 
-    T(test_structs);
     T(test_power_of_two);
     T(test_align);
     T(test_map);

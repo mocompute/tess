@@ -16,7 +16,8 @@ typedef struct hashmap hashmap;
 
 // -- allocation and deallocation --
 
-nodiscard hashmap *map_create(allocator *) mallocfun;
+nodiscard hashmap *map_create(allocator *, u16 value_size) mallocfun;
+nodiscard hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) mallocfun;
 void               map_destroy(allocator *, hashmap **);
 nodiscard hashmap *map_copy(allocator *, hashmap const *) mallocfun;
 
@@ -30,10 +31,14 @@ f32    map_load_factor(hashmap const *);
 
 // -- insertion and removal --
 
-void map_set(allocator *, hashmap **, byte const *key, u16 key_len, byte const *data, u16 data_len);
-void map_contains(hashmap *, byte const *key, u16 key_len);
-void map_get(hashmap *, byte const *key, u16 key_len, byte *data, u16 *data_len);
-void map_erase(hashmap *, byte const *key, u16 key_len);
+void  map_set(allocator *, hashmap **, void const *key, u16 key_len, void const *data);
+bool  map_contains(hashmap *, void const *key, u16 key_len);
+void *map_get(hashmap *, void const *key, u16 key_len);
+void  map_erase(hashmap *, void const *key, u16 key_len);
+
+// pass zero-init iterator to start
+bool map_iter(hashmap const *, struct hashmap_iterator *, struct hashmap_entry **out);
+bool map_citer(hashmap const *, struct hashmap_iterator *, struct hashmap_entry const **out);
 
 // -- utilities --
 
