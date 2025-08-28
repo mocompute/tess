@@ -341,15 +341,15 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
         }
     }
 
-    // allocate key storage
-    struct hashmap_key *key_storage =
-      alloc_malloc((*self)->key_alloc, sizeof(struct hashmap_key) + key_len);
-    key_storage->size = key_len;
-    memcpy(key_storage->data, key, key_len);
+    struct hashmap_entry entry = {
+      .key    = alloc_malloc((*self)->key_alloc, sizeof(struct hashmap_key) + key_len),
+      .status = 0,
+    };
 
-    // set the entry
+    // copy key into storage
+    entry.key->size = key_len;
+    memcpy(entry.key->data, key, key_len);
 
-    struct hashmap_entry entry = {.key = key_storage, .status = 0};
     if (set_one(*self, &entry, data)) {
         dbg("map_set: error in set_one\n");
         assert(false);
@@ -368,5 +368,9 @@ void map_erase(hashmap *map, void const *key, u16 key_len) {
     if (!cell) return;
 
     set_tombstone(&cell->status);
+
+    alloc_free(map->key_alloc, cell->key);
+    cell->key = null;
+
     map->n_occupied--;
 }
