@@ -330,7 +330,8 @@ static int test_parse_all(void) {
 }
 
 static int test_let_fun(void) {
-    char const *input = "let add a b = a + b";
+    char const *input = "let add a b = a + b\n"
+                        "let main () = add 1 2\n";
     return compile_input(input);
 }
 

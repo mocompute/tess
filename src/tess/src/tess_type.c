@@ -107,16 +107,19 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     case type_string: len = snprintf(buf, (size_t)sz, "%s", type_tag_to_string(self->tag)); break;
 
     case type_tuple:  {
-        len                                = 0;
-        struct tess_type const *const *it  = vec_cbegin(&self->tuple);
-        struct tess_type const *const *end = vec_cend(&self->tuple);
+        len = 0;
+
         len += snprintf(buf, (size_t)sz, "(");
-        while (it != end) {
+
+        struct vector_iterator  iter = {0};
+        struct tess_type const *it;
+        while (vec_citer(&self->tuple, &iter, (void *)&it)) {
+
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, *it++);
+                len += tess_type_snprint(buf + len, sz - len, it);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, *it++);
+                len += tess_type_snprint(null, 0, it);
                 len += snprintf(null, 0, ", ");
             }
         }

@@ -104,6 +104,7 @@ static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node **con
 // -- solver --
 
 static void dbg_constraint(struct constraint const *c) {
+
     int  len_left  = tess_type_snprint(null, 0, c->left) + 1;
     int  len_right = tess_type_snprint(null, 0, c->right) + 1;
     char buf_left[len_left], buf_right[len_right];
@@ -264,7 +265,11 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const 
 
     ast_node const *const *it    = vec_cbegin(arguments);
     ast_node const *const *end   = vec_cend(arguments);
-    while (it != end) vec_push_back(alloc, &tuple->tuple, (*it++)->type);
+    while (it != end) {
+        assert((*it)->type);
+        vec_push_back(alloc, &tuple->tuple, (*it)->type);
+        it++;
+    }
     return tuple;
 }
 

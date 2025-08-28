@@ -365,6 +365,10 @@ bool vec_iter(vector *self, struct vector_iterator *iter, void **out) {
     return true;
 }
 
+bool vec_citer(vector const *self, struct vector_iterator *iter, void **out) {
+    return vec_iter((vector *)self, iter, out);
+}
+
 //
 
 void vec_map(vector const *self, vec_map_fun fun, void *ctx, void *out) {

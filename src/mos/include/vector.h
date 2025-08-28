@@ -78,6 +78,7 @@ void       *veca_back(vectora *);
 
 // pass zero-init iterator to start
 bool vec_iter(vector *, struct vector_iterator *, void **out);
+bool vec_citer(vector const *, struct vector_iterator *, void **out);
 
 // -- map --
 
