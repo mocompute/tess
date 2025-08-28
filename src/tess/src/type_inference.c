@@ -175,6 +175,20 @@ void solver_run(struct solver *self) {
                 substitute_constraints(&it[1], veca_end(self->constraints), *it);
             }
 
+            // tv1 = tv2 -> tv3 : replace tv1s with the arrow type
+            else if (type_type_var == it->left->tag && type_arrow == it->right->tag &&
+                     type_type_var == it->right->arrow.left->tag &&
+                     type_type_var == it->right->arrow.right->tag) {
+
+                dbg("adding substitution: ");
+                dbg_constraint(it);
+                veca_push_back(self->substitutions, it);
+
+                // iterate through remainder of constraints and substitute
+                substitute_constraints(&it[1], veca_end(self->constraints), *it);
+
+            }
+
             // tuple constraints of equal size
             else if (type_tuple == it->left->tag && type_tuple == it->right->tag &&
                      vec_size(&it->left->tuple) == vec_size(&it->right->tuple)) {
@@ -265,7 +279,7 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const 
 
     struct vector_iterator iter  = {0};
     ast_node const *const *it;
-    while (vec_citer(arguments, &iter, (void *)&it)) vec_push_back(alloc, &tuple->tuple, (*it)->type);
+    while (vec_citer(arguments, &iter, (void *)&it)) vec_push_back(alloc, &tuple->tuple, &(*it)->type);
 
     return tuple;
 }

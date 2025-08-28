@@ -111,20 +111,20 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
 
         len += snprintf(buf, (size_t)sz, "(");
 
-        struct vector_iterator  iter = {0};
-        struct tess_type const *it;
+        struct vector_iterator   iter = {0};
+        struct tess_type const **it;
         while (vec_citer(&self->tuple, &iter, (void *)&it)) {
 
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, it);
+                len += tess_type_snprint(buf + len, sz - len, *it);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, it);
+                len += tess_type_snprint(null, 0, *it);
                 len += snprintf(null, 0, ", ");
             }
         }
 
-        if (buf && sz) len += snprintf(buf, (size_t)sz, ")");
+        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
         else len += snprintf(null, 0, ")");
 
     } break;
@@ -142,6 +142,7 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
         }
 
     } break;
+
     case type_type_var: len = snprintf(buf, (size_t)sz, "tv%u", self->type_var); break;
     }
 
