@@ -1,5 +1,5 @@
+#include "alloc.h"
 #include "hashmap.h"
-#include "hashmap_internal.h"
 
 #include "dbg.h"
 #include "vector.h"
@@ -43,7 +43,7 @@ static int test_align(void) {
 static int test_map(void) {
     int        error = 0;
 
-    allocator *alloc = alloc_default_allocator();
+    allocator *alloc = alloc_leak_detector_create();
 
     hashmap   *map   = map_create(alloc, sizeof(int));
 
@@ -52,7 +52,7 @@ static int test_map(void) {
 
     int data = 0;
     data     = 123;
-    map_set(alloc, &map, &key0, sizeof key0, &data);
+    map_set(&map, &key0, sizeof key0, &data);
 
     if (map_get(map, &key0, sizeof key0)) error += 123 == *(int *)map_get(map, &key0, sizeof key0) ? 0 : 1;
     else error++;
@@ -60,15 +60,16 @@ static int test_map(void) {
     int key1 = 1;
     error += 0 == map_get(map, &key1, sizeof key1) ? 0 : 1;
     data = 456;
-    map_set(alloc, &map, &key1, sizeof key1, &data);
+    map_set(&map, &key1, sizeof key1, &data);
     error += 456 == *(int *)map_get(map, &key1, sizeof key1) ? 0 : 1;
 
     map_erase(map, &key0, sizeof key0);
     error += 0 == map_get(map, &key0, sizeof key0) ? 0 : 1;
     error += 456 == *(int *)map_get(map, &key1, sizeof key1) ? 0 : 1;
 
-    map_destroy(alloc, &map);
+    map_destroy(&map);
 
+    alloc_leak_detector_destroy(&alloc);
     return error;
 }
 
@@ -97,7 +98,7 @@ static int test_big_map(void) {
 
         pair_t pair = {key, rand()};
         vec_push_back(alloc, &vec, &pair);
-        map_set(alloc, &map, &pair.left, sizeof pair.left, &pair.right);
+        map_set(&map, &pair.left, sizeof pair.left, &pair.right);
     }
 
     // verify
@@ -120,7 +121,7 @@ static int test_big_map(void) {
         }
     }
 
-    map_destroy(alloc, &map);
+    map_destroy(&map);
 
 cleanup:
     vec_deinit(alloc, &vec);
