@@ -359,14 +359,14 @@ u32 veca_capacity(vectora const *vec) {
 
 //
 
-bool vec_iter(vector *self, struct vector_iterator *iter, void **out) {
+bool vec_iter(vector *self, struct vector_iterator *iter) {
     if (iter->next == vec_size(self)) return false;
-    *out = vec_at(self, iter->next++);
+    iter->ptr = vec_at(self, iter->next++);
     return true;
 }
 
-bool vec_citer(vector const *self, struct vector_iterator *iter, void **out) {
-    return vec_iter((vector *)self, iter, out);
+bool vec_citer(vector const *self, struct vector_iterator *iter) {
+    return vec_iter((vector *)self, iter);
 }
 
 //

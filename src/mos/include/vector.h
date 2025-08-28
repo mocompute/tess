@@ -28,7 +28,8 @@ typedef struct vectora {
 } vectora; // can cast to vector
 
 struct vector_iterator {
-    u32 next;
+    u32   next;
+    void *ptr;
 };
 
 // -- allocation and deallocation --
@@ -78,9 +79,9 @@ void const *veca_cat(vectora const *, u32);
 void       *vec_back(vector *);
 void       *veca_back(vectora *);
 
-// pass zero-init iterator to start; out gets a pointer to the element
-bool vec_iter(vector *, struct vector_iterator *, void **out);
-bool vec_citer(vector const *, struct vector_iterator *, void **out);
+// pass zero-init iterator to start;
+bool vec_iter(vector *, struct vector_iterator *);
+bool vec_citer(vector const *, struct vector_iterator *);
 
 // -- map --
 

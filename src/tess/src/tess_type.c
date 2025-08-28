@@ -111,15 +111,14 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
 
         len += snprintf(buf, (size_t)sz, "(");
 
-        struct vector_iterator   iter = {0};
-        struct tess_type const **it;
-        while (vec_citer(&self->tuple, &iter, (void *)&it)) {
+        struct tess_type_iterator iter = {0};
+        while (vec_citer(&self->tuple, (struct vector_iterator *)&iter)) {
 
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, *it);
+                len += tess_type_snprint(buf + len, sz - len, iter.ptr);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, *it);
+                len += tess_type_snprint(null, 0, iter.ptr);
                 len += snprintf(null, 0, ", ");
             }
         }
@@ -147,10 +146,6 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     }
 
     return len;
-}
-
-bool tess_type_ptr_vec_iter(vector *vec, struct vector_iterator *iter, struct tess_type **ptr) {
-    return vec_iter(vec, iter, (void *)ptr);
 }
 
 void tess_type_ptr_vec_push_back(allocator *alloc, vector *vec, struct tess_type **el) {

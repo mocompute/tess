@@ -678,10 +678,12 @@ static int let_form(parser *p) {
 
     // get declaration out of pool to move into new node
     node->let.name = decl->function_declaration.name;
+    dbg("let_form: name = %p\n", node->let.name);
     node->let.body = defn;
 
     // move the vector from the function_declaration node to the new ast node
     vec_move(&node->let.parameters, &decl->function_declaration.parameters);
+
     // reset moved-from vector to an empty vector so the node in the
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool

@@ -89,6 +89,11 @@ typedef struct ast_node {
     ast_tag                 tag;
 } ast_node;
 
+struct ast_node_iterator {
+    u32              next;
+    struct ast_node *ptr;
+};
+
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
@@ -113,5 +118,7 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 
 void ast_pool_dfs(void *, ast_node *, ast_op_fun);
 void ast_pool_cdfs(void *, ast_node const *, ast_op_cfun);
+
+void ast_validate_nodes(ast_node *nodes[], u32 count);
 
 #endif

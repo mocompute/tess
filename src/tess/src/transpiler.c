@@ -53,16 +53,14 @@ int transpiler_compile(transpiler *self, vector const *nodes) {
     // output std header
     out_put(self, embed_std);
 
-    struct vector_iterator iter = {0};
-    ast_node const *const *it;
+    struct ast_node_iterator iter = {0};
 
-    while (vec_citer(nodes, &iter, (void *)&it)) {
+    while (vec_citer(nodes, (struct vector_iterator *)&iter)) {
 
-        ast_node const *node = *it;
-        assert(node);
+        assert(iter.ptr);
 
         int res = 0;
-        if ((res = a_toplevel(self, node))) return res;
+        if ((res = a_toplevel(self, iter.ptr))) return res;
     }
 
     return 0;
@@ -190,10 +188,7 @@ static int a_std_apply(transpiler *self, ast_node const *node, char const *name)
 
 static int a_let(transpiler *self, ast_node const *node) {
 
-    ast_node const *name = node->let.name;
-    assert(name);
-
-    if (0 == ast_node_name_strcmp(name, "main")) {
+    if (0 == ast_node_name_strcmp(node->let.name, "main")) {
 
         dbg("found main\n");
         out_put(self, "\nint main(int argc, char* argv[]) {\n");

@@ -28,6 +28,11 @@ struct constraint {
     struct tess_type const *right;
 };
 
+struct constraint_iterator {
+    u32                next;
+    struct constraint *ptr;
+};
+
 struct solver {
     allocator *alloc;
     allocator *strings;
@@ -39,15 +44,15 @@ struct solver {
 
 // -- ti_inferer --
 
-static void    ti_assign_type_variables(allocator *, ast_node **, u32);
-static vectora ti_collect_constraints(allocator *alloc, ast_node *const *, u32);
-static void    ti_apply_substitutions_to_ast(vectora *, ast_node **, u32);
+static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
+static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
+static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
 
 struct solver  solver_init(allocator *, vectora *constraints, vectora *substitutions);
 void           solver_deinit(struct solver *);
 void           solver_run(struct solver *);
 
-ti_inferer    *ti_inferer_create(allocator *alloc, ast_node **nodes, u32 count) {
+ti_inferer    *ti_inferer_create(allocator *alloc, ast_node *nodes[], u32 count) {
     ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena = alloc_arena_create(alloc, 4096);
     self->strings    = alloc_string_arena_create(alloc, 1024);
@@ -64,7 +69,9 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 }
 
 void ti_inferer_run(ti_inferer *self) {
+    ast_validate_nodes(self->nodes, self->count);
     ti_assign_type_variables(self->type_arena, self->nodes, self->count);
+    ast_validate_nodes(self->nodes, self->count);
     self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->count);
 
     dbg("ti_inferer_run result constraints:\n");
@@ -87,17 +94,11 @@ void dfs_apply_substitution(void *ctx, ast_node *node) {
     if (node->type == c->left) node->type = c->right;
 }
 
-static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node **const nodes, u32 const count) {
+static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
 
-    struct vector_iterator iter = {0};
-    struct constraint     *c;
-    while (vec_iter((vector *)substitutions, &iter, (void **)&c)) {
-
-        ast_node **node  = nodes;
-        u32        index = count;
-        while (index--) {
-            ast_pool_dfs(c, *node++, dfs_apply_substitution);
-        }
+    struct constraint_iterator iter = {0};
+    while (vec_iter((vector *)substitutions, (struct vector_iterator *)&iter)) {
+        for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_substitution);
     }
 }
 
@@ -253,21 +254,40 @@ void assign_type_variables(void *ctx_, ast_node *node) {
         struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->next++);
         struct tess_type *arrow = tess_type_create_arrow(ctx->alloc, left, right);
         node->type              = arrow;
+        dbg("assign_type_variables: name = %p\n", node->let.name);
     } else {
         struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
         node->type           = tv;
     }
+
+    dbg("validating in assign_type_variables... ");
+    ast_validate_nodes(&node, 1);
 }
 
-void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
+void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
     struct assign_type_variables_ctx ctx = {
       .alloc   = alloc,
       .symbols = map_create(alloc, sizeof(struct tess_type *)),
       .next    = 1, // 0 not valid
     };
 
-    ast_node **it = nodes;
-    while (count--) ast_pool_dfs(&ctx, *it++, assign_type_variables);
+    for (size_t i = 0; i < count; ++i) {
+
+        if (nodes[i]->tag == ast_let) {
+            dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
+        }
+        dbg("validating before dfs... ");
+        ast_validate_nodes(nodes, count);
+
+        ast_pool_dfs(&ctx, nodes[i], assign_type_variables);
+
+        dbg("validating after dfs... ");
+        ast_validate_nodes(nodes, count);
+
+        if (nodes[i]->tag == ast_let) {
+            dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
+        }
+    }
 
     map_destroy(&ctx.symbols);
 }
@@ -275,35 +295,34 @@ void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
 // -- collect_constraints --
 
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
-    struct tess_type      *tuple = tess_type_create_tuple(alloc);
+    struct tess_type        *tuple = tess_type_create_tuple(alloc);
 
-    struct vector_iterator iter  = {0};
-    ast_node const *const *it;
+    struct ast_node_iterator iter  = {0};
 
-    while (vec_citer(arguments, &iter, (void *)&it))
-        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &(*it)->type);
+    while (vec_citer(arguments, (struct vector_iterator *)&iter))
+        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &iter.ptr->type);
 
     return tuple;
 }
 
-static ast_node const *find_let_node(char const *name, ast_node const *const *nodes, u32 count) {
+static ast_node const *find_let_node(char const *name, ast_node *nodes[], u32 count) {
     // TODO profile linear search versus hashmap
-    while (count--) {
-        ast_node const *const node = *nodes++;
-        if (ast_let == node->tag) {
-            assert(ast_symbol == node->let.name->tag);
-            char const *node_name = mos_string_str(&node->let.name->symbol.name);
-            if (0 == strcmp(name, node_name)) return node;
+
+    for (size_t i = 0; i < count; ++i) {
+        if (ast_let == nodes[i]->tag) {
+            assert(ast_symbol == nodes[i]->let.name->tag);
+            char const *node_name = mos_string_str(&nodes[i]->let.name->symbol.name);
+            if (0 == strcmp(name, node_name)) return nodes[i];
         }
     }
     return null;
 }
 
 struct collect_constraints_ctx {
-    allocator             *alloc;
-    ast_node const *const *nodes;
-    u32                    count;
-    struct vectora         constraints;
+    allocator     *alloc;
+    ast_node     **nodes;
+    u32            count;
+    struct vectora constraints;
 };
 
 void collect_constraints(void *ctx_, ast_node *node) {
@@ -429,12 +448,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #undef push
 }
 
-vectora ti_collect_constraints(allocator *alloc, ast_node *const *nodes, u32 count) {
-    struct collect_constraints_ctx ctx = {alloc, (ast_node const *const *)nodes, count,
-                                          VECA(alloc, struct constraint)};
+vectora ti_collect_constraints(allocator *alloc, ast_node *nodes[], u32 count) {
+    struct collect_constraints_ctx ctx = {alloc, nodes, count, VECA(alloc, struct constraint)};
 
-    ast_node *const               *it  = nodes;
-    while (count--) ast_pool_dfs(&ctx, *it++, collect_constraints);
+    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, nodes[i], collect_constraints);
     return ctx.constraints;
 }
 

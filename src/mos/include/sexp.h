@@ -61,6 +61,11 @@ typedef struct {
 
 } sexp;
 
+struct sexp_iterator {
+    u32   next;
+    sexp *ptr;
+};
+
 // -- allocation and deallocation --
 
 sexp sexp_init_unboxed(i64);
@@ -88,7 +93,7 @@ bool      sexp_is_boxed(sexp);
 i64       sexp_unboxed_get(sexp);
 sexp_box *sexp_box_get(sexp);
 
-// -- utilities
+// -- utilities --
 
 char *sexp_to_string(allocator *, sexp);
 int   sexp_to_string_buf(sexp const *, char *, size_t);
