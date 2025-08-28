@@ -359,6 +359,14 @@ u32 veca_capacity(vectora const *vec) {
 
 //
 
+bool vec_iter(vector *self, struct vector_iterator *iter, void **out) {
+    if (iter->next == vec_size(self)) return false;
+    *out = vec_at(self, iter->next++);
+    return true;
+}
+
+//
+
 void vec_map(vector const *self, vec_map_fun fun, void *ctx, void *out) {
     u32 const   element_size = self->element_size;
     void const *it           = vec_cbegin(self);
