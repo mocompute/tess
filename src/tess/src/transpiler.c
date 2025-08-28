@@ -53,17 +53,16 @@ int transpiler_compile(transpiler *self, vector const *nodes) {
     // output std header
     out_put(self, embed_std);
 
-    ast_node const *const *it  = (typeof(it))vec_cbegin(nodes);
-    ast_node const *const *end = (typeof(it))vec_cend(nodes);
-    while (it != end) {
+    struct vector_iterator iter = {0};
+    ast_node const *const *it;
+
+    while (vec_citer(nodes, &iter, (void *)&it)) {
 
         ast_node const *node = *it;
         assert(node);
 
         int res = 0;
         if ((res = a_toplevel(self, node))) return res;
-
-        ++it;
     }
 
     return 0;

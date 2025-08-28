@@ -305,7 +305,7 @@ void const *vec_cbegin(vector const *vec) {
 }
 
 void const *veca_cbegin(vectora const *vec) {
-    return vec_cbegin((vector *)vec);
+    return vec_begin((vector *)vec);
 }
 
 void *vec_end(vector *vec) {
@@ -325,7 +325,7 @@ void const *vec_cend(vector const *vec) {
 }
 
 void const *veca_cend(vectora const *vec) {
-    return vec_cend((vector *)vec);
+    return vec_cend((vector const *)vec);
 }
 
 u32 vec_size(vector const *vec) {

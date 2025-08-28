@@ -61,6 +61,7 @@ bool veca_empty(vectora const *);
 
 void       *vec_data(vector *);
 void       *veca_data(vectora *);
+
 void       *vec_begin(vector *);
 void       *veca_begin(vectora *);
 void const *vec_cbegin(vector const *);
@@ -69,6 +70,7 @@ void       *vec_end(vector *);
 void       *veca_end(vectora *);
 void const *vec_cend(vector const *);
 void const *veca_cend(vectora const *);
+
 void       *vec_at(vector *, u32);
 void       *veca_at(vectora *, u32);
 void const *vec_cat(vector const *, u32);
@@ -76,7 +78,7 @@ void const *veca_cat(vectora const *, u32);
 void       *vec_back(vector *);
 void       *veca_back(vectora *);
 
-// pass zero-init iterator to start
+// pass zero-init iterator to start; out gets a pointer to the element
 bool vec_iter(vector *, struct vector_iterator *, void **out);
 bool vec_citer(vector const *, struct vector_iterator *, void **out);
 

@@ -6,6 +6,7 @@
 #include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
+#include "vector.h"
 
 #include <stdio.h>
 
@@ -103,10 +104,10 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         break;
 
     case ast_tuple: {
-        ast_node **it  = vec_begin(&node->tuple.elements);
-        ast_node **end = vec_end(&node->tuple.elements);
-        while (it != end)
-            if (rename_variables(self, *it++)) return 1;
+        struct vector_iterator iter = {0};
+        ast_node             **it;
+        while (vec_iter(&node->tuple.elements, &iter, (void *)&it))
+            if (rename_variables(self, *it)) return 1;
     } break;
 
     case ast_let_in: {
@@ -145,10 +146,9 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         assert(save);
 
-        ast_node **it  = (ast_node **)vec_begin(&node->let.parameters);
-        ast_node **end = (ast_node **)vec_end(&node->let.parameters);
-
-        while (it != end) {
+        struct vector_iterator iter = {0};
+        ast_node             **it;
+        while (vec_iter(&node->let.parameters, &iter, (void *)&it)) {
             ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
@@ -184,10 +184,9 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         if (!save) return 1;
 
-        ast_node **it  = (ast_node **)vec_begin(&node->lambda_function.parameters);
-        ast_node **end = (ast_node **)vec_end(&node->lambda_function.parameters);
-
-        while (it != end) {
+        struct vector_iterator iter = {0};
+        ast_node             **it;
+        while (vec_iter(&node->lambda_function.parameters, &iter, (void *)&it)) {
             ast_node const *name = *it;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
@@ -211,18 +210,18 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
     } break;
 
     case ast_lambda_function_application: {
-        ast_node **it  = (ast_node **)vec_begin(&node->lambda_application.arguments);
-        ast_node **end = (ast_node **)vec_end(&node->lambda_application.arguments);
-        while (it != end)
-            if (rename_variables(self, *it++)) return 1;
+        struct vector_iterator iter = {0};
+        ast_node             **it;
+        while (vec_iter(&node->lambda_application.arguments, &iter, (void *)&it))
+            if (rename_variables(self, *it)) return 1;
 
     } break;
 
     case ast_named_function_application: {
-        ast_node **it  = (ast_node **)vec_begin(&node->named_application.arguments);
-        ast_node **end = (ast_node **)vec_end(&node->named_application.arguments);
-        while (it != end)
-            if (rename_variables(self, *it++)) return 1;
+        struct vector_iterator iter = {0};
+        ast_node             **it;
+        while (vec_iter(&node->named_application.arguments, &iter, (void *)&it))
+            if (rename_variables(self, *it)) return 1;
     } break;
 
     case ast_eof:

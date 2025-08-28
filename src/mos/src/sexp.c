@@ -137,9 +137,9 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_symbol:
     case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
     case sexp_box_list:   {
-        sexp       *it  = vec_begin(&self->list.list);
-        sexp const *end = vec_end(&self->list.list);
-        while (it != end) sexp_deinit(alloc, it++);
+        struct vector_iterator iter = {0};
+        sexp                  *it;
+        while (vec_iter(&self->list.list, &iter, (void *)&it)) sexp_deinit(alloc, it);
         vec_deinit(alloc, &self->list.list);
     } break;
     }
@@ -181,14 +181,13 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
 
 #define do_print_list(FIELD)                                                                               \
     do {                                                                                                   \
-        size_t      count = vec_size(&FIELD);                                                              \
-        sexp const *it    = vec_cbegin(&FIELD);                                                            \
-        while (count--) {                                                                                  \
+        struct vector_iterator iter  = {0};                                                                \
+        size_t                 count = vec_size(&FIELD);                                                   \
+        sexp const            *it;                                                                         \
+        while (vec_iter(&FIELD, &iter, (void *)&it)) {                                                     \
                                                                                                            \
             do_print_node(it);                                                                             \
-            if (count) do_print_literal(" ");                                                              \
-                                                                                                           \
-            ++it;                                                                                          \
+            if (--count) do_print_literal(" ");                                                            \
         }                                                                                                  \
     } while (0)
 

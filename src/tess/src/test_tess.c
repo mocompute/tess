@@ -365,7 +365,7 @@ static int test_parse_to_c(void) {
         // print out the output byte array: add string terminator
         vec_push_back_byte(alloc, &transpiler_output, '\0');
 
-        printf("Output:\n%s\n", (char const *)vec_cbegin(&transpiler_output));
+        printf("Output:\n%s\n", (char const *)vec_data(&transpiler_output));
 
         vec_deinit(alloc, &transpiler_output);
         transpiler_destroy(&transpiler);

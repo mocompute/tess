@@ -263,13 +263,10 @@ void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
     struct tess_type      *tuple = tess_type_create_tuple(alloc);
 
-    ast_node const *const *it    = vec_cbegin(arguments);
-    ast_node const *const *end   = vec_cend(arguments);
-    while (it != end) {
-        assert((*it)->type);
-        vec_push_back(alloc, &tuple->tuple, (*it)->type);
-        it++;
-    }
+    struct vector_iterator iter  = {0};
+    ast_node const *const *it;
+    while (vec_citer(arguments, &iter, (void *)&it)) vec_push_back(alloc, &tuple->tuple, (*it)->type);
+
     return tuple;
 }
 
