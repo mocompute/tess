@@ -279,7 +279,9 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const 
 
     struct vector_iterator iter  = {0};
     ast_node const *const *it;
-    while (vec_citer(arguments, &iter, (void *)&it)) vec_push_back(alloc, &tuple->tuple, &(*it)->type);
+
+    while (vec_citer(arguments, &iter, (void *)&it))
+        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &(*it)->type);
 
     return tuple;
 }

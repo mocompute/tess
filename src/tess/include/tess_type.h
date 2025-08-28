@@ -21,7 +21,7 @@ typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
 
 struct tess_type {
     union {
-        struct vector tuple;
+        struct vector tuple; // tess_type*
         struct {
             struct tess_type *left;
             struct tess_type *right;
@@ -46,5 +46,9 @@ struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 
 int                     tess_type_snprint(char *, int, struct tess_type const *);
 char const             *type_tag_to_string(tess_type_tag);
+
+bool                    tess_type_ptr_vec_iter(vector *, struct vector_iterator *, struct tess_type **);
+void                    tess_type_ptr_vec_push_back(allocator *, vector *, struct tess_type **);
+void tess_type_cptr_vec_push_back(allocator *, vector *, struct tess_type const *const *);
 
 #endif

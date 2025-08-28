@@ -149,6 +149,18 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     return len;
 }
 
+bool tess_type_ptr_vec_iter(vector *vec, struct vector_iterator *iter, struct tess_type **ptr) {
+    return vec_iter(vec, iter, (void *)ptr);
+}
+
+void tess_type_ptr_vec_push_back(allocator *alloc, vector *vec, struct tess_type **el) {
+    vec_push_back(alloc, vec, el);
+}
+
+void tess_type_cptr_vec_push_back(allocator *alloc, vector *vec, struct tess_type const *const *el) {
+    vec_push_back(alloc, vec, el);
+}
+
 #ifndef MOS_TAG_STRING
 #define MOS_TAG_STRING(name, str) [name] = str,
 #endif
