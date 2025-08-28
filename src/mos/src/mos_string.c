@@ -76,6 +76,11 @@ char const *mos_string_str(string_t const *s) {
     return &s->small.data[0];
 }
 
+u32 mos_string_hash(string_t const *s) {
+    char const *str = mos_string_str(s);
+    return hash32((byte const *)str, strlen(str));
+}
+
 u32 mos_string_size(string_t const *s) {
     if (mos_string_is_allocated(s)) return s->allocated.size;
     return (u32)strlen(s->small.data);

@@ -273,11 +273,11 @@ static int test_parse_all(void) {
     {
         char const *input = "let a = 1 in\n"
                             "let b = 2 in\n"
-                            "let a = b in\n"
-                            "let b = a in\n"
-                            "b           \n";
+                            "let a = b in\n"  // a = 2
+                            "let b = a in\n"  // b = 2
+                            "b           \n"; // value = 2
 
-        parser     *p     = parser_create(ast_alloc, input, strlen(input));
+        parser *p = parser_create(ast_alloc, input, strlen(input));
         if (null == p) return error + 1;
 
         vectora nodes = VECA(vec_alloc, ast_node *);
@@ -307,7 +307,11 @@ static int test_parse_all(void) {
             alloc_free(alloc_default_allocator(), str);
         }
 
+        dbg("constraints:\n");
         ti_inferer_dbg_constraints(ti);
+        dbg("substitutions:\n");
+        ti_inferer_dbg_substitutions(ti);
+
         ti_inferer_destroy(ti_alloc, &ti);
 
         syntax_checker_destroy(&syntax);
