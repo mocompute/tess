@@ -569,6 +569,7 @@ static int infix_operation(parser *p) {
     node->infix.left     = lhs;
     node->infix.right    = rhs;
     node->infix.op       = op;
+
     return result_ast_node(p, node);
 }
 

@@ -101,7 +101,7 @@ sexp sexp_init_list(allocator *alloc, sexp *elements, u32 count) {
     sexp      out = sexp_init_boxed(alloc);
     sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_list;
-    vec_copy_back(alloc, &box->list.list, elements, count);
+    if (count) vec_copy_back(alloc, &box->list.list, elements, count);
     return out;
 }
 
