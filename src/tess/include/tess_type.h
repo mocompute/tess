@@ -34,10 +34,13 @@ struct tess_type {
 
 struct tess_type        tess_type_init(tess_type_tag);
 struct tess_type        tess_type_init_type_var(u32);
-struct tess_type       *tess_type_create_type_var(allocator *, u32);
 struct tess_type        tess_type_init_tuple();
 struct tess_type        tess_type_init_arrow(struct tess_type *, struct tess_type *);
 void                    tess_type_deinit(allocator *, struct tess_type *);
+
+struct tess_type       *tess_type_create_type_var(allocator *, u32);
+struct tess_type       *tess_type_create_tuple(allocator *);
+struct tess_type       *tess_type_create_arrow(allocator *, struct tess_type *, struct tess_type *);
 
 struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 

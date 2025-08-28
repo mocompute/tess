@@ -22,9 +22,7 @@ struct tess_type tess_type_init_type_var(u32 val) {
 
 struct tess_type *tess_type_create_type_var(allocator *alloc, u32 val) {
     struct tess_type *self = alloc_struct(alloc, self);
-    *self                  = tess_type_init(type_type_var);
-    self->type_var         = val;
-
+    *self                  = tess_type_init_type_var(val);
     return self;
 }
 
@@ -34,10 +32,23 @@ struct tess_type tess_type_init_tuple() {
     return self;
 }
 
+struct tess_type *tess_type_create_tuple(allocator *alloc) {
+    struct tess_type *self = alloc_struct(alloc, self);
+    *self                  = tess_type_init_tuple();
+    return self;
+}
+
 struct tess_type tess_type_init_arrow(struct tess_type *left, struct tess_type *right) {
     struct tess_type self = tess_type_init(type_arrow);
     self.arrow.left       = left;
     self.arrow.right      = right;
+    return self;
+}
+
+struct tess_type *tess_type_create_arrow(allocator *alloc, struct tess_type *left,
+                                         struct tess_type *right) {
+    struct tess_type *self = alloc_struct(alloc, self);
+    *self                  = tess_type_init_arrow(left, right);
     return self;
 }
 

@@ -222,9 +222,7 @@ void assign_type_variables(void *ctx_, ast_node *node) {
             dbg("copied %u to %s\n", (*found)->type_var, mos_string_str(&node->symbol.name));
             assert(node->type->tag != type_nil);
         } else {
-            struct tess_type *assign = alloc_struct(ctx->alloc, assign);
-            *assign                  = tess_type_init_type_var(ctx->next++);
-
+            struct tess_type *assign = tess_type_create_type_var(ctx->alloc, ctx->next++);
             node->type               = assign;
             map_set(&ctx->symbols, mos_string_str(&node->symbol.name),
                     (u16)mos_string_size(&node->symbol.name), &assign);
@@ -235,12 +233,9 @@ void assign_type_variables(void *ctx_, ast_node *node) {
     }
 
     else if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        struct tess_type *left  = alloc_struct(ctx->alloc, left);
-        struct tess_type *right = alloc_struct(ctx->alloc, right);
-        struct tess_type *arrow = alloc_struct(ctx->alloc, arrow);
-        *left                   = tess_type_init_type_var(ctx->next++);
-        *right                  = tess_type_init_type_var(ctx->next++);
-        *arrow                  = tess_type_init_arrow(left, right);
+        struct tess_type *left  = tess_type_create_type_var(ctx->alloc, ctx->next++);
+        struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->next++);
+        struct tess_type *arrow = tess_type_create_arrow(ctx->alloc, left, right);
         node->type              = arrow;
     } else {
         struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
@@ -264,11 +259,10 @@ void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
 // -- collect_constraints --
 
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
-    struct tess_type *tuple    = alloc_struct(alloc, tuple);
-    *tuple                     = tess_type_init_tuple();
+    struct tess_type      *tuple = tess_type_create_tuple(alloc);
 
-    ast_node const *const *it  = vec_cbegin(arguments);
-    ast_node const *const *end = vec_cend(arguments);
+    ast_node const *const *it    = vec_cbegin(arguments);
+    ast_node const *const *end   = vec_cend(arguments);
     while (it != end) vec_push_back(alloc, &tuple->tuple, (*it++)->type);
     return tuple;
 }
