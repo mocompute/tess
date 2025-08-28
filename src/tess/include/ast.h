@@ -85,8 +85,8 @@ typedef struct ast_node {
         } tuple;
     };
 
-    struct tess_type *type;
-    ast_tag           tag;
+    struct tess_type const *type;
+    ast_tag                 tag;
 } ast_node;
 
 // -- ast_node --
