@@ -11,20 +11,12 @@
 #include <stdbool.h>
 
 // -- hash map --
-//
-// A hash map with u32 keys and smallish (up to 24 byte) values.
-// Note that keys are u32 because they should be a good hash
-// selected by the client.
-//
-// Each cell places the key in a header, followed by client's
-// element_size bytes of data.
 
 typedef struct hashmap hashmap;
-typedef u32            hashmap_key;
 
 // -- allocation and deallocation --
 
-nodiscard hashmap *map_create(allocator *, u8 element_size, u32 buckets, f32 max_load_factor) mallocfun;
+nodiscard hashmap *map_create(allocator *) mallocfun;
 void               map_destroy(allocator *, hashmap **);
 nodiscard hashmap *map_copy(allocator *, hashmap const *) mallocfun;
 
@@ -35,16 +27,13 @@ bool   map_empty(hashmap const *);
 f32    map_load_factor(hashmap const *);
 
 // -- data and iterator access --
-//
-// Data cell includes header struct.
-
-hashmap_element_header *map_unchecked_at(hashmap *, hashmap_key);
 
 // -- insertion and removal --
 
-nodiscard int map_set(allocator *, hashmap **, u32 key, void *data);
-void         *map_get(hashmap *, hashmap_key);
-void          map_erase(hashmap *, hashmap_key);
+void map_set(allocator *, hashmap **, byte const *key, u16 key_len, byte const *data, u16 data_len);
+void map_contains(hashmap *, byte const *key, u16 key_len);
+void map_get(hashmap *, byte const *key, u16 key_len, byte *data, u16 *data_len);
+void map_erase(hashmap *, byte const *key, u16 key_len);
 
 // -- utilities --
 
