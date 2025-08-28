@@ -106,7 +106,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
     case ast_tuple: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->tuple.elements, (struct vector_iterator *)&iter))
-            if (rename_variables(self, iter.ptr)) return 1;
+            if (rename_variables(self, *iter.ptr)) return 1;
     } break;
 
     case ast_let_in: {
@@ -147,7 +147,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->let.parameters, (struct vector_iterator *)&iter)) {
-            ast_node const *name = iter.ptr;
+            ast_node const *name = *iter.ptr;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
 
@@ -157,7 +157,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
                     (u16)mos_string_size(&name->symbol.name), &var_name);
 
             // rename the actual parameter symbol
-            if (rename_variables(self, iter.ptr)) return 1;
+            if (rename_variables(self, *iter.ptr)) return 1;
         }
 
         if (rename_variables(self, node->let.body)) return 1;
@@ -182,7 +182,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->lambda_function.parameters, (struct vector_iterator *)&iter)) {
-            ast_node const *name = iter.ptr;
+            ast_node const *name = *iter.ptr;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
 
@@ -192,7 +192,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
                     (u16)mos_string_size(&name->symbol.name), &var_name);
 
             // rename the actual parameter symbol
-            if (rename_variables(self, iter.ptr)) return 1;
+            if (rename_variables(self, *iter.ptr)) return 1;
         }
 
         if (rename_variables(self, node->lambda_function.body)) return 1;
@@ -205,14 +205,14 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
     case ast_lambda_function_application: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->lambda_application.arguments, (struct vector_iterator *)&iter))
-            if (rename_variables(self, iter.ptr)) return 1;
+            if (rename_variables(self, *iter.ptr)) return 1;
 
     } break;
 
     case ast_named_function_application: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->named_application.arguments, (struct vector_iterator *)&iter))
-            if (rename_variables(self, iter.ptr)) return 1;
+            if (rename_variables(self, *iter.ptr)) return 1;
     } break;
 
     case ast_eof:

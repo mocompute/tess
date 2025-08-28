@@ -69,9 +69,7 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 }
 
 void ti_inferer_run(ti_inferer *self) {
-    ast_validate_nodes(self->nodes, self->count);
     ti_assign_type_variables(self->type_arena, self->nodes, self->count);
-    ast_validate_nodes(self->nodes, self->count);
     self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->count);
 
     dbg("ti_inferer_run result constraints:\n");
@@ -259,9 +257,6 @@ void assign_type_variables(void *ctx_, ast_node *node) {
         struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
         node->type           = tv;
     }
-
-    dbg("validating in assign_type_variables... ");
-    ast_validate_nodes(&node, 1);
 }
 
 void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
@@ -276,13 +271,8 @@ void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
         if (nodes[i]->tag == ast_let) {
             dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
         }
-        dbg("validating before dfs... ");
-        ast_validate_nodes(nodes, count);
 
         ast_pool_dfs(&ctx, nodes[i], assign_type_variables);
-
-        dbg("validating after dfs... ");
-        ast_validate_nodes(nodes, count);
 
         if (nodes[i]->tag == ast_let) {
             dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
@@ -300,7 +290,7 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const 
     struct ast_node_iterator iter  = {0};
 
     while (vec_citer(arguments, (struct vector_iterator *)&iter))
-        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &iter.ptr->type);
+        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &(*iter.ptr)->type);
 
     return tuple;
 }

@@ -90,8 +90,8 @@ typedef struct ast_node {
 } ast_node;
 
 struct ast_node_iterator {
-    u32              next;
-    struct ast_node *ptr;
+    u32               next;
+    struct ast_node **ptr;
 };
 
 // -- ast_node --

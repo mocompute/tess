@@ -60,7 +60,7 @@ int transpiler_compile(transpiler *self, vector const *nodes) {
         assert(iter.ptr);
 
         int res = 0;
-        if ((res = a_toplevel(self, iter.ptr))) return res;
+        if ((res = a_toplevel(self, *iter.ptr))) return res;
     }
 
     return 0;

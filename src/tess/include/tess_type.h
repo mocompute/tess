@@ -33,8 +33,8 @@ struct tess_type {
 };
 
 struct tess_type_iterator {
-    u32               next;
-    struct tess_type *ptr;
+    u32                next;
+    struct tess_type **ptr;
 };
 
 struct tess_type        tess_type_init(tess_type_tag);

@@ -115,10 +115,10 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
         while (vec_citer(&self->tuple, (struct vector_iterator *)&iter)) {
 
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, iter.ptr);
+                len += tess_type_snprint(buf + len, sz - len, *iter.ptr);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, iter.ptr);
+                len += tess_type_snprint(null, 0, *iter.ptr);
                 len += snprintf(null, 0, ", ");
             }
         }

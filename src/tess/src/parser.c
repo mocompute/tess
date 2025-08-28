@@ -488,6 +488,7 @@ static int function_application(parser *p) {
 
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
+
     vec_push_back(p->parser_arena, &arguments, &p->result);
 
     while (true) {
@@ -500,7 +501,9 @@ static int function_application(parser *p) {
 
             ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
             node->named_application.name = name;
+
             vec_move(&node->named_application.arguments, &arguments);
+
             return result_ast_node(p, node);
         }
 
@@ -688,6 +691,7 @@ static int let_form(parser *p) {
     // ast_pool is still valid.
     // TODO: better would be to remove the node from the pool
     decl->function_declaration.parameters = vec_init(node->let.parameters.element_size);
+
     return result_ast_node(p, node);
 }
 

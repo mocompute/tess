@@ -289,8 +289,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_tuple: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->tuple.elements, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         return fun(ctx, node);
@@ -308,9 +307,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->let.parameters, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         ast_pool_dfs(ctx, node->let.body, fun);
@@ -328,9 +325,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_lambda_function: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->lambda_function.parameters, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         ast_pool_dfs(ctx, node->lambda_function.body, fun);
@@ -343,9 +338,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->function_declaration.parameters, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         return fun(ctx, node);
@@ -354,9 +347,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_lambda_declaration: {
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->lambda_declaration.parameters, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         return fun(ctx, node);
@@ -368,9 +359,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->lambda_application.arguments, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         return fun(ctx, node);
@@ -381,9 +370,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         struct ast_node_iterator iter = {0};
         while (vec_iter(&node->named_application.arguments, (struct vector_iterator *)&iter)) {
-            ast_validate_nodes(&iter.ptr, 1);
-            ast_pool_dfs(ctx, iter.ptr, fun);
-            ast_validate_nodes(&iter.ptr, 1);
+            ast_pool_dfs(ctx, *iter.ptr, fun);
         }
 
         return fun(ctx, node);
