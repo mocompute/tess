@@ -89,14 +89,16 @@ allocator *alloc_default_allocator() {
 // -- allocator malloc and friends --
 
 void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
+    if (!sz) return null;
     void *ptr = alloc->malloc(alloc, sz, file, line);
     assert(ptr);
     if (!ptr) fatal("malloc failed\n");
     return ptr;
 }
 
-void *alloc_calloc_i(allocator *alloc, size_t count, size_t size, char const *file, int line) {
-    void *ptr = alloc->calloc(alloc, count, size, file, line);
+void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file, int line) {
+    if (!sz) return null;
+    void *ptr = alloc->calloc(alloc, count, sz, file, line);
     assert(ptr);
     if (!ptr) fatal("calloc failed\n");
     return ptr;
