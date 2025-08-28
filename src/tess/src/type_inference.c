@@ -201,7 +201,7 @@ void assign_type_variables(void *ctx_, ast_node *node) {
             *assign                  = tess_type_init_type_var(ctx->next++);
 
             node->type               = assign;
-            map_set(ctx->alloc, &ctx->symbols, mos_string_str(&node->symbol.name),
+            map_set(&ctx->symbols, mos_string_str(&node->symbol.name),
                     (u16)mos_string_size(&node->symbol.name), &assign);
 
             dbg("assigned %u to %s\n", ctx->next - 1, mos_string_str(&node->symbol.name));
@@ -233,7 +233,7 @@ void ti_assign_type_variables(allocator *alloc, ast_node **nodes, u32 count) {
     ast_node **it = nodes;
     while (count--) ast_pool_dfs(&ctx, *it++, assign_type_variables);
 
-    map_destroy(alloc, &ctx.symbols);
+    map_destroy(&ctx.symbols);
 }
 
 // -- collect_constraints --

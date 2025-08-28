@@ -18,8 +18,8 @@ typedef struct hashmap hashmap;
 
 nodiscard hashmap *map_create(allocator *, u16 value_size) mallocfun;
 nodiscard hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) mallocfun;
-void               map_destroy(allocator *, hashmap **);
-nodiscard hashmap *map_copy(allocator *, hashmap const *) mallocfun;
+void               map_destroy(hashmap **);
+nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 
 // -- read-only access --
 
@@ -31,7 +31,7 @@ f32    map_load_factor(hashmap const *);
 
 // -- insertion and removal --
 
-void  map_set(allocator *, hashmap **, void const *key, u16 key_len, void const *data);
+void  map_set(hashmap **, void const *key, u16 key_len, void const *data);
 bool  map_contains(hashmap *, void const *key, u16 key_len);
 void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);

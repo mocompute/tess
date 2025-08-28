@@ -45,7 +45,7 @@ void test_hash32(int n, int word_size) {
             // random generation.
             if (0 != strcmp(ptr, found)) collisions++;
         }
-        map_set(alloc, &map, &h, sizeof h, ptr);
+        map_set(&map, &h, sizeof h, ptr);
         ptr += word_size + 1;
     }
 

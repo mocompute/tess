@@ -22,6 +22,7 @@ struct hashmap_key {
 
 struct hashmap {
 
+    allocator *parent_alloc;
     allocator *key_alloc;
 
     u32        n_cells;

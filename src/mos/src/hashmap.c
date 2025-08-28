@@ -169,7 +169,7 @@ static int set_one(hashmap *map, struct hashmap_entry const *header, byte const 
 //     return set_one(map, cell, cell->data);
 // }
 
-static int grow_buckets(allocator *alloc, hashmap **map) {
+static int grow_buckets(hashmap **map) {
     // make a new map with 1.618x the number of buckets. Copy all data to
     // the new map. Then release the old map's buffers, and overwrite
     // its struct with the new map.
@@ -181,7 +181,7 @@ static int grow_buckets(allocator *alloc, hashmap **map) {
         return 1;
     }
 
-    hashmap *new_map = map_create_n(alloc, (*map)->value_size, (u32)new_buckets);
+    hashmap *new_map = map_create_n((*map)->parent_alloc, (*map)->value_size, (u32)new_buckets);
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
         struct hashmap_entry *cell = map_unchecked_at(*map, i);
@@ -189,12 +189,12 @@ static int grow_buckets(allocator *alloc, hashmap **map) {
             // use map_set api in order to copy keys to new storage,
             // under the assumption data locality would be better than
             // preserving existing key strorage.
-            map_set(alloc, &new_map, cell->key->data, cell->key->size, cell->data);
+            map_set(&new_map, cell->key->data, cell->key->size, cell->data);
         }
     }
 
     // destroy old map and return new map
-    map_destroy(alloc, map);
+    map_destroy(map);
     *map = new_map;
 
     return 0;
@@ -249,6 +249,7 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
     hashmap *map = alloc_calloc(
       alloc, 1, sizeof(struct hashmap) + n_buckets * (sizeof(struct hashmap_entry) + aligned_value_size));
 
+    map->parent_alloc       = alloc;
     map->key_alloc          = alloc;
 
     map->n_cells            = n_buckets;
@@ -269,19 +270,19 @@ hashmap *map_create(allocator *alloc, u16 value_size) {
     return map_create_n(alloc, value_size, DEFAULT_N_BUCKETS);
 }
 
-void map_destroy(allocator *alloc, hashmap **map) {
+void map_destroy(hashmap **map) {
 
     struct hashmap_iterator     iter = {0};
     struct hashmap_entry const *entry;
     while (map_citer(*map, &iter, &entry)) alloc_free((*map)->key_alloc, entry->key);
 
-    alloc_free(alloc, *map);
+    alloc_free((*map)->parent_alloc, *map);
     *map = null;
 }
 
-hashmap *map_copy(allocator *alloc, hashmap const *src) {
+hashmap *map_copy(hashmap const *src) {
     size_t   size = sizeof(struct hashmap) + src->n_cells * hashmap_entry_size(src);
-    hashmap *dst  = alloc_malloc(alloc, size);
+    hashmap *dst  = alloc_malloc(src->parent_alloc, size);
     memcpy(dst, src, size);
 
     struct hashmap_iterator iter = {0};
@@ -322,7 +323,7 @@ bool map_contains(hashmap *self, void const *key, u16 key_len) {
     return cell != null;
 }
 
-void map_set(allocator *alloc, hashmap **self, void const *key, u16 key_len, void const *data) {
+void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
 
     // Must check for existing key. Replace if present.
     struct hashmap_entry *existing = map_find(*self, key, key_len);
@@ -333,7 +334,7 @@ void map_set(allocator *alloc, hashmap **self, void const *key, u16 key_len, voi
     }
 
     if (map_load_factor(*self) >= DEFAULT_LOAD_FACTOR) {
-        if (grow_buckets(alloc, self)) {
+        if (grow_buckets(self)) {
             dbg("map_set: oom\n");
             assert(false);
             exit(1);
