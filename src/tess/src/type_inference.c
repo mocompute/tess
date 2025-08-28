@@ -7,6 +7,7 @@
 #include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
+#include "tess.h"
 #include "tess_type.h"
 #include "vector.h"
 
@@ -291,35 +292,26 @@ void collect_constraints(void *ctx_, ast_node *node) {
     struct collect_constraints_ctx *ctx = ctx_;
     struct constraint               c   = {0};
 
+#define push(L, R)                                                                                         \
+    do {                                                                                                   \
+        c = (struct constraint){(L), (R)};                                                                 \
+        veca_push_back(&ctx->constraints, &c);                                                             \
+    } while (0)
+
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:
-        c = (struct constraint){node->type, tess_type_prim(type_nil)};
-        veca_push_back(&ctx->constraints, &c);
-        break;
-
-    case ast_bool:
-        c = (struct constraint){node->type, tess_type_prim(type_bool)};
-        veca_push_back(&ctx->constraints, &c);
-        break;
+    case ast_nil:    push(node->type, tess_type_prim(type_nil)); break;
+    case ast_bool:   push(node->type, tess_type_prim(type_bool)); break;
 
     case ast_symbol: break;
 
     case ast_i64:
     case ast_u64:
-        c = (struct constraint){node->type, tess_type_prim(type_int)}; // TODO unsigned
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type, tess_type_prim(type_int)); // TODO unsigned
         break;
 
-    case ast_f64:
-        c = (struct constraint){node->type, tess_type_prim(type_float)};
-        veca_push_back(&ctx->constraints, &c);
-        break;
-
-    case ast_string:
-        c = (struct constraint){node->type, tess_type_prim(type_string)};
-        veca_push_back(&ctx->constraints, &c);
-        break;
+    case ast_f64:                  push(node->type, tess_type_prim(type_float)); break;
+    case ast_string:               push(node->type, tess_type_prim(type_string)); break;
 
     case ast_tuple:
     case ast_function_declaration:
@@ -327,38 +319,30 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_infix:
         // operands same type
-        c = (struct constraint){node->infix.left->type, node->infix.right->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->infix.left->type, node->infix.right->type);
 
         // node same type as operands
-        c = (struct constraint){node->type, node->infix.right->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type, node->infix.right->type);
 
         break;
 
     case ast_let_in:
         // variable name same type as value
-        c = (struct constraint){node->let_in.name->type, node->let_in.value->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->let_in.name->type, node->let_in.value->type);
 
         // node same type as value
-        c = (struct constraint){node->type, node->let_in.value->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type, node->let_in.value->type);
         break;
 
     case ast_let:
         // function name same type as node's arrow type
-        c = (struct constraint){node->let.name->type, node->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->let.name->type, node->type);
         break;
 
     case ast_if_then_else:
         // yes and no arms same type, node same type
-        c = (struct constraint){node->if_then_else.yes->type, node->if_then_else.no->type};
-        veca_push_back(&ctx->constraints, &c);
-
-        c = (struct constraint){node->type, node->if_then_else.yes->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->if_then_else.yes->type, node->if_then_else.no->type);
+        push(node->type, node->if_then_else.yes->type);
         break;
 
     case ast_lambda_function: {
@@ -366,11 +350,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // type is same as tuple of parameters, and right is same as
         // function body.
         struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, &node->lambda_function.parameters);
-        c                     = (struct constraint){node->type->arrow.left, tup};
-        veca_push_back(&ctx->constraints, &c);
-
-        c = (struct constraint){node->type->arrow.right, node->lambda_function.body->type};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type->arrow.left, tup);
+        push(node->type->arrow.right, node->lambda_function.body->type);
         break;
 
     } break;
@@ -382,12 +363,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->lambda_application.arguments);
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &lambda->lambda_function.parameters);
-        c                        = (struct constraint){args, params};
-        veca_push_back(&ctx->constraints, &c);
+        push(args, params);
 
         assert(type_arrow == lambda->type->tag);
-        c = (struct constraint){node->type, lambda->type->arrow.right};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type, lambda->type->arrow.right);
     } break;
 
     case ast_named_function_application: {
@@ -396,20 +375,20 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_symbol == node->named_application.name->tag);
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
         ast_node const *let  = find_let_node(name, ctx->nodes, ctx->count);
-        if (null == let) break;
+        if (null == let) fatal("collect_constraints: can't find let node for function application.");
 
         struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->named_application.arguments);
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &let->let.parameters);
-        c                        = (struct constraint){args, params};
-        veca_push_back(&ctx->constraints, &c);
+        push(args, params);
 
         assert(type_arrow == let->type->tag);
-        c = (struct constraint){node->type, let->type->arrow.right};
-        veca_push_back(&ctx->constraints, &c);
+        push(node->type, let->type->arrow.right);
     }
 
     break;
     }
+
+#undef push
 }
 
 vectora ti_collect_constraints(allocator *alloc, ast_node *const *nodes, u32 count) {
