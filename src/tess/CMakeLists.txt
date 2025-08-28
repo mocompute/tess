@@ -52,6 +52,11 @@ target_include_directories(tess PUBLIC "${PROJECT_SOURCE_DIR}/src/tess/include")
 target_link_libraries(tess PRIVATE PUBLIC mos)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 
+# -- exe --
+add_executable(tess_exe src/tess_exe.c)
+target_link_libraries(tess_exe PUBLIC tess readline)
+set_target_properties(tess_exe PROPERTIES OUTPUT_NAME tess)
+
 
 # -- tests --
 
