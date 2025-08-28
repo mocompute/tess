@@ -181,7 +181,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
         alloc_free(alloc, elements);
 
         return penta(alloc, sexp_init_sym(alloc, "let"), ast_node_to_sexp(alloc, node->let.name), list,
-                     ast_node_to_sexp(alloc, node->let_in.body), type);
+                     ast_node_to_sexp(alloc, node->let.body), type);
 
     } break;
 
