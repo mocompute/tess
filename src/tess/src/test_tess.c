@@ -15,6 +15,62 @@
 #include <string.h>
 #include <time.h>
 
+static int compile_input(char const *input) {
+
+    dbg("\n---------------------------\n");
+    dbg("Compiling input string:\n\n%s\n\n", input);
+
+    allocator *vec_alloc = alloc_leak_detector_create();
+    allocator *ast_alloc = alloc_leak_detector_create();
+    allocator *ti_alloc  = alloc_leak_detector_create();
+
+    parser    *p         = parser_create(ast_alloc, input, strlen(input));
+
+    vectora    nodes     = VECA(vec_alloc, ast_node *);
+    veca_reserve(&nodes, 1024);
+
+    if (parser_parse_all(p, &nodes)) return 1;
+
+    allocator      *syntax_alloc = alloc_leak_detector_create();
+    syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
+
+    // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
+    // is not a correct program, it is just 3 symbol nodes
+
+    if (syntax_checker_run(syntax, (ast_node **)veca_data(&nodes), veca_size(&nodes))) return 1;
+
+    ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)veca_data(&nodes), veca_size(&nodes));
+
+    ti_inferer_run(ti);
+
+    for (u32 i = 0; i < 1; ++i) {
+        ast_node const *node = *(ast_node **)veca_cat(&nodes, i);
+        char           *str  = ast_node_to_string(alloc_default_allocator(), node);
+        dbg("node: %s\n", str);
+        alloc_free(alloc_default_allocator(), str);
+    }
+
+    dbg("constraints:\n");
+    ti_inferer_dbg_constraints(ti);
+    dbg("substitutions:\n");
+    ti_inferer_dbg_substitutions(ti);
+
+    ti_inferer_destroy(ti_alloc, &ti);
+
+    syntax_checker_destroy(&syntax);
+    alloc_leak_detector_destroy(&syntax_alloc);
+
+    veca_deinit(&nodes);
+    parser_destroy(&p);
+
+    alloc_leak_detector_destroy(&ti_alloc);
+    alloc_leak_detector_destroy(&ast_alloc);
+    alloc_leak_detector_destroy(&vec_alloc);
+
+    dbg("\n---------------------------\n\n");
+    return 0;
+}
+
 static int test_tess_token_string(void) {
     int        error = 0;
 
@@ -263,69 +319,19 @@ static int test_parser_node_to_string(void) {
 }
 
 static int test_parse_all(void) {
-    int        error     = 0;
 
-    allocator *vec_alloc = alloc_leak_detector_create();
-    allocator *ast_alloc = alloc_leak_detector_create();
-    allocator *ti_alloc  = alloc_leak_detector_create();
-    if (!ast_alloc) return error + 1;
+    char const *input = "let a = 1 in\n"
+                        "let b = 2 in\n"
+                        "let a = b in\n"  // a = 2
+                        "let b = a in\n"  // b = 2
+                        "b           \n"; // value = 2
 
-    {
-        char const *input = "let a = 1 in\n"
-                            "let b = 2 in\n"
-                            "let a = b in\n"  // a = 2
-                            "let b = a in\n"  // b = 2
-                            "b           \n"; // value = 2
+    return compile_input(input);
+}
 
-        parser *p = parser_create(ast_alloc, input, strlen(input));
-        if (null == p) return error + 1;
-
-        vectora nodes = VECA(vec_alloc, ast_node *);
-        veca_reserve(&nodes, 1024);
-
-        if (parser_parse_all(p, &nodes)) return error + 1;
-
-        allocator      *syntax_alloc = alloc_leak_detector_create();
-        syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
-
-        // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
-        // is not a correct program, it is just 3 symbol nodes
-
-        error += 1 == veca_size(&nodes) ? 0 : 1;
-        if (error) return error;
-
-        if (syntax_checker_run(syntax, (ast_node **)veca_data(&nodes), veca_size(&nodes))) return error + 1;
-
-        ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)veca_data(&nodes), veca_size(&nodes));
-
-        ti_inferer_run(ti);
-
-        for (u32 i = 0; i < 1; ++i) {
-            ast_node const *node = *(ast_node **)veca_cat(&nodes, i);
-            char           *str  = ast_node_to_string(alloc_default_allocator(), node);
-            dbg("node: %s\n", str);
-            alloc_free(alloc_default_allocator(), str);
-        }
-
-        dbg("constraints:\n");
-        ti_inferer_dbg_constraints(ti);
-        dbg("substitutions:\n");
-        ti_inferer_dbg_substitutions(ti);
-
-        ti_inferer_destroy(ti_alloc, &ti);
-
-        syntax_checker_destroy(&syntax);
-        alloc_leak_detector_destroy(&syntax_alloc);
-
-        veca_deinit(&nodes);
-        parser_destroy(&p);
-    }
-
-    alloc_leak_detector_destroy(&ti_alloc);
-    alloc_leak_detector_destroy(&ast_alloc);
-    alloc_leak_detector_destroy(&vec_alloc);
-
-    return error;
+static int test_let_fun(void) {
+    char const *input = "let add a b = a + b";
+    return compile_input(input);
 }
 
 static int test_parse_to_c(void) {
@@ -369,7 +375,6 @@ static int test_parse_to_c(void) {
 
     alloc_leak_detector_destroy(&alloc);
 
-    return 1;
     return error;
 }
 
@@ -399,6 +404,7 @@ int main(void) {
     T(test_parser_node_to_string);
     T(test_parse_all);
     T(test_parse_to_c);
+    T(test_let_fun);
 
     return error;
 }
