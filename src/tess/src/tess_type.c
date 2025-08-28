@@ -20,6 +20,14 @@ struct tess_type tess_type_init_type_var(u32 val) {
     return self;
 }
 
+struct tess_type *tess_type_create_type_var(allocator *alloc, u32 val) {
+    struct tess_type *self = alloc_struct(alloc, self);
+    *self                  = tess_type_init(type_type_var);
+    self->type_var         = val;
+
+    return self;
+}
+
 struct tess_type tess_type_init_tuple() {
     struct tess_type self = tess_type_init(type_tuple);
     self.tuple            = VEC(struct tess_type *);
