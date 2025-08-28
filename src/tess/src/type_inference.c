@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "alloc_string.h"
+#include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
 #include "hashmap.h"
@@ -39,6 +40,7 @@ struct solver {
 
 static void    ti_assign_type_variables(allocator *, ast_node **, u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *const *, u32);
+static void    ti_apply_substitutions_to_ast(vectora *, ast_node **, u32);
 
 struct solver  solver_init(allocator *, vectora *constraints, vectora *substitutions);
 void           solver_deinit(struct solver *);
@@ -70,10 +72,32 @@ void ti_inferer_run(ti_inferer *self) {
     self->substitutions  = VECA(self->type_arena, struct constraint);
     struct solver solver = solver_init(self->type_arena, &self->constraints, &self->substitutions);
     solver_run(&solver);
-
     solver_deinit(&solver);
 
+    ti_apply_substitutions_to_ast(&self->substitutions, self->nodes, self->count);
+
     // TODO ...
+}
+
+// -- apply substitutions --
+
+void dfs_apply_substitution(void *ctx, ast_node *node) {
+    struct constraint *c = ctx;
+    if (node->type == c->left) node->type = c->right;
+}
+
+static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node **const nodes, u32 const count) {
+
+    struct vector_iterator iter = {0};
+    struct constraint     *c;
+    while (vec_iter((vector *)substitutions, &iter, (void **)&c)) {
+
+        ast_node **node  = nodes;
+        u32        index = count;
+        while (index--) {
+            ast_pool_dfs(c, *node++, dfs_apply_substitution);
+        }
+    }
 }
 
 // -- solver --
@@ -135,7 +159,6 @@ void solver_run(struct solver *self) {
 
             // delete a = a constraints
             if (it->left == it->right) {
-                dbg("deleting constraint %p\n", it);
                 veca_erase(self->constraints, it); // it points to next item, but end will change
                 continue;                          // skip iterator increment at bottom of loop
             }
@@ -169,6 +192,8 @@ void solver_run(struct solver *self) {
                 did_substitute = true;
             ++it;
         }
+
+        // apply each substitution to all known ast nodes
 
         if (!did_substitute) break;
     }
@@ -218,8 +243,8 @@ void assign_type_variables(void *ctx_, ast_node *node) {
         *arrow                  = tess_type_init_arrow(left, right);
         node->type              = arrow;
     } else {
-        node->type  = alloc_struct(ctx->alloc, node->type);
-        *node->type = tess_type_init_type_var(ctx->next++);
+        struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
+        node->type           = tv;
     }
 }
 
@@ -320,6 +345,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_let_in:
         // variable name same type as value
         c = (struct constraint){node->let_in.name->type, node->let_in.value->type};
+        veca_push_back(&ctx->constraints, &c);
+
+        // node same type as value
+        c = (struct constraint){node->type, node->let_in.value->type};
         veca_push_back(&ctx->constraints, &c);
         break;
 
