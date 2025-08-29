@@ -241,11 +241,20 @@ void solver_deinit(struct solver *self) {
 static bool substitute_constraints(struct constraint *begin, struct constraint *end,
                                    struct constraint const sub) {
 
+    // When a substitution e.g 'tv1 becomes tv2' has been added to the
+    // sequence of substitutions to be applied, it should also be
+    // immediately applied to the rest of the constraints, so that
+    // 'tv1' no longer appears in any constraint.
+
     bool did_substitute = false;
 
     while (begin != end) {
         // Note: casts away const
         apply_one_substitution((struct tess_type **)&begin->left, sub.left, sub.right);
+        apply_one_substitution((struct tess_type **)&begin->right, sub.left, sub.right);
+
+        // FIXME: what about the right hand side of the constraint??
+
         ++begin;
     }
 
@@ -338,8 +347,6 @@ void solver_run(struct solver *self) {
                                        *iter.ptr))
                 did_substitute = true;
         }
-
-        // apply each substitution to all known ast nodes
 
         if (!did_substitute) break;
     }
