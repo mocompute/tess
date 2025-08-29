@@ -46,7 +46,6 @@ struct solver {
 static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
 static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
-static void    ti_apply_prim_constraints_to_ast(vectora *, ast_node *[], u32 const);
 // static void    ti_specialize_functions(vectora *nodes);
 
 static void   dbg_constraint(struct constraint const *);
@@ -94,7 +93,6 @@ void ti_inferer_run(ti_inferer *self) {
     solver_deinit(&solver);
 
     ti_apply_substitutions_to_ast(&self->substitutions, veca_data(self->nodes), veca_size(self->nodes));
-    ti_apply_prim_constraints_to_ast(&self->constraints, veca_data(self->nodes), veca_size(self->nodes));
 
     // TODO ...
 }
@@ -158,67 +156,6 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
 
 static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
     for (size_t i = 0; i < count; ++i) ast_pool_dfs(substitutions, nodes[i], dfs_apply_substitutions);
-}
-
-void dfs_apply_prim_constraints(void *ctx, ast_node *node) {
-    vectora                   *constraints = ctx;
-
-    struct constraint_iterator iter        = {0};
-    while (veca_iter(constraints, &iter.base)) {
-        bool left_prim  = tess_type_is_prim(iter.ptr->left);
-        bool right_prim = tess_type_is_prim(iter.ptr->right);
-        if (!left_prim && !right_prim) continue;
-
-        if (node->type == iter.ptr->left && right_prim) {
-            node->type = iter.ptr->right;
-            continue;
-        }
-        if (node->type == iter.ptr->right && left_prim) {
-            node->type = iter.ptr->left;
-            continue;
-        }
-
-        switch (node->type->tag) {
-        case type_nil:
-        case type_bool:
-        case type_int:
-        case type_float:
-        case type_string:
-        case type_type_var: break;
-
-        case type_tuple:    {
-            struct ast_node_iterator node_iter = {0};
-            while (vec_citer(&node->type->tuple, &node_iter.base)) {
-                struct tess_type const **ty = &(*node_iter.ptr)->type;
-                if (*ty == iter.ptr->left && right_prim) *ty = iter.ptr->right;
-                if (*ty == iter.ptr->right && left_prim) *ty = iter.ptr->left;
-            }
-        } break;
-
-        case type_arrow: {
-            // Note: cast away const to directly modify arrow arms
-            struct tess_type **ty = (struct tess_type **)&node->type;
-            if (right_prim) {
-                if ((*ty)->arrow.left == iter.ptr->left)
-                    (*ty)->arrow.left = (struct tess_type *)iter.ptr->right;
-                if ((*ty)->arrow.right == iter.ptr->left)
-                    (*ty)->arrow.right = (struct tess_type *)iter.ptr->right;
-            } else if (left_prim) {
-                if ((*ty)->arrow.left == iter.ptr->right)
-                    (*ty)->arrow.left = (struct tess_type *)iter.ptr->left;
-                if ((*ty)->arrow.right == iter.ptr->right)
-                    (*ty)->arrow.right = (struct tess_type *)iter.ptr->left;
-            }
-        } break;
-        }
-    }
-
-    struct constraint *c = ctx;
-    if (node->type == c->left && tess_type_is_prim(c->right)) node->type = c->right;
-}
-
-static void ti_apply_prim_constraints_to_ast(vectora *constraints, ast_node *nodes[], u32 const count) {
-    for (size_t i = 0; i < count; ++i) ast_pool_dfs(constraints, nodes[i], dfs_apply_prim_constraints);
 }
 
 // -- solver --
