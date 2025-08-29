@@ -101,12 +101,14 @@ void ti_inferer_run(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static void apply_one_substitution(struct tess_type **type, struct tess_type const *from,
+static bool apply_one_substitution(struct tess_type **type, struct tess_type const *from,
                                    struct tess_type const *to) {
+    bool did_substitute = false;
+
     if (*type == from) {
         // Note: casts away const
         *type = (struct tess_type *)to;
-        return;
+        return true;
     }
 
     switch ((*type)->tag) {
@@ -123,16 +125,24 @@ static void apply_one_substitution(struct tess_type **type, struct tess_type con
         while (vec_citer(&(*type)->tuple, &node_iter.base)) {
             struct tess_type const **ty = &(*node_iter.ptr)->type;
             if (*ty == from) {
-                *ty = to;
+                *ty            = to;
+                did_substitute = true;
             }
         }
     } break;
 
     case type_arrow: {
-        if ((*type)->arrow.left == from) (*type)->arrow.left = to;
-        if ((*type)->arrow.right == from) (*type)->arrow.right = to;
+        if ((*type)->arrow.left == from) {
+            (*type)->arrow.left = to;
+            did_substitute      = true;
+        }
+        if ((*type)->arrow.right == from) {
+            (*type)->arrow.right = to;
+            did_substitute       = true;
+        }
     } break;
     }
+    return did_substitute;
 }
 
 void dfs_apply_substitutions(void *ctx, ast_node *node) {
@@ -246,19 +256,17 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     // immediately applied to the rest of the constraints, so that
     // 'tv1' no longer appears in any constraint.
 
-    bool did_substitute = false;
+    int did_substitute = 0;
 
     while (begin != end) {
         // Note: casts away const
-        apply_one_substitution((struct tess_type **)&begin->left, sub.left, sub.right);
-        apply_one_substitution((struct tess_type **)&begin->right, sub.left, sub.right);
-
-        // FIXME: what about the right hand side of the constraint??
+        did_substitute += apply_one_substitution((struct tess_type **)&begin->left, sub.left, sub.right);
+        did_substitute += apply_one_substitution((struct tess_type **)&begin->right, sub.left, sub.right);
 
         ++begin;
     }
 
-    return did_substitute;
+    return did_substitute != 0;
 }
 
 static bool unify_one(struct solver *self, struct constraint c) {
@@ -279,8 +287,9 @@ static bool unify_one(struct solver *self, struct constraint c) {
     else if (type_type_var == c.left->tag && type_arrow == c.right->tag &&
              type_type_var == c.right->arrow.left->tag && type_type_var == c.right->arrow.right->tag) {
 
-        // dbg("adding substitution: ");
-        // dbg_constraint(iter.ptr);
+        // FIXME this isn't working: tv1 = (tv2, tv3, ) -> tv3
+        dbg("adding substitution: ");
+        dbg_constraint(&c);
 
         struct constraint_iterator iter = {.ptr = &c};
         veca_iterator_init(self->substitutions, &iter.base);
@@ -289,6 +298,7 @@ static bool unify_one(struct solver *self, struct constraint c) {
 
     // tv1 = (tv2, ) : replace tv1s with the tuple type
     else if (type_type_var == c.left->tag && type_tuple == c.right->tag) {
+        // FIXME: check if tv1 appears in tuple and skip
         struct constraint_iterator iter = {.ptr = &c};
         veca_iterator_init(self->substitutions, &iter.base);
         veca_push_back(self->substitutions, &iter.base);
@@ -317,11 +327,16 @@ static bool unify_one(struct solver *self, struct constraint c) {
 }
 
 void solver_run(struct solver *self) {
-    u32 loop_count = 10;
+    int loop_count = 100;
     while (loop_count--) {
 
-        struct constraint_iterator iter = {0};
+        bool                       did_substitute = false;
+
+        struct constraint_iterator iter           = {0};
         while (veca_iter(self->constraints, &iter.base)) {
+
+            dbg("processing: ");
+            dbg_constraint(iter.ptr);
 
             // delete a = a constraints
             if (iter.ptr->left == iter.ptr->right) {
@@ -333,12 +348,11 @@ void solver_run(struct solver *self) {
 
                 if (unify_one(self, *iter.ptr)) {
                     // iterate through remainder of constraints and substitute
-                    substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
+                    if (substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr))
+                        did_substitute = true;
                 }
             }
         }
-
-        bool did_substitute = false;
 
         // apply each substitution in sequence to constraints
         iter = (struct constraint_iterator){0};
@@ -350,6 +364,8 @@ void solver_run(struct solver *self) {
 
         if (!did_substitute) break;
     }
+    if (loop_count == -1) fatal("solver_run: loop exhausted");
+    dbg("exit loop_count = %i\n", loop_count);
 }
 
 // -- assign_type_variables --
@@ -569,6 +585,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
         ast_node const *let  = find_let_node(name, ctx->nodes, ctx->count);
         if (null == let) fatal("collect_constraints: can't find let node for function application.");
+
+        // name must match function type
+        push(node->named_application.name->type, let->let.name->type);
 
         // arguments must match parameters
         struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, &node->named_application.arguments);
