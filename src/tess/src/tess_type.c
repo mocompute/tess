@@ -1,4 +1,5 @@
 #include "tess_type.h"
+#include "alloc.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -110,6 +111,39 @@ bool tess_type_is_prim(struct tess_type const *self) {
     assert(false);
 }
 
+bool tess_type_equal(struct tess_type const *left, struct tess_type const *right) {
+    if (left->tag != right->tag) return false;
+
+    switch (left->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string: return true;
+
+    case type_tuple:  {
+        if (vec_size(&left->tuple) != vec_size(&right->tuple)) return false;
+
+        struct tess_type_iterator left_iter  = {0};
+        struct tess_type_iterator right_iter = {0};
+        while (vec_citer(&left->tuple, &left_iter.base)) {
+            if (!vec_citer(&right->tuple, &right_iter.base)) return false;
+            if (!tess_type_equal(*left_iter.ptr, *right_iter.ptr)) return false;
+        }
+        return true;
+
+    } break;
+
+    case type_arrow:
+        return tess_type_equal(left->arrow.left, right->arrow.left) &&
+               tess_type_equal(left->arrow.right, right->arrow.right);
+
+    case type_type_var: return left->type_var == right->type_var;
+    }
+    assert(false);
+    exit(1);
+}
+
 int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     int len = -1;
 
@@ -162,6 +196,13 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     }
 
     return len;
+}
+
+char *tess_type_to_string(allocator *alloc, struct tess_type const *type) {
+    int   len = tess_type_snprint(null, 0, type) + 1;
+    char *out = alloc_malloc(alloc, (size_t)len);
+    tess_type_snprint(out, len, type);
+    return out;
 }
 
 #ifndef MOS_TAG_STRING

@@ -121,11 +121,12 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
 
     case type_tuple:    {
 
-        struct ast_node_iterator node_iter = {0};
-        while (vec_citer(&(*type)->tuple, &node_iter.base)) {
-            struct tess_type const **ty = &(*node_iter.ptr)->type;
-            if (*ty == from) {
-                *ty            = to;
+        struct tess_type_iterator iter = {0};
+        while (vec_citer(&(*type)->tuple, &iter.base)) {
+
+            if (*iter.ptr == from) {
+                // Note: casts away const
+                *iter.ptr      = (struct tess_type *)to;
                 did_substitute = true;
             }
         }
@@ -146,12 +147,9 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
 }
 
 void dfs_apply_substitutions(void *ctx, ast_node *node) {
-    vectora *substitutions = ctx;
+    vectora                   *substitutions = ctx;
 
-    dbg("examining node type %s:  %s\n", type_tag_to_string(node->type->tag),
-        ast_node_to_string(alloc_default_allocator(), node));
-
-    struct constraint_iterator iter = {0};
+    struct constraint_iterator iter          = {0};
     while (veca_iter(substitutions, &iter.base)) {
         // Note: casts away const
         apply_one_substitution((struct tess_type **)&node->type, iter.ptr->left, iter.ptr->right);
@@ -273,35 +271,49 @@ static bool unify_one(struct solver *self, struct constraint c) {
 
     if (c.left == c.right) return false;
 
-    // typevar1 = typevar2 : replace all tv1s
-    else if (type_type_var == c.left->tag && type_type_var == c.right->tag) {
-        // dbg("adding substitution: ");
-        // dbg_constraint(iter.ptr);
+    else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
+        struct tess_type const    *orig           = type_type_var == c.left->tag ? c.left : c.right;
+        struct tess_type const    *other          = type_type_var == c.left->tag ? c.right : c.left;
 
-        struct constraint_iterator iter = {.ptr = &c};
-        veca_iterator_init(self->substitutions, &iter.base);
-        veca_push_back(self->substitutions, &iter.base);
-    }
+        struct constraint          candidate      = {orig, other};
+        struct constraint_iterator candidate_iter = {.ptr = &candidate};
+        veca_iterator_init(self->substitutions, &candidate_iter.base);
 
-    // tv1 = tv2 -> tv3 : replace tv1s with the arrow type
-    else if (type_type_var == c.left->tag && type_arrow == c.right->tag &&
-             type_type_var == c.right->arrow.left->tag && type_type_var == c.right->arrow.right->tag) {
+        switch (other->tag) {
+        case type_nil:
+        case type_bool:
+        case type_int:
+        case type_float:
+        case type_string: {
 
-        // FIXME this isn't working: tv1 = (tv2, tv3, ) -> tv3
-        dbg("adding substitution: ");
-        dbg_constraint(&c);
+            veca_push_back(self->substitutions, &candidate_iter.base);
 
-        struct constraint_iterator iter = {.ptr = &c};
-        veca_iterator_init(self->substitutions, &iter.base);
-        veca_push_back(self->substitutions, &iter.base);
-    }
+        } break;
 
-    // tv1 = (tv2, ) : replace tv1s with the tuple type
-    else if (type_type_var == c.left->tag && type_tuple == c.right->tag) {
-        // FIXME: check if tv1 appears in tuple and skip
-        struct constraint_iterator iter = {.ptr = &c};
-        veca_iterator_init(self->substitutions, &iter.base);
-        veca_push_back(self->substitutions, &iter.base);
+        case type_tuple: {
+
+            bool                     found = false;
+            struct ast_node_iterator iter  = {0};
+            while (vec_citer(&other->tuple, &iter.base)) {
+                if ((*iter.ptr)->type == orig) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) return false;
+
+            veca_push_back(self->substitutions, &candidate_iter.base);
+
+        } break;
+
+        case type_arrow:
+            if (other->arrow.left == orig || other->arrow.right == orig) return false;
+            veca_push_back(self->substitutions, &candidate_iter.base);
+            break;
+
+        case type_type_var: veca_push_back(self->substitutions, &candidate_iter.base); break;
+        }
+
     }
 
     // tuple constraints of equal size
@@ -339,12 +351,13 @@ void solver_run(struct solver *self) {
             dbg_constraint(iter.ptr);
 
             // delete a = a constraints
-            if (iter.ptr->left == iter.ptr->right) {
+            if (iter.ptr->left == iter.ptr->right || tess_type_equal(iter.ptr->left, iter.ptr->right)) {
 
                 veca_erase(self->constraints, &iter.base);
                 continue;
+            }
 
-            } else {
+            else {
 
                 if (unify_one(self, *iter.ptr)) {
                     // iterate through remainder of constraints and substitute
@@ -390,7 +403,6 @@ void assign_type_variables(void *ctx_, ast_node *node) {
                                            (u16)mos_string_size(&node->symbol.name));
         if (found) {
             node->type = *found;
-            dbg("copied %u to %s\n", (*found)->type_var, mos_string_str(&node->symbol.name));
             assert(node->type->tag != type_nil);
         } else {
             struct tess_type *assign = tess_type_create_type_var(ctx->alloc, ctx->next++);
