@@ -28,7 +28,10 @@ typedef struct vectora {
 } vectora; // can cast to vector
 
 struct vector_iterator {
-    u32   next;
+    struct vector_iterator_base {
+        u32 next;
+        u32 element_size;
+    } private;
     void *ptr;
 };
 
@@ -79,9 +82,13 @@ void const *veca_cat(vectora const *, u32);
 void       *vec_back(vector *);
 void       *veca_back(vectora *);
 
-// pass zero-init iterator to start;
-bool vec_iter(vector *, struct vector_iterator *);
-bool vec_citer(vector const *, struct vector_iterator *);
+// pass zero-initialized iterator to start iteration
+bool vec_iter(vector *, struct vector_iterator_base *);
+bool vec_citer(vector const *, struct vector_iterator_base *);
+
+// or initialize iterator prior to using it with push_back
+void vec_iterator_init(vector const *, struct vector_iterator_base *);
+void veca_iterator_init(vectora const *, struct vector_iterator_base *);
 
 // -- map --
 
@@ -94,14 +101,24 @@ void veca_map_n(vectora const *, vec_map_fun, void *ctx, void *out, u32);
 
 // -- insertion and removal --
 
-void vec_push_back(allocator *, vector *, void const *);
-void veca_push_back(vectora *, void const *);
-void vec_copy_back(allocator *, vector *, void const *, u32);
-void veca_copy_back(vectora *, void const *, u32);
+void vec_push_back(allocator *, vector *, struct vector_iterator_base *);
+void veca_push_back(vectora *, struct vector_iterator_base *);
+void vec_push_back_void(allocator *, vector *, void const *);
+void veca_push_back_void(vectora *, void const *);
+
+void vec_copy_back(allocator *, vector *, struct vector_iterator_base const *, u32);
+void veca_copy_back(vectora *, struct vector_iterator_base const *, u32);
+void vec_copy_back_void(allocator *, vector *, void const *, u32);
+void veca_copy_back_void(vectora *, void const *, u32);
+
 void vec_pop_back(vector *);
 void veca_pop_back(vectora *);
-void vec_erase(vector *, void *);
-void veca_erase(vectora *, void *);
+
+void vec_erase(vector *, struct vector_iterator_base *);
+void veca_erase(vectora *, struct vector_iterator_base *);
+void vec_erase_void(vector *, void *);
+void veca_erase_void(vectora *, void *);
+
 void vec_resize(allocator *, vector *, u32);
 void veca_resize(vectora *, u32);
 void vec_clear(vector *);

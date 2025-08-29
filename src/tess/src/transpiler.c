@@ -55,7 +55,7 @@ int transpiler_compile(transpiler *self, vector const *nodes) {
 
     struct ast_node_iterator iter = {0};
 
-    while (vec_citer(nodes, (struct vector_iterator *)&iter)) {
+    while (vec_citer(nodes, &iter.base)) {
 
         assert(iter.ptr);
 

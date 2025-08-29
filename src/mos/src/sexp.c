@@ -101,7 +101,7 @@ sexp sexp_init_list(allocator *alloc, sexp *elements, u32 count) {
     sexp      out = sexp_init_boxed(alloc);
     sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_list;
-    if (count) vec_copy_back(alloc, &box->list.list, elements, count);
+    if (count) vec_copy_back_void(alloc, &box->list.list, elements, count);
     return out;
 }
 
@@ -138,7 +138,7 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
     case sexp_box_list:   {
         struct sexp_iterator iter = {0};
-        while (vec_iter(&self->list.list, (struct vector_iterator *)&iter)) sexp_deinit(alloc, iter.ptr);
+        while (vec_iter(&self->list.list, &iter.base)) sexp_deinit(alloc, iter.ptr);
         vec_deinit(alloc, &self->list.list);
     } break;
     }
@@ -182,7 +182,7 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
     do {                                                                                                   \
         struct sexp_iterator iter  = {0};                                                                  \
         size_t               count = vec_size(&FIELD);                                                     \
-        while (vec_iter(&FIELD, (struct vector_iterator *)&iter)) {                                        \
+        while (vec_iter(&FIELD, &iter.base)) {                                                             \
                                                                                                            \
             do_print_node(iter.ptr);                                                                       \
             if (--count) do_print_literal(" ");                                                            \

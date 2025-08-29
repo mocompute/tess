@@ -444,7 +444,9 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                     } else {
                         // append to list
-                        vec_push_back(self->alloc, &exprs, &sub_expr);
+                        struct sexp_iterator iter = {.ptr = &sub_expr};
+                        vec_iterator_init(&exprs, &iter.base);
+                        vec_push_back(self->alloc, &exprs, &iter.base);
                     }
                 } // while sub_expr
 

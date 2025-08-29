@@ -105,7 +105,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
     case ast_tuple: {
         struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->tuple.elements, (struct vector_iterator *)&iter))
+        while (vec_iter(&node->tuple.elements, &iter.base))
             if (rename_variables(self, *iter.ptr)) return 1;
     } break;
 
@@ -146,7 +146,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         assert(save);
 
         struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->let.parameters, (struct vector_iterator *)&iter)) {
+        while (vec_iter(&node->let.parameters, &iter.base)) {
             ast_node const *name = *iter.ptr;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
@@ -181,7 +181,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         if (!save) return 1;
 
         struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_function.parameters, (struct vector_iterator *)&iter)) {
+        while (vec_iter(&node->lambda_function.parameters, &iter.base)) {
             ast_node const *name = *iter.ptr;
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
@@ -204,14 +204,14 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
     case ast_lambda_function_application: {
         struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_application.arguments, (struct vector_iterator *)&iter))
+        while (vec_iter(&node->lambda_application.arguments, &iter.base))
             if (rename_variables(self, *iter.ptr)) return 1;
 
     } break;
 
     case ast_named_function_application: {
         struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->named_application.arguments, (struct vector_iterator *)&iter))
+        while (vec_iter(&node->named_application.arguments, &iter.base))
             if (rename_variables(self, *iter.ptr)) return 1;
     } break;
 

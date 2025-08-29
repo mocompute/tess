@@ -465,7 +465,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
-            default:   vec_push_back(self->parent, &self->buf, &c); break;
+            default:   vec_push_back_void(self->parent, &self->buf, &c); break;
             }
         } break;
 
@@ -494,12 +494,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                vec_push_back(self->parent, &self->buf, &actual);
+                vec_push_back_void(self->parent, &self->buf, &actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                vec_push_back(self->parent, &self->buf, &backslash);
-                vec_push_back(self->parent, &self->buf, &c);
+                vec_push_back_void(self->parent, &self->buf, &backslash);
+                vec_push_back_void(self->parent, &self->buf, &c);
             }
             state = in_string;
 
@@ -535,5 +535,5 @@ finish:
 // -- backtracking --
 
 void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
-    for (size_t i = n_toks; i != 0; --i) vec_push_back(self->parent, &self->backtrack, &toks[i - 1]);
+    for (size_t i = n_toks; i != 0; --i) vec_push_back_void(self->parent, &self->backtrack, &toks[i - 1]);
 }

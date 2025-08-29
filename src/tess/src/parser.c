@@ -22,11 +22,16 @@ struct parser {
 
     ast_node              *result;
 
-    struct vectora         seen_tokens; // for backtracking
+    struct vectora         seen_tokens; // (token) for backtracking
 
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
     struct token           token;
+};
+
+struct token_iterator {
+    struct vector_iterator_base base;
+    struct token               *ptr;
 };
 
 // -- allocation and deallocation --
@@ -190,7 +195,9 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        veca_push_back(&p->seen_tokens, &p->token);
+        struct token_iterator iter = {.ptr = &p->token};
+        veca_iterator_init(&p->seen_tokens, &iter.base);
+        veca_push_back(&p->seen_tokens, &iter.base);
         return 0;
     }
 }
@@ -429,7 +436,9 @@ static int function_declaration(parser *p) {
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            vec_push_back(p->parser_arena, &parameters, &p->result);
+            struct ast_node_iterator iter = {.ptr = &p->result};
+            vec_iterator_init(&parameters, &iter.base);
+            vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
 
@@ -456,7 +465,9 @@ static int lambda_declaration(parser *p) {
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
         if (0 == a_try(p, &a_identifier)) {
-            vec_push_back(p->parser_arena, &parameters, &p->result);
+            struct ast_node_iterator iter = {.ptr = &p->result};
+            vec_iterator_init(&parameters, &iter.base);
+            vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
 
@@ -489,11 +500,13 @@ static int function_application(parser *p) {
     // must have at least one argument
     if (a_try(p, &function_argument)) return 1;
 
-    vec_push_back(p->parser_arena, &arguments, &p->result);
+    struct ast_node_iterator iter = {.ptr = &p->result};
+    vec_iterator_init(&arguments, &iter.base);
+    vec_push_back(p->parser_arena, &arguments, &iter.base);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            vec_push_back(p->parser_arena, &arguments, &p->result);
+            vec_push_back(p->parser_arena, &arguments, &iter.base);
             continue;
         }
 
@@ -616,11 +629,14 @@ static int lambda_function_application(parser *p) {
     ast_vector_init(&arguments);
 
     if (a_try(p, &function_argument)) return 1;
-    vec_push_back(p->parser_arena, &arguments, (void *)&p->result);
+
+    struct ast_node_iterator iter = {.ptr = &p->result};
+    vec_iterator_init(&arguments, &iter.base);
+    vec_push_back(p->parser_arena, &arguments, &iter.base);
 
     while (true) {
         if (0 == a_try(p, &function_argument)) {
-            vec_push_back(p->parser_arena, &arguments, (void *)&p->result);
+            vec_push_back(p->parser_arena, &arguments, &iter.base);
             continue;
         }
 
@@ -706,7 +722,10 @@ static int tuple_expression(parser *p) {
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
     if (a_try(p, &expression)) return 1;
-    vec_push_back(p->ast_arena, &elements, (void *)&p->result);
+
+    struct ast_node_iterator iter = {.ptr = &p->result};
+    vec_iterator_init(&elements, &iter.base);
+    vec_push_back(p->ast_arena, &elements, &iter.base);
     if (a_try(p, &a_comma)) goto cleanup;
 
     int count = 0;
@@ -724,7 +743,9 @@ static int tuple_expression(parser *p) {
             if (a_try(p, &a_comma)) goto cleanup;
 
         // expression
-        if (0 == a_try(p, &expression)) vec_push_back(p->ast_arena, &elements, (void *)&p->result);
+        if (0 == a_try(p, &expression)) {
+            vec_push_back(p->ast_arena, &elements, &iter.base);
+        }
 
         // loop to check for close round, or else
     }
@@ -780,7 +801,10 @@ int parser_parse_all(parser *p, vectora *out) {
     while (0 == (res = parser_next(p))) {
         ast_node *node;
         parser_result(p, &node);
-        veca_push_back(out, (void *)&node);
+
+        struct ast_node_iterator iter = {.ptr = &node};
+        veca_iterator_init(out, &iter.base);
+        veca_push_back(out, &iter.base);
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;

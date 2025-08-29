@@ -161,25 +161,52 @@ bool veca_empty(vectora const *vec) {
     return vec->size == 0;
 }
 
-void vec_push_back(allocator *alloc, vector *vec, void const *element) {
+void vec_push_back(allocator *alloc, vector *vec, struct vector_iterator_base *iter_) {
+    struct vector_iterator *iter = (struct vector_iterator *)iter_;
+    if (vec->element_size != iter->private.element_size) {
+        fatal("vec_push_back: element size mismatch: got %u, expected %u\n", iter->private.element_size,
+              vec->element_size);
+    }
+
+    vec_push_back_void(alloc, vec, iter->ptr);
+}
+
+void veca_push_back(vectora *vec, struct vector_iterator_base *iter) {
+    return vec_push_back(vec->data->alloc, (vector *)vec, iter);
+}
+
+void vec_push_back_void(allocator *alloc, vector *vec, void const *element) {
     u32 size = vec->size;
     vec_reserve(alloc, vec, size + 1);
     memcpy(vec_at(vec, size), element, vec->element_size);
     vec->size += 1;
 }
 
-void veca_push_back(vectora *vec, void const *element) {
-    return vec_push_back(vec->data->alloc, (vector *)vec, element);
+void veca_push_back_void(vectora *vec, void const *element) {
+    return vec_push_back_void(vec->data->alloc, (vector *)vec, element);
 }
 
-void vec_copy_back(allocator *alloc, vector *vec, void const *start, u32 count) {
+void vec_copy_back(allocator *alloc, vector *vec, struct vector_iterator_base const *start, u32 count) {
+    struct vector_iterator *iter = (struct vector_iterator *)start;
+    if (vec->element_size != iter->private.element_size) {
+        fatal("vec_copy_back: element size mismatch: got %u, expected %u\n", iter->private.element_size,
+              vec->element_size);
+    }
+    return vec_copy_back_void(alloc, vec, iter->ptr, count);
+}
+
+void veca_copy_back(vectora *vec, struct vector_iterator_base const *start, u32 count) {
+    return vec_copy_back(vec->data->alloc, (vector *)vec, start, count);
+}
+
+void vec_copy_back_void(allocator *alloc, vector *vec, void const *start, u32 count) {
     vec_reserve(alloc, vec, vec->size + count);
     memcpy(vec_at(vec, vec->size), start, count * vec->element_size);
     vec->size += count;
 }
 
-void veca_copy_back(vectora *vec, void const *start, u32 count) {
-    return vec_copy_back(vec->data->alloc, (vector *)vec, start, count);
+void veca_copy_back_void(vectora *vec, void const *start, u32 count) {
+    return vec_copy_back_void(vec->data->alloc, (vector *)vec, start, count);
 }
 
 void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
@@ -248,7 +275,20 @@ void veca_pop_back(vectora *vec) {
     return vec_pop_back((vector *)vec);
 }
 
-void vec_erase(vector *vec, void *it_) {
+void vec_erase(vector *vec, struct vector_iterator_base *it) {
+    struct vector_iterator *iter = (struct vector_iterator *)it;
+    if (vec->element_size != iter->private.element_size) {
+        fatal("vec_erase: element size mismatch: got %u, expected %u\n", iter->private.element_size,
+              vec->element_size);
+    }
+    return vec_erase_void(vec, iter->ptr);
+}
+
+void veca_erase(vectora *vec, struct vector_iterator_base *it) {
+    return vec_erase((vector *)vec, it);
+}
+
+void vec_erase_void(vector *vec, void *it_) {
     byte *const       it  = it_;
     byte const *const end = vec_end(vec);
 
@@ -259,8 +299,8 @@ void vec_erase(vector *vec, void *it_) {
     vec->size -= 1;
 }
 
-void veca_erase(vectora *vec, void *it) {
-    return vec_erase((vector *)vec, it);
+void veca_erase_void(vectora *vec, void *it) {
+    return vec_erase_void((vector *)vec, it);
 }
 
 void vec_resize(allocator *alloc, vector *vec, u32 n) {
@@ -359,13 +399,24 @@ u32 veca_capacity(vectora const *vec) {
 
 //
 
-bool vec_iter(vector *self, struct vector_iterator *iter) {
-    if (iter->next == vec_size(self)) return false;
-    iter->ptr = vec_at(self, iter->next++);
+void vec_iterator_init(vector const *self, struct vector_iterator_base *iter) {
+    iter->next         = 0;
+    iter->element_size = self->element_size;
+}
+
+void veca_iterator_init(vectora const *self, struct vector_iterator_base *iter) {
+    return vec_iterator_init((vector const *)self, iter);
+}
+
+bool vec_iter(vector *self, struct vector_iterator_base *iter_) {
+    struct vector_iterator *iter = (struct vector_iterator *)iter_;
+    if (iter->private.next == vec_size(self)) return false;
+    iter->private.element_size = self->element_size;
+    iter->ptr                  = vec_at(self, iter->private.next++);
     return true;
 }
 
-bool vec_citer(vector const *self, struct vector_iterator *iter) {
+bool vec_citer(vector const *self, struct vector_iterator_base *iter) {
     return vec_iter((vector *)self, iter);
 }
 
@@ -405,7 +456,7 @@ void veca_map_n(vectora const *self, vec_map_fun fun, void *ctx, void *out, u32 
 
 void vec_assoc_set(allocator *alloc, vector *vec, void const *pair) {
     assert(vec->element_size >= sizeof(u32));
-    vec_push_back(alloc, vec, pair);
+    vec_push_back_void(alloc, vec, pair);
 }
 
 void veca_assoc_set(vectora *vec, void const *pair) {
@@ -443,7 +494,7 @@ void vec_assoc_erase(vector *vec, u32 key) {
     // it points just past the key, so reverse it
     it -= sizeof(u32);
 
-    vec_erase(vec, it);
+    vec_erase_void(vec, it);
 }
 
 void veca_assoc_erase(vectora *vec, u32 key) {

@@ -112,7 +112,7 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
         len += snprintf(buf, (size_t)sz, "(");
 
         struct tess_type_iterator iter = {0};
-        while (vec_citer(&self->tuple, (struct vector_iterator *)&iter)) {
+        while (vec_citer(&self->tuple, &iter.base)) {
 
             if (buf && sz) {
                 len += tess_type_snprint(buf + len, sz - len, *iter.ptr);
@@ -146,14 +146,6 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     }
 
     return len;
-}
-
-void tess_type_ptr_vec_push_back(allocator *alloc, vector *vec, struct tess_type **el) {
-    vec_push_back(alloc, vec, el);
-}
-
-void tess_type_cptr_vec_push_back(allocator *alloc, vector *vec, struct tess_type const *const *el) {
-    vec_push_back(alloc, vec, el);
 }
 
 #ifndef MOS_TAG_STRING

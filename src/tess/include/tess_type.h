@@ -33,8 +33,13 @@ struct tess_type {
 };
 
 struct tess_type_iterator {
-    u32                next;
-    struct tess_type **ptr;
+    struct vector_iterator_base base;
+    struct tess_type          **ptr;
+};
+
+struct tess_type_citerator {
+    struct vector_iterator_base base;
+    struct tess_type const    **ptr;
 };
 
 struct tess_type        tess_type_init(tess_type_tag);
@@ -51,8 +56,5 @@ struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 
 int                     tess_type_snprint(char *, int, struct tess_type const *);
 char const             *type_tag_to_string(tess_type_tag);
-
-void                    tess_type_ptr_vec_push_back(allocator *, vector *, struct tess_type **);
-void tess_type_cptr_vec_push_back(allocator *, vector *, struct tess_type const *const *);
 
 #endif

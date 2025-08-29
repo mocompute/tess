@@ -15,12 +15,12 @@ static int test_vector(void) {
     error += vec_empty(vec) == 1 ? 0 : 1;
 
     int val = 123;
-    vec_push_back(alloc, vec, &val);
+    vec_push_back_void(alloc, vec, &val);
     error += vec_empty(vec) == 0 ? 0 : 1;
     error += *(int *)(vec_back(vec)) == 123 ? 0 : 1;
 
     val = 456;
-    vec_push_back(alloc, vec, &val);
+    vec_push_back_void(alloc, vec, &val);
     error += vec_empty(vec) == 0 ? 0 : 1;
     error += *(int *)(vec_back(vec)) == 456 ? 0 : 1;
 
@@ -32,7 +32,7 @@ static int test_vector(void) {
     error += vec_empty(vec) == 1 ? 0 : 1;
 
     int data[] = {321, 234, 654};
-    vec_copy_back(alloc, vec, data, 3);
+    vec_copy_back_void(alloc, vec, data, 3);
     error += 3 == vec_size(vec) ? 0 : 1;
     error += 3 <= vec_capacity(vec) ? 0 : 1;
     error += ((int *)vec_data(vec))[0] == 321 ? 0 : 1;

@@ -29,8 +29,8 @@ struct constraint {
 };
 
 struct constraint_iterator {
-    u32                next;
-    struct constraint *ptr;
+    struct vector_iterator_base base;
+    struct constraint          *ptr;
 };
 
 struct solver {
@@ -95,7 +95,7 @@ void dfs_apply_substitution(void *ctx, ast_node *node) {
 static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
 
     struct constraint_iterator iter = {0};
-    while (vec_iter((vector *)substitutions, (struct vector_iterator *)&iter)) {
+    while (vec_iter((vector *)substitutions, &iter.base)) {
         for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_substitution);
     }
 }
@@ -156,19 +156,22 @@ void solver_run(struct solver *self) {
         struct constraint *it = veca_begin(self->constraints);
         while (it != veca_end(self->constraints)) {
 
+            struct constraint_iterator iter = {.ptr = it};
+            veca_iterator_init(self->substitutions, &iter.base);
+
             dbg_constraint(it);
 
             // delete a = a constraints
             if (it->left == it->right) {
-                veca_erase(self->constraints, it); // it points to next item, but end will change
-                continue;                          // skip iterator increment at bottom of loop
+                veca_erase_void(self->constraints, it); // it points to next item, but end will change
+                continue;                               // skip iterator increment at bottom of loop
             }
 
             // typevar1 = typevar2 : replace all tv1s
             else if (type_type_var == it->left->tag && type_type_var == it->right->tag) {
                 dbg("adding substitution: ");
                 dbg_constraint(it);
-                veca_push_back(self->substitutions, it);
+                veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
                 substitute_constraints(&it[1], veca_end(self->constraints), *it);
@@ -181,7 +184,7 @@ void solver_run(struct solver *self) {
 
                 dbg("adding substitution: ");
                 dbg_constraint(it);
-                veca_push_back(self->substitutions, it);
+                veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
                 substitute_constraints(&it[1], veca_end(self->constraints), *it);
@@ -267,16 +270,7 @@ void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
     };
 
     for (size_t i = 0; i < count; ++i) {
-
-        if (nodes[i]->tag == ast_let) {
-            dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
-        }
-
         ast_pool_dfs(&ctx, nodes[i], assign_type_variables);
-
-        if (nodes[i]->tag == ast_let) {
-            dbg("assign_type_variables: node name = %p\n", nodes[i]->let.name);
-        }
     }
 
     map_destroy(&ctx.symbols);
@@ -285,12 +279,17 @@ void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
 // -- collect_constraints --
 
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
-    struct tess_type        *tuple = tess_type_create_tuple(alloc);
+    struct tess_type          *tuple     = tess_type_create_tuple(alloc);
 
-    struct ast_node_iterator iter  = {0};
+    struct ast_node_iterator   iter      = {0};
+    struct tess_type_citerator type_iter = {0};
+    vec_iterator_init(arguments, &iter.base);
+    vec_iterator_init(&tuple->tuple, &type_iter.base);
 
-    while (vec_citer(arguments, (struct vector_iterator *)&iter))
-        tess_type_cptr_vec_push_back(alloc, &tuple->tuple, &(*iter.ptr)->type);
+    while (vec_citer(arguments, &iter.base)) {
+        type_iter.ptr = &(*iter.ptr)->type;
+        vec_push_back(alloc, &tuple->tuple, &type_iter.base);
+    }
 
     return tuple;
 }
@@ -321,8 +320,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
-        c = (struct constraint){(L), (R)};                                                                 \
-        veca_push_back(&ctx->constraints, &c);                                                             \
+        c                               = (struct constraint){(L), (R)};                                   \
+        struct constraint_iterator iter = {.ptr = &c};                                                     \
+        veca_iterator_init(&ctx->constraints, &iter.base);                                                 \
+        veca_push_back(&ctx->constraints, &iter.base);                                                     \
     } while (0)
 
     switch (node->tag) {

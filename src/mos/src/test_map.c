@@ -97,7 +97,7 @@ static int test_big_map(void) {
         while (map_contains(map, &key, sizeof key)) key = rand();
 
         pair_t pair = {key, rand()};
-        vec_push_back(alloc, &vec, &pair);
+        vec_push_back_void(alloc, &vec, &pair);
         map_set(&map, &pair.left, sizeof pair.left, &pair.right);
     }
 

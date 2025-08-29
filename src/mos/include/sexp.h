@@ -62,8 +62,8 @@ typedef struct {
 } sexp;
 
 struct sexp_iterator {
-    u32   next;
-    sexp *ptr;
+    struct vector_iterator_base base;
+    sexp                       *ptr;
 };
 
 // -- allocation and deallocation --
