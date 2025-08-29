@@ -211,6 +211,7 @@ void veca_copy_back_void(vectora *vec, void const *start, u32 count) {
 
 void vec_push_back_byte(allocator *alloc, vector *vec, u8 b) {
     assert(1 == vec->element_size);
+    assert(vec->data);
     vec_reserve(alloc, vec, vec->data ? vec->size + 1 : 1);
     *(byte *)(&vec_data(vec)[vec->size]) = b;
     vec->size += 1;
@@ -222,6 +223,7 @@ void veca_push_back_byte(vectora *vec, u8 b) {
 
 void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 count) {
     assert(1 == vec->element_size);
+    assert(vec->data);
     vec_reserve(alloc, vec, vec->data ? vec->size + count : count);
 
     memcpy(&vec_data(vec)[vec->size], start, count);
@@ -244,6 +246,7 @@ void veca_copy_back_c_string(vectora *vec, char const *str) {
 }
 
 void *vec_at(vector *vec, u32 index) {
+    if (!vec->data) return null;
     return &vec_data(vec)[index * vec->element_size];
 }
 
@@ -325,7 +328,7 @@ void veca_clear(vectora *vec) {
 }
 
 void *vec_data(vector *vec) {
-    assert(vec->data);
+    if (!vec->data) return null;
     return &vec->data->buffer[(vec->data->capacity_ % 2 == 1 ? sizeof(void *) : 0)]; // expanded header
 }
 

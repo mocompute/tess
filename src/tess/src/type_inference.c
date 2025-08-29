@@ -204,7 +204,10 @@ static bool unify_one(struct solver *self, struct constraint c) {
     }
 
     // arrow types
-    else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {}
+    else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
+        unify_one(self, (struct constraint){c.left->arrow.left, c.right->arrow.left});
+        unify_one(self, (struct constraint){c.left->arrow.right, c.right->arrow.right});
+    }
 
     return true;
 }
@@ -265,6 +268,8 @@ void assign_type_variables(void *ctx_, ast_node *node) {
 
     if (ast_symbol == node->tag) {
 
+        if (null != node->type) return; // already assigned, possibly as an ast_let name
+
         struct tess_type **found = map_get(ctx->symbols, mos_string_str(&node->symbol.name),
                                            (u16)mos_string_size(&node->symbol.name));
         if (found) {
@@ -277,7 +282,6 @@ void assign_type_variables(void *ctx_, ast_node *node) {
             map_set(&ctx->symbols, mos_string_str(&node->symbol.name),
                     (u16)mos_string_size(&node->symbol.name), &assign);
 
-            dbg("assigned %u to %s\n", ctx->next - 1, mos_string_str(&node->symbol.name));
             assert(node->type->tag != type_nil);
         }
     }
@@ -286,8 +290,12 @@ void assign_type_variables(void *ctx_, ast_node *node) {
         struct tess_type *left  = tess_type_create_type_var(ctx->alloc, ctx->next++);
         struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->next++);
         struct tess_type *arrow = tess_type_create_arrow(ctx->alloc, left, right);
-        node->type              = arrow;
-        dbg("assign_type_variables: name = %p\n", node->let.name);
+        if (ast_lambda_function == node->tag) {
+            node->type = arrow;
+        } else {
+            node->type           = tess_type_create_type_var(ctx->alloc, ctx->next++);
+            node->let.name->type = arrow;
+        }
     } else {
         struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
         node->type           = tv;
@@ -400,13 +408,19 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, node->let_in.value->type);
         break;
 
-    case ast_let:
-        // function name same type as node's arrow type
-        push(node->let.name->type, node->type);
+    case ast_let: {
+        assert(node->let.name->type->tag == type_arrow);
+
+        // left side of arrow is same as parameter tuple type
+        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &node->let.parameters);
+        push(node->let.name->type->arrow.left, params);
+
+        // right side of arrow is same as function body type
+        push(node->let.name->type->arrow.right, node->let.body->type);
 
         // result is nil
         push(node->type, tess_type_prim(type_nil));
-        break;
+    } break;
 
     case ast_if_then_else:
         // yes and no arms same type
@@ -461,8 +475,11 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(args, params);
 
         // result must be same as right hand of arrow
-        assert(type_arrow == let->type->tag);
-        push(node->type, let->type->arrow.right);
+        assert(type_arrow == let->let.name->type->tag);
+        push(node->type, let->let.name->type->arrow.right);
+
+        // and result must be same as body
+        push(node->type, let->let.body->type);
     }
 
     break;

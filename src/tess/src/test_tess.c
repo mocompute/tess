@@ -43,12 +43,19 @@ static int compile_input(char const *input) {
 
     ti_inferer_run(ti);
 
-    for (u32 i = 0; i < 1; ++i) {
-        ast_node const *node = *(ast_node **)veca_cat(&nodes, i);
-        char           *str  = ast_node_to_string(alloc_default_allocator(), node);
+    struct ast_node_iterator iter = {0};
+    while (veca_iter(&nodes, &iter.base)) {
+        char *str = ast_node_to_string(alloc_default_allocator(), *iter.ptr);
         dbg("node: %s\n", str);
         alloc_free(alloc_default_allocator(), str);
     }
+
+    // for (u32 i = 0; i < 1; ++i) {
+    //     ast_node const *node = *(ast_node **)veca_cat(&nodes, i);
+    //     char           *str  = ast_node_to_string(alloc_default_allocator(), node);
+    //     dbg("node: %s\n", str);
+    //     alloc_free(alloc_default_allocator(), str);
+    // }
 
     dbg("constraints:\n");
     ti_inferer_dbg_constraints(ti);
