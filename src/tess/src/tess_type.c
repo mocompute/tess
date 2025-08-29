@@ -92,6 +92,21 @@ struct tess_type const *tess_type_prim(tess_type_tag tag) {
         exit(1);
         break;
     }
+    assert(false);
+}
+
+bool tess_type_is_prim(struct tess_type const *self) {
+    switch (self->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:   return true;
+    case type_tuple:
+    case type_arrow:
+    case type_type_var: return false;
+    }
+    assert(false);
 }
 
 int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {

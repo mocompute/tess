@@ -46,6 +46,7 @@ struct solver {
 static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
 static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
+static void    ti_apply_prim_constraints_to_ast(vectora *, ast_node *[], u32 const);
 // static void    ti_specialize_functions(vectora *nodes);
 
 struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
@@ -81,6 +82,7 @@ void ti_inferer_run(ti_inferer *self) {
     solver_deinit(&solver);
 
     ti_apply_substitutions_to_ast(&self->substitutions, veca_data(self->nodes), veca_size(self->nodes));
+    ti_apply_prim_constraints_to_ast(&self->constraints, veca_data(self->nodes), veca_size(self->nodes));
 
     // TODO ...
 }
@@ -95,8 +97,21 @@ void dfs_apply_substitution(void *ctx, ast_node *node) {
 static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
 
     struct constraint_iterator iter = {0};
-    while (vec_iter((vector *)substitutions, &iter.base)) {
+    while (veca_iter(substitutions, &iter.base)) {
         for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_substitution);
+    }
+}
+
+void dfs_apply_prim_constraints(void *ctx, ast_node *node) {
+    struct constraint *c = ctx;
+    if (node->type == c->left && tess_type_is_prim(c->right)) node->type = c->right;
+}
+
+static void ti_apply_prim_constraints_to_ast(vectora *constraints, ast_node *nodes[], u32 const count) {
+
+    struct constraint_iterator iter = {0};
+    while (veca_iter(constraints, &iter.base)) {
+        for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_prim_constraints);
     }
 }
 
@@ -130,7 +145,7 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
 
     bool did_substitute = false;
 
-    dbg("substitute_constraint: %p -> %p\n", sub.left, sub.right);
+    // dbg("substitute_constraint: %p -> %p\n", sub.left, sub.right);
 
     // this uses reference identity: different pointers are considered
     // unequal even if they are structurally equal.
@@ -156,7 +171,7 @@ void solver_run(struct solver *self) {
         struct constraint_iterator iter = {0};
         while (veca_iter(self->constraints, &iter.base)) {
 
-            dbg_constraint(iter.ptr);
+            // dbg_constraint(iter.ptr);
 
             // delete a = a constraints
             if (iter.ptr->left == iter.ptr->right) {
@@ -166,8 +181,8 @@ void solver_run(struct solver *self) {
 
             // typevar1 = typevar2 : replace all tv1s
             else if (type_type_var == iter.ptr->left->tag && type_type_var == iter.ptr->right->tag) {
-                dbg("adding substitution: ");
-                dbg_constraint(iter.ptr);
+                // dbg("adding substitution: ");
+                // dbg_constraint(iter.ptr);
                 veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
@@ -179,8 +194,8 @@ void solver_run(struct solver *self) {
                      type_type_var == iter.ptr->right->arrow.left->tag &&
                      type_type_var == iter.ptr->right->arrow.right->tag) {
 
-                dbg("adding substitution: ");
-                dbg_constraint(iter.ptr);
+                // dbg("adding substitution: ");
+                // dbg_constraint(iter.ptr);
                 veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
@@ -207,9 +222,6 @@ void solver_run(struct solver *self) {
             if (substitute_constraints(veca_begin(self->constraints), veca_end(self->constraints),
                                        *iter.ptr))
                 did_substitute = true;
-
-            // remove substitution
-            veca_erase(self->substitutions, &iter.base);
         }
 
         // apply each substitution to all known ast nodes

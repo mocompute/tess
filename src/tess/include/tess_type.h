@@ -54,6 +54,8 @@ struct tess_type       *tess_type_create_arrow(allocator *, struct tess_type *, 
 
 struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 
+bool                    tess_type_is_prim(struct tess_type const *);
+
 int                     tess_type_snprint(char *, int, struct tess_type const *);
 char const             *type_tag_to_string(tess_type_tag);
 
