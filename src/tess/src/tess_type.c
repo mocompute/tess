@@ -29,13 +29,14 @@ struct tess_type *tess_type_create_type_var(allocator *alloc, u32 val) {
 
 struct tess_type tess_type_init_tuple() {
     struct tess_type self = tess_type_init(type_tuple);
-    self.tuple            = VEC(struct tess_type *);
     return self;
 }
 
-struct tess_type *tess_type_create_tuple(allocator *alloc) {
+struct tess_type *tess_type_create_tuple(allocator *alloc, u16 size) {
     struct tess_type *self = alloc_struct(alloc, self);
     *self                  = tess_type_init_tuple();
+    self->n_elements       = size;
+    if (size) self->elements = alloc_calloc(alloc, size, sizeof *self->elements);
     return self;
 }
 
@@ -68,7 +69,7 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
         tess_type_deinit(alloc, (struct tess_type *)self->arrow.right);
         break;
 
-    case type_tuple: vec_deinit(alloc, &self->tuple); break;
+    case type_tuple: alloc_free(alloc, self->elements); break;
     }
 
     alloc_invalidate(self);
@@ -122,14 +123,12 @@ bool tess_type_equal(struct tess_type const *left, struct tess_type const *right
     case type_string: return true;
 
     case type_tuple:  {
-        if (vec_size(&left->tuple) != vec_size(&right->tuple)) return false;
 
-        struct tess_type_iterator left_iter  = {0};
-        struct tess_type_iterator right_iter = {0};
-        while (vec_citer(&left->tuple, &left_iter.base)) {
-            if (!vec_citer(&right->tuple, &right_iter.base)) return false;
-            if (!tess_type_equal(*left_iter.ptr, *right_iter.ptr)) return false;
-        }
+        if (left->n_elements != right->n_elements) return false;
+
+        for (size_t i = 0; i < left->n_elements; ++i)
+            if (!tess_type_equal(left->elements[i], right->elements[i])) return false;
+
         return true;
 
     } break;
@@ -161,14 +160,13 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
 
         len += snprintf(buf, (size_t)sz, "(");
 
-        struct tess_type_iterator iter = {0};
-        while (vec_citer(&self->tuple, &iter.base)) {
+        for (size_t i = 0; i < self->n_elements; ++i) {
 
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, *iter.ptr);
+                len += tess_type_snprint(buf + len, sz - len, self->elements[i]);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, *iter.ptr);
+                len += tess_type_snprint(null, 0, self->elements[i]);
                 len += snprintf(null, 0, ", ");
             }
         }

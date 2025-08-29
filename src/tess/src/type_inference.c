@@ -119,15 +119,13 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
 
     case type_tuple:    {
 
-        struct tess_type_iterator iter = {0};
-        while (vec_citer(&(*type)->tuple, &iter.base)) {
-
-            if (*iter.ptr == from) {
-                // Note: casts away const
-                *iter.ptr      = (struct tess_type *)to;
-                did_substitute = true;
+        for (size_t i = 0; i < (*type)->n_elements; ++i) {
+            if ((*type)->elements[i] == from) {
+                (*type)->elements[i] = to;
+                did_substitute       = true;
             }
         }
+
     } break;
 
     case type_arrow: {
@@ -229,14 +227,14 @@ static bool unify_one(struct solver *self, struct constraint c) {
         case type_type_var: break;
         case type_tuple:    {
 
-            bool                     found = false;
-            struct ast_node_iterator iter  = {0};
-            while (vec_citer(&other->tuple, &iter.base)) {
-                if ((*iter.ptr)->type == orig) {
+            bool found = false;
+            for (size_t i = 0; i < other->n_elements; ++i) {
+                if (other->elements[i] == orig) {
                     found = true;
                     break;
                 }
             }
+
             if (found) return false;
 
         } break;
@@ -251,15 +249,11 @@ static bool unify_one(struct solver *self, struct constraint c) {
 
     // tuple constraints of equal size: unify matching elements
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
-             vec_size(&c.left->tuple) == vec_size(&c.right->tuple)) {
+             c.left->n_elements == c.right->n_elements) {
 
-        struct tess_type_iterator left  = {0};
-        struct tess_type_iterator right = {0};
-        while (vec_citer(&c.left->tuple, &left.base)) {
-            if (!vec_citer(&c.right->tuple, &right.base)) fatal("solver_run: vector size mismatch");
+        for (size_t i = 0; i < c.left->n_elements; ++i)
+            unify_one(self, (struct constraint){c.left->elements[i], c.right->elements[i]});
 
-            unify_one(self, (struct constraint){*left.ptr, *right.ptr});
-        }
     }
 
     // arrow types: unify matching arms
@@ -378,16 +372,14 @@ void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
 // -- collect_constraints --
 
 static struct tess_type *arguments_to_tuple_type(allocator *alloc, vector const *arguments) {
-    struct tess_type          *tuple     = tess_type_create_tuple(alloc);
+    u32               n     = vec_size(arguments);
 
-    struct ast_node_iterator   iter      = {0};
-    struct tess_type_citerator type_iter = {0};
-    vec_iterator_init(arguments, &iter.base);
-    vec_iterator_init(&tuple->tuple, &type_iter.base);
+    struct tess_type *tuple = tess_type_create_tuple(alloc, (u16)n);
+    assert(tuple->elements);
 
-    while (vec_citer(arguments, &iter.base)) {
-        type_iter.ptr = &(*iter.ptr)->type;
-        vec_push_back(alloc, &tuple->tuple, &type_iter.base);
+    for (u32 i = 0; i < n; ++i) {
+        memcpy(&tuple->elements[i], ((ast_node const *)vec_cat(arguments, i))->type,
+               sizeof tuple->elements[0]);
     }
 
     return tuple;
