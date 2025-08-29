@@ -39,7 +39,7 @@ static int compile_input(char const *input) {
 
     if (syntax_checker_run(syntax, (ast_node **)veca_data(&nodes), veca_size(&nodes))) return 1;
 
-    ti_inferer *ti = ti_inferer_create(ti_alloc, (ast_node **)veca_data(&nodes), veca_size(&nodes));
+    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes);
 
     ti_inferer_run(ti);
 

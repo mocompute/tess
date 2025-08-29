@@ -16,8 +16,7 @@
 struct ti_inferer {
     allocator *type_arena;
     allocator *strings;
-    ast_node **nodes;
-    u32        count;
+    vectora   *nodes;
 
     vectora    constraints;
     vectora    substitutions;
@@ -47,17 +46,17 @@ struct solver {
 static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
 static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
+// static void    ti_specialize_functions(vectora *nodes);
 
-struct solver  solver_init(allocator *, vectora *constraints, vectora *substitutions);
-void           solver_deinit(struct solver *);
-void           solver_run(struct solver *);
+struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
+void          solver_deinit(struct solver *);
+void          solver_run(struct solver *);
 
-ti_inferer    *ti_inferer_create(allocator *alloc, ast_node *nodes[], u32 count) {
+ti_inferer   *ti_inferer_create(allocator *alloc, vectora *nodes) {
     ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena = alloc_arena_create(alloc, 4096);
     self->strings    = alloc_string_arena_create(alloc, 1024);
     self->nodes      = nodes;
-    self->count      = count;
     return self;
 }
 
@@ -69,8 +68,9 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 }
 
 void ti_inferer_run(ti_inferer *self) {
-    ti_assign_type_variables(self->type_arena, self->nodes, self->count);
-    self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->count);
+    ti_assign_type_variables(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
+    self->constraints =
+      ti_collect_constraints(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
 
     dbg("ti_inferer_run result constraints:\n");
     ti_inferer_dbg_constraints(self);
@@ -80,7 +80,7 @@ void ti_inferer_run(ti_inferer *self) {
     solver_run(&solver);
     solver_deinit(&solver);
 
-    ti_apply_substitutions_to_ast(&self->substitutions, self->nodes, self->count);
+    ti_apply_substitutions_to_ast(&self->substitutions, veca_data(self->nodes), veca_size(self->nodes));
 
     // TODO ...
 }
@@ -153,62 +153,63 @@ void solver_run(struct solver *self) {
     u32 loop_count = 10;
     while (loop_count--) {
 
-        struct constraint *it = veca_begin(self->constraints);
-        while (it != veca_end(self->constraints)) {
+        struct constraint_iterator iter = {0};
+        while (veca_iter(self->constraints, &iter.base)) {
 
-            struct constraint_iterator iter = {.ptr = it};
-            veca_iterator_init(self->substitutions, &iter.base);
-
-            dbg_constraint(it);
+            dbg_constraint(iter.ptr);
 
             // delete a = a constraints
-            if (it->left == it->right) {
-                veca_erase_void(self->constraints, it); // it points to next item, but end will change
-                continue;                               // skip iterator increment at bottom of loop
+            if (iter.ptr->left == iter.ptr->right) {
+                veca_erase(self->constraints, &iter.base);
+                continue;
             }
 
             // typevar1 = typevar2 : replace all tv1s
-            else if (type_type_var == it->left->tag && type_type_var == it->right->tag) {
+            else if (type_type_var == iter.ptr->left->tag && type_type_var == iter.ptr->right->tag) {
                 dbg("adding substitution: ");
-                dbg_constraint(it);
+                dbg_constraint(iter.ptr);
                 veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
-                substitute_constraints(&it[1], veca_end(self->constraints), *it);
+                substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
             }
 
             // tv1 = tv2 -> tv3 : replace tv1s with the arrow type
-            else if (type_type_var == it->left->tag && type_arrow == it->right->tag &&
-                     type_type_var == it->right->arrow.left->tag &&
-                     type_type_var == it->right->arrow.right->tag) {
+            else if (type_type_var == iter.ptr->left->tag && type_arrow == iter.ptr->right->tag &&
+                     type_type_var == iter.ptr->right->arrow.left->tag &&
+                     type_type_var == iter.ptr->right->arrow.right->tag) {
 
                 dbg("adding substitution: ");
-                dbg_constraint(it);
+                dbg_constraint(iter.ptr);
                 veca_push_back(self->substitutions, &iter.base);
 
                 // iterate through remainder of constraints and substitute
-                substitute_constraints(&it[1], veca_end(self->constraints), *it);
+                substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
 
             }
 
             // tuple constraints of equal size
-            else if (type_tuple == it->left->tag && type_tuple == it->right->tag &&
-                     vec_size(&it->left->tuple) == vec_size(&it->right->tuple)) {
+            else if (type_tuple == iter.ptr->left->tag && type_tuple == iter.ptr->right->tag &&
+                     vec_size(&iter.ptr->left->tuple) == vec_size(&iter.ptr->right->tuple)) {
 
                 // FIXME ...
             }
 
-            ++it;
+            // arrow types
+            else if (type_arrow == iter.ptr->left->tag && type_arrow == iter.ptr->right->tag) {}
         }
 
         bool did_substitute = false;
 
         // apply each substitution in sequence to constraints
-        it = veca_begin(self->substitutions);
-        while (it != veca_end(self->substitutions)) {
-            if (substitute_constraints(veca_begin(self->constraints), veca_end(self->constraints), *it))
+        iter = (struct constraint_iterator){0};
+        while (veca_iter(self->substitutions, &iter.base)) {
+            if (substitute_constraints(veca_begin(self->constraints), veca_end(self->constraints),
+                                       *iter.ptr))
                 did_substitute = true;
-            ++it;
+
+            // remove substitution
+            veca_erase(self->substitutions, &iter.base);
         }
 
         // apply each substitution to all known ast nodes
@@ -460,3 +461,30 @@ void ti_inferer_dbg_substitutions(ti_inferer const *self) {
     dbg("substitutions count = %u\n", veca_size(&self->substitutions));
     veca_map(&self->substitutions, map_dbg_constraint, null, null);
 }
+
+// -- specialize function applications --
+
+#if 0
+struct specialize_functions_ctx {
+    vectora *nodes;
+};
+
+static void specialize_node(void *ctx_, ast_node *node) {
+    struct specialize_functions_ctx *ctx = ctx_;
+
+    if (node->tag != ast_named_function_application) return;
+    assert(ast_symbol == node->named_application.name->tag);
+
+    ast_node const *let = find_let_node(mos_string_str(&node->named_application.name->symbol.name),
+                                        veca_data(ctx->nodes), veca_size(ctx->nodes));
+
+    // TODO compiler error
+    if (null == let) fatal("specialize_node: can't find let node for function application.");
+}
+
+static void ti_specialize_functions(vectora *nodes) {
+    struct specialize_functions_ctx ctx  = {nodes};
+    struct ast_node_iterator        iter = {0};
+    while (vec_iter((vector *)nodes, &iter.base)) ast_pool_dfs(&ctx, *iter.ptr, specialize_node);
+}
+#endif

@@ -85,6 +85,8 @@ void       *veca_back(vectora *);
 // pass zero-initialized iterator to start iteration
 bool vec_iter(vector *, struct vector_iterator_base *);
 bool vec_citer(vector const *, struct vector_iterator_base *);
+bool veca_iter(vectora *, struct vector_iterator_base *);
+bool veca_citer(vectora const *, struct vector_iterator_base *);
 
 // or initialize iterator prior to using it with push_back
 void vec_iterator_init(vector const *, struct vector_iterator_base *);

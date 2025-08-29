@@ -281,6 +281,8 @@ void vec_erase(vector *vec, struct vector_iterator_base *it) {
         fatal("vec_erase: element size mismatch: got %u, expected %u\n", iter->private.element_size,
               vec->element_size);
     }
+
+    if (iter->private.next > 0) --iter->private.next; // adjust iterator location
     return vec_erase_void(vec, iter->ptr);
 }
 
@@ -332,7 +334,6 @@ void *veca_data(vectora *vec) {
 }
 
 void *vec_begin(vector *vec) {
-    if (vec_empty(vec)) return null;
     return vec_data(vec);
 }
 
@@ -349,8 +350,6 @@ void const *veca_cbegin(vectora const *vec) {
 }
 
 void *vec_end(vector *vec) {
-    // points 1 past the end
-    if (vec_empty(vec)) return null;
     return vec_at(vec, vec->size);
 }
 
@@ -359,8 +358,6 @@ void *veca_end(vectora *vec) {
 }
 
 void const *vec_cend(vector const *vec) {
-    // points 1 past the end
-    if (vec_empty(vec)) return null;
     return vec_cat(vec, vec->size);
 }
 
@@ -417,6 +414,14 @@ bool vec_iter(vector *self, struct vector_iterator_base *iter_) {
 }
 
 bool vec_citer(vector const *self, struct vector_iterator_base *iter) {
+    return vec_iter((vector *)self, iter);
+}
+
+bool veca_iter(vectora *self, struct vector_iterator_base *iter) {
+    return vec_iter((vector *)self, iter);
+}
+
+bool veca_citer(vectora const *self, struct vector_iterator_base *iter) {
     return vec_iter((vector *)self, iter);
 }
 
