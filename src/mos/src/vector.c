@@ -226,6 +226,7 @@ void vec_copy_back_bytes(allocator *alloc, vector *vec, u8 const *start, u32 cou
     assert(vec->data);
     vec_reserve(alloc, vec, vec->data ? vec->size + count : count);
 
+    if (!vec->data) fatal("vec_copy_back_bytes: null pointer");
     memcpy(&vec_data(vec)[vec->size], start, count);
     vec->size += count;
 }

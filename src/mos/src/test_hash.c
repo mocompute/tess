@@ -26,7 +26,7 @@ void test_hash32(int n, int word_size) {
     int        i     = n;
     while (i--) {
         for (int j = 0; j < word_size; ++j) {
-            *ptr++ = 0x20 + (rand() % (0x7f - 0x20));
+            *ptr++ = (char)(0x20 + (rand() % (0x7f - 0x20)));
         }
         *ptr++ = 0;
     }
