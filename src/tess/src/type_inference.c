@@ -164,6 +164,51 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     return did_substitute;
 }
 
+static bool unify_one(struct solver *self, struct constraint c) {
+
+    if (c.left == c.right) return false;
+
+    // typevar1 = typevar2 : replace all tv1s
+    else if (type_type_var == c.left->tag && type_type_var == c.right->tag) {
+        // dbg("adding substitution: ");
+        // dbg_constraint(iter.ptr);
+
+        struct constraint_iterator iter = {.ptr = &c};
+        veca_iterator_init(self->substitutions, &iter.base);
+        veca_push_back(self->substitutions, &iter.base);
+    }
+
+    // tv1 = tv2 -> tv3 : replace tv1s with the arrow type
+    else if (type_type_var == c.left->tag && type_arrow == c.right->tag &&
+             type_type_var == c.right->arrow.left->tag && type_type_var == c.right->arrow.right->tag) {
+
+        // dbg("adding substitution: ");
+        // dbg_constraint(iter.ptr);
+
+        struct constraint_iterator iter = {.ptr = &c};
+        veca_iterator_init(self->substitutions, &iter.base);
+        veca_push_back(self->substitutions, &iter.base);
+    }
+
+    // tuple constraints of equal size
+    else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
+             vec_size(&c.left->tuple) == vec_size(&c.right->tuple)) {
+
+        struct tess_type_citerator left  = {0};
+        struct tess_type_citerator right = {0};
+        while (vec_citer(&c.left->tuple, &left.base)) {
+            if (!vec_citer(&c.right->tuple, &right.base)) fatal("solver_run: vector size mismatch");
+
+            unify_one(self, (struct constraint){*left.ptr, *right.ptr});
+        }
+    }
+
+    // arrow types
+    else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {}
+
+    return true;
+}
+
 void solver_run(struct solver *self) {
     u32 loop_count = 10;
     while (loop_count--) {
@@ -175,43 +220,17 @@ void solver_run(struct solver *self) {
 
             // delete a = a constraints
             if (iter.ptr->left == iter.ptr->right) {
+
                 veca_erase(self->constraints, &iter.base);
                 continue;
+
+            } else {
+
+                if (unify_one(self, *iter.ptr)) {
+                    // iterate through remainder of constraints and substitute
+                    substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
+                }
             }
-
-            // typevar1 = typevar2 : replace all tv1s
-            else if (type_type_var == iter.ptr->left->tag && type_type_var == iter.ptr->right->tag) {
-                // dbg("adding substitution: ");
-                // dbg_constraint(iter.ptr);
-                veca_push_back(self->substitutions, &iter.base);
-
-                // iterate through remainder of constraints and substitute
-                substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
-            }
-
-            // tv1 = tv2 -> tv3 : replace tv1s with the arrow type
-            else if (type_type_var == iter.ptr->left->tag && type_arrow == iter.ptr->right->tag &&
-                     type_type_var == iter.ptr->right->arrow.left->tag &&
-                     type_type_var == iter.ptr->right->arrow.right->tag) {
-
-                // dbg("adding substitution: ");
-                // dbg_constraint(iter.ptr);
-                veca_push_back(self->substitutions, &iter.base);
-
-                // iterate through remainder of constraints and substitute
-                substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr);
-
-            }
-
-            // tuple constraints of equal size
-            else if (type_tuple == iter.ptr->left->tag && type_tuple == iter.ptr->right->tag &&
-                     vec_size(&iter.ptr->left->tuple) == vec_size(&iter.ptr->right->tuple)) {
-
-                // FIXME ...
-            }
-
-            // arrow types
-            else if (type_arrow == iter.ptr->left->tag && type_arrow == iter.ptr->right->tag) {}
         }
 
         bool did_substitute = false;
