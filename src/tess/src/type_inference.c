@@ -189,7 +189,10 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     // When a substitution e.g 'tv1 becomes tv2' has been added to the
     // sequence of substitutions to be applied, it should also be
     // immediately applied to the rest of the constraints, so that
-    // 'tv1' no longer appears in any constraint.
+    // 'tv1' no longer appears in any constraint. This ensures
+    // transitive constraints are satisfied. For example, tv1 = tv2,
+    // tv1 = int. Without the step in this function, the constraint
+    // tv1 = int would be lost.
 
     int did_substitute = 0;
 
@@ -206,7 +209,7 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
 
 static bool unify_one(struct solver *self, struct constraint c) {
 
-    if (c.left == c.right) return false;
+    if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
         struct tess_type const    *orig           = type_type_var == c.left->tag ? c.left : c.right;
@@ -216,18 +219,15 @@ static bool unify_one(struct solver *self, struct constraint c) {
         struct constraint_iterator candidate_iter = {.ptr = &candidate};
         veca_iterator_init(self->substitutions, &candidate_iter.base);
 
+        // check conditions to rule out the candidate
         switch (other->tag) {
         case type_nil:
         case type_bool:
         case type_int:
         case type_float:
-        case type_string: {
-
-            veca_push_back(self->substitutions, &candidate_iter.base);
-
-        } break;
-
-        case type_tuple: {
+        case type_string:
+        case type_type_var: break;
+        case type_tuple:    {
 
             bool                     found = false;
             struct ast_node_iterator iter  = {0};
@@ -239,21 +239,17 @@ static bool unify_one(struct solver *self, struct constraint c) {
             }
             if (found) return false;
 
-            veca_push_back(self->substitutions, &candidate_iter.base);
-
         } break;
-
         case type_arrow:
             if (other->arrow.left == orig || other->arrow.right == orig) return false;
-            veca_push_back(self->substitutions, &candidate_iter.base);
             break;
-
-        case type_type_var: veca_push_back(self->substitutions, &candidate_iter.base); break;
         }
 
+        // push the candidate substitution
+        veca_push_back(self->substitutions, &candidate_iter.base);
     }
 
-    // tuple constraints of equal size
+    // tuple constraints of equal size: unify matching elements
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
              vec_size(&c.left->tuple) == vec_size(&c.right->tuple)) {
 
@@ -266,7 +262,7 @@ static bool unify_one(struct solver *self, struct constraint c) {
         }
     }
 
-    // arrow types
+    // arrow types: unify matching arms
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
         unify_one(self, (struct constraint){c.left->arrow.left, c.right->arrow.left});
         unify_one(self, (struct constraint){c.left->arrow.right, c.right->arrow.right});
@@ -283,9 +279,6 @@ void solver_run(struct solver *self) {
 
         struct constraint_iterator iter           = {0};
         while (veca_iter(self->constraints, &iter.base)) {
-
-            dbg("processing: ");
-            dbg_constraint(iter.ptr);
 
             // delete a = a constraints
             if (iter.ptr->left == iter.ptr->right || tess_type_equal(iter.ptr->left, iter.ptr->right)) {
@@ -314,8 +307,9 @@ void solver_run(struct solver *self) {
 
         if (!did_substitute) break;
     }
+
     if (loop_count == -1) fatal("solver_run: loop exhausted");
-    dbg("exit loop_count = %i\n", loop_count);
+    dbg("solver_run: exit loop_count = %i\n", loop_count);
 }
 
 // -- assign_type_variables --
