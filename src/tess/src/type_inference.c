@@ -49,6 +49,8 @@ static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
 static void    ti_apply_prim_constraints_to_ast(vectora *, ast_node *[], u32 const);
 // static void    ti_specialize_functions(vectora *nodes);
 
+static void   dbg_constraint(struct constraint const *);
+
 struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
 void          solver_deinit(struct solver *);
 void          solver_run(struct solver *);
@@ -69,11 +71,21 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 }
 
 void ti_inferer_run(ti_inferer *self) {
+
     ti_assign_type_variables(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
+
     self->constraints =
       ti_collect_constraints(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
 
     dbg("ti_inferer_run result constraints:\n");
+    {
+        struct ast_node_iterator iter = {0};
+        while (veca_iter(self->nodes, &iter.base)) {
+            char *str = ast_node_to_string(alloc_default_allocator(), *iter.ptr);
+            dbg("node: %s\n", str);
+            alloc_free(alloc_default_allocator(), str);
+        }
+    }
     ti_inferer_dbg_constraints(self);
 
     self->substitutions  = VECA(self->type_arena, struct constraint);
@@ -89,30 +101,116 @@ void ti_inferer_run(ti_inferer *self) {
 
 // -- apply substitutions --
 
-void dfs_apply_substitution(void *ctx, ast_node *node) {
-    struct constraint *c = ctx;
-    if (node->type == c->left) node->type = c->right;
-}
+static void apply_one_substitution(struct tess_type **type, struct tess_type const *from,
+                                   struct tess_type const *to) {
+    if (*type == from) {
+        // Note: casts away const
+        *type = (struct tess_type *)to;
+        return;
+    }
 
-static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
+    switch ((*type)->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_type_var: break;
 
-    struct constraint_iterator iter = {0};
-    while (veca_iter(substitutions, &iter.base)) {
-        for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_substitution);
+    case type_tuple:    {
+
+        struct ast_node_iterator node_iter = {0};
+        while (vec_citer(&(*type)->tuple, &node_iter.base)) {
+            struct tess_type const **ty = &(*node_iter.ptr)->type;
+            if (*ty == from) {
+                *ty = to;
+            }
+        }
+    } break;
+
+    case type_arrow: {
+        if ((*type)->arrow.left == from) (*type)->arrow.left = to;
+        if ((*type)->arrow.right == from) (*type)->arrow.right = to;
+    } break;
     }
 }
 
+void dfs_apply_substitutions(void *ctx, ast_node *node) {
+    vectora *substitutions = ctx;
+
+    dbg("examining node type %s:  %s\n", type_tag_to_string(node->type->tag),
+        ast_node_to_string(alloc_default_allocator(), node));
+
+    struct constraint_iterator iter = {0};
+    while (veca_iter(substitutions, &iter.base)) {
+        // Note: casts away const
+        apply_one_substitution((struct tess_type **)&node->type, iter.ptr->left, iter.ptr->right);
+    }
+}
+
+static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
+    for (size_t i = 0; i < count; ++i) ast_pool_dfs(substitutions, nodes[i], dfs_apply_substitutions);
+}
+
 void dfs_apply_prim_constraints(void *ctx, ast_node *node) {
+    vectora                   *constraints = ctx;
+
+    struct constraint_iterator iter        = {0};
+    while (veca_iter(constraints, &iter.base)) {
+        bool left_prim  = tess_type_is_prim(iter.ptr->left);
+        bool right_prim = tess_type_is_prim(iter.ptr->right);
+        if (!left_prim && !right_prim) continue;
+
+        if (node->type == iter.ptr->left && right_prim) {
+            node->type = iter.ptr->right;
+            continue;
+        }
+        if (node->type == iter.ptr->right && left_prim) {
+            node->type = iter.ptr->left;
+            continue;
+        }
+
+        switch (node->type->tag) {
+        case type_nil:
+        case type_bool:
+        case type_int:
+        case type_float:
+        case type_string:
+        case type_type_var: break;
+
+        case type_tuple:    {
+            struct ast_node_iterator node_iter = {0};
+            while (vec_citer(&node->type->tuple, &node_iter.base)) {
+                struct tess_type const **ty = &(*node_iter.ptr)->type;
+                if (*ty == iter.ptr->left && right_prim) *ty = iter.ptr->right;
+                if (*ty == iter.ptr->right && left_prim) *ty = iter.ptr->left;
+            }
+        } break;
+
+        case type_arrow: {
+            // Note: cast away const to directly modify arrow arms
+            struct tess_type **ty = (struct tess_type **)&node->type;
+            if (right_prim) {
+                if ((*ty)->arrow.left == iter.ptr->left)
+                    (*ty)->arrow.left = (struct tess_type *)iter.ptr->right;
+                if ((*ty)->arrow.right == iter.ptr->left)
+                    (*ty)->arrow.right = (struct tess_type *)iter.ptr->right;
+            } else if (left_prim) {
+                if ((*ty)->arrow.left == iter.ptr->right)
+                    (*ty)->arrow.left = (struct tess_type *)iter.ptr->left;
+                if ((*ty)->arrow.right == iter.ptr->right)
+                    (*ty)->arrow.right = (struct tess_type *)iter.ptr->left;
+            }
+        } break;
+        }
+    }
+
     struct constraint *c = ctx;
     if (node->type == c->left && tess_type_is_prim(c->right)) node->type = c->right;
 }
 
 static void ti_apply_prim_constraints_to_ast(vectora *constraints, ast_node *nodes[], u32 const count) {
-
-    struct constraint_iterator iter = {0};
-    while (veca_iter(constraints, &iter.base)) {
-        for (size_t i = 0; i < count; ++i) ast_pool_dfs(iter.ptr, nodes[i], dfs_apply_prim_constraints);
-    }
+    for (size_t i = 0; i < count; ++i) ast_pool_dfs(constraints, nodes[i], dfs_apply_prim_constraints);
 }
 
 // -- solver --
@@ -145,19 +243,9 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
 
     bool did_substitute = false;
 
-    // dbg("substitute_constraint: %p -> %p\n", sub.left, sub.right);
-
-    // this uses reference identity: different pointers are considered
-    // unequal even if they are structurally equal.
     while (begin != end) {
-        if (begin->left == sub.left) {
-            begin->left    = sub.right;
-            did_substitute = true;
-        }
-        if (begin->right == sub.left) {
-            begin->right   = sub.right;
-            did_substitute = true;
-        }
+        // Note: casts away const
+        apply_one_substitution((struct tess_type **)&begin->left, sub.left, sub.right);
         ++begin;
     }
 
@@ -190,12 +278,19 @@ static bool unify_one(struct solver *self, struct constraint c) {
         veca_push_back(self->substitutions, &iter.base);
     }
 
+    // tv1 = (tv2, ) : replace tv1s with the tuple type
+    else if (type_type_var == c.left->tag && type_tuple == c.right->tag) {
+        struct constraint_iterator iter = {.ptr = &c};
+        veca_iterator_init(self->substitutions, &iter.base);
+        veca_push_back(self->substitutions, &iter.base);
+    }
+
     // tuple constraints of equal size
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
              vec_size(&c.left->tuple) == vec_size(&c.right->tuple)) {
 
-        struct tess_type_citerator left  = {0};
-        struct tess_type_citerator right = {0};
+        struct tess_type_iterator left  = {0};
+        struct tess_type_iterator right = {0};
         while (vec_citer(&c.left->tuple, &left.base)) {
             if (!vec_citer(&c.right->tuple, &right.base)) fatal("solver_run: vector size mismatch");
 
@@ -218,8 +313,6 @@ void solver_run(struct solver *self) {
 
         struct constraint_iterator iter = {0};
         while (veca_iter(self->constraints, &iter.base)) {
-
-            // dbg_constraint(iter.ptr);
 
             // delete a = a constraints
             if (iter.ptr->left == iter.ptr->right) {
@@ -410,13 +503,14 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_let: {
         assert(node->let.name->type->tag == type_arrow);
+        struct tess_type const *name = node->let.name->type;
 
         // left side of arrow is same as parameter tuple type
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, &node->let.parameters);
-        push(node->let.name->type->arrow.left, params);
+        push(name->arrow.left, params);
 
         // right side of arrow is same as function body type
-        push(node->let.name->type->arrow.right, node->let.body->type);
+        push(name->arrow.right, node->let.body->type);
 
         // result is nil
         push(node->type, tess_type_prim(type_nil));

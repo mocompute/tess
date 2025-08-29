@@ -62,8 +62,9 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     case type_string:   break;
 
     case type_arrow:
-        tess_type_deinit(alloc, self->arrow.left);
-        tess_type_deinit(alloc, self->arrow.right);
+        // Note: cast away const
+        tess_type_deinit(alloc, (struct tess_type *)self->arrow.left);
+        tess_type_deinit(alloc, (struct tess_type *)self->arrow.right);
         break;
 
     case type_tuple: vec_deinit(alloc, &self->tuple); break;
@@ -148,11 +149,11 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
         if (buf && sz) {
             len += tess_type_snprint(buf, sz, self->arrow.left);
             len += snprintf(buf + len, (size_t)(sz - len), " -> ");
-            len += tess_type_snprint(buf + len, sz - len, self->arrow.left);
+            len += tess_type_snprint(buf + len, sz - len, self->arrow.right);
         } else {
             len += tess_type_snprint(null, 0, self->arrow.left);
             len += snprintf(null, 0, " -> ");
-            len += tess_type_snprint(null, 0, self->arrow.left);
+            len += tess_type_snprint(null, 0, self->arrow.right);
         }
 
     } break;

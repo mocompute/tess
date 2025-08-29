@@ -23,8 +23,8 @@ struct tess_type {
     union {
         struct vector tuple; // tess_type*
         struct {
-            struct tess_type *left;
-            struct tess_type *right;
+            struct tess_type const *left;
+            struct tess_type const *right;
         } arrow;
 
         u32 type_var;
