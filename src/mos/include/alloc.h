@@ -4,7 +4,15 @@
 #include "nodiscard.h"
 
 #include <stdlib.h>
+#include <stdnoreturn.h>
 #include <string.h>
+
+// -- fatal --
+
+noreturn void fatal_i(char const *file, int line, char const *restrict, ...)
+  __attribute__((format(printf, 3, 4)));
+
+#define fatal(...) fatal_i(__FILE__, __LINE__, __VA_ARGS__)
 
 typedef struct allocator allocator;
 

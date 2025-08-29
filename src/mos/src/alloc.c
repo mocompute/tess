@@ -23,15 +23,6 @@
 #include <stdlib.h>
 #endif
 
-static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
-static noreturn void fatal(char const *restrict fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    exit(1);
-}
-
 typedef struct {
     size_t size;
     byte   data[];
@@ -610,4 +601,22 @@ size_t alloc_next_power_of_two(size_t n) {
 size_t alloc_align_to_word_size(size_t n) {
     size_t mask = sizeof(void *) - 1;
     return (n + mask) & ~mask;
+}
+
+noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...) {
+    static const size_t buf_size = 256;
+    char                buf[buf_size];
+    va_list             args;
+
+    //
+
+    int len = snprintf(buf, buf_size, "fatal: %s:%i: ", file, line);
+    if (len < 0) exit(1);
+
+    va_start(args, fmt);
+    vsnprintf(buf + len, buf_size - (size_t)len, fmt, args);
+    va_end(args);
+
+    fprintf(stderr, "%s\n", buf);
+    exit(1);
 }

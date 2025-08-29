@@ -33,11 +33,10 @@ struct vectora_data_header {
     alignas(void *) char buffer[];
 };
 
-static noreturn void fatal(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
-static void          init_vector(allocator *, vector *, u32 num, u32 size);
-static void          init_vectora(allocator *, vectora *, u32 num, u32 size);
-static void          vec_capacity_set(vector *vec, u32 val);
-static size_t        header_size(vector *);
+static void   init_vector(allocator *, vector *, u32 num, u32 size);
+static void   init_vectora(allocator *, vectora *, u32 num, u32 size);
+static void   vec_capacity_set(vector *vec, u32 val);
+static size_t header_size(vector *);
 
 //
 
@@ -508,12 +507,4 @@ void vec_assoc_erase(vector *vec, u32 key) {
 
 void veca_assoc_erase(vectora *vec, u32 key) {
     return vec_assoc_erase((vector *)vec, key);
-}
-
-static noreturn void fatal(char const *restrict fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    exit(1);
 }
