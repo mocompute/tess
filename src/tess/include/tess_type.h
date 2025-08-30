@@ -15,6 +15,7 @@
     X(type_string, "string")                                                                               \
     X(type_tuple, "tuple")                                                                                 \
     X(type_arrow, "arrow")                                                                                 \
+    X(type_user, "user")                                                                                   \
     X(type_type_var, "type_var")
 
 typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
@@ -29,6 +30,13 @@ struct tess_type {
         struct {
             struct tess_type const *left;
             struct tess_type const *right;
+        };
+
+        struct {
+            char const              *name;
+            struct tess_type const **fields;
+            char const             **field_names;
+            u16                      n_fields;
         };
 
         u32 type_var;
@@ -50,6 +58,7 @@ struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 
 bool                    tess_type_is_prim(struct tess_type const *);
 bool                    tess_type_equal(struct tess_type const *, struct tess_type const *);
+int                     tess_type_compare(struct tess_type const *, struct tess_type const *);
 
 int                     tess_type_snprint(char *, int, struct tess_type const *);
 char                   *tess_type_to_string(allocator *, struct tess_type const *);

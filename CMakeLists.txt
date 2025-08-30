@@ -62,7 +62,7 @@ else()
     -ftrivial-auto-var-init=zero
 
     # note: no -Wpedantic, due to use of computed goto
-    # -Werror
+    -Werror
     -Wall -Wextra
     -Winline
     -Wswitch-enum

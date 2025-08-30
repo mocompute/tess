@@ -11,8 +11,8 @@ struct type_registry {
     u32                cap_entries;
 };
 
-static int     compare_types(const void *, const void *);
-static int     compare_type_entries(const void *, const void *);
+// static int     compare_types(const void *, const void *);
+// static int     compare_type_entries(const void *, const void *);
 static int     compare_type_entry_names(const void *, const void *);
 static void    sorted_insert(allocator *, struct type_entry **ptr, u32 *n, u32 *cap, struct type_entry);
 
@@ -73,48 +73,21 @@ static void sorted_insert(allocator *alloc, struct type_entry **parray, u32 *pn,
     return;
 }
 
-static int compare_types(void const *a, void const *b) {
-    struct tess_type const *left  = a;
-    struct tess_type const *right = b;
+// static int compare_types(void const *a, void const *b) {
+//     struct tess_type const *left  = a;
+//     struct tess_type const *right = b;
 
-    if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
+//     return tess_type_compare(left, right);
+// }
 
-    switch (left->tag) {
-    case type_nil:
-    case type_bool:
-    case type_int:
-    case type_float:
-    case type_string: return 0;
+// static int compare_type_entries(void const *a, void const *b) {
+//     struct type_entry const *left  = a;
+//     struct type_entry const *right = b;
 
-    case type_tuple:
-        if (left->n_elements != right->n_elements) return left->n_elements < right->n_elements ? -1 : 1;
-        for (u16 i = 0; i < left->n_elements; i++) {
-            int res;
-            if ((res = compare_types(left->elements[i], right->elements[i])) != 0) return res;
-        }
-        return 0;
-
-    case type_arrow: {
-        int res;
-        if ((res = compare_types(left->left, right->left)) != 0) return res;
-        if ((res = compare_types(left->right, right->right)) != 0) return res;
-        return 0;
-    }
-
-    case type_type_var:
-        if (left->type_var == right->type_var) return 0;
-        return left->type_var < right->type_var ? -1 : 1;
-    }
-}
-
-static int compare_type_entries(void const *a, void const *b) {
-    struct type_entry const *left  = a;
-    struct type_entry const *right = b;
-
-    int                      res;
-    if ((res = strcmp(left->name, right->name)) != 0) return res;
-    return compare_types(left->type, right->type);
-}
+//     int                      res;
+//     if ((res = strcmp(left->name, right->name)) != 0) return res;
+//     return compare_types(left->type, right->type);
+// }
 
 static int compare_type_entry_names(void const *a, void const *b) {
     struct type_entry const *left  = a;

@@ -63,6 +63,11 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     case type_type_var:
     case type_string:   break;
 
+    case type_user:
+        alloc_free(alloc, self->fields);
+        alloc_free(alloc, self->field_names);
+        break;
+
     case type_arrow:
         // Note: cast away const
         tess_type_deinit(alloc, (struct tess_type *)self->left);
@@ -90,6 +95,7 @@ struct tess_type const *tess_type_prim(tess_type_tag tag) {
     case type_string: return &string_type;
     case type_tuple:
     case type_arrow:
+    case type_user:
     case type_type_var:
         assert(false);
         exit(1);
@@ -105,6 +111,7 @@ bool tess_type_is_prim(struct tess_type const *self) {
     case type_int:
     case type_float:
     case type_string:   return true;
+    case type_user:
     case type_tuple:
     case type_arrow:
     case type_type_var: return false;
@@ -113,33 +120,53 @@ bool tess_type_is_prim(struct tess_type const *self) {
 }
 
 bool tess_type_equal(struct tess_type const *left, struct tess_type const *right) {
-    if (left->tag != right->tag) return false;
+    return tess_type_compare(left, right) == 0;
+}
+
+int tess_type_compare(struct tess_type const *left, struct tess_type const *right) {
+    if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
 
     switch (left->tag) {
     case type_nil:
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: return true;
+    case type_string: return 0;
 
-    case type_tuple:  {
+    case type_tuple:
+        if (left->n_elements != right->n_elements) return left->n_elements < right->n_elements ? -1 : 1;
+        for (u16 i = 0; i < left->n_elements; i++) {
+            int res;
+            if ((res = tess_type_compare(left->elements[i], right->elements[i])) != 0) return res;
+        }
+        return 0;
 
-        if (left->n_elements != right->n_elements) return false;
+    case type_arrow: {
+        int res;
+        if ((res = tess_type_compare(left->left, right->left)) != 0) return res;
+        if ((res = tess_type_compare(left->right, right->right)) != 0) return res;
+        return 0;
+    }
 
-        for (size_t i = 0; i < left->n_elements; ++i)
-            if (!tess_type_equal(left->elements[i], right->elements[i])) return false;
+    case type_user: {
+        if (left->n_fields != right->n_fields) return left->n_fields < right->n_fields ? -1 : 1;
+        for (u16 i = 0; i < left->n_fields; ++i) {
+            int res;
+            if ((res = tess_type_compare(left->fields[i], right->fields[i])) != 0) return res;
+        }
 
-        return true;
+        for (u16 i = 0; i < left->n_fields; ++i) {
+            int res;
+            if ((res = strcmp(left->field_names[i], right->field_names[i])) != 0) return res;
+        }
+        return 0;
 
     } break;
 
-    case type_arrow:
-        return tess_type_equal(left->left, right->left) && tess_type_equal(left->right, right->right);
-
-    case type_type_var: return left->type_var == right->type_var;
+    case type_type_var:
+        if (left->type_var == right->type_var) return 0;
+        return left->type_var < right->type_var ? -1 : 1;
     }
-    assert(false);
-    exit(1);
 }
 
 int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
@@ -154,7 +181,28 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     case type_float:
     case type_string: len = snprintf(buf, (size_t)sz, "%s", type_tag_to_string(self->tag)); break;
 
-    case type_tuple:  {
+    case type_user:   {
+        len = 0;
+        len += snprintf(buf, (size_t)sz, "(");
+
+        for (size_t i = 0; i < self->n_fields; ++i) {
+
+            if (buf && sz) {
+                len += snprintf(buf + len, (size_t)(sz - len), "%s : ", self->field_names[i]);
+                len += tess_type_snprint(buf + len, sz - len, self->fields[i]);
+                len += snprintf(buf + len, (size_t)(sz - len), ", ");
+            } else {
+                len += snprintf(null, 0, "%s : ", self->field_names[i]);
+                len += tess_type_snprint(null, 0, self->elements[i]);
+                len += snprintf(null, 0, ", ");
+            }
+        }
+
+        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
+        else len += snprintf(null, 0, ")");
+    } break;
+
+    case type_tuple: {
         len = 0;
 
         len += snprintf(buf, (size_t)sz, "(");

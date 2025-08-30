@@ -122,6 +122,7 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
     case type_int:
     case type_float:
     case type_string:
+    case type_user:
     case type_type_var: break;
 
     case type_tuple:    {
@@ -231,6 +232,7 @@ static bool unify_one(struct solver *self, struct constraint c) {
         case type_int:
         case type_float:
         case type_string:
+        case type_user:
         case type_type_var: break;
         case type_tuple:    {
 
