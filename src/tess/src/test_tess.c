@@ -288,7 +288,11 @@ static int test_user_struct(void) {
     char const *input = "struct foo = \n"
                         "  a : int\n"
                         "  b : string\n"
-                        "end\n";
+                        "end\n"
+                        "\n"
+                        "struct bar = \n"
+                        "  x : foo\n"
+                        "end";
 
     return compile_input(input);
 }

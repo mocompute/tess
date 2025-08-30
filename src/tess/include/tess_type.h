@@ -49,15 +49,21 @@ struct tess_type_iterator {
     struct tess_type          **ptr;
 };
 
-struct tess_type        tess_type_init(tess_type_tag);
-struct tess_type        tess_type_init_type_var(u32);
-struct tess_type        tess_type_init_tuple();
-struct tess_type        tess_type_init_arrow(struct tess_type *, struct tess_type *);
-void                    tess_type_deinit(allocator *, struct tess_type *);
+struct tess_type  tess_type_init(tess_type_tag);
+struct tess_type  tess_type_init_type_var(u32);
+struct tess_type  tess_type_init_tuple();
+struct tess_type  tess_type_init_arrow(struct tess_type *, struct tess_type *);
 
-struct tess_type       *tess_type_create_type_var(allocator *, u32);
-struct tess_type       *tess_type_create_tuple(allocator *, u16);
-struct tess_type       *tess_type_create_arrow(allocator *, struct tess_type *, struct tess_type *);
+struct tess_type  tess_type_init_user_type(char const *name, struct tess_type const **fields,
+                                           char const **field_names, u16 n);
+
+void              tess_type_deinit(allocator *, struct tess_type *);
+
+struct tess_type *tess_type_create_type_var(allocator *, u32) mallocfun;
+struct tess_type *tess_type_create_tuple(allocator *, u16) mallocfun;
+struct tess_type *tess_type_create_arrow(allocator *, struct tess_type *, struct tess_type *) mallocfun;
+struct tess_type *tess_type_create_user_type(allocator *, char const *name, struct tess_type const **fields,
+                                             char const **field_names, u16 n) mallocfun;
 
 struct tess_type const *tess_type_prim(tess_type_tag); // only primitives
 

@@ -471,20 +471,15 @@ static int struct_block(parser *p) {
 
     // accumulate names and types until end of block is seen
     while (true) {
-        dbg("looking for newlines... ");
         if (eat_newlines(p)) return 1;
-        dbg("success.\n");
 
         if (0 == a_try(p, &a_identifier)) {
             ast_node *field_name = p->result;
-            dbg("got field name: %s\n", ast_node_to_string(p->ast_arena, field_name));
 
             if (a_try(p, &a_colon)) return 1;
-            dbg("got colon\n");
 
             if (a_try(p, &a_type_identifier)) return 1;
-            struct tess_type *type = p->type_entry->type;
-            dbg("got type: %s\n", tess_type_to_string(p->ast_arena, type));
+            struct tess_type        *type = p->type_entry->type;
 
             struct ast_node_iterator iter = {.ptr = &field_name};
             vec_iterator_init(&field_names, &iter.base);
@@ -494,18 +489,12 @@ static int struct_block(parser *p) {
             vec_iterator_init(&field_types, &ty_iter.base);
             vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
 
-            dbg("pushed things...");
-
             if (a_try(p, &a_end_of_expression)) return 1; // expect ; or newline after field
-            dbg("continuing\n");
 
             continue;
         }
 
-        dbg("looking for newlines...\n");
         if (eat_newlines(p)) return 1;
-
-        dbg("looking for end of block...\n");
 
         if (0 == a_try(p, a_end_of_block)) {
 
@@ -514,11 +503,9 @@ static int struct_block(parser *p) {
             vec_move_plain_u16(p->parser_arena, &field_names, (void **)&node->user_defined_type.field_names,
                                &node->user_defined_type.n_fields);
 
-            // convert symbols representing a type into an actual type
-            // FIXME: this requires a type registry
-
             vec_move_plain_u16(p->parser_arena, &field_types, (void **)&node->user_defined_type.field_types,
                                &node->user_defined_type.n_fields);
+
             return result_ast_node(p, node);
         }
 
@@ -912,10 +899,39 @@ static int expression(parser *parser) {
     return 1;
 }
 
+static int register_user_type(parser *p) {
+    ast_node *ty = p->result;
+    assert(ty->tag == ast_user_defined_type);
+
+    u16          n_fields    = ty->user_defined_type.n_fields;
+    char const **field_names = 0;
+
+    if (n_fields) {
+        field_names = alloc_calloc(p->ast_arena, n_fields, sizeof field_names[0]);
+        for (u16 i = 0; i < n_fields; ++i)
+            field_names[i] = mos_string_str(&ty->user_defined_type.field_names[i]->symbol.name);
+    }
+
+    char const *type_name = mos_string_str(&ty->user_defined_type.name->symbol.name);
+
+    if (type_registry_find(p->type_registry, type_name)) {
+        p->error.tag = tess_err_type_exists;
+        return 1;
+    }
+
+    struct tess_type *user_type = tess_type_create_user_type(
+      p->ast_arena, type_name, ty->user_defined_type.field_types, field_names, n_fields);
+
+    if (type_registry_add(p->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
+        fatal("register_user_type: unexpected failure");
+
+    return 0;
+}
+
 static int toplevel(parser *p) {
     if (eat_newlines(p)) return 1;
 
-    if (0 == struct_block(p)) return 0;
+    if (0 == struct_block(p)) return register_user_type(p);
     if (0 == expression(p)) return 0;
 
     return 1;

@@ -54,6 +54,26 @@ struct tess_type *tess_type_create_arrow(allocator *alloc, struct tess_type *lef
     return self;
 }
 
+struct tess_type tess_type_init_user_type(char const *name, struct tess_type const **fields,
+                                          char const **field_names, u16 n) {
+
+    struct tess_type self = tess_type_init(type_user);
+    self.name             = name;
+    self.fields           = fields;
+    self.field_names      = field_names;
+    self.n_fields         = n;
+    return self;
+}
+
+struct tess_type *tess_type_create_user_type(allocator *alloc, char const *name,
+                                             struct tess_type const **fields, char const **field_names,
+                                             u16 n) {
+
+    struct tess_type *self = alloc_struct(alloc, self);
+    *self                  = tess_type_init_user_type(name, fields, field_names, n);
+    return self;
+}
+
 void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     switch (self->tag) {
     case type_nil:
@@ -193,7 +213,7 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
                 len += snprintf(null, 0, "%s : ", self->field_names[i]);
-                len += tess_type_snprint(null, 0, self->elements[i]);
+                len += tess_type_snprint(null, 0, self->fields[i]);
                 len += snprintf(null, 0, ", ");
             }
         }
