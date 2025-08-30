@@ -35,16 +35,6 @@ struct tess_type {
     tess_type_tag tag;
 };
 
-struct tess_type_iterator {
-    struct vector_iterator_base base;
-    struct tess_type          **ptr;
-};
-
-struct tess_type_citerator {
-    struct vector_iterator_base base;
-    struct tess_type const    **ptr;
-};
-
 struct tess_type        tess_type_init(tess_type_tag);
 struct tess_type        tess_type_init_type_var(u32);
 struct tess_type        tess_type_init_tuple();
