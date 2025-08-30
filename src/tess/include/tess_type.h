@@ -25,10 +25,11 @@ struct tess_type {
             struct tess_type const **elements;
             u16                      n_elements;
         };
+
         struct {
             struct tess_type const *left;
             struct tess_type const *right;
-        } arrow;
+        };
 
         u32 type_var;
     };

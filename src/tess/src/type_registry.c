@@ -96,8 +96,8 @@ static int compare_types(void const *a, void const *b) {
 
     case type_arrow: {
         int res;
-        if ((res = compare_types(left->arrow.left, right->arrow.left)) != 0) return res;
-        if ((res = compare_types(left->arrow.right, right->arrow.right)) != 0) return res;
+        if ((res = compare_types(left->left, right->left)) != 0) return res;
+        if ((res = compare_types(left->right, right->right)) != 0) return res;
         return 0;
     }
 

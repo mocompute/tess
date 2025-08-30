@@ -136,13 +136,13 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
     } break;
 
     case type_arrow: {
-        if ((*type)->arrow.left == from) {
-            (*type)->arrow.left = to;
-            did_substitute      = true;
+        if ((*type)->left == from) {
+            (*type)->left  = to;
+            did_substitute = true;
         }
-        if ((*type)->arrow.right == from) {
-            (*type)->arrow.right = to;
-            did_substitute       = true;
+        if ((*type)->right == from) {
+            (*type)->right = to;
+            did_substitute = true;
         }
     } break;
     }
@@ -246,7 +246,7 @@ static bool unify_one(struct solver *self, struct constraint c) {
 
         } break;
         case type_arrow:
-            if (other->arrow.left == orig || other->arrow.right == orig) return false;
+            if (other->left == orig || other->right == orig) return false;
             break;
         }
 
@@ -265,8 +265,8 @@ static bool unify_one(struct solver *self, struct constraint c) {
 
     // arrow types: unify matching arms
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
-        unify_one(self, (struct constraint){c.left->arrow.left, c.right->arrow.left});
-        unify_one(self, (struct constraint){c.left->arrow.right, c.right->arrow.right});
+        unify_one(self, (struct constraint){c.left->left, c.right->left});
+        unify_one(self, (struct constraint){c.left->right, c.right->right});
     }
 
     return true;
@@ -468,10 +468,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // left side of arrow is same as parameter tuple type
         struct tess_type *params = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
-        push(name->arrow.left, params);
+        push(name->left, params);
 
         // right side of arrow is same as function body type
-        push(name->arrow.right, node->let.body->type);
+        push(name->right, node->let.body->type);
 
         // result is nil
         push(node->type, tess_type_prim(type_nil));
@@ -490,13 +490,13 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(type_arrow == node->type->tag);
 
         struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
-        push(node->type->arrow.left, tup);
+        push(node->type->left, tup);
 
         // body type must be same as right hand of arrow
-        push(node->type->arrow.right, node->lambda_function.body->type);
+        push(node->type->right, node->lambda_function.body->type);
 
         // result must be same as right hand of arrow
-        push(node->type, node->type->arrow.right);
+        push(node->type, node->type->right);
         break;
 
     } break;
@@ -515,7 +515,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // result must be same as right hand of arrow
         assert(type_arrow == lambda->type->tag);
-        push(node->type, lambda->type->arrow.right);
+        push(node->type, lambda->type->right);
     } break;
 
     case ast_named_function_application: {
@@ -537,7 +537,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // result must be same as right hand of arrow
         assert(type_arrow == let->let.name->type->tag);
-        push(node->type, let->let.name->type->arrow.right);
+        push(node->type, let->let.name->type->right);
 
         // and result must be same as body
         push(node->type, let->let.body->type);

@@ -42,8 +42,8 @@ struct tess_type *tess_type_create_tuple(allocator *alloc, u16 size) {
 
 struct tess_type tess_type_init_arrow(struct tess_type *left, struct tess_type *right) {
     struct tess_type self = tess_type_init(type_arrow);
-    self.arrow.left       = left;
-    self.arrow.right      = right;
+    self.left             = left;
+    self.right            = right;
     return self;
 }
 
@@ -65,8 +65,8 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
 
     case type_arrow:
         // Note: cast away const
-        tess_type_deinit(alloc, (struct tess_type *)self->arrow.left);
-        tess_type_deinit(alloc, (struct tess_type *)self->arrow.right);
+        tess_type_deinit(alloc, (struct tess_type *)self->left);
+        tess_type_deinit(alloc, (struct tess_type *)self->right);
         break;
 
     case type_tuple: alloc_free(alloc, self->elements); break;
@@ -134,8 +134,7 @@ bool tess_type_equal(struct tess_type const *left, struct tess_type const *right
     } break;
 
     case type_arrow:
-        return tess_type_equal(left->arrow.left, right->arrow.left) &&
-               tess_type_equal(left->arrow.right, right->arrow.right);
+        return tess_type_equal(left->left, right->left) && tess_type_equal(left->right, right->right);
 
     case type_type_var: return left->type_var == right->type_var;
     }
@@ -179,13 +178,13 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     case type_arrow: {
         len = 0;
         if (buf && sz) {
-            len += tess_type_snprint(buf, sz, self->arrow.left);
+            len += tess_type_snprint(buf, sz, self->left);
             len += snprintf(buf + len, (size_t)(sz - len), " -> ");
-            len += tess_type_snprint(buf + len, sz - len, self->arrow.right);
+            len += tess_type_snprint(buf + len, sz - len, self->right);
         } else {
-            len += tess_type_snprint(null, 0, self->arrow.left);
+            len += tess_type_snprint(null, 0, self->left);
             len += snprintf(null, 0, " -> ");
-            len += tess_type_snprint(null, 0, self->arrow.right);
+            len += tess_type_snprint(null, 0, self->right);
         }
 
     } break;
