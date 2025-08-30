@@ -16,6 +16,7 @@
 struct ti_inferer {
     allocator        *type_arena;
     allocator        *strings;
+    allocator        *nodes_alloc;
     struct ast_node **nodes;
     u32               n_nodes;
 
@@ -47,20 +48,22 @@ struct solver {
 static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
 static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
 static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
-// static void    ti_specialize_functions(vectora *nodes);
+static void    ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
+                                       u32 *out_n);
 
-static void   dbg_constraint(struct constraint const *);
+static void    dbg_constraint(struct constraint const *);
 
-struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
-void          solver_deinit(struct solver *);
-void          solver_run(struct solver *);
+struct solver  solver_init(allocator *, vectora *constraints, vectora *substitutions);
+void           solver_deinit(struct solver *);
+void           solver_run(struct solver *);
 
-ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n) {
-    ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena = alloc_arena_create(alloc, 4096);
-    self->strings    = alloc_string_arena_create(alloc, 1024);
-    self->nodes      = nodes;
-    self->n_nodes    = n;
+ti_inferer    *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
+    ti_inferer *self  = alloc_calloc(alloc, 1, sizeof *self);
+    self->type_arena  = alloc_arena_create(alloc, 4096);
+    self->strings     = alloc_string_arena_create(alloc, 1024);
+    self->nodes_alloc = nodes_alloc;
+    self->nodes       = nodes;
+    self->n_nodes     = n;
     return self;
 }
 
@@ -93,6 +96,10 @@ void ti_inferer_run(ti_inferer *self) {
     solver_deinit(&solver);
 
     ti_apply_substitutions_to_ast(&self->substitutions, self->nodes, self->n_nodes);
+
+    struct ast_node **specialized   = 0;
+    u32               n_specialized = 0;
+    ti_specialize_functions(self->nodes, self->n_nodes, &specialized, &n_specialized);
 
     // TODO ...
 }
@@ -380,14 +387,14 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node **ar
     return tuple;
 }
 
-static ast_node const *find_let_node(char const *name, ast_node *nodes[], u32 count) {
+static ast_node const *find_let_node(char const *name, u16 arity, ast_node *nodes[], u32 count) {
     // TODO profile linear search versus hashmap
 
     for (size_t i = 0; i < count; ++i) {
         if (ast_let == nodes[i]->tag) {
             assert(ast_symbol == nodes[i]->let.name->tag);
             char const *node_name = mos_string_str(&nodes[i]->let.name->symbol.name);
-            if (0 == strcmp(name, node_name)) return nodes[i];
+            if (0 == strcmp(name, node_name) && arity == nodes[i]->array.n) return nodes[i];
         }
     }
     return null;
@@ -516,7 +523,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // for matching symbol name.
         assert(ast_symbol == node->named_application.name->tag);
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
-        ast_node const *let  = find_let_node(name, ctx->nodes, ctx->count);
+        ast_node const *let  = find_let_node(name, node->array.n, ctx->nodes, ctx->count);
         if (null == let) fatal("collect_constraints: can't find let node for function application.");
 
         // name must match function type
@@ -566,9 +573,12 @@ void ti_inferer_dbg_substitutions(ti_inferer const *self) {
 
 // -- specialize function applications --
 
-#if 0
 struct specialize_functions_ctx {
-    vectora *nodes;
+    struct ast_node  **nodes;
+    u32                n_nodes;
+
+    struct ast_node ***out_nodes;
+    u32               *out_n;
 };
 
 static void specialize_node(void *ctx_, ast_node *node) {
@@ -578,15 +588,14 @@ static void specialize_node(void *ctx_, ast_node *node) {
     assert(ast_symbol == node->named_application.name->tag);
 
     ast_node const *let = find_let_node(mos_string_str(&node->named_application.name->symbol.name),
-                                        veca_data(ctx->nodes), veca_size(ctx->nodes));
+                                        node->named_application.n_arguments, ctx->nodes, ctx->n_nodes);
 
     // TODO compiler error
     if (null == let) fatal("specialize_node: can't find let node for function application.");
 }
 
-static void ti_specialize_functions(vectora *nodes) {
-    struct specialize_functions_ctx ctx  = {nodes};
-    struct ast_node_iterator        iter = {0};
-    while (vec_iter((vector *)nodes, &iter.base)) ast_pool_dfs(&ctx, *iter.ptr, specialize_node);
+static void ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
+                                    u32 *out_n) {
+    struct specialize_functions_ctx ctx = {nodes, n, out_nodes, out_n};
+    for (size_t i = 0; i < n; ++i) ast_pool_dfs(&ctx, nodes[i], specialize_node);
 }
-#endif

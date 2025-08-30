@@ -9,7 +9,7 @@ typedef struct ti_inferer ti_inferer;
 
 // -- allocation and deallocation --
 
-nodiscard ti_inferer *ti_inferer_create(allocator *, struct ast_node **, u32);
+nodiscard ti_inferer *ti_inferer_create(allocator *, struct ast_node **, u32, allocator *nodes_alloc);
 void                  ti_inferer_destroy(allocator *, ti_inferer **);
 
 // -- operation --

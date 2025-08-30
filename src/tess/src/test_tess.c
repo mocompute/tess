@@ -20,16 +20,16 @@ static int compile_input(char const *input) {
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
 
-    allocator        *vec_alloc = alloc_leak_detector_create();
-    allocator        *ast_alloc = alloc_leak_detector_create();
-    allocator        *ti_alloc  = alloc_leak_detector_create();
+    allocator        *nodes_alloc = alloc_leak_detector_create();
+    allocator        *ast_alloc   = alloc_leak_detector_create();
+    allocator        *ti_alloc    = alloc_leak_detector_create();
 
-    parser           *p         = parser_create(ast_alloc, input, strlen(input));
+    parser           *p           = parser_create(ast_alloc, input, strlen(input));
 
     struct ast_node **nodes;
     u32               n_nodes = 0;
 
-    if (parser_parse_all(p, vec_alloc, &nodes, &n_nodes)) return 1;
+    if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) return 1;
 
     allocator      *syntax_alloc = alloc_leak_detector_create();
     syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
@@ -39,7 +39,7 @@ static int compile_input(char const *input) {
 
     if (syntax_checker_run(syntax, nodes, n_nodes)) return 1;
 
-    ti_inferer *ti = ti_inferer_create(ti_alloc, nodes, n_nodes);
+    ti_inferer *ti = ti_inferer_create(ti_alloc, nodes, n_nodes, nodes_alloc);
 
     ti_inferer_run(ti);
 
@@ -59,12 +59,12 @@ static int compile_input(char const *input) {
     syntax_checker_destroy(&syntax);
     alloc_leak_detector_destroy(&syntax_alloc);
 
-    alloc_free(vec_alloc, nodes);
+    alloc_free(nodes_alloc, nodes);
     parser_destroy(&p);
 
     alloc_leak_detector_destroy(&ti_alloc);
     alloc_leak_detector_destroy(&ast_alloc);
-    alloc_leak_detector_destroy(&vec_alloc);
+    alloc_leak_detector_destroy(&nodes_alloc);
 
     dbg("\n---------------------------\n\n");
     return 0;
