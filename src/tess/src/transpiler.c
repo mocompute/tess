@@ -46,21 +46,16 @@ void transpiler_destroy(transpiler **self) {
     *self = null;
 }
 
-int transpiler_compile(transpiler *self, vector const *nodes) {
+int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     (void)self;
-    assert(sizeof(ast_node *) == nodes->element_size);
 
     // output std header
     out_put(self, embed_std);
 
-    struct ast_node_iterator iter = {0};
-
-    while (vec_citer(nodes, &iter.base)) {
-
-        assert(iter.ptr);
+    for (size_t i = 0; i < n; ++i) {
 
         int res = 0;
-        if ((res = a_toplevel(self, *iter.ptr))) return res;
+        if ((res = a_toplevel(self, nodes[i]))) return res;
     }
 
     return 0;

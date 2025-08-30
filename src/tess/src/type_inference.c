@@ -14,12 +14,13 @@
 #include <assert.h>
 
 struct ti_inferer {
-    allocator *type_arena;
-    allocator *strings;
-    vectora   *nodes;
+    allocator        *type_arena;
+    allocator        *strings;
+    struct ast_node **nodes;
+    u32               n_nodes;
 
-    vectora    constraints;
-    vectora    substitutions;
+    vectora           constraints;
+    vectora           substitutions;
 };
 
 struct constraint {
@@ -54,11 +55,12 @@ struct solver solver_init(allocator *, vectora *constraints, vectora *substituti
 void          solver_deinit(struct solver *);
 void          solver_run(struct solver *);
 
-ti_inferer   *ti_inferer_create(allocator *alloc, vectora *nodes) {
+ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n) {
     ti_inferer *self = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena = alloc_arena_create(alloc, 4096);
     self->strings    = alloc_string_arena_create(alloc, 1024);
     self->nodes      = nodes;
+    self->n_nodes    = n;
     return self;
 }
 
@@ -71,16 +73,14 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
 
 void ti_inferer_run(ti_inferer *self) {
 
-    ti_assign_type_variables(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
+    ti_assign_type_variables(self->type_arena, self->nodes, self->n_nodes);
 
-    self->constraints =
-      ti_collect_constraints(self->type_arena, veca_data(self->nodes), veca_size(self->nodes));
+    self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->n_nodes);
 
     dbg("ti_inferer_run result constraints:\n");
     {
-        struct ast_node_iterator iter = {0};
-        while (veca_iter(self->nodes, &iter.base)) {
-            char *str = ast_node_to_string(alloc_default_allocator(), *iter.ptr);
+        for (size_t i = 0; i < self->n_nodes; ++i) {
+            char *str = ast_node_to_string(alloc_default_allocator(), self->nodes[i]);
             dbg("node: %s\n", str);
             alloc_free(alloc_default_allocator(), str);
         }
@@ -92,7 +92,7 @@ void ti_inferer_run(ti_inferer *self) {
     solver_run(&solver);
     solver_deinit(&solver);
 
-    ti_apply_substitutions_to_ast(&self->substitutions, veca_data(self->nodes), veca_size(self->nodes));
+    ti_apply_substitutions_to_ast(&self->substitutions, self->nodes, self->n_nodes);
 
     // TODO ...
 }

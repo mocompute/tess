@@ -20,16 +20,16 @@ static int compile_input(char const *input) {
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
 
-    allocator *vec_alloc = alloc_leak_detector_create();
-    allocator *ast_alloc = alloc_leak_detector_create();
-    allocator *ti_alloc  = alloc_leak_detector_create();
+    allocator        *vec_alloc = alloc_leak_detector_create();
+    allocator        *ast_alloc = alloc_leak_detector_create();
+    allocator        *ti_alloc  = alloc_leak_detector_create();
 
-    parser    *p         = parser_create(ast_alloc, input, strlen(input));
+    parser           *p         = parser_create(ast_alloc, input, strlen(input));
 
-    vectora    nodes     = VECA(vec_alloc, ast_node *);
-    veca_reserve(&nodes, 1024);
+    struct ast_node **nodes;
+    u32               n_nodes = 0;
 
-    if (parser_parse_all(p, &nodes)) return 1;
+    if (parser_parse_all(p, vec_alloc, &nodes, &n_nodes)) return 1;
 
     allocator      *syntax_alloc = alloc_leak_detector_create();
     syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
@@ -37,15 +37,14 @@ static int compile_input(char const *input) {
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes
 
-    if (syntax_checker_run(syntax, (ast_node **)veca_data(&nodes), veca_size(&nodes))) return 1;
+    if (syntax_checker_run(syntax, nodes, n_nodes)) return 1;
 
-    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes);
+    ti_inferer *ti = ti_inferer_create(ti_alloc, nodes, n_nodes);
 
     ti_inferer_run(ti);
 
-    struct ast_node_iterator iter = {0};
-    while (veca_iter(&nodes, &iter.base)) {
-        char *str = ast_node_to_string(alloc_default_allocator(), *iter.ptr);
+    for (size_t i = 0; i < n_nodes; ++i) {
+        char *str = ast_node_to_string(alloc_default_allocator(), nodes[i]);
         dbg("node: %s\n", str);
         alloc_free(alloc_default_allocator(), str);
     }
@@ -60,7 +59,7 @@ static int compile_input(char const *input) {
     syntax_checker_destroy(&syntax);
     alloc_leak_detector_destroy(&syntax_alloc);
 
-    veca_deinit(&nodes);
+    alloc_free(vec_alloc, nodes);
     parser_destroy(&p);
 
     alloc_leak_detector_destroy(&ti_alloc);
@@ -347,11 +346,11 @@ static int test_parse_to_c(void) {
         parser     *p     = parser_create(alloc, input, strlen(input));
         if (null == p) return error + 1;
 
-        vectora nodes = VECA(alloc, ast_node *);
-        veca_reserve(&nodes, 1024);
+        struct ast_node **nodes;
+        u32               n_nodes = 0;
 
-        if (parser_parse_all(p, &nodes)) return error + 1;
-        error += 1 == veca_size(&nodes) ? 0 : 1;
+        if (parser_parse_all(p, alloc, &nodes, &n_nodes)) return error + 1;
+        error += 1 == n_nodes ? 0 : 1;
         if (error) return error;
 
         vector transpiler_output = VEC(char);
@@ -360,7 +359,7 @@ static int test_parse_to_c(void) {
         transpiler *transpiler = transpiler_create(alloc, &transpiler_output, alloc);
         if (!transpiler) return error + 1;
 
-        if (transpiler_compile(transpiler, (vector *)&nodes)) return error + 1;
+        if (transpiler_compile(transpiler, nodes, n_nodes)) return error + 1;
 
         // print out the output byte array: add string terminator
         vec_push_back_byte(alloc, &transpiler_output, '\0');
@@ -369,7 +368,7 @@ static int test_parse_to_c(void) {
 
         vec_deinit(alloc, &transpiler_output);
         transpiler_destroy(&transpiler);
-        veca_deinit(&nodes);
+        alloc_free(alloc, nodes);
 
         parser_destroy(&p);
     }

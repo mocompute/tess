@@ -797,17 +797,26 @@ int parser_next(parser *parser) {
     return expression(parser);
 }
 
-int parser_parse_all(parser *p, vectora *out) {
-    assert(sizeof(ast_node *) == out->element_size);
+int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u32 *len) {
 
-    int res = 0;
+    u32 cap                 = 16;
+    *len                    = 0;
+    *out                    = alloc_calloc(out_alloc, cap, sizeof(struct ast_node *));
+
+    struct ast_node **nodes = *out;
+
+    int               res   = 0;
     while (0 == (res = parser_next(p))) {
         ast_node *node;
         parser_result(p, &node);
 
-        struct ast_node_iterator iter = {.ptr = &node};
-        veca_iterator_init(out, &iter.base);
-        veca_push_back(out, &iter.base);
+        if (*len == cap) {
+            alloc_resize(out_alloc, &out, &cap, cap * 2);
+            nodes = *out;
+        }
+
+        nodes[*len] = node;
+        *len        = *len + 1;
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
