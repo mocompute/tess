@@ -31,6 +31,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_inference.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
 )
 
 set(SOURCES
@@ -44,6 +45,7 @@ set(SOURCES
   src/token.c
   src/tokenizer.c
   src/type_inference.c
+  src/type_registry.c
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
   )
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})
