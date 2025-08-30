@@ -148,6 +148,29 @@ void vec_move(vector *dst, vector *src) {
     alloc_invalidate(src);
 }
 
+void vec_move_plain(allocator *alloc, vector *src, void **data, u32 *count) {
+
+    // get rid of header
+    memmove(src->data, src->data->buffer, src->size * src->element_size);
+
+    // realloc to shrink to fit
+    alloc_realloc(alloc, src->data, src->size * src->element_size);
+
+    *data  = src->data;
+    *count = src->size;
+
+    alloc_invalidate(src);
+}
+
+void vec_move_plain_u16(allocator *alloc, vector *src, void **data, u16 *count) {
+
+    u32 actual_count = 0;
+    vec_move_plain(alloc, src, data, &actual_count);
+
+    if (actual_count > UINT16_MAX) fatal("vec_move_plain_u16: overflow");
+    *count = (u16)actual_count;
+}
+
 void veca_move(vectora *dst, vectora *src) {
     return vec_move((vector *)dst, ((vector *)src));
 }

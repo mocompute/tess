@@ -157,14 +157,12 @@ static int a_string(transpiler *self, ast_node const *node) {
 
 static int a_std_dbg(transpiler *self, ast_node const *node) {
 
-    vector const *const arguments = &node->named_application.arguments;
-
     // FIXME for now only one string argument is valid
-    if (1 != vec_size(arguments)) return 1;
+    if (1 != node->named_application.n_arguments) return 1;
 
     out_put_start(self, "fprintf(stderr, \"%s\", ");
-    ast_node const *const *arg = (typeof(arg))vec_cat(arguments, 0);
-    if (a_string(self, *arg)) return 1;
+    ast_node *arg = node->named_application.arguments[0];
+    if (a_string(self, arg)) return 1;
     out_put(self, ");\n");
     return 0;
 }

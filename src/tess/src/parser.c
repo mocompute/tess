@@ -426,7 +426,6 @@ static int function_declaration(parser *p) {
         if (0 == a_try(p, &a_equal_sign)) {
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
-            vec_move(&node->function_declaration.parameters, &parameters);
             return result_ast_node(p, node);
         }
 
@@ -446,7 +445,9 @@ static int function_declaration(parser *p) {
 
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
-            vec_move(&node->function_declaration.parameters, &parameters);
+            vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->ast_node_array.elements,
+                               &node->ast_node_array.n);
+
             return result_ast_node(p, node);
         }
 
@@ -473,7 +474,10 @@ static int lambda_declaration(parser *p) {
 
         if (0 == a_try(p, &a_arrow)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
-            vec_move(&node->lambda_declaration.parameters, &parameters);
+
+            vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->ast_node_array.elements,
+                               &node->ast_node_array.n);
+
             return result_ast_node(p, node);
         }
 
@@ -515,7 +519,8 @@ static int function_application(parser *p) {
             ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
             node->named_application.name = name;
 
-            vec_move(&node->named_application.arguments, &arguments);
+            vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->ast_node_array.elements,
+                               &node->ast_node_array.n);
 
             return result_ast_node(p, node);
         }
@@ -603,12 +608,11 @@ static int lambda_function(parser *p) {
     node->lambda_function.body = defn_h;
 
     // move the vector from the function_declaration node to the new ast node
-    vec_move(&node->lambda_function.parameters, &decl->function_declaration.parameters);
+    node->ast_node_array.elements = decl->ast_node_array.elements;
+    node->ast_node_array.n        = decl->ast_node_array.n;
+    decl->ast_node_array.elements = null;
+    decl->ast_node_array.n        = 0;
 
-    // reset moved-from vector to an empty vector so the node in the
-    // ast_pool is still valid.
-    // TODO: better would be to remove the node from the pool
-    decl->function_declaration.parameters = vec_init(node->lambda_function.parameters.element_size);
     return result_ast_node(p, node);
 }
 
@@ -643,7 +647,10 @@ static int lambda_function_application(parser *p) {
         if (0 == a_try(p, &a_end_of_expression)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
             node->lambda_application.lambda = lambda;
-            vec_move(&node->lambda_application.arguments, &arguments);
+
+            vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->ast_node_array.elements,
+                               &node->ast_node_array.n);
+
             return result_ast_node(p, node);
         }
 
@@ -701,12 +708,10 @@ static int let_form(parser *p) {
     node->let.body = defn;
 
     // move the vector from the function_declaration node to the new ast node
-    vec_move(&node->let.parameters, &decl->function_declaration.parameters);
-
-    // reset moved-from vector to an empty vector so the node in the
-    // ast_pool is still valid.
-    // TODO: better would be to remove the node from the pool
-    decl->function_declaration.parameters = vec_init(node->let.parameters.element_size);
+    node->ast_node_array.elements = decl->ast_node_array.elements;
+    node->ast_node_array.n        = decl->ast_node_array.n;
+    decl->ast_node_array.elements = null;
+    decl->ast_node_array.n        = 0;
 
     return result_ast_node(p, node);
 }
@@ -725,7 +730,7 @@ static int tuple_expression(parser *p) {
 
     struct ast_node_iterator iter = {.ptr = &p->result};
     vec_iterator_init(&elements, &iter.base);
-    vec_push_back(p->ast_arena, &elements, &iter.base);
+    vec_push_back(p->parser_arena, &elements, &iter.base);
     if (a_try(p, &a_comma)) goto cleanup;
 
     int count = 0;
@@ -734,7 +739,10 @@ static int tuple_expression(parser *p) {
 
         if (0 == a_try(p, &a_close_round)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_tuple);
-            vec_move(&node->tuple.elements, &elements);
+
+            vec_move_plain_u16(p->parser_arena, &elements, (void **)&node->ast_node_array.elements,
+                               &node->ast_node_array.n);
+
             return result_ast_node(p, node);
         }
 

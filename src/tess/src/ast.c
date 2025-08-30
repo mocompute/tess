@@ -16,7 +16,7 @@
 
 void ast_node_deinit(allocator *alloc, struct ast_node *node) {
 
-#define deinit(P) vec_deinit(alloc, &P)
+#define deinit(P) alloc_free(alloc, P)
 
     switch (node->tag) {
     case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
@@ -43,18 +43,21 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
 }
 
 ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
+    // FIXME this should probably be called alloc, because it doesn't
+    // init the node like other _create functions do.
     ast_node *self = alloc_calloc(alloc, 1, sizeof *self);
     self->tag      = tag;
     return self;
 }
 
-void ast_node_init(ast_node *node, ast_tag tag) {
+void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 
     // accepts pool = null in some cases
 
 #define init(P)                                                                                            \
     do {                                                                                                   \
-        return ast_vector_init(&P);                                                                        \
+        (P) = alloc_calloc(alloc, 1, sizeof *(P));                                                         \
+        return;                                                                                            \
     } while (0)
 
     alloc_zero(node);
@@ -87,7 +90,7 @@ void ast_node_init(ast_node *node, ast_tag tag) {
 
 void ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
     ast_node_deinit(alloc, node);
-    return ast_node_init(node, tag);
+    return ast_node_init(alloc, node, tag);
 }
 
 void ast_node_move(ast_node *dst, ast_node *src) {
@@ -113,7 +116,17 @@ char const *ast_operator_to_string(ast_operator);
 
 static void map_ast_node_to_sexp(void *, void *, void const *); // vec_map_fun
 
-sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
+static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 const n) {
+    sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
+
+    for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], elements[i]);
+    sexp list = sexp_init_list(alloc, sexp_elements, n);
+
+    alloc_free(alloc, sexp_elements);
+    return list;
+}
+
+sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
 #define pair(...)   sexp_init_list_pair(__VA_ARGS__)
 #define triple(...) sexp_init_list_triple(__VA_ARGS__)
@@ -161,10 +174,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_tuple: {
 
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->tuple.elements));
-        vec_map(&node->tuple.elements, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->tuple.elements));
-        alloc_free(alloc, elements);
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return triple(alloc, sexp_init_sym(alloc, "tuple"), list, type);
 
     } break;
@@ -175,11 +185,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                      ast_node_to_sexp(alloc, node->let_in.body), type);
 
     case ast_let: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->let.parameters));
-        vec_map(&node->let.parameters, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->let.parameters));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return penta(alloc, sexp_init_sym(alloc, "let"), ast_node_to_sexp(alloc, node->let.name), list,
                      ast_node_to_sexp(alloc, node->let.body), type);
 
@@ -192,55 +198,33 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                      ast_node_to_sexp(alloc, node->if_then_else.no), type);
 
     case ast_lambda_function: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_function.parameters));
-        vec_map(&node->lambda_function.parameters, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_function.parameters));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return quad(alloc, sexp_init_sym(alloc, "lambda"), list,
                     ast_node_to_sexp(alloc, node->lambda_function.body), type);
 
     } break;
 
     case ast_function_declaration: {
-
-        sexp *elements =
-          alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->function_declaration.parameters));
-        vec_map(&node->function_declaration.parameters, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->function_declaration.parameters));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return quad(alloc, sexp_init_sym(alloc, "function-declaration"), list,
                     ast_node_to_sexp(alloc, node->lambda_function.body), type);
 
     } break;
 
     case ast_lambda_declaration: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_declaration.parameters));
-        vec_map(&node->lambda_declaration.parameters, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_declaration.parameters));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return triple(alloc, sexp_init_sym(alloc, "lambda-declaration"), list, type);
 
     } break;
 
     case ast_lambda_function_application: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->lambda_application.arguments));
-        vec_map(&node->lambda_application.arguments, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->lambda_application.arguments));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return quad(alloc, sexp_init_sym(alloc, "lambda-application"),
                     ast_node_to_sexp(alloc, node->lambda_application.lambda), list, type);
 
     } break;
     case ast_named_function_application: {
-        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * vec_size(&node->named_application.arguments));
-        vec_map(&node->named_application.arguments, map_ast_node_to_sexp, alloc, elements);
-        sexp list = sexp_init_list(alloc, elements, vec_size(&node->named_application.arguments));
-        alloc_free(alloc, elements);
-
+        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
         return quad(alloc, sexp_init_sym(alloc, "named-application"),
                     ast_node_to_sexp(alloc, node->named_application.name), list, type);
 
@@ -249,7 +233,7 @@ sexp        ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 }
 
 void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {
-    *(sexp *)out = ast_node_to_sexp(alloc, *(ast_node const **)node_ptr);
+    *(sexp *)out = ast_node_to_sexp(alloc, (ast_node const *)node_ptr);
 }
 
 sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
@@ -266,6 +250,10 @@ sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
 }
 
 // -- pool operations --
+
+static void recur_on_array(struct ast_node **elements, u16 n, void *ctx, ast_op_fun fun) {
+    for (size_t i = 0; i < n; ++i) ast_pool_dfs(ctx, elements[i], fun);
+}
 
 void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
@@ -287,11 +275,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
 
     case ast_tuple: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->tuple.elements, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
-
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
         return fun(ctx, node);
     } break;
 
@@ -305,10 +289,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_let: {
         ast_pool_dfs(ctx, node->let.name, fun);
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->let.parameters, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         ast_pool_dfs(ctx, node->let.body, fun);
 
@@ -323,10 +304,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
 
     case ast_lambda_function: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_function.parameters, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         ast_pool_dfs(ctx, node->lambda_function.body, fun);
 
@@ -336,19 +314,13 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_function_declaration: {
         ast_pool_dfs(ctx, node->function_declaration.name, fun);
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->function_declaration.parameters, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;
 
     case ast_lambda_declaration: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_declaration.parameters, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         return fun(ctx, node);
 
@@ -357,10 +329,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_lambda_function_application: {
         ast_pool_dfs(ctx, node->lambda_application.lambda, fun);
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_application.arguments, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;
@@ -368,10 +337,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_named_function_application: {
         ast_pool_dfs(ctx, node->named_application.name, fun);
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->named_application.arguments, &iter.base)) {
-            ast_pool_dfs(ctx, *iter.ptr, fun);
-        }
+        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;

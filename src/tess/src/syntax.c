@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "alloc_string.h"
 #include "ast.h"
+#include "ast_tags.h"
 #include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
@@ -91,6 +92,28 @@ static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap
     return 0;
 }
 
+static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node);
+
+static nodiscard int rename_array_elements(rename_variable_ctx *self, ast_node **elements, u16 n) {
+
+    for (size_t i = 0; i < n; ++i) {
+        ast_node const *name = elements[i];
+        // parameter may be a symbol or nil
+        if (ast_symbol != name->tag) break; // nil can only be sole param
+
+        string_t var_name;
+        if (next_variable_name(self, &var_name)) return 1;
+
+        map_set(&self->map, mos_string_str(&name->symbol.name), (u16)mos_string_size(&name->symbol.name),
+                &var_name);
+
+        // rename the actual parameter symbol
+        if (rename_variables(self, elements[i])) return 1;
+    }
+
+    return 0;
+}
+
 static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node) {
     if (!node) return 1;
 
@@ -104,9 +127,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         break;
 
     case ast_tuple: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->tuple.elements, &iter.base))
-            if (rename_variables(self, *iter.ptr)) return 1;
+        for (size_t i = 0; i < node->ast_node_array.n; ++i)
+            if (rename_variables(self, node->ast_node_array.elements[i])) return 1;
     } break;
 
     case ast_let_in: {
@@ -145,21 +167,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         assert(save);
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->let.parameters, &iter.base)) {
-            ast_node const *name = *iter.ptr;
-            // parameter may be a symbol or nil
-            if (ast_symbol != name->tag) break; // nil can only be sole param
-
-            string_t var_name;
-            if (next_variable_name(self, &var_name)) return 1;
-            map_set(&self->map, mos_string_str(&name->symbol.name),
-                    (u16)mos_string_size(&name->symbol.name), &var_name);
-
-            // rename the actual parameter symbol
-            if (rename_variables(self, *iter.ptr)) return 1;
-        }
-
+        if (rename_array_elements(self, node->ast_node_array.elements, node->ast_node_array.n)) return 1;
         if (rename_variables(self, node->let.body)) return 1;
 
         map_destroy(&self->map);
@@ -180,21 +188,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         if (!save) return 1;
 
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_function.parameters, &iter.base)) {
-            ast_node const *name = *iter.ptr;
-            // parameter may be a symbol or nil
-            if (ast_symbol != name->tag) break; // nil can only be sole param
-
-            string_t var_name;
-            if (next_variable_name(self, &var_name)) return 1;
-            map_set(&self->map, mos_string_str(&name->symbol.name),
-                    (u16)mos_string_size(&name->symbol.name), &var_name);
-
-            // rename the actual parameter symbol
-            if (rename_variables(self, *iter.ptr)) return 1;
-        }
-
+        if (rename_array_elements(self, node->ast_node_array.elements, node->ast_node_array.n)) return 1;
         if (rename_variables(self, node->lambda_function.body)) return 1;
 
         map_destroy(&self->map);
@@ -202,17 +196,11 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
     } break;
 
-    case ast_lambda_function_application: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->lambda_application.arguments, &iter.base))
-            if (rename_variables(self, *iter.ptr)) return 1;
+    case ast_lambda_function_application:
+    case ast_named_function_application:  {
+        for (size_t i = 0; i < node->ast_node_array.n; ++i)
+            if (rename_variables(self, node->ast_node_array.elements[i])) return 1;
 
-    } break;
-
-    case ast_named_function_application: {
-        struct ast_node_iterator iter = {0};
-        while (vec_iter(&node->named_application.arguments, &iter.base))
-            if (rename_variables(self, *iter.ptr)) return 1;
     } break;
 
     case ast_eof:

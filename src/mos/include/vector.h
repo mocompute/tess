@@ -61,6 +61,8 @@ void                      vec_reserve(allocator *, vector *, u32);
 void                      veca_reserve(vectora *, u32);
 void                      vec_move(vector *dst, vector *src);
 void                      veca_move(vectora *dst, vectora *src);
+void                      vec_move_plain(allocator *, vector *, void **, u32 *);
+void                      vec_move_plain_u16(allocator *, vector *, void **, u16 *);
 
 // -- read-only access --
 

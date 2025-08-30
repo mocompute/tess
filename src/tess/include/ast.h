@@ -38,8 +38,9 @@ typedef struct ast_node {
         } infix;
 
         struct {
-            vector           parameters;
-            struct ast_node *body;
+            struct ast_node **parameters;
+            u16               n_parameters;
+            struct ast_node  *body;
         } lambda_function;
 
         struct {
@@ -49,18 +50,21 @@ typedef struct ast_node {
         } let_in;
 
         struct {
-            vector           parameters;
-            struct ast_node *name;
+            struct ast_node **parameters;
+            u16               n_parameters;
+            struct ast_node  *name;
         } function_declaration;
 
         struct {
-            vector parameters;
+            struct ast_node **parameters;
+            u16               n_parameters;
         } lambda_declaration;
 
         struct {
-            vector           parameters;
-            struct ast_node *name;
-            struct ast_node *body;
+            struct ast_node **parameters;
+            u16               n_parameters;
+            struct ast_node  *name;
+            struct ast_node  *body;
         } let;
 
         struct {
@@ -70,19 +74,28 @@ typedef struct ast_node {
         } if_then_else;
 
         struct {
-            vector           arguments;
-            struct ast_node *lambda;
+            struct ast_node **arguments;
+            u16               n_arguments;
+            struct ast_node  *lambda;
         } lambda_application;
 
         struct {
-            vector           arguments;
-            struct ast_node *name;
-            bool             specialized;
+            struct ast_node **arguments;
+            u16               n_arguments;
+            struct ast_node  *name;
+            bool              specialized;
         } named_application;
 
         struct {
-            vector elements;
+            struct ast_node **elements;
+            u16               n_elements;
         } tuple;
+
+        struct {
+            // all variants must use this layout
+            struct ast_node **elements;
+            u16               n;
+        } ast_node_array;
     };
 
     struct tess_type const *type;
@@ -97,7 +110,7 @@ struct ast_node_iterator {
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
-void                ast_node_init(ast_node *, ast_tag);
+void                ast_node_init(allocator *, ast_node *, ast_tag);
 void                ast_node_deinit(allocator *, ast_node *);
 void                ast_node_replace(allocator *, ast_node *, ast_tag);
 void                ast_node_move(ast_node *dst, ast_node *src);
