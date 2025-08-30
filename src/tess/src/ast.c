@@ -278,6 +278,23 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
     }
 }
 
+sexp ast_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
+
+    if (null == node) return ast_node_to_sexp(alloc, node);
+    if (node->tag != ast_symbol) return ast_node_to_sexp(alloc, node);
+
+    sexp type;
+    {
+        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        char buf[len];
+        tess_type_snprint(buf, len, node->type);
+        type = sexp_init_sym(alloc, buf);
+    }
+
+    return triple(alloc, sexp_init_sym(alloc, "symbol"),
+                  sexp_init_sym(alloc, mos_string_str(&node->symbol.original)), type);
+}
+
 void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {
     *(sexp *)out = ast_node_to_sexp(alloc, (ast_node const *)node_ptr);
 }
@@ -438,6 +455,13 @@ void ast_vector_init(vector *vec) {
 
 char *ast_node_to_string(allocator *alloc, ast_node const *node) {
     sexp  expr = ast_node_to_sexp(alloc, node);
+    char *out  = sexp_to_string(alloc, expr);
+    sexp_deinit(alloc, &expr);
+    return out;
+}
+
+char *ast_node_to_string_for_error(allocator *alloc, ast_node const *node) {
+    sexp  expr = ast_node_to_sexp_for_error(alloc, node);
     char *out  = sexp_to_string(alloc, expr);
     sexp_deinit(alloc, &expr);
     return out;

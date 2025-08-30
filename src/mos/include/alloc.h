@@ -37,10 +37,10 @@ void                 alloc_arena_deinit(allocator *);
 //
 // these allocations never fail: failures call fatal() and exit the program.
 
-void *alloc_malloc_i(allocator *, size_t, char const *, int) mallocfun;
-void *alloc_calloc_i(allocator *, size_t, size_t, char const *, int) mallocfun;
-void *alloc_realloc_i(allocator *, void *, size_t, char const *, int);
-void  alloc_free_i(allocator *, void *, char const *, int);
+nodiscard void *alloc_malloc_i(allocator *, size_t, char const *, int) mallocfun;
+nodiscard void *alloc_calloc_i(allocator *, size_t, size_t, char const *, int) mallocfun;
+nodiscard void *alloc_realloc_i(allocator *, void *, size_t, char const *, int);
+void            alloc_free_i(allocator *, void *, char const *, int);
 
 #define alloc_malloc(A, S)     alloc_malloc_i((A), (S), __FILE__, __LINE__)
 #define alloc_calloc(A, N, S)  alloc_calloc_i((A), (N), (S), __FILE__, __LINE__)
@@ -49,18 +49,29 @@ void  alloc_free_i(allocator *, void *, char const *, int);
 
 // -- utilities --
 
-void   alloc_invalidate_n(void *, size_t);
-void   alloc_assert_invalid_n(void *, size_t);
+void            alloc_invalidate_n(void *, size_t);
+void            alloc_assert_invalid_n(void *, size_t);
 
-char  *alloc_strdup(allocator *, char const *) mallocfun;
-char  *alloc_strndup(allocator *, char const *, size_t) mallocfun;
+nodiscard char *alloc_strdup(allocator *, char const *) mallocfun;
+nodiscard char *alloc_strndup(allocator *, char const *, size_t) mallocfun;
 
-size_t alloc_next_power_of_two(size_t);
-size_t alloc_align_to_word_size(size_t);
+size_t          alloc_next_power_of_two(size_t);
+size_t          alloc_align_to_word_size(size_t);
 
 #define alloc_invalidate(P)     alloc_invalidate_n((P), sizeof *(P))
 #define alloc_assert_invalid(P) alloc_assert_invalid_n((P), sizeof *(P))
 #define alloc_zero(P)           memset((P), 0, sizeof *(P));
 #define alloc_copy(DST, SRC)    memcpy((DST), (SRC), sizeof *(DST));
 #define alloc_struct(A, NAME)   alloc_calloc((A), 1, sizeof *NAME)
+
+// -- vector alternative --
+
+#define alloc_resize(ALLOC, BUF_PTR, SIZE_PTR, NEW_SIZE)                                                   \
+    do {                                                                                                   \
+        void *ptr = alloc_realloc((ALLOC), *(BUF_PTR), (NEW_SIZE) * sizeof **(BUF_PTR));                   \
+        if (!ptr) fatal("realloc failed.");                                                                \
+        *(BUF_PTR)  = ptr;                                                                                 \
+        *(SIZE_PTR) = (NEW_SIZE);                                                                          \
+    } while (0)
+
 #endif

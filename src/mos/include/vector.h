@@ -7,16 +7,6 @@
 
 #include <stdbool.h>
 
-// -- vector alternative --
-
-#define alloc_resize(ALLOC, BUF_PTR, SIZE_PTR, NEW_SIZE)                                                   \
-    do {                                                                                                   \
-        void *ptr = alloc_realloc((ALLOC), *(BUF_PTR), (NEW_SIZE) * sizeof **(BUF_PTR));                   \
-        if (!ptr) fatal("realloc failed.");                                                                \
-        *(BUF_PTR)  = ptr;                                                                                 \
-        *(SIZE_PTR) = (NEW_SIZE);                                                                          \
-    } while (0)
-
 // -- vector struct --
 //
 // As an exception due to how common is the use of this module, the

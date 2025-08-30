@@ -17,18 +17,27 @@
 nodiscard static int syntax_rename_variables(allocator *, ast_node **, u32);
 nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
 nodiscard static int syntax_register_user_types(struct syntax_checker *);
+static void syntax_error(struct syntax_checker *, ast_node *, enum tess_error_tag, char const *message);
 
 // -- syntax_checker --
 
+struct syntax_error {
+    ast_node   *node;
+    char const *message;
+    // error code is in ast_node
+};
+
 struct syntax_checker {
-    allocator     *alloc;
-    allocator     *arena;
-    type_registry *type_registry;
+    allocator           *alloc;
+    allocator           *arena;
+    type_registry       *type_registry;
 
-    ast_node     **nodes;
-    u32            n_nodes;
+    ast_node           **nodes;
+    u32                  n_nodes;
 
-    u32            error_count;
+    struct syntax_error *errors;
+    u32                  n_errors;
+    u32                  cap_errors;
 };
 
 // -- allocation and deallocation --
@@ -42,8 +51,6 @@ syntax_checker *syntax_checker_create(allocator *alloc, ast_node **nodes, u32 co
 
     self->nodes          = nodes;
     self->n_nodes        = count;
-
-    self->error_count    = 0;
 
     return self;
 }
@@ -64,7 +71,24 @@ int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
     if ((res = syntax_check_type_annotations(self))) return res;
     if ((res = syntax_rename_variables(self->alloc, nodes, count))) return res;
 
-    return (int)self->error_count;
+    return (int)self->n_errors;
+}
+
+void syntax_checker_report_errors(syntax_checker *self) {
+    if (self->n_errors == 0) return;
+
+    for (u32 i = 0; i < self->n_errors; ++i) {
+
+        char *str = ast_node_to_string_for_error(self->arena, self->errors[i].node);
+
+        if (self->errors[i].message)
+            fprintf(stderr, "error: %s: %s: %s\n", tess_error_tag_to_string(self->errors[i].node->error),
+                    self->errors[i].message, str);
+
+        else fprintf(stderr, "error: %s: %s\n", tess_error_tag_to_string(self->errors[i].node->error), str);
+
+        alloc_free(self->arena, str);
+    }
 }
 
 // -- register_user_types --
@@ -76,7 +100,16 @@ static void register_user_type(void *ctx, ast_node *node) {
     if (node->user_type.field_types) return;
 
     char const *type_name = mos_string_str(&node->user_type.name->symbol.name);
-    if (type_registry_find(self->type_registry, type_name)) return;
+
+    if (type_registry_find(self->type_registry, type_name)) {
+
+        int   len     = snprintf(null, 0, "%s", type_name) + 1;
+        char *message = alloc_malloc(self->arena, (u32)len);
+        snprintf(message, (u32)len, "%s", type_name);
+        syntax_error(self, node, tess_err_type_exists, message);
+
+        return;
+    }
 
     u16 const    n_fields    = node->user_type.n_fields;
     char const **field_names = null;
@@ -112,7 +145,8 @@ static void register_user_type(void *ctx, ast_node *node) {
 
 nodiscard static int syntax_register_user_types(struct syntax_checker *self) {
 
-    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], register_user_type);
+    // ast user type nodes do not participate in depth first search
+    for (u32 i = 0; i < self->n_nodes; ++i) register_user_type(self, self->nodes[i]);
     return 0;
 }
 
@@ -125,8 +159,17 @@ static void check_annotation(void *ctx, ast_node *node) {
     char const        *str = mos_string_str(&node->symbol.annotation->symbol.name);
     struct type_entry *te  = type_registry_find(self->type_registry, str);
     if (!te) {
-        node->error = tess_err_expected_type;
-        self->error_count++;
+
+#define fmt "unknown type: %s"
+        char *message;
+        int   len = snprintf(null, 0, fmt, str) + 1;
+        if (len > 0) {
+            message = alloc_malloc(self->arena, (size_t)len);
+            snprintf(message, (size_t)len, fmt, str);
+        }
+#undef fmt
+
+        syntax_error(self, node, tess_err_expected_type, message);
     }
 }
 
@@ -317,4 +360,19 @@ int syntax_rename_variables(allocator *alloc, ast_node **nodes, u32 count) {
 
     rename_variable_ctx_deinit(&ctx);
     return 0;
+}
+
+static void syntax_error(struct syntax_checker *self, ast_node *node, enum tess_error_tag tag,
+                         char const *message) {
+
+    node->error = tag;
+
+    if (!self->errors) {
+        self->cap_errors = 16;
+        self->errors     = alloc_calloc(self->arena, self->cap_errors, sizeof self->errors[0]);
+    } else if (self->n_errors == self->cap_errors) {
+        alloc_resize(self->arena, &self->errors, &self->cap_errors, self->cap_errors * 2);
+    }
+
+    self->errors[self->n_errors++] = (struct syntax_error){node, message};
 }

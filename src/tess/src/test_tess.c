@@ -46,7 +46,10 @@ static int compile_input(char const *input) {
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes
 
-    if (syntax_checker_run(syntax, nodes, n_nodes)) return 1;
+    if (syntax_checker_run(syntax, nodes, n_nodes)) {
+        syntax_checker_report_errors(syntax);
+        return 1;
+    }
 
     ti_inferer *ti = ti_inferer_create(ti_alloc, nodes, n_nodes, nodes_alloc);
 

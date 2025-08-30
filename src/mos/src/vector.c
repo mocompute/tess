@@ -154,10 +154,10 @@ void vec_move_plain(allocator *alloc, vector *src, void **data, u32 *count) {
     memmove(src->data, src->data->buffer, src->size * src->element_size);
 
     // realloc to shrink to fit
-    alloc_realloc(alloc, src->data, src->size * src->element_size);
+    src->data = alloc_realloc(alloc, src->data, src->size * src->element_size);
 
-    *data  = src->data;
-    *count = src->size;
+    *data     = src->data;
+    *count    = src->size;
 
     alloc_invalidate(src);
 }

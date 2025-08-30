@@ -42,6 +42,7 @@ void type_registry_destroy(type_registry **self) {
 int type_registry_add(type_registry *self, struct type_entry entry) {
     if (type_registry_find(self, entry.name)) return 1;
     sorted_insert(self->alloc, &self->entries, &self->n_entries, &self->cap_entries, entry);
+    dbg("type_registry_add: added %s\n", entry.name);
     return 0;
 }
 
