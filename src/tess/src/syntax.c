@@ -14,16 +14,17 @@
 
 // -- forwards --
 
+static void syntax_error(struct syntax_checker *, ast_node *, enum tess_error_tag, char const *message);
+
 nodiscard static int syntax_rename_variables(allocator *, ast_node **, u32);
 nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
 nodiscard static int syntax_register_user_types(struct syntax_checker *);
-static void syntax_error(struct syntax_checker *, ast_node *, enum tess_error_tag, char const *message);
 
 // -- syntax_checker --
 
 struct syntax_error {
     ast_node   *node;
-    char const *message;
+    char const *message; // optional
     // error code is in ast_node
 };
 
