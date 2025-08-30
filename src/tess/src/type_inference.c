@@ -331,7 +331,9 @@ void assign_type_variables(void *ctx_, ast_node *node) {
 
     if (ast_symbol == node->tag) {
 
-        if (null != node->type) return; // already assigned, possibly as an ast_let name
+        // Is it already assigned, possibly as an ast_let name, or a
+        // user-declared type during parsing?
+        if (null != node->type) return;
 
         struct tess_type **found = map_get(ctx->symbols, mos_string_str(&node->symbol.name),
                                            (u16)mos_string_size(&node->symbol.name));

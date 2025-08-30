@@ -327,6 +327,26 @@ error:
     return 1;
 }
 
+static int a_colon(parser *p);
+
+static int a_identifier_typed(parser *p) {
+    if (a_try(p, a_identifier)) return 1;
+    ast_node                *name = p->result;
+
+    struct type_entry const *type = 0;
+
+    if (0 == a_try(p, a_colon)) {
+
+        if (a_try(p, a_type_identifier)) return 1;
+        type = p->type_entry;
+    }
+
+    ast_node *node    = ast_node_create(p->ast_arena, ast_symbol);
+    node->symbol.name = name->symbol.name;
+    if (type) node->type = type->type;
+    return result_ast_node(p, node);
+}
+
 static int a_infix_operator(parser *p) {
     // + - * /, relationals: < <= == <> >= >
     if (next_token(p)) return 1;
@@ -540,7 +560,7 @@ static int function_declaration(parser *p) {
 
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
-        if (0 == a_try(p, &a_identifier)) {
+        if (0 == a_try(p, &a_identifier_typed)) {
             struct ast_node_iterator iter = {.ptr = &p->result};
             vec_iterator_init(&parameters, &iter.base);
             vec_push_back(p->parser_arena, &parameters, &iter.base);
@@ -570,7 +590,7 @@ static int lambda_declaration(parser *p) {
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
-        if (0 == a_try(p, &a_identifier)) {
+        if (0 == a_try(p, &a_identifier_typed)) {
             struct ast_node_iterator iter = {.ptr = &p->result};
             vec_iterator_init(&parameters, &iter.base);
             vec_push_back(p->parser_arena, &parameters, &iter.base);
@@ -763,9 +783,9 @@ static int lambda_function_application(parser *p) {
 }
 
 static int simple_declaration(parser *p) {
-    // a = ...
-    // a single identifier followed by an equal sign
-    if (a_try(p, a_identifier)) return 1;
+    // a = ... a single identifier, optionally typed, followed by an
+    // equal sign
+    if (a_try(p, a_identifier_typed)) return 1;
     ast_node *sym = p->result;
 
     if (a_try(p, a_equal_sign)) return 1;

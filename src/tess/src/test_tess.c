@@ -263,7 +263,7 @@ static int test_parser_node_to_string(void) {
 
 static int test_parse_all(void) {
 
-    char const *input = "let a = 1 in\n"
+    char const *input = "let a : int = 1 in\n"
                         "let b = 2 in\n"
                         "let a = b in\n"  // a = 2
                         "let b = a in\n"  // b = 2
