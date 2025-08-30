@@ -30,6 +30,74 @@ static int test_align_to_word_size(void) {
     return error;
 }
 
+static int test_arena_realloc(void) {
+    int        error = 0;
+
+    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+
+    void      *p1    = alloc_malloc(arena, 64);
+    void      *p2    = alloc_realloc(arena, p1, 128);
+
+    error += p1 == p2 ? 0 : 1;
+
+    alloc_arena_destroy(alloc_default_allocator(), &arena);
+
+    return error;
+}
+
+static int test_arena_realloc_non_contiguous(void) {
+    int        error = 0;
+
+    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+
+    void      *p1    = alloc_malloc(arena, 64);
+    void      *p2    = alloc_malloc(arena, 16);
+    void      *p3    = alloc_realloc(arena, p1, 128);
+
+    error += p1 != p2 ? 0 : 1;
+    error += p1 != p3 ? 0 : 1;
+
+    alloc_arena_destroy(alloc_default_allocator(), &arena);
+
+    return error;
+}
+
+static int test_arena_free_reuse(void) {
+    int        error = 0;
+
+    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+
+    void      *p1    = alloc_malloc(arena, 64);
+    alloc_free(arena, p1);
+
+    void *p2 = alloc_malloc(arena, 128);
+
+    error += p1 == p2 ? 0 : 1;
+
+    alloc_arena_destroy(alloc_default_allocator(), &arena);
+
+    return error;
+}
+
+static int test_arena_free_reuse_non_contiguous(void) {
+    int        error = 0;
+
+    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+
+    void      *p1    = alloc_malloc(arena, 64);
+    void      *p2    = alloc_malloc(arena, 64);
+    alloc_free(arena, p1);
+
+    void *p3 = alloc_malloc(arena, 128);
+
+    error += p1 != p3 ? 0 : 1;
+    error += p2 != p3 ? 0 : 1;
+
+    alloc_arena_destroy(alloc_default_allocator(), &arena);
+
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -43,6 +111,10 @@ int main(void) {
 
     T(test_align_next_power_of_two);
     T(test_align_to_word_size);
+    T(test_arena_realloc);
+    T(test_arena_realloc_non_contiguous);
+    T(test_arena_free_reuse);
+    T(test_arena_free_reuse_non_contiguous);
 
     return error;
 }

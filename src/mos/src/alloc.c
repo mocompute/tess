@@ -128,7 +128,7 @@ static size_t *block_size(byte const *p) {
 static bool is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
     if (((byte *)p) < ((byte *)bucket)) return false;
-    return (size_t)(((byte *)p) - ((byte *)bucket)) + sz == bucket->size;
+    return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size;
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
@@ -248,11 +248,20 @@ static void *arena_calloc(allocator *alloc, size_t num, size_t size, char const 
     return out;
 }
 
-static void arena_free(allocator *alloc, void *p, char const *file, int line) {
+static void arena_free(allocator *a, void *p, char const *file, int line) {
     (void)file;
     (void)line;
-    (void)alloc;
-    (void)p;
+
+    if (null == p) return;
+
+    arena_header *bucket = find_bucket((arena_allocator *)a, p);
+    if (null == bucket) fatal("arena_free: attempt to free unknown pointer %p", p);
+
+    if (is_last_block(bucket, p)) {
+        // shrink bucket
+        bucket->size -= *block_size(p) + sizeof(arena_block);
+        return;
+    }
 }
 
 allocator *alloc_arena_create(allocator *alloc, size_t sz) {
