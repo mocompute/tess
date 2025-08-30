@@ -278,6 +278,17 @@ static int test_let_fun(void) {
     return compile_input(input);
 }
 
+static int test_let_fun_user_types(void) {
+    char const *input = "struct foo = \n"
+                        "  a : int\n"
+                        "  b : string\n"
+                        "end\n"
+                        "\n"
+                        "let add a : foo b = a + b\n"
+                        "let main () = add 1 2\n";
+    return compile_input(input);
+}
+
 static int test_user_struct_empty(void) {
     char const *input = "struct foo = end\n";
 
@@ -365,6 +376,7 @@ int main(void) {
     T(test_parse_all);
     T(test_parse_to_c);
     T(test_let_fun);
+    T(test_let_fun_user_types);
     T(test_user_struct_empty);
     T(test_user_struct);
 
