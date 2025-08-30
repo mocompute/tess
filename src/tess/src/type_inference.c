@@ -80,15 +80,15 @@ void ti_inferer_run(ti_inferer *self) {
 
     self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->n_nodes);
 
-    dbg("ti_inferer_run result constraints:\n");
-    {
-        for (size_t i = 0; i < self->n_nodes; ++i) {
-            char *str = ast_node_to_string(alloc_default_allocator(), self->nodes[i]);
-            dbg("node: %s\n", str);
-            alloc_free(alloc_default_allocator(), str);
-        }
-    }
-    ti_inferer_dbg_constraints(self);
+    // dbg("ti_inferer_run result constraints:\n");
+    // {
+    //     for (size_t i = 0; i < self->n_nodes; ++i) {
+    //         char *str = ast_node_to_string(alloc_default_allocator(), self->nodes[i]);
+    //         dbg("node: %s\n", str);
+    //         alloc_free(alloc_default_allocator(), str);
+    //     }
+    // }
+    // ti_inferer_dbg_constraints(self);
 
     self->substitutions  = VECA(self->type_arena, struct constraint);
     struct solver solver = solver_init(self->type_arena, &self->constraints, &self->substitutions);
