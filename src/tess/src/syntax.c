@@ -15,9 +15,8 @@
 // -- forwards --
 
 nodiscard static int syntax_rename_variables(allocator *, ast_node **, u32);
-nodiscard static int syntax_register_user_types(struct syntax_checker *, int);
 nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
-nodiscard static int syntax_assign_annotated_types(struct syntax_checker *);
+nodiscard static int syntax_register_user_types(struct syntax_checker *);
 
 // -- syntax_checker --
 
@@ -61,104 +60,59 @@ void syntax_checker_destroy(syntax_checker **self) {
 int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
 
     int res = 0;
-    if ((res = syntax_assign_annotated_types(self))) return res;
-    if ((res = syntax_register_user_types(self, 0))) return res;
-
-    if ((res = syntax_assign_annotated_types(self))) return res;
-    if ((res = syntax_register_user_types(self, 1))) return res;
-
-    if ((res = syntax_assign_annotated_types(self))) return res;
-
+    if ((res = syntax_register_user_types(self))) return res;
     if ((res = syntax_check_type_annotations(self))) return res;
-
     if ((res = syntax_rename_variables(self->alloc, nodes, count))) return res;
 
-    return res;
+    return (int)self->error_count;
 }
 
 // -- register_user_types --
 
-static void assign_annotated_types(void *ctx, ast_node *node) {
+static void register_user_type(void *ctx, ast_node *node) {
     struct syntax_checker *self = ctx;
 
     if (ast_user_defined_type != node->tag) return;
     if (node->user_type.field_types) return;
 
-    node->user_type.field_types =
-      alloc_calloc(self->arena, node->user_type.n_fields, sizeof node->user_type.field_types[0]);
+    char const *type_name = mos_string_str(&node->user_type.name->symbol.name);
+    if (type_registry_find(self->type_registry, type_name)) return;
 
-    for (u32 i = 0; i < node->user_type.n_fields; ++i) {
+    u16 const    n_fields    = node->user_type.n_fields;
+    char const **field_names = null;
+    if (n_fields) {
 
-        char const        *str = mos_string_str(&node->user_type.field_annotations[i]->symbol.name);
-        struct type_entry *te  = type_registry_find(self->type_registry, str);
-        if (!te) continue;
+        // convert symbol annotations to actual types
 
-        node->user_type.field_types[i] = te->type;
+        node->user_type.field_types =
+          alloc_calloc(self->arena, n_fields, sizeof node->user_type.field_types[0]);
+
+        for (u32 i = 0; i < n_fields; ++i) {
+
+            char const        *str = mos_string_str(&node->user_type.field_annotations[i]->symbol.name);
+            struct type_entry *te  = type_registry_find(self->type_registry, str);
+            if (!te) continue;
+
+            node->user_type.field_types[i] = te->type;
+        }
+
+        // conver field names from ast symbols to simple strings
+
+        field_names = alloc_calloc(self->alloc, n_fields, sizeof field_names[0]);
+        for (u16 i = 0; i < n_fields; ++i)
+            field_names[i] = mos_string_str(&node->user_type.field_names[i]->symbol.name);
     }
+
+    struct tess_type *user_type = tess_type_create_user_type(
+      self->alloc, type_name, node->user_type.field_types, field_names, n_fields);
+
+    if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
+        fatal("syntax_register_user_types: unexpected failure");
 }
 
-nodiscard static int syntax_assign_annotated_types(struct syntax_checker *self) {
+nodiscard static int syntax_register_user_types(struct syntax_checker *self) {
 
-    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], assign_annotated_types);
-    return 0;
-}
-
-static int syntax_register_user_types(struct syntax_checker *self, int pass) {
-
-    for (u32 i = 0; i < self->n_nodes; ++i) {
-
-        if (ast_user_defined_type != self->nodes[i]->tag) continue;
-
-        ast_node    *ty          = self->nodes[i];
-
-        u16 const    n_fields    = ty->user_type.n_fields;
-        char const **field_names = 0;
-        char const  *type_name   = mos_string_str(&ty->user_type.name->symbol.name);
-
-        if (type_registry_find(self->type_registry, type_name)) {
-            if (pass > 0) {
-                self->nodes[i]->error = tess_err_type_exists;
-                self->error_count++;
-            }
-            continue;
-        }
-
-        if (!ty->user_type.field_types && n_fields) {
-
-            // try to convert annotations to types
-            ty->user_type.field_types =
-              alloc_calloc(self->arena, n_fields, sizeof ty->user_type.field_types[0]);
-
-            for (u32 j = 0; j < n_fields; ++j) {
-
-                char const *annotation = mos_string_str(&ty->user_type.field_annotations[j]->symbol.name);
-
-                struct type_entry *te  = type_registry_find(self->type_registry, annotation);
-
-                // don't know the type yet
-                if (!te) {
-                    if (pass == 0) continue;
-                    self->nodes[i]->error = tess_err_expected_type;
-                    self->error_count++;
-                }
-
-                ty->user_type.field_types[j] = te->type;
-            }
-        }
-
-        if (n_fields) {
-            field_names = alloc_calloc(self->alloc, n_fields, sizeof field_names[0]);
-            for (u16 i = 0; i < n_fields; ++i)
-                field_names[i] = mos_string_str(&ty->user_type.field_names[i]->symbol.name);
-        }
-
-        struct tess_type *user_type = tess_type_create_user_type(
-          self->alloc, type_name, ty->user_type.field_types, field_names, n_fields);
-
-        if (type_registry_add(self->type_registry,
-                              (struct type_entry){.name = type_name, .type = user_type}))
-            fatal("syntax_register_user_types: unexpected failure");
-    }
+    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], register_user_type);
     return 0;
 }
 
