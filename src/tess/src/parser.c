@@ -5,8 +5,10 @@
 #include "ast_tags.h"
 #include "dbg.h"
 #include "mos_string.h"
+#include "tess_type.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "type_registry.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -16,20 +18,24 @@
 #define PARSER_ARENA_SIZE 1024
 
 struct parser {
-    allocator             *parent_alloc;
-    allocator             *parser_arena; // for tokens
-    allocator             *ast_arena;    // for ast nodes
-    tokenizer             *tokenizer;
+    allocator               *parent_alloc;
+    allocator               *parser_arena; // for tokens
+    allocator               *ast_arena;    // for ast nodes
 
-    ast_node              *result;
+    type_registry           *type_registry;
 
-    struct token          *tokens; // (token) for backtracking
-    u32                    n_tokens;
-    u32                    cap_tokens;
+    tokenizer               *tokenizer;
 
-    struct parser_error    error;
-    struct tokenizer_error tokenizer_error;
-    struct token           token;
+    ast_node                *result;
+
+    struct token            *tokens; // (token) for backtracking
+    u32                      n_tokens;
+    u32                      cap_tokens;
+
+    struct parser_error      error;
+    struct tokenizer_error   tokenizer_error;
+    struct token             token;
+    struct type_entry const *type_entry;
 };
 
 struct token_iterator {
@@ -49,6 +55,9 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->parent_alloc = alloc;
     self->parser_arena = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+
+    // type registry
+    self->type_registry = type_registry_create(self->ast_arena);
 
     // tokenizer
     self->tokenizer = tokenizer_create(alloc, input, input_len);
@@ -72,6 +81,9 @@ void parser_destroy(parser **self) {
 
     // tokenizer
     tokenizer_destroy(&(*self)->tokenizer);
+
+    // type registry
+    type_registry_destroy(&(*self)->type_registry);
 
     // arena
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
@@ -145,7 +157,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static bool is_reserved(char const *s) {
     static char const *strings[] = {
-      "if", "then", "else", "fun", "let", "in", "true", "false", "end", null,
+      "bool", "else", "end", "false",  "fun",  "if",   "in",
+      "int",  "let",  "nil", "string", "then", "true", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -273,33 +286,44 @@ static int a_end_of_expression(parser *p) {
 static int a_identifier(parser *p) {
     if (next_token(p)) return 1;
 
-    if (tok_symbol == p->token.tag) {
-        if (0 != strlen(p->token.s) && !is_reserved(p->token.s)) {
+    if (tok_symbol != p->token.tag || 0 == strlen(p->token.s) || is_reserved(p->token.s)) goto error;
 
-            char const c = p->token.s[0];
-            if (('_' == c) || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')) {
+    char const c = p->token.s[0];
+    if (('_' == c) || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')) {
 
-                // first character good, check remaining characters
-                char const *pc = &p->token.s[1];
-                while (*pc) {
-                    if ('_' == *pc || ('a' <= *pc && *pc <= 'z') || ('A' <= *pc && *pc <= 'Z') ||
-                        ('0' <= *pc && *pc <= '9')) {
-                        pc++; // still good
-                    } else {
-                        goto error;
-                    }
-                }
-
-                // check for reserved words, which are not allowed as identifiers
-                if (is_reserved(p->token.s)) goto error;
-
-                return result_ast_str(p, ast_symbol, p->token.s);
+        // first character good, check remaining characters
+        char const *pc = &p->token.s[1];
+        while (*pc) {
+            if ('_' == *pc || ('a' <= *pc && *pc <= 'z') || ('A' <= *pc && *pc <= 'Z') ||
+                ('0' <= *pc && *pc <= '9')) {
+                pc++; // still good
+            } else {
+                goto error;
             }
         }
+
+        // check for reserved words, which are not allowed as identifiers
+        if (is_reserved(p->token.s)) goto error;
+
+        return result_ast_str(p, ast_symbol, p->token.s);
     }
 
 error:
     p->error.tag = tess_err_expected_identifier;
+    return 1;
+}
+
+static int a_type_identifier(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_symbol != p->token.tag || 0 == strlen(p->token.s)) goto error;
+
+    p->type_entry = type_registry_find(p->type_registry, p->token.s);
+    if (!p->type_entry) goto error;
+    return 0;
+
+error:
+    p->error.tag = tess_err_expected_type;
     return 1;
 }
 
@@ -431,12 +455,10 @@ static int struct_block(parser *p) {
     if (a_try_s(p, &the_symbol, "struct")) return 1;
 
     if (a_try(p, &a_identifier)) return 1;
-    ast_node *name = p->result;
+    ast_node *name        = p->result;
 
-    vector    field_names;
-    vector    field_types;
-    ast_vector_init(&field_names);
-    ast_vector_init(&field_types);
+    vector    field_names = VEC(ast_node *);
+    vector    field_types = VEC(struct tess_type *);
 
     if (a_try(p, &a_equal_sign)) return 1;
 
@@ -455,18 +477,22 @@ static int struct_block(parser *p) {
 
         if (0 == a_try(p, &a_identifier)) {
             ast_node *field_name = p->result;
+            dbg("got field name: %s\n", ast_node_to_string(p->ast_arena, field_name));
 
             if (a_try(p, &a_colon)) return 1;
+            dbg("got colon\n");
 
-            if (a_try(p, &a_identifier)) return 1;
-            ast_node                *type_name = p->result;
+            if (a_try(p, &a_type_identifier)) return 1;
+            struct tess_type *type = p->type_entry->type;
+            dbg("got type: %s\n", tess_type_to_string(p->ast_arena, type));
 
-            struct ast_node_iterator iter      = {.ptr = &field_name};
+            struct ast_node_iterator iter = {.ptr = &field_name};
             vec_iterator_init(&field_names, &iter.base);
             vec_push_back(p->parser_arena, &field_names, &iter.base);
 
-            iter.ptr = &type_name;
-            vec_push_back(p->parser_arena, &field_types, &iter.base);
+            struct tess_type_iterator ty_iter = {.ptr = &type};
+            vec_iterator_init(&field_types, &ty_iter.base);
+            vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
 
             dbg("pushed things...");
 

@@ -23,6 +23,7 @@
     X(tess_err_expected_symbol, "expected_symbol")                                                         \
     X(tess_err_expected_string, "expected_string")                                                         \
     X(tess_err_expected_identifier, "expected_identifier")                                                 \
+    X(tess_err_expected_type, "expected_type")                                                             \
     X(tess_err_expected_literal, "expected_literal")                                                       \
     X(tess_err_expected_number, "expected_number")                                                         \
     X(tess_err_expected_bool, "expected_bool")                                                             \

@@ -618,5 +618,7 @@ noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...)
     va_end(args);
 
     fprintf(stderr, "%s\n", buf);
+
+    assert(false);
     exit(1);
 }

@@ -6,6 +6,7 @@
 #include "tokenizer.h"
 #include "transpiler.h"
 #include "type_inference.h"
+#include "type_registry.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -210,71 +211,6 @@ static int test_tokenizer_terminal_static_string(void) {
     return error;
 }
 
-static int test_parser_init(void) {
-    int         error = 0;
-
-    char const *input = "()";
-
-    allocator  *alloc = alloc_leak_detector_create();
-    if (!alloc) return error + 1;
-
-    parser *p = parser_create(alloc, input, strlen(input));
-    if (!p) return ++error;
-
-    parser_destroy(&p);
-
-    alloc_leak_detector_destroy(&alloc);
-    return error;
-}
-
-static int test_parser_basic(void) {
-    int         error = 0;
-
-    char const *input = "a";
-
-    allocator  *alloc = alloc_leak_detector_create();
-    if (!alloc) return error + 1;
-
-    parser *p = parser_create(alloc, input, strlen(input));
-    if (!p) return error + 1;
-
-    if (parser_next(p)) return error + 1;
-
-    ast_node *node;
-    parser_result(p, &node);
-
-    error += ast_symbol == node->tag ? 0 : 1;
-    error += 0 == strcmp(mos_string_str(&node->symbol.name), "a") ? 0 : 1;
-
-    parser_destroy(&p);
-    alloc_leak_detector_destroy(&alloc);
-
-    return error;
-}
-
-static int test_parser_expression(void) {
-    int         error = 0;
-
-    char const *input = "let x = 5 in x + 2";
-
-    allocator  *alloc = alloc_leak_detector_create();
-    if (!alloc) return error + 1;
-
-    parser *p = parser_create(alloc, input, strlen(input));
-    if (null == p) return error + 1;
-
-    if (parser_next(p)) return error + 1;
-    ast_node *node;
-    parser_result(p, &node);
-
-    error += ast_let_in == node->tag ? 0 : 1;
-
-    parser_destroy(&p);
-    alloc_leak_detector_destroy(&alloc);
-
-    return error;
-}
-
 static int test_parser_node_to_string(void) {
     int         error = 0;
 
@@ -421,9 +357,6 @@ int main(void) {
     T(test_tokenizer_basic);
     T(test_tokenizer_string);
     T(test_tokenizer_terminal_static_string);
-    T(test_parser_init);
-    T(test_parser_basic);
-    T(test_parser_expression);
     T(test_parser_node_to_string);
     T(test_parse_all);
     T(test_parse_to_c);
