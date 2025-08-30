@@ -12,6 +12,7 @@
     X(tok_one_newline, "one_newline")                                                                      \
     X(tok_two_newline, "two_newline")                                                                      \
     X(tok_comma, "comma")                                                                                  \
+    X(tok_colon, "colon")                                                                                  \
     X(tok_semicolon, "semicolon")                                                                          \
     X(tok_arrow, "arrow")                                                                                  \
     X(tok_open_round, "open_round")                                                                        \

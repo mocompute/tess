@@ -30,6 +30,8 @@
     X(tess_err_expected_equal_sign, "expected_equal_sign")                                                 \
     X(tess_err_expected_arrow, "expected_arrow")                                                           \
     X(tess_err_expected_comma, "expected_comma")                                                           \
+    X(tess_err_expected_colon, "expected_colon")                                                           \
+    X(tess_err_expected_end_of_block, "expected_end_of_block")                                             \
     X(tess_err_expected_open_round, "expected_open_round")                                                 \
     X(tess_err_expected_close_round, "expected_close_round")                                               \
     X(tess_err_expected_infix_operand, "expected_infix_operand")                                           \

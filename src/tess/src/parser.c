@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "ast.h"
+#include "ast_tags.h"
 #include "dbg.h"
 #include "mos_string.h"
 #include "token.h"
@@ -144,7 +145,7 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static bool is_reserved(char const *s) {
     static char const *strings[] = {
-      "if", "then", "else", "fun", "let", "in", "true", "false", null,
+      "if", "then", "else", "fun", "let", "in", "true", "false", "end", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -261,7 +262,8 @@ static int a_end_of_expression(parser *p) {
         return 1;
     }
 
-    if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag || tok_two_newline == p->token.tag)
+    if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag ||
+        tok_newline_indent == p->token.tag || tok_two_newline == p->token.tag)
         return result_ast_str(p, ast_symbol, ";");
 
     p->error.tag = tess_err_unfinished_expression;
@@ -392,6 +394,15 @@ static int a_equal_sign(parser *p) {
     return 1;
 }
 
+static int a_colon(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_colon == p->token.tag) return result_ast_str(p, ast_symbol, ":");
+
+    p->error.tag = tess_err_expected_colon;
+    return 1;
+}
+
 static int a_arrow(parser *p) {
     if (next_token(p)) return 1;
 
@@ -407,6 +418,88 @@ static int a_nil(parser *p) {
 
     p->error.tag = tess_err_expected_arrow;
     return 1;
+}
+
+static int a_end_of_block(parser *p) {
+    if (0 == a_try_s(p, &the_symbol, "end")) return result_ast_str(p, ast_symbol, "end");
+    p->error.tag = tess_err_expected_end_of_block;
+    return 1;
+}
+
+static int struct_block(parser *p) {
+    //     struct name = ... end
+    if (a_try_s(p, &the_symbol, "struct")) return 1;
+
+    if (a_try(p, &a_identifier)) return 1;
+    ast_node *name = p->result;
+
+    vector    field_names;
+    vector    field_types;
+    ast_vector_init(&field_names);
+    ast_vector_init(&field_types);
+
+    if (a_try(p, &a_equal_sign)) return 1;
+
+    // check for empty struct
+    if (0 == a_try(p, &a_end_of_block)) {
+        ast_node *node               = ast_node_create(p->ast_arena, ast_user_defined_type);
+        node->user_defined_type.name = name;
+        return result_ast_node(p, node);
+    }
+
+    // accumulate names and types until end of block is seen
+    while (true) {
+        dbg("looking for newlines... ");
+        if (eat_newlines(p)) return 1;
+        dbg("success.\n");
+
+        if (0 == a_try(p, &a_identifier)) {
+            ast_node *field_name = p->result;
+
+            if (a_try(p, &a_colon)) return 1;
+
+            if (a_try(p, &a_identifier)) return 1;
+            ast_node                *type_name = p->result;
+
+            struct ast_node_iterator iter      = {.ptr = &field_name};
+            vec_iterator_init(&field_names, &iter.base);
+            vec_push_back(p->parser_arena, &field_names, &iter.base);
+
+            iter.ptr = &type_name;
+            vec_push_back(p->parser_arena, &field_types, &iter.base);
+
+            dbg("pushed things...");
+
+            if (a_try(p, &a_end_of_expression)) return 1; // expect ; or newline after field
+            dbg("continuing\n");
+
+            continue;
+        }
+
+        dbg("looking for newlines...\n");
+        if (eat_newlines(p)) return 1;
+
+        dbg("looking for end of block...\n");
+
+        if (0 == a_try(p, a_end_of_block)) {
+
+            ast_node *node               = ast_node_create(p->ast_arena, ast_user_defined_type);
+            node->user_defined_type.name = name;
+            vec_move_plain_u16(p->parser_arena, &field_names, (void **)&node->user_defined_type.field_names,
+                               &node->user_defined_type.n_fields);
+
+            // convert symbols representing a type into an actual type
+            // FIXME: this requires a type registry
+
+            vec_move_plain_u16(p->parser_arena, &field_types, (void **)&node->user_defined_type.field_types,
+                               &node->user_defined_type.n_fields);
+            return result_ast_node(p, node);
+        }
+
+        // anything else is an error
+        p->error.tag = tess_err_expected_end_of_block;
+        return 1;
+    }
 }
 
 static int function_declaration(parser *p) {
@@ -793,8 +886,17 @@ static int expression(parser *parser) {
     return 1;
 }
 
+static int toplevel(parser *p) {
+    if (eat_newlines(p)) return 1;
+
+    if (0 == struct_block(p)) return 0;
+    if (0 == expression(p)) return 0;
+
+    return 1;
+}
+
 int parser_next(parser *parser) {
-    return expression(parser);
+    return toplevel(parser);
 }
 
 int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u32 *len) {

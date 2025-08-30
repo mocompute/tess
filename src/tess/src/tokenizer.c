@@ -161,6 +161,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case '/':  state = forward_slash; continue;
 
+            case ':':
+                replace_token(self->strings, &res, tok_colon);
+                state = stop;
+                break;
+
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
                 state = stop;
@@ -346,6 +351,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ' ':
             case ')':
             case ',':
+            case ':':
+            case ';':
                 --self->pos;
                 state = stop_number;
                 break;
@@ -402,6 +409,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ')':
             case ' ':
             case '"':
+            case ':':
             case ';':
             case ',':
                 // these tokens break a symbol

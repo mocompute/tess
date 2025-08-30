@@ -41,6 +41,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_one_newline:
     case tok_two_newline:
     case tok_comma:
+    case tok_colon:
     case tok_semicolon:
     case tok_arrow:
     case tok_open_round:
@@ -73,6 +74,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_one_newline:
     case tok_two_newline:
     case tok_comma:
+    case tok_colon:
     case tok_semicolon:
     case tok_arrow:
     case tok_open_round:

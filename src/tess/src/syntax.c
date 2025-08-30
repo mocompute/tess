@@ -211,7 +211,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
     case ast_f64:
     case ast_string:
     case ast_function_declaration:
-    case ast_lambda_declaration:   break;
+    case ast_lambda_declaration:
+    case ast_user_defined_type:    break;
     }
 
     return 0;

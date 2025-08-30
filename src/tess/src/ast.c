@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "alloc.h"
+#include "ast_tags.h"
 #include "dbg.h"
 #include "mos_string.h"
 #include "sexp.h"
@@ -27,6 +28,10 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
     case ast_named_function_application:  deinit(node->named_application.arguments); break;
     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
+    case ast_user_defined_type:
+        deinit(node->user_defined_type.field_names);
+        deinit(node->user_defined_type.field_types);
+        break;
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -36,7 +41,7 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
     case ast_string:
     case ast_infix:
     case ast_let_in:
-    case ast_if_then_else:                break;
+    case ast_if_then_else: break;
     }
 
 #undef deinit
@@ -72,6 +77,7 @@ void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
     case ast_lambda_function_application: init(node->lambda_application.arguments);
     case ast_named_function_application:  init(node->named_application.arguments);
 
+    case ast_user_defined_type:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -229,6 +235,26 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                     ast_node_to_sexp(alloc, node->named_application.name), list, type);
 
     } break;
+
+    case ast_user_defined_type: {
+        u16                      n             = node->user_defined_type.n_fields;
+        ast_node               **field_names   = node->user_defined_type.field_names;
+        struct tess_type const **field_types   = node->user_defined_type.field_types;
+
+        sexp                    *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
+
+        for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], field_names[i]);
+        sexp names_list = sexp_init_list(alloc, sexp_elements, n);
+
+        for (size_t i = 0; i < n; ++i)
+            sexp_elements[i] = sexp_init_sym(alloc, tess_type_to_string(alloc, field_types[i]));
+        sexp types_list = sexp_init_list(alloc, sexp_elements, n);
+
+        alloc_free(alloc, sexp_elements);
+        return quad(alloc, sexp_init_sym(alloc, "user-type"),
+                    ast_node_to_sexp(alloc, node->user_defined_type.name), names_list, types_list);
+
+    } break;
     }
 }
 
@@ -341,6 +367,10 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         return fun(ctx, node);
     } break;
+
+    case ast_user_defined_type:
+        // excluded from dfs
+        return;
     }
     assert(false);
 }
@@ -414,7 +444,8 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_lambda_function_application:
-    case ast_named_function_application:  valid = true; break;
+    case ast_named_function_application:
+    case ast_user_defined_type:           valid = true; break;
     }
     if (!valid) {
 

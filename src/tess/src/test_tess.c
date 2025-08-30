@@ -31,6 +31,14 @@ static int compile_input(char const *input) {
 
     if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) return 1;
 
+    dbg("\n  Parser output: \n");
+    for (size_t i = 0; i < n_nodes; ++i) {
+        char *str = ast_node_to_string(alloc_default_allocator(), nodes[i]);
+        dbg("%s\n", str);
+        alloc_free(alloc_default_allocator(), str);
+    }
+    dbg("\n");
+
     allocator      *syntax_alloc = alloc_leak_detector_create();
     syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
 
@@ -334,6 +342,21 @@ static int test_let_fun(void) {
     return compile_input(input);
 }
 
+static int test_user_struct_empty(void) {
+    char const *input = "struct foo = end\n";
+
+    return compile_input(input);
+}
+
+static int test_user_struct(void) {
+    char const *input = "struct foo = \n"
+                        "  a : int\n"
+                        "  b : string\n"
+                        "end\n";
+
+    return compile_input(input);
+}
+
 static int test_parse_to_c(void) {
     int        error = 0;
 
@@ -405,6 +428,8 @@ int main(void) {
     T(test_parse_all);
     T(test_parse_to_c);
     T(test_let_fun);
+    T(test_user_struct_empty);
+    T(test_user_struct);
 
     return error;
 }

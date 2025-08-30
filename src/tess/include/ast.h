@@ -96,6 +96,13 @@ typedef struct ast_node {
             struct ast_node **elements;
             u16               n_elements;
         } tuple;
+
+        struct {
+            struct ast_node         *name;
+            struct tess_type const **field_types;
+            struct ast_node        **field_names;
+            u16                      n_fields;
+        } user_defined_type;
     };
 
     struct tess_type const *type;

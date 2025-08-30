@@ -23,7 +23,8 @@
     X(ast_function_declaration, "function_declaration")                                                    \
     X(ast_lambda_declaration, "lambda_declaration")                                                        \
     X(ast_lambda_function_application, "lambda_function_application")                                      \
-    X(ast_named_function_application, "named_function_application")
+    X(ast_named_function_application, "named_function_application")                                        \
+    X(ast_user_defined_type, "user_defined_type")
 
 typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;
 

@@ -423,10 +423,11 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:    push(node->type, tess_type_prim(type_nil)); break;
-    case ast_bool:   push(node->type, tess_type_prim(type_bool)); break;
+    case ast_nil:               push(node->type, tess_type_prim(type_nil)); break;
+    case ast_bool:              push(node->type, tess_type_prim(type_bool)); break;
 
-    case ast_symbol: break;
+    case ast_user_defined_type:
+    case ast_symbol:            break;
 
     case ast_i64:
     case ast_u64:

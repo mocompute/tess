@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "ast.h"
 
+#include "ast_tags.h"
 #include "dbg.h"
 #include "vector.h"
 
@@ -97,6 +98,9 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:  break;
+    case ast_user_defined_type:
+        // FIXME
+        break;
     }
     return 0;
 }
@@ -122,6 +126,9 @@ static int a_body(transpiler *self, ast_node const *node) {
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_lambda_function_application: break;
+    case ast_user_defined_type:
+        // FIXME should not be in body
+        break;
     }
     return 0;
 }
