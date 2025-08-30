@@ -9,7 +9,7 @@ typedef struct syntax_checker syntax_checker;
 
 // -- allocation and deallocation --
 
-nodiscard syntax_checker *syntax_checker_create(allocator *) mallocfun;
+nodiscard syntax_checker *syntax_checker_create(allocator *, ast_node **, u32) mallocfun;
 void                      syntax_checker_destroy(syntax_checker **);
 
 // -- operation --

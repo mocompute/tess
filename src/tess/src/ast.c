@@ -30,6 +30,7 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
     case ast_user_defined_type:
         deinit(node->user_type.field_names);
+        deinit(node->user_type.field_annotations);
         deinit(node->user_type.field_types);
         break;
     case ast_eof:
@@ -120,21 +121,21 @@ char const *ast_operator_to_string(ast_operator);
 
 //
 
-static sexp tess_type_to_sexp(allocator *alloc, struct tess_type const *type) {
-    // TODO this could be better in tess_type.h but that would require
-    // exposing sexp to that header.
-    switch (type->tag) {
-    case type_nil:      return sexp_init_sym(alloc, "nil");
-    case type_bool:     return sexp_init_sym(alloc, "bool");
-    case type_int:      return sexp_init_sym(alloc, "int");
-    case type_float:    return sexp_init_sym(alloc, "float");
-    case type_string:   return sexp_init_sym(alloc, "string");
-    case type_tuple:    return sexp_init_sym(alloc, "[tuple]");
-    case type_arrow:    return sexp_init_sym(alloc, "[arrow]");
-    case type_user:     return sexp_init_sym(alloc, "[user]");
-    case type_type_var: return sexp_init_sym(alloc, "[tv]"); break;
-    }
-}
+// static sexp tess_type_to_sexp(allocator *alloc, struct tess_type const *type) {
+//     // TODO this could be better in tess_type.h but that would require
+//     // exposing sexp to that header.
+//     switch (type->tag) {
+//     case type_nil:      return sexp_init_sym(alloc, "nil");
+//     case type_bool:     return sexp_init_sym(alloc, "bool");
+//     case type_int:      return sexp_init_sym(alloc, "int");
+//     case type_float:    return sexp_init_sym(alloc, "float");
+//     case type_string:   return sexp_init_sym(alloc, "string");
+//     case type_tuple:    return sexp_init_sym(alloc, "[tuple]");
+//     case type_arrow:    return sexp_init_sym(alloc, "[arrow]");
+//     case type_user:     return sexp_init_sym(alloc, "[user]");
+//     case type_type_var: return sexp_init_sym(alloc, "[tv]"); break;
+//     }
+// }
 
 static void map_ast_node_to_sexp(void *, void *, void const *); // vec_map_fun
 
@@ -253,21 +254,25 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_user_defined_type: {
-        u16                      n             = node->user_type.n_fields;
-        ast_node               **field_names   = node->user_type.field_names;
-        struct tess_type const **field_types   = node->user_type.field_types;
+        u16        n                 = node->user_type.n_fields;
+        ast_node **field_names       = node->user_type.field_names;
+        ast_node **field_annotations = node->user_type.field_annotations;
+        // struct tess_type const **field_types       = node->user_type.field_types;
 
-        sexp                    *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
+        sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
 
         for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], field_names[i]);
         sexp names_list = sexp_init_list(alloc, sexp_elements, n);
 
-        for (size_t i = 0; i < n; ++i) sexp_elements[i] = tess_type_to_sexp(alloc, field_types[i]);
-        sexp types_list = sexp_init_list(alloc, sexp_elements, n);
+        for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], field_annotations[i]);
+        sexp annotations_list = sexp_init_list(alloc, sexp_elements, n);
+
+        // for (size_t i = 0; i < n; ++i) sexp_elements[i] = tess_type_to_sexp(alloc, field_types[i]);
+        // sexp types_list = sexp_init_list(alloc, sexp_elements, n);
 
         alloc_free(alloc, sexp_elements);
         return penta(alloc, sexp_init_sym(alloc, "user-type"),
-                     ast_node_to_sexp(alloc, node->user_type.name), names_list, types_list, type);
+                     ast_node_to_sexp(alloc, node->user_type.name), names_list, annotations_list, type);
 
     } break;
     }

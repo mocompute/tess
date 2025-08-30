@@ -2,6 +2,7 @@
 #define TESS_AST_H
 
 #include "ast_tags.h"
+#include "error.h"
 #include "mos_string.h"
 #include "nodiscard.h"
 #include "tess_type.h"
@@ -11,8 +12,9 @@
 typedef struct ast_node {
     union {
         struct {
-            string_t name;
-            string_t original; // set by syntax_rename_variable
+            string_t         name;
+            string_t         original; // set by syntax_rename_variable
+            struct ast_node *annotation;
         } symbol;
 
         struct {
@@ -99,14 +101,16 @@ typedef struct ast_node {
 
         struct {
             struct ast_node         *name;
-            struct tess_type const **field_types;
+            struct ast_node        **field_annotations;
             struct ast_node        **field_names;
+            struct tess_type const **field_types;
             u16                      n_fields;
         } user_type;
     };
 
     struct tess_type const *type;
     ast_tag                 tag;
+    enum tess_error_tag     error;
 } ast_node;
 
 struct ast_node_iterator {

@@ -35,7 +35,7 @@ void                 alloc_arena_deinit(allocator *);
 
 // -- allocator malloc and friends --
 //
-// these allocations never fail: failures call exit the program.
+// these allocations never fail: failures call fatal() and exit the program.
 
 void *alloc_malloc_i(allocator *, size_t, char const *, int) mallocfun;
 void *alloc_calloc_i(allocator *, size_t, size_t, char const *, int) mallocfun;

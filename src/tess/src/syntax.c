@@ -5,35 +5,53 @@
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
+#include "error.h"
 #include "hashmap.h"
 #include "mos_string.h"
-#include "vector.h"
+#include "type_registry.h"
 
 #include <stdio.h>
 
 // -- forwards --
 
-typedef struct rename_variable_ctx rename_variable_ctx;
-static void                        rename_variable_ctx_init(rename_variable_ctx *, allocator *);
-nodiscard static int               syntax_rename_variables(allocator *, ast_node **, size_t);
+nodiscard static int syntax_rename_variables(allocator *, ast_node **, u32);
+nodiscard static int syntax_register_user_types(struct syntax_checker *, int);
+nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
+nodiscard static int syntax_assign_annotated_types(struct syntax_checker *);
 
 // -- syntax_checker --
 
 struct syntax_checker {
-    allocator *alloc;
+    allocator     *alloc;
+    allocator     *arena;
+    type_registry *type_registry;
+
+    ast_node     **nodes;
+    u32            n_nodes;
+
+    u32            error_count;
 };
 
 // -- allocation and deallocation --
 
-syntax_checker *syntax_checker_create(allocator *alloc) {
+syntax_checker *syntax_checker_create(allocator *alloc, ast_node **nodes, u32 count) {
     syntax_checker *self = alloc_calloc(alloc, 1, sizeof *self);
-    if (!self) return self;
 
-    self->alloc = alloc;
+    self->alloc          = alloc;
+    self->arena          = alloc_arena_create(alloc, 2048);
+    self->type_registry  = type_registry_create(self->arena);
+
+    self->nodes          = nodes;
+    self->n_nodes        = count;
+
+    self->error_count    = 0;
+
     return self;
 }
 
 void syntax_checker_destroy(syntax_checker **self) {
+
+    alloc_arena_destroy((*self)->alloc, &(*self)->arena);
     alloc_free((*self)->alloc, *self);
     *self = null;
 }
@@ -43,11 +61,124 @@ void syntax_checker_destroy(syntax_checker **self) {
 int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
 
     int res = 0;
+    if ((res = syntax_assign_annotated_types(self))) return res;
+    if ((res = syntax_register_user_types(self, 0))) return res;
+
+    if ((res = syntax_assign_annotated_types(self))) return res;
+    if ((res = syntax_register_user_types(self, 1))) return res;
+
+    if ((res = syntax_assign_annotated_types(self))) return res;
+
+    if ((res = syntax_check_type_annotations(self))) return res;
+
     if ((res = syntax_rename_variables(self->alloc, nodes, count))) return res;
 
-    // TODO more to come...
-
     return res;
+}
+
+// -- register_user_types --
+
+static void assign_annotated_types(void *ctx, ast_node *node) {
+    struct syntax_checker *self = ctx;
+
+    if (ast_user_defined_type != node->tag) return;
+    if (node->user_type.field_types) return;
+
+    node->user_type.field_types =
+      alloc_calloc(self->arena, node->user_type.n_fields, sizeof node->user_type.field_types[0]);
+
+    for (u32 i = 0; i < node->user_type.n_fields; ++i) {
+
+        char const        *str = mos_string_str(&node->user_type.field_annotations[i]->symbol.name);
+        struct type_entry *te  = type_registry_find(self->type_registry, str);
+        if (!te) continue;
+
+        node->user_type.field_types[i] = te->type;
+    }
+}
+
+nodiscard static int syntax_assign_annotated_types(struct syntax_checker *self) {
+
+    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], assign_annotated_types);
+    return 0;
+}
+
+static int syntax_register_user_types(struct syntax_checker *self, int pass) {
+
+    for (u32 i = 0; i < self->n_nodes; ++i) {
+
+        if (ast_user_defined_type != self->nodes[i]->tag) continue;
+
+        ast_node    *ty          = self->nodes[i];
+
+        u16 const    n_fields    = ty->user_type.n_fields;
+        char const **field_names = 0;
+        char const  *type_name   = mos_string_str(&ty->user_type.name->symbol.name);
+
+        if (type_registry_find(self->type_registry, type_name)) {
+            if (pass > 0) {
+                self->nodes[i]->error = tess_err_type_exists;
+                self->error_count++;
+            }
+            continue;
+        }
+
+        if (!ty->user_type.field_types && n_fields) {
+
+            // try to convert annotations to types
+            ty->user_type.field_types =
+              alloc_calloc(self->arena, n_fields, sizeof ty->user_type.field_types[0]);
+
+            for (u32 j = 0; j < n_fields; ++j) {
+
+                char const *annotation = mos_string_str(&ty->user_type.field_annotations[j]->symbol.name);
+
+                struct type_entry *te  = type_registry_find(self->type_registry, annotation);
+
+                // don't know the type yet
+                if (!te) {
+                    if (pass == 0) continue;
+                    self->nodes[i]->error = tess_err_expected_type;
+                    self->error_count++;
+                }
+
+                ty->user_type.field_types[j] = te->type;
+            }
+        }
+
+        if (n_fields) {
+            field_names = alloc_calloc(self->alloc, n_fields, sizeof field_names[0]);
+            for (u16 i = 0; i < n_fields; ++i)
+                field_names[i] = mos_string_str(&ty->user_type.field_names[i]->symbol.name);
+        }
+
+        struct tess_type *user_type = tess_type_create_user_type(
+          self->alloc, type_name, ty->user_type.field_types, field_names, n_fields);
+
+        if (type_registry_add(self->type_registry,
+                              (struct type_entry){.name = type_name, .type = user_type}))
+            fatal("syntax_register_user_types: unexpected failure");
+    }
+    return 0;
+}
+
+static void check_annotation(void *ctx, ast_node *node) {
+    struct syntax_checker *self = ctx;
+
+    if (ast_symbol != node->tag) return;
+    if (!node->symbol.annotation) return;
+
+    char const        *str = mos_string_str(&node->symbol.annotation->symbol.name);
+    struct type_entry *te  = type_registry_find(self->type_registry, str);
+    if (!te) {
+        node->error = tess_err_expected_type;
+        self->error_count++;
+    }
+}
+
+static int syntax_check_type_annotations(struct syntax_checker *self) {
+    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], check_annotation);
+    return 0;
 }
 
 // -- rename_variable --
@@ -59,7 +190,7 @@ struct rename_variable_ctx {
     size_t     next;
 };
 
-static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc) {
+static void rename_variable_ctx_init(struct rename_variable_ctx *self, allocator *alloc) {
 
     self->alloc   = alloc;
     self->strings = alloc_string_arena_create(alloc, 2048);
@@ -68,13 +199,13 @@ static void rename_variable_ctx_init(rename_variable_ctx *self, allocator *alloc
     self->map     = map_create(alloc, sizeof(string_t));
 }
 
-static void rename_variable_ctx_deinit(rename_variable_ctx *self) {
+static void rename_variable_ctx_deinit(struct rename_variable_ctx *self) {
     map_destroy(&self->map);
     alloc_string_arena_destroy(self->alloc, &self->strings);
     alloc_invalidate(self);
 }
 
-static nodiscard int next_variable_name(rename_variable_ctx *self, string_t *out) {
+static nodiscard int next_variable_name(struct rename_variable_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "__v%zu", self->next++);
     *out = mos_string_init(self->strings, buf);
@@ -92,9 +223,9 @@ static nodiscard int rename_if_match(allocator *alloc, string_t *string, hashmap
     return 0;
 }
 
-static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node);
+static nodiscard int rename_variables(struct rename_variable_ctx *self, ast_node *node);
 
-static nodiscard int rename_array_elements(rename_variable_ctx *self, ast_node **elements, u16 n) {
+static nodiscard int rename_array_elements(struct rename_variable_ctx *self, ast_node **elements, u16 n) {
 
     for (size_t i = 0; i < n; ++i) {
         ast_node const *name = elements[i];
@@ -114,7 +245,7 @@ static nodiscard int rename_array_elements(rename_variable_ctx *self, ast_node *
     return 0;
 }
 
-static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node) {
+static nodiscard int rename_variables(struct rename_variable_ctx *self, ast_node *node) {
     if (!node) return 1;
 
     switch (node->tag) {
@@ -218,9 +349,9 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
     return 0;
 }
 
-int syntax_rename_variables(allocator *alloc, ast_node **nodes, size_t count) {
+int syntax_rename_variables(allocator *alloc, ast_node **nodes, u32 count) {
 
-    rename_variable_ctx ctx;
+    struct rename_variable_ctx ctx;
     rename_variable_ctx_init(&ctx, alloc);
 
     while (count--) {

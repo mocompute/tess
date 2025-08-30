@@ -48,10 +48,10 @@
     X(tess_err_function_not_found, "function_not_found")                                                   \
     X(tess_err_type_error, "type_error")
 
-#endif
-
 typedef enum tess_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tess_error_tag;
 
 // -- utilities --
 
 char const *tess_error_tag_to_string(tess_error_tag);
+
+#endif

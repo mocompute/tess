@@ -41,7 +41,7 @@ static int compile_input(char const *input) {
     dbg("\n");
 
     allocator      *syntax_alloc = alloc_leak_detector_create();
-    syntax_checker *syntax       = syntax_checker_create(syntax_alloc);
+    syntax_checker *syntax       = syntax_checker_create(syntax_alloc, nodes, n_nodes);
 
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes
