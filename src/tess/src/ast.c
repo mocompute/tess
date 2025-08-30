@@ -29,8 +29,8 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
     case ast_named_function_application:  deinit(node->named_application.arguments); break;
     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
     case ast_user_defined_type:
-        deinit(node->user_defined_type.field_names);
-        deinit(node->user_defined_type.field_types);
+        deinit(node->user_type.field_names);
+        deinit(node->user_type.field_types);
         break;
     case ast_eof:
     case ast_nil:
@@ -253,9 +253,9 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_user_defined_type: {
-        u16                      n             = node->user_defined_type.n_fields;
-        ast_node               **field_names   = node->user_defined_type.field_names;
-        struct tess_type const **field_types   = node->user_defined_type.field_types;
+        u16                      n             = node->user_type.n_fields;
+        ast_node               **field_names   = node->user_type.field_names;
+        struct tess_type const **field_types   = node->user_type.field_types;
 
         sexp                    *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
 
@@ -267,7 +267,7 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
         alloc_free(alloc, sexp_elements);
         return penta(alloc, sexp_init_sym(alloc, "user-type"),
-                     ast_node_to_sexp(alloc, node->user_defined_type.name), names_list, types_list, type);
+                     ast_node_to_sexp(alloc, node->user_type.name), names_list, types_list, type);
 
     } break;
     }

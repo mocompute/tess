@@ -464,8 +464,8 @@ static int struct_block(parser *p) {
 
     // check for empty struct
     if (0 == a_try(p, &a_end_of_block)) {
-        ast_node *node               = ast_node_create(p->ast_arena, ast_user_defined_type);
-        node->user_defined_type.name = name;
+        ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
+        node->user_type.name = name;
         return result_ast_node(p, node);
     }
 
@@ -498,13 +498,13 @@ static int struct_block(parser *p) {
 
         if (0 == a_try(p, a_end_of_block)) {
 
-            ast_node *node               = ast_node_create(p->ast_arena, ast_user_defined_type);
-            node->user_defined_type.name = name;
-            vec_move_plain_u16(p->parser_arena, &field_names, (void **)&node->user_defined_type.field_names,
-                               &node->user_defined_type.n_fields);
+            ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
+            node->user_type.name = name;
+            vec_move_plain_u16(p->parser_arena, &field_names, (void **)&node->user_type.field_names,
+                               &node->user_type.n_fields);
 
-            vec_move_plain_u16(p->parser_arena, &field_types, (void **)&node->user_defined_type.field_types,
-                               &node->user_defined_type.n_fields);
+            vec_move_plain_u16(p->parser_arena, &field_types, (void **)&node->user_type.field_types,
+                               &node->user_type.n_fields);
 
             return result_ast_node(p, node);
         }
@@ -903,24 +903,24 @@ static int register_user_type(parser *p) {
     ast_node *ty = p->result;
     assert(ty->tag == ast_user_defined_type);
 
-    u16          n_fields    = ty->user_defined_type.n_fields;
+    u16          n_fields    = ty->user_type.n_fields;
     char const **field_names = 0;
 
     if (n_fields) {
         field_names = alloc_calloc(p->ast_arena, n_fields, sizeof field_names[0]);
         for (u16 i = 0; i < n_fields; ++i)
-            field_names[i] = mos_string_str(&ty->user_defined_type.field_names[i]->symbol.name);
+            field_names[i] = mos_string_str(&ty->user_type.field_names[i]->symbol.name);
     }
 
-    char const *type_name = mos_string_str(&ty->user_defined_type.name->symbol.name);
+    char const *type_name = mos_string_str(&ty->user_type.name->symbol.name);
 
     if (type_registry_find(p->type_registry, type_name)) {
         p->error.tag = tess_err_type_exists;
         return 1;
     }
 
-    struct tess_type *user_type = tess_type_create_user_type(
-      p->ast_arena, type_name, ty->user_defined_type.field_types, field_names, n_fields);
+    struct tess_type *user_type =
+      tess_type_create_user_type(p->ast_arena, type_name, ty->user_type.field_types, field_names, n_fields);
 
     if (type_registry_add(p->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
         fatal("register_user_type: unexpected failure");
