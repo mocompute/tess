@@ -127,8 +127,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         break;
 
     case ast_tuple: {
-        for (size_t i = 0; i < node->ast_node_array.n; ++i)
-            if (rename_variables(self, node->ast_node_array.elements[i])) return 1;
+        for (size_t i = 0; i < node->array.n; ++i)
+            if (rename_variables(self, node->array.nodes[i])) return 1;
     } break;
 
     case ast_let_in: {
@@ -167,7 +167,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         assert(save);
 
-        if (rename_array_elements(self, node->ast_node_array.elements, node->ast_node_array.n)) return 1;
+        if (rename_array_elements(self, node->array.nodes, node->array.n)) return 1;
         if (rename_variables(self, node->let.body)) return 1;
 
         map_destroy(&self->map);
@@ -188,7 +188,7 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
         hashmap *save = map_copy(self->map);
         if (!save) return 1;
 
-        if (rename_array_elements(self, node->ast_node_array.elements, node->ast_node_array.n)) return 1;
+        if (rename_array_elements(self, node->array.nodes, node->array.n)) return 1;
         if (rename_variables(self, node->lambda_function.body)) return 1;
 
         map_destroy(&self->map);
@@ -198,8 +198,8 @@ static nodiscard int rename_variables(rename_variable_ctx *self, ast_node *node)
 
     case ast_lambda_function_application:
     case ast_named_function_application:  {
-        for (size_t i = 0; i < node->ast_node_array.n; ++i)
-            if (rename_variables(self, node->ast_node_array.elements[i])) return 1;
+        for (size_t i = 0; i < node->array.n; ++i)
+            if (rename_variables(self, node->array.nodes[i])) return 1;
 
     } break;
 

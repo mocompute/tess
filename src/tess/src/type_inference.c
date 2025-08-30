@@ -428,8 +428,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_string: push(node->type, tess_type_prim(type_string)); break;
 
     case ast_tuple:  {
-        struct tess_type *els =
-          arguments_to_tuple_type(ctx->alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        struct tess_type *els = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
 
         push(node->type, els);
     } break;
@@ -461,8 +460,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         struct tess_type const *name = node->let.name->type;
 
         // left side of arrow is same as parameter tuple type
-        struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
         push(name->arrow.left, params);
 
         // right side of arrow is same as function body type
@@ -484,8 +482,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // argument tuple must be same type as parameter tuple
         assert(type_arrow == node->type->tag);
 
-        struct tess_type *tup =
-          arguments_to_tuple_type(ctx->alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
         push(node->type->arrow.left, tup);
 
         // body type must be same as right hand of arrow
@@ -503,10 +500,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_lambda_function == lambda->tag);
 
         // arguments must match parameters
-        struct tess_type *args =
-          arguments_to_tuple_type(ctx->alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        struct tess_type *args = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
         struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, lambda->ast_node_array.elements, lambda->ast_node_array.n);
+          arguments_to_tuple_type(ctx->alloc, lambda->array.nodes, lambda->array.n);
 
         push(args, params);
 
@@ -527,10 +523,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->named_application.name->type, let->let.name->type);
 
         // arguments must match parameters
-        struct tess_type *args =
-          arguments_to_tuple_type(ctx->alloc, node->ast_node_array.elements, node->ast_node_array.n);
-        struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, let->ast_node_array.elements, let->ast_node_array.n);
+        struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
+        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, let->array.nodes, let->array.n);
 
         push(args, params);
 

@@ -174,7 +174,7 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
     case ast_tuple: {
 
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return triple(alloc, sexp_init_sym(alloc, "tuple"), list, type);
 
     } break;
@@ -185,7 +185,7 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                      ast_node_to_sexp(alloc, node->let_in.body), type);
 
     case ast_let: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return penta(alloc, sexp_init_sym(alloc, "let"), ast_node_to_sexp(alloc, node->let.name), list,
                      ast_node_to_sexp(alloc, node->let.body), type);
 
@@ -198,33 +198,33 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
                      ast_node_to_sexp(alloc, node->if_then_else.no), type);
 
     case ast_lambda_function: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return quad(alloc, sexp_init_sym(alloc, "lambda"), list,
                     ast_node_to_sexp(alloc, node->lambda_function.body), type);
 
     } break;
 
     case ast_function_declaration: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return quad(alloc, sexp_init_sym(alloc, "function-declaration"), list,
                     ast_node_to_sexp(alloc, node->lambda_function.body), type);
 
     } break;
 
     case ast_lambda_declaration: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return triple(alloc, sexp_init_sym(alloc, "lambda-declaration"), list, type);
 
     } break;
 
     case ast_lambda_function_application: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return quad(alloc, sexp_init_sym(alloc, "lambda-application"),
                     ast_node_to_sexp(alloc, node->lambda_application.lambda), list, type);
 
     } break;
     case ast_named_function_application: {
-        sexp list = elements_to_sexp(alloc, node->ast_node_array.elements, node->ast_node_array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
         return quad(alloc, sexp_init_sym(alloc, "named-application"),
                     ast_node_to_sexp(alloc, node->named_application.name), list, type);
 
@@ -275,7 +275,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
 
     case ast_tuple: {
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
         return fun(ctx, node);
     } break;
 
@@ -289,7 +289,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_let: {
         ast_pool_dfs(ctx, node->let.name, fun);
 
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         ast_pool_dfs(ctx, node->let.body, fun);
 
@@ -304,7 +304,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
 
     case ast_lambda_function: {
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         ast_pool_dfs(ctx, node->lambda_function.body, fun);
 
@@ -314,13 +314,13 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_function_declaration: {
         ast_pool_dfs(ctx, node->function_declaration.name, fun);
 
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;
 
     case ast_lambda_declaration: {
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         return fun(ctx, node);
 
@@ -329,7 +329,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_lambda_function_application: {
         ast_pool_dfs(ctx, node->lambda_application.lambda, fun);
 
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;
@@ -337,7 +337,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_named_function_application: {
         ast_pool_dfs(ctx, node->named_application.name, fun);
 
-        recur_on_array(node->ast_node_array.elements, node->ast_node_array.n, ctx, fun);
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
         return fun(ctx, node);
     } break;

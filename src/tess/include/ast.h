@@ -32,6 +32,12 @@ typedef struct ast_node {
         } f64;
 
         struct {
+            // all variants with arrays must use this layout
+            struct ast_node **nodes;
+            u16               n;
+        } array;
+
+        struct {
             ast_operator     op;
             struct ast_node *left;
             struct ast_node *right;
@@ -90,12 +96,6 @@ typedef struct ast_node {
             struct ast_node **elements;
             u16               n_elements;
         } tuple;
-
-        struct {
-            // all variants must use this layout
-            struct ast_node **elements;
-            u16               n;
-        } ast_node_array;
     };
 
     struct tess_type const *type;
