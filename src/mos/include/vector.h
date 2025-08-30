@@ -9,11 +9,11 @@
 
 // -- vector alternative --
 
-#define alloc_resize(ALLOC, BUF, SIZE_PTR, NEW_SIZE)                                                       \
+#define alloc_resize(ALLOC, BUF_PTR, SIZE_PTR, NEW_SIZE)                                                   \
     do {                                                                                                   \
-        void *ptr = alloc_realloc((ALLOC), (BUF), (NEW_SIZE) * sizeof *(BUF));                             \
+        void *ptr = alloc_realloc((ALLOC), *(BUF_PTR), (NEW_SIZE) * sizeof **(BUF_PTR));                   \
         if (!ptr) fatal("realloc failed.");                                                                \
-        (BUF)       = ptr;                                                                                 \
+        *(BUF_PTR)  = ptr;                                                                                 \
         *(SIZE_PTR) = (NEW_SIZE);                                                                          \
     } while (0)
 

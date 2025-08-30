@@ -22,7 +22,9 @@ struct parser {
 
     ast_node              *result;
 
-    struct vectora         seen_tokens; // (token) for backtracking
+    struct token          *tokens; // (token) for backtracking
+    u32                    n_tokens;
+    u32                    cap_tokens;
 
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
@@ -33,6 +35,9 @@ struct token_iterator {
     struct vector_iterator_base base;
     struct token               *ptr;
 };
+
+static void tokens_push_back(struct parser *, struct token *);
+static void tokens_shrink(struct parser *, u32);
 
 // -- allocation and deallocation --
 
@@ -48,7 +53,9 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->tokenizer = tokenizer_create(alloc, input, input_len);
 
     // good_tokens
-    self->seen_tokens = VECA(self->parser_arena, struct token);
+    self->cap_tokens = 16;
+    self->n_tokens   = 0;
+    self->tokens     = alloc_calloc(self->parser_arena, self->cap_tokens, sizeof self->tokens[0]);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -60,7 +67,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
 
 void parser_destroy(parser **self) {
     // error token: arena
-    // good_tokens: arena
+    // tokens: arena
 
     // tokenizer
     tokenizer_destroy(&(*self)->tokenizer);
@@ -195,35 +202,28 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        struct token_iterator iter = {.ptr = &p->token};
-        veca_iterator_init(&p->seen_tokens, &iter.base);
-        veca_push_back(&p->seen_tokens, &iter.base);
+        tokens_push_back(p, &p->token);
         return 0;
     }
 }
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
-    u32 const save_toks = veca_size(&p->seen_tokens);
+    u32 const save_toks = p->n_tokens;
     if (fun(p)) {
-        assert(veca_size(&p->seen_tokens) >= save_toks);
-        tokenizer_put_back(p->tokenizer, ((token const *)veca_data(&p->seen_tokens)) + save_toks,
-                           veca_size(&p->seen_tokens) - save_toks);
-
-        veca_resize(&p->seen_tokens, save_toks);
-
+        assert(p->n_tokens >= save_toks);
+        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+        tokens_shrink(p, save_toks);
         return 1;
     }
     return 0;
 }
 
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
-    u32 const save_toks = veca_size(&p->seen_tokens);
+    u32 const save_toks = p->n_tokens;
     if (fun(p, arg)) {
-        assert(veca_size(&p->seen_tokens) >= save_toks);
-        tokenizer_put_back(p->tokenizer, ((token const *)veca_data(&p->seen_tokens)) + save_toks,
-                           veca_size(&p->seen_tokens) - save_toks);
-
-        veca_resize(&p->seen_tokens, save_toks);
+        assert(p->n_tokens >= save_toks);
+        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+        tokens_shrink(p, save_toks);
 
         return 1;
     }
@@ -819,4 +819,16 @@ void parser_result(parser *p, ast_node **handle) {
     if (handle) {
         *handle = p->result;
     }
+}
+
+static void tokens_push_back(struct parser *p, struct token *tok) {
+    if (p->n_tokens == p->cap_tokens)
+        alloc_resize(p->parser_arena, &p->tokens, &p->cap_tokens, p->cap_tokens * 2);
+
+    p->tokens[p->n_tokens++] = *tok;
+}
+
+static void tokens_shrink(struct parser *p, u32 n) {
+    assert(n <= p->n_tokens);
+    p->n_tokens = n;
 }
