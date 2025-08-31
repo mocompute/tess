@@ -22,6 +22,8 @@ struct ti_inferer {
 
     vectora           constraints;
     vectora           substitutions;
+
+    bool              verbose;
 };
 
 struct constraint {
@@ -74,21 +76,37 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
     *self = null;
 }
 
-void ti_inferer_run(ti_inferer *self) {
+void ti_inferer_set_verbose(ti_inferer *self, bool val) {
+    self->verbose = val;
+}
+
+int ti_inferer_run(ti_inferer *self) {
 
     ti_assign_type_variables(self->type_arena, self->nodes, self->n_nodes);
 
+    if (self->verbose) {
+        dbg("ti_inferer_run: input nodes:\n");
+        {
+            for (size_t i = 0; i < self->n_nodes; ++i) {
+                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+                dbg("%p: %s\n", self->nodes[i], str);
+                alloc_free(self->strings, str);
+            }
+        }
+    }
+
     self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->n_nodes);
 
-    // dbg("ti_inferer_run result constraints:\n");
-    // {
-    //     for (size_t i = 0; i < self->n_nodes; ++i) {
-    //         char *str = ast_node_to_string(alloc_default_allocator(), self->nodes[i]);
-    //         dbg("node: %s\n", str);
-    //         alloc_free(alloc_default_allocator(), str);
-    //     }
-    // }
-    // ti_inferer_dbg_constraints(self);
+    if (self->verbose) {
+        dbg("ti_inferer_run: after collect constraints:\n");
+        {
+            for (size_t i = 0; i < self->n_nodes; ++i) {
+                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+                dbg("%p: %s\n", self->nodes[i], str);
+                alloc_free(self->strings, str);
+            }
+        }
+    }
 
     self->substitutions  = VECA(self->type_arena, struct constraint);
     struct solver solver = solver_init(self->type_arena, &self->constraints, &self->substitutions);
@@ -101,7 +119,35 @@ void ti_inferer_run(ti_inferer *self) {
     u32               n_specialized = 0;
     ti_specialize_functions(self->nodes, self->n_nodes, &specialized, &n_specialized);
 
-    // TODO ...
+    if (self->verbose) {
+        dbg("ti_inferer_run: final constraints:\n");
+        ti_inferer_dbg_constraints(self);
+        {
+            for (size_t i = 0; i < self->n_nodes; ++i) {
+                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+                dbg("%s\n", str);
+                alloc_free(self->strings, str);
+            }
+        }
+    }
+
+    if (veca_size(&self->constraints)) return 1;
+    return 0;
+}
+
+void ti_inferer_report_errors(ti_inferer *self) {
+    dbg("error: unsatisfied constraints\n");
+    ti_inferer_dbg_constraints(self);
+
+    dbg("\ninfo: program nodes follow\n\n");
+    {
+        for (size_t i = 0; i < self->n_nodes; ++i) {
+            char *str = ast_node_to_string(self->strings, self->nodes[i]);
+            dbg("%s\n", str);
+            alloc_free(self->strings, str);
+        }
+    }
+    dbg("\n-- program nodes end\n\n");
 }
 
 // -- apply substitutions --

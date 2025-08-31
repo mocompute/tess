@@ -156,7 +156,10 @@ int compile(struct state *self) {
     }
 
     ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), nodes, n_nodes, nodes_alloc);
-    ti_inferer_run(ti);
+    ti_inferer_set_verbose(ti, self->verbose);
+    if (ti_inferer_run(ti)) {
+        ti_inferer_report_errors(ti);
+    }
 
     allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
     vector      transpiler_output = VEC(char);

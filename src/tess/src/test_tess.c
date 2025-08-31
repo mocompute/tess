@@ -56,7 +56,10 @@ static int compile_input(char const *input) {
 
     ti_inferer *ti = ti_inferer_create(ti_alloc, nodes, n_nodes, nodes_alloc);
 
-    ti_inferer_run(ti);
+    if (ti_inferer_run(ti)) {
+        ti_inferer_report_errors(ti);
+        return 1;
+    }
 
     for (size_t i = 0; i < n_nodes; ++i) {
         char *str = ast_node_to_string(alloc_default_allocator(), nodes[i]);

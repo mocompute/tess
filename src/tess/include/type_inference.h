@@ -14,9 +14,11 @@ void                  ti_inferer_destroy(allocator *, ti_inferer **);
 
 // -- operation --
 
-void ti_inferer_run(ti_inferer *);
+nodiscard int ti_inferer_run(ti_inferer *);
+void          ti_inferer_report_errors(ti_inferer *);
 
-void ti_inferer_dbg_constraints(ti_inferer const *);
-void ti_inferer_dbg_substitutions(ti_inferer const *);
+void          ti_inferer_set_verbose(ti_inferer *, bool);
+void          ti_inferer_dbg_constraints(ti_inferer const *);
+void          ti_inferer_dbg_substitutions(ti_inferer const *);
 
 #endif
