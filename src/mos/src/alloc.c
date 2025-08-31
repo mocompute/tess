@@ -25,14 +25,14 @@
 
 typedef struct {
     size_t size;
-    byte   data[];
+    alignas(void *) byte data[];
 } arena_block;
 
 typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
-    arena_block          data[];
+    alignas(void *) arena_block data[];
 } arena_header;
 
 typedef struct arena_allocator {
@@ -83,6 +83,7 @@ void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
     if (!sz) return null;
     void *ptr = alloc->malloc(alloc, sz, file, line);
     assert(ptr);
+    assert((uintptr_t)ptr % 2 == 0);
     if (!ptr) fatal("malloc failed\n");
     return ptr;
 }
@@ -91,6 +92,7 @@ void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file
     if (!sz) return null;
     void *ptr = alloc->calloc(alloc, count, sz, file, line);
     assert(ptr);
+    assert((uintptr_t)ptr % 2 == 0);
     if (!ptr) fatal("calloc failed\n");
     return ptr;
 }
@@ -98,6 +100,7 @@ void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file
 void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
     void *out = alloc->realloc(alloc, ptr, sz, file, line);
     assert(out);
+    assert((uintptr_t)out % 2 == 0);
     if (!out) fatal("realloc failed\n");
     return out;
 }
@@ -115,9 +118,15 @@ void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
     arena_block *out = (void *)(((byte *)bucket) + sizeof(arena_header) + bucket->size);
 
-    out->size        = sz;
+    // size must be even or all hell breaks loose
+    if (sz % 2 == 1) ++sz;
+
+    out->size = sz;
     bucket->size += sz + sizeof(arena_block);
-    return &out->data;
+
+    void *res = &out->data;
+    assert((uintptr_t)res % 2 == 0);
+    return res;
 }
 
 static size_t *block_size(byte const *p) {
@@ -507,7 +516,8 @@ static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file,
     leak_detector *self = (leak_detector *)alloc;
     leak_detector_reserve_one(self);
 
-    void *ptr                = malloc(sz);
+    void *ptr = malloc(sz);
+    assert((uintptr_t)ptr % 2 == 0);
     self->data[self->size++] = (struct leak_allocation){
       .ptr = ptr, .realloc_ptr = null, .size = sz, .file = file, .line = line, .status = leak_action_alloc};
     return ptr;
@@ -517,7 +527,8 @@ static void *leak_detector_calloc(allocator *alloc, size_t num, size_t sz, char 
     leak_detector *self = (leak_detector *)alloc;
     leak_detector_reserve_one(self);
 
-    void *ptr                = calloc(num, sz);
+    void *ptr = calloc(num, sz);
+    assert((uintptr_t)ptr % 2 == 0);
     self->data[self->size++] = (struct leak_allocation){
       .ptr = ptr, .realloc_ptr = null, .size = sz, .file = file, .line = line, .status = leak_action_alloc};
     return ptr;
@@ -527,7 +538,8 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
     leak_detector *self = (leak_detector *)alloc;
     leak_detector_reserve_one(self);
 
-    void *ptr                = realloc(p, sz);
+    void *ptr = realloc(p, sz);
+    assert((uintptr_t)ptr % 2 == 0);
     self->data[self->size++] = (struct leak_allocation){
       .ptr = ptr, .realloc_ptr = p, .size = sz, .file = file, .line = line, .status = leak_action_realloc};
     return ptr;
@@ -551,6 +563,7 @@ static void leak_detector_free(allocator *alloc, void *ptr, char const *file, in
 char *alloc_strdup(allocator *alloc, char const *src) {
     size_t len = strlen(src);
     char  *out = alloc_malloc(alloc, len + 1);
+    assert((uintptr_t)out % 2 == 0);
     if (out) {
         memcpy(out, src, len);
         out[len] = '\0';
@@ -566,6 +579,7 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 
     char *out = alloc_malloc(alloc, len + 1);
     if (out) {
+        assert((uintptr_t)out % 2 == 0);
         memcpy(out, src, len);
         out[len] = '\0';
     }

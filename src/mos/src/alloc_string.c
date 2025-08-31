@@ -22,6 +22,9 @@ struct string_arena {
 static char *bump_alloc_assume_capacity(struct arena_header *bucket, size_t sz) {
     char *out = (void *)(((byte *)bucket) + sizeof(struct arena_header) + bucket->size);
 
+    // size must be even or all hell breaks loose
+    if (sz % 2 != 0) ++sz;
+
     bucket->size += sz;
     return out;
 }
