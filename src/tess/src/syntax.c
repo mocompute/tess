@@ -70,7 +70,7 @@ int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
     int res = 0;
     if ((res = syntax_register_user_types(self))) return res;
     if ((res = syntax_check_type_annotations(self))) return res;
-    if ((res = syntax_rename_variables(self->alloc, nodes, count))) return res;
+    if ((res = syntax_rename_variables(self->arena, nodes, count))) return res;
 
     return (int)self->n_errors;
 }
@@ -130,15 +130,15 @@ static void register_user_type(void *ctx, ast_node *node) {
             node->user_type.field_types[i] = te->type;
         }
 
-        // conver field names from ast symbols to simple strings
+        // convert field names from ast symbols to simple strings
 
-        field_names = alloc_calloc(self->alloc, n_fields, sizeof field_names[0]);
+        field_names = alloc_calloc(self->arena, n_fields, sizeof field_names[0]);
         for (u16 i = 0; i < n_fields; ++i)
             field_names[i] = mos_string_str(&node->user_type.field_names[i]->symbol.name);
     }
 
     struct tess_type *user_type = tess_type_create_user_type(
-      self->alloc, type_name, node->user_type.field_types, field_names, n_fields);
+      self->arena, type_name, node->user_type.field_types, field_names, n_fields);
 
     if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
         fatal("syntax_register_user_types: unexpected failure");

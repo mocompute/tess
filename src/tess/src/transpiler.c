@@ -28,12 +28,14 @@ extern char const *embed_std_c;
 // -- static forwards --
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
-static int  a_toplevel(transpiler *, ast_node const *);
-static int  a_body(transpiler *, ast_node const *);
-static int  a_let(transpiler *, ast_node const *);
-static int  a_fun_apply(transpiler *, ast_node const *);
-static int  a_std_apply(transpiler *, ast_node const *, char const *);
-static int  a_string(transpiler *, ast_node const *);
+static int a_toplevel(transpiler *, ast_node const *);
+static int a_eval(transpiler *, ast_node const *);
+static int a_result_type_of(transpiler *, struct tess_type const *);
+static int a_body(transpiler *, ast_node const *);
+static int a_let(transpiler *, ast_node const *);
+static int a_fun_apply(transpiler *, ast_node const *);
+// static int  a_std_apply(transpiler *, ast_node const *, char const *);
+// static int  a_string(transpiler *, ast_node const *);
 
 static void out_put_start(transpiler *, char const *);
 static void out_put(transpiler *, char const *);
@@ -113,6 +115,7 @@ static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
     case type_float:  out_put(self, "double"); break;
     case type_string: out_put(self, "char *"); break;
     case type_tuple:  out_put(self, "FIXME"); break;
+    case type_any:    out_put(self, "void*"); break;
     case type_arrow:  return a_result_type_of(self, ty->right);
     case type_user:   {
         char *name = tess_type_to_string(self->strings, ty);
@@ -157,21 +160,60 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_infix(transpiler *self, ast_node const *node) {
+
+    struct tess_type const *type = node->type;
+
+    out_put(self, "(");
+    if (a_result_type_of(self, type)) return 1;
+    out_put(self, ")");
+
+    out_put(self, "(");
+
+    if (a_eval(self, node->infix.left)) return 1;
+
+    switch (node->infix.op) {
+    case ast_op_addition:           out_put(self, " + "); break;
+    case ast_op_subtraction:        out_put(self, " - "); break;
+    case ast_op_multiplication:     out_put(self, " * "); break;
+    case ast_op_division:           out_put(self, " / "); break;
+    case ast_op_less_than:          out_put(self, " < "); break;
+    case ast_op_less_than_equal:    out_put(self, " <= "); break;
+    case ast_op_equal:              out_put(self, " == "); break;
+    case ast_op_not_equal:          out_put(self, " != "); break;
+    case ast_op_greater_than_equal: out_put(self, " >= "); break;
+    case ast_op_greater_than:       out_put(self, " > "); break;
+    case ast_op_sentinel:           out_put(self, " FIXME "); break;
+    }
+
+    if (a_eval(self, node->infix.right)) return 1;
+
+    out_put(self, ")");
+
+    return 0;
+}
+
 static int a_eval(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_eof:
     case ast_nil:    out_put(self, "NULL"); break;
+
     case ast_symbol: out_put_fmt(self, "%s", mos_string_str(&node->symbol.name)); break;
-    case ast_i64:    out_put_fmt(self, "%" PRIi64, node->i64.val); break;
-    case ast_u64:    out_put_fmt(self, "%" PRIu64, node->u64.val); break;
-    case ast_f64:    out_put_fmt(self, "%f", node->f64.val); break;
+    case ast_string:
+        out_put(self, "\"");
+        out_put_fmt(self, "%s", mos_string_str(&node->symbol.name));
+        out_put(self, "\"");
+        break;
+
+    case ast_i64: out_put_fmt(self, "%" PRIi64, node->i64.val); break;
+    case ast_u64: out_put_fmt(self, "%" PRIu64, node->u64.val); break;
+    case ast_f64: out_put_fmt(self, "%f", node->f64.val); break;
     case ast_bool:
         if (node->bool_.val) out_put(self, "true");
         else out_put(self, "false");
         break;
-    case ast_string:
-    case ast_infix:
+    case ast_infix:                       return a_infix(self, node);
     case ast_tuple:
     case ast_let_in:                      break;
     case ast_let:                         return a_let(self, node);
@@ -210,7 +252,7 @@ static int a_body(transpiler *self, ast_node const *node) {
     case ast_lambda_function_application:
         out_put_start(self, "return ");
         a_eval(self, node);
-        out_put(self, ";\n");
+        out_put(self, ";");
         break;
 
     case ast_user_defined_type:
@@ -223,55 +265,64 @@ static int a_body(transpiler *self, ast_node const *node) {
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    static char const *const std_prefix     = "std_";
-    static u8 const          std_prefix_len = strlen(std_prefix);
+    // static char const *const std_prefix     = "std_";
+    // static u8 const          std_prefix_len = strlen(std_prefix);
 
-    ast_node const          *name           = node->named_application.name;
-    char const              *name_str       = ast_node_name_string(name);
-    if (0 == strncmp(name_str, std_prefix, std_prefix_len)) {
-        return a_std_apply(self, node, name_str);
-    }
+    ast_node const *name     = node->named_application.name;
+    char const     *name_str = ast_node_name_string(name);
 
+    // if (0 == strncmp(name_str, std_prefix, std_prefix_len)) {
+    //     return a_std_apply(self, node, name_str);
+    // }
     // FIXME only supports std_ functions for now
-    return 1;
-}
 
-static int a_string(transpiler *self, ast_node const *node) {
-    assert(ast_string == node->tag);
-    vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
-    vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node));
-    vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
-    return 0;
-}
-
-static int a_std_dbg(transpiler *self, ast_node const *node) {
-
-    // FIXME for now only one string argument is valid
-    if (1 != node->named_application.n_arguments) return 1;
-
-    out_put(self, "(fprintf(stderr, \"%s\", ");
-    ast_node *arg = node->named_application.arguments[0];
-    if (a_string(self, arg)) return 1;
-    out_put(self, "), 0)");
-    return 0;
-}
-
-static int a_std_apply(transpiler *self, ast_node const *node, char const *name) {
-    static char const *const std_names[] = {
-      "std_dbg",
-    };
-    static compile_fun_t const std_funs[] = {
-      a_std_dbg,
-    };
-
-    size_t i;
-    for (i = 0; i != sizeof(std_names) / sizeof(char *); ++i) {
-        if (0 == strcmp(std_names[i], name)) {
-            return std_funs[i](self, node);
-        }
+    out_put(self, name_str);
+    out_put(self, "(");
+    for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+        a_eval(self, node->named_application.arguments[i]);
+        if (i != node->named_application.n_arguments - 1) out_put(self, ", ");
     }
-    return 1;
+    out_put(self, ")");
+
+    return 0;
 }
+
+// static int a_string(transpiler *self, ast_node const *node) {
+//     assert(ast_string == node->tag);
+//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
+//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node));
+//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
+//     return 0;
+// }
+
+// static int a_std_dbg(transpiler *self, ast_node const *node) {
+
+//     // FIXME for now only one string argument is valid
+//     if (1 != node->named_application.n_arguments) return 1;
+
+//     out_put(self, "(fprintf(stderr, \"%s\", ");
+//     ast_node *arg = node->named_application.arguments[0];
+//     if (a_string(self, arg)) return 1;
+//     out_put(self, "), 0)");
+//     return 0;
+// }
+
+// static int a_std_apply(transpiler *self, ast_node const *node, char const *name) {
+//     static char const *const std_names[] = {
+//       "std_dbg",
+//     };
+//     static compile_fun_t const std_funs[] = {
+//       a_std_dbg,
+//     };
+
+//     size_t i;
+//     for (i = 0; i != sizeof(std_names) / sizeof(char *); ++i) {
+//         if (0 == strcmp(std_names[i], name)) {
+//             return std_funs[i](self, node);
+//         }
+//     }
+//     return 1;
+// }
 
 static int a_let(transpiler *self, ast_node const *node) {
 

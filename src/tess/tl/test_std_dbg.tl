@@ -1,2 +1,2 @@
 let main() =
-    std_dbg "hello, world!"
+    std_dbg "hello from %s lang!" "tess"

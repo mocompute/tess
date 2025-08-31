@@ -123,7 +123,8 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type con
     case type_float:
     case type_string:
     case type_user:
-    case type_type_var: break;
+    case type_type_var:
+    case type_any:      break;
 
     case type_tuple:    {
 
@@ -233,7 +234,8 @@ static bool unify_one(struct solver *self, struct constraint c) {
         case type_float:
         case type_string:
         case type_user:
-        case type_type_var: break;
+        case type_type_var:
+        case type_any:      break;
         case type_tuple:    {
 
             bool found = false;
@@ -393,6 +395,20 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node **ar
 
 static ast_node const *find_let_node(char const *name, u16 arity, ast_node *nodes[], u32 count) {
     // TODO profile linear search versus hashmap
+
+    if (!name) fatal("find_let_node: null search string");
+
+    // TODO possibly use type registry for this: we're creating a synthetic let node whose only purpose is
+    // to hold an arrow type of any -> any.
+    static struct tess_type any_type       = {.tag = type_any};
+    static struct tess_type nil_type       = {.tag = type_nil};
+    static struct tess_type any_arrow_type = {.tag = type_arrow, .left = &any_type, .right = &any_type};
+    static ast_node         sym_any        = (struct ast_node){.tag = ast_symbol, .type = &any_type};
+    static ast_node         sym_any_arrow  = (struct ast_node){.tag = ast_symbol, .type = &any_arrow_type};
+    static ast_node         let_any_any    = (struct ast_node){
+                 .tag = ast_let, .let = {.name = &sym_any_arrow, .body = &sym_any}, .type = &nil_type};
+
+    if (0 == strncmp("c_", name, 2) || 0 == strncmp("std_", name, 4)) return &let_any_any;
 
     for (size_t i = 0; i < count; ++i) {
         if (ast_let == nodes[i]->tag) {

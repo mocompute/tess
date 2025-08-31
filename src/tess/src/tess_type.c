@@ -81,6 +81,7 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     case type_int:
     case type_float:
     case type_type_var:
+    case type_any:
     case type_string:   break;
 
     case type_user:
@@ -106,6 +107,7 @@ struct tess_type const *tess_type_prim(tess_type_tag tag) {
     static struct tess_type int_type    = {{0}, type_int};
     static struct tess_type float_type  = {{0}, type_float};
     static struct tess_type string_type = {{0}, type_string};
+    static struct tess_type any_type    = {{0}, type_any};
 
     switch (tag) {
     case type_nil:    return &nil_type;
@@ -113,6 +115,7 @@ struct tess_type const *tess_type_prim(tess_type_tag tag) {
     case type_int:    return &int_type;
     case type_float:  return &float_type;
     case type_string: return &string_type;
+    case type_any:    return &any_type;
     case type_tuple:
     case type_arrow:
     case type_user:
@@ -130,7 +133,8 @@ bool tess_type_is_prim(struct tess_type const *self) {
     case type_bool:
     case type_int:
     case type_float:
-    case type_string:   return true;
+    case type_string:
+    case type_any:      return true;
     case type_user:
     case type_tuple:
     case type_arrow:
@@ -152,6 +156,7 @@ int tess_type_compare(struct tess_type const *left, struct tess_type const *righ
     case type_int:
     case type_float:
     case type_string: return 0;
+    case type_any:    return 0; // FIXME: should type_any compare equal to all types?
 
     case type_tuple:
         if (left->n_elements != right->n_elements) return left->n_elements < right->n_elements ? -1 : 1;
@@ -199,7 +204,8 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: len = snprintf(buf, (size_t)sz, "%s", type_tag_to_string(self->tag)); break;
+    case type_string:
+    case type_any:    len = snprintf(buf, (size_t)sz, "%s", type_tag_to_string(self->tag)); break;
 
     case type_user:   {
         len = 0;

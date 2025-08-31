@@ -16,7 +16,8 @@
     X(type_tuple, "tuple")                                                                                 \
     X(type_arrow, "arrow")                                                                                 \
     X(type_user, "user")                                                                                   \
-    X(type_type_var, "type_var")
+    X(type_type_var, "type_var")                                                                           \
+    X(type_any, "any")
 
 typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
 

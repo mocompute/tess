@@ -42,7 +42,6 @@ void type_registry_destroy(type_registry **self) {
 int type_registry_add(type_registry *self, struct type_entry entry) {
     if (type_registry_find(self, entry.name)) return 1;
     sorted_insert(self->alloc, &self->entries, &self->n_entries, &self->cap_entries, entry);
-    dbg("type_registry_add: added %s\n", entry.name);
     return 0;
 }
 
@@ -66,6 +65,7 @@ static void register_basic_types(type_registry *self) {
     static struct tess_type int_type    = {.tag = type_int};
     static struct tess_type float_type  = {.tag = type_float};
     static struct tess_type string_type = {.tag = type_string};
+    static struct tess_type any_type    = {.tag = type_any};
     struct type_entry       entry       = {0};
 
     //
@@ -87,6 +87,10 @@ static void register_basic_types(type_registry *self) {
 
     entry.name = type_tag_to_string(type_string);
     entry.type = &string_type;
+    error += type_registry_add(self, entry);
+
+    entry.name = type_tag_to_string(type_any);
+    entry.type = &any_type;
     error += type_registry_add(self, entry);
 
     if (error) fatal("register_basic_types: failed to add types to registry.");
