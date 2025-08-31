@@ -154,6 +154,7 @@ int compile(struct state *self) {
 
     if (self->out_path) {
         FILE *f = fopen(self->out_path, "wb");
+        if (!f) fatal("could not open output file: '%s'", self->out_path);
 
         fprintf(f, "%s", (char *)vec_data(&transpiler_output));
 
