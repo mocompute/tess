@@ -529,7 +529,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_symbol == node->named_application.name->tag);
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
         ast_node const *let  = find_let_node(name, node->array.n, ctx->nodes, ctx->count);
-        if (null == let) fatal("collect_constraints: can't find let node for function application.");
+        if (null == let)
+            fatal("collect_constraints: can't find let node for function application: '%s'", name);
 
         // name must match function type
         push(node->named_application.name->type, let->let.name->type);

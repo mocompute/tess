@@ -104,6 +104,8 @@ static void out_put_start(transpiler *self, char const *str) {
 
 static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
 
+    if (!ty) fatal("a_result_type_of: null type");
+
     switch (ty->tag) {
     case type_nil:    out_put(self, "void"); break;
     case type_bool:   out_put(self, "bool"); break;
@@ -287,7 +289,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     // return type
-    if (a_result_type_of(self, node->type)) return 1;
+    if (a_result_type_of(self, node->let.name->type)) return 1;
     out_put(self, " ");
 
     // name
@@ -297,9 +299,19 @@ static int a_let(transpiler *self, ast_node const *node) {
     // params
     out_put(self, "(");
     for (u32 i = 0; i < node->let.n_parameters; ++i) {
-        // FIXME we don't have the specialised types of the params yet
+        if (a_result_type_of(self, node->let.parameters[i]->type)) return 1;
+        out_put(self, " ");
+        out_put(self, mos_string_str(&node->let.parameters[i]->symbol.name));
+        if (i < node->let.n_parameters - 1) out_put(self, ", ");
     }
     out_put(self, ")");
+
+    // body
+    out_put(self, " {\n");
+    self->indent_level++;
+    if (a_body(self, node->let.body)) return 1;
+    self->indent_level--;
+    out_put(self, "\n}");
 
     return 0;
 }

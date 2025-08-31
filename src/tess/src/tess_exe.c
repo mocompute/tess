@@ -3,6 +3,7 @@
 #include "parser.h"
 #include "syntax.h"
 #include "transpiler.h"
+#include "type_inference.h"
 #include "types.h"
 
 #include <stdbool.h>
@@ -145,6 +146,15 @@ int compile(struct state *self) {
 
     if (parser_parse_all(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
 
+    syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes, n_nodes);
+    if (syntax_checker_run(syntax, nodes, n_nodes)) {
+        syntax_checker_report_errors(syntax);
+        return 1;
+    }
+
+    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), nodes, n_nodes, nodes_alloc);
+    ti_inferer_run(ti);
+
     allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
     vector      transpiler_output = VEC(char);
 
@@ -162,6 +172,10 @@ int compile(struct state *self) {
     } else {
         puts(vec_data(&transpiler_output));
     }
+
+    transpiler_destroy(&transpiler);
+    ti_inferer_destroy(alloc_default_allocator(), &ti);
+    syntax_checker_destroy(&syntax);
 
     alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
     alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
