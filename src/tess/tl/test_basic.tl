@@ -1,1 +1,1 @@
-let main () = 0
+let main () = 1

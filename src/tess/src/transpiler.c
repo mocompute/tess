@@ -190,7 +190,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (0 == ast_node_name_strcmp(node->let.name, "main")) {
 
-        out_put(self, "\nint main(int argc, char* argv[]) {\n");
+        out_put(self, "\nint main(int argc, char* argv[]) { (void)argc; (void)argv; \n");
 
         self->indent_level++;
         int res = 0;

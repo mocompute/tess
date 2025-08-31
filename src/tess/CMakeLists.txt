@@ -14,8 +14,6 @@ add_custom_command(
   COMMENT "Processing embedded files from directory ${CMAKE_CURRENT_SOURCE_DIR}/embed"
 )
 
-
-
 # -- library --
 
 add_library(tess)
@@ -55,10 +53,10 @@ target_link_libraries(tess PRIVATE PUBLIC mos)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- exe --
+
 add_executable(tess_exe src/tess_exe.c)
 target_link_libraries(tess_exe PUBLIC tess readline)
 set_target_properties(tess_exe PROPERTIES OUTPUT_NAME tess)
-
 
 # -- tests --
 
@@ -72,6 +70,35 @@ function(tess_create_test NAME)
 endfunction()
 
 tess_create_test(tess)
+
+# -- tesslang tests --
+
+
+
+function(tesslang_create_test NAME)
+  set(TEST_NAME test-tl-${NAME})
+
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
+    COMMAND tess_exe
+      c
+      -o ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    DEPENDS
+      $<TARGET_FILE:tess_exe>
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Compiling test_${NAME}.tl to test_${NAME}.c"
+  )
+
+  add_executable(${TEST_NAME} "${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c")
+  target_link_libraries(${TEST_NAME} PRIVATE tess)
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC} -Wunused)
+  target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
+  add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
+endfunction()
+
+tesslang_create_test(basic)
 
 # -- doxygen --
 
