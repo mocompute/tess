@@ -86,6 +86,10 @@ u32 mos_string_size(string_t const *s) {
     return (u32)strlen(s->small.data);
 }
 
+bool mos_string_empty(string_t const *s) {
+    return mos_string_size(s) == 0;
+}
+
 bool mos_string_is_allocated(string_t const *s) {
     return s->small.tag == 1;
 }

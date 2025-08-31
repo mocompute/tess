@@ -37,6 +37,7 @@ void     mos_string_copy(allocator *, string_t *, string_t const *);
 
 char const *mos_string_str(string_t const *);
 u32         mos_string_size(string_t const *);
+bool        mos_string_empty(string_t const *);
 u32         mos_string_hash(string_t const *);
 
 // -- utilities --

@@ -137,19 +137,55 @@ char const *ast_operator_to_string(ast_operator);
 //     }
 // }
 
-static void map_ast_node_to_sexp(void *, void *, void const *); // vec_map_fun
+sexp        do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
+                                sexp (*symbol_fun)(allocator *, ast_node const *));
 
-static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 const n) {
+static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 const n,
+                             sexp (*symbol_fun)(allocator *, ast_node const *)) {
+
     sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
 
-    for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], elements[i]);
+    for (size_t i = 0; i < n; ++i) sexp_elements[i] = do_ast_node_to_sexp(alloc, elements[i], symbol_fun);
+
     sexp list = sexp_init_list(alloc, sexp_elements, n);
 
     alloc_free(alloc, sexp_elements);
     return list;
 }
 
-sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
+sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
+    assert(node->tag == ast_symbol);
+    sexp type;
+    {
+        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        char buf[len];
+        tess_type_snprint(buf, len, node->type);
+        type = sexp_init_sym(alloc, buf);
+    }
+    return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
+                                 sexp_init_sym(alloc, mos_string_str(&node->symbol.name)), type);
+}
+
+sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
+    assert(node->tag == ast_symbol);
+    sexp type;
+    {
+        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        char buf[len];
+        tess_type_snprint(buf, len, node->type);
+        type = sexp_init_sym(alloc, buf);
+    }
+
+    if (!mos_string_empty(&node->symbol.original))
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
+                                     sexp_init_sym(alloc, mos_string_str(&node->symbol.original)), type);
+    else
+        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
+                                     sexp_init_sym(alloc, mos_string_str(&node->symbol.name)), type);
+}
+
+sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
+                         sexp (*symbol_fun)(allocator *, ast_node const *)) {
 
 #define pair(...)   sexp_init_list_pair(__VA_ARGS__)
 #define triple(...) sexp_init_list_triple(__VA_ARGS__)
@@ -174,9 +210,7 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
         return pair(alloc, node->bool_.val ? sexp_init_sym(alloc, "true") : sexp_init_sym(alloc, "false"),
                     type);
 
-    case ast_symbol:
-        return triple(alloc, sexp_init_sym(alloc, "symbol"),
-                      sexp_init_sym(alloc, mos_string_str(&node->symbol.name)), type);
+    case ast_symbol: return symbol_fun(alloc, node);
 
     case ast_i64:
         return triple(alloc, sexp_init_sym(alloc, "i64"), sexp_init_i64(alloc, node->i64.val), type);
@@ -192,64 +226,66 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
     case ast_infix:
         return penta(alloc, sexp_init_sym(alloc, "infix"),
                      sexp_init_sym(alloc, ast_operator_to_string(node->infix.op)),
-                     ast_node_to_sexp(alloc, node->infix.left), ast_node_to_sexp(alloc, node->infix.right),
-                     type);
+                     do_ast_node_to_sexp(alloc, node->infix.left, symbol_fun),
+                     do_ast_node_to_sexp(alloc, node->infix.right, symbol_fun), type);
 
     case ast_tuple: {
 
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return triple(alloc, sexp_init_sym(alloc, "tuple"), list, type);
 
     } break;
 
     case ast_let_in:
-        return penta(alloc, sexp_init_sym(alloc, "let-in"), ast_node_to_sexp(alloc, node->let_in.name),
-                     ast_node_to_sexp(alloc, node->let_in.value),
-                     ast_node_to_sexp(alloc, node->let_in.body), type);
+        return penta(alloc, sexp_init_sym(alloc, "let-in"),
+                     do_ast_node_to_sexp(alloc, node->let_in.name, symbol_fun),
+                     do_ast_node_to_sexp(alloc, node->let_in.value, symbol_fun),
+                     do_ast_node_to_sexp(alloc, node->let_in.body, symbol_fun), type);
 
     case ast_let: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
-        return penta(alloc, sexp_init_sym(alloc, "let"), ast_node_to_sexp(alloc, node->let.name), list,
-                     ast_node_to_sexp(alloc, node->let.body), type);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
+        return penta(alloc, sexp_init_sym(alloc, "let"),
+                     do_ast_node_to_sexp(alloc, node->let.name, symbol_fun), list,
+                     do_ast_node_to_sexp(alloc, node->let.body, symbol_fun), type);
 
     } break;
 
     case ast_if_then_else:
         return penta(alloc, sexp_init_sym(alloc, "if-then-else"),
-                     ast_node_to_sexp(alloc, node->if_then_else.condition),
-                     ast_node_to_sexp(alloc, node->if_then_else.yes),
-                     ast_node_to_sexp(alloc, node->if_then_else.no), type);
+                     do_ast_node_to_sexp(alloc, node->if_then_else.condition, symbol_fun),
+                     do_ast_node_to_sexp(alloc, node->if_then_else.yes, symbol_fun),
+                     do_ast_node_to_sexp(alloc, node->if_then_else.no, symbol_fun), type);
 
     case ast_lambda_function: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sexp_init_sym(alloc, "lambda"), list,
-                    ast_node_to_sexp(alloc, node->lambda_function.body), type);
+                    do_ast_node_to_sexp(alloc, node->lambda_function.body, symbol_fun), type);
 
     } break;
 
     case ast_function_declaration: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sexp_init_sym(alloc, "function-declaration"), list,
-                    ast_node_to_sexp(alloc, node->lambda_function.body), type);
+                    do_ast_node_to_sexp(alloc, node->lambda_function.body, symbol_fun), type);
 
     } break;
 
     case ast_lambda_declaration: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return triple(alloc, sexp_init_sym(alloc, "lambda-declaration"), list, type);
 
     } break;
 
     case ast_lambda_function_application: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sexp_init_sym(alloc, "lambda-application"),
-                    ast_node_to_sexp(alloc, node->lambda_application.lambda), list, type);
+                    do_ast_node_to_sexp(alloc, node->lambda_application.lambda, symbol_fun), list, type);
 
     } break;
     case ast_named_function_application: {
-        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sexp_init_sym(alloc, "named-application"),
-                    ast_node_to_sexp(alloc, node->named_application.name), list, type);
+                    do_ast_node_to_sexp(alloc, node->named_application.name, symbol_fun), list, type);
 
     } break;
 
@@ -261,10 +297,13 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
         sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
 
-        for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], field_names[i]);
+        for (size_t i = 0; i < n; ++i)
+            sexp_elements[i] = do_ast_node_to_sexp(alloc, field_names[i], symbol_fun);
         sexp names_list = sexp_init_list(alloc, sexp_elements, n);
 
-        for (size_t i = 0; i < n; ++i) map_ast_node_to_sexp(alloc, &sexp_elements[i], field_annotations[i]);
+        for (size_t i = 0; i < n; ++i)
+            sexp_elements[i] = do_ast_node_to_sexp(alloc, field_annotations[i], symbol_fun);
+
         sexp annotations_list = sexp_init_list(alloc, sexp_elements, n);
 
         // for (size_t i = 0; i < n; ++i) sexp_elements[i] = tess_type_to_sexp(alloc, field_types[i]);
@@ -272,27 +311,19 @@ sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
 
         alloc_free(alloc, sexp_elements);
         return penta(alloc, sexp_init_sym(alloc, "user-type"),
-                     ast_node_to_sexp(alloc, node->user_type.name), names_list, annotations_list, type);
+                     do_ast_node_to_sexp(alloc, node->user_type.name, symbol_fun), names_list,
+                     annotations_list, type);
 
     } break;
     }
 }
 
+sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
+    return do_ast_node_to_sexp(alloc, node, symbol_node_to_sexp);
+}
+
 sexp ast_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
-
-    if (null == node) return ast_node_to_sexp(alloc, node);
-    if (node->tag != ast_symbol) return ast_node_to_sexp(alloc, node);
-
-    sexp type;
-    {
-        int  len = tess_type_snprint(null, 0, node->type) + 1;
-        char buf[len];
-        tess_type_snprint(buf, len, node->type);
-        type = sexp_init_sym(alloc, buf);
-    }
-
-    return triple(alloc, sexp_init_sym(alloc, "symbol"),
-                  sexp_init_sym(alloc, mos_string_str(&node->symbol.original)), type);
+    return do_ast_node_to_sexp(alloc, node, symbol_node_to_sexp_for_error);
 }
 
 void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {

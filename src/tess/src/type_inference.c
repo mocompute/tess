@@ -131,7 +131,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     dbg("\ninfo: program nodes follow --\n\n");
     {
         for (size_t i = 0; i < self->n_nodes; ++i) {
-            char *str = ast_node_to_string(self->strings, self->nodes[i]);
+            char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
             dbg("%s\n", str);
             alloc_free(self->strings, str);
         }
@@ -364,8 +364,9 @@ struct assign_type_variables_ctx {
 void assign_type_variables(void *ctx_, ast_node *node) {
     struct assign_type_variables_ctx *ctx = ctx_;
 
-    // ensure symbols with the same name are assigned the same type
-    // variable
+    // Ensure symbols with the same name are assigned the same type
+    // variable. An early phase has renamed every variable to a unique
+    // name, respecting lexical scope.
 
     if (ast_symbol == node->tag) {
 
