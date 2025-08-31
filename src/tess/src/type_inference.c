@@ -1,7 +1,6 @@
 #include "type_inference.h"
 
 #include "alloc.h"
-#include "alloc_string.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
@@ -61,7 +60,7 @@ void          solver_run(struct solver *);
 ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
     ti_inferer *self  = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena  = alloc_arena_create(alloc, 4096);
-    self->strings     = alloc_string_arena_create(alloc, 1024);
+    self->strings     = alloc_arena_create(alloc, 1024);
     self->nodes_alloc = nodes_alloc;
     self->nodes       = nodes;
     self->n_nodes     = n;
@@ -69,7 +68,7 @@ ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n
 }
 
 void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
-    alloc_string_arena_destroy(alloc, &(*self)->strings);
+    alloc_arena_destroy(alloc, &(*self)->strings);
     alloc_arena_destroy(alloc, &(*self)->type_arena);
     alloc_free(alloc, *self);
     *self = null;
@@ -216,14 +215,14 @@ static void dbg_constraint(struct constraint const *c) {
 struct solver solver_init(allocator *alloc, vectora *constraints, vectora *substitutions) {
     struct solver self;
     self.alloc         = alloc;
-    self.strings       = alloc_string_arena_create(alloc, 1024);
+    self.strings       = alloc_arena_create(alloc, 1024);
     self.constraints   = constraints;
     self.substitutions = substitutions;
     return self;
 }
 
 void solver_deinit(struct solver *self) {
-    alloc_string_arena_destroy(self->alloc, &self->strings);
+    alloc_arena_destroy(self->alloc, &self->strings);
 }
 
 static bool substitute_constraints(struct constraint *begin, struct constraint *end,

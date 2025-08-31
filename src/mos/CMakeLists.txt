@@ -4,7 +4,6 @@ add_library(mos)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc_internal.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/alloc_string.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/dbg.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
@@ -19,7 +18,6 @@ set(HEADERS
 
 set(SOURCES
   src/alloc.c
-  src/alloc_string.c
   src/dbg.c
   src/hash.c
   src/file.c

@@ -1,7 +1,6 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
-#include "alloc_string.h"
 #include "token.h"
 #include "vector.h"
 
@@ -34,7 +33,7 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
-    self->strings   = alloc_string_arena_create(alloc, 4096);
+    self->strings   = alloc_arena_create(alloc, 4096);
     self->input     = input;
     self->input_len = len;
     self->pos       = 0;
@@ -49,7 +48,7 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
 }
 
 void tokenizer_destroy(tokenizer **self) {
-    alloc_string_arena_destroy((*self)->parent, &(*self)->strings);
+    alloc_arena_destroy((*self)->parent, &(*self)->strings);
 
     vec_deinit((*self)->parent, &(*self)->backtrack);
     vec_deinit((*self)->parent, &(*self)->buf);

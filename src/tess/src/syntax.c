@@ -1,7 +1,6 @@
 #include "syntax.h"
 
 #include "alloc.h"
-#include "alloc_string.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
@@ -191,7 +190,7 @@ struct rename_variable_ctx {
 static void rename_variable_ctx_init(struct rename_variable_ctx *self, allocator *alloc) {
 
     self->alloc   = alloc;
-    self->strings = alloc_string_arena_create(alloc, 2048);
+    self->strings = alloc_arena_create(alloc, 2048);
     self->next    = 1;
 
     self->map     = map_create(alloc, sizeof(string_t));
@@ -199,7 +198,7 @@ static void rename_variable_ctx_init(struct rename_variable_ctx *self, allocator
 
 static void rename_variable_ctx_deinit(struct rename_variable_ctx *self) {
     map_destroy(&self->map);
-    alloc_string_arena_destroy(self->alloc, &self->strings);
+    alloc_arena_destroy(self->alloc, &self->strings);
     alloc_invalidate(self);
 }
 
