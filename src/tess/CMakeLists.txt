@@ -55,8 +55,10 @@ target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 # -- exe --
 
 add_executable(tess_exe src/tess_exe.c)
-target_link_libraries(tess_exe PUBLIC tess readline)
 set_target_properties(tess_exe PROPERTIES OUTPUT_NAME tess)
+target_compile_options(tess_exe BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
+target_link_libraries(tess_exe PUBLIC tess readline)
+target_link_options(tess_exe PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- tests --
 
@@ -93,7 +95,7 @@ function(tesslang_create_test NAME)
 
   add_executable(${TEST_NAME} "${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c")
   target_link_libraries(${TEST_NAME} PRIVATE tess)
-  target_compile_options(${TEST_NAME} PRIVATE -Wall ${MOS_C_EXEC})
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
   target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()

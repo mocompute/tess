@@ -12,6 +12,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #define PARSER_ARENA_SIZE 1024
@@ -221,6 +222,20 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     return 0;
 }
 
+nodiscard static int a_try_special(parser *p, parse_fun fun) {
+    // if fun returns 2, tokens are restored as in the failure case,
+    // but this function returns success.
+    u32 const save_toks = p->n_tokens;
+    int const res       = fun(p);
+    if (res) {
+        assert(p->n_tokens >= save_toks);
+        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+        tokens_shrink(p, save_toks);
+        return res == 2 ? 0 : 1;
+    }
+    return 0;
+}
+
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     u32 const save_toks = p->n_tokens;
     if (fun(p, arg)) {
@@ -267,6 +282,12 @@ static int a_end_of_expression(parser *p) {
     if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag ||
         tok_newline_indent == p->token.tag || tok_two_newline == p->token.tag)
         return result_ast_str(p, ast_symbol, ";");
+
+    if (tok_close_round == p->token.tag) {
+        // signal special failure so the token gets put back, but use a magic
+        // error code so that consumers of end_of_expression can treat it as a success
+        return 2;
+    }
 
     p->error.tag = tess_err_unfinished_expression;
     return 1;
@@ -488,7 +509,7 @@ static int struct_declaration(parser *p) {
             vec_iterator_init(&field_types, &ty_iter.base);
             vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
 
-            if (a_try(p, &a_end_of_expression)) return 1; // expect ; or newline after field
+            if (a_try_special(p, &a_end_of_expression)) return 1; // expect ; or newline after field
 
             continue;
         }
@@ -617,7 +638,9 @@ static int function_application(parser *p) {
             continue;
         }
 
-        if (0 == a_try(p, &a_end_of_expression)) {
+        if (0 == a_try_special(p, &a_end_of_expression)) {
+            // 2: "fails" due to close_round, which must not be
+            // consumed, so that grouped_expression catches it.
 
             ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
             node->named_application.name = name;
@@ -746,7 +769,7 @@ static int lambda_function_application(parser *p) {
             continue;
         }
 
-        if (0 == a_try(p, &a_end_of_expression)) {
+        if (0 == a_try_special(p, &a_end_of_expression)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
             node->lambda_application.lambda = lambda;
 
@@ -924,7 +947,7 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
         parser_result(p, &node);
 
         if (*len == cap) {
-            alloc_resize(out_alloc, &out, &cap, cap * 2);
+            alloc_resize(out_alloc, out, &cap, cap * 2);
             nodes = *out;
         }
 
@@ -953,4 +976,10 @@ static void tokens_push_back(struct parser *p, struct token *tok) {
 static void tokens_shrink(struct parser *p, u32 n) {
     assert(n <= p->n_tokens);
     p->n_tokens = n;
+}
+
+void parser_report_errors(parser *self) {
+    if (tess_err_ok == self->error.tag) return;
+
+    fprintf(stderr, "parse error: %s\n", tess_error_tag_to_string(self->error.tag));
 }

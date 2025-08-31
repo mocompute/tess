@@ -51,7 +51,7 @@ void state_deinit(struct state *self) {
 }
 
 void state_gather_single_options(struct state *self, char *str) {
-    u32 len = strlen(str);
+    u32 len = (u32)strlen(str);
     for (u32 i = 1; i < len; ++i) {
         switch (str[i]) {
         case 'h': self->help = true; break;
@@ -88,6 +88,7 @@ void eval_print(char *in) {
 }
 
 int repl(struct state *self) {
+    (void)self;
     while (true) {
         char *line = readline("tess > ");
 
@@ -124,7 +125,7 @@ int compile(struct state *self) {
                     if (new_cap > UINT32_MAX) fatal("overflow: input files too large.");
                 }
                 if (new_cap > cap_input)
-                    alloc_resize(alloc_default_allocator(), &input, &cap_input, new_cap);
+                    alloc_resize(alloc_default_allocator(), &input, &cap_input, (u32)new_cap);
 
                 strcpy(&input[n_input], buf);
                 input[n_input + size] = '\n'; // overwrite \0
@@ -135,6 +136,8 @@ int compile(struct state *self) {
         }
 
         alloc_arena_destroy(alloc_default_allocator(), &file_arena);
+
+        input[n_input] = '\0';
     }
 
     parser *parser = parser_create(alloc_default_allocator(), input, n_input);
@@ -176,6 +179,7 @@ int compile(struct state *self) {
     transpiler_destroy(&transpiler);
     ti_inferer_destroy(alloc_default_allocator(), &ti);
     syntax_checker_destroy(&syntax);
+    parser_destroy(&parser);
 
     alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
     alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
@@ -186,6 +190,8 @@ int compile(struct state *self) {
 
 int main(int argc, char *argv[]) {
 
+    int          result = 0;
+
     struct state self;
     state_init(&self);
     state_gather_options(&self, argc, argv);
@@ -193,8 +199,11 @@ int main(int argc, char *argv[]) {
     if (self.n_words == 0) usage(0, argv[0]);
 
     if (0 == strcmp("c", self.words[0])) {
-        return compile(&self);
+        result = compile(&self);
     } else if (0 == strcmp("repl", self.words[0])) {
         return repl(&self);
     }
+
+    state_deinit(&self);
+    return result;
 }

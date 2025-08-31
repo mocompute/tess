@@ -63,6 +63,7 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
 
     // output std header
     out_put(self, embed_std_c);
+    out_put(self, "\n\n");
 
     for (size_t i = 0; i < n; ++i) {
 
@@ -70,6 +71,7 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
         if ((res = a_toplevel(self, nodes[i]))) return res;
     }
 
+    vec_push_back_byte(self->bytes_alloc, self->bytes, '\0');
     return 0;
 }
 
@@ -193,6 +195,26 @@ static int a_infix(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_let_in(transpiler *self, ast_node const *node) {
+
+    out_put_start(self, "{\n");
+    self->indent_level++;
+
+    char const *name = mos_string_str(&node->let_in.name->symbol.name);
+
+    a_result_type_of(self, node->let_in.name->type);
+    out_put(self, " ");
+    out_put(self, name);
+    out_put(self, ";\n");
+
+    a_body(self, node->let_in.body);
+
+    self->indent_level--;
+    out_put(self, "}\n");
+
+    return 0;
+}
+
 static int a_eval(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
@@ -214,8 +236,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
         else out_put(self, "false");
         break;
     case ast_infix:                       return a_infix(self, node);
-    case ast_tuple:
-    case ast_let_in:                      break;
+    case ast_tuple:                       break;
+    case ast_let_in:                      return a_let_in(self, node);
     case ast_let:                         return a_let(self, node);
     case ast_if_then_else:
     case ast_lambda_function:
@@ -328,14 +350,15 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (0 == ast_node_name_strcmp(node->let.name, "main")) {
 
-        out_put(self, "\nint main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
+        out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
         self->indent_level++;
+
         int res = 0;
         if ((res = a_body(self, node->let.body))) return res;
         self->indent_level--;
 
-        out_put(self, "\n}");
+        out_put(self, "\n}\n");
         return 0;
     }
 
@@ -362,7 +385,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     self->indent_level++;
     if (a_body(self, node->let.body)) return 1;
     self->indent_level--;
-    out_put(self, "\n}");
+    out_put(self, "\n}\n\n");
 
     return 0;
 }

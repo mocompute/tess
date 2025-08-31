@@ -30,7 +30,10 @@ static int compile_input(char const *input) {
     struct ast_node **nodes;
     u32               n_nodes = 0;
 
-    if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) return 1;
+    if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) {
+        parser_report_errors(p);
+        return 1;
+    }
 
     dbg("\n  Parser output: \n");
     for (size_t i = 0; i < n_nodes; ++i) {
@@ -281,6 +284,15 @@ static int test_let_fun(void) {
     return compile_input(input);
 }
 
+static int test_grouped(void) {
+    char const *input = "let add a b = a + b\n"
+                        "let sub a b = a - b\n"
+                        "\n"
+                        "let main () = \n"
+                        "    sub (add 1 2) 3\n";
+    return compile_input(input);
+}
+
 static int test_let_fun_user_types(void) {
     char const *input = "struct foo = \n"
                         "  a : int\n"
@@ -380,6 +392,7 @@ int main(void) {
     T(test_parse_to_c);
     T(test_let_fun);
     T(test_let_fun_user_types);
+    T(test_grouped);
     T(test_user_struct_empty);
     T(test_user_struct);
 
