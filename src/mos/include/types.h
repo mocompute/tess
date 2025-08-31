@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef unsigned char byte;

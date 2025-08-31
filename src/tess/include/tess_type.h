@@ -1,7 +1,8 @@
 #ifndef TESS_TYPE_H
 #define TESS_TYPE_H
 
-#include "vector.h"
+#include "alloc.h"
+#include "types.h"
 
 #ifndef MOS_TAG_NAME
 #define MOS_TAG_NAME(name, str) name,
@@ -43,11 +44,6 @@ struct tess_type {
         u32 type_var;
     };
     tess_type_tag tag;
-};
-
-struct tess_type_iterator {
-    struct vector_iterator_base base;
-    struct tess_type          **ptr;
 };
 
 struct tess_type  tess_type_init(tess_type_tag);
