@@ -4,13 +4,18 @@
 
 #include "ast_tags.h"
 #include "dbg.h"
+#include "tess_type.h"
 #include "vector.h"
 
 #include <assert.h>
+#include <inttypes.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 struct transpiler {
     allocator *alloc;
+    allocator *strings;
     vector    *bytes;
     allocator *bytes_alloc;
     int        indent_level;
@@ -30,19 +35,23 @@ static int  a_fun_apply(transpiler *, ast_node const *);
 static int  a_std_apply(transpiler *, ast_node const *, char const *);
 static int  a_string(transpiler *, ast_node const *);
 
+static void out_put_start(transpiler *, char const *);
 static void out_put(transpiler *, char const *);
+static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
 transpiler *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
 
     transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc       = alloc;
+    self->strings     = alloc_arena_create(alloc, 1024);
     self->bytes       = bytes;
     self->bytes_alloc = bytes_alloc;
     return self;
 }
 
 void transpiler_destroy(transpiler **self) {
+    alloc_arena_destroy((*self)->alloc, &(*self)->strings);
     alloc_free((*self)->alloc, *self);
     *self = null;
 }
@@ -64,17 +73,58 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
 
 // -- statics --
 
-void out_put(transpiler *self, char const *str) {
+static void out_put(transpiler *self, char const *str) {
     vec_copy_back_c_string(self->bytes_alloc, self->bytes, str);
 }
 
-void out_put_start(transpiler *self, char const *str) {
+static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    int len = vsnprintf(null, 0, fmt, args) + 1;
+    va_end(args);
+    if (len <= 0) fatal("out_put_fmt: invalid fmt string: %s", fmt);
+
+    char buf[len];
+    va_start(args, fmt);
+    vsnprintf(buf, (size_t)len, fmt, args);
+    va_end(args);
+
+    vec_copy_back_c_string(self->bytes_alloc, self->bytes, buf);
+}
+
+static void out_put_start(transpiler *self, char const *str) {
 
     int indent = self->indent_level * 4;
     if (indent < 0) indent = 0;
     while (indent--) vec_copy_back_c_string(self->bytes_alloc, self->bytes, " ");
 
     return out_put(self, str);
+}
+
+static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
+
+    switch (ty->tag) {
+    case type_nil:    out_put(self, "void"); break;
+    case type_bool:   out_put(self, "bool"); break;
+    case type_int:    out_put(self, "int64_t"); break;
+    case type_float:  out_put(self, "double"); break;
+    case type_string: out_put(self, "char *"); break;
+    case type_tuple:  out_put(self, "FIXME"); break;
+    case type_arrow:  return a_result_type_of(self, ty->right);
+    case type_user:   {
+        char *name = tess_type_to_string(self->strings, ty);
+        out_put(self, name);
+        alloc_free(self->strings, name);
+
+    } break;
+
+    case type_type_var:
+        out_put(self, "void*"); // FIXME
+        break;
+    }
+
+    return 0;
 }
 
 static int a_toplevel(transpiler *self, ast_node const *node) {
@@ -105,11 +155,41 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_eval(transpiler *self, ast_node const *node) {
+
+    switch (node->tag) {
+    case ast_eof:
+    case ast_nil:    out_put(self, "NULL"); break;
+    case ast_symbol: out_put_fmt(self, "%s", mos_string_str(&node->symbol.name)); break;
+    case ast_i64:    out_put_fmt(self, "%" PRIi64, node->i64.val); break;
+    case ast_u64:    out_put_fmt(self, "%" PRIu64, node->u64.val); break;
+    case ast_f64:    out_put_fmt(self, "%f", node->f64.val); break;
+    case ast_bool:
+        if (node->bool_.val) out_put(self, "true");
+        else out_put(self, "false");
+        break;
+    case ast_string:
+    case ast_infix:
+    case ast_tuple:
+    case ast_let_in:                      break;
+    case ast_let:                         return a_let(self, node);
+    case ast_if_then_else:
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application: break;
+    case ast_named_function_application:  return a_fun_apply(self, node);
+
+    case ast_user_defined_type:           break;
+    }
+    return 0;
+}
+
 static int a_body(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
-    case ast_let:                         return a_let(self, node);
-    case ast_named_function_application:  return a_fun_apply(self, node);
+    case ast_let:
+    case ast_named_function_application:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -125,7 +205,12 @@ static int a_body(transpiler *self, ast_node const *node) {
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
-    case ast_lambda_function_application: break;
+    case ast_lambda_function_application:
+        out_put_start(self, "return ");
+        a_eval(self, node);
+        out_put(self, ";\n");
+        break;
+
     case ast_user_defined_type:
         // FIXME should not be in body
         break;
@@ -162,10 +247,10 @@ static int a_std_dbg(transpiler *self, ast_node const *node) {
     // FIXME for now only one string argument is valid
     if (1 != node->named_application.n_arguments) return 1;
 
-    out_put_start(self, "fprintf(stderr, \"%s\", ");
+    out_put(self, "(fprintf(stderr, \"%s\", ");
     ast_node *arg = node->named_application.arguments[0];
     if (a_string(self, arg)) return 1;
-    out_put(self, ");\n");
+    out_put(self, "), 0)");
     return 0;
 }
 
@@ -190,15 +275,31 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (0 == ast_node_name_strcmp(node->let.name, "main")) {
 
-        out_put(self, "\nint main(int argc, char* argv[]) { (void)argc; (void)argv; \n");
+        out_put(self, "\nint main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
         self->indent_level++;
         int res = 0;
         if ((res = a_body(self, node->let.body))) return res;
         self->indent_level--;
 
-        out_put(self, "\n    return 0;\n}");
+        out_put(self, "\n}");
+        return 0;
     }
+
+    // return type
+    if (a_result_type_of(self, node->type)) return 1;
+    out_put(self, " ");
+
+    // name
+    out_put(self, mos_string_str(&node->let.name->symbol.name));
+    out_put(self, " ");
+
+    // params
+    out_put(self, "(");
+    for (u32 i = 0; i < node->let.n_parameters; ++i) {
+        // FIXME we don't have the specialised types of the params yet
+    }
+    out_put(self, ")");
 
     return 0;
 }

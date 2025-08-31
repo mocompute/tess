@@ -99,6 +99,7 @@ function(tesslang_create_test NAME)
 endfunction()
 
 tesslang_create_test(basic)
+tesslang_create_test(std_dbg)
 
 # -- doxygen --
 
