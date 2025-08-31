@@ -463,7 +463,7 @@ struct collect_constraints_ctx {
     vectora         *constraints;
 };
 
-void collect_constraints(void *ctx_, ast_node const *node) {
+void collect_constraints(void *ctx_, ast_node *node) {
     struct collect_constraints_ctx *ctx = ctx_;
     struct constraint               c   = {0};
 
@@ -616,7 +616,7 @@ void collect_constraints(void *ctx_, ast_node const *node) {
 void ti_collect_constraints(allocator *alloc, ast_node const *nodes[], u32 count, vectora *constraints) {
     struct collect_constraints_ctx ctx = {alloc, nodes, count, constraints};
 
-    for (size_t i = 0; i < count; ++i) ast_pool_cdfs(&ctx, nodes[i], collect_constraints);
+    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, (ast_node *)nodes[i], collect_constraints);
 }
 
 static void map_dbg_constraint(void *ctx, void *out, void const *el) {

@@ -22,9 +22,6 @@ struct string_arena {
 static char *bump_alloc_assume_capacity(struct arena_header *bucket, size_t sz) {
     char *out = (void *)(((byte *)bucket) + sizeof(struct arena_header) + bucket->size);
 
-    // size must be even or all hell breaks loose
-    if (sz % 2 != 0) ++sz;
-
     bucket->size += sz;
     return out;
 }
@@ -67,6 +64,8 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     (void)file;
     (void)line;
 
+    sz                                 = alloc_align_to_word_size(sz);
+
     struct arena_header *bucket        = arena->head;
     struct arena_header *last          = null;
     size_t               last_capacity = 0;
@@ -106,6 +105,8 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
 
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
+    sz                          = alloc_align_to_word_size(sz);
+
     struct arena_header *bucket = find_bucket((struct string_arena *)a, p);
     if (null == bucket) {
         assert(false);
@@ -142,12 +143,14 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
     return new_block;
 }
 
-static void *arena_calloc(allocator *alloc, size_t num, size_t size, char const *file, int line) {
+static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *file, int line) {
     (void)file;
     (void)line;
 
-    void *out = arena_malloc(alloc, num * size, __FILE__, __LINE__);
-    if (out) memset(out, 0, num * size);
+    sz        = alloc_align_to_word_size(sz);
+
+    void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
+    if (out) memset(out, 0, num * sz);
     return out;
 }
 

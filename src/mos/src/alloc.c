@@ -81,6 +81,7 @@ allocator *alloc_default_allocator() {
 
 void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
     if (!sz) return null;
+    sz        = alloc_align_to_word_size(sz);
     void *ptr = alloc->malloc(alloc, sz, file, line);
     assert(ptr);
     assert((uintptr_t)ptr % 2 == 0);
@@ -90,6 +91,7 @@ void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
 
 void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file, int line) {
     if (!sz) return null;
+    sz        = alloc_align_to_word_size(sz);
     void *ptr = alloc->calloc(alloc, count, sz, file, line);
     assert(ptr);
     assert((uintptr_t)ptr % 2 == 0);
@@ -98,6 +100,7 @@ void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file
 }
 
 void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
+    sz        = alloc_align_to_word_size(sz);
     void *out = alloc->realloc(alloc, ptr, sz, file, line);
     assert(out);
     assert((uintptr_t)out % 2 == 0);
@@ -118,10 +121,7 @@ void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
     arena_block *out = (void *)(((byte *)bucket) + sizeof(arena_header) + bucket->size);
 
-    // size must be even or all hell breaks loose
-    if (sz % 2 == 1) ++sz;
-
-    out->size = sz;
+    out->size        = sz;
     bucket->size += sz + sizeof(arena_block);
 
     void *res = &out->data;
@@ -209,6 +209,8 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
 
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
+    sz                   = alloc_align_to_word_size(sz);
+
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
     if (null == bucket) {
         assert(false);
@@ -248,12 +250,13 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
     return new_block;
 }
 
-static void *arena_calloc(allocator *alloc, size_t num, size_t size, char const *file, int line) {
+static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *file, int line) {
     (void)file;
     (void)line;
 
-    void *out = arena_malloc(alloc, num * size, __FILE__, __LINE__);
-    if (out) memset(out, 0, num * size);
+    sz        = alloc_align_to_word_size(sz);
+    void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
+    if (out) memset(out, 0, num * sz);
     return out;
 }
 

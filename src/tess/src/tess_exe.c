@@ -106,6 +106,8 @@ int repl(struct state *self) {
 int compile(struct state *self) {
     if (self->n_words < 2) usage(1, self->argv0);
 
+    int   error     = 0;
+
     u32   cap_input = 64 * 1024;
     u32   n_input   = 0;
     char *input     = alloc_calloc(alloc_default_allocator(), 1, cap_input);
@@ -152,14 +154,16 @@ int compile(struct state *self) {
     syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes, n_nodes);
     if (syntax_checker_run(syntax, nodes, n_nodes)) {
         syntax_checker_report_errors(syntax);
-        return 1;
+        error = 1;
+        goto cleanup_syntax;
     }
 
     ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), nodes, n_nodes, nodes_alloc);
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
-        return 1;
+        error = 1;
+        goto cleanup_ti;
     }
 
     allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
@@ -181,15 +185,19 @@ int compile(struct state *self) {
     }
 
     transpiler_destroy(&transpiler);
+    alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
+
+cleanup_ti:
     ti_inferer_destroy(alloc_default_allocator(), &ti);
+
+cleanup_syntax:
     syntax_checker_destroy(&syntax);
     parser_destroy(&parser);
 
-    alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
     alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
     alloc_free(alloc_default_allocator(), input);
 
-    return 0;
+    return error;
 }
 
 int main(int argc, char *argv[]) {
