@@ -276,7 +276,10 @@ static bool unify_one(struct solver *self, struct constraint c) {
         case type_int:
         case type_float:
         case type_string:
-        case type_user:     return self->unify_monotypes;
+        case type_user:
+            if (!self->unify_monotypes) return false;
+            break;
+
         case type_type_var:
         case type_any:      break;
         case type_tuple:    {
