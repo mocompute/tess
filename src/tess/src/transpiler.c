@@ -284,6 +284,40 @@ static int a_body(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_main_body(transpiler *self, ast_node const *node) {
+
+    switch (node->tag) {
+    case ast_let:
+    case ast_named_function_application:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_infix:
+    case ast_tuple:
+    case ast_let_in:
+    case ast_if_then_else:
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+        out_put_start(self, "return (int) (");
+        a_eval(self, node);
+        out_put(self, ")");
+        out_put(self, ";");
+        break;
+
+    case ast_user_defined_type:
+        // FIXME should not be in body
+        break;
+    }
+    return 0;
+}
+
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
@@ -355,7 +389,7 @@ static int a_let(transpiler *self, ast_node const *node) {
         self->indent_level++;
 
         int res = 0;
-        if ((res = a_body(self, node->let.body))) return res;
+        if ((res = a_main_body(self, node->let.body))) return res;
         self->indent_level--;
 
         out_put(self, "\n}\n");
@@ -363,6 +397,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     // return type
+    out_put_start(self, "static ");
     if (a_result_type_of(self, node->let.name->type)) return 1;
     out_put(self, " ");
 
