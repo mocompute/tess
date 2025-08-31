@@ -18,7 +18,7 @@ struct transpiler {
 
 // -- embed externs --
 
-extern char const *embed_std;
+extern char const *embed_std_c;
 
 // -- static forwards --
 
@@ -51,7 +51,7 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     (void)self;
 
     // output std header
-    out_put(self, embed_std);
+    out_put(self, embed_std_c);
 
     for (size_t i = 0; i < n; ++i) {
 
@@ -190,7 +190,6 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (0 == ast_node_name_strcmp(node->let.name, "main")) {
 
-        dbg("found main\n");
         out_put(self, "\nint main(int argc, char* argv[]) {\n");
 
         self->indent_level++;

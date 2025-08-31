@@ -2,6 +2,7 @@
 #include "types.h"
 
 #include <stdio.h>
+#include <string.h>
 
 void file_read(allocator *alloc, char const *filename, char **out, size_t *out_size) {
 
@@ -48,4 +49,9 @@ cleanup:
     fclose(f);
     *out      = buf;
     *out_size = (size_t)size;
+}
+
+char const *file_basename(char const *input) {
+    char const *p = strrchr(input, '/');
+    return p + 1;
 }

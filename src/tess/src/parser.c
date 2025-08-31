@@ -805,7 +805,6 @@ static int let_form(parser *p) {
 
     // get declaration out of pool to move into new node
     node->let.name = decl->function_declaration.name;
-    dbg("let_form: name = %p\n", node->let.name);
     node->let.body = defn;
 
     // move the vector from the function_declaration node to the new ast node
