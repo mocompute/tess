@@ -25,8 +25,8 @@ struct ti_inferer {
 };
 
 struct constraint {
-    struct tess_type const *left;
-    struct tess_type const *right;
+    struct tess_type *left;
+    struct tess_type *right;
 };
 
 struct constraint_iterator {
@@ -148,13 +148,11 @@ void ti_inferer_report_errors(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static bool apply_one_substitution(struct tess_type **type, struct tess_type const *from,
-                                   struct tess_type const *to) {
+static bool apply_one_substitution(struct tess_type **type, struct tess_type *from, struct tess_type *to) {
     bool did_substitute = false;
 
     if (*type == from) {
-        // Note: casts away const
-        *type = (struct tess_type *)to;
+        *type = to;
         return true;
     }
 
@@ -198,8 +196,7 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
 
     struct constraint_iterator iter          = {0};
     while (veca_iter(substitutions, &iter.base)) {
-        // Note: casts away const
-        apply_one_substitution((struct tess_type **)&node->type, iter.ptr->left, iter.ptr->right);
+        apply_one_substitution(&node->type, iter.ptr->left, iter.ptr->right);
     }
 }
 
@@ -247,9 +244,8 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     int did_substitute = 0;
 
     while (begin != end) {
-        // Note: casts away const
-        did_substitute += apply_one_substitution((struct tess_type **)&begin->left, sub.left, sub.right);
-        did_substitute += apply_one_substitution((struct tess_type **)&begin->right, sub.left, sub.right);
+        did_substitute += apply_one_substitution(&begin->left, sub.left, sub.right);
+        did_substitute += apply_one_substitution(&begin->right, sub.left, sub.right);
 
         ++begin;
     }
@@ -262,8 +258,8 @@ static bool unify_one(struct solver *self, struct constraint c) {
     if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
-        struct tess_type const    *orig           = type_type_var == c.left->tag ? c.left : c.right;
-        struct tess_type const    *other          = type_type_var == c.left->tag ? c.right : c.left;
+        struct tess_type          *orig           = type_type_var == c.left->tag ? c.left : c.right;
+        struct tess_type          *other          = type_type_var == c.left->tag ? c.right : c.left;
 
         struct constraint          candidate      = {orig, other};
         struct constraint_iterator candidate_iter = {.ptr = &candidate};

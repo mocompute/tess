@@ -100,17 +100,17 @@ typedef struct ast_node {
         } tuple;
 
         struct {
-            struct ast_node         *name;
-            struct ast_node        **field_annotations;
-            struct ast_node        **field_names;
-            struct tess_type const **field_types;
-            u16                      n_fields;
+            struct ast_node   *name;
+            struct ast_node  **field_annotations;
+            struct ast_node  **field_names;
+            struct tess_type **field_types;
+            u16                n_fields;
         } user_type;
     };
 
-    struct tess_type const *type;
-    ast_tag                 tag;
-    enum tess_error_tag     error;
+    struct tess_type   *type;
+    ast_tag             tag;
+    enum tess_error_tag error;
 } ast_node;
 
 struct ast_node_iterator {

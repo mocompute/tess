@@ -54,7 +54,7 @@ struct tess_type *tess_type_create_arrow(allocator *alloc, struct tess_type *lef
     return self;
 }
 
-struct tess_type tess_type_init_user_type(char const *name, struct tess_type const **fields,
+struct tess_type tess_type_init_user_type(char const *name, struct tess_type **fields,
                                           char const **field_names, u16 n) {
 
     struct tess_type self = tess_type_init(type_user);
@@ -65,9 +65,8 @@ struct tess_type tess_type_init_user_type(char const *name, struct tess_type con
     return self;
 }
 
-struct tess_type *tess_type_create_user_type(allocator *alloc, char const *name,
-                                             struct tess_type const **fields, char const **field_names,
-                                             u16 n) {
+struct tess_type *tess_type_create_user_type(allocator *alloc, char const *name, struct tess_type **fields,
+                                             char const **field_names, u16 n) {
 
     struct tess_type *self = alloc_struct(alloc, self);
     *self                  = tess_type_init_user_type(name, fields, field_names, n);
@@ -91,8 +90,8 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
 
     case type_arrow:
         // Note: cast away const
-        tess_type_deinit(alloc, (struct tess_type *)self->left);
-        tess_type_deinit(alloc, (struct tess_type *)self->right);
+        tess_type_deinit(alloc, self->left);
+        tess_type_deinit(alloc, self->right);
         break;
 
     case type_tuple: alloc_free(alloc, self->elements); break;
@@ -101,7 +100,7 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     alloc_invalidate(self);
 }
 
-struct tess_type const *tess_type_prim(tess_type_tag tag) {
+struct tess_type *tess_type_prim(tess_type_tag tag) {
     static struct tess_type nil_type    = {.tag = type_nil};
     static struct tess_type bool_type   = {.tag = type_bool};
     static struct tess_type int_type    = {.tag = type_int};
