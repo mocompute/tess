@@ -18,6 +18,7 @@ struct state {
     allocator   *arena;
 
     char const  *argv0;
+    char const  *out_path;
 
     char const **words;
     u32          n_words;
@@ -30,7 +31,7 @@ struct state {
 noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
 
-    printf("Usage: %s [-hv] [c | repl] [path1 path2 ... pathn] \n", progname);
+    printf("Usage: %s [-hv] [c | repl] [-o outpath] [path1 path2 ... pathn] \n", progname);
     exit(status);
 }
 
@@ -65,7 +66,14 @@ void state_gather_options(struct state *self, int argc, char *argv[]) {
 
     for (int i = 1; i < argc; ++i) {
         if ('-' == argv[i][0]) {
-            state_gather_single_options(self, argv[i]);
+
+            if (0 == strcmp("-o", argv[i])) {
+                self->out_path = argv[++i];
+                continue;
+            } else {
+                state_gather_single_options(self, argv[i]);
+            }
+
         } else {
             if (self->n_words == self->cap_words)
                 alloc_resize(self->arena, &self->words, &self->cap_words, self->cap_words * 2);
@@ -144,7 +152,15 @@ int compile(struct state *self) {
       transpiler_create(alloc_default_allocator(), &transpiler_output, transpile_alloc);
     if (transpiler_compile(transpiler, nodes, n_nodes)) fatal("error while transpiling");
 
-    puts(vec_data(&transpiler_output));
+    if (self->out_path) {
+        FILE *f = fopen(self->out_path, "wb");
+
+        fprintf(f, "%s", (char *)vec_data(&transpiler_output));
+
+        fclose(f);
+    } else {
+        puts(vec_data(&transpiler_output));
+    }
 
     alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
     alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
