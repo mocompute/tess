@@ -102,12 +102,12 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
 }
 
 struct tess_type const *tess_type_prim(tess_type_tag tag) {
-    static struct tess_type nil_type    = {{0}, type_nil};
-    static struct tess_type bool_type   = {{0}, type_bool};
-    static struct tess_type int_type    = {{0}, type_int};
-    static struct tess_type float_type  = {{0}, type_float};
-    static struct tess_type string_type = {{0}, type_string};
-    static struct tess_type any_type    = {{0}, type_any};
+    static struct tess_type nil_type    = {.tag = type_nil};
+    static struct tess_type bool_type   = {.tag = type_bool};
+    static struct tess_type int_type    = {.tag = type_int};
+    static struct tess_type float_type  = {.tag = type_float};
+    static struct tess_type string_type = {.tag = type_string};
+    static struct tess_type any_type    = {.tag = type_any};
 
     switch (tag) {
     case type_nil:    return &nil_type;
@@ -155,8 +155,8 @@ int tess_type_compare(struct tess_type const *left, struct tess_type const *righ
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: return 0;
-    case type_any:    return 0; // FIXME: should type_any compare equal to all types?
+    case type_string:
+    case type_any:    return 0;
 
     case type_tuple:
         if (left->n_elements != right->n_elements) return left->n_elements < right->n_elements ? -1 : 1;

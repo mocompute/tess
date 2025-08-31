@@ -41,6 +41,13 @@ struct solver {
     // in-out
     vectora *constraints;
     vectora *substitutions;
+
+    // configuration
+
+    bool unify_monotypes;
+    // can be set to false to find type variables that may have
+    // contradictory constraints. This will aid in reporting to the
+    // user which program forms are ill-typed.
 };
 
 // -- ti_inferer --
@@ -214,10 +221,11 @@ static void dbg_constraint(struct constraint const *c) {
 
 struct solver solver_init(allocator *alloc, vectora *constraints, vectora *substitutions) {
     struct solver self;
-    self.alloc         = alloc;
-    self.strings       = alloc_arena_create(alloc, 1024);
-    self.constraints   = constraints;
-    self.substitutions = substitutions;
+    self.alloc           = alloc;
+    self.strings         = alloc_arena_create(alloc, 1024);
+    self.constraints     = constraints;
+    self.substitutions   = substitutions;
+    self.unify_monotypes = true;
     return self;
 }
 
@@ -268,7 +276,7 @@ static bool unify_one(struct solver *self, struct constraint c) {
         case type_int:
         case type_float:
         case type_string:
-        case type_user:
+        case type_user:     return self->unify_monotypes;
         case type_type_var:
         case type_any:      break;
         case type_tuple:    {
