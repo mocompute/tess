@@ -209,7 +209,7 @@ static void dbg_constraint(struct constraint const *c) {
     char buf_left[len_left], buf_right[len_right];
     tess_type_snprint(buf_left, len_left, c->left);
     tess_type_snprint(buf_right, len_right, c->right);
-    dbg("constraint %p: %s (%p) = %s (%p)\n", c, buf_left, c->left, buf_right, c->right);
+    dbg("constraint %s = %s\n", buf_left, buf_right);
 }
 
 struct solver solver_init(allocator *alloc, vectora *constraints, vectora *substitutions) {
@@ -320,8 +320,9 @@ void solver_run(struct solver *self) {
         struct constraint_iterator iter           = {0};
         while (veca_iter(self->constraints, &iter.base)) {
 
-            // delete a = a constraints
-            if (iter.ptr->left == iter.ptr->right || tess_type_equal(iter.ptr->left, iter.ptr->right)) {
+            // delete a = a constraints, and a = any constraints
+            if (iter.ptr->left == iter.ptr->right || tess_type_equal(iter.ptr->left, iter.ptr->right) ||
+                iter.ptr->left->tag == type_any || iter.ptr->right->tag == type_any) {
 
                 veca_erase(self->constraints, &iter.base);
                 continue;
@@ -593,10 +594,17 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // arguments must match parameters
         struct tess_type *args =
           arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
-        struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)let->array.nodes, let->array.n);
 
-        push(args, params);
+        // consider that the function may be any -> any
+        struct tess_type *params = null;
+
+        assert(type_arrow == let->let.name->type->tag);
+        if (let->let.name->type->left->tag != type_any) {
+            params = arguments_to_tuple_type(ctx->alloc, (ast_node const **)let->array.nodes, let->array.n);
+            push(args, params);
+        } else {
+            push(args, let->let.name->type->left);
+        }
 
         // result must be same as right hand of arrow
         assert(type_arrow == let->let.name->type->tag);
