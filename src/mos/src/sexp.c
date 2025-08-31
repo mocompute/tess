@@ -1,5 +1,6 @@
 #include "sexp.h"
 #include "alloc.h"
+#include "dbg.h"
 #include "mos_string.h"
 #include "vector.h"
 
@@ -97,7 +98,7 @@ sexp sexp_init_sym(allocator *alloc, char const *str) {
     return out;
 }
 
-sexp sexp_init_list(allocator *alloc, sexp *elements, u32 count) {
+sexp sexp_init_list(allocator *alloc, sexp const *elements, u32 count) {
     sexp      out = sexp_init_boxed(alloc);
     sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_list;

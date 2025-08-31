@@ -7,7 +7,6 @@
 #include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
-#include "tess.h"
 #include "tess_type.h"
 #include "vector.h"
 
@@ -47,19 +46,19 @@ struct solver {
 
 // -- ti_inferer --
 
-static void    ti_assign_type_variables(allocator *, ast_node *[], u32);
-static vectora ti_collect_constraints(allocator *alloc, ast_node *[], u32);
-static void    ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
-static void    ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
-                                       u32 *out_n);
+static void   ti_assign_type_variables(allocator *, ast_node *[], u32);
+static void   ti_collect_constraints(allocator *alloc, ast_node const *[], u32, vectora *constraints);
+static void   ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
+static void   ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
+                                      u32 *out_n);
 
-static void    dbg_constraint(struct constraint const *);
+static void   dbg_constraint(struct constraint const *);
 
-struct solver  solver_init(allocator *, vectora *constraints, vectora *substitutions);
-void           solver_deinit(struct solver *);
-void           solver_run(struct solver *);
+struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
+void          solver_deinit(struct solver *);
+void          solver_run(struct solver *);
 
-ti_inferer    *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
+ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
     ti_inferer *self  = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena  = alloc_arena_create(alloc, 4096);
     self->strings     = alloc_string_arena_create(alloc, 1024);
@@ -95,18 +94,9 @@ int ti_inferer_run(ti_inferer *self) {
         }
     }
 
-    self->constraints = ti_collect_constraints(self->type_arena, self->nodes, self->n_nodes);
-
-    if (self->verbose) {
-        dbg("ti_inferer_run: after collect constraints:\n");
-        {
-            for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
-                dbg("%p: %s\n", self->nodes[i], str);
-                alloc_free(self->strings, str);
-            }
-        }
-    }
+    self->constraints = VECA(self->type_arena, struct constraint);
+    ti_collect_constraints(self->type_arena, (ast_node const **)self->nodes, self->n_nodes,
+                           &self->constraints);
 
     self->substitutions  = VECA(self->type_arena, struct constraint);
     struct solver solver = solver_init(self->type_arena, &self->constraints, &self->substitutions);
@@ -139,7 +129,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     dbg("error: unsatisfied constraints\n");
     ti_inferer_dbg_constraints(self);
 
-    dbg("\ninfo: program nodes follow\n\n");
+    dbg("\ninfo: program nodes follow --\n\n");
     {
         for (size_t i = 0; i < self->n_nodes; ++i) {
             char *str = ast_node_to_string(self->strings, self->nodes[i]);
@@ -430,7 +420,7 @@ void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
 
 // -- collect_constraints --
 
-static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node **arguments, u16 n) {
+static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
     struct tess_type *tuple = tess_type_create_tuple(alloc, n);
     assert(!n || tuple->elements);
 
@@ -439,7 +429,7 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node **ar
     return tuple;
 }
 
-static ast_node const *find_let_node(char const *name, u16 arity, ast_node *nodes[], u32 count) {
+static ast_node const *find_let_node(char const *name, u16 arity, ast_node const *nodes[], u32 count) {
     // TODO profile linear search versus hashmap
 
     if (!name) fatal("find_let_node: null search string");
@@ -467,13 +457,13 @@ static ast_node const *find_let_node(char const *name, u16 arity, ast_node *node
 }
 
 struct collect_constraints_ctx {
-    allocator     *alloc;
-    ast_node     **nodes;
-    u32            count;
-    struct vectora constraints;
+    allocator       *alloc;
+    ast_node const **nodes;
+    u32              count;
+    vectora         *constraints;
 };
 
-void collect_constraints(void *ctx_, ast_node *node) {
+void collect_constraints(void *ctx_, ast_node const *node) {
     struct collect_constraints_ctx *ctx = ctx_;
     struct constraint               c   = {0};
 
@@ -481,8 +471,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
     do {                                                                                                   \
         c                               = (struct constraint){(L), (R)};                                   \
         struct constraint_iterator iter = {.ptr = &c};                                                     \
-        veca_iterator_init(&ctx->constraints, &iter.base);                                                 \
-        veca_push_back(&ctx->constraints, &iter.base);                                                     \
+        veca_iterator_init(ctx->constraints, &iter.base);                                                  \
+        veca_push_back(ctx->constraints, &iter.base);                                                      \
     } while (0)
 
     switch (node->tag) {
@@ -502,7 +492,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_string: push(node->type, tess_type_prim(type_string)); break;
 
     case ast_tuple:  {
-        struct tess_type *els = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
+        struct tess_type *els =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->type, els);
     } break;
@@ -534,7 +525,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         struct tess_type const *name = node->let.name->type;
 
         // left side of arrow is same as parameter tuple type
-        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
+        struct tess_type *params =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
         push(name->left, params);
 
         // right side of arrow is same as function body type
@@ -556,7 +548,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // argument tuple must be same type as parameter tuple
         assert(type_arrow == node->type->tag);
 
-        struct tess_type *tup = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
+        struct tess_type *tup =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
         push(node->type->left, tup);
 
         // body type must be same as right hand of arrow
@@ -574,9 +567,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_lambda_function == lambda->tag);
 
         // arguments must match parameters
-        struct tess_type *args = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
+        struct tess_type *args =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
         struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, lambda->array.nodes, lambda->array.n);
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)lambda->array.nodes, lambda->array.n);
 
         push(args, params);
 
@@ -598,8 +592,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->named_application.name->type, let->let.name->type);
 
         // arguments must match parameters
-        struct tess_type *args   = arguments_to_tuple_type(ctx->alloc, node->array.nodes, node->array.n);
-        struct tess_type *params = arguments_to_tuple_type(ctx->alloc, let->array.nodes, let->array.n);
+        struct tess_type *args =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+        struct tess_type *params =
+          arguments_to_tuple_type(ctx->alloc, (ast_node const **)let->array.nodes, let->array.n);
 
         push(args, params);
 
@@ -617,11 +613,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #undef push
 }
 
-vectora ti_collect_constraints(allocator *alloc, ast_node *nodes[], u32 count) {
-    struct collect_constraints_ctx ctx = {alloc, nodes, count, VECA(alloc, struct constraint)};
+void ti_collect_constraints(allocator *alloc, ast_node const *nodes[], u32 count, vectora *constraints) {
+    struct collect_constraints_ctx ctx = {alloc, nodes, count, constraints};
 
-    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, nodes[i], collect_constraints);
-    return ctx.constraints;
+    for (size_t i = 0; i < count; ++i) ast_pool_cdfs(&ctx, nodes[i], collect_constraints);
 }
 
 static void map_dbg_constraint(void *ctx, void *out, void const *el) {
@@ -655,8 +650,9 @@ static void specialize_node(void *ctx_, ast_node *node) {
     if (node->tag != ast_named_function_application) return;
     assert(ast_symbol == node->named_application.name->tag);
 
-    ast_node const *let = find_let_node(mos_string_str(&node->named_application.name->symbol.name),
-                                        node->named_application.n_arguments, ctx->nodes, ctx->n_nodes);
+    ast_node const *let =
+      find_let_node(mos_string_str(&node->named_application.name->symbol.name),
+                    node->named_application.n_arguments, (ast_node const **)ctx->nodes, ctx->n_nodes);
 
     // TODO compiler error
     if (null == let) fatal("specialize_node: can't find let node for function application.");

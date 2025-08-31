@@ -74,7 +74,7 @@ sexp sexp_init_i64(allocator *, i64);
 sexp sexp_init_u64(allocator *, u64);
 sexp sexp_init_f64(allocator *, f64);
 sexp sexp_init_sym(allocator *, char const *);
-sexp sexp_init_list(allocator *, sexp *, u32);
+sexp sexp_init_list(allocator *, sexp const *, u32);
 sexp sexp_init_list_single(allocator *, sexp);
 sexp sexp_init_list_pair(allocator *, sexp, sexp);
 sexp sexp_init_list_triple(allocator *, sexp, sexp, sexp);

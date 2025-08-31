@@ -159,6 +159,7 @@ int compile(struct state *self) {
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
+        return 1;
     }
 
     allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
