@@ -114,15 +114,15 @@ void alloc_free_i(allocator *alloc, void *ptr, char const *file, int line) {
 
 // -- arena --
 //
-// Each bucket has an arena_header struct. Size and capacity fields do
-// not include size of the header. Each allocated block has a size_t
-// header to record its size (struct arena_allocation).
+// Each bucket has an arena_header struct. Each allocated block has a
+// size_t header to record its size (struct arena_allocation).
 
 static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
-    arena_block *out = (void *)(((byte *)bucket) + sizeof(arena_header) + bucket->size);
+    arena_block *out = (void *)(((byte *)bucket) + bucket->size);
 
     out->size        = sz;
     bucket->size += sz + sizeof(arena_block);
+    assert(bucket->size <= bucket->capacity);
 
     void *res = &out->data;
     assert((uintptr_t)res % 2 == 0);
@@ -137,7 +137,7 @@ static size_t *block_size(byte const *p) {
 static bool is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
     if (((byte *)p) < ((byte *)bucket)) return false;
-    return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size;
+    return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size - sizeof(arena_header);
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
@@ -153,7 +153,7 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
     assert(bucket);
     while (bucket) {
         if (((byte *)ptr) > ((byte *)bucket) + sizeof(arena_header) &&
-            ((byte *)ptr) < ((byte *)bucket + sizeof(arena_header) + bucket->size))
+            ((byte *)ptr) < ((byte *)bucket + bucket->size))
             return bucket;
 
         bucket = bucket->next;
@@ -188,17 +188,19 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     }
 
     // need to allocate a new bucket
+    size_t needed       = sz + sizeof(arena_header);
 
     size_t new_capacity = last_capacity * 2;
-    if (new_capacity < sz) new_capacity = alloc_next_power_of_two(sz);
+    if (new_capacity < needed) new_capacity = alloc_next_power_of_two(needed);
 
-    last->next = alloc_malloc(arena->parent, new_capacity + sizeof(arena_header));
+    last->next = alloc_malloc(arena->parent, new_capacity);
     if (null == last->next) return null;
 
     bucket = last->next;
 
     alloc_zero(bucket);
     bucket->capacity = new_capacity;
+    bucket->size     = sizeof(arena_header);
 
     return bump_alloc_assume_capacity(bucket, sz);
 }
@@ -210,7 +212,6 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
     sz                   = alloc_align_to_word_size(sz);
-
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
     if (null == bucket) {
         assert(false);
@@ -296,12 +297,13 @@ void alloc_arena_destroy(allocator *alloc, allocator **arena) {
 void alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
-    sz                     = alloc_next_power_of_two(sz);
+    sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
     if (0 == sz) sz = 16;
-    arena->head = alloc_malloc(parent, sizeof(arena_header) + sz);
+    arena->head = alloc_malloc(parent, sz);
 
     alloc_zero(arena->head);
     arena->head->capacity    = sz;
+    arena->head->size        = sizeof(arena_header);
 
     arena->allocator.malloc  = &arena_malloc;
     arena->allocator.calloc  = &arena_calloc;
