@@ -2,7 +2,6 @@
 
 #include "alloc.h"
 #include "token.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -16,7 +15,9 @@ struct tokenizer {
     size_t        input_len;
     size_t        pos;
 
-    struct vector backtrack;
+    struct token *backtrack;
+    u32           n_backtrack;
+    u32           cap_backtrack;
 
     char         *buf;
     u32           n_buf;
@@ -33,21 +34,21 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 // -- allocation and deallocation --
 
 tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
-    tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
+    tokenizer *self     = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
-    self->parent    = alloc;
-    self->strings   = alloc_arena_create(alloc, 4096);
-    self->input     = input;
-    self->input_len = len;
-    self->pos       = 0;
+    self->parent        = alloc;
+    self->strings       = alloc_arena_create(alloc, 4096);
+    self->input         = input;
+    self->input_len     = len;
+    self->pos           = 0;
 
-    self->cap_buf   = 32;
-    self->buf       = alloc_malloc(alloc, self->cap_buf * sizeof self->buf[0]);
-    self->n_buf     = 0;
+    self->cap_buf       = 32;
+    self->buf           = alloc_malloc(alloc, self->cap_buf * sizeof self->buf[0]);
+    self->n_buf         = 0;
 
-    self->backtrack = VEC(token);
-
-    vec_reserve(alloc, &self->backtrack, 8);
+    self->cap_backtrack = 8;
+    self->backtrack     = alloc_malloc(alloc, self->cap_backtrack * sizeof self->backtrack[0]);
+    self->n_backtrack   = 0;
 
     return self;
 }
@@ -55,7 +56,7 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
 void tokenizer_destroy(tokenizer **self) {
     alloc_arena_destroy((*self)->parent, &(*self)->strings);
 
-    vec_deinit((*self)->parent, &(*self)->backtrack);
+    alloc_free((*self)->parent, (*self)->backtrack);
     alloc_free((*self)->parent, (*self)->buf);
     alloc_free((*self)->parent, *self);
     *self = null;
@@ -87,9 +88,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
 
     // support backtracking by parser
-    if (!vec_empty(&self->backtrack)) {
-        alloc_copy(out, vec_back(&self->backtrack));
-        vec_pop_back(&self->backtrack);
+    if (self->n_backtrack) {
+        *out = self->backtrack[--self->n_backtrack];
         return 0;
     }
 
@@ -547,5 +547,8 @@ finish:
 // -- backtracking --
 
 void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
-    for (size_t i = n_toks; i != 0; --i) vec_push_back_void(self->parent, &self->backtrack, &toks[i - 1]);
+
+    for (size_t i = n_toks; i != 0; --i)
+        alloc_push_back(self->parent, &self->backtrack, &self->n_backtrack, &self->cap_backtrack,
+                        &toks[i - 1]);
 }
