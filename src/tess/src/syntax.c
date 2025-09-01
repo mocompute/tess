@@ -161,8 +161,8 @@ static void check_annotation(void *ctx, ast_node *node) {
     if (!te) {
 
 #define fmt "unknown type: %s"
-        char *message;
-        int   len = snprintf(null, 0, fmt, str) + 1;
+        char *message = null;
+        int   len     = snprintf(null, 0, fmt, str) + 1;
         if (len > 0) {
             message = alloc_malloc(self->arena, (size_t)len);
             snprintf(message, (size_t)len, fmt, str);

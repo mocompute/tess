@@ -151,6 +151,10 @@ void ti_inferer_report_errors(ti_inferer *self) {
 static bool apply_one_substitution(struct tess_type **type, struct tess_type *from, struct tess_type *to) {
     bool did_substitute = false;
 
+    assert(type && *type);
+    assert(from);
+    assert(to);
+
     if (*type == from) {
         *type = to;
         return true;
@@ -587,6 +591,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
           find_let_node(name, node->array.n, (ast_node const **)ctx->nodes, ctx->n_nodes);
         if (null == let)
             fatal("collect_constraints: can't find let node for function application: '%s'", name);
+
+        assert(let->let.name->type);
+        assert(let->let.body->type);
 
         // name must match function type
         push(node->named_application.name->type, let->let.name->type);

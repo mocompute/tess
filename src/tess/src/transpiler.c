@@ -130,7 +130,7 @@ static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
     case type_float:  out_put(self, "double"); break;
     case type_string: out_put(self, "char *"); break;
     case type_tuple:  out_put(self, "FIXME"); break;
-    case type_any:    out_put(self, "void*"); break;
+    case type_any:    out_put(self, "int"); break;
     case type_arrow:  return a_result_type_of(self, ty->right);
     case type_user:   {
         char *name = tess_type_to_string(self->strings, ty);
@@ -139,9 +139,7 @@ static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
 
     } break;
 
-    case type_type_var:
-        out_put(self, "void*"); // FIXME
-        break;
+    case type_type_var: out_put_fmt(self, "/* tv%u */ int", ty->type_var); break;
     }
 
     return 0;
@@ -247,6 +245,8 @@ static int a_nil_expression(transpiler *self, ast_node const *node) {
 }
 
 static int a_eval(transpiler *self, ast_node const *node) {
+
+    if (!node || !node->type) fatal("a_eval: node or type is null");
 
     if (node->type->tag == type_nil) {
         return a_nil_expression(self, node);

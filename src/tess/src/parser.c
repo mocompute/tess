@@ -4,6 +4,7 @@
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
+#include "error.h"
 #include "mos_string.h"
 #include "tess_type.h"
 #include "token.h"
@@ -465,7 +466,16 @@ static int a_nil(parser *p) {
 }
 
 static int a_end_of_block(parser *p) {
-    if (0 == a_try_s(p, &the_symbol, "end")) return result_ast_str(p, ast_symbol, "end");
+
+    if (next_token(p)) {
+        if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
+            return result_ast_str(p, ast_symbol, "end");
+        return 1;
+    }
+
+    if (tok_symbol == p->token.tag && 0 == strcmp("end", p->token.s))
+        return result_ast_str(p, ast_symbol, "end");
+
     p->error.tag = tess_err_expected_end_of_block;
     return 1;
 }
