@@ -221,8 +221,11 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     u32 const save_toks = p->n_tokens;
     if (fun(p)) {
         assert(p->n_tokens >= save_toks);
-        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-        tokens_shrink(p, save_toks);
+        if (p->n_tokens > save_toks) {
+            log(p, "a_try: putting back %u tokens", p->n_tokens - save_toks);
+            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
+        }
         return 1;
     }
     return 0;
@@ -235,8 +238,10 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
     int const res       = fun(p);
     if (res) {
         assert(p->n_tokens >= save_toks);
-        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-        tokens_shrink(p, save_toks);
+        if (p->n_tokens > save_toks) {
+            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
+        }
         return res == 2 ? 0 : 1;
     }
     return 0;
@@ -245,9 +250,10 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     u32 const save_toks = p->n_tokens;
     if (fun(p, arg)) {
-        assert(p->n_tokens >= save_toks);
-        tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-        tokens_shrink(p, save_toks);
+        if (p->n_tokens > save_toks) {
+            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
+        }
 
         return 1;
     }
@@ -475,12 +481,22 @@ static int a_end_of_block(parser *p) {
     if (next_token(p)) {
         if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
             return result_ast_str(p, ast_symbol, "end");
+
+        log(p, "end_of_block: next_token error");
         return 1;
     }
 
-    if (tok_symbol == p->token.tag && 0 == strcmp("end", p->token.s))
+    if (tok_symbol == p->token.tag && 0 == strcmp("end", p->token.s)) {
+        log(p, "end_of_block: found end symbol");
         return result_ast_str(p, ast_symbol, "end");
+    }
 
+    if (tok_one_newline == p->token.tag || tok_two_newline == p->token.tag) {
+        log(p, "end_of_block: found newline");
+        return result_ast_str(p, ast_symbol, "end");
+    }
+
+    log(p, "end_of_block: found token %s, returning error", token_tag_to_string(p->token.tag));
     p->error.tag = tess_err_expected_end_of_block;
     return 1;
 }
@@ -815,24 +831,40 @@ static int simple_declaration(parser *p) {
     return result_ast_node(p, sym);
 }
 
+// -- public read-only portion of struct --
+// FIXME put this elsewhere
+struct tokenizer {
+    allocator  *parent;
+    allocator  *strings;
+    char const *input;
+    size_t      input_len;
+    size_t      pos;
+};
+
 static int let_in_form(parser *p) {
     // let a = 2 in expression
     if (a_try_s(p, the_symbol, "let")) return 1;
+    log(p, "let_in_form: pos = %zu", p->tokenizer->pos);
     if (a_try(p, simple_declaration)) return 1;
     ast_node *sym = p->result;
+    log(p, "let_in_form: let %s", ast_node_name_string(sym));
 
     if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
+    dbg("let_in_form: value = %s\n", ast_tag_to_string(defn->tag));
 
     if (a_try_s(p, the_symbol, "in")) return 1;
+    log(p, "let_in_form: found an 'in' at pos %zu", p->tokenizer->pos);
     if (a_try(p, expression)) return 1;
     ast_node *body = p->result;
+    log(p, "let_in_form: body is %s", ast_tag_to_string(body->tag));
     if (a_try(p, a_end_of_block)) return 1;
 
     ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
     node->let_in.name  = sym;
     node->let_in.value = defn;
     node->let_in.body  = body;
+    log(p, "let_in_form: returning node %s", ast_tag_to_string(node->tag));
     return result_ast_node(p, node);
 }
 
@@ -920,23 +952,25 @@ static int grouped_expression(parser *parser) {
     return 0;
 }
 
-static int expression(parser *parser) {
-    if (eat_newlines(parser)) return 1;
+static int expression(parser *p) {
+    if (eat_newlines(p)) return 1;
 
-    if (0 == a_try(parser, &lambda_function_application)) return 0;
-    if (0 == a_try(parser, &infix_operation)) return 0;
-    if (0 == a_try(parser, &tuple_expression)) return 0;
-    if (0 == a_try(parser, &grouped_expression)) return 0;
-    if (0 == a_try(parser, &a_nil)) return 0;
-    if (0 == a_try(parser, &lambda_function)) return 0;
-    if (0 == a_try(parser, &let_in_form)) return 0;
-    if (0 == a_try(parser, &let_form)) return 0;
-    if (0 == a_try(parser, &if_then_else)) return 0;
-    if (0 == a_try(parser, &function_application)) return 0;
-    if (0 == a_try(parser, &a_identifier)) return 0;
-    if (0 == a_try(parser, &a_number)) return 0;
-    if (0 == a_try(parser, &a_bool)) return 0;
-    if (0 == a_try(parser, &a_end_of_expression)) return 0;
+    if (0 == a_try(p, &lambda_function_application)) return 0;
+    if (0 == a_try(p, &infix_operation)) return 0;
+    if (0 == a_try(p, &tuple_expression)) return 0;
+    if (0 == a_try(p, &grouped_expression)) return 0;
+    if (0 == a_try(p, &a_nil)) return 0;
+    if (0 == a_try(p, &lambda_function)) return 0;
+    log(p, "expression: try let_in_form");
+    if (0 == a_try(p, &let_in_form)) return 0;
+    log(p, "expression: not a let_in_form");
+    if (0 == a_try(p, &let_form)) return 0;
+    if (0 == a_try(p, &if_then_else)) return 0;
+    if (0 == a_try(p, &function_application)) return 0;
+    if (0 == a_try(p, &a_identifier)) return 0;
+    if (0 == a_try(p, &a_number)) return 0;
+    if (0 == a_try(p, &a_bool)) return 0;
+    if (0 == a_try(p, &a_end_of_expression)) return 0;
 
     return 1;
 }
@@ -945,7 +979,11 @@ static int toplevel(parser *p) {
     if (eat_newlines(p)) return 1;
 
     if (0 == struct_declaration(p)) return 0;
+
+    log(p, "toplevel: not a struct");
     if (0 == expression(p)) return 0;
+
+    log(p, "toplevel: not an expression");
 
     return 1;
 }
@@ -959,14 +997,15 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
     u32 cap                 = 16;
     *len                    = 0;
     *out                    = alloc_calloc(out_alloc, cap, sizeof(struct ast_node *));
-    p->verbose              = false;
 
     struct ast_node **nodes = *out;
 
     int               res   = 0;
     while (0 == (res = parser_next(p))) {
         ast_node *node;
+
         parser_result(p, &node);
+        log(p, "parse_all: parsed node %s", ast_tag_to_string(node->tag));
 
         if (*len == cap) {
             alloc_resize(out_alloc, out, &cap, cap * 2);
