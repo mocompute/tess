@@ -32,11 +32,16 @@ struct parser {
     u32                    n_tokens;
     u32                    cap_tokens;
 
+    u32                   *save_pos;
+    u32                    n_save_pos;
+    u32                    cap_save_pos;
+
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
     struct token           token;
 
     bool                   verbose;
+    int                    indent_level;
 };
 
 struct token_iterator {
@@ -66,6 +71,11 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->cap_tokens = 16;
     self->n_tokens   = 0;
     self->tokens     = alloc_calloc(self->parser_arena, self->cap_tokens, sizeof self->tokens[0]);
+
+    // save_pos
+    self->cap_save_pos = 16;
+    self->n_save_pos   = 0;
+    self->save_pos     = alloc_calloc(self->parser_arena, self->cap_save_pos, sizeof self->save_pos[0]);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -219,16 +229,25 @@ nodiscard static int next_token(parser *p) {
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
     u32 const save_toks = p->n_tokens;
+
+    int       result    = 0;
+    alloc_push_back(p->parser_arena, &p->save_pos, &p->n_save_pos, &p->cap_save_pos, &save_toks);
+
+    log(p, "a_try %p save position %u", fun, save_toks);
     if (fun(p)) {
         assert(p->n_tokens >= save_toks);
         if (p->n_tokens > save_toks) {
-            log(p, "a_try: putting back %u tokens", p->n_tokens - save_toks);
+            log(p, "a_try: putting back %u tokens, shrink to %u", p->n_tokens - save_toks, save_toks);
             tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
             tokens_shrink(p, save_toks);
         }
-        return 1;
+        result = 1;
+        goto cleanup;
     }
-    return 0;
+
+cleanup:
+    p->n_save_pos--;
+    return result;
 }
 
 nodiscard static int a_try_special(parser *p, parse_fun fun) {
@@ -847,7 +866,7 @@ static int let_in_form(parser *p) {
     log(p, "let_in_form: pos = %zu", p->tokenizer->pos);
     if (a_try(p, simple_declaration)) return 1;
     ast_node *sym = p->result;
-    log(p, "let_in_form: let %s", ast_node_name_string(sym));
+    log(p, "let_in_form: let %s =", ast_node_name_string(sym));
 
     if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
@@ -953,26 +972,34 @@ static int grouped_expression(parser *parser) {
 }
 
 static int expression(parser *p) {
+
     if (eat_newlines(p)) return 1;
 
-    if (0 == a_try(p, &lambda_function_application)) return 0;
-    if (0 == a_try(p, &infix_operation)) return 0;
-    if (0 == a_try(p, &tuple_expression)) return 0;
-    if (0 == a_try(p, &grouped_expression)) return 0;
-    if (0 == a_try(p, &a_nil)) return 0;
-    if (0 == a_try(p, &lambda_function)) return 0;
-    log(p, "expression: try let_in_form");
-    if (0 == a_try(p, &let_in_form)) return 0;
-    log(p, "expression: not a let_in_form");
-    if (0 == a_try(p, &let_form)) return 0;
-    if (0 == a_try(p, &if_then_else)) return 0;
-    if (0 == a_try(p, &function_application)) return 0;
-    if (0 == a_try(p, &a_identifier)) return 0;
-    if (0 == a_try(p, &a_number)) return 0;
-    if (0 == a_try(p, &a_bool)) return 0;
-    if (0 == a_try(p, &a_end_of_expression)) return 0;
+    p->indent_level++;
 
+    if (0 == a_try(p, &lambda_function_application)) goto cleanup;
+    if (0 == a_try(p, &infix_operation)) goto cleanup;
+    if (0 == a_try(p, &tuple_expression)) goto cleanup;
+    if (0 == a_try(p, &grouped_expression)) goto cleanup;
+    if (0 == a_try(p, &a_nil)) goto cleanup;
+    if (0 == a_try(p, &lambda_function)) goto cleanup;
+    log(p, "expression: try let_in_form");
+    if (0 == a_try(p, &let_in_form)) goto cleanup;
+    log(p, "expression: not a let_in_form");
+    if (0 == a_try(p, &let_form)) goto cleanup;
+    if (0 == a_try(p, &if_then_else)) goto cleanup;
+    if (0 == a_try(p, &function_application)) goto cleanup;
+    if (0 == a_try(p, &a_identifier)) goto cleanup;
+    if (0 == a_try(p, &a_number)) goto cleanup;
+    if (0 == a_try(p, &a_bool)) goto cleanup;
+    if (0 == a_try(p, &a_end_of_expression)) goto cleanup;
+
+    p->indent_level--;
     return 1;
+
+cleanup:
+    p->indent_level--;
+    return 0;
 }
 
 static int toplevel(parser *p) {
@@ -1060,8 +1087,13 @@ void log(struct parser *self, char const *restrict fmt, ...) {
 
     if (!self->verbose) return;
 
-    char buf[128];
-    snprintf(buf, sizeof buf - 1, "parser: %s\n", fmt);
+    int  spaces = self->indent_level * 2;
+
+    char buf[256];
+    int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
+    if (offset < 0) return;
+
+    snprintf(buf + offset, sizeof buf - (u32)offset, "parser: %s\n", fmt);
 
     va_list args;
     va_start(args, fmt);
