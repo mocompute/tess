@@ -18,10 +18,13 @@ struct transpiler {
     allocator *strings;
     vector    *bytes;
     allocator *bytes_alloc;
-    int        indent_level;
+
+    char     **results;
+    u32        n_results;
+    u32        cap_results;
 
     u32        next_variable;
-    char      *expression_result_var;
+    int        indent_level;
 };
 
 // -- embed externs --
@@ -34,16 +37,14 @@ typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 static int a_toplevel(transpiler *, ast_node const *);
 static int a_eval(transpiler *, ast_node const *);
 static int a_result_type_of(transpiler *, struct tess_type const *);
-static int a_expression(transpiler *, ast_node const *);
-static int a_body(transpiler *, ast_node const *);
+// static int a_expression(transpiler *, ast_node const *);
+// static int a_body(transpiler *, ast_node const *);
 static int a_let(transpiler *, ast_node const *);
 static int a_fun_apply(transpiler *, ast_node const *);
 // static int  a_std_apply(transpiler *, ast_node const *, char const *);
 // static int  a_string(transpiler *, ast_node const *);
 
 static char *next_variable(transpiler *);
-static char *future_variable(transpiler *);
-static char *previous_variable(transpiler *);
 
 static void  out_put_start(transpiler *, char const *);
 static void  out_put(transpiler *, char const *);
@@ -57,6 +58,10 @@ transpiler  *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes
     self->strings     = alloc_arena_create(alloc, 1024);
     self->bytes       = bytes;
     self->bytes_alloc = bytes_alloc;
+
+    self->cap_results = 16;
+    self->results     = alloc_malloc(self->strings, self->cap_results * sizeof self->results[0]);
+    self->n_results   = 0;
     return self;
 }
 
@@ -174,13 +179,20 @@ static int a_infix(transpiler *self, ast_node const *node) {
 
     struct tess_type const *type = node->type;
 
-    out_put(self, "(");
-    if (a_result_type_of(self, type)) return 1;
-    out_put(self, ")");
-
-    out_put(self, "(");
-
+    // Eval left and right, resulting in two result variables on the
+    // stack. Eval in reverse order so we can pop them in correct
+    // order.
+    if (a_eval(self, node->infix.right)) return 1;
     if (a_eval(self, node->infix.left)) return 1;
+    char *left  = self->results[--self->n_results];
+    char *right = self->results[--self->n_results];
+
+    char *var   = next_variable(self);
+    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+
+    out_put_start(self, "");
+    if (a_result_type_of(self, type)) return 1;
+    out_put_fmt(self, " %s = %s ", var, left);
 
     switch (node->infix.op) {
     case ast_op_addition:           out_put(self, " + "); break;
@@ -196,9 +208,7 @@ static int a_infix(transpiler *self, ast_node const *node) {
     case ast_op_sentinel:           out_put(self, " FIXME "); break;
     }
 
-    if (a_eval(self, node->infix.right)) return 1;
-
-    out_put(self, ")");
+    out_put_fmt(self, "%s;\n", right);
 
     return 0;
 }
@@ -207,170 +217,255 @@ static int a_let_in(transpiler *self, ast_node const *node) {
 
     // let a = 1 in a + 2 end => resN = 3
 
-    char *var = next_variable(self);
-
-    out_put_start(self, "");
-    a_result_type_of(self, node->let_in.name->type);
-    out_put(self, " ");
-    out_put(self, var);
-    out_put(self, ";\n");
-
-    out_put_start(self, "{\n");
-    self->indent_level++;
-
     char const *name = mos_string_str(&node->let_in.name->symbol.name);
-    a_result_type_of(self, node->let_in.name->type);
-    out_put(self, " ");
-    out_put(self, name);
-    out_put(self, ";\n");
+
+    if (a_eval(self, node->let_in.value)) return 1;
+    char *value = self->results[--self->n_results];
 
     out_put_start(self, "");
-    a_eval(self, node->let_in.value);
     a_result_type_of(self, node->let_in.name->type);
-    out_put(self, " ");
-    out_put(self, name);
-    out_put(self, " = ");
-    out_put(self, previous_variable(self));
-    out_put(self, ";\n");
+    out_put_fmt(self, " %s = %s;\n", name, value);
 
-    a_body(self, node->let_in.body);
+    a_eval(self, node->let_in.body);
+    char *body = self->results[--self->n_results];
 
-    self->indent_level--;
-    out_put(self, "}\n");
+    char *var  = next_variable(self);
+    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+
+    out_put_start(self, "");
+    a_result_type_of(self, node->let_in.name->type);
+    out_put_fmt(self, " %s = %s;\n", var, body);
 
     return 0;
 }
 
-static int a_expression(transpiler *self, ast_node const *node) {
-
-    char *var                   = next_variable(self);
-    self->expression_result_var = var;
+static int a_nil_expression(transpiler *self, ast_node const *node) {
+    // an expression of type nil: there is no need to capture its
+    // result
+    assert(type_nil == node->type->tag);
+    return a_eval(self, node);
 }
 
 static int a_eval(transpiler *self, ast_node const *node) {
 
+    if (node->type->tag == type_nil) {
+        return a_nil_expression(self, node);
+    }
+
+    char *var = next_variable(self);
+    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_fmt(self, " %s;\n", var);
+
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:    out_put(self, "NULL"); break;
+    case ast_nil:
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = NULL;\n", var);
+        break;
 
-    case ast_symbol: out_put_fmt(self, "%s", mos_string_str(&node->symbol.name)); break;
+    case ast_symbol:
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %s;\n", var, mos_string_str(&node->symbol.name));
+        break;
+
     case ast_string:
-        out_put(self, "\"");
-        out_put_fmt(self, "%s", mos_string_str(&node->symbol.name));
-        out_put(self, "\"");
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = \"%s\";\n", var, mos_string_str(&node->symbol.name));
         break;
 
-    case ast_i64: out_put_fmt(self, "%" PRIi64, node->i64.val); break;
-    case ast_u64: out_put_fmt(self, "%" PRIu64, node->u64.val); break;
-    case ast_f64: out_put_fmt(self, "%f", node->f64.val); break;
-    case ast_bool:
-        if (node->bool_.val) out_put(self, "true");
-        else out_put(self, "false");
+    case ast_i64:
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
         break;
-    case ast_infix:                       return a_infix(self, node);
-    case ast_tuple:                       break;
-    case ast_let_in:                      return a_let_in(self, node);
-    case ast_let:                         return a_let(self, node);
+    case ast_u64:
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val);
+        break;
+    case ast_f64:
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %f;\n", var, node->f64.val);
+        break;
+    case ast_bool:
+        out_put_start(self, "");
+        if (node->bool_.val) out_put_fmt(self, "%s = true;\n", var);
+        else out_put_fmt(self, "%s = false;\n", var);
+        break;
+
+    case ast_infix: {
+        if (a_infix(self, node)) return 1;
+        char *res = self->results[--self->n_results];
+        out_put_fmt(self, "%s = %s;\n", var, res);
+    } break;
+
+    case ast_tuple:  break;
+
+    case ast_let_in: {
+        if (a_let_in(self, node)) return 1;
+        char *res = self->results[--self->n_results];
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %s;\n", var, res);
+
+    } break;
+
+    case ast_let: {
+        if (a_let(self, node)) return 1;
+        char *res = self->results[--self->n_results];
+        out_put_fmt(self, "%s = %s;\n", var, res);
+    } break;
+
     case ast_if_then_else:
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_lambda_function_application: break;
-    case ast_named_function_application:  return a_fun_apply(self, node);
 
-    case ast_user_defined_type:           break;
+    case ast_named_function_application:  {
+        if (a_fun_apply(self, node)) return 1;
+        char *res = self->results[--self->n_results];
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %s;\n", var, res);
+    } break;
+
+    case ast_user_defined_type: break;
     }
     return 0;
 }
 
-static int a_body(transpiler *self, ast_node const *node) {
+// static int a_eval(transpiler *self, ast_node const *node) {
 
-    switch (node->tag) {
-    case ast_let:
-    case ast_named_function_application:
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_tuple:
-    case ast_let_in:
-    case ast_if_then_else:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-        out_put_start(self, "return ");
-        a_eval(self, node);
-        out_put(self, ";");
-        break;
+//     switch (node->tag) {
+//     case ast_eof:
+//     case ast_nil:    out_put(self, "NULL"); break;
 
-    case ast_user_defined_type:
-        // FIXME should not be in body
-        break;
-    }
-    return 0;
-}
+//     case ast_symbol: out_put_fmt(self, "%s", mos_string_str(&node->symbol.name)); break;
+//     case ast_string:
+//         out_put(self, "\"");
+//         out_put_fmt(self, "%s", mos_string_str(&node->symbol.name));
+//         out_put(self, "\"");
+//         break;
 
-static int a_main_body(transpiler *self, ast_node const *node) {
+//     case ast_i64: out_put_fmt(self, "%" PRIi64, node->i64.val); break;
+//     case ast_u64: out_put_fmt(self, "%" PRIu64, node->u64.val); break;
+//     case ast_f64: out_put_fmt(self, "%f", node->f64.val); break;
+//     case ast_bool:
+//         if (node->bool_.val) out_put(self, "true");
+//         else out_put(self, "false");
+//         break;
+//     case ast_infix:                       return a_infix(self, node);
+//     case ast_tuple:                       break;
+//     case ast_let_in:                      return a_let_in(self, node);
+//     case ast_let:                         return a_let(self, node);
+//     case ast_if_then_else:
+//     case ast_lambda_function:
+//     case ast_function_declaration:
+//     case ast_lambda_declaration:
+//     case ast_lambda_function_application: break;
+//     case ast_named_function_application:  return a_fun_apply(self, node);
 
-    switch (node->tag) {
-    case ast_let:
-    case ast_named_function_application:
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_tuple:
-    case ast_let_in:
-    case ast_if_then_else:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-        out_put_start(self, "return (int) (");
-        a_eval(self, node);
-        out_put(self, ")");
-        out_put(self, ";");
-        break;
+//     case ast_user_defined_type:           break;
+//     }
+//     return 0;
+// }
 
-    case ast_user_defined_type:
-        // FIXME should not be in body
-        break;
-    }
-    return 0;
-}
+// static int a_body(transpiler *self, ast_node const *node) {
+
+//     switch (node->tag) {
+//     case ast_let:
+//     case ast_named_function_application:
+//     case ast_eof:
+//     case ast_nil:
+//     case ast_bool:
+//     case ast_symbol:
+//     case ast_i64:
+//     case ast_u64:
+//     case ast_f64:
+//     case ast_string:
+//     case ast_infix:
+//     case ast_tuple:
+//     case ast_let_in:
+//     case ast_if_then_else:
+//     case ast_lambda_function:
+//     case ast_function_declaration:
+//     case ast_lambda_declaration:
+//     case ast_lambda_function_application:
+//         out_put_start(self, "return ");
+//         a_eval(self, node);
+//         out_put(self, ";");
+//         break;
+
+//     case ast_user_defined_type:
+//         // FIXME should not be in body
+//         break;
+//     }
+//     return 0;
+// }
+
+// static int a_main_body(transpiler *self, ast_node const *node) {
+
+//     switch (node->tag) {
+//     case ast_let:
+//     case ast_named_function_application:
+//     case ast_eof:
+//     case ast_nil:
+//     case ast_bool:
+//     case ast_symbol:
+//     case ast_i64:
+//     case ast_u64:
+//     case ast_f64:
+//     case ast_string:
+//     case ast_infix:
+//     case ast_tuple:
+//     case ast_let_in:
+//     case ast_if_then_else:
+//     case ast_lambda_function:
+//     case ast_function_declaration:
+//     case ast_lambda_declaration:
+//     case ast_lambda_function_application:
+//         out_put_start(self, "return (int) (");
+//         a_eval(self, node);
+//         out_put(self, ")");
+//         out_put(self, ";");
+//         break;
+
+//     case ast_user_defined_type:
+//         // FIXME should not be in body
+//         break;
+//     }
+//     return 0;
+// }
 
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    // static char const *const std_prefix     = "std_";
-    // static u8 const          std_prefix_len = strlen(std_prefix);
-
     ast_node const *name     = node->named_application.name;
     char const     *name_str = ast_node_name_string(name);
 
-    // if (0 == strncmp(name_str, std_prefix, std_prefix_len)) {
-    //     return a_std_apply(self, node, name_str);
-    // }
-    // FIXME only supports std_ functions for now
+    char           *var      = next_variable(self);
+    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
 
-    out_put(self, name_str);
-    out_put(self, "(");
-    for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-        a_eval(self, node->named_application.arguments[i]);
-        if (i != node->named_application.n_arguments - 1) out_put(self, ", ");
+    // eval arguments in reverse order, then generate function call,
+    // assigning to the result variable
+    i32 const n_args = node->named_application.n_arguments;
+    if (n_args)
+        for (i32 i = n_args - 1; i >= 0; --i)
+            if (a_eval(self, node->named_application.arguments[i])) return 1;
+
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_fmt(self, " %s;\n", var);
+
+    out_put_start(self, "");
+    out_put_fmt(self, "%s = %s(", var, name_str);
+
+    for (i32 i = 0; i < n_args; ++i) {
+        char *arg = self->results[--self->n_results];
+        out_put(self, arg);
+        if (i < n_args - 1) out_put(self, ", ");
     }
-    out_put(self, ")");
+    out_put(self, ");\n");
 
     return 0;
 }
@@ -421,12 +516,20 @@ static int a_let(transpiler *self, ast_node const *node) {
         self->indent_level++;
 
         int res = 0;
-        if ((res = a_main_body(self, node->let.body))) return res;
+        if ((res = a_eval(self, node->let.body))) return res;
+
+        char *var = self->results[--self->n_results];
+
+        out_put_start(self, "");
+        out_put_fmt(self, "return (int) %s;", var);
+
         self->indent_level--;
 
         out_put(self, "\n}\n");
         return 0;
     }
+
+    // function declaration
 
     // return type
     out_put_start(self, "static ");
@@ -450,8 +553,11 @@ static int a_let(transpiler *self, ast_node const *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
-    if (a_body(self, node->let.body)) return 1;
+    if (a_eval(self, node->let.body)) return 1;
     self->indent_level--;
+    char *body = self->results[--self->n_results];
+    out_put_start(self, "");
+    out_put_fmt(self, "return %s;", body);
     out_put(self, "\n}\n\n");
 
     return 0;
@@ -461,22 +567,6 @@ static char *next_variable(transpiler *self) {
     int   len = snprintf(null, 0, "_res%u_", self->next_variable) + 1;
 
     char *out = alloc_malloc(self->strings, (u32)len);
-    snprintf(out, len, "_res%u_", self->next_variable++);
-    return out;
-}
-
-static char *future_variable(transpiler *self) {
-    int   len = snprintf(null, 0, "_res%u_", self->next_variable + 1) + 1;
-
-    char *out = alloc_malloc(self->strings, (u32)len);
-    snprintf(out, len, "_res%u_", self->next_variable + 1);
-    return out;
-}
-
-static char *previous_variable(transpiler *self) {
-    int   len = snprintf(null, 0, "_res%u_", self->next_variable - 1) + 1;
-
-    char *out = alloc_malloc(self->strings, (u32)len);
-    snprintf(out, len, "_res%u_", self->next_variable - 1);
+    snprintf(out, (u32)len, "_res%u_", self->next_variable++);
     return out;
 }
