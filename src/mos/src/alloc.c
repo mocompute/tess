@@ -100,6 +100,7 @@ void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file
 }
 
 void *alloc_realloc_i(allocator *alloc, void *ptr, size_t sz, char const *file, int line) {
+    assert(ptr);
     sz        = alloc_align_to_word_size(sz);
     void *out = alloc->realloc(alloc, ptr, sz, file, line);
     assert(out);
