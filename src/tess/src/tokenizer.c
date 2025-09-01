@@ -16,8 +16,11 @@ struct tokenizer {
     size_t        input_len;
     size_t        pos;
 
-    struct vector buf;
     struct vector backtrack;
+
+    char         *buf;
+    u32           n_buf;
+    u32           cap_buf;
 };
 
 // -- statics --
@@ -38,10 +41,12 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
     self->input_len = len;
     self->pos       = 0;
 
-    self->buf       = VEC(char);
+    self->cap_buf   = 32;
+    self->buf       = alloc_malloc(alloc, self->cap_buf * sizeof self->buf[0]);
+    self->n_buf     = 0;
+
     self->backtrack = VEC(token);
 
-    vec_reserve(alloc, &self->buf, 32);
     vec_reserve(alloc, &self->backtrack, 8);
 
     return self;
@@ -51,7 +56,7 @@ void tokenizer_destroy(tokenizer **self) {
     alloc_arena_destroy((*self)->parent, &(*self)->strings);
 
     vec_deinit((*self)->parent, &(*self)->backtrack);
-    vec_deinit((*self)->parent, &(*self)->buf);
+    alloc_free((*self)->parent, (*self)->buf);
     alloc_free((*self)->parent, *self);
     *self = null;
 }
@@ -459,8 +464,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             break;
 
         case start_string: {
-            vec_clear(&self->buf);
-            state = in_string;
+            self->n_buf = 0;
+            state       = in_string;
         } break;
 
         case in_string: {
@@ -472,7 +477,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
-            default:   vec_push_back_void(self->parent, &self->buf, &c); break;
+            default:   alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &c); break;
             }
         } break;
 
@@ -501,19 +506,19 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                vec_push_back_void(self->parent, &self->buf, &actual);
+                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                vec_push_back_void(self->parent, &self->buf, &backslash);
-                vec_push_back_void(self->parent, &self->buf, &c);
+                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &backslash);
+                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &c);
             }
             state = in_string;
 
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, tok_string, vec_data(&self->buf), vec_size(&self->buf));
+            replace_token_sn(self->strings, &res, tok_string, self->buf, self->n_buf);
             state = stop;
         } break;
 
