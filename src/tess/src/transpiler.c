@@ -19,6 +19,9 @@ struct transpiler {
     vector    *bytes;
     allocator *bytes_alloc;
     int        indent_level;
+
+    u32        next_variable;
+    char      *expression_result_var;
 };
 
 // -- embed externs --
@@ -31,17 +34,22 @@ typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 static int a_toplevel(transpiler *, ast_node const *);
 static int a_eval(transpiler *, ast_node const *);
 static int a_result_type_of(transpiler *, struct tess_type const *);
+static int a_expression(transpiler *, ast_node const *);
 static int a_body(transpiler *, ast_node const *);
 static int a_let(transpiler *, ast_node const *);
 static int a_fun_apply(transpiler *, ast_node const *);
 // static int  a_std_apply(transpiler *, ast_node const *, char const *);
 // static int  a_string(transpiler *, ast_node const *);
 
-static void out_put_start(transpiler *, char const *);
-static void out_put(transpiler *, char const *);
-static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static char *next_variable(transpiler *);
+static char *future_variable(transpiler *);
+static char *previous_variable(transpiler *);
 
-transpiler *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
+static void  out_put_start(transpiler *, char const *);
+static void  out_put(transpiler *, char const *);
+static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+
+transpiler  *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
 
     transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
@@ -197,14 +205,32 @@ static int a_infix(transpiler *self, ast_node const *node) {
 
 static int a_let_in(transpiler *self, ast_node const *node) {
 
+    // let a = 1 in a + 2 end => resN = 3
+
+    char *var = next_variable(self);
+
+    out_put_start(self, "");
+    a_result_type_of(self, node->let_in.name->type);
+    out_put(self, " ");
+    out_put(self, var);
+    out_put(self, ";\n");
+
     out_put_start(self, "{\n");
     self->indent_level++;
 
     char const *name = mos_string_str(&node->let_in.name->symbol.name);
-
     a_result_type_of(self, node->let_in.name->type);
     out_put(self, " ");
     out_put(self, name);
+    out_put(self, ";\n");
+
+    out_put_start(self, "");
+    a_eval(self, node->let_in.value);
+    a_result_type_of(self, node->let_in.name->type);
+    out_put(self, " ");
+    out_put(self, name);
+    out_put(self, " = ");
+    out_put(self, previous_variable(self));
     out_put(self, ";\n");
 
     a_body(self, node->let_in.body);
@@ -213,6 +239,12 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     out_put(self, "}\n");
 
     return 0;
+}
+
+static int a_expression(transpiler *self, ast_node const *node) {
+
+    char *var                   = next_variable(self);
+    self->expression_result_var = var;
 }
 
 static int a_eval(transpiler *self, ast_node const *node) {
@@ -423,4 +455,28 @@ static int a_let(transpiler *self, ast_node const *node) {
     out_put(self, "\n}\n\n");
 
     return 0;
+}
+
+static char *next_variable(transpiler *self) {
+    int   len = snprintf(null, 0, "_res%u_", self->next_variable) + 1;
+
+    char *out = alloc_malloc(self->strings, (u32)len);
+    snprintf(out, len, "_res%u_", self->next_variable++);
+    return out;
+}
+
+static char *future_variable(transpiler *self) {
+    int   len = snprintf(null, 0, "_res%u_", self->next_variable + 1) + 1;
+
+    char *out = alloc_malloc(self->strings, (u32)len);
+    snprintf(out, len, "_res%u_", self->next_variable + 1);
+    return out;
+}
+
+static char *previous_variable(transpiler *self) {
+    int   len = snprintf(null, 0, "_res%u_", self->next_variable - 1) + 1;
+
+    char *out = alloc_malloc(self->strings, (u32)len);
+    snprintf(out, len, "_res%u_", self->next_variable - 1);
+    return out;
 }

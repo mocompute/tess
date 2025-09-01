@@ -103,6 +103,7 @@ endfunction()
 tesslang_create_test(basic)
 # tesslang_create_test(fun_apply_type_error)
 tesslang_create_test(let_basic)
+tesslang_create_test(let_in_basic)
 tesslang_create_test(std_dbg)
 
 # -- doxygen --
