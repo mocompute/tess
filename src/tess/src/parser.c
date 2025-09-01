@@ -32,10 +32,6 @@ struct parser {
     u32                    n_tokens;
     u32                    cap_tokens;
 
-    u32                   *save_pos;
-    u32                    n_save_pos;
-    u32                    cap_save_pos;
-
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
     struct token           token;
@@ -71,11 +67,6 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->cap_tokens = 16;
     self->n_tokens   = 0;
     self->tokens     = alloc_calloc(self->parser_arena, self->cap_tokens, sizeof self->tokens[0]);
-
-    // save_pos
-    self->cap_save_pos = 16;
-    self->n_save_pos   = 0;
-    self->save_pos     = alloc_calloc(self->parser_arena, self->cap_save_pos, sizeof self->save_pos[0]);
 
     // error
     token_init(&self->token, tok_invalid);
@@ -222,61 +213,71 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
+        char *str = token_to_string(p->parser_arena, &p->token);
+        log(p, "next_token: %s", str);
+        alloc_free(p->parser_arena, str);
+
         tokens_push_back(p, &p->token);
         return 0;
     }
 }
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
+    int       result    = 0;
     u32 const save_toks = p->n_tokens;
 
-    int       result    = 0;
-    alloc_push_back(p->parser_arena, &p->save_pos, &p->n_save_pos, &p->cap_save_pos, &save_toks);
-
-    log(p, "a_try %p save position %u", fun, save_toks);
     if (fun(p)) {
         assert(p->n_tokens >= save_toks);
         if (p->n_tokens > save_toks) {
-            log(p, "a_try: putting back %u tokens, shrink to %u", p->n_tokens - save_toks, save_toks);
             tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-            tokens_shrink(p, save_toks);
         }
         result = 1;
         goto cleanup;
     }
 
 cleanup:
-    p->n_save_pos--;
+    tokens_shrink(p, save_toks);
     return result;
 }
 
 nodiscard static int a_try_special(parser *p, parse_fun fun) {
     // if fun returns 2, tokens are restored as in the failure case,
     // but this function returns success.
+    int       error     = 0;
+
     u32 const save_toks = p->n_tokens;
     int const res       = fun(p);
     if (res) {
         assert(p->n_tokens >= save_toks);
         if (p->n_tokens > save_toks) {
             tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-            tokens_shrink(p, save_toks);
         }
-        return res == 2 ? 0 : 1;
+        error = res == 2 ? 0 : 1;
+        goto cleanup;
     }
-    return 0;
+
+cleanup:
+    tokens_shrink(p, save_toks);
+    return error;
 }
 
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
+    int       error     = 0;
+
     u32 const save_toks = p->n_tokens;
+
     if (fun(p, arg)) {
         if (p->n_tokens > save_toks) {
             tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
-            tokens_shrink(p, save_toks);
         }
 
-        return 1;
+        error = 1;
+        goto cleanup;
     }
-    return 0;
+
+cleanup:
+    tokens_shrink(p, save_toks);
+    return error;
 }
 
 static int a_comma(parser *p) {
@@ -714,14 +715,24 @@ static int function_application(parser *p) {
 
 static int function_argument(parser *p) {
 
-    if (0 == a_try(p, &lambda_function_application)) return 0;
-    if (0 == a_try(p, &grouped_expression)) return 0;
-    if (0 == a_try(p, &let_in_form)) return 0;
-    if (0 == a_try(p, &if_then_else)) return 0;
-    if (0 == a_try(p, &a_nil)) return 0;
-    if (0 == a_try(p, &a_identifier)) return 0;
-    if (0 == a_try(p, &a_literal)) return 0;
+    p->indent_level++;
+    log(p, "try function_argument");
+
+    if (0 == a_try(p, &lambda_function_application)) goto cleanup;
+    if (0 == a_try(p, &grouped_expression)) goto cleanup;
+    if (0 == a_try(p, &let_in_form)) goto cleanup;
+    if (0 == a_try(p, &if_then_else)) goto cleanup;
+    if (0 == a_try(p, &a_nil)) goto cleanup;
+    if (0 == a_try(p, &a_identifier)) goto cleanup;
+    if (0 == a_try(p, &a_literal)) goto cleanup;
+
+    log(p, "not function_argument");
+    p->indent_level--;
     return 1;
+
+cleanup:
+    p->indent_level--;
+    return 0;
 }
 
 static int if_then_else(parser *p) {
@@ -977,16 +988,33 @@ static int expression(parser *p) {
 
     p->indent_level++;
 
+    log(p, "expression: try lambda");
     if (0 == a_try(p, &lambda_function_application)) goto cleanup;
+    log(p, "expression: not lambda");
+
+    log(p, "expression: try infix");
     if (0 == a_try(p, &infix_operation)) goto cleanup;
+    log(p, "expression: not infix");
+
+    log(p, "expression: try tuple");
     if (0 == a_try(p, &tuple_expression)) goto cleanup;
+    log(p, "expression: not tuple");
+
+    log(p, "expression: try grouped");
     if (0 == a_try(p, &grouped_expression)) goto cleanup;
+    log(p, "expression: not grouped");
+
     if (0 == a_try(p, &a_nil)) goto cleanup;
     if (0 == a_try(p, &lambda_function)) goto cleanup;
+
     log(p, "expression: try let_in_form");
     if (0 == a_try(p, &let_in_form)) goto cleanup;
     log(p, "expression: not a let_in_form");
+
+    log(p, "expression: try let_form");
     if (0 == a_try(p, &let_form)) goto cleanup;
+    log(p, "expression: not let_form");
+
     if (0 == a_try(p, &if_then_else)) goto cleanup;
     if (0 == a_try(p, &function_application)) goto cleanup;
     if (0 == a_try(p, &a_identifier)) goto cleanup;
@@ -1066,14 +1094,10 @@ void parser_result(parser *p, ast_node **handle) {
 }
 
 static void tokens_push_back(struct parser *p, struct token *tok) {
-    if (p->n_tokens == p->cap_tokens)
-        alloc_resize(p->parser_arena, &p->tokens, &p->cap_tokens, p->cap_tokens * 2);
-
-    p->tokens[p->n_tokens++] = *tok;
+    alloc_push_back(p->parser_arena, &p->tokens, &p->n_tokens, &p->cap_tokens, tok);
 }
 
 static void tokens_shrink(struct parser *p, u32 n) {
-    assert(n <= p->n_tokens);
     p->n_tokens = n;
 }
 

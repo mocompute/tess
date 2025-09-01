@@ -149,7 +149,7 @@ int compile(struct state *self) {
     struct ast_node **nodes;
     u32               n_nodes = 0;
 
-    if (parser_parse_all(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
+    if (parser_parse_all_verbose(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
 
     syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes, n_nodes);
     if (syntax_checker_run(syntax, nodes, n_nodes)) {
