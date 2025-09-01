@@ -195,6 +195,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     if (null == node) return sexp_init_boxed(alloc);
 
     sexp type;
+    if (node->tag != ast_symbol) // symbols are delegated to symbol_fun
     {
         int  len = tess_type_snprint(null, 0, node->type) + 1;
         char buf[len];
