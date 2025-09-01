@@ -7,21 +7,30 @@
 #include "hashmap.h"
 #include "mos_string.h"
 #include "tess_type.h"
-#include "vector.h"
 
 #include <assert.h>
 
 struct ti_inferer {
-    allocator        *type_arena;
-    allocator        *strings;
-    allocator        *nodes_alloc;
-    struct ast_node **nodes;
-    u32               n_nodes;
+    allocator         *type_arena;
+    allocator         *strings;
+    allocator         *nodes_alloc;
+    struct ast_node  **nodes;
+    u32                n_nodes;
 
-    vectora           constraints;
-    vectora           substitutions;
+    struct constraint *constraints;
+    u32                n_constraints;
+    u32                cap_constraints;
 
-    bool              verbose;
+    struct constraint *substitutions;
+    u32                n_substitutions;
+    u32                cap_substitutions;
+
+    bool               verbose;
+
+    bool               unify_monotypes;
+    // can be set to false to find type variables that may have
+    // contradictory constraints. This will aid in reporting to the
+    // user which program forms are ill-typed.
 };
 
 struct constraint {
@@ -29,48 +38,34 @@ struct constraint {
     struct tess_type *right;
 };
 
-struct constraint_iterator {
-    struct vector_iterator_base base;
-    struct constraint          *ptr;
-};
-
-struct solver {
-    allocator *alloc;
-    allocator *strings;
-
-    // in-out
-    vectora *constraints;
-    vectora *substitutions;
-
-    // configuration
-
-    bool unify_monotypes;
-    // can be set to false to find type variables that may have
-    // contradictory constraints. This will aid in reporting to the
-    // user which program forms are ill-typed.
-};
-
 // -- ti_inferer --
 
-static void   ti_assign_type_variables(allocator *, ast_node *[], u32);
-static void   ti_collect_constraints(allocator *alloc, ast_node const *[], u32, vectora *constraints);
-static void   ti_apply_substitutions_to_ast(vectora *, ast_node *[], u32);
-static void   ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
-                                      u32 *out_n);
+static void ti_assign_type_variables(allocator *, ast_node *[], u32);
+static void ti_collect_constraints(ti_inferer *);
 
-static void   dbg_constraint(struct constraint const *);
+static void ti_apply_substitutions_to_ast(struct constraint *, u32, ast_node *[], u32);
+static void ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
+                                    u32 *out_n);
+void        ti_run_solver(ti_inferer *);
 
-struct solver solver_init(allocator *, vectora *constraints, vectora *substitutions);
-void          solver_deinit(struct solver *);
-void          solver_run(struct solver *);
+static void dbg_constraint(struct constraint const *);
 
-ti_inferer   *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
-    ti_inferer *self  = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena  = alloc_arena_create(alloc, 4096);
-    self->strings     = alloc_arena_create(alloc, 1024);
-    self->nodes_alloc = nodes_alloc;
-    self->nodes       = nodes;
-    self->n_nodes     = n;
+ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
+    ti_inferer *self        = alloc_calloc(alloc, 1, sizeof *self);
+    self->type_arena        = alloc_arena_create(alloc, 4096);
+    self->strings           = alloc_arena_create(alloc, 1024);
+    self->nodes_alloc       = nodes_alloc;
+    self->nodes             = nodes;
+    self->n_nodes           = n;
+
+    self->cap_constraints   = 1024;
+    self->cap_substitutions = 1024;
+    self->constraints = alloc_malloc(self->type_arena, self->cap_constraints * sizeof self->constraints[0]);
+    self->substitutions =
+      alloc_malloc(self->type_arena, self->cap_substitutions * sizeof self->substitutions[0]);
+
+    self->unify_monotypes = true;
+
     return self;
 }
 
@@ -100,16 +95,16 @@ int ti_inferer_run(ti_inferer *self) {
         }
     }
 
-    self->constraints = VECA(self->type_arena, struct constraint);
-    ti_collect_constraints(self->type_arena, (ast_node const **)self->nodes, self->n_nodes,
-                           &self->constraints);
+    // 1
+    ti_collect_constraints(self);
 
-    self->substitutions  = VECA(self->type_arena, struct constraint);
-    struct solver solver = solver_init(self->type_arena, &self->constraints, &self->substitutions);
-    solver_run(&solver);
-    solver_deinit(&solver);
+    // 2
+    ti_run_solver(self);
 
-    ti_apply_substitutions_to_ast(&self->substitutions, self->nodes, self->n_nodes);
+    // 3
+    ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
+
+    //
 
     struct ast_node **specialized   = 0;
     u32               n_specialized = 0;
@@ -127,7 +122,8 @@ int ti_inferer_run(ti_inferer *self) {
         }
     }
 
-    if (veca_size(&self->constraints)) return 1;
+    // any remaining constraints indicate an ill-typed program
+    if (self->n_constraints) return 1;
     return 0;
 }
 
@@ -191,17 +187,21 @@ static bool apply_one_substitution(struct tess_type **type, struct tess_type *fr
     return did_substitute;
 }
 
+struct constraint_buffer {
+    struct constraint *buffer;
+    u32                size;
+};
 void dfs_apply_substitutions(void *ctx, ast_node *node) {
-    vectora                   *substitutions = ctx;
+    struct constraint_buffer *subs = ctx;
 
-    struct constraint_iterator iter          = {0};
-    while (veca_iter(substitutions, &iter.base)) {
-        apply_one_substitution(&node->type, iter.ptr->left, iter.ptr->right);
-    }
+    for (u32 i = 0; i < subs->size; ++i)
+        apply_one_substitution(&node->type, subs->buffer[i].left, subs->buffer[i].right);
 }
 
-static void ti_apply_substitutions_to_ast(vectora *substitutions, ast_node *nodes[], u32 const count) {
-    for (size_t i = 0; i < count; ++i) ast_pool_dfs(substitutions, nodes[i], dfs_apply_substitutions);
+static void ti_apply_substitutions_to_ast(struct constraint *substitutions, u32 n_substitutions,
+                                          ast_node *nodes[], u32 const count) {
+    struct constraint_buffer ctx = {substitutions, n_substitutions};
+    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, nodes[i], dfs_apply_substitutions);
 }
 
 // -- solver --
@@ -214,20 +214,6 @@ static void dbg_constraint(struct constraint const *c) {
     tess_type_snprint(buf_left, len_left, c->left);
     tess_type_snprint(buf_right, len_right, c->right);
     dbg("constraint %s = %s\n", buf_left, buf_right);
-}
-
-struct solver solver_init(allocator *alloc, vectora *constraints, vectora *substitutions) {
-    struct solver self;
-    self.alloc           = alloc;
-    self.strings         = alloc_arena_create(alloc, 1024);
-    self.constraints     = constraints;
-    self.substitutions   = substitutions;
-    self.unify_monotypes = true;
-    return self;
-}
-
-void solver_deinit(struct solver *self) {
-    alloc_arena_destroy(self->alloc, &self->strings);
 }
 
 static bool substitute_constraints(struct constraint *begin, struct constraint *end,
@@ -253,17 +239,15 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     return did_substitute != 0;
 }
 
-static bool unify_one(struct solver *self, struct constraint c) {
+static bool unify_one(ti_inferer *self, struct constraint c) {
 
     if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
-        struct tess_type          *orig           = type_type_var == c.left->tag ? c.left : c.right;
-        struct tess_type          *other          = type_type_var == c.left->tag ? c.right : c.left;
+        struct tess_type *orig      = type_type_var == c.left->tag ? c.left : c.right;
+        struct tess_type *other     = type_type_var == c.left->tag ? c.right : c.left;
 
-        struct constraint          candidate      = {orig, other};
-        struct constraint_iterator candidate_iter = {.ptr = &candidate};
-        veca_iterator_init(self->substitutions, &candidate_iter.base);
+        struct constraint candidate = {orig, other};
 
         // check conditions to rule out the candidate
         switch (other->tag) {
@@ -297,7 +281,10 @@ static bool unify_one(struct solver *self, struct constraint c) {
         }
 
         // push the candidate substitution
-        veca_push_back(self->substitutions, &candidate_iter.base);
+
+        alloc_push_back(self->type_arena, &self->substitutions, &self->n_substitutions,
+                        &self->cap_substitutions, &candidate);
+
     }
 
     // tuple constraints of equal size: unify matching elements
@@ -318,38 +305,46 @@ static bool unify_one(struct solver *self, struct constraint c) {
     return true;
 }
 
-void solver_run(struct solver *self) {
+void ti_run_solver(ti_inferer *self) {
     int loop_count = 100;
     while (loop_count--) {
 
-        bool                       did_substitute = false;
+        bool did_substitute = false;
 
-        struct constraint_iterator iter           = {0};
-        while (veca_iter(self->constraints, &iter.base)) {
+        for (u32 i = 0; i < self->n_constraints;) {
+
+            struct constraint *item = &self->constraints[i];
 
             // delete a = a constraints, and a = any constraints
-            if (iter.ptr->left == iter.ptr->right || tess_type_equal(iter.ptr->left, iter.ptr->right) ||
-                iter.ptr->left->tag == type_any || iter.ptr->right->tag == type_any) {
+            if (item->left == item->right || tess_type_equal(item->left, item->right) ||
+                item->left->tag == type_any || item->right->tag == type_any) {
 
-                veca_erase(self->constraints, &iter.base);
+                u32 len = self->n_constraints - i - 1;
+                memmove(&self->constraints[i], &self->constraints[i + 1],
+                        len * sizeof(self->constraints[0]));
+                self->n_constraints--;
+
+                // i does not increment
                 continue;
             }
 
             else {
 
-                if (unify_one(self, *iter.ptr)) {
+                if (unify_one(self, *item)) {
                     // iterate through remainder of constraints and substitute
-                    if (substitute_constraints(&iter.ptr[1], veca_end(self->constraints), *iter.ptr))
+                    if (substitute_constraints(&item[1], &self->constraints[self->n_constraints], *item))
                         did_substitute = true;
                 }
             }
+
+            ++i;
         }
 
         // apply each substitution in sequence to constraints
-        iter = (struct constraint_iterator){0};
-        while (veca_iter(self->substitutions, &iter.base)) {
-            if (substitute_constraints(veca_begin(self->constraints), veca_end(self->constraints),
-                                       *iter.ptr))
+        for (u32 i = 0; i < self->n_substitutions; ++i) {
+
+            if (substitute_constraints(self->constraints, &self->constraints[self->n_constraints],
+                                       self->substitutions[i]))
                 did_substitute = true;
         }
 
@@ -464,23 +459,15 @@ static ast_node const *find_let_node(char const *name, u16 arity, ast_node const
     return null;
 }
 
-struct collect_constraints_ctx {
-    allocator       *alloc;
-    ast_node const **nodes;
-    u32              count;
-    vectora         *constraints;
-};
-
 void collect_constraints(void *ctx_, ast_node *node) {
-    struct collect_constraints_ctx *ctx = ctx_;
-    struct constraint               c   = {0};
+    ti_inferer       *ctx = ctx_;
+    struct constraint c   = {0};
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
-        c                               = (struct constraint){(L), (R)};                                   \
-        struct constraint_iterator iter = {.ptr = &c};                                                     \
-        veca_iterator_init(ctx->constraints, &iter.base);                                                  \
-        veca_push_back(ctx->constraints, &iter.base);                                                      \
+        c = (struct constraint){(L), (R)};                                                                 \
+        alloc_push_back(ctx->type_arena, &ctx->constraints, &ctx->n_constraints, &ctx->cap_constraints,    \
+                        &c);                                                                               \
     } while (0)
 
     switch (node->tag) {
@@ -501,7 +488,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_tuple:  {
         struct tess_type *els =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->type, els);
     } break;
@@ -534,7 +521,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // left side of arrow is same as parameter tuple type
         struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         push(name->left, params);
 
         // right side of arrow is same as function body type
@@ -557,7 +544,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(type_arrow == node->type->tag);
 
         struct tess_type *tup =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         push(node->type->left, tup);
 
         // body type must be same as right hand of arrow
@@ -576,9 +563,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // arguments must match parameters
         struct tess_type *args =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         struct tess_type *params =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)lambda->array.nodes, lambda->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)lambda->array.nodes, lambda->array.n);
 
         push(args, params);
 
@@ -592,7 +579,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // for matching symbol name.
         assert(ast_symbol == node->named_application.name->tag);
         char const     *name = mos_string_str(&node->named_application.name->symbol.name);
-        ast_node const *let  = find_let_node(name, node->array.n, ctx->nodes, ctx->count);
+        ast_node const *let =
+          find_let_node(name, node->array.n, (ast_node const **)ctx->nodes, ctx->n_nodes);
         if (null == let)
             fatal("collect_constraints: can't find let node for function application: '%s'", name);
 
@@ -601,14 +589,15 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // arguments must match parameters
         struct tess_type *args =
-          arguments_to_tuple_type(ctx->alloc, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         // consider that the function may be any -> any
         struct tess_type *params = null;
 
         assert(type_arrow == let->let.name->type->tag);
         if (let->let.name->type->left->tag != type_any) {
-            params = arguments_to_tuple_type(ctx->alloc, (ast_node const **)let->array.nodes, let->array.n);
+            params =
+              arguments_to_tuple_type(ctx->type_arena, (ast_node const **)let->array.nodes, let->array.n);
             push(args, params);
         } else {
             push(args, let->let.name->type->left);
@@ -628,33 +617,27 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #undef push
 }
 
-void ti_collect_constraints(allocator *alloc, ast_node const *nodes[], u32 count, vectora *constraints) {
-    struct collect_constraints_ctx ctx = {alloc, nodes, count, constraints};
+void ti_collect_constraints(ti_inferer *self) {
 
-    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, (ast_node *)nodes[i], collect_constraints);
-}
-
-static void map_dbg_constraint(void *ctx, void *out, void const *el) {
-    (void)ctx;
-    (void)out;
-    dbg_constraint(el);
+    for (size_t i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], collect_constraints);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
-    veca_map(&self->constraints, map_dbg_constraint, null, null);
+    for (u32 i = 0; i < self->n_constraints; ++i) dbg_constraint(&self->constraints[i]);
 }
 
 void ti_inferer_dbg_substitutions(ti_inferer const *self) {
-    dbg("substitutions count = %u\n", veca_size(&self->substitutions));
-    veca_map(&self->substitutions, map_dbg_constraint, null, null);
+    dbg("substitutions count = %u\n", self->n_substitutions);
+    for (u32 i = 0; i < self->n_substitutions; ++i) dbg_constraint(&self->substitutions[i]);
 }
 
 // -- specialize function applications --
 
 struct specialize_functions_ctx {
-    struct ast_node  **nodes;
-    u32                n_nodes;
+    struct ast_node **nodes;
+    u32               n_nodes;
 
+    // FIXME don't do it this way - just be part of ti_inferer.
     struct ast_node ***out_nodes;
     u32               *out_n;
 };
