@@ -12,6 +12,7 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,8 @@ struct parser {
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
     struct token           token;
+
+    bool                   verbose;
 };
 
 struct token_iterator {
@@ -43,6 +46,7 @@ struct token_iterator {
 
 static void tokens_push_back(struct parser *, struct token *);
 static void tokens_shrink(struct parser *, u32);
+static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
 
@@ -53,6 +57,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->parent_alloc = alloc;
     self->parser_arena = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->verbose      = false;
 
     // tokenizer
     self->tokenizer = tokenizer_create(alloc, input, input_len);
@@ -954,6 +959,7 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
     u32 cap                 = 16;
     *len                    = 0;
     *out                    = alloc_calloc(out_alloc, cap, sizeof(struct ast_node *));
+    p->verbose              = false;
 
     struct ast_node **nodes = *out;
 
@@ -973,6 +979,17 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
 
+    return res;
+}
+
+int parser_parse_all_verbose(parser *p, allocator *out_alloc, struct ast_node ***out, u32 *len) {
+    p->verbose = true;
+
+    log(p, "begin parse");
+    int res = parser_parse_all(p, out_alloc, out, len);
+    log(p, "end parse");
+
+    p->verbose = false;
     return res;
 }
 
@@ -998,4 +1015,17 @@ void parser_report_errors(parser *self) {
     if (tess_err_ok == self->error.tag) return;
 
     fprintf(stderr, "parse error: %s\n", tess_error_tag_to_string(self->error.tag));
+}
+
+void log(struct parser *self, char const *restrict fmt, ...) {
+
+    if (!self->verbose) return;
+
+    char buf[128];
+    snprintf(buf, sizeof buf - 1, "parser: %s\n", fmt);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, buf, args); // NOLINT
+    va_end(args);
 }

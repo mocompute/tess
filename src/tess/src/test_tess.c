@@ -16,7 +16,7 @@
 #include <string.h>
 #include <time.h>
 
-static int compile_input(char const *input) {
+static int compile_input_flag(char const *input, bool verbose) {
 
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
@@ -30,9 +30,16 @@ static int compile_input(char const *input) {
     struct ast_node **nodes;
     u32               n_nodes = 0;
 
-    if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) {
-        parser_report_errors(p);
-        return 1;
+    if (verbose) {
+        if (parser_parse_all_verbose(p, nodes_alloc, &nodes, &n_nodes)) {
+            parser_report_errors(p);
+            return 1;
+        }
+    } else {
+        if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) {
+            parser_report_errors(p);
+            return 1;
+        }
     }
 
     dbg("\n  Parser output: \n");
@@ -86,6 +93,10 @@ static int compile_input(char const *input) {
 
     dbg("\n---------------------------\n\n");
     return 0;
+}
+
+static int compile_input(char const *input) {
+    return compile_input_flag(input, false);
 }
 
 static int test_tess_token_string(void) {
@@ -278,7 +289,7 @@ static int test_parse_all(void) {
                         "let b = a in\n"  // b = 2
                         "b           \n"; // value = 2
 
-    return compile_input(input);
+    return compile_input_flag(input, true);
 }
 
 static int test_let_fun(void) {
