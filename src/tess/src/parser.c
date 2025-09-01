@@ -558,11 +558,16 @@ static int function_declaration(parser *p) {
         return 1;
     }
 
+    // must have at least one parameter
+    if (a_try(p, a_identifier_typed)) return 1;
+
+    struct ast_node_iterator iter = {.ptr = &p->result};
+    vec_iterator_init(&parameters, &iter.base);
+    vec_push_back(p->parser_arena, &parameters, &iter.base);
+
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, &a_identifier_typed)) {
-            struct ast_node_iterator iter = {.ptr = &p->result};
-            vec_iterator_init(&parameters, &iter.base);
             vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
@@ -797,16 +802,17 @@ static int simple_declaration(parser *p) {
 
 static int let_in_form(parser *p) {
     // let a = 2 in expression
-    if (a_try_s(p, &the_symbol, "let")) return 1;
-    if (a_try(p, &simple_declaration)) return 1;
+    if (a_try_s(p, the_symbol, "let")) return 1;
+    if (a_try(p, simple_declaration)) return 1;
     ast_node *sym = p->result;
 
-    if (a_try(p, &expression)) return 1;
+    if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
 
-    if (a_try_s(p, &the_symbol, "in")) return 1;
-    if (a_try(p, &expression)) return 1;
-    ast_node *body     = p->result;
+    if (a_try_s(p, the_symbol, "in")) return 1;
+    if (a_try(p, expression)) return 1;
+    ast_node *body = p->result;
+    if (a_try(p, a_end_of_block)) return 1;
 
     ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
     node->let_in.name  = sym;
