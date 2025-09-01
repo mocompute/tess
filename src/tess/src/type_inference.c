@@ -10,6 +10,10 @@
 
 #include <assert.h>
 
+#define TYPE_ARENA_SIZE    16 * 1024
+#define STRINGS_ARENA_SIZE 4 * 1024
+#define CONSTRAINTS_SIZE   1024
+
 struct ti_inferer {
     allocator         *type_arena;
     allocator         *strings;
@@ -52,14 +56,14 @@ static void dbg_constraint(struct constraint const *);
 
 ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
     ti_inferer *self        = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena        = alloc_arena_create(alloc, 4096);
-    self->strings           = alloc_arena_create(alloc, 1024);
+    self->type_arena        = alloc_arena_create(alloc, TYPE_ARENA_SIZE);
+    self->strings           = alloc_arena_create(alloc, STRINGS_ARENA_SIZE);
     self->nodes_alloc       = nodes_alloc;
     self->nodes             = nodes;
     self->n_nodes           = n;
 
-    self->cap_constraints   = 1024;
-    self->cap_substitutions = 1024;
+    self->cap_constraints   = CONSTRAINTS_SIZE;
+    self->cap_substitutions = CONSTRAINTS_SIZE;
     self->constraints = alloc_malloc(self->type_arena, self->cap_constraints * sizeof self->constraints[0]);
     self->substitutions =
       alloc_malloc(self->type_arena, self->cap_substitutions * sizeof self->substitutions[0]);
