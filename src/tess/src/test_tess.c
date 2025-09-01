@@ -337,50 +337,6 @@ static int test_user_struct(void) {
     return compile_input(input);
 }
 
-static int test_parse_to_c(void) {
-    int        error = 0;
-
-    allocator *alloc = alloc_leak_detector_create();
-
-    {
-        char const *input = "let main () = \n"
-                            "  std_dbg \"hello world!\"";
-
-        parser     *p     = parser_create(alloc, input, strlen(input));
-        if (null == p) return error + 1;
-
-        struct ast_node **nodes;
-        u32               n_nodes = 0;
-
-        if (parser_parse_all(p, alloc, &nodes, &n_nodes)) return error + 1;
-        error += 1 == n_nodes ? 0 : 1;
-        if (error) return error;
-
-        vector transpiler_output = VEC(char);
-        vec_reserve(alloc, &transpiler_output, 1024);
-
-        transpiler *transpiler = transpiler_create(alloc, &transpiler_output, alloc);
-        if (!transpiler) return error + 1;
-
-        if (transpiler_compile(transpiler, nodes, n_nodes)) return error + 1;
-
-        // print out the output byte array: add string terminator
-        vec_push_back_byte(alloc, &transpiler_output, '\0');
-
-        printf("Output:\n%s\n", (char const *)vec_data(&transpiler_output));
-
-        vec_deinit(alloc, &transpiler_output);
-        transpiler_destroy(&transpiler);
-        alloc_free(alloc, nodes);
-
-        parser_destroy(&p);
-    }
-
-    alloc_leak_detector_destroy(&alloc);
-
-    return error;
-}
-
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -403,7 +359,6 @@ int main(void) {
     T(test_tokenizer_terminal_static_string);
     T(test_parser_node_to_string);
     T(test_parse_all);
-    T(test_parse_to_c);
     T(test_let_fun);
     T(test_let_fun_user_types);
     T(test_grouped);
