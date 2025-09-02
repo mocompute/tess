@@ -31,6 +31,8 @@ struct ti_inferer {
     u32                n_substitutions;
     u32                cap_substitutions;
 
+    u32                next_type_var;
+
     bool               verbose;
 
     bool               unify_monotypes;
@@ -48,7 +50,7 @@ struct constraint {
 
 // -- ti_inferer --
 
-static void ti_assign_type_variables(allocator *, ast_node *[], u32);
+static void ti_assign_type_variables(ti_inferer *);
 static void ti_collect_constraints(ti_inferer *);
 
 static void ti_apply_substitutions_to_ast(struct constraint *, u32, ast_node *[], u32);
@@ -72,7 +74,8 @@ ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, 
     self->substitutions =
       alloc_malloc(self->type_arena, self->cap_substitutions * sizeof self->substitutions[0]);
 
-    self->unify_monotypes = true;
+    self->unify_monotypes = false;
+    self->next_type_var   = 1; // 0 is not valid
 
     return self;
 }
@@ -90,7 +93,7 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
 
 int ti_inferer_run(ti_inferer *self) {
 
-    ti_assign_type_variables(self->type_arena, self->nodes, self->n_nodes);
+    ti_assign_type_variables(self);
 
     if (self->verbose) {
         dbg("ti_inferer_run: input nodes:\n");
@@ -119,6 +122,35 @@ int ti_inferer_run(ti_inferer *self) {
     ti_specialize_functions(self, &specialized, &n_specialized);
 
     // 5: add specialised nodes to program
+
+    {
+        u32 old = self->n_nodes;
+        self->n_nodes += n_specialized;
+        self->nodes = alloc_realloc(self->nodes_alloc, self->nodes, self->n_nodes * sizeof self->nodes[0]);
+        if (!self->nodes) fatal("ti_inferer_run: realloc failed after specialization.");
+
+        memcpy(&self->nodes[old], specialized, n_specialized * sizeof specialized[0]);
+
+        alloc_free(self->type_arena, specialized);
+        specialized = null;
+    }
+
+    if (self->verbose) {
+        dbg("ti_inferer_run: after specialization:\n");
+        {
+            for (size_t i = 0; i < self->n_nodes; ++i) {
+                char *str = ast_node_to_string(self->strings, self->nodes[i]);
+                dbg("%p: %s\n", self->nodes[i], str);
+                alloc_free(self->strings, str);
+            }
+        }
+    }
+
+    // 6. collect and solve constraints again
+    ti_assign_type_variables(self);
+    ti_collect_constraints(self);
+    ti_run_solver(self);
+    ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
 
     if (self->verbose) {
         dbg("ti_inferer_run: final constraints:\n");
@@ -294,6 +326,14 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
             break;
         }
 
+        // If a constraint exists on the original type towards a
+        // primitive type, reject this candidate.
+
+        for (u32 i = 0; i < self->n_constraints; i++) {
+            if (self->constraints[i].left == orig && tess_type_is_prim(self->constraints[i].right))
+                return false;
+        }
+
         // push the candidate substitution
 
         alloc_push_back(self->type_arena, &self->substitutions, &self->n_substitutions,
@@ -372,9 +412,9 @@ void ti_run_solver(ti_inferer *self) {
 // -- assign_type_variables --
 
 struct assign_type_variables_ctx {
-    allocator *alloc;
-    hashmap   *symbols;
-    u32        next;
+    ti_inferer *ti;
+    allocator  *alloc;
+    hashmap    *symbols;
 };
 
 void assign_type_variables(void *ctx_, ast_node *node) {
@@ -396,7 +436,7 @@ void assign_type_variables(void *ctx_, ast_node *node) {
             node->type = *found;
             assert(node->type->tag != type_nil);
         } else {
-            struct tess_type *assign = tess_type_create_type_var(ctx->alloc, ctx->next++);
+            struct tess_type *assign = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
             node->type               = assign;
             map_set(&ctx->symbols, mos_string_str(&node->symbol.name),
                     (u16)mos_string_size(&node->symbol.name), &assign);
@@ -406,30 +446,30 @@ void assign_type_variables(void *ctx_, ast_node *node) {
     }
 
     else if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        struct tess_type *left  = tess_type_create_type_var(ctx->alloc, ctx->next++);
-        struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->next++);
+        struct tess_type *left  = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
+        struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
         struct tess_type *arrow = tess_type_create_arrow(ctx->alloc, left, right);
         if (ast_lambda_function == node->tag) {
             node->type = arrow;
         } else {
-            node->type           = tess_type_create_type_var(ctx->alloc, ctx->next++);
+            node->type           = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
             node->let.name->type = arrow;
         }
     } else {
-        struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->next++);
+        struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
         node->type           = tv;
     }
 }
 
-void ti_assign_type_variables(allocator *alloc, ast_node *nodes[], u32 count) {
+void ti_assign_type_variables(ti_inferer *self) {
     struct assign_type_variables_ctx ctx = {
-      .alloc   = alloc,
-      .symbols = map_create(alloc, sizeof(struct tess_type *)),
-      .next    = 1, // 0 not valid
+      .ti      = self,
+      .alloc   = self->type_arena,
+      .symbols = map_create(self->type_arena, sizeof(struct tess_type *)),
     };
 
-    for (size_t i = 0; i < count; ++i) {
-        ast_pool_dfs(&ctx, nodes[i], assign_type_variables);
+    for (size_t i = 0; i < self->n_nodes; ++i) {
+        ast_pool_dfs(&ctx, self->nodes[i], assign_type_variables);
     }
 
     map_destroy(&ctx.symbols);
@@ -548,8 +588,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // operands must be same type
         push(node->infix.left->type, node->infix.right->type);
 
-        // result must be same type
+        // result must be same type as both
         push(node->type, node->infix.right->type);
+        push(node->type, node->infix.left->type);
 
         break;
 
@@ -690,6 +731,13 @@ struct specialize_functions_ctx {
     u32               cap_specials;
 };
 
+static void restore_original_variables(void *ctx, ast_node *node) {
+    (void)ctx;
+    if (ast_symbol != node->tag) return;
+
+    mos_string_move(&node->symbol.name, &node->symbol.original);
+}
+
 static void specialize_node(void *ctx_, ast_node *node) {
     struct specialize_functions_ctx *ctx   = ctx_;
     allocator                       *alloc = ctx->ti->type_arena;
@@ -729,12 +777,22 @@ static void specialize_node(void *ctx_, ast_node *node) {
     if (null == special) fatal("specialize_node: clone failed.");
 
     // set special's arrow type to the specialised args from the callsite
-    assert(type_arrow == special->let.name->type->tag);
-    special->let.name->type->left = args_type;
+    // assert(type_arrow == special->let.name->type->tag);
+    // special->let.name->type->left = args_type;
 
-    char *str                     = tess_type_to_string(alloc, special->let.name->type);
+    char *str = tess_type_to_string(alloc, special->let.name->type);
     log(ctx->ti, "specialized '%s' for type %s", ast_node_name_string(special->let.name), str);
     alloc_free(alloc, str);
+
+    // clear special's type to allow later phase to do full constraint satisfaction
+    special->type           = null;
+    special->let.name->type = null;
+    special->let.body->type = null;
+
+    // replace all its renamed variables with their originals
+    ast_pool_dfs(null, special, restore_original_variables);
+
+    alloc_push_back(alloc, &ctx->specials, &ctx->n_specials, &ctx->cap_specials, &special);
 }
 
 static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nodes, u32 *out_n) {
@@ -750,6 +808,9 @@ static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nod
     if (!ctx.specials) fatal("ti_specialize_functions: realloc failed.");
     *out_nodes = ctx.specials;
     *out_n     = ctx.n_specials;
+
+    // use a syntax checker instance to
+    // FIXME: move syntax checker into ti_inferer so that it can remember the next variable name to assign.
 }
 
 //
