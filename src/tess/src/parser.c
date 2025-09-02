@@ -86,6 +86,7 @@ void parser_destroy(parser **self) {
     tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
+    alloc_arena_destroy((*self)->parent_alloc, &(*self)->debug_arena);
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
     alloc_arena_destroy((*self)->parent_alloc, &(*self)->parser_arena);
     alloc_free((*self)->parent_alloc, *self);
