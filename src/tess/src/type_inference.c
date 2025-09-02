@@ -491,11 +491,12 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
 
         // If a constraint exists on the original type towards a
         // primitive type, reject this candidate.
+        // FIXME: not sure about the correct logic on this question
 
-        for (u32 i = 0; i < self->n_constraints; i++) {
-            if (self->constraints[i].left == orig && tess_type_is_prim(self->constraints[i].right))
-                return false;
-        }
+        // for (u32 i = 0; i < self->n_constraints; i++) {
+        //     if (self->constraints[i].left == orig && tess_type_is_prim(self->constraints[i].right))
+        //         return false;
+        // }
 
         // push the candidate substitution
 
@@ -691,8 +692,8 @@ static ast_node const *find_typed_let_node(char const *name, struct tess_type *p
             if (0 == strcmp(name, node_name) && n_params == nodes[i]->array.n) {
 
                 struct tess_type *arrow = nodes[i]->let.name->type;
-                assert(type_arrow == arrow->tag);
-                assert(type_tuple == arrow->left->tag);
+                if (type_arrow != arrow->tag) goto mismatch;
+                if (type_tuple != arrow->left->tag) goto mismatch;
 
                 for (u16 j = 0; j < n_params; ++j) {
                     if (params[j] != arrow->left->elements[j]) goto mismatch;
@@ -828,9 +829,17 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // must find function definition in a prior ast_let node. Look
         // for matching symbol name.
         assert(ast_symbol == node->named_application.name->tag);
-        char const     *name = mos_string_str(&node->named_application.name->symbol.name);
-        ast_node const *let =
-          find_let_node(name, node->array.n, (ast_node const **)ctx->nodes, ctx->n_nodes);
+        char const       *name = mos_string_str(&node->named_application.name->symbol.name);
+
+        struct tess_type *args_type =
+          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->named_application.arguments,
+                                  node->named_application.n_arguments);
+
+        ast_node const *let = null;
+        let                 = find_typed_let_node(name, args_type->elements, args_type->n_elements,
+                                                  (ast_node const **)ctx->nodes, ctx->n_nodes);
+
+        if (!let) let = find_let_node(name, node->array.n, (ast_node const **)ctx->nodes, ctx->n_nodes);
         if (null == let)
             fatal("collect_constraints: can't find let node for function application: '%s'", name);
 
@@ -956,6 +965,27 @@ static void specialize_node(void *ctx_, ast_node *node) {
     alloc_push_back(alloc, &ctx->specials, &ctx->n_specials, &ctx->cap_specials, &special);
 }
 
+// static void apply_specializations(void *ctx_, ast_node *node) {
+//     struct specialize_functions_ctx *ctx = ctx_;
+//     if (ast_named_function_application != node->tag) return;
+
+//     ast_node const *name = node->named_application.name;
+
+//     // does a specialised function exist?
+//     assert(type_arrow == node->named_application.name->type->tag);
+
+//     struct tess_type *arrow = node->named_application.name->type->left;
+
+//     ast_node const   *let =
+//       find_typed_let_node(ast_node_name_string(name), arrow->elements, arrow->n_elements,
+//                           (ast_node const **)ctx->ti->nodes, ctx->ti->n_nodes);
+
+//     if (!let) return;
+
+//     // rewrite application node
+//     // FIXME probably don't need to do this at all
+// }
+
 static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nodes, u32 *out_n) {
     struct specialize_functions_ctx ctx;
     ctx.ti           = self;
@@ -984,7 +1014,8 @@ static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nod
         map_destroy(&rename.map);
     }
 
-    // FIXME install specialised copies into the callsites
+    // FIXME install specialised copies into the callsites - FIXME no need for this
+    // for (size_t i = 0; i < self->n_nodes; ++i) ast_pool_dfs(&ctx, self->nodes[i], apply_specializations);
 }
 
 //
