@@ -63,7 +63,7 @@ void syntax_checker_destroy(syntax_checker **self) {
 
 // -- syntax_checker operation --
 
-int syntax_checker_run(syntax_checker *self, ast_node **nodes, u32 count) {
+int syntax_checker_run(syntax_checker *self) {
 
     int res = 0;
     if ((res = syntax_register_user_types(self))) return res;

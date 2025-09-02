@@ -56,7 +56,7 @@ static int compile_input_flag(char const *input, bool verbose) {
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes
 
-    if (syntax_checker_run(syntax, nodes, n_nodes)) {
+    if (syntax_checker_run(syntax)) {
         syntax_checker_report_errors(syntax);
         return 1;
     }

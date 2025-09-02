@@ -156,7 +156,7 @@ int compile(struct state *self) {
     }
 
     syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes, n_nodes);
-    if (syntax_checker_run(syntax, nodes, n_nodes)) {
+    if (syntax_checker_run(syntax)) {
         syntax_checker_report_errors(syntax);
         error = 1;
         goto cleanup_syntax;
