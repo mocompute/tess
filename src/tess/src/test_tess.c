@@ -289,7 +289,7 @@ static int test_parse_all(void) {
                         "let b = a in\n"  // b = 2
                         "b           \n"; // value = 2
 
-    return compile_input_flag(input, true);
+    return compile_input_flag(input, false);
 }
 
 static int test_let_fun(void) {
@@ -315,13 +315,13 @@ static int test_let_fun_user_types(void) {
                         "\n"
                         "let add a : foo b = a + b\n"
                         "let main () = add 1 2\n";
-    return compile_input(input);
+    return compile_input_flag(input, false);
 }
 
 static int test_user_struct_empty(void) {
     char const *input = "struct foo = end\n";
 
-    return compile_input(input);
+    return compile_input_flag(input, false);
 }
 
 static int test_user_struct(void) {
@@ -334,7 +334,7 @@ static int test_user_struct(void) {
                         "  x : foo\n"
                         "end";
 
-    return compile_input(input);
+    return compile_input_flag(input, false);
 }
 
 #define T(name)                                                                                            \

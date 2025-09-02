@@ -36,6 +36,7 @@
     X(tess_err_expected_open_round, "expected_open_round")                                                 \
     X(tess_err_expected_close_round, "expected_close_round")                                               \
     X(tess_err_expected_infix_operand, "expected_infix_operand")                                           \
+    X(tess_err_expected_newline, "expected_newline")                                                       \
     X(tess_err_expected_eof, "expected_eof")                                                               \
     X(tess_err_invalid_expression, "invalid_expression")                                                   \
     X(tess_err_reserved_symbol, "reserved_symbol")                                                         \

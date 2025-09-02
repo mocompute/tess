@@ -97,6 +97,7 @@ void parser_destroy(parser **self) {
 typedef int (*parse_fun)(parser *);
 typedef int (*parse_fun_s)(parser *, char const *);
 
+static int struct_declaration(parser *);
 static int expression(parser *);
 static int function_argument(parser *);
 static int grouped_expression(parser *);
@@ -325,20 +326,17 @@ static int a_close_round(parser *p) {
 }
 
 static int a_end_of_expression(parser *p) {
-    if (eat_newlines(p)) {
-        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
-        return 1;
-    }
 
-    if (next_token(p)) {
+    if (eat_newlines(p) || next_token(p)) {
         if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
 
     switch (p->token.tag) {
     case tok_one_newline:
+    case tok_newline_indent:
     case tok_two_newline:
-    case tok_semicolon:   return result_ast_str(p, ast_symbol, ";");
+    case tok_semicolon:      return result_ast_str(p, ast_symbol, ";");
 
     case tok_close_round:
         // signal special failure so the token gets put back, but use a magic
@@ -346,7 +344,6 @@ static int a_end_of_expression(parser *p) {
         return 2;
 
     case tok_symbol:
-        // FIXME
 
         if (is_start_of_expression(p->token.s)) return 2;
         break;
@@ -357,13 +354,46 @@ static int a_end_of_expression(parser *p) {
     case tok_open_round:
     case tok_equal_sign:
     case tok_invalid:
-    case tok_newline_indent:
     case tok_number:
     case tok_string:
-    case tok_comment:        break;
+    case tok_comment:    break;
     }
 
     p->error.tag = tess_err_unfinished_expression;
+    return 1;
+}
+
+static int a_newline(parser *p) {
+
+    if (next_token(p)) {
+        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
+        return 1;
+    }
+
+    switch (p->token.tag) {
+    case tok_one_newline:
+    case tok_newline_indent:
+    case tok_two_newline:
+    case tok_semicolon:      return result_ast_str(p, ast_symbol, ";");
+
+    case tok_close_round:
+        // signal special failure so the token gets put back, but use a magic
+        // error code so that consumers of end_of_expression can treat it as a success
+        return 2;
+
+    case tok_symbol:
+    case tok_comma:
+    case tok_colon:
+    case tok_arrow:
+    case tok_open_round:
+    case tok_equal_sign:
+    case tok_invalid:
+    case tok_number:
+    case tok_string:
+    case tok_comment:    break;
+    }
+
+    p->error.tag = tess_err_expected_newline;
     return 1;
 }
 
@@ -548,7 +578,7 @@ static int a_nil(parser *p) {
 
 static int a_end_of_block(parser *p) {
 
-    if (next_token(p)) {
+    if (eat_newlines(p) || next_token(p)) {
         if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
             return result_ast_str(p, ast_symbol, "end");
 
@@ -596,11 +626,13 @@ static int struct_declaration(parser *p) {
 
         if (0 == a_try(p, a_identifier)) {
             ast_node *field_name = p->result;
+            log(p, "struct_declaration: field %s", ast_node_to_string(p->debug_arena, field_name));
 
             if (a_try(p, a_colon)) return 1;
 
             if (a_try(p, a_type_identifier)) return 1;
-            ast_node                *type = p->result;
+            ast_node *type = p->result;
+            log(p, "struct_declaration: type %s", ast_node_to_string(p->debug_arena, type));
 
             struct ast_node_iterator iter = {.ptr = &field_name};
             vec_iterator_init(&field_names, &iter.base);
@@ -610,12 +642,10 @@ static int struct_declaration(parser *p) {
             vec_iterator_init(&field_types, &ty_iter.base);
             vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
 
-            if (a_try_special(p, a_end_of_expression)) return 1; // expect ; or newline after field
+            if (a_try_special(p, a_newline)) return 1; // expect ; or newline after field
 
             continue;
         }
-
-        if (eat_newlines(p)) return 1;
 
         if (0 == a_try(p, a_end_of_block)) {
 
