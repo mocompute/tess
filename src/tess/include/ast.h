@@ -1,6 +1,7 @@
 #ifndef TESS_AST_H
 #define TESS_AST_H
 
+#include "alloc.h"
 #include "ast_tags.h"
 #include "error.h"
 #include "mos_string.h"
@@ -121,6 +122,7 @@ struct ast_node_iterator {
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
+nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
 void                ast_node_init(allocator *, ast_node *, ast_tag);
 void                ast_node_deinit(allocator *, ast_node *);
 void                ast_node_replace(allocator *, ast_node *, ast_tag);

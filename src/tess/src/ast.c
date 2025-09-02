@@ -103,6 +103,118 @@ void ast_node_move(ast_node *dst, ast_node *src) {
     alloc_zero(src); // valid nil node
 }
 
+nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
+
+    if (null == orig) return null;
+
+    ast_node *clone = ast_node_create(alloc, orig->tag);
+
+    // types are copied by reference, not cloned
+    clone->type = orig->type;
+
+    // clone common array for some tags
+    switch (clone->tag) {
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_let:
+    case ast_tuple:
+    case ast_lambda_function_application:
+    case ast_named_function_application:
+        clone->array.n     = orig->array.n;
+        clone->array.nodes = alloc_malloc(alloc, orig->array.n * sizeof clone->array.nodes[0]);
+        for (u32 i = 0; i < clone->array.n; ++i)
+            clone->array.nodes[i] = ast_node_clone(alloc, orig->array.nodes[i]);
+        break;
+
+    case ast_user_defined_type:
+    case ast_symbol:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_infix:
+    case ast_let_in:
+    case ast_if_then_else:      break;
+    }
+
+    // clone the rest of the fields
+    switch (clone->tag) {
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:  break;
+
+    case ast_symbol:
+    case ast_string:
+        mos_string_copy(alloc, &clone->symbol.name, &orig->symbol.name);
+        mos_string_copy(alloc, &clone->symbol.original, &orig->symbol.original);
+        clone->symbol.annotation = ast_node_clone(alloc, orig->symbol.annotation);
+        break;
+
+    case ast_infix:
+        clone->infix.left  = ast_node_clone(alloc, orig->infix.left);
+        clone->infix.right = ast_node_clone(alloc, orig->infix.right);
+        break;
+
+    case ast_tuple: break;
+
+    case ast_let_in:
+        clone->let_in.name  = ast_node_clone(alloc, orig->let_in.name);
+        clone->let_in.value = ast_node_clone(alloc, orig->let_in.value);
+        clone->let_in.body  = ast_node_clone(alloc, orig->let_in.body);
+        break;
+
+    case ast_let:
+        clone->let.name = ast_node_clone(alloc, orig->let.name);
+        clone->let.body = ast_node_clone(alloc, orig->let.body);
+        break;
+
+    case ast_if_then_else:
+        clone->if_then_else.condition = ast_node_clone(alloc, orig->if_then_else.condition);
+        clone->if_then_else.yes       = ast_node_clone(alloc, orig->if_then_else.yes);
+        clone->if_then_else.no        = ast_node_clone(alloc, orig->if_then_else.no);
+        break;
+
+    case ast_lambda_function:
+        clone->lambda_function.body = ast_node_clone(alloc, orig->lambda_function.body);
+        break;
+
+    case ast_function_declaration:
+        clone->function_declaration.name = ast_node_clone(alloc, orig->function_declaration.name);
+        break;
+
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+        clone->lambda_application.lambda = ast_node_clone(alloc, orig->lambda_application.lambda);
+        break;
+
+    case ast_named_function_application:
+        clone->named_application.name = ast_node_clone(alloc, orig->named_application.name);
+        break;
+
+    case ast_user_defined_type:
+        clone->user_type.name        = ast_node_clone(alloc, orig->user_type.name);
+
+        clone->user_type.n_fields    = orig->user_type.n_fields;
+        clone->user_type.field_types = orig->user_type.field_types; // always in arena, never clone types
+
+        for (u32 i = 0; i < clone->user_type.n_fields; ++i) {
+            clone->user_type.field_annotations[i] =
+              ast_node_clone(alloc, orig->user_type.field_annotations[i]);
+            clone->user_type.field_names[i] = ast_node_clone(alloc, orig->user_type.field_names[i]);
+        }
+        break;
+    }
+
+    return clone;
+}
+
 char const *ast_node_name_string(ast_node const *node) {
     if (ast_symbol != node->tag && ast_string != node->tag) return null;
 

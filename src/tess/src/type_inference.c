@@ -9,6 +9,8 @@
 #include "tess_type.h"
 
 #include <assert.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 #define TYPE_ARENA_SIZE    16 * 1024
 #define STRINGS_ARENA_SIZE 4 * 1024
@@ -35,6 +37,8 @@ struct ti_inferer {
     // can be set to false to find type variables that may have
     // contradictory constraints. This will aid in reporting to the
     // user which program forms are ill-typed.
+
+    int indent_level;
 };
 
 struct constraint {
@@ -48,11 +52,11 @@ static void ti_assign_type_variables(allocator *, ast_node *[], u32);
 static void ti_collect_constraints(ti_inferer *);
 
 static void ti_apply_substitutions_to_ast(struct constraint *, u32, ast_node *[], u32);
-static void ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
-                                    u32 *out_n);
+static void ti_specialize_functions(ti_inferer *, struct ast_node ***out_nodes, u32 *out_n);
 void        ti_run_solver(ti_inferer *);
 
 static void dbg_constraint(struct constraint const *);
+static void log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, allocator *nodes_alloc) {
     ti_inferer *self        = alloc_calloc(alloc, 1, sizeof *self);
@@ -108,11 +112,13 @@ int ti_inferer_run(ti_inferer *self) {
     // 3
     ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
 
-    //
+    // 4: specialize
 
     struct ast_node **specialized   = 0;
     u32               n_specialized = 0;
-    ti_specialize_functions(self->nodes, self->n_nodes, &specialized, &n_specialized);
+    ti_specialize_functions(self, &specialized, &n_specialized);
+
+    // 5: add specialised nodes to program
 
     if (self->verbose) {
         dbg("ti_inferer_run: final constraints:\n");
@@ -457,13 +463,45 @@ static ast_node const *find_let_node(char const *name, u16 arity, ast_node const
 
     if (0 == strncmp("c_", name, 2) || 0 == strncmp("std_", name, 4)) return &let_any_any;
 
-    for (size_t i = 0; i < count; ++i) {
+    for (u32 i = 0; i < count; ++i) {
         if (ast_let == nodes[i]->tag) {
             assert(ast_symbol == nodes[i]->let.name->tag);
             char const *node_name = mos_string_str(&nodes[i]->let.name->symbol.name);
             if (0 == strcmp(name, node_name) && arity == nodes[i]->array.n) return nodes[i];
         }
     }
+    return null;
+}
+
+static ast_node const *find_typed_let_node(char const *name, struct tess_type *params[], u16 n_params,
+                                           ast_node const *nodes[], u32 n_nodes) {
+
+    if (!name) fatal("find_typed_let_node: null search string");
+
+    if (0 == strncmp("c_", name, 2) || 0 == strncmp("std_", name, 4))
+        return find_let_node(name, n_params, nodes, n_nodes);
+
+    for (u32 i = 0; i < n_nodes; ++i) {
+        if (ast_let == nodes[i]->tag) {
+            assert(ast_symbol == nodes[i]->let.name->tag);
+            char const *node_name = mos_string_str(&nodes[i]->let.name->symbol.name);
+            if (0 == strcmp(name, node_name) && n_params == nodes[i]->array.n) {
+
+                struct tess_type *arrow = nodes[i]->let.name->type;
+                assert(type_arrow == arrow->tag);
+                assert(type_tuple == arrow->left->tag);
+
+                for (u16 j = 0; j < n_params; ++j) {
+                    if (params[j] != arrow->left->elements[j]) goto mismatch;
+                }
+
+                return nodes[i];
+            }
+        }
+
+    mismatch:;
+    }
+
     return null;
 }
 
@@ -645,30 +683,91 @@ void ti_inferer_dbg_substitutions(ti_inferer const *self) {
 // -- specialize function applications --
 
 struct specialize_functions_ctx {
-    struct ast_node **nodes;
-    u32               n_nodes;
+    ti_inferer       *ti;
 
-    // FIXME don't do it this way - just be part of ti_inferer.
-    struct ast_node ***out_nodes;
-    u32               *out_n;
+    struct ast_node **specials;
+    u32               n_specials;
+    u32               cap_specials;
 };
 
 static void specialize_node(void *ctx_, ast_node *node) {
-    struct specialize_functions_ctx *ctx = ctx_;
+    struct specialize_functions_ctx *ctx   = ctx_;
+    allocator                       *alloc = ctx->ti->type_arena;
 
     if (node->tag != ast_named_function_application) return;
     assert(ast_symbol == node->named_application.name->tag);
 
-    ast_node const *let =
-      find_let_node(mos_string_str(&node->named_application.name->symbol.name),
-                    node->named_application.n_arguments, (ast_node const **)ctx->nodes, ctx->n_nodes);
+    ast_node const *name = node->named_application.name;
+
+    // does a specialised function already exist?
+
+    struct tess_type *args_type = arguments_to_tuple_type(
+      alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
+
+    ast_node const *let = null;
+
+    let = find_typed_let_node(ast_node_name_string(name), args_type->elements, args_type->n_elements,
+                              (ast_node const **)ctx->ti->nodes, ctx->ti->n_nodes);
+
+    if (!let)
+        let = find_let_node(mos_string_str(&name->symbol.name), node->named_application.n_arguments,
+                            (ast_node const **)ctx->ti->nodes, ctx->ti->n_nodes);
 
     // TODO compiler error
     if (null == let) fatal("specialize_node: can't find let node for function application.");
+
+    assert(type_arrow == name->type->tag);
+
+    // can we unify our arrow type with the generic function?
+
+    // what if our arrow type also includes a type variable?? How
+    // would we specialize the generic function then?
+
+    // make a specialised function and later re-run constraint solving
+
+    ast_node *special = ast_node_clone(alloc, let);
+    if (null == special) fatal("specialize_node: clone failed.");
+
+    // set special's arrow type to the specialised args from the callsite
+    assert(type_arrow == special->let.name->type->tag);
+    special->let.name->type->left = args_type;
+
+    char *str                     = tess_type_to_string(alloc, special->let.name->type);
+    log(ctx->ti, "specialized '%s' for type %s", ast_node_name_string(special->let.name), str);
+    alloc_free(alloc, str);
 }
 
-static void ti_specialize_functions(struct ast_node **nodes, u32 n, struct ast_node ***out_nodes,
-                                    u32 *out_n) {
-    struct specialize_functions_ctx ctx = {nodes, n, out_nodes, out_n};
-    for (size_t i = 0; i < n; ++i) ast_pool_dfs(&ctx, nodes[i], specialize_node);
+static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nodes, u32 *out_n) {
+    struct specialize_functions_ctx ctx;
+    ctx.ti           = self;
+    ctx.cap_specials = 128;
+    ctx.n_specials   = 0;
+    ctx.specials     = alloc_malloc(self->type_arena, ctx.cap_specials * sizeof ctx.specials[0]);
+
+    for (size_t i = 0; i < self->n_nodes; ++i) ast_pool_dfs(&ctx, self->nodes[i], specialize_node);
+
+    if (ctx.n_specials) ctx.specials = alloc_realloc(self->type_arena, ctx.specials, ctx.n_specials);
+    if (!ctx.specials) fatal("ti_specialize_functions: realloc failed.");
+    *out_nodes = ctx.specials;
+    *out_n     = ctx.n_specials;
+}
+
+//
+
+void log(ti_inferer *self, char const *restrict fmt, ...) {
+
+    if (!self->verbose) return;
+
+    int  spaces = self->indent_level * 2;
+
+    char buf[256];
+    int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
+    if (offset < 0) return;
+
+    snprintf(buf + offset, sizeof buf - (u32)offset, "parser: %s\n", fmt);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, buf, args); // NOLINT
+    va_end(args);
 }
