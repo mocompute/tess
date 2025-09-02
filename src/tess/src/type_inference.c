@@ -31,6 +31,8 @@ struct ti_inferer {
     u32                n_substitutions;
     u32                cap_substitutions;
 
+    u32                next_var;
+
     u32                next_type_var;
 
     bool               verbose;
@@ -50,6 +52,7 @@ struct constraint {
 
 // -- ti_inferer --
 
+static void ti_rename_variables(ti_inferer *);
 static void ti_assign_type_variables(ti_inferer *);
 static void ti_collect_constraints(ti_inferer *);
 
@@ -76,6 +79,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, 
 
     self->unify_monotypes = false;
     self->next_type_var   = 1; // 0 is not valid
+    self->next_var        = 1; // 0 is not valid
 
     return self;
 }
@@ -92,6 +96,8 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
 }
 
 int ti_inferer_run(ti_inferer *self) {
+
+    ti_rename_variables(self);
 
     ti_assign_type_variables(self);
 
@@ -182,6 +188,163 @@ void ti_inferer_report_errors(ti_inferer *self) {
         }
     }
     dbg("\n-- program nodes end\n\n");
+}
+
+// -- rename variables --
+
+struct rename_variables_ctx {
+    ti_inferer *ti;
+    allocator  *alloc;
+    hashmap    *map;
+};
+
+static void next_variable_name(struct rename_variables_ctx *self, string_t *out) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "__v%u", self->ti->next_var++);
+    *out = mos_string_init(self->ti->strings, buf);
+}
+
+static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
+
+    string_t const *found = map_get(map, mos_string_str(string), (u16)mos_string_size(string));
+
+    if (found) {
+        mos_string_copy(alloc, copy_to, string); // preserve original name for errors
+        mos_string_copy(alloc, string, found);
+    }
+}
+
+static void rename_variables(struct rename_variables_ctx *, ast_node *);
+
+static void rename_array_elements(struct rename_variables_ctx *self, ast_node **elements, u16 n) {
+
+    for (size_t i = 0; i < n; ++i) {
+        ast_node const *name = elements[i];
+        // parameter may be a symbol or nil
+        if (ast_symbol != name->tag) break; // nil can only be sole param
+
+        string_t var_name;
+        next_variable_name(self, &var_name);
+
+        map_set(&self->map, mos_string_str(&name->symbol.name), (u16)mos_string_size(&name->symbol.name),
+                &var_name);
+
+        // rename the actual parameter symbol
+        rename_variables(self, elements[i]);
+    }
+}
+
+static void rename_variables(struct rename_variables_ctx *self, ast_node *node) {
+    if (!node) return;
+
+    switch (node->tag) {
+    case ast_symbol:
+        return rename_if_match(self->alloc, &node->symbol.name, self->map, &node->symbol.original);
+
+    case ast_infix:
+        rename_variables(self, node->infix.left);
+        rename_variables(self, node->infix.right);
+        break;
+
+    case ast_tuple:
+        for (size_t i = 0; i < node->array.n; ++i) rename_variables(self, node->array.nodes[i]);
+        break;
+
+    case ast_let_in: {
+        // make a new variable for this let-in subexpression and recurse,
+        // but save prior value in case this is a shadowing binding.
+
+        // first apply rename to the value portion of the expression,
+        // since it is not allowed to refer to the symbol being defined.
+        // But it may refer to an outer let-in binding of the same name.
+        rename_variables(self, node->let_in.value);
+
+        string_t var_name;
+        next_variable_name(self, &var_name);
+
+        hashmap *save = map_copy(self->map);
+        assert(save);
+
+        ast_node const *name = node->let_in.name;
+        assert(ast_symbol == name->tag);
+
+        map_set(&self->map, mos_string_str(&name->symbol.name), (u16)mos_string_size(&name->symbol.name),
+                &var_name);
+
+        rename_variables(self, node->let_in.name);
+        rename_variables(self, node->let_in.body);
+
+        map_destroy(&self->map);
+        self->map = save;
+
+    } break;
+
+    case ast_let: {
+        // make new variables for all function parameters. save existing
+        // map in case any of them shadow.
+
+        hashmap *save = map_copy(self->map);
+        assert(save);
+
+        rename_array_elements(self, node->array.nodes, node->array.n);
+        rename_variables(self, node->let.body);
+
+        map_destroy(&self->map);
+        self->map = save;
+
+    } break;
+
+    case ast_if_then_else:
+        rename_variables(self, node->if_then_else.condition);
+        rename_variables(self, node->if_then_else.yes);
+        rename_variables(self, node->if_then_else.no);
+        break;
+
+    case ast_lambda_function: {
+        // make new variable for function parameters, saving map in case of
+        // shadowing.
+
+        hashmap *save = map_copy(self->map);
+        if (!save) fatal("rename_variables: map copy failed.");
+
+        rename_array_elements(self, node->array.nodes, node->array.n);
+        rename_variables(self, node->lambda_function.body);
+
+        map_destroy(&self->map);
+        self->map = save;
+
+    } break;
+
+    case ast_lambda_function_application:
+    case ast_named_function_application:  {
+        for (size_t i = 0; i < node->array.n; ++i) rename_variables(self, node->array.nodes[i]);
+
+    } break;
+
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_user_defined_type:    break;
+    }
+}
+
+static void ti_rename_variables(ti_inferer *self) {
+    struct rename_variables_ctx ctx;
+    ctx.ti    = self;
+    ctx.alloc = self->type_arena;
+    ctx.map   = map_create(self->type_arena, sizeof(string_t));
+
+    for (u32 i = 0; i < self->n_nodes; ++i) {
+        rename_variables(&ctx, self->nodes[i]);
+    }
+
+    map_destroy(&ctx.map);
 }
 
 // -- apply substitutions --
