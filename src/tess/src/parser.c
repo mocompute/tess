@@ -166,6 +166,17 @@ static bool is_reserved(char const *s) {
     return false;
 }
 
+static bool is_start_of_expression(char const *s) {
+    static char const *strings[] = {
+      "fun", "if", "let", "struct", null,
+    };
+    char const **it = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return true;
+
+    return false;
+}
+
 static bool is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
       "+", "-", "*", "/", null,
@@ -314,19 +325,42 @@ static int a_close_round(parser *p) {
 }
 
 static int a_end_of_expression(parser *p) {
+    if (eat_newlines(p)) {
+        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
+        return 1;
+    }
+
     if (next_token(p)) {
         if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
 
-    if (tok_semicolon == p->token.tag || tok_one_newline == p->token.tag ||
-        tok_newline_indent == p->token.tag || tok_two_newline == p->token.tag)
-        return result_ast_str(p, ast_symbol, ";");
+    switch (p->token.tag) {
+    case tok_one_newline:
+    case tok_two_newline:
+    case tok_semicolon:   return result_ast_str(p, ast_symbol, ";");
 
-    if (tok_close_round == p->token.tag) {
+    case tok_close_round:
         // signal special failure so the token gets put back, but use a magic
         // error code so that consumers of end_of_expression can treat it as a success
         return 2;
+
+    case tok_symbol:
+        // FIXME
+
+        if (is_start_of_expression(p->token.s)) return 2;
+        break;
+
+    case tok_comma:
+    case tok_colon:
+    case tok_arrow:
+    case tok_open_round:
+    case tok_equal_sign:
+    case tok_invalid:
+    case tok_newline_indent:
+    case tok_number:
+    case tok_string:
+    case tok_comment:        break;
     }
 
     p->error.tag = tess_err_unfinished_expression;
@@ -1047,6 +1081,8 @@ static int grouped_expression(parser *p) {
 }
 
 static int expression(parser *p) {
+
+    if (eat_newlines(p)) return 1;
 
     p->indent_level++;
 
