@@ -77,7 +77,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node **nodes, u32 n, 
     self->substitutions =
       alloc_malloc(self->type_arena, self->cap_substitutions * sizeof self->substitutions[0]);
 
-    self->unify_monotypes = false;
+    self->unify_monotypes = true;
     self->next_type_var   = 1; // 0 is not valid
     self->next_var        = 1; // 0 is not valid
 
@@ -894,11 +894,9 @@ struct specialize_functions_ctx {
     u32               cap_specials;
 };
 
-static void restore_original_variables(void *ctx, ast_node *node) {
+static void clear_types(void *ctx, ast_node *node) {
     (void)ctx;
-    if (ast_symbol != node->tag) return;
-
-    mos_string_move(&node->symbol.name, &node->symbol.original);
+    node->type = null;
 }
 
 static void specialize_node(void *ctx_, ast_node *node) {
@@ -952,8 +950,8 @@ static void specialize_node(void *ctx_, ast_node *node) {
     special->let.name->type = null;
     special->let.body->type = null;
 
-    // replace all its renamed variables with their originals
-    ast_pool_dfs(null, special, restore_original_variables);
+    // clear existing types from the specialised copy
+    ast_pool_dfs(null, special, clear_types);
 
     alloc_push_back(alloc, &ctx->specials, &ctx->n_specials, &ctx->cap_specials, &special);
 }
@@ -972,8 +970,21 @@ static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nod
     *out_nodes = ctx.specials;
     *out_n     = ctx.n_specials;
 
-    // use a syntax checker instance to
-    // FIXME: move syntax checker into ti_inferer so that it can remember the next variable name to assign.
+    // rename variables in specialised copies
+    {
+        struct rename_variables_ctx rename;
+        rename.ti    = self;
+        rename.alloc = self->type_arena;
+        rename.map   = map_create(self->type_arena, sizeof(string_t));
+
+        for (u32 i = 0; i < ctx.n_specials; ++i) {
+            rename_variables(&rename, ctx.specials[i]);
+        }
+
+        map_destroy(&rename.map);
+    }
+
+    // FIXME install specialised copies into the callsites
 }
 
 //
