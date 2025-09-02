@@ -548,7 +548,8 @@ finish:
 
 void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 
-    for (size_t i = n_toks; i != 0; --i)
+    for (size_t i = n_toks; i != 0; --i) {
         alloc_push_back(self->parent, &self->backtrack, &self->n_backtrack, &self->cap_backtrack,
                         &toks[i - 1]);
+    }
 }
