@@ -23,6 +23,7 @@ struct parser {
     allocator             *parent_alloc;
     allocator             *parser_arena; // for tokens
     allocator             *ast_arena;    // for ast nodes
+    allocator             *debug_arena;  // for debug strings
 
     tokenizer             *tokenizer;
 
@@ -58,6 +59,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->parent_alloc = alloc;
     self->parser_arena = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->debug_arena  = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->verbose      = false;
 
     // tokenizer
@@ -213,9 +215,9 @@ nodiscard static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        char *str = token_to_string(p->parser_arena, &p->token);
+        char *str = token_to_string(p->debug_arena, &p->token);
         log(p, "next_token: %s", str);
-        alloc_free(p->parser_arena, str);
+        alloc_free(p->debug_arena, str);
 
         tokens_push_back(p, &p->token);
         return 0;
@@ -229,18 +231,61 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     if (fun(p)) {
         assert(p->n_tokens >= save_toks);
         if (p->n_tokens > save_toks) {
-            char *str = token_to_string(p->parser_arena, &p->tokens[save_toks]);
+            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
             log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
-            alloc_free(p->parser_arena, str);
+            alloc_free(p->debug_arena, str);
             tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
         }
         result = 1;
         goto cleanup;
     }
 
 cleanup:
-    tokens_shrink(p, save_toks);
+    // do not reset tokens on success, because calls to a_try may be
+    // nested.
     return result;
+}
+
+static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
+    u32 const save_toks = p->n_tokens;
+    if (fun(p, arg)) {
+        if (p->n_tokens > save_toks) {
+            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
+            log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
+            alloc_free(p->debug_arena, str);
+
+            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
+        }
+
+        return 1;
+    }
+    // do not reset tokens on success, because calls to a_try may be
+    // nested.
+    return 0;
+}
+
+nodiscard static int a_try_special(parser *p, parse_fun fun) {
+    // if fun returns 2, tokens are restored as in the failure case,
+    // but this function returns success.
+    u32 const save_toks = p->n_tokens;
+    int const res       = fun(p);
+    if (res) {
+        if (p->n_tokens > save_toks) {
+            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
+            log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
+            alloc_free(p->debug_arena, str);
+
+            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokens_shrink(p, save_toks);
+        }
+        return res == 2 ? 0 : 1;
+    }
+
+    // do not reset tokens on success, because calls to a_try may be
+    // nested.
+    return 0;
 }
 
 static int a_comma(parser *p) {
@@ -319,26 +364,34 @@ error:
 }
 
 static int a_type_identifier(parser *p) {
-    return a_identifier(p);
+    return a_try(p, a_identifier);
 }
 
 static int a_colon(parser *p);
 
 static int a_identifier_typed(parser *p) {
-    if (a_identifier(p)) return 1;
-    ast_node *name       = p->result;
+    if (a_try(p, a_identifier)) return 1;
+    ast_node *name = p->result;
+    log(p, "a_identifier_typed: %s", ast_node_to_string(p->debug_arena, name));
 
     ast_node *annotation = 0;
 
-    if (0 == a_colon(p)) {
+    if (0 == a_try(p, a_colon)) {
 
-        if (a_type_identifier(p)) return 1;
+        if (a_try(p, a_type_identifier)) {
+            log(p, "a_identifier_typed: not a type");
+            return 1;
+        }
+
         annotation = p->result;
+        log(p, "a_identifier_typed: %s : %s", ast_node_to_string(p->debug_arena, name),
+            ast_node_to_string(p->debug_arena, annotation));
     }
 
     ast_node *node    = ast_node_create(p->ast_arena, ast_symbol);
     node->symbol.name = name->symbol.name;
     if (annotation) node->symbol.annotation = annotation;
+    log(p, "a_identifier_typed returning %s", ast_node_to_string(p->debug_arena, node));
     return result_ast_node(p, node);
 }
 
@@ -417,9 +470,9 @@ static int a_bool(parser *p) {
 }
 
 static int a_literal(parser *p) {
-    if (0 == a_string(p)) return 0;
-    if (0 == a_number(p)) return 0;
-    if (0 == a_bool(p)) return 0;
+    if (0 == a_try(p, a_string)) return 0;
+    if (0 == a_try(p, a_number)) return 0;
+    if (0 == a_try(p, a_bool)) return 0;
     p->error.tag = tess_err_expected_literal;
     return 1;
 }
@@ -479,25 +532,25 @@ static int a_end_of_block(parser *p) {
         return result_ast_str(p, ast_symbol, "end");
     }
 
-    log(p, "end_of_block: found token %s, returning error", token_tag_to_string(p->token.tag));
+    log(p, "end_of_block: found token %s, returning error", token_to_string(p->debug_arena, &p->token));
     p->error.tag = tess_err_expected_end_of_block;
     return 1;
 }
 
 static int struct_declaration(parser *p) {
     //     struct name = ... end
-    if (the_symbol(p, "struct")) return 1;
+    if (a_try_s(p, the_symbol, "struct")) return 1;
 
-    if (a_identifier(p)) return 1;
+    if (a_try(p, a_identifier)) return 1;
     ast_node *name        = p->result;
 
     vector    field_names = VEC(ast_node *);
     vector    field_types = VEC(ast_node *);
 
-    if (a_equal_sign(p)) return 1;
+    if (a_try(p, a_equal_sign)) return 1;
 
     // check for empty struct
-    if (0 == a_end_of_block(p)) {
+    if (0 == a_try(p, a_end_of_block)) {
         ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
         node->user_type.name = name;
         return result_ast_node(p, node);
@@ -507,12 +560,12 @@ static int struct_declaration(parser *p) {
     while (true) {
         if (eat_newlines(p)) return 1;
 
-        if (0 == a_identifier(p)) {
+        if (0 == a_try(p, a_identifier)) {
             ast_node *field_name = p->result;
 
-            if (a_colon(p)) return 1;
+            if (a_try(p, a_colon)) return 1;
 
-            if (a_type_identifier(p)) return 1;
+            if (a_try(p, a_type_identifier)) return 1;
             ast_node                *type = p->result;
 
             struct ast_node_iterator iter = {.ptr = &field_name};
@@ -523,14 +576,14 @@ static int struct_declaration(parser *p) {
             vec_iterator_init(&field_types, &ty_iter.base);
             vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
 
-            if (a_end_of_expression(p)) return 1; // expect ; or newline after field
+            if (a_try_special(p, a_end_of_expression)) return 1; // expect ; or newline after field
 
             continue;
         }
 
         if (eat_newlines(p)) return 1;
 
-        if (0 == a_end_of_block(p)) {
+        if (0 == a_try(p, a_end_of_block)) {
 
             ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
             node->user_type.name = name;
@@ -552,18 +605,19 @@ static int struct_declaration(parser *p) {
 static int function_declaration(parser *p) {
     // f a b c... = : only symbols allowed, terminated by =.
 
-    if (a_identifier(p)) return 1;
+    if (a_try(p, a_identifier)) return 1;
 
     ast_node *const name = p->result; // function name
+    log(p, "function_declaration let %s", ast_node_to_string(p->debug_arena, name));
 
-    vector          parameters;
+    vector parameters;
     ast_vector_init(&parameters);
 
     // check: f () declares function with no parameters
-    if (0 == a_nil(p)) {
+    if (0 == a_try(p, a_nil)) {
 
         // next token must be equal sign
-        if (0 == a_equal_sign(p)) {
+        if (0 == a_try(p, a_equal_sign)) {
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
             return result_ast_node(p, node);
@@ -573,7 +627,7 @@ static int function_declaration(parser *p) {
     }
 
     // must have at least one parameter
-    if (a_identifier_typed(p)) return 1;
+    if (a_try(p, a_identifier_typed)) return 1;
 
     struct ast_node_iterator iter = {.ptr = &p->result};
     vec_iterator_init(&parameters, &iter.base);
@@ -581,19 +635,26 @@ static int function_declaration(parser *p) {
 
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
-        if (0 == a_identifier_typed(p)) {
+        if (0 == a_try(p, a_identifier_typed)) {
+            log(p, "function_declaration: subsequent parameter: %s",
+                ast_node_to_string(p->debug_arena, p->result));
             vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
 
-        if (0 == a_equal_sign(p)) {
+        log(p, "function_declaration: not identifier");
+
+        if (0 == a_try(p, a_equal_sign)) {
 
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
             vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->array.nodes, &node->array.n);
 
+            log(p, "function_declaration: returning %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
         }
+
+        log(p, "function_declaration: not equal_sign");
 
         // anything else is an error
         p->error.tag = tess_err_expected_argument;
@@ -609,14 +670,14 @@ static int lambda_declaration(parser *p) {
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
-        if (0 == a_identifier_typed(p)) {
+        if (0 == a_try(p, a_identifier_typed)) {
             struct ast_node_iterator iter = {.ptr = &p->result};
             vec_iterator_init(&parameters, &iter.base);
             vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
 
-        if (0 == a_arrow(p)) {
+        if (0 == a_try(p, a_arrow)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
 
             vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->array.nodes, &node->array.n);
@@ -637,7 +698,8 @@ static int function_definition(parser *p) {
 static int function_application(parser *p) {
     // f a b c ..., terminated by semicolon or one_newline or two_newline
 
-    if (a_identifier(p)) return 1;
+    log(p, "try function_application");
+    if (a_try(p, a_identifier)) return 1;
 
     ast_node *const name = p->result;
 
@@ -645,20 +707,19 @@ static int function_application(parser *p) {
     ast_vector_init(&arguments);
 
     // must have at least one argument
-    if (function_argument(p)) return 1;
+    if (a_try(p, function_argument)) return 1;
 
     struct ast_node_iterator iter = {.ptr = &p->result};
     vec_iterator_init(&arguments, &iter.base);
     vec_push_back(p->parser_arena, &arguments, &iter.base);
 
     while (true) {
-        if (0 == function_argument(p)) {
+        if (0 == a_try(p, function_argument)) {
             vec_push_back(p->parser_arena, &arguments, &iter.base);
             continue;
         }
 
-        int const res = a_end_of_expression(p);
-        if (0 == res || 2 == res) {
+        if (0 == a_try_special(p, a_end_of_expression)) {
             // 2: "fails" due to close_round, which must not be
             // consumed, so that grouped_expression catches it.
 
@@ -667,10 +728,12 @@ static int function_application(parser *p) {
 
             vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->array.nodes, &node->array.n);
 
+            log(p, "function_application: got %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
         }
 
         p->error.tag = tess_err_expected_argument;
+        log(p, "not function_application");
         return 1;
     }
 }
@@ -682,15 +745,23 @@ static int function_argument(parser *p) {
     p->indent_level++;
     log(p, "try function_argument");
 
-    if (0 == lambda_function_application(p)) goto cleanup;
-    if (0 == grouped_expression(p)) goto cleanup;
-    if (0 == let_in_form(p)) goto cleanup;
-    if (0 == if_then_else(p)) goto cleanup;
-    if (0 == a_nil(p)) goto cleanup;
-    if (0 == a_identifier(p)) goto cleanup;
-    if (0 == a_literal(p)) goto cleanup;
+    p->indent_level++;
 
+    log(p, "try grouped_expression");
+    if (0 == a_try(p, grouped_expression)) goto cleanup;
+
+    log(p, "try nil");
+    if (0 == a_try(p, a_nil)) goto cleanup;
+
+    log(p, "try identifier");
+    if (0 == a_try(p, a_identifier)) goto cleanup;
+
+    log(p, "try literal");
+    if (0 == a_try(p, a_literal)) goto cleanup;
+
+    p->indent_level--;
     log(p, "not function_argument");
+
     p->indent_level--;
     return 1;
 
@@ -703,15 +774,15 @@ static int if_then_else(parser *p) {
 
     ast_node *cond, *yes, *no;
 
-    if (the_symbol(p, "if")) return 1;
+    if (a_try_s(p, the_symbol, "if")) return 1;
     if (expression(p)) return 1;
     cond = p->result;
 
-    if (the_symbol(p, "then")) return 1;
+    if (a_try_s(p, the_symbol, "then")) return 1;
     if (expression(p)) return 1;
     yes = p->result;
 
-    if (the_symbol(p, "else")) return 1;
+    if (a_try_s(p, the_symbol, "else")) return 1;
     if (expression(p)) return 1;
     no                           = p->result;
 
@@ -723,24 +794,39 @@ static int if_then_else(parser *p) {
 }
 
 static int infix_operand(parser *p) {
-    return function_argument(p);
+    return a_try(p, function_argument);
 }
 
 static int infix_operation(parser *p) {
     // a * b
 
-    if (infix_operand(p)) return 1;
-    ast_node *const lhs = p->result;
-    log(p, "infix_operation: got lhs: %s", ast_node_to_string(p->parser_arena, lhs));
+    log(p, "try infix_operation");
 
-    if (a_infix_operator(p)) return 1;
+    if (infix_operand(p)) {
+        log(p, "infix_operation: no first operand");
+        return 1;
+    }
+    ast_node *const lhs = p->result;
+    log(p, "infix_operation: got lhs: %s", ast_node_to_string(p->debug_arena, lhs));
+
+    if (a_try(p, a_infix_operator)) {
+        log(p, "infix_operation: no operator");
+        return 1;
+    }
     ast_node    *op_node = p->result;
 
     ast_operator op;
-    if (string_to_ast_operator(mos_string_str(&op_node->symbol.name), &op)) return 1;
+    if (string_to_ast_operator(mos_string_str(&op_node->symbol.name), &op)) {
+        log(p, "infix_operation: string conversion failed");
+        return 1;
+    }
     log(p, "infix_operation: got operator");
 
-    if (infix_operand(p)) return 1;
+    if (infix_operand(p)) {
+        log(p, "infix_operation: no operand");
+        return 1;
+    }
+
     ast_node *const rhs = p->result;
     log(p, "infix_operation: got rhs");
 
@@ -755,11 +841,12 @@ static int infix_operation(parser *p) {
 static int lambda_function(parser *p) {
     // fun a b c... -> rhs
 
-    if (the_symbol(p, "fun")) return 1;
-    if (lambda_declaration(p)) return 1;
+    if (a_try_s(p, the_symbol, "fun")) return 1;
+
+    if (a_try(p, lambda_declaration)) return 1;
     ast_node *decl = p->result;
 
-    if (function_definition(p)) return 1;
+    if (a_try(p, function_definition)) return 1;
     ast_node *defn_h           = p->result;
 
     ast_node *node             = ast_node_create(p->ast_arena, ast_lambda_function);
@@ -776,7 +863,7 @@ static int lambda_function(parser *p) {
 
 static int lambda_function_application(parser *p) {
 
-    if (grouped_expression(p)) return 1;
+    if (a_try(p, grouped_expression)) return 1;
     // a lambda application must be a grouped lambda function, i.e.
     // surrouneded by round braces
     ast_node *lambda = p->result;
@@ -790,20 +877,19 @@ static int lambda_function_application(parser *p) {
     vector arguments;
     ast_vector_init(&arguments);
 
-    if (function_argument(p)) return 1;
+    if (a_try(p, function_argument)) return 1;
 
     struct ast_node_iterator iter = {.ptr = &p->result};
     vec_iterator_init(&arguments, &iter.base);
     vec_push_back(p->parser_arena, &arguments, &iter.base);
 
     while (true) {
-        if (0 == function_argument(p)) {
+        if (0 == a_try(p, function_argument)) {
             vec_push_back(p->parser_arena, &arguments, &iter.base);
             continue;
         }
 
-        int res = a_end_of_expression(p);
-        if (0 == res || 2 == res) {
+        if (0 == a_try_special(p, a_end_of_expression)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
             node->lambda_application.lambda = lambda;
 
@@ -821,10 +907,10 @@ static int lambda_function_application(parser *p) {
 static int simple_declaration(parser *p) {
     // a = ... a single identifier, optionally typed, followed by an
     // equal sign
-    if (a_identifier_typed(p)) return 1;
+    if (a_try(p, a_identifier_typed)) return 1;
     ast_node *sym = p->result;
 
-    if (a_equal_sign(p)) return 1;
+    if (a_try(p, a_equal_sign)) return 1;
 
     return result_ast_node(p, sym);
 }
@@ -841,46 +927,50 @@ struct tokenizer {
 
 static int let_in_form(parser *p) {
     // let a = 2 in expression
-    if (the_symbol(p, "let")) return 1;
+    if (a_try_s(p, the_symbol, "let")) return 1;
 
     log(p, "let_in_form: pos = %zu", p->tokenizer->pos);
-    if (simple_declaration(p)) return 1;
+    if (a_try(p, simple_declaration)) return 1;
     ast_node *sym = p->result;
 
     log(p, "let_in_form: let %s =", ast_node_name_string(sym));
 
-    if (expression(p)) return 1;
+    if (a_try(p, expression)) return 1;
 
     ast_node *defn = p->result;
-    dbg("let_in_form: value = %s\n", ast_tag_to_string(defn->tag));
+    dbg("let_in_form: value = %s\n", ast_node_to_string(p->debug_arena, defn));
 
-    if (the_symbol(p, "in")) return 1;
+    if (a_try_s(p, the_symbol, "in")) return 1;
 
     log(p, "let_in_form: found an 'in' at pos %zu", p->tokenizer->pos);
 
-    if (expression(p)) return 1;
+    if (a_try(p, expression)) return 1;
 
     ast_node *body = p->result;
-    log(p, "let_in_form: body is %s", ast_tag_to_string(body->tag));
+    log(p, "let_in_form: body is %s", ast_node_to_string(p->debug_arena, body));
 
-    if (a_end_of_block(p)) return 1;
+    if (a_try(p, a_end_of_block)) return 1;
 
     ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
     node->let_in.name  = sym;
     node->let_in.value = defn;
     node->let_in.body  = body;
-    log(p, "let_in_form: returning node %s", ast_tag_to_string(node->tag));
+    log(p, "let_in_form: returning node %s", ast_node_to_string(p->debug_arena, node));
     return result_ast_node(p, node);
 }
 
 static int let_form(parser *p) {
     // let f a b c... = ...
-    if (the_symbol(p, "let")) return 1;
-    if (function_declaration(p)) return 1;
-    ast_node *decl = p->result;
 
-    if (function_definition(p)) return 1;
+    if (a_try_s(p, the_symbol, "let")) return 1;
+
+    if (a_try(p, function_declaration)) return 1;
+    ast_node *decl = p->result;
+    log(p, "let_form: got decl %s", ast_node_to_string(p->debug_arena, decl));
+
+    if (a_try(p, function_definition)) return 1;
     ast_node *defn = p->result;
+    log(p, "let_form: got defn %s", ast_node_to_string(p->debug_arena, defn));
 
     ast_node *node = ast_node_create(p->ast_arena, ast_let);
 
@@ -899,7 +989,7 @@ static int let_form(parser *p) {
 
 static int tuple_expression(parser *p) {
 
-    if (a_open_round(p)) return 1;
+    if (a_try(p, a_open_round)) return 1;
 
     vector elements;
     ast_vector_init(&elements);
@@ -907,7 +997,7 @@ static int tuple_expression(parser *p) {
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
-    if (expression(p)) return 1;
+    if (a_try(p, expression)) return 1;
 
     struct ast_node_iterator iter = {.ptr = &p->result};
     vec_iterator_init(&elements, &iter.base);
@@ -918,7 +1008,7 @@ static int tuple_expression(parser *p) {
 
     while (true) {
 
-        if (0 == a_close_round(p)) {
+        if (0 == a_try(p, a_close_round)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_tuple);
 
             vec_move_plain_u16(p->parser_arena, &elements, (void **)&node->array.nodes, &node->array.n);
@@ -928,10 +1018,10 @@ static int tuple_expression(parser *p) {
 
         // comma required if this is not the first time through the loop
         if (count++ > 0)
-            if (a_comma(p)) goto cleanup;
+            if (a_try(p, a_comma)) goto cleanup;
 
         // expression
-        if (0 == expression(p)) {
+        if (0 == a_try(p, expression)) {
             vec_push_back(p->ast_arena, &elements, &iter.base);
         }
 
@@ -944,13 +1034,12 @@ cleanup:
 }
 
 static int grouped_expression(parser *p) {
-    if (a_open_round(p)) return 1;
-    if (expression(p)) return 1;
+    if (a_try(p, a_open_round)) return 1;
 
-    // save expression node result
+    if (a_try(p, expression)) return 1;
     ast_node *const out = p->result;
 
-    if (a_close_round(p)) return 1;
+    if (a_try(p, a_close_round)) return 1;
 
     // replace parser result with expression node
     p->result = out;
@@ -959,42 +1048,49 @@ static int grouped_expression(parser *p) {
 
 static int expression(parser *p) {
 
-    if (eat_newlines(p)) return 1;
-
     p->indent_level++;
 
     log(p, "expression: try lambda");
     if (0 == a_try(p, &lambda_function_application)) goto cleanup;
-    log(p, "expression: not lambda");
 
-    log(p, "expression: try infix");
+    log(p, "expression: try infix, n_tokens = %u", p->n_tokens);
     if (0 == a_try(p, &infix_operation)) goto cleanup;
-    log(p, "expression: not infix");
+    log(p, "expression: not infix, n_tokens = %u", p->n_tokens);
 
     log(p, "expression: try tuple");
     if (0 == a_try(p, &tuple_expression)) goto cleanup;
-    log(p, "expression: not tuple");
 
     log(p, "expression: try grouped");
     if (0 == a_try(p, &grouped_expression)) goto cleanup;
-    log(p, "expression: not grouped");
 
+    log(p, "expression: try nil");
     if (0 == a_try(p, &a_nil)) goto cleanup;
+
+    log(p, "expression: try lambda");
     if (0 == a_try(p, &lambda_function)) goto cleanup;
 
     log(p, "expression: try let_in_form");
     if (0 == a_try(p, &let_in_form)) goto cleanup;
-    log(p, "expression: not a let_in_form");
 
     log(p, "expression: try let_form");
     if (0 == a_try(p, &let_form)) goto cleanup;
-    log(p, "expression: not let_form");
 
+    log(p, "expression: try if_then");
     if (0 == a_try(p, &if_then_else)) goto cleanup;
+
+    log(p, "expression: function_application");
     if (0 == a_try(p, &function_application)) goto cleanup;
+
+    log(p, "expression: try identifier");
     if (0 == a_try(p, &a_identifier)) goto cleanup;
+
+    log(p, "expression: try number");
     if (0 == a_try(p, &a_number)) goto cleanup;
+
+    log(p, "expression: try bool");
     if (0 == a_try(p, &a_bool)) goto cleanup;
+
+    log(p, "expression: try end_of_expression");
     if (0 == a_try(p, &a_end_of_expression)) goto cleanup;
 
     p->indent_level--;
@@ -1035,7 +1131,7 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
         ast_node *node;
 
         parser_result(p, &node);
-        log(p, "parse_all: parsed node %s", ast_tag_to_string(node->tag));
+        log(p, "parse_all: parsed node %s", ast_node_to_string(p->debug_arena, node));
 
         if (*len == cap) {
             alloc_resize(out_alloc, out, &cap, cap * 2);
