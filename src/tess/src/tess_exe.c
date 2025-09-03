@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
+#include <string.h>
 
 #include "readline/history.h"
 #include "readline/readline.h"
@@ -26,6 +27,7 @@ struct state {
     u32          cap_words;
 
     bool         verbose;
+    bool         verbose_parse;
     bool         help;
 };
 
@@ -33,6 +35,14 @@ noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
 
     printf("Usage: %s [-hv] [c | repl] [-o outpath] [path1 path2 ... pathn] \n", progname);
+    puts("Commands:\n");
+    printf("    c                      transpile input files to stdout\n");
+    printf("    repl                   launch the repl\n");
+    printf("\nOptions:\n");
+    printf("    -h                     print usage\n");
+    printf("    -o                     write output to path instead of stdout\n");
+    printf("    -v                     verbose logging\n");
+    printf("    --verbose-parse        produce large amount of parse progress output\n");
     exit(status);
 }
 
@@ -61,6 +71,10 @@ void state_gather_single_options(struct state *self, char *str) {
     }
 }
 
+void state_gather_long_option(struct state *self, char *str) {
+    if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = true;
+}
+
 void state_gather_options(struct state *self, int argc, char *argv[]) {
 
     self->argv0 = argv[0];
@@ -71,6 +85,8 @@ void state_gather_options(struct state *self, int argc, char *argv[]) {
             if (0 == strcmp("-o", argv[i])) {
                 self->out_path = argv[++i];
                 continue;
+            } else if (0 == strncmp("--", argv[i], 2)) {
+                state_gather_long_option(self, argv[i]);
             } else {
                 state_gather_single_options(self, argv[i]);
             }
@@ -149,7 +165,7 @@ int compile(struct state *self) {
     struct ast_node **nodes;
     u32               n_nodes = 0;
 
-    if (self->verbose) {
+    if (self->verbose_parse) {
         if (parser_parse_all_verbose(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
     } else {
         if (parser_parse_all(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
