@@ -135,29 +135,27 @@ if(MOS_UBSAN)
 endif()
 
 if(MOS_ASAN)
-  list(APPEND MOS_C_DIAGNOSTIC
+  set(MOS_C_ASAN
     -fsanitize=address
     -fsanitize=leak
     -fsanitize=undefined
     -fno-sanitize-recover=all
-    -fno-omit-frame-pointer
-  )
-  list(APPEND MOS_C_LINK_OPTIONS
+    -fno-omit-frame-pointer)
+
+  set(MOS_C_LINK_ASAN
     -fsanitize=address
     -fsanitize=leak
     -fsanitize=undefined
     -fno-sanitize-recover=all
-    -fno-omit-frame-pointer
-  )
+    -fno-omit-frame-pointer)
 
   if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    list(APPEND MOS_C_DIAGNOSTIC
-      -fsanitize-address-use-after-return=always
-    )
-    list(APPEND MOS_C_LINK_OPTIONS
-      -fsanitize-address-use-after-return=always
-    )
+    list(APPEND MOS_C_ASAN      -fsanitize-address-use-after-return=always)
+    list(APPEND MOS_C_LINK_ASAN -fsanitize-address-use-after-return=always)
   endif()
+
+  list(APPEND MOS_C_DIAGNOSTIC   ${MOS_C_ASAN})
+  list(APPEND MOS_C_LINK_OPTIONS ${MOS_C_LINK_ASAN})
 
   message(STATUS "Setting ASAN")
 endif()

@@ -75,11 +75,10 @@ tess_create_test(tess)
 
 # -- tesslang tests --
 
-
-
 function(tesslang_create_test NAME)
   set(TEST_NAME test-tl-${NAME})
 
+  # transpile to C
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
     COMMAND tess_exe
@@ -95,8 +94,8 @@ function(tesslang_create_test NAME)
 
   add_executable(${TEST_NAME} "${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c")
   target_link_libraries(${TEST_NAME} PRIVATE tess)
-  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
-  target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_ASAN})
+  target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_ASAN})
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
