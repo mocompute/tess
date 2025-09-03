@@ -153,6 +153,30 @@ static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
     return 0;
 }
 
+static int a_user_type(transpiler *self, ast_node const *node) {
+    char const *name = ast_node_name_string(node->user_type.name);
+
+    out_put_start(self, "");
+    out_put_fmt(self, "struct %s {\n", name);
+
+    self->indent_level++;
+    for (u32 i = 0; i < node->user_type.n_fields; ++i) {
+        struct tess_type *ty         = node->user_type.field_types[i];
+        char const       *field_name = ast_node_name_string(node->user_type.field_names[i]);
+
+        char             *str        = tess_type_to_string(self->strings, ty);
+        out_put_start(self, "");
+        out_put_fmt(self, "%s %s;\n", str, field_name);
+
+        alloc_free(self->strings, str);
+    }
+    self->indent_level--;
+
+    out_put_start(self, "};\n");
+
+    return 0;
+}
+
 static int a_toplevel(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
@@ -174,9 +198,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:  break;
-    case ast_user_defined_type:
-        // FIXME
-        break;
+    case ast_user_defined_type:           return a_user_type(self, node); break;
     }
     return 0;
 }
