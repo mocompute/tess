@@ -193,11 +193,6 @@ int ti_inferer_run(ti_inferer *self) {
     self->n_constraints                   = 0; // reset constraints from first phase
     ti_collect_constraints(self);
 
-    if (self->verbose) {
-        dbg("\nti_inferer_run: before solver:\n");
-        ti_inferer_dbg_constraints(self);
-    }
-
     ti_run_solver(self);
     ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
 
@@ -247,7 +242,7 @@ struct rename_variables_ctx {
 
 static void next_variable_name(struct rename_variables_ctx *self, string_t *out) {
     char buf[64];
-    snprintf(buf, sizeof buf, "__v%u", self->ti->next_var++);
+    snprintf(buf, sizeof buf, "_v%u_", self->ti->next_var++);
     *out = mos_string_init(self->ti->strings, buf);
 }
 
@@ -840,9 +835,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // left side of arrow is same as parameter tuple type
         struct tess_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-
-        dbg("let adds %s = %s\n", tess_type_to_string(ctx->strings, node->let.arrow->left),
-            tess_type_to_string(ctx->strings, params));
 
         push(node->let.arrow->left, params);
 
