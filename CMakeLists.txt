@@ -68,6 +68,9 @@ else()
     -Wswitch-enum
     -Wimplicit-fallthrough
     -Wunused
+
+    # allow gnu extensions
+    -Wno-gnu-alignof-expression
   )
 
 

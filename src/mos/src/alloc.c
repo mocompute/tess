@@ -628,6 +628,7 @@ size_t alloc_next_power_of_two(size_t n) {
 }
 
 size_t alloc_align(size_t n, size_t align) {
+    assert(align != 0);
     size_t mask = align - 1;
     return (n + mask) & ~mask;
 }

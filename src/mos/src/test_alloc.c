@@ -30,6 +30,20 @@ static int test_align_to_word_size(void) {
     return error;
 }
 
+static int test_align(void) {
+    int error = 0;
+
+    error += 0 == alloc_align(0, 1) ? 0 : 1;
+    error += 1 == alloc_align(1, 1) ? 0 : 1;
+
+    error += 0 == alloc_align(0, 2) ? 0 : 1;
+    error += 2 == alloc_align(1, 2) ? 0 : 1;
+    error += 2 == alloc_align(2, 2) ? 0 : 1;
+    error += 4 == alloc_align(3, 2) ? 0 : 1;
+
+    return error;
+}
+
 static int test_arena_realloc(void) {
     int        error = 0;
 
@@ -111,6 +125,7 @@ int main(void) {
 
     T(test_align_next_power_of_two);
     T(test_align_to_word_size);
+    T(test_align);
     T(test_arena_realloc);
     T(test_arena_realloc_non_contiguous);
     T(test_arena_free_reuse);

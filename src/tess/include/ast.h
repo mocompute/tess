@@ -2,6 +2,7 @@
 #define TESS_AST_H
 
 #include "alloc.h"
+#include "array.h"
 #include "ast_tags.h"
 #include "error.h"
 #include "mos_string.h"
@@ -116,6 +117,11 @@ typedef struct ast_node {
     ast_tag             tag;
     enum tess_error_tag error;
 } ast_node;
+
+typedef struct {
+    array_header;
+    ast_node **v;
+} ast_node_array;
 
 struct ast_node_iterator {
     struct vector_iterator_base base;

@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
@@ -597,10 +598,10 @@ static int struct_declaration(parser *p) {
     if (a_try_s(p, the_symbol, "struct")) return 1;
 
     if (a_try(p, a_identifier)) return 1;
-    ast_node *name        = p->result;
+    ast_node      *name        = p->result;
 
-    vector    field_names = VEC(ast_node *);
-    vector    field_types = VEC(ast_node *);
+    ast_node_array field_names = {.alloc = p->ast_arena};
+    ast_node_array field_types = {.alloc = p->ast_arena};
 
     if (a_try(p, a_equal_sign)) return 1;
 
@@ -625,13 +626,8 @@ static int struct_declaration(parser *p) {
             ast_node *type = p->result;
             log(p, "struct_declaration: type %s", ast_node_to_string(p->debug_arena, type));
 
-            struct ast_node_iterator iter = {.ptr = &field_name};
-            vec_iterator_init(&field_names, &iter.base);
-            vec_push_back(p->parser_arena, &field_names, &iter.base);
-
-            struct ast_node_iterator ty_iter = {.ptr = &type};
-            vec_iterator_init(&field_types, &ty_iter.base);
-            vec_push_back(p->parser_arena, &field_types, &ty_iter.base);
+            array_push(field_names, &field_name);
+            array_push(field_types, &type);
 
             if (a_try_special(p, a_newline)) return 1; // expect ; or newline after field
 
@@ -642,11 +638,13 @@ static int struct_declaration(parser *p) {
 
             ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
             node->user_type.name = name;
-            vec_move_plain_u16(p->parser_arena, &field_names, (void **)&node->user_type.field_names,
-                               &node->user_type.n_fields);
 
-            vec_move_plain_u16(p->parser_arena, &field_types, (void **)&node->user_type.field_annotations,
-                               &node->user_type.n_fields);
+            array_shrink(field_names);
+            node->user_type.field_names = field_names.v;
+            node->user_type.n_fields    = (u16)field_names.size;
+
+            array_shrink(field_types);
+            node->user_type.field_annotations = field_types.v;
 
             return result_ast_node(p, node);
         }

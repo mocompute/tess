@@ -3,6 +3,7 @@ message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 add_library(mos)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/array.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/alloc_internal.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/dbg.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
@@ -18,6 +19,7 @@ set(HEADERS
 
 set(SOURCES
   src/alloc.c
+  src/array.c
   src/dbg.c
   src/hash.c
   src/file.c
@@ -57,6 +59,7 @@ function(mos_create_test NAME)
 endfunction()
 
 mos_create_test(alloc)
+mos_create_test(array)
 mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(string)
