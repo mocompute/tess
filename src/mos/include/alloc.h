@@ -57,6 +57,7 @@ nodiscard char *alloc_strndup(allocator *, char const *, size_t) mallocfun;
 
 size_t          alloc_next_power_of_two(size_t);
 size_t          alloc_align_to_word_size(size_t);
+size_t          alloc_align(size_t n, size_t align);
 
 #define alloc_invalidate(P)     alloc_invalidate_n((P), sizeof *(P))
 #define alloc_assert_invalid(P) alloc_assert_invalid_n((P), sizeof *(P))

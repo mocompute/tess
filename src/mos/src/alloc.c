@@ -627,9 +627,13 @@ size_t alloc_next_power_of_two(size_t n) {
     return n + 1;
 }
 
-size_t alloc_align_to_word_size(size_t n) {
-    size_t mask = sizeof(void *) - 1;
+size_t alloc_align(size_t n, size_t align) {
+    size_t mask = align - 1;
     return (n + mask) & ~mask;
+}
+
+size_t alloc_align_to_word_size(size_t n) {
+    return alloc_align(n, sizeof(void *));
 }
 
 noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...) {
