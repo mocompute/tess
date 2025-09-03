@@ -6,7 +6,6 @@
 #include "dbg.h"
 #include "error.h"
 #include "mos_string.h"
-#include "tess_type.h"
 #include "token.h"
 #include "tokenizer.h"
 #include "vector.h"
