@@ -190,17 +190,23 @@ int ti_inferer_run(ti_inferer *self) {
 
     // 6. collect and solve constraints again, this time constraining function applications
     self->constrain_function_applications = true;
+    self->n_constraints                   = 0; // reset constraints from first phase
     ti_collect_constraints(self);
+
+    if (self->verbose) {
+        dbg("\nti_inferer_run: before solver:\n");
+        ti_inferer_dbg_constraints(self);
+    }
 
     ti_run_solver(self);
     ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
 
     if (self->verbose) {
-        dbg("ti_inferer_run: final constraints:\n");
+        dbg("\nti_inferer_run: final constraints:\n");
         ti_inferer_dbg_constraints(self);
         {
             for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+                char *str = ast_node_to_string(self->strings, self->nodes[i]);
                 dbg("%s\n", str);
                 alloc_free(self->strings, str);
             }
@@ -223,7 +229,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     dbg("\ninfo: program nodes follow --\n\n");
     {
         for (size_t i = 0; i < self->n_nodes; ++i) {
-            char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+            char *str = ast_node_to_string(self->strings, self->nodes[i]);
             dbg("%s\n", str);
             alloc_free(self->strings, str);
         }
@@ -643,47 +649,34 @@ void ti_run_solver(ti_inferer *self) {
 
 // -- assign_type_variables --
 
-struct assign_type_variables_ctx {
-    ti_inferer *ti;
-    allocator  *alloc;
-    hashmap    *symbols;
-};
-
-void assign_type_variables(void *ctx_, ast_node *node) {
-    struct assign_type_variables_ctx *ctx = ctx_;
-
-    assert(null == node->type);
-
+void do_assign_type_variables(ti_inferer *self, ast_node *node) {
     if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        struct tess_type *left  = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
-        struct tess_type *right = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
-        struct tess_type *arrow = tess_type_create_arrow(ctx->alloc, left, right);
+        struct tess_type *left  = tess_type_create_type_var(self->type_arena, self->next_type_var++);
+        struct tess_type *right = tess_type_create_type_var(self->type_arena, self->next_type_var++);
+        struct tess_type *arrow = tess_type_create_arrow(self->type_arena, left, right);
 
         if (ast_lambda_function == node->tag) {
             node->type = arrow;
         } else {
             node->let.arrow = arrow;
-            node->type      = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
+            node->type      = tess_type_create_type_var(self->type_arena, self->next_type_var++);
         }
 
     } else {
-        struct tess_type *tv = tess_type_create_type_var(ctx->alloc, ctx->ti->next_type_var++);
+        struct tess_type *tv = tess_type_create_type_var(self->type_arena, self->next_type_var++);
         node->type           = tv;
     }
 }
 
+void assign_type_variables(void *ctx, ast_node *node) {
+    return do_assign_type_variables(ctx, node);
+}
+
 void ti_assign_type_variables(ti_inferer *self) {
-    struct assign_type_variables_ctx ctx = {
-      .ti      = self,
-      .alloc   = self->type_arena,
-      .symbols = map_create(self->type_arena, sizeof(struct tess_type *)),
-    };
 
     for (size_t i = 0; i < self->n_nodes; ++i) {
-        ast_pool_dfs(&ctx, self->nodes[i], assign_type_variables);
+        ast_pool_dfs(self, self->nodes[i], assign_type_variables);
     }
-
-    map_destroy(&ctx.symbols);
 }
 
 // -- collect_constraints --
@@ -848,6 +841,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         struct tess_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
+        dbg("let adds %s = %s\n", tess_type_to_string(ctx->strings, node->let.arrow->left),
+            tess_type_to_string(ctx->strings, params));
+
         push(node->let.arrow->left, params);
 
         // right side of arrow is same as function body type
@@ -915,6 +911,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
             struct tess_type *args_type =
               arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->named_application.arguments,
                                       node->named_application.n_arguments);
+
             push(fun->let.arrow->left, args_type);
             push(fun->let.arrow->right, node->type);
         }
@@ -983,6 +980,9 @@ static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node
     char *str = tess_type_to_string(alloc, args);
     log(ctx->ti, "specialized '%s' for type %s", mos_string_str(&special->let.name), str);
     alloc_free(alloc, str);
+
+    // cloned arrow type needs to be reset
+    do_assign_type_variables(ctx->ti, special);
 
     // assign new typevars to params and to body nodes that are not monotyped
     ast_pool_dfs(ctx->ti, special, reassign_typevars);

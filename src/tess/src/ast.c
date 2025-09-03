@@ -352,8 +352,12 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        return penta(alloc, sym("let"), sym(mos_string_str(&node->let.name)), list, recur(node->let.body),
-                     type);
+        if (mos_string_empty(&node->let.specialized_name))
+            return penta(alloc, sym("let"), sym(mos_string_str(&node->let.name)), list,
+                         recur(node->let.body), type);
+        else
+            return penta(alloc, sym("let"), sym(mos_string_str(&node->let.specialized_name)), list,
+                         recur(node->let.body), type);
 
     } break;
 
