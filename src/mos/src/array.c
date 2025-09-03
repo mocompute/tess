@@ -28,7 +28,8 @@ void *array_reserve_impl(array_header_t *h, void *ptr, u32 num, u32 width, u16 a
     return ptr;
 }
 
-void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align, void *restrict data) {
+void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                      void const *restrict data) {
     if (h->size == h->capacity) {
         u32 new_cap = h->capacity ? h->capacity * 2 : 8;
         ptr         = array_reserve_impl(h, ptr, new_cap, width, align);
@@ -38,8 +39,8 @@ void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 alig
     return ptr;
 }
 
-void *array_copy_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align, void *restrict data,
-                      u32 num) {
+void *array_copy_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                      void const *restrict data, u32 num) {
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
     memcpy(&ptr[h->size * alloc_align(width, align)], data, num * width);

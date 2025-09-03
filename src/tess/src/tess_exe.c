@@ -187,21 +187,20 @@ int compile(struct state *self) {
     }
 
     allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
-    vector      transpiler_output = VEC(char);
+    char_array  transpiler_output = {.alloc = transpile_alloc};
 
-    transpiler *transpiler =
-      transpiler_create(alloc_default_allocator(), &transpiler_output, transpile_alloc);
+    transpiler *transpiler        = transpiler_create(alloc_default_allocator(), &transpiler_output);
     if (transpiler_compile(transpiler, nodes, n_nodes)) fatal("error while transpiling");
 
     if (self->out_path) {
         FILE *f = fopen(self->out_path, "wb");
         if (!f) fatal("could not open output file: '%s'", self->out_path);
 
-        fprintf(f, "%s", (char *)vec_data(&transpiler_output));
+        fprintf(f, "%s", transpiler_output.v);
 
         fclose(f);
     } else {
-        puts(vec_data(&transpiler_output));
+        puts(transpiler_output.v);
     }
 
     transpiler_destroy(&transpiler);

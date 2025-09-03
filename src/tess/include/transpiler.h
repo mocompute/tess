@@ -2,15 +2,15 @@
 #define TESS_TRANSPILER_H
 
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 #include "nodiscard.h"
-#include "vector.h"
 
 typedef struct transpiler transpiler;
 
 // -- allocation and deallocation --
 
-nodiscard transpiler *transpiler_create(allocator *, vector *bytes, allocator *bytes_alloc) mallocfun;
+nodiscard transpiler *transpiler_create(allocator *, char_array *bytes) mallocfun;
 void                  transpiler_destroy(transpiler **);
 
 // -- operation --

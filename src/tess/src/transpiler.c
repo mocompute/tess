@@ -6,7 +6,6 @@
 #include "dbg.h"
 #include "mos_string.h"
 #include "tess_type.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -15,17 +14,16 @@
 #include <string.h>
 
 struct transpiler {
-    allocator *alloc;
-    allocator *strings;
-    vector    *bytes;
-    allocator *bytes_alloc;
+    allocator  *alloc;
+    allocator  *strings;
+    char_array *bytes;
 
-    char     **results;
-    u32        n_results;
-    u32        cap_results;
+    char      **results;
+    u32         n_results;
+    u32         cap_results;
 
-    u32        next_variable;
-    int        indent_level;
+    u32         next_variable;
+    int         indent_level;
 };
 
 // -- embed externs --
@@ -54,14 +52,12 @@ static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__(
 
 static bool  is_generic_function(ast_node const *node);
 
-transpiler  *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
-    assert(1 == bytes->element_size);
+transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
 
     transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc       = alloc;
     self->strings     = alloc_arena_create(alloc, 1024);
     self->bytes       = bytes;
-    self->bytes_alloc = bytes_alloc;
 
     self->cap_results = 16;
     self->results     = alloc_malloc(self->strings, self->cap_results * sizeof self->results[0]);
@@ -94,14 +90,15 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
         if ((res = a_main(self, nodes[i]))) return res;
     }
 
-    vec_push_back_byte(self->bytes_alloc, self->bytes, '\0');
+    array_push_val(*self->bytes, '\0');
+
     return 0;
 }
 
 // -- statics --
 
 static void out_put(transpiler *self, char const *str) {
-    vec_copy_back_c_string(self->bytes_alloc, self->bytes, str);
+    array_copy(*self->bytes, str, strlen(str));
 }
 
 static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
@@ -117,14 +114,14 @@ static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
     vsnprintf(buf, (size_t)len, fmt, args);
     va_end(args);
 
-    vec_copy_back_c_string(self->bytes_alloc, self->bytes, buf);
+    array_copy(*self->bytes, buf, strlen(buf));
 }
 
 static void out_put_start(transpiler *self, char const *str) {
 
     int indent = self->indent_level * 4;
     if (indent < 0) indent = 0;
-    while (indent--) vec_copy_back_c_string(self->bytes_alloc, self->bytes, " ");
+    while (indent--) array_push_val(*self->bytes, ' ');
 
     return out_put(self, str);
 }
