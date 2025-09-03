@@ -436,27 +436,22 @@ static int a_colon(parser *p);
 
 static int a_identifier_typed(parser *p) {
     if (a_try(p, a_identifier)) return 1;
-    ast_node *name = p->result;
-    log(p, "a_identifier_typed: %s", ast_node_to_string(p->debug_arena, name));
+    ast_node *name       = p->result;
 
     ast_node *annotation = 0;
 
     if (0 == a_try(p, a_colon)) {
 
         if (a_try(p, a_type_identifier)) {
-            log(p, "a_identifier_typed: not a type");
             return 1;
         }
 
         annotation = p->result;
-        log(p, "a_identifier_typed: %s : %s", ast_node_to_string(p->debug_arena, name),
-            ast_node_to_string(p->debug_arena, annotation));
     }
 
     ast_node *node    = ast_node_create(p->ast_arena, ast_symbol);
     node->symbol.name = name->symbol.name;
     if (annotation) node->symbol.annotation = annotation;
-    log(p, "a_identifier_typed returning %s", ast_node_to_string(p->debug_arena, node));
     return result_ast_node(p, node);
 }
 
@@ -583,21 +578,17 @@ static int a_end_of_block(parser *p) {
         if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
             return result_ast_str(p, ast_symbol, "end");
 
-        log(p, "end_of_block: next_token error");
         return 1;
     }
 
     if (tok_symbol == p->token.tag && 0 == strcmp("end", p->token.s)) {
-        log(p, "end_of_block: found end symbol");
         return result_ast_str(p, ast_symbol, "end");
     }
 
     if (tok_one_newline == p->token.tag || tok_two_newline == p->token.tag) {
-        log(p, "end_of_block: found newline");
         return result_ast_str(p, ast_symbol, "end");
     }
 
-    log(p, "end_of_block: found token %s, returning error", token_to_string(p->debug_arena, &p->token));
     p->error.tag = tess_err_expected_end_of_block;
     return 1;
 }
@@ -673,9 +664,8 @@ static int function_declaration(parser *p) {
     if (a_try(p, a_identifier)) return 1;
 
     ast_node *const name = p->result; // function name
-    log(p, "function_declaration let %s", ast_node_to_string(p->debug_arena, name));
 
-    vector parameters;
+    vector          parameters;
     ast_vector_init(&parameters);
 
     // check: f () declares function with no parameters
@@ -701,13 +691,9 @@ static int function_declaration(parser *p) {
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, a_identifier_typed)) {
-            log(p, "function_declaration: subsequent parameter: %s",
-                ast_node_to_string(p->debug_arena, p->result));
             vec_push_back(p->parser_arena, &parameters, &iter.base);
             continue;
         }
-
-        log(p, "function_declaration: not identifier");
 
         if (0 == a_try(p, a_equal_sign)) {
 
@@ -718,8 +704,6 @@ static int function_declaration(parser *p) {
             log(p, "function_declaration: returning %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
         }
-
-        log(p, "function_declaration: not equal_sign");
 
         // anything else is an error
         p->error.tag = tess_err_expected_argument;
@@ -994,26 +978,15 @@ struct tokenizer {
 static int let_in_form(parser *p) {
     // let a = 2 in expression
     if (a_try_s(p, the_symbol, "let")) return 1;
-
-    log(p, "let_in_form: pos = %zu", p->tokenizer->pos);
     if (a_try(p, simple_declaration)) return 1;
     ast_node *sym = p->result;
 
-    log(p, "let_in_form: let %s =", ast_node_name_string(sym));
-
     if (a_try(p, expression)) return 1;
-
     ast_node *defn = p->result;
-    dbg("let_in_form: value = %s\n", ast_node_to_string(p->debug_arena, defn));
 
     if (a_try_s(p, the_symbol, "in")) return 1;
-
-    log(p, "let_in_form: found an 'in' at pos %zu", p->tokenizer->pos);
-
     if (a_try(p, expression)) return 1;
-
     ast_node *body = p->result;
-    log(p, "let_in_form: body is %s", ast_node_to_string(p->debug_arena, body));
 
     if (a_try(p, a_end_of_block)) return 1;
 
@@ -1029,14 +1002,11 @@ static int let_form(parser *p) {
     // let f a b c... = ...
 
     if (a_try_s(p, the_symbol, "let")) return 1;
-
     if (a_try(p, function_declaration)) return 1;
     ast_node *decl = p->result;
-    log(p, "let_form: got decl %s", ast_node_to_string(p->debug_arena, decl));
 
     if (a_try(p, function_definition)) return 1;
     ast_node *defn = p->result;
-    log(p, "let_form: got defn %s", ast_node_to_string(p->debug_arena, defn));
 
     ast_node *node = ast_node_create(p->ast_arena, ast_let);
 
@@ -1247,7 +1217,8 @@ void parser_report_errors(parser *self) {
 }
 
 void log(struct parser *self, char const *restrict fmt, ...) {
-
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -1262,4 +1233,5 @@ void log(struct parser *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
+#pragma clang diagnostic pop
 }

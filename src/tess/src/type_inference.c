@@ -80,6 +80,7 @@ static void ti_specialize_functions(ti_inferer *, struct ast_node ***out_nodes, 
 void        ti_run_solver(ti_inferer *);
 
 static void dbg_constraint(struct constraint const *);
+static void dbg_ast_nodes(ti_inferer *);
 static void log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node ***nodes, u32 *n, allocator *nodes_alloc) {
@@ -102,8 +103,8 @@ ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node ***nodes, u32 *n
 
     self->unify_monotypes  = true;
     self->next_type_var    = 1; // 0 is not valid
-    self->next_var         = 1; // 0 is not valid
-    self->next_specialized = 1; // 0 is not valid
+    self->next_var         = 1;
+    self->next_specialized = 1;
 
     return self;
 }
@@ -151,13 +152,7 @@ int ti_inferer_run(ti_inferer *self) {
 
     if (self->verbose) {
         dbg("\n\nti_inferer_run: before specialisation:\n");
-        {
-            for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
-                dbg("%p: %s\n", self->nodes[i], str);
-                alloc_free(self->strings, str);
-            }
-        }
+        dbg_ast_nodes(self);
     }
 
     struct ast_node **specialized   = 0;
@@ -179,13 +174,7 @@ int ti_inferer_run(ti_inferer *self) {
 
     if (self->verbose) {
         dbg("ti_inferer_run: after specialization:\n");
-        {
-            for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string(self->strings, self->nodes[i]);
-                dbg("%p: %s\n", self->nodes[i], str);
-                alloc_free(self->strings, str);
-            }
-        }
+        dbg_ast_nodes(self);
     }
 
     // 6. collect and solve constraints again, this time constraining function applications
@@ -199,13 +188,7 @@ int ti_inferer_run(ti_inferer *self) {
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
         ti_inferer_dbg_constraints(self);
-        {
-            for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string(self->strings, self->nodes[i]);
-                dbg("%s\n", str);
-                alloc_free(self->strings, str);
-            }
-        }
+        dbg_ast_nodes(self);
     }
 
     // update caller's nodes
@@ -222,13 +205,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     ti_inferer_dbg_constraints(self);
 
     dbg("\ninfo: program nodes follow --\n\n");
-    {
-        for (size_t i = 0; i < self->n_nodes; ++i) {
-            char *str = ast_node_to_string(self->strings, self->nodes[i]);
-            dbg("%s\n", str);
-            alloc_free(self->strings, str);
-        }
-    }
+    dbg_ast_nodes(self);
     dbg("\n-- program nodes end\n\n");
 }
 
@@ -501,6 +478,14 @@ static void dbg_constraint(struct constraint const *c) {
     dbg("constraint %s = %s\n", buf_left, buf_right);
 }
 
+static void dbg_ast_nodes(ti_inferer *self) {
+    for (size_t i = 0; i < self->n_nodes; ++i) {
+        char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
+        dbg("%p: %s\n", self->nodes[i], str);
+        alloc_free(self->strings, str);
+    }
+}
+
 static bool substitute_constraints(struct constraint *begin, struct constraint *end,
                                    struct constraint const sub) {
 
@@ -639,7 +624,6 @@ void ti_run_solver(ti_inferer *self) {
     }
 
     if (loop_count == -1) fatal("ti_run_solver: loop exhausted");
-    dbg("ti_run_solver: exit loop_count = %i\n", loop_count);
 }
 
 // -- assign_type_variables --
@@ -1050,6 +1034,8 @@ static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nod
 //
 
 void log(ti_inferer *self, char const *restrict fmt, ...) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
 
     if (!self->verbose) return;
 
@@ -1065,4 +1051,6 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
+
+#pragma clang diagnostic push
 }
