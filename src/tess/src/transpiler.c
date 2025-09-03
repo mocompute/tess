@@ -4,6 +4,7 @@
 
 #include "ast_tags.h"
 #include "dbg.h"
+#include "mos_string.h"
 #include "tess_type.h"
 #include "vector.h"
 
@@ -35,6 +36,7 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 static int a_toplevel(transpiler *, ast_node const *);
+static int a_main(transpiler *, ast_node const *);
 static int a_eval(transpiler *, ast_node const *);
 static int a_result_type_of(transpiler *, struct tess_type const *);
 // static int a_expression(transpiler *, ast_node const *);
@@ -49,6 +51,8 @@ static char *next_variable(transpiler *);
 static void  out_put_start(transpiler *, char const *);
 static void  out_put(transpiler *, char const *);
 static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+
+static bool  is_generic_function(ast_node const *node);
 
 transpiler  *transpiler_create(allocator *alloc, vector *bytes, allocator *bytes_alloc) {
     assert(1 == bytes->element_size);
@@ -79,9 +83,13 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     out_put(self, "\n\n");
 
     for (size_t i = 0; i < n; ++i) {
-
         int res = 0;
         if ((res = a_toplevel(self, nodes[i]))) return res;
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        int res = 0;
+        if ((res = a_main(self, nodes[i]))) return res;
     }
 
     vec_push_back_byte(self->bytes_alloc, self->bytes, '\0');
@@ -297,6 +305,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_infix: {
         if (a_infix(self, node)) return 1;
         char *res = self->results[--self->n_results];
+        out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
 
@@ -313,6 +322,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_let: {
         if (a_let(self, node)) return 1;
         char *res = self->results[--self->n_results];
+        out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
 
@@ -334,116 +344,18 @@ static int a_eval(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-// static int a_eval(transpiler *self, ast_node const *node) {
-
-//     switch (node->tag) {
-//     case ast_eof:
-//     case ast_nil:    out_put(self, "NULL"); break;
-
-//     case ast_symbol: out_put_fmt(self, "%s", mos_string_str(&node->symbol.name)); break;
-//     case ast_string:
-//         out_put(self, "\"");
-//         out_put_fmt(self, "%s", mos_string_str(&node->symbol.name));
-//         out_put(self, "\"");
-//         break;
-
-//     case ast_i64: out_put_fmt(self, "%" PRIi64, node->i64.val); break;
-//     case ast_u64: out_put_fmt(self, "%" PRIu64, node->u64.val); break;
-//     case ast_f64: out_put_fmt(self, "%f", node->f64.val); break;
-//     case ast_bool:
-//         if (node->bool_.val) out_put(self, "true");
-//         else out_put(self, "false");
-//         break;
-//     case ast_infix:                       return a_infix(self, node);
-//     case ast_tuple:                       break;
-//     case ast_let_in:                      return a_let_in(self, node);
-//     case ast_let:                         return a_let(self, node);
-//     case ast_if_then_else:
-//     case ast_lambda_function:
-//     case ast_function_declaration:
-//     case ast_lambda_declaration:
-//     case ast_lambda_function_application: break;
-//     case ast_named_function_application:  return a_fun_apply(self, node);
-
-//     case ast_user_defined_type:           break;
-//     }
-//     return 0;
-// }
-
-// static int a_body(transpiler *self, ast_node const *node) {
-
-//     switch (node->tag) {
-//     case ast_let:
-//     case ast_named_function_application:
-//     case ast_eof:
-//     case ast_nil:
-//     case ast_bool:
-//     case ast_symbol:
-//     case ast_i64:
-//     case ast_u64:
-//     case ast_f64:
-//     case ast_string:
-//     case ast_infix:
-//     case ast_tuple:
-//     case ast_let_in:
-//     case ast_if_then_else:
-//     case ast_lambda_function:
-//     case ast_function_declaration:
-//     case ast_lambda_declaration:
-//     case ast_lambda_function_application:
-//         out_put_start(self, "return ");
-//         a_eval(self, node);
-//         out_put(self, ";");
-//         break;
-
-//     case ast_user_defined_type:
-//         // FIXME should not be in body
-//         break;
-//     }
-//     return 0;
-// }
-
-// static int a_main_body(transpiler *self, ast_node const *node) {
-
-//     switch (node->tag) {
-//     case ast_let:
-//     case ast_named_function_application:
-//     case ast_eof:
-//     case ast_nil:
-//     case ast_bool:
-//     case ast_symbol:
-//     case ast_i64:
-//     case ast_u64:
-//     case ast_f64:
-//     case ast_string:
-//     case ast_infix:
-//     case ast_tuple:
-//     case ast_let_in:
-//     case ast_if_then_else:
-//     case ast_lambda_function:
-//     case ast_function_declaration:
-//     case ast_lambda_declaration:
-//     case ast_lambda_function_application:
-//         out_put_start(self, "return (int) (");
-//         a_eval(self, node);
-//         out_put(self, ")");
-//         out_put(self, ";");
-//         break;
-
-//     case ast_user_defined_type:
-//         // FIXME should not be in body
-//         break;
-//     }
-//     return 0;
-// }
-
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    ast_node const *name     = node->named_application.name;
-    char const     *name_str = ast_node_name_string(name);
+    char const *name = null;
+    if (node->named_application.specialized) {
+        name = mos_string_str(&node->named_application.specialized->let.specialized_name);
+    } else {
+        // c_ and std_ etc...
+        name = mos_string_str(&node->named_application.name);
+    }
 
-    char           *var      = next_variable(self);
+    char *var = next_variable(self);
     alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
 
     // eval arguments in reverse order, then generate function call,
@@ -458,7 +370,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put_fmt(self, " %s;\n", var);
 
     out_put_start(self, "");
-    out_put_fmt(self, "%s = %s(", var, name_str);
+    out_put_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
         char *arg = self->results[--self->n_results];
@@ -470,46 +382,10 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-// static int a_string(transpiler *self, ast_node const *node) {
-//     assert(ast_string == node->tag);
-//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
-//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, ast_node_name_string(node));
-//     vec_copy_back_c_string(self->bytes_alloc, self->bytes, "\"");
-//     return 0;
-// }
+static int a_main(transpiler *self, ast_node const *node) {
+    if (ast_let != node->tag) return 0;
 
-// static int a_std_dbg(transpiler *self, ast_node const *node) {
-
-//     // FIXME for now only one string argument is valid
-//     if (1 != node->named_application.n_arguments) return 1;
-
-//     out_put(self, "(fprintf(stderr, \"%s\", ");
-//     ast_node *arg = node->named_application.arguments[0];
-//     if (a_string(self, arg)) return 1;
-//     out_put(self, "), 0)");
-//     return 0;
-// }
-
-// static int a_std_apply(transpiler *self, ast_node const *node, char const *name) {
-//     static char const *const std_names[] = {
-//       "std_dbg",
-//     };
-//     static compile_fun_t const std_funs[] = {
-//       a_std_dbg,
-//     };
-
-//     size_t i;
-//     for (i = 0; i != sizeof(std_names) / sizeof(char *); ++i) {
-//         if (0 == strcmp(std_names[i], name)) {
-//             return std_funs[i](self, node);
-//         }
-//     }
-//     return 1;
-// }
-
-static int a_let(transpiler *self, ast_node const *node) {
-
-    if (0 == ast_node_name_strcmp(node->let.name, "main")) {
+    if (0 == strcmp(mos_string_str(&node->let.name), "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
@@ -528,16 +404,33 @@ static int a_let(transpiler *self, ast_node const *node) {
         out_put(self, "\n}\n");
         return 0;
     }
+    return 0;
+}
+
+static int a_let(transpiler *self, ast_node const *node) {
+
+    char const *name = mos_string_str(&node->let.specialized_name);
+    if (0 == strlen(name)) name = mos_string_str(&node->let.name);
+
+    if (is_generic_function(node)) return 0;
+
+    // don't emit generic template functions
+    if (mos_string_empty(&node->let.specialized_name)) return 0;
+
+    if (0 == strcmp(mos_string_str(&node->let.name), "main")) {
+        // skip here, let a_main process it.
+        return 0;
+    }
 
     // function declaration
 
     // return type
     out_put_start(self, "static ");
-    if (a_result_type_of(self, node->let.name->type)) return 1;
+    if (a_result_type_of(self, node->let.arrow)) return 1;
     out_put(self, " ");
 
     // name
-    out_put(self, mos_string_str(&node->let.name->symbol.name));
+    out_put(self, name);
     out_put(self, " ");
 
     // params
@@ -553,11 +446,14 @@ static int a_let(transpiler *self, ast_node const *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
+
     if (a_eval(self, node->let.body)) return 1;
-    self->indent_level--;
+
     char *body = self->results[--self->n_results];
     out_put_start(self, "");
     out_put_fmt(self, "return %s;", body);
+
+    self->indent_level--;
     out_put(self, "\n}\n\n");
 
     return 0;
@@ -569,4 +465,19 @@ static char *next_variable(transpiler *self) {
     char *out = alloc_malloc(self->strings, (u32)len);
     snprintf(out, (u32)len, "_res%u_", self->next_variable++);
     return out;
+}
+
+static bool is_generic_function(ast_node const *node) {
+    if (ast_let != node->tag) return false;
+
+    struct tess_type *arrow = node->let.arrow;
+    if (arrow->right->tag == type_type_var) return true;
+
+    struct tess_type *left = arrow->left;
+    assert(left->tag == type_tuple);
+
+    for (u32 i = 0; i < left->n_elements; ++i)
+        if (type_type_var == left->elements[i]->tag) return true;
+
+    return false;
 }

@@ -144,11 +144,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     // clone the rest of the fields
     switch (clone->tag) {
     case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:  break;
+    case ast_nil:  break;
+    case ast_bool: clone->bool_.val = orig->bool_.val; break;
+
+    case ast_i64:  clone->i64.val = orig->i64.val; break;
+    case ast_u64:  clone->u64.val = orig->u64.val; break;
+    case ast_f64:  clone->f64.val = orig->f64.val; break;
 
     case ast_symbol:
     case ast_string:
@@ -160,6 +161,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_infix:
         clone->infix.left  = ast_node_clone(alloc, orig->infix.left);
         clone->infix.right = ast_node_clone(alloc, orig->infix.right);
+        clone->infix.op    = orig->infix.op;
         break;
 
     case ast_tuple: break;
@@ -171,8 +173,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         break;
 
     case ast_let:
-        clone->let.name = ast_node_clone(alloc, orig->let.name);
-        clone->let.body = ast_node_clone(alloc, orig->let.body);
+        mos_string_copy(alloc, &clone->let.name, &orig->let.name);
+        clone->let.body  = ast_node_clone(alloc, orig->let.body);
+        clone->let.arrow = orig->let.arrow;
+        mos_string_copy(alloc, &clone->let.specialized_name, &orig->let.specialized_name);
         break;
 
     case ast_if_then_else:
@@ -189,13 +193,15 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->function_declaration.name = ast_node_clone(alloc, orig->function_declaration.name);
         break;
 
-    case ast_lambda_declaration:
+    case ast_lambda_declaration: break;
+
     case ast_lambda_function_application:
         clone->lambda_application.lambda = ast_node_clone(alloc, orig->lambda_application.lambda);
         break;
 
     case ast_named_function_application:
-        clone->named_application.name = ast_node_clone(alloc, orig->named_application.name);
+        mos_string_copy(alloc, &clone->named_application.name, &orig->named_application.name);
+        clone->named_application.specialized = ast_node_clone(alloc, orig->named_application.specialized);
         break;
 
     case ast_user_defined_type:
@@ -346,7 +352,8 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        return penta(alloc, sym("let"), recur(node->let.name), list, recur(node->let.body), type);
+        return penta(alloc, sym("let"), sym(mos_string_str(&node->let.name)), list, recur(node->let.body),
+                     type);
 
     } break;
 
@@ -379,7 +386,13 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     } break;
     case ast_named_function_application: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        return quad(alloc, sym("named-application"), recur(node->named_application.name), list, type);
+        if (node->named_application.specialized)
+            return quad(alloc, sym("named-application"),
+                        sym(mos_string_str(&node->named_application.specialized->let.specialized_name)),
+                        list, type);
+        else
+            return quad(alloc, sym("named-application"), sym(mos_string_str(&node->named_application.name)),
+                        list, type);
 
     } break;
 
@@ -445,6 +458,8 @@ static void recur_on_array(struct ast_node **elements, u16 n, void *ctx, ast_op_
 
 void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
+    if (!node) return;
+
     // Note: const dfs also uses this function.
 
     switch (node->tag) {
@@ -475,7 +490,6 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
 
     case ast_let: {
-        ast_pool_dfs(ctx, node->let.name, fun);
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
@@ -523,7 +537,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     } break;
 
     case ast_named_function_application: {
-        ast_pool_dfs(ctx, node->named_application.name, fun);
+        ast_pool_dfs(ctx, node->named_application.specialized, fun);
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 

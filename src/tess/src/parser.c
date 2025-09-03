@@ -767,8 +767,9 @@ static int function_application(parser *p) {
     if (a_try(p, a_identifier)) return 1;
 
     ast_node *const name = p->result;
+    assert(ast_symbol == name->tag);
 
-    vector          arguments;
+    vector arguments;
     ast_vector_init(&arguments);
 
     // must have at least one argument
@@ -788,8 +789,8 @@ static int function_application(parser *p) {
             // 2: "fails" due to close_round, which must not be
             // consumed, so that grouped_expression catches it.
 
-            ast_node *node               = ast_node_create(p->ast_arena, ast_named_function_application);
-            node->named_application.name = name;
+            ast_node *node = ast_node_create(p->ast_arena, ast_named_function_application);
+            mos_string_copy(p->ast_arena, &node->named_application.name, &name->symbol.name);
 
             vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->array.nodes, &node->array.n);
 
@@ -1040,7 +1041,7 @@ static int let_form(parser *p) {
     ast_node *node = ast_node_create(p->ast_arena, ast_let);
 
     // get declaration out of pool to move into new node
-    node->let.name = decl->function_declaration.name;
+    mos_string_copy(p->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
     node->let.body = defn;
 
     // move the vector from the function_declaration node to the new ast node

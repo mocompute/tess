@@ -27,19 +27,19 @@ struct tess_type {
         struct {
             struct tess_type **elements;
             u16                n_elements;
-        };
+        }; // tuple
 
         struct {
             struct tess_type *left;
             struct tess_type *right;
-        };
+        }; // arrow
 
         struct {
             char const        *name;
             struct tess_type **fields;
             char const       **field_names;
             u16                n_fields;
-        };
+        }; // user
 
         u32 type_var;
     };

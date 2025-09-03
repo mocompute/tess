@@ -50,6 +50,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u16               n_parameters;
             struct ast_node  *body;
+            // node type is arrow
         } lambda_function;
 
         struct {
@@ -72,8 +73,10 @@ typedef struct ast_node {
         struct {
             struct ast_node **parameters;
             u16               n_parameters;
-            struct ast_node  *name;
+            struct string     name;
             struct ast_node  *body;
+            struct tess_type *arrow;            // because the node type itself is nil
+            struct string     specialized_name; // set during function specialisation
         } let;
 
         struct {
@@ -91,8 +94,8 @@ typedef struct ast_node {
         struct {
             struct ast_node **arguments;
             u16               n_arguments;
-            struct ast_node  *name;
-            bool              specialized;
+            struct string     name;
+            struct ast_node  *specialized;
         } named_application;
 
         struct {

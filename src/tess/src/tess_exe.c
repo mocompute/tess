@@ -162,7 +162,7 @@ int compile(struct state *self) {
         goto cleanup_syntax;
     }
 
-    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), nodes, n_nodes, nodes_alloc);
+    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), &nodes, &n_nodes, nodes_alloc);
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
