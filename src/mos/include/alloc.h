@@ -74,6 +74,7 @@ size_t          alloc_align_to_word_size(size_t);
         *(SIZE_PTR) = (NEW_SIZE);                                                                          \
     } while (0)
 
+// FIXME: if 2 * CAP is < SIZE, this fails.
 #define alloc_push_back(ALLOC, BUF_PTR, SIZE_PTR, CAP_PTR, DATA_PTR)                                       \
     do {                                                                                                   \
         if (*(SIZE_PTR) == *(CAP_PTR)) alloc_resize(ALLOC, BUF_PTR, CAP_PTR, 2 * (*(CAP_PTR)));            \

@@ -82,11 +82,13 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     out_put(self, embed_std_c);
     out_put(self, "\n\n");
 
+    // output toplevel forms
     for (size_t i = 0; i < n; ++i) {
         int res = 0;
         if ((res = a_toplevel(self, nodes[i]))) return res;
     }
 
+    // output main function
     for (size_t i = 0; i < n; ++i) {
         int res = 0;
         if ((res = a_main(self, nodes[i]))) return res;
