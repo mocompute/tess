@@ -3,7 +3,6 @@
 
 #include "alloc.h"
 #include "ast.h"
-#include "types.h"
 
 typedef struct ti_inferer ti_inferer;
 

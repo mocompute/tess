@@ -158,8 +158,8 @@ c_string_cslice ast_nodes_get_names(allocator *, ast_node_slice);
 typedef void (*ast_op_fun)(void *, ast_node *);
 typedef void (*ast_op_cfun)(void *, ast_node const *);
 
-void ast_pool_dfs(void *, ast_node *, ast_op_fun);
-void ast_pool_cdfs(void *, ast_node const *, ast_op_cfun);
+void ast_node_dfs(void *, ast_node *, ast_op_fun);
+void ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
 
 void ast_validate_nodes(ast_node *nodes[], u32 count);
 

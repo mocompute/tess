@@ -445,7 +445,7 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
 static void ti_apply_substitutions_to_ast(struct constraint *substitutions, u32 n_substitutions,
                                           ast_node *nodes[], u32 const count) {
     struct constraint_buffer ctx = {substitutions, n_substitutions};
-    for (size_t i = 0; i < count; ++i) ast_pool_dfs(&ctx, nodes[i], dfs_apply_substitutions);
+    for (size_t i = 0; i < count; ++i) ast_node_dfs(&ctx, nodes[i], dfs_apply_substitutions);
 }
 
 // -- solver --
@@ -632,7 +632,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
 void ti_assign_type_variables(ti_inferer *self) {
 
     for (size_t i = 0; i < self->nodes.size; ++i) {
-        ast_pool_dfs(self, self->nodes.v[i], assign_type_variables);
+        ast_node_dfs(self, self->nodes.v[i], assign_type_variables);
     }
 }
 
@@ -877,7 +877,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
 void ti_collect_constraints(ti_inferer *self) {
 
-    for (size_t i = 0; i < self->nodes.size; ++i) ast_pool_dfs(self, self->nodes.v[i], collect_constraints);
+    for (size_t i = 0; i < self->nodes.size; ++i) ast_node_dfs(self, self->nodes.v[i], collect_constraints);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
@@ -934,7 +934,7 @@ static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node
     do_assign_type_variables(ctx->ti, special);
 
     // assign new typevars to params and to body nodes that are not monotyped
-    ast_pool_dfs(ctx->ti, special, reassign_typevars);
+    ast_node_dfs(ctx->ti, special, reassign_typevars);
 
     // rename variables in the specialized function, since at this
     // point every variable name must have 1-1 map to its type
@@ -995,7 +995,7 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
     ctx.specials = (ast_node_array){.alloc = self->type_arena};
     array_reserve(ctx.specials, 128);
 
-    for (size_t i = 0; i < self->nodes.size; ++i) ast_pool_dfs(&ctx, self->nodes.v[i], specialize_node);
+    for (size_t i = 0; i < self->nodes.size; ++i) ast_node_dfs(&ctx, self->nodes.v[i], specialize_node);
 
     if (ctx.specials.size) array_shrink(ctx.specials);
     if (!ctx.specials.v) fatal("ti_specialize_functions: realloc failed.");

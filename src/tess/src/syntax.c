@@ -177,7 +177,7 @@ static void check_annotation(void *ctx, ast_node *node) {
 
 static int syntax_check_type_annotations(struct syntax_checker *self) {
     for (u32 i = self->nodes.begin; i < self->nodes.end; ++i)
-        ast_pool_dfs(self, self->nodes.v[i], check_annotation);
+        ast_node_dfs(self, self->nodes.v[i], check_annotation);
     return 0;
 }
 

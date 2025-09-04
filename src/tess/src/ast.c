@@ -458,10 +458,10 @@ sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
 // -- pool operations --
 
 static void recur_on_array(struct ast_node **elements, u16 n, void *ctx, ast_op_fun fun) {
-    for (size_t i = 0; i < n; ++i) ast_pool_dfs(ctx, elements[i], fun);
+    for (size_t i = 0; i < n; ++i) ast_node_dfs(ctx, elements[i], fun);
 }
 
-void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
+void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
     if (!node) return;
 
@@ -478,8 +478,8 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_string: return fun(ctx, node);
 
     case ast_infix:
-        ast_pool_dfs(ctx, node->infix.left, fun);
-        ast_pool_dfs(ctx, node->infix.right, fun);
+        ast_node_dfs(ctx, node->infix.left, fun);
+        ast_node_dfs(ctx, node->infix.right, fun);
         return fun(ctx, node);
 
     case ast_tuple: {
@@ -488,9 +488,9 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     } break;
 
     case ast_let_in:
-        ast_pool_dfs(ctx, node->let_in.name, fun);
-        ast_pool_dfs(ctx, node->let_in.value, fun);
-        ast_pool_dfs(ctx, node->let_in.body, fun);
+        ast_node_dfs(ctx, node->let_in.name, fun);
+        ast_node_dfs(ctx, node->let_in.value, fun);
+        ast_node_dfs(ctx, node->let_in.body, fun);
 
         return fun(ctx, node);
 
@@ -498,28 +498,28 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
-        ast_pool_dfs(ctx, node->let.body, fun);
+        ast_node_dfs(ctx, node->let.body, fun);
 
         return fun(ctx, node);
     } break;
 
     case ast_if_then_else:
-        ast_pool_dfs(ctx, node->if_then_else.condition, fun);
-        ast_pool_dfs(ctx, node->if_then_else.yes, fun);
-        ast_pool_dfs(ctx, node->if_then_else.no, fun);
+        ast_node_dfs(ctx, node->if_then_else.condition, fun);
+        ast_node_dfs(ctx, node->if_then_else.yes, fun);
+        ast_node_dfs(ctx, node->if_then_else.no, fun);
 
         return fun(ctx, node);
 
     case ast_lambda_function: {
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
-        ast_pool_dfs(ctx, node->lambda_function.body, fun);
+        ast_node_dfs(ctx, node->lambda_function.body, fun);
 
         return fun(ctx, node);
     } break;
 
     case ast_function_declaration: {
-        ast_pool_dfs(ctx, node->function_declaration.name, fun);
+        ast_node_dfs(ctx, node->function_declaration.name, fun);
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
@@ -534,7 +534,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     } break;
 
     case ast_lambda_function_application: {
-        ast_pool_dfs(ctx, node->lambda_application.lambda, fun);
+        ast_node_dfs(ctx, node->lambda_application.lambda, fun);
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
@@ -542,7 +542,7 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     } break;
 
     case ast_named_function_application: {
-        ast_pool_dfs(ctx, node->named_application.specialized, fun);
+        ast_node_dfs(ctx, node->named_application.specialized, fun);
 
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
 
@@ -556,8 +556,8 @@ void ast_pool_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     assert(false);
 }
 
-void ast_pool_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
-    ast_pool_dfs(ctx, (ast_node *)start, (ast_op_fun)fun);
+void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
+    ast_node_dfs(ctx, (ast_node *)start, (ast_op_fun)fun);
 }
 
 // -- utilities --
@@ -648,7 +648,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
 void ast_validate_nodes(ast_node *nodes[], u32 count) {
 
     for (size_t i = 0; i < count; ++i) {
-        ast_pool_dfs(null, nodes[i], validate_one_node);
+        ast_node_dfs(null, nodes[i], validate_one_node);
     }
 
     dbg("all nodes valid\n");
