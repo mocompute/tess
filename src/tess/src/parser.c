@@ -1139,28 +1139,16 @@ int parser_next(parser *parser) {
     return toplevel(parser);
 }
 
-int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u32 *len) {
+int parser_parse_all(parser *p, ast_node_array *out) {
 
-    u32 cap                 = 16;
-    *len                    = 0;
-    *out                    = alloc_calloc(out_alloc, cap, sizeof(struct ast_node *));
-
-    struct ast_node **nodes = *out;
-
-    int               res   = 0;
+    int res = 0;
     while (0 == (res = parser_next(p))) {
         ast_node *node;
 
         parser_result(p, &node);
         log(p, "parse_all: parsed node %s", ast_node_to_string(p->debug_arena, node));
 
-        if (*len == cap) {
-            alloc_resize(out_alloc, out, &cap, cap * 2);
-            nodes = *out;
-        }
-
-        nodes[*len] = node;
-        *len        = *len + 1;
+        array_push(*out, &node);
     }
 
     if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
@@ -1168,11 +1156,11 @@ int parser_parse_all(parser *p, allocator *out_alloc, struct ast_node ***out, u3
     return res;
 }
 
-int parser_parse_all_verbose(parser *p, allocator *out_alloc, struct ast_node ***out, u32 *len) {
+int parser_parse_all_verbose(parser *p, ast_node_array *out) {
     p->verbose = true;
 
     log(p, "begin parse");
-    int res = parser_parse_all(p, out_alloc, out, len);
+    int res = parser_parse_all(p, out);
     log(p, "end parse");
 
     p->verbose = false;

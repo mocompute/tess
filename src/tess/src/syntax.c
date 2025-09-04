@@ -1,6 +1,7 @@
 #include "syntax.h"
 
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
@@ -26,17 +27,20 @@ struct syntax_error {
     // error code is in ast_node
 };
 
+typedef struct {
+    array_header;
+    struct syntax_error *v;
+} syntax_error_array;
+
 struct syntax_checker {
-    allocator           *alloc;
-    allocator           *arena;
-    type_registry       *type_registry;
+    allocator         *alloc;
+    allocator         *arena;
+    type_registry     *type_registry;
 
-    ast_node           **nodes;
-    u32                  n_nodes;
+    ast_node         **nodes;
+    u32                n_nodes;
 
-    struct syntax_error *errors;
-    u32                  n_errors;
-    u32                  cap_errors;
+    syntax_error_array errors;
 };
 
 // -- allocation and deallocation --
@@ -47,6 +51,8 @@ syntax_checker *syntax_checker_create(allocator *alloc, ast_node **nodes, u32 co
     self->alloc          = alloc;
     self->arena          = alloc_arena_create(alloc, 2048);
     self->type_registry  = type_registry_create(self->arena);
+
+    self->errors         = (syntax_error_array){.alloc = self->arena};
 
     self->nodes          = nodes;
     self->n_nodes        = count;
@@ -69,21 +75,23 @@ int syntax_checker_run(syntax_checker *self) {
     if ((res = syntax_register_user_types(self))) return res;
     if ((res = syntax_check_type_annotations(self))) return res;
 
-    return (int)self->n_errors;
+    return (int)self->errors.size;
 }
 
 void syntax_checker_report_errors(syntax_checker *self) {
-    if (self->n_errors == 0) return;
+    if (self->errors.size == 0) return;
 
-    for (u32 i = 0; i < self->n_errors; ++i) {
+    for (u32 i = 0; i < self->errors.size; ++i) {
 
-        char *str = ast_node_to_string_for_error(self->arena, self->errors[i].node);
+        char *str = ast_node_to_string_for_error(self->arena, self->errors.v[i].node);
 
-        if (self->errors[i].message)
-            fprintf(stderr, "error: %s: %s: %s\n", tess_error_tag_to_string(self->errors[i].node->error),
-                    self->errors[i].message, str);
+        if (self->errors.v[i].message)
+            fprintf(stderr, "error: %s: %s: %s\n", tess_error_tag_to_string(self->errors.v[i].node->error),
+                    self->errors.v[i].message, str);
 
-        else fprintf(stderr, "error: %s: %s\n", tess_error_tag_to_string(self->errors[i].node->error), str);
+        else
+            fprintf(stderr, "error: %s: %s\n", tess_error_tag_to_string(self->errors.v[i].node->error),
+                    str);
 
         alloc_free(self->arena, str);
     }
@@ -181,12 +189,14 @@ static void syntax_error(struct syntax_checker *self, ast_node *node, enum tess_
 
     node->error = tag;
 
-    if (!self->errors) {
-        self->cap_errors = 16;
-        self->errors     = alloc_calloc(self->arena, self->cap_errors, sizeof self->errors[0]);
-    } else if (self->n_errors == self->cap_errors) {
-        alloc_resize(self->arena, &self->errors, &self->cap_errors, self->cap_errors * 2);
-    }
+    array_push_val(self->errors, ((struct syntax_error){node, message}));
 
-    self->errors[self->n_errors++] = (struct syntax_error){node, message};
+    // if (!self->errors) {
+    //     self->cap_errors = 16;
+    //     self->errors     = alloc_calloc(self->arena, self->cap_errors, sizeof self->errors[0]);
+    // } else if (self->n_errors == self->cap_errors) {
+    //     alloc_resize(self->arena, &self->errors, &self->cap_errors, self->cap_errors * 2);
+    // }
+
+    // self->errors[self->n_errors++] = (struct syntax_error){node, message};
 }

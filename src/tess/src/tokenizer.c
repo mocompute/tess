@@ -9,19 +9,14 @@
 #include <string.h>
 
 struct tokenizer {
-    allocator    *parent;
-    allocator    *strings;
-    char const   *input;
-    size_t        input_len;
-    size_t        pos;
+    allocator  *parent;
+    allocator  *strings;
+    char const *input;
+    size_t      input_len;
+    size_t      pos;
 
-    struct token *backtrack;
-    u32           n_backtrack;
-    u32           cap_backtrack;
-
-    char         *buf;
-    u32           n_buf;
-    u32           cap_buf;
+    token_array backtrack;
+    char_array  buf;
 };
 
 // -- statics --
@@ -34,21 +29,16 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 // -- allocation and deallocation --
 
 tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
-    tokenizer *self     = alloc_calloc(alloc, 1, sizeof(tokenizer));
+    tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
-    self->parent        = alloc;
-    self->strings       = alloc_arena_create(alloc, 4096);
-    self->input         = input;
-    self->input_len     = len;
-    self->pos           = 0;
+    self->parent    = alloc;
+    self->strings   = alloc_arena_create(alloc, 4096);
+    self->input     = input;
+    self->input_len = len;
+    self->pos       = 0;
 
-    self->cap_buf       = 32;
-    self->buf           = alloc_malloc(alloc, self->cap_buf * sizeof self->buf[0]);
-    self->n_buf         = 0;
-
-    self->cap_backtrack = 8;
-    self->backtrack     = alloc_malloc(alloc, self->cap_backtrack * sizeof self->backtrack[0]);
-    self->n_backtrack   = 0;
+    self->buf       = (char_array){.alloc = alloc};
+    self->backtrack = (token_array){.alloc = alloc};
 
     return self;
 }
@@ -56,8 +46,9 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
 void tokenizer_destroy(tokenizer **self) {
     alloc_arena_destroy((*self)->parent, &(*self)->strings);
 
-    alloc_free((*self)->parent, (*self)->backtrack);
-    alloc_free((*self)->parent, (*self)->buf);
+    array_free((*self)->backtrack);
+    array_free((*self)->buf);
+
     alloc_free((*self)->parent, *self);
     *self = null;
 }
@@ -88,8 +79,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
 
     // support backtracking by parser
-    if (self->n_backtrack) {
-        *out = self->backtrack[--self->n_backtrack];
+    if (self->backtrack.size) {
+        *out = self->backtrack.v[--self->backtrack.size];
         return 0;
     }
 
@@ -464,8 +455,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             break;
 
         case start_string: {
-            self->n_buf = 0;
-            state       = in_string;
+            self->buf.size = 0;
+            state          = in_string;
         } break;
 
         case in_string: {
@@ -477,7 +468,9 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
-            default:   alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &c); break;
+            default:   {
+                array_push(self->buf, &c);
+            } break;
             }
         } break;
 
@@ -506,19 +499,19 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &actual);
+                array_push(self->buf, &actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &backslash);
-                alloc_push_back(self->parent, &self->buf, &self->n_buf, &self->cap_buf, &c);
+                array_push(self->buf, &backslash);
+                array_push(self->buf, &c);
             }
             state = in_string;
 
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, tok_string, self->buf, self->n_buf);
+            replace_token_sn(self->strings, &res, tok_string, self->buf.v, self->buf.size);
             state = stop;
         } break;
 
@@ -549,7 +542,6 @@ finish:
 void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 
     for (size_t i = n_toks; i != 0; --i) {
-        alloc_push_back(self->parent, &self->backtrack, &self->n_backtrack, &self->cap_backtrack,
-                        &toks[i - 1]);
+        array_push(self->backtrack, &toks[i - 1]);
     }
 }

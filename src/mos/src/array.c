@@ -63,6 +63,17 @@ void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *
     return ptr;
 }
 
+void *array_insert_impl(array_header_t *h, void *ptr, u32 index, u32 width, u16 align, void *data,
+                        u32 num) {
+    assert(index < h->size);
+
+    ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
+
+    memmove(&ptr[index + num], &ptr[index], (h->size - index) * alloc_align(width, align));
+    memcpy(&ptr[index + num], data, num * width);
+    return ptr;
+}
+
 void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
     assert(h->alloc);
     if (h->capacity == h->size) return ptr;

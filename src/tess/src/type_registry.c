@@ -8,24 +8,20 @@
 #include <stdlib.h>
 
 struct type_registry {
-    allocator         *alloc;
-    struct type_entry *entries;
-    u32                n_entries;
-    u32                cap_entries;
+    allocator       *alloc;
+    type_entry_array entries;
 };
 
 // static int     compare_types(const void *, const void *);
 // static int     compare_type_entries(const void *, const void *);
 static int     compare_type_entry_names(const void *, const void *);
-static void    sorted_insert(allocator *, struct type_entry **ptr, u32 *n, u32 *cap, struct type_entry);
+static void    sorted_insert(type_entry_array *, struct type_entry);
 static void    register_basic_types(type_registry *);
 
 type_registry *type_registry_create(allocator *alloc) {
     type_registry *self = alloc_struct(alloc, self);
     self->alloc         = alloc;
-    self->cap_entries   = 16;
-    self->entries       = alloc_calloc(alloc, self->cap_entries, sizeof self->entries[0]);
-    self->n_entries     = 0;
+    self->entries       = (type_entry_array){.alloc = alloc};
 
     register_basic_types(self);
 
@@ -34,22 +30,22 @@ type_registry *type_registry_create(allocator *alloc) {
 
 void type_registry_destroy(type_registry **self) {
 
-    alloc_free((*self)->alloc, (*self)->entries);
+    array_free((*self)->entries);
     alloc_free((*self)->alloc, *self);
     *self = null;
 }
 
 int type_registry_add(type_registry *self, struct type_entry entry) {
     if (type_registry_find(self, entry.name)) return 1;
-    sorted_insert(self->alloc, &self->entries, &self->n_entries, &self->cap_entries, entry);
+    sorted_insert(&self->entries, entry);
     return 0;
 }
 
 struct type_entry *type_registry_find(type_registry *self, char const *name) {
     struct type_entry  tmp = {.name = name};
 
-    struct type_entry *out =
-      bsearch(&tmp, self->entries, self->n_entries, sizeof self->entries[0], compare_type_entry_names);
+    struct type_entry *out = bsearch(&tmp, self->entries.v, self->entries.size, sizeof self->entries.v[0],
+                                     compare_type_entry_names);
 
     return out;
 }
@@ -98,32 +94,21 @@ static void register_basic_types(type_registry *self) {
 
 //
 
-static void sorted_insert(allocator *alloc, struct type_entry **parray, u32 *pn, u32 *pcap,
-                          struct type_entry entry) {
+static void sorted_insert(type_entry_array *entries, struct type_entry entry) {
 
-    struct type_entry *entries = *parray;
-    u32                n       = *pn;
-    u32                cap     = *pcap;
+    if (entries->size == entries->capacity) array_reserve(*entries, entries->capacity * 2);
 
-    if (n == cap) {
-        alloc_resize(alloc, parray, pcap, cap * 2);
-        entries = *parray;
-    }
+    for (u32 i = 0; i < entries->size; ++i) {
 
-    for (u32 i = 0; i < n; ++i) {
+        if (compare_type_entry_names(&entry, &entries->v[i]) <= 0) {
 
-        if (compare_type_entry_names(&entry, &entries[i]) <= 0) {
+            array_insert(*entries, i, &entry, 1);
 
-            memmove(&entries[i + 1], &entries[i], (n - i) * sizeof entries[0]);
-
-            entries[i] = entry;
-            *pn        = ++n;
             return;
         }
     }
 
-    entries[n++] = entry;
-    *pn          = n;
+    array_push(*entries, &entry);
     return;
 }
 

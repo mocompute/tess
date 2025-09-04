@@ -21,37 +21,36 @@ static int compile_input_flag(char const *input, bool verbose) {
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
 
-    allocator        *nodes_alloc = alloc_leak_detector_create();
-    allocator        *ast_alloc   = alloc_leak_detector_create();
-    allocator        *ti_alloc    = alloc_leak_detector_create();
+    allocator     *nodes_alloc = alloc_leak_detector_create();
+    allocator     *ast_alloc   = alloc_leak_detector_create();
+    allocator     *ti_alloc    = alloc_leak_detector_create();
 
-    parser           *p           = parser_create(ast_alloc, input, strlen(input));
+    parser        *p           = parser_create(ast_alloc, input, strlen(input));
 
-    struct ast_node **nodes;
-    u32               n_nodes = 0;
+    ast_node_array nodes       = {.alloc = nodes_alloc};
 
     if (verbose) {
-        if (parser_parse_all_verbose(p, nodes_alloc, &nodes, &n_nodes)) {
+        if (parser_parse_all_verbose(p, &nodes)) {
             parser_report_errors(p);
             return 1;
         }
     } else {
-        if (parser_parse_all(p, nodes_alloc, &nodes, &n_nodes)) {
+        if (parser_parse_all(p, &nodes)) {
             parser_report_errors(p);
             return 1;
         }
     }
 
     dbg("\n  Parser output: \n");
-    for (size_t i = 0; i < n_nodes; ++i) {
-        char *str = ast_node_to_string(alloc_default_allocator(), nodes[i]);
+    for (size_t i = 0; i < nodes.size; ++i) {
+        char *str = ast_node_to_string(alloc_default_allocator(), nodes.v[i]);
         dbg("%s\n", str);
         alloc_free(alloc_default_allocator(), str);
     }
     dbg("\n");
 
     allocator      *syntax_alloc = alloc_leak_detector_create();
-    syntax_checker *syntax       = syntax_checker_create(syntax_alloc, nodes, n_nodes);
+    syntax_checker *syntax       = syntax_checker_create(syntax_alloc, nodes.v, nodes.size);
 
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes
@@ -61,15 +60,15 @@ static int compile_input_flag(char const *input, bool verbose) {
         return 1;
     }
 
-    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes, &n_nodes, nodes_alloc);
+    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes);
 
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
         return 1;
     }
 
-    for (size_t i = 0; i < n_nodes; ++i) {
-        char *str = ast_node_to_string(alloc_default_allocator(), nodes[i]);
+    for (size_t i = 0; i < nodes.size; ++i) {
+        char *str = ast_node_to_string(alloc_default_allocator(), nodes.v[i]);
         dbg("node: %s\n", str);
         alloc_free(alloc_default_allocator(), str);
     }
@@ -84,7 +83,7 @@ static int compile_input_flag(char const *input, bool verbose) {
     syntax_checker_destroy(&syntax);
     alloc_leak_detector_destroy(&syntax_alloc);
 
-    alloc_free(nodes_alloc, nodes);
+    array_free(nodes);
     parser_destroy(&p);
 
     alloc_leak_detector_destroy(&ti_alloc);

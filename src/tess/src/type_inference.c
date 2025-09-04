@@ -1,6 +1,7 @@
 #include "type_inference.h"
 
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "dbg.h"
@@ -16,24 +17,25 @@
 #define STRINGS_ARENA_SIZE 4 * 1024
 #define CONSTRAINTS_SIZE   1024
 
+struct constraint {
+    struct tess_type *left;
+    struct tess_type *right;
+};
+
+typedef struct {
+    array_header;
+    struct constraint *v;
+} constraint_array;
+
 struct ti_inferer {
-    allocator         *type_arena;
-    allocator         *strings;
-    allocator         *nodes_alloc;
+    allocator       *type_arena;
+    allocator       *strings;
 
-    struct ast_node ***in_out_nodes;
-    u32               *in_out_n_nodes;
+    ast_node_array  *in_out_nodes;
+    ast_node_array   nodes;
 
-    struct ast_node  **nodes;
-    u32                n_nodes;
-
-    struct constraint *constraints;
-    u32                n_constraints;
-    u32                cap_constraints;
-
-    struct constraint *substitutions;
-    u32                n_substitutions;
-    u32                cap_substitutions;
+    constraint_array constraints;
+    constraint_array substitutions;
 
     // for rename_variables
     u32 next_var;
@@ -64,11 +66,6 @@ struct ti_inferer {
     int indent_level;
 };
 
-struct constraint {
-    struct tess_type *left;
-    struct tess_type *right;
-};
-
 // -- ti_inferer --
 
 static void ti_rename_variables(ti_inferer *);
@@ -76,28 +73,23 @@ static void ti_assign_type_variables(ti_inferer *);
 static void ti_collect_constraints(ti_inferer *);
 
 static void ti_apply_substitutions_to_ast(struct constraint *, u32, ast_node *[], u32);
-static void ti_specialize_functions(ti_inferer *, struct ast_node ***out_nodes, u32 *out_n);
+static void ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
 void        ti_run_solver(ti_inferer *);
 
 static void dbg_constraint(struct constraint const *);
 static void dbg_ast_nodes(ti_inferer *);
 static void log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-ti_inferer *ti_inferer_create(allocator *alloc, struct ast_node ***nodes, u32 *n, allocator *nodes_alloc) {
-    ti_inferer *self        = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena        = alloc_arena_create(alloc, TYPE_ARENA_SIZE);
-    self->strings           = alloc_arena_create(alloc, STRINGS_ARENA_SIZE);
-    self->nodes_alloc       = nodes_alloc;
-    self->in_out_nodes      = nodes;
-    self->in_out_n_nodes    = n;
-    self->nodes             = *nodes;
-    self->n_nodes           = *n;
+ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
+    ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
+    self->type_arena       = alloc_arena_create(alloc, TYPE_ARENA_SIZE);
+    self->strings          = alloc_arena_create(alloc, STRINGS_ARENA_SIZE);
 
-    self->cap_constraints   = CONSTRAINTS_SIZE;
-    self->cap_substitutions = CONSTRAINTS_SIZE;
-    self->constraints = alloc_malloc(self->type_arena, self->cap_constraints * sizeof self->constraints[0]);
-    self->substitutions =
-      alloc_malloc(self->type_arena, self->cap_substitutions * sizeof self->substitutions[0]);
+    self->in_out_nodes     = nodes;
+    self->nodes            = *nodes;
+
+    self->constraints      = (constraint_array){.alloc = self->type_arena};
+    self->substitutions    = (constraint_array){.alloc = self->type_arena};
 
     self->symbols          = map_create(self->type_arena, sizeof(struct tess_type *));
 
@@ -130,9 +122,9 @@ int ti_inferer_run(ti_inferer *self) {
     if (self->verbose) {
         dbg("\n\nti_inferer_run: input nodes:\n");
         {
-            for (size_t i = 0; i < self->n_nodes; ++i) {
-                char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
-                dbg("%p: %s\n", self->nodes[i], str);
+            for (size_t i = 0; i < self->nodes.size; ++i) {
+                char *str = ast_node_to_string_for_error(self->strings, self->nodes.v[i]);
+                dbg("%p: %s\n", self->nodes.v[i], str);
                 alloc_free(self->strings, str);
             }
         }
@@ -146,7 +138,8 @@ int ti_inferer_run(ti_inferer *self) {
     ti_run_solver(self);
 
     // 3
-    ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
+    ti_apply_substitutions_to_ast(self->substitutions.v, self->substitutions.size, self->nodes.v,
+                                  self->nodes.size);
 
     // 4: specialize
 
@@ -155,22 +148,11 @@ int ti_inferer_run(ti_inferer *self) {
         dbg_ast_nodes(self);
     }
 
-    struct ast_node **specialized   = 0;
-    u32               n_specialized = 0;
-    ti_specialize_functions(self, &specialized, &n_specialized);
+    ast_node_array specialized = {.alloc = self->type_arena};
+    ti_specialize_functions(self, &specialized);
 
     // 5: add specialised nodes to program
-    {
-        u32 old = self->n_nodes;
-        self->n_nodes += n_specialized;
-        self->nodes = alloc_realloc(self->nodes_alloc, self->nodes, self->n_nodes * sizeof self->nodes[0]);
-        if (!self->nodes) fatal("ti_inferer_run: realloc failed after specialization.");
-
-        memcpy(&self->nodes[old], specialized, n_specialized * sizeof specialized[0]);
-
-        alloc_free(self->type_arena, specialized);
-        specialized = null;
-    }
+    array_copy(self->nodes, specialized.v, specialized.size);
 
     if (self->verbose) {
         dbg("ti_inferer_run: after specialization:\n");
@@ -179,11 +161,12 @@ int ti_inferer_run(ti_inferer *self) {
 
     // 6. collect and solve constraints again, this time constraining function applications
     self->constrain_function_applications = true;
-    self->n_constraints                   = 0; // reset constraints from first phase
+    self->constraints.size                = 0; // reset constraints from first phase
     ti_collect_constraints(self);
 
     ti_run_solver(self);
-    ti_apply_substitutions_to_ast(self->substitutions, self->n_substitutions, self->nodes, self->n_nodes);
+    ti_apply_substitutions_to_ast(self->substitutions.v, self->substitutions.size, self->nodes.v,
+                                  self->nodes.size);
 
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
@@ -192,11 +175,10 @@ int ti_inferer_run(ti_inferer *self) {
     }
 
     // update caller's nodes
-    *self->in_out_nodes   = self->nodes;
-    *self->in_out_n_nodes = self->n_nodes;
+    *self->in_out_nodes = self->nodes;
 
     // any remaining constraints indicate an ill-typed program
-    if (self->n_constraints) return 1;
+    if (self->constraints.size) return 1;
     return 0;
 }
 
@@ -359,8 +341,8 @@ static void ti_rename_variables(ti_inferer *self) {
     ctx.alloc = self->type_arena;
     ctx.map   = map_create(self->type_arena, sizeof(string_t));
 
-    for (u32 i = 0; i < self->n_nodes; ++i) {
-        rename_variables(&ctx, self->nodes[i]);
+    for (u32 i = 0; i < self->nodes.size; ++i) {
+        rename_variables(&ctx, self->nodes.v[i]);
     }
 
     map_destroy(&ctx.map);
@@ -479,9 +461,9 @@ static void dbg_constraint(struct constraint const *c) {
 }
 
 static void dbg_ast_nodes(ti_inferer *self) {
-    for (size_t i = 0; i < self->n_nodes; ++i) {
-        char *str = ast_node_to_string_for_error(self->strings, self->nodes[i]);
-        dbg("%p: %s\n", self->nodes[i], str);
+    for (size_t i = 0; i < self->nodes.size; ++i) {
+        char *str = ast_node_to_string_for_error(self->strings, self->nodes.v[i]);
+        dbg("%p: %s\n", self->nodes.v[i], str);
         alloc_free(self->strings, str);
     }
 }
@@ -553,9 +535,7 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
         // }
 
         // push the candidate substitution
-
-        alloc_push_back(self->type_arena, &self->substitutions, &self->n_substitutions,
-                        &self->cap_substitutions, &candidate);
+        array_push(self->substitutions, &candidate);
 
     }
 
@@ -583,18 +563,19 @@ void ti_run_solver(ti_inferer *self) {
 
         bool did_substitute = false;
 
-        for (u32 i = 0; i < self->n_constraints;) {
+        for (u32 i = 0; i < self->constraints.size;) {
 
-            struct constraint *item = &self->constraints[i];
+            struct constraint *item = &self->constraints.v[i];
 
             // delete a = a constraints, and a = any constraints
             if (item->left == item->right || tess_type_equal(item->left, item->right) ||
                 item->left->tag == type_any || item->right->tag == type_any) {
 
-                u32 len = self->n_constraints - i - 1;
-                memmove(&self->constraints[i], &self->constraints[i + 1],
-                        len * sizeof(self->constraints[0]));
-                self->n_constraints--;
+                // TODO: add array_delete
+                u32 len = self->constraints.size - i - 1;
+                memmove(&self->constraints.v[i], &self->constraints.v[i + 1],
+                        len * sizeof(self->constraints.v[0]));
+                self->constraints.size--;
 
                 // i does not increment
                 continue;
@@ -604,7 +585,8 @@ void ti_run_solver(ti_inferer *self) {
 
                 if (unify_one(self, *item)) {
                     // iterate through remainder of constraints and substitute
-                    if (substitute_constraints(&item[1], &self->constraints[self->n_constraints], *item))
+                    if (substitute_constraints(&item[1], &self->constraints.v[self->constraints.size],
+                                               *item))
                         did_substitute = true;
                 }
             }
@@ -613,10 +595,10 @@ void ti_run_solver(ti_inferer *self) {
         }
 
         // apply each substitution in sequence to constraints
-        for (u32 i = 0; i < self->n_substitutions; ++i) {
+        for (u32 i = 0; i < self->substitutions.size; ++i) {
 
-            if (substitute_constraints(self->constraints, &self->constraints[self->n_constraints],
-                                       self->substitutions[i]))
+            if (substitute_constraints(self->constraints.v, &self->constraints.v[self->constraints.size],
+                                       self->substitutions.v[i]))
                 did_substitute = true;
         }
 
@@ -653,8 +635,8 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
 void ti_assign_type_variables(ti_inferer *self) {
 
-    for (size_t i = 0; i < self->n_nodes; ++i) {
-        ast_pool_dfs(self, self->nodes[i], assign_type_variables);
+    for (size_t i = 0; i < self->nodes.size; ++i) {
+        ast_pool_dfs(self, self->nodes.v[i], assign_type_variables);
     }
 }
 
@@ -749,8 +731,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
         c = (struct constraint){(L), (R)};                                                                 \
-        alloc_push_back(ctx->type_arena, &ctx->constraints, &ctx->n_constraints, &ctx->cap_constraints,    \
-                        &c);                                                                               \
+        array_push(ctx->constraints, &c);                                                                  \
     } while (0)
 
     switch (node->tag) {
@@ -900,26 +881,23 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
 void ti_collect_constraints(ti_inferer *self) {
 
-    for (size_t i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], collect_constraints);
+    for (size_t i = 0; i < self->nodes.size; ++i) ast_pool_dfs(self, self->nodes.v[i], collect_constraints);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
-    for (u32 i = 0; i < self->n_constraints; ++i) dbg_constraint(&self->constraints[i]);
+    for (u32 i = 0; i < self->constraints.size; ++i) dbg_constraint(&self->constraints.v[i]);
 }
 
 void ti_inferer_dbg_substitutions(ti_inferer const *self) {
-    dbg("substitutions count = %u\n", self->n_substitutions);
-    for (u32 i = 0; i < self->n_substitutions; ++i) dbg_constraint(&self->substitutions[i]);
+    dbg("substitutions count = %u\n", self->substitutions.size);
+    for (u32 i = 0; i < self->substitutions.size; ++i) dbg_constraint(&self->substitutions.v[i]);
 }
 
 // -- specialize function applications --
 
 struct specialize_functions_ctx {
-    ti_inferer       *ti;
-
-    struct ast_node **specials;
-    u32               n_specials;
-    u32               cap_specials;
+    ti_inferer    *ti;
+    ast_node_array specials;
 };
 
 char *make_specialized_name(ti_inferer *self, char const *name) {
@@ -994,16 +972,16 @@ static void specialize_node(void *ctx_, ast_node *node) {
       alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
 
     ast_node *let = null;
-    let =
-      find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes, ctx->ti->n_nodes, true);
+    let = find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes.v, ctx->ti->nodes.size,
+                        true);
 
     if (let) {
         node->named_application.specialized = let;
         return;
     }
 
-    let =
-      find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes, ctx->ti->n_nodes, false);
+    let = find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes.v, ctx->ti->nodes.size,
+                        false);
 
     // TODO compiler error
     if (null == let) return;
@@ -1012,23 +990,21 @@ static void specialize_node(void *ctx_, ast_node *node) {
     node->named_application.specialized = make_specialized(ctx, let, args_ty);
 
     // record the special to be added to the program
-    alloc_push_back(alloc, &ctx->specials, &ctx->n_specials, &ctx->cap_specials,
-                    &node->named_application.specialized);
+    array_push(ctx->specials, &node->named_application.specialized);
 }
 
-static void ti_specialize_functions(ti_inferer *self, struct ast_node ***out_nodes, u32 *out_n) {
+static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes) {
     struct specialize_functions_ctx ctx;
-    ctx.ti           = self;
-    ctx.cap_specials = 128;
-    ctx.n_specials   = 0;
-    ctx.specials     = alloc_malloc(self->type_arena, ctx.cap_specials * sizeof ctx.specials[0]);
+    ctx.ti       = self;
 
-    for (size_t i = 0; i < self->n_nodes; ++i) ast_pool_dfs(&ctx, self->nodes[i], specialize_node);
+    ctx.specials = (ast_node_array){.alloc = self->type_arena};
+    array_reserve(ctx.specials, 128);
 
-    if (ctx.n_specials) ctx.specials = alloc_realloc(self->type_arena, ctx.specials, ctx.n_specials);
-    if (!ctx.specials) fatal("ti_specialize_functions: realloc failed.");
+    for (size_t i = 0; i < self->nodes.size; ++i) ast_pool_dfs(&ctx, self->nodes.v[i], specialize_node);
+
+    if (ctx.specials.size) array_shrink(ctx.specials);
+    if (!ctx.specials.v) fatal("ti_specialize_functions: realloc failed.");
     *out_nodes = ctx.specials;
-    *out_n     = ctx.n_specials;
 }
 
 //

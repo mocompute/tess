@@ -1,5 +1,6 @@
 #include "transpiler.h"
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 
 #include "ast_tags.h"
@@ -14,16 +15,14 @@
 #include <string.h>
 
 struct transpiler {
-    allocator  *alloc;
-    allocator  *strings;
-    char_array *bytes;
+    allocator     *alloc;
+    allocator     *strings;
+    char_array    *bytes;
 
-    char      **results;
-    u32         n_results;
-    u32         cap_results;
+    c_string_array results;
 
-    u32         next_variable;
-    int         indent_level;
+    u32            next_variable;
+    int            indent_level;
 };
 
 // -- embed externs --
@@ -54,14 +53,12 @@ static bool  is_generic_function(ast_node const *node);
 
 transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
 
-    transpiler *self  = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc       = alloc;
-    self->strings     = alloc_arena_create(alloc, 1024);
-    self->bytes       = bytes;
+    transpiler *self = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc      = alloc;
+    self->strings    = alloc_arena_create(alloc, 1024);
+    self->bytes      = bytes;
 
-    self->cap_results = 16;
-    self->results     = alloc_malloc(self->strings, self->cap_results * sizeof self->results[0]);
-    self->n_results   = 0;
+    self->results    = (c_string_array){.alloc = self->strings};
     return self;
 }
 
@@ -211,11 +208,11 @@ static int a_infix(transpiler *self, ast_node const *node) {
     // order.
     if (a_eval(self, node->infix.right)) return 1;
     if (a_eval(self, node->infix.left)) return 1;
-    char *left  = self->results[--self->n_results];
-    char *right = self->results[--self->n_results];
+    char *left  = self->results.v[--self->results.size];
+    char *right = self->results.v[--self->results.size];
 
     char *var   = next_variable(self);
-    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+    array_push(self->results, &var);
 
     out_put_start(self, "");
     if (a_result_type_of(self, type)) return 1;
@@ -247,17 +244,17 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     char const *name = mos_string_str(&node->let_in.name->symbol.name);
 
     if (a_eval(self, node->let_in.value)) return 1;
-    char *value = self->results[--self->n_results];
+    char *value = self->results.v[--self->results.size];
 
     out_put_start(self, "");
     a_result_type_of(self, node->let_in.name->type);
     out_put_fmt(self, " %s = %s;\n", name, value);
 
     a_eval(self, node->let_in.body);
-    char *body = self->results[--self->n_results];
+    char *body = self->results.v[--self->results.size];
 
     char *var  = next_variable(self);
-    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+    array_push(self->results, &var);
 
     out_put_start(self, "");
     a_result_type_of(self, node->let_in.name->type);
@@ -282,7 +279,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     }
 
     char *var = next_variable(self);
-    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+    array_push(self->results, &var);
 
     out_put_start(self, "");
     a_result_type_of(self, node->type);
@@ -325,7 +322,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_infix: {
         if (a_infix(self, node)) return 1;
-        char *res = self->results[--self->n_results];
+        char *res = self->results.v[--self->results.size];
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -334,7 +331,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_let_in: {
         if (a_let_in(self, node)) return 1;
-        char *res = self->results[--self->n_results];
+        char *res = self->results.v[--self->results.size];
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
 
@@ -342,7 +339,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_let: {
         if (a_let(self, node)) return 1;
-        char *res = self->results[--self->n_results];
+        char *res = self->results.v[--self->results.size];
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -355,7 +352,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_named_function_application:  {
         if (a_fun_apply(self, node)) return 1;
-        char *res = self->results[--self->n_results];
+        char *res = self->results.v[--self->results.size];
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -377,7 +374,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     }
 
     char *var = next_variable(self);
-    alloc_push_back(self->strings, &self->results, &self->n_results, &self->cap_results, &var);
+    array_push(self->results, &var);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -394,7 +391,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
-        char *arg = self->results[--self->n_results];
+        char *arg = self->results.v[--self->results.size];
         out_put(self, arg);
         if (i < n_args - 1) out_put(self, ", ");
     }
@@ -415,7 +412,7 @@ static int a_main(transpiler *self, ast_node const *node) {
         int res = 0;
         if ((res = a_eval(self, node->let.body))) return res;
 
-        char *var = self->results[--self->n_results];
+        char *var = self->results.v[--self->results.size];
 
         out_put_start(self, "");
         out_put_fmt(self, "return (int) %s;", var);
@@ -470,7 +467,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (a_eval(self, node->let.body)) return 1;
 
-    char *body = self->results[--self->n_results];
+    char *body = self->results.v[--self->results.size];
     out_put_start(self, "");
     out_put_fmt(self, "return %s;", body);
 

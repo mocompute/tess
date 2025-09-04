@@ -27,8 +27,8 @@ void              parser_destroy(parser **);
 int  parser_next(parser *);
 void parser_result(parser *, ast_node **);
 
-int  parser_parse_all(parser *, allocator *out_alloc, struct ast_node ***out, u32 *len);
-int  parser_parse_all_verbose(parser *, allocator *out_alloc, struct ast_node ***out, u32 *len);
+int  parser_parse_all(parser *, ast_node_array *out);
+int  parser_parse_all_verbose(parser *, ast_node_array *out);
 void parser_report_errors(parser *);
 
 #endif

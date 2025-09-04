@@ -65,21 +65,4 @@ size_t          alloc_align(size_t n, size_t align);
 #define alloc_copy(DST, SRC)    memcpy((DST), (SRC), sizeof *(DST));
 #define alloc_struct(A, NAME)   alloc_calloc((A), 1, sizeof *NAME)
 
-// -- vector alternative --
-
-#define alloc_resize(ALLOC, BUF_PTR, SIZE_PTR, NEW_SIZE)                                                   \
-    do {                                                                                                   \
-        void *ptr = alloc_realloc((ALLOC), *(BUF_PTR), (NEW_SIZE) * sizeof(*(BUF_PTR))[0]);                \
-        if (!ptr) fatal("realloc failed.");                                                                \
-        *(BUF_PTR)  = ptr;                                                                                 \
-        *(SIZE_PTR) = (NEW_SIZE);                                                                          \
-    } while (0)
-
-#define alloc_push_back(ALLOC, BUF_PTR, SIZE_PTR, CAP_PTR, DATA_PTR)                                       \
-    do {                                                                                                   \
-        if (*(SIZE_PTR) == *(CAP_PTR)) alloc_resize(ALLOC, BUF_PTR, CAP_PTR, 2 * (*(CAP_PTR)));            \
-        (*(BUF_PTR))[*(SIZE_PTR)] = *(DATA_PTR);                                                           \
-        *(SIZE_PTR)               = *(SIZE_PTR) + 1;                                                       \
-    } while (0)
-
 #endif

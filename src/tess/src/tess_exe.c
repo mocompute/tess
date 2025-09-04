@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include "array.h"
 #include "file.h"
 #include "parser.h"
 #include "syntax.h"
@@ -17,18 +18,16 @@
 #include "readline/readline.h"
 
 struct state {
-    allocator   *arena;
+    allocator     *arena;
 
-    char const  *argv0;
-    char const  *out_path;
+    char const    *argv0;
+    char const    *out_path;
 
-    char const **words;
-    u32          n_words;
-    u32          cap_words;
+    c_string_array words;
 
-    bool         verbose;
-    bool         verbose_parse;
-    bool         help;
+    bool           verbose;
+    bool           verbose_parse;
+    bool           help;
 };
 
 noreturn void usage(int status, char const *argv0) {
@@ -48,10 +47,10 @@ noreturn void usage(int status, char const *argv0) {
 
 void state_init(struct state *self) {
     alloc_zero(self);
-    self->arena     = alloc_arena_create(alloc_default_allocator(), 4096);
+    self->arena = alloc_arena_create(alloc_default_allocator(), 4096);
 
-    self->cap_words = 32;
-    self->words     = alloc_calloc(self->arena, self->cap_words, sizeof self->words[0]);
+    self->words = (c_string_array){.alloc = self->arena};
+    array_reserve(self->words, 32);
 }
 
 void state_deinit(struct state *self) {
@@ -92,9 +91,7 @@ void state_gather_options(struct state *self, int argc, char *argv[]) {
             }
 
         } else {
-            if (self->n_words == self->cap_words)
-                alloc_resize(self->arena, &self->words, &self->cap_words, self->cap_words * 2);
-            self->words[self->n_words++] = argv[i];
+            array_push_val(self->words, argv[i]);
         }
     }
 }
@@ -120,34 +117,32 @@ int repl(struct state *self) {
 }
 
 int compile(struct state *self) {
-    if (self->n_words < 2) usage(1, self->argv0);
+    if (self->words.size < 2) usage(1, self->argv0);
 
-    int   error     = 0;
+    int        error = 0;
 
-    u32   cap_input = 64 * 1024;
-    u32   n_input   = 0;
-    char *input     = alloc_calloc(alloc_default_allocator(), 1, cap_input);
+    char_array input = {.alloc = alloc_default_allocator()};
+    array_reserve(input, 64 * 1024);
 
     {
         allocator *file_arena = alloc_arena_create(alloc_default_allocator(), 32 * 1024);
 
-        for (u32 i = 1; i < self->n_words; ++i) {
+        for (u32 i = 1; i < self->words.size; ++i) {
             char  *buf;
             size_t size;
-            file_read(file_arena, self->words[i], &buf, &size);
+            file_read(file_arena, self->words.v[i], &buf, &size);
 
             if (size) {
-                size_t new_cap = cap_input;
-                while (n_input + size + 2 >= new_cap) {
+                size_t new_cap = input.capacity;
+                while (input.size + size + 2 >= new_cap) {
                     new_cap *= 2;
                     if (new_cap > UINT32_MAX) fatal("overflow: input files too large.");
                 }
-                if (new_cap > cap_input)
-                    alloc_resize(alloc_default_allocator(), &input, &cap_input, (u32)new_cap);
 
-                strcpy(&input[n_input], buf);
-                input[n_input + size] = '\n'; // overwrite \0
-                n_input += size + 1;
+                if (new_cap > input.capacity) array_reserve(input, (u32)new_cap);
+
+                array_copy(input, buf, size);
+                input.v[input.size - 1] = '\n'; // overwrite \0
             }
 
             alloc_free(file_arena, buf);
@@ -155,30 +150,29 @@ int compile(struct state *self) {
 
         alloc_arena_destroy(alloc_default_allocator(), &file_arena);
 
-        input[n_input] = '\0';
+        array_push_val(input, '\0');
     }
 
-    parser *parser = parser_create(alloc_default_allocator(), input, n_input);
+    parser *parser = parser_create(alloc_default_allocator(), input.v, input.size);
     if (!parser) fatal("could not create parser");
 
-    allocator        *nodes_alloc = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
-    struct ast_node **nodes;
-    u32               n_nodes = 0;
+    allocator     *nodes_alloc = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
+    ast_node_array nodes       = {.alloc = nodes_alloc};
 
     if (self->verbose_parse) {
-        if (parser_parse_all_verbose(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
+        if (parser_parse_all_verbose(parser, &nodes)) fatal("error while parsing.");
     } else {
-        if (parser_parse_all(parser, nodes_alloc, &nodes, &n_nodes)) fatal("error while parsing.");
+        if (parser_parse_all(parser, &nodes)) fatal("error while parsing.");
     }
 
-    syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes, n_nodes);
+    syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes.v, nodes.size);
     if (syntax_checker_run(syntax)) {
         syntax_checker_report_errors(syntax);
         error = 1;
         goto cleanup_syntax;
     }
 
-    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), &nodes, &n_nodes, nodes_alloc);
+    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), &nodes);
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
@@ -190,7 +184,7 @@ int compile(struct state *self) {
     char_array  transpiler_output = {.alloc = transpile_alloc};
 
     transpiler *transpiler        = transpiler_create(alloc_default_allocator(), &transpiler_output);
-    if (transpiler_compile(transpiler, nodes, n_nodes)) fatal("error while transpiling");
+    if (transpiler_compile(transpiler, nodes.v, nodes.size)) fatal("error while transpiling");
 
     if (self->out_path) {
         FILE *f = fopen(self->out_path, "wb");
@@ -214,7 +208,7 @@ cleanup_syntax:
     parser_destroy(&parser);
 
     alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
-    alloc_free(alloc_default_allocator(), input);
+    array_free(input);
 
     return error;
 }
@@ -227,11 +221,11 @@ int main(int argc, char *argv[]) {
     state_init(&self);
     state_gather_options(&self, argc, argv);
     if (self.help) usage(0, argv[0]);
-    if (self.n_words == 0) usage(0, argv[0]);
+    if (self.words.size == 0) usage(0, argv[0]);
 
-    if (0 == strcmp("c", self.words[0])) {
+    if (0 == strcmp("c", self.words.v[0])) {
         result = compile(&self);
-    } else if (0 == strcmp("repl", self.words[0])) {
+    } else if (0 == strcmp("repl", self.words.v[0])) {
         return repl(&self);
     }
 
