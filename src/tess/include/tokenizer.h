@@ -5,7 +5,6 @@
 
 #include "alloc.h"
 #include "error.h"
-#include "nodiscard.h"
 
 typedef struct tokenizer_error {
     tess_error_tag tag;

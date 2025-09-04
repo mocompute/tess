@@ -99,6 +99,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         in_equal,
 
+        in_colon,
+
         forward_slash,
 
         start_number,
@@ -159,10 +161,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case '/':  state = forward_slash; continue;
 
-            case ':':
-                replace_token(self->strings, &res, tok_colon);
+            case '.':
+                replace_token(self->strings, &res, tok_dot);
                 state = stop;
                 break;
+
+            case ':': state = in_colon; continue;
 
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
@@ -200,6 +204,26 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 }
 
                 // else skip char
+                break;
+            }
+        } break;
+
+        case in_colon: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_colon);
+                state = stop;
+                goto finish;
+            }
+            char const c = self->input[self->pos++];
+            switch (c) {
+            case '=':
+                replace_token(self->strings, &res, tok_colon_equal);
+                state = stop;
+                break;
+            default:
+                self->pos -= 1;
+                replace_token(self->strings, &res, tok_colon);
+                state = stop;
                 break;
             }
         } break;
@@ -408,9 +432,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ' ':
             case '"':
             case ':':
+            case '=':
             case ';':
             case ',':
-                // these tokens break a symbol
+            case '.':
+                // these tokens break a symbol TODO there should be more
                 --self->pos;
                 state = stop_symbol;
                 break;
