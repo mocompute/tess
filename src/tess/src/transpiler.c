@@ -530,8 +530,8 @@ static bool is_generic_function(ast_node const *node) {
     tess_type *left = arrow->left;
     assert(left->tag == type_tuple);
 
-    for (u32 i = 0; i < left->n_elements; ++i)
-        if (type_type_var == left->elements[i]->tag) return true;
+    for (u32 i = 0; i < left->elements.size; ++i)
+        if (type_type_var == left->elements.v[i]->tag) return true;
 
     return false;
 }

@@ -2,6 +2,7 @@
 #define TESS_TYPE_H
 
 #include "alloc.h"
+#include "array.h"
 #include "types.h"
 
 #ifndef MOS_TAG_NAME
@@ -22,11 +23,15 @@
 
 typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
 
+typedef struct {
+    array_sized;
+    struct tess_type **v;
+} tess_type_sized;
+
 typedef struct tess_type {
     union {
         struct {
-            struct tess_type **elements;
-            u16                n_elements;
+            tess_type_sized elements;
         }; // tuple
 
         struct {
@@ -45,6 +50,11 @@ typedef struct tess_type {
     };
     tess_type_tag tag;
 } tess_type;
+
+typedef struct {
+    array_header;
+    tess_type **v;
+} tess_type_array;
 
 tess_type   tess_type_init(tess_type_tag);
 tess_type   tess_type_init_type_var(u32);

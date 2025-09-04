@@ -28,6 +28,12 @@ typedef struct {
     u32 end
 
 typedef struct {
+    u32 size;
+}array_sized_t;
+
+#define array_sized u32 size
+
+typedef struct {
     array_header;
     byte *v;
 } byte_array;
@@ -99,7 +105,8 @@ typedef struct {
 #define array_shrink(p)                                                                                    \
     (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof(p.v[0]))
 
-#define slice_all(x) {.v = (x).v, .end = (x).size}
+#define slice_all(x)  {.v = (x).v, .end = (x).size}
+#define slice_size(x) ((x).end - (x).begin)
 
 char_cslice char_cslice_from(char const *, u32);
 

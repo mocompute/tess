@@ -374,10 +374,10 @@ static bool apply_one_substitution(tess_type **type, tess_type *from, tess_type 
 
     case type_tuple:    {
 
-        for (size_t i = 0; i < (*type)->n_elements; ++i) {
-            if ((*type)->elements[i] == from) {
-                (*type)->elements[i] = to;
-                did_substitute       = true;
+        for (size_t i = 0; i < (*type)->elements.size; ++i) {
+            if ((*type)->elements.v[i] == from) {
+                (*type)->elements.v[i] = to;
+                did_substitute         = true;
             }
         }
 
@@ -516,8 +516,8 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
         case type_any:      break;
 
         case type_tuple:
-            for (size_t i = 0; i < other->n_elements; ++i)
-                if (other->elements[i] == orig) return false;
+            for (size_t i = 0; i < other->elements.size; ++i)
+                if (other->elements.v[i] == orig) return false;
 
             break;
         case type_arrow:
@@ -541,10 +541,10 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
 
     // tuple constraints of equal size: unify matching elements
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
-             c.left->n_elements == c.right->n_elements) {
+             c.left->elements.size == c.right->elements.size) {
 
-        for (size_t i = 0; i < c.left->n_elements; ++i)
-            unify_one(self, (struct constraint){c.left->elements[i], c.right->elements[i]});
+        for (size_t i = 0; i < c.left->elements.size; ++i)
+            unify_one(self, (struct constraint){c.left->elements.v[i], c.right->elements.v[i]});
 
     }
 
@@ -640,9 +640,9 @@ void ti_assign_type_variables(ti_inferer *self) {
 
 static tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
     tess_type *tuple = tess_type_create_tuple(alloc, n);
-    assert(!n || tuple->elements);
+    assert(!n || tuple->elements.v);
 
-    for (u16 i = 0; i < n; ++i) tuple->elements[i] = arguments[i]->type;
+    for (u32 i = 0; i < n; ++i) tuple->elements.v[i] = arguments[i]->type;
 
     return tuple;
 }
@@ -663,10 +663,10 @@ static bool is_type_compatible(tess_type const *a, tess_type const *b, bool stri
         if (!strict && type_type_var == b->tag) return true;
         else if (type_tuple != b->tag) return false;
         else {
-            if (a->n_elements != b->n_elements) return false;
+            if (a->elements.size != b->elements.size) return false;
 
-            for (u32 i = 0; i < a->n_elements; ++i)
-                if (!is_type_compatible(a->elements[i], b->elements[i], strict)) return false;
+            for (u32 i = 0; i < a->elements.size; ++i)
+                if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
 
             return true;
         }
@@ -683,8 +683,8 @@ static bool is_type_compatible(tess_type const *a, tess_type const *b, bool stri
     }
 }
 
-static ast_node *find_let_node(char const *name, tess_type **elements, u32 n_elements, ast_node *nodes[],
-                               u32 count, bool strict) {
+static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_node_slice nodes,
+                               bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
@@ -693,8 +693,8 @@ static ast_node *find_let_node(char const *name, tess_type **elements, u32 n_ele
 
     if (!name) fatal("find_let_node: null search string");
 
-    for (u32 i = 0; i < count; ++i) {
-        ast_node *candidate = nodes[i];
+    for (u32 i = nodes.begin; i < nodes.end; ++i) {
+        ast_node *candidate = nodes.v[i];
         if (ast_let != candidate->tag) continue;
 
         if (0 != strcmp(name, mos_string_str(&candidate->let.name))) continue;
@@ -704,11 +704,11 @@ static ast_node *find_let_node(char const *name, tess_type **elements, u32 n_ele
         assert(type_tuple == candidate->let.arrow->left->tag);
 
         tess_type *params = candidate->let.arrow->left;
-        if (n_elements != params->n_elements) continue;
+        if (elements.size != params->elements.size) continue;
 
-        for (u32 j = 0; j < n_elements; ++j) {
-            tess_type *el    = elements[j];
-            tess_type *param = params->elements[j];
+        for (u32 j = 0; j < elements.size; ++j) {
+            tess_type *el    = elements.v[j];
+            tess_type *param = params->elements.v[j];
             if (!is_type_compatible(el, param, strict)) goto skip;
         }
 
@@ -967,16 +967,14 @@ static void specialize_node(void *ctx_, ast_node *node) {
       alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
 
     ast_node *let = null;
-    let = find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes.v, ctx->ti->nodes.size,
-                        true);
+    let           = find_let_node(name, args_ty->elements, (ast_node_slice)slice_all(ctx->ti->nodes), true);
 
     if (let) {
         node->named_application.specialized = let;
         return;
     }
 
-    let = find_let_node(name, args_ty->elements, args_ty->n_elements, ctx->ti->nodes.v, ctx->ti->nodes.size,
-                        false);
+    let = find_let_node(name, args_ty->elements, (ast_node_slice)slice_all(ctx->ti->nodes), false);
 
     // TODO compiler error
     if (null == let) return;
@@ -1007,7 +1005,6 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
 void log(ti_inferer *self, char const *restrict fmt, ...) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
-
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;

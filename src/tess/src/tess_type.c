@@ -33,10 +33,10 @@ tess_type tess_type_init_tuple() {
 }
 
 tess_type *tess_type_create_tuple(allocator *alloc, u16 size) {
-    tess_type *self  = alloc_struct(alloc, self);
-    *self            = tess_type_init_tuple();
-    self->n_elements = size;
-    if (size) self->elements = alloc_calloc(alloc, size, sizeof *self->elements);
+    tess_type *self     = alloc_struct(alloc, self);
+    *self               = tess_type_init_tuple();
+    self->elements.size = size;
+    if (size) self->elements.v = alloc_calloc(alloc, size, sizeof self->elements.v[0]);
     return self;
 }
 
@@ -92,7 +92,7 @@ void tess_type_deinit(allocator *alloc, tess_type *self) {
         tess_type_deinit(alloc, self->right);
         break;
 
-    case type_tuple: alloc_free(alloc, self->elements); break;
+    case type_tuple: alloc_free(alloc, self->elements.v); break;
     }
 
     alloc_invalidate(self);
@@ -156,10 +156,11 @@ int tess_type_compare(tess_type const *left, tess_type const *right) {
     case type_any:    return 0;
 
     case type_tuple:
-        if (left->n_elements != right->n_elements) return left->n_elements < right->n_elements ? -1 : 1;
-        for (u16 i = 0; i < left->n_elements; i++) {
+        if (left->elements.size != right->elements.size)
+            return left->elements.size < right->elements.size ? -1 : 1;
+        for (u32 i = 0; i < left->elements.size; i++) {
             int res;
-            if ((res = tess_type_compare(left->elements[i], right->elements[i])) != 0) return res;
+            if ((res = tess_type_compare(left->elements.v[i], right->elements.v[i])) != 0) return res;
         }
         return 0;
 
@@ -230,13 +231,13 @@ int tess_type_snprint(char *buf, int sz, tess_type const *self) {
 
         len += snprintf(buf, (size_t)sz, "(");
 
-        for (size_t i = 0; i < self->n_elements; ++i) {
+        for (size_t i = 0; i < self->elements.size; ++i) {
 
             if (buf && sz) {
-                len += tess_type_snprint(buf + len, sz - len, self->elements[i]);
+                len += tess_type_snprint(buf + len, sz - len, self->elements.v[i]);
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
-                len += tess_type_snprint(null, 0, self->elements[i]);
+                len += tess_type_snprint(null, 0, self->elements.v[i]);
                 len += snprintf(null, 0, ", ");
             }
         }
