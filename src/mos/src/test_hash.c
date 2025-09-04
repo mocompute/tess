@@ -18,7 +18,7 @@
 
 void test_hash32(int n, int word_size) {
 
-    allocator *alloc = alloc_arena_create(alloc_default_allocator(), 4096);
+    allocator *alloc = arena_create(default_allocator(), 4096);
     hashmap   *map   = map_create(alloc, sizeof(char *));
     char      *buf   = alloc_malloc(alloc, (size_t)(n * (word_size + 1)));
 
@@ -51,7 +51,7 @@ void test_hash32(int n, int word_size) {
 
     OUT("%i strings of size %i, collisions = %u", n, word_size, collisions);
 
-    alloc_arena_destroy(alloc_default_allocator(), &alloc);
+    arena_destroy(default_allocator(), &alloc);
 }
 
 int main(void) {

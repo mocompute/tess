@@ -13,7 +13,7 @@ static int test_string(void) {
     assert(8 == sizeof(char *));
     assert(16 == sizeof(string_t));
 
-    allocator *alloc = alloc_default_allocator();
+    allocator *alloc = default_allocator();
 
     int        tries = 10000;
     for (int i = 0; i < tries; ++i) {

@@ -79,8 +79,8 @@ static void       log(ti_inferer *, char const *restrict fmt, ...) __attribute__
 
 ti_inferer       *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena       = alloc_arena_create(alloc, TYPE_ARENA_SIZE);
-    self->strings          = alloc_arena_create(alloc, STRINGS_ARENA_SIZE);
+    self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
+    self->strings          = arena_create(alloc, STRINGS_ARENA_SIZE);
 
     self->nodes            = nodes;
 
@@ -99,8 +99,8 @@ ti_inferer       *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
 
 void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
     map_destroy(&(*self)->symbols);
-    alloc_arena_destroy(alloc, &(*self)->strings);
-    alloc_arena_destroy(alloc, &(*self)->type_arena);
+    arena_destroy(alloc, &(*self)->strings);
+    arena_destroy(alloc, &(*self)->type_arena);
     alloc_free(alloc, *self);
     *self = null;
 }

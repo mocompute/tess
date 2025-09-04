@@ -13,7 +13,7 @@ typedef struct {
 static int test_array(void) {
     int       error = 0;
 
-    int_array arr   = {.alloc = alloc_leak_detector_create()};
+    int_array arr   = {.alloc = leak_detector_create()};
 
     int       data  = 1;
 
@@ -24,7 +24,7 @@ static int test_array(void) {
     error += arr.v[1] == 2 ? 0 : 1;
 
     array_free(arr);
-    alloc_leak_detector_destroy(&arr.alloc);
+    leak_detector_destroy(&arr.alloc);
 
     return error;
 }
@@ -33,7 +33,7 @@ static int test_array_erase(void) {
     int error = 0;
 
     {
-        int_array arr = {.alloc = alloc_leak_detector_create()};
+        int_array arr = {.alloc = leak_detector_create()};
 
         int       x   = 0;
         array_push(arr, &x);
@@ -49,11 +49,11 @@ static int test_array_erase(void) {
         error += arr.v[1] == 2 ? 0 : 1;
 
         array_free(arr);
-        alloc_leak_detector_destroy(&arr.alloc);
+        leak_detector_destroy(&arr.alloc);
     }
 
     {
-        int_array arr = {.alloc = alloc_leak_detector_create()};
+        int_array arr = {.alloc = leak_detector_create()};
 
         int       x   = 0;
         array_push(arr, &x);
@@ -69,11 +69,11 @@ static int test_array_erase(void) {
         error += arr.v[1] == 2 ? 0 : 1;
 
         array_free(arr);
-        alloc_leak_detector_destroy(&arr.alloc);
+        leak_detector_destroy(&arr.alloc);
     }
 
     {
-        int_array arr = {.alloc = alloc_leak_detector_create()};
+        int_array arr = {.alloc = leak_detector_create()};
 
         int       x   = 0;
         array_push(arr, &x);
@@ -89,7 +89,7 @@ static int test_array_erase(void) {
         error += arr.v[1] == 1 ? 0 : 1;
 
         array_free(arr);
-        alloc_leak_detector_destroy(&arr.alloc);
+        leak_detector_destroy(&arr.alloc);
     }
 
     return error;

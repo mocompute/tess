@@ -22,9 +22,9 @@ static int compile_input_flag(char const *input, bool verbose) {
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
 
-    allocator     *nodes_alloc = alloc_leak_detector_create();
-    allocator     *ast_alloc   = alloc_leak_detector_create();
-    allocator     *ti_alloc    = alloc_leak_detector_create();
+    allocator     *nodes_alloc = leak_detector_create();
+    allocator     *ast_alloc   = leak_detector_create();
+    allocator     *ti_alloc    = leak_detector_create();
 
     parser        *p           = parser_create(ast_alloc, char_cslice_from(input, (u32)strlen(input)));
 
@@ -44,13 +44,13 @@ static int compile_input_flag(char const *input, bool verbose) {
 
     dbg("\n  Parser output: \n");
     for (size_t i = 0; i < nodes.size; ++i) {
-        char *str = ast_node_to_string(alloc_default_allocator(), nodes.v[i]);
+        char *str = ast_node_to_string(default_allocator(), nodes.v[i]);
         dbg("%s\n", str);
-        alloc_free(alloc_default_allocator(), str);
+        alloc_free(default_allocator(), str);
     }
     dbg("\n");
 
-    allocator      *syntax_alloc = alloc_leak_detector_create();
+    allocator      *syntax_alloc = leak_detector_create();
     syntax_checker *syntax       = syntax_checker_create(syntax_alloc, (ast_node_slice)slice_all(nodes));
 
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
@@ -69,9 +69,9 @@ static int compile_input_flag(char const *input, bool verbose) {
     }
 
     for (size_t i = 0; i < nodes.size; ++i) {
-        char *str = ast_node_to_string(alloc_default_allocator(), nodes.v[i]);
+        char *str = ast_node_to_string(default_allocator(), nodes.v[i]);
         dbg("node: %s\n", str);
-        alloc_free(alloc_default_allocator(), str);
+        alloc_free(default_allocator(), str);
     }
 
     dbg("constraints:\n");
@@ -82,14 +82,14 @@ static int compile_input_flag(char const *input, bool verbose) {
     ti_inferer_destroy(ti_alloc, &ti);
 
     syntax_checker_destroy(&syntax);
-    alloc_leak_detector_destroy(&syntax_alloc);
+    leak_detector_destroy(&syntax_alloc);
 
     array_free(nodes);
     parser_destroy(&p);
 
-    alloc_leak_detector_destroy(&ti_alloc);
-    alloc_leak_detector_destroy(&ast_alloc);
-    alloc_leak_detector_destroy(&nodes_alloc);
+    leak_detector_destroy(&ti_alloc);
+    leak_detector_destroy(&ast_alloc);
+    leak_detector_destroy(&nodes_alloc);
 
     dbg("\n---------------------------\n\n");
     return 0;
@@ -102,7 +102,7 @@ static int compile_input(char const *input) {
 static int test_tess_token_string(void) {
     int        error = 0;
 
-    allocator *alloc = alloc_default_allocator();
+    allocator *alloc = default_allocator();
 
     error += strcmp("comma", token_tag_to_string(tok_comma)) == 0 ? 0 : 1;
 
@@ -142,7 +142,7 @@ static int test_tokenizer_basic(void) {
 
     char const *input = "  (  )  ";
 
-    allocator  *alloc = alloc_default_allocator();
+    allocator  *alloc = default_allocator();
     tokenizer  *t     = tokenizer_create(alloc, (char_cslice){.v = input, .end = (u32)strlen(input)});
     if (!t) return ++error;
 
@@ -186,7 +186,7 @@ static int test_tokenizer_string(void) {
 
     char const *input = " \"abcdef\"  ";
 
-    allocator  *alloc = alloc_default_allocator();
+    allocator  *alloc = default_allocator();
     tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
     if (!t) return ++error;
 
@@ -211,7 +211,7 @@ static int test_tokenizer_terminal_static_string(void) {
     int         error = 0;
 
     char const *input = "-";
-    allocator  *alloc = alloc_default_allocator();
+    allocator  *alloc = default_allocator();
     tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
     if (!t) return ++error;
 
@@ -236,7 +236,7 @@ static int test_parser_node_to_string(void) {
 
     char const *input = "1 + 2";
 
-    allocator  *alloc = alloc_leak_detector_create();
+    allocator  *alloc = leak_detector_create();
     if (!alloc) return error + 1;
 
     {
@@ -276,7 +276,7 @@ static int test_parser_node_to_string(void) {
         parser_destroy(&p);
     }
 
-    alloc_leak_detector_destroy(&alloc);
+    leak_detector_destroy(&alloc);
 
     return error;
 }

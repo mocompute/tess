@@ -47,14 +47,14 @@ static int test_align(void) {
 static int test_arena_realloc(void) {
     int        error = 0;
 
-    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+    allocator *arena = arena_create(default_allocator(), 1024);
 
     void      *p1    = alloc_malloc(arena, 64);
     void      *p2    = alloc_realloc(arena, p1, 128);
 
     error += p1 == p2 ? 0 : 1;
 
-    alloc_arena_destroy(alloc_default_allocator(), &arena);
+    arena_destroy(default_allocator(), &arena);
 
     return error;
 }
@@ -62,7 +62,7 @@ static int test_arena_realloc(void) {
 static int test_arena_realloc_non_contiguous(void) {
     int        error = 0;
 
-    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+    allocator *arena = arena_create(default_allocator(), 1024);
 
     void      *p1    = alloc_malloc(arena, 64);
     void      *p2    = alloc_malloc(arena, 16);
@@ -71,7 +71,7 @@ static int test_arena_realloc_non_contiguous(void) {
     error += p1 != p2 ? 0 : 1;
     error += p1 != p3 ? 0 : 1;
 
-    alloc_arena_destroy(alloc_default_allocator(), &arena);
+    arena_destroy(default_allocator(), &arena);
 
     return error;
 }
@@ -79,7 +79,7 @@ static int test_arena_realloc_non_contiguous(void) {
 static int test_arena_free_reuse(void) {
     int        error = 0;
 
-    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+    allocator *arena = arena_create(default_allocator(), 1024);
 
     void      *p1    = alloc_malloc(arena, 64);
     alloc_free(arena, p1);
@@ -88,7 +88,7 @@ static int test_arena_free_reuse(void) {
 
     error += p1 == p2 ? 0 : 1;
 
-    alloc_arena_destroy(alloc_default_allocator(), &arena);
+    arena_destroy(default_allocator(), &arena);
 
     return error;
 }
@@ -96,7 +96,7 @@ static int test_arena_free_reuse(void) {
 static int test_arena_free_reuse_non_contiguous(void) {
     int        error = 0;
 
-    allocator *arena = alloc_arena_create(alloc_default_allocator(), 1024);
+    allocator *arena = arena_create(default_allocator(), 1024);
 
     void      *p1    = alloc_malloc(arena, 64);
     void      *p2    = alloc_malloc(arena, 64);
@@ -107,7 +107,7 @@ static int test_arena_free_reuse_non_contiguous(void) {
     error += p1 != p3 ? 0 : 1;
     error += p2 != p3 ? 0 : 1;
 
-    alloc_arena_destroy(alloc_default_allocator(), &arena);
+    arena_destroy(default_allocator(), &arena);
 
     return error;
 }

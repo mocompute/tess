@@ -72,7 +72,7 @@ static void default_free(allocator *a, void *p, char const *file, int line) {
     return free(p);
 }
 
-allocator *alloc_default_allocator() {
+allocator *default_allocator() {
     static allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
     return &allocator;
 }
@@ -278,24 +278,24 @@ static void arena_free(allocator *a, void *p, char const *file, int line) {
     }
 }
 
-allocator *alloc_arena_create(allocator *alloc, size_t sz) {
+allocator *arena_create(allocator *alloc, size_t sz) {
     allocator *out = alloc_malloc(alloc, sizeof(struct arena_allocator));
-    alloc_arena_init(out, alloc, sz);
+    arena_init(out, alloc, sz);
     return out;
 }
 
-void alloc_arena_dealloc(allocator *alloc, allocator **arena) {
+void arena_dealloc(allocator *alloc, allocator **arena) {
     alloc_assert_invalid(*arena);
     alloc_free(alloc, *arena);
     *arena = null;
 }
 
-void alloc_arena_destroy(allocator *alloc, allocator **arena) {
-    alloc_arena_deinit(*arena);
-    alloc_arena_dealloc(alloc, arena);
+void arena_destroy(allocator *alloc, allocator **arena) {
+    arena_deinit(*arena);
+    arena_dealloc(alloc, arena);
 }
 
-void alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
+void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
@@ -312,7 +312,7 @@ void alloc_arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena->allocator.free    = &arena_free;
 }
 
-void alloc_arena_deinit(allocator *arena_) {
+void arena_deinit(allocator *arena_) {
     arena_allocator *arena = (arena_allocator *)arena_;
 
     arena_header    *next  = arena->head;
@@ -362,7 +362,7 @@ static void *leak_detector_calloc(allocator *alloc, size_t num, size_t sz, char 
 static void *leak_detector_realloc(allocator *a, void *p, size_t sz, char const *file, int line);
 static void  leak_detector_free(allocator *alloc, void *p, char const *file, int line);
 
-allocator   *alloc_leak_detector_create() {
+allocator   *leak_detector_create() {
 
     leak_detector *self = malloc(sizeof *self);
     assert(self);
@@ -381,10 +381,10 @@ allocator   *alloc_leak_detector_create() {
     return (allocator *)self;
 }
 
-void alloc_leak_detector_destroy(allocator **alloc) {
+void leak_detector_destroy(allocator **alloc) {
     leak_detector *self = (leak_detector *)*alloc;
 
-    if (!self->reported) alloc_leak_detector_report(*alloc);
+    if (!self->reported) leak_detector_report(*alloc);
 
     free(self->data);
 
@@ -392,7 +392,7 @@ void alloc_leak_detector_destroy(allocator **alloc) {
     *alloc = null;
 }
 
-void alloc_leak_detector_report(allocator *alloc) {
+void leak_detector_report(allocator *alloc) {
     leak_detector          *self    = (leak_detector *)alloc;
 
     struct leak_allocation *records = malloc(sizeof *records * (size_t)self->size);

@@ -49,9 +49,9 @@ parser *parser_create(allocator *alloc, char_cslice input) {
 
     alloc_zero(self);
     self->parent_alloc = alloc;
-    self->parser_arena = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->ast_arena    = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->debug_arena  = alloc_arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->parser_arena = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->ast_arena    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->debug_arena  = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->verbose      = false;
 
     // tokenizer
@@ -76,9 +76,9 @@ void parser_destroy(parser **self) {
     tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
-    alloc_arena_destroy((*self)->parent_alloc, &(*self)->debug_arena);
-    alloc_arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
-    alloc_arena_destroy((*self)->parent_alloc, &(*self)->parser_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->debug_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->parser_arena);
     alloc_free((*self)->parent_alloc, *self);
     *self = null;
 }

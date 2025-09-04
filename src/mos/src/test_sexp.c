@@ -25,7 +25,7 @@ static int test_sexp_parse(void) {
 
     char const *input = "(a (b \"str\"  c)  d -123)";
 
-    allocator  *alloc = alloc_default_allocator();
+    allocator  *alloc = default_allocator();
 
     sexp_parser p;
     if (sexp_parser_init(alloc, &p, input, strlen(input))) return error + 1;

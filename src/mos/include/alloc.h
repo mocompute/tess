@@ -18,20 +18,20 @@ typedef struct allocator allocator;
 
 // -- default allocator --
 
-allocator *alloc_default_allocator();
+allocator *default_allocator();
 
 // -- leak detection --
-nodiscard allocator *alloc_leak_detector_create() mallocfun;
-void                 alloc_leak_detector_destroy(allocator **);
-void                 alloc_leak_detector_report(allocator *);
+nodiscard allocator *leak_detector_create() mallocfun;
+void                 leak_detector_destroy(allocator **);
+void                 leak_detector_report(allocator *);
 
 // -- arena bump allocator --
 
-nodiscard allocator *alloc_arena_create(allocator *alloc, size_t) mallocfun;
-void                 alloc_arena_dealloc(allocator *parent, allocator **arena);
-void                 alloc_arena_destroy(allocator *, allocator **);
-void                 alloc_arena_init(allocator *, allocator *parent, size_t);
-void                 alloc_arena_deinit(allocator *);
+nodiscard allocator *arena_create(allocator *alloc, size_t) mallocfun;
+void                 arena_dealloc(allocator *parent, allocator **arena);
+void                 arena_destroy(allocator *, allocator **);
+void                 arena_init(allocator *, allocator *parent, size_t);
+void                 arena_deinit(allocator *);
 
 // -- allocator malloc and friends --
 //

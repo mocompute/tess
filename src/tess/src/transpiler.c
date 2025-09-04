@@ -58,7 +58,7 @@ transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
 
     transpiler *self = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc      = alloc;
-    self->strings    = alloc_arena_create(alloc, 1024);
+    self->strings    = arena_create(alloc, 1024);
     self->bytes      = bytes;
 
     self->results    = (c_string_array){.alloc = self->strings};
@@ -66,7 +66,7 @@ transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
 }
 
 void transpiler_destroy(transpiler **self) {
-    alloc_arena_destroy((*self)->alloc, &(*self)->strings);
+    arena_destroy((*self)->alloc, &(*self)->strings);
     alloc_free((*self)->alloc, *self);
     *self = null;
 }

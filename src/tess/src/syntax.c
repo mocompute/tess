@@ -48,7 +48,7 @@ syntax_checker *syntax_checker_create(allocator *alloc, ast_node_slice nodes) {
     syntax_checker *self = alloc_calloc(alloc, 1, sizeof *self);
 
     self->alloc          = alloc;
-    self->arena          = alloc_arena_create(alloc, 2048);
+    self->arena          = arena_create(alloc, 2048);
     self->type_registry  = type_registry_create(self->arena);
 
     self->errors         = (syntax_error_array){.alloc = self->arena};
@@ -60,7 +60,7 @@ syntax_checker *syntax_checker_create(allocator *alloc, ast_node_slice nodes) {
 
 void syntax_checker_destroy(syntax_checker **self) {
 
-    alloc_arena_destroy((*self)->alloc, &(*self)->arena);
+    arena_destroy((*self)->alloc, &(*self)->arena);
     alloc_free((*self)->alloc, *self);
     *self = null;
 }

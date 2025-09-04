@@ -47,14 +47,14 @@ noreturn void usage(int status, char const *argv0) {
 
 void state_init(struct state *self) {
     alloc_zero(self);
-    self->arena = alloc_arena_create(alloc_default_allocator(), 4096);
+    self->arena = arena_create(default_allocator(), 4096);
 
     self->words = (c_string_array){.alloc = self->arena};
     array_reserve(self->words, 32);
 }
 
 void state_deinit(struct state *self) {
-    alloc_arena_destroy(alloc_default_allocator(), &self->arena);
+    arena_destroy(default_allocator(), &self->arena);
 
     alloc_invalidate(self);
 }
@@ -121,11 +121,11 @@ int compile(struct state *self) {
 
     int        error = 0;
 
-    char_array input = {.alloc = alloc_default_allocator()};
+    char_array input = {.alloc = default_allocator()};
     array_reserve(input, 64 * 1024);
 
     {
-        allocator *file_arena = alloc_arena_create(alloc_default_allocator(), 32 * 1024);
+        allocator *file_arena = arena_create(default_allocator(), 32 * 1024);
 
         for (u32 i = 1; i < self->words.size; ++i) {
             char  *buf;
@@ -148,15 +148,15 @@ int compile(struct state *self) {
             alloc_free(file_arena, buf);
         }
 
-        alloc_arena_destroy(alloc_default_allocator(), &file_arena);
+        arena_destroy(default_allocator(), &file_arena);
 
         array_push_val(input, '\0');
     }
 
-    parser *parser = parser_create(alloc_default_allocator(), (char_cslice)slice_all(input));
+    parser *parser = parser_create(default_allocator(), (char_cslice)slice_all(input));
     if (!parser) fatal("could not create parser");
 
-    allocator     *nodes_alloc = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
+    allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
     if (self->verbose_parse) {
@@ -165,8 +165,7 @@ int compile(struct state *self) {
         if (parser_parse_all(parser, &nodes)) fatal("error while parsing.");
     }
 
-    syntax_checker *syntax =
-      syntax_checker_create(alloc_default_allocator(), (ast_node_slice)slice_all(nodes));
+    syntax_checker *syntax = syntax_checker_create(default_allocator(), (ast_node_slice)slice_all(nodes));
 
     if (syntax_checker_run(syntax)) {
         syntax_checker_report_errors(syntax);
@@ -174,7 +173,7 @@ int compile(struct state *self) {
         goto cleanup_syntax;
     }
 
-    ti_inferer *ti = ti_inferer_create(alloc_default_allocator(), &nodes);
+    ti_inferer *ti = ti_inferer_create(default_allocator(), &nodes);
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
@@ -182,10 +181,10 @@ int compile(struct state *self) {
         goto cleanup_ti;
     }
 
-    allocator  *transpile_alloc   = alloc_arena_create(alloc_default_allocator(), 64 * 1024);
+    allocator  *transpile_alloc   = arena_create(default_allocator(), 64 * 1024);
     char_array  transpiler_output = {.alloc = transpile_alloc};
 
-    transpiler *transpiler        = transpiler_create(alloc_default_allocator(), &transpiler_output);
+    transpiler *transpiler        = transpiler_create(default_allocator(), &transpiler_output);
     if (transpiler_compile(transpiler, nodes.v, nodes.size)) fatal("error while transpiling");
 
     if (self->out_path) {
@@ -200,16 +199,16 @@ int compile(struct state *self) {
     }
 
     transpiler_destroy(&transpiler);
-    alloc_arena_destroy(alloc_default_allocator(), &transpile_alloc);
+    arena_destroy(default_allocator(), &transpile_alloc);
 
 cleanup_ti:
-    ti_inferer_destroy(alloc_default_allocator(), &ti);
+    ti_inferer_destroy(default_allocator(), &ti);
 
 cleanup_syntax:
     syntax_checker_destroy(&syntax);
     parser_destroy(&parser);
 
-    alloc_arena_destroy(alloc_default_allocator(), &nodes_alloc);
+    arena_destroy(default_allocator(), &nodes_alloc);
     array_free(input);
 
     return error;

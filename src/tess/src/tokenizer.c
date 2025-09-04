@@ -32,7 +32,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_cslice input) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
-    self->strings   = alloc_arena_create(alloc, 4096);
+    self->strings   = arena_create(alloc, 4096);
     self->input     = input;
     self->pos       = input.begin;
 
@@ -45,7 +45,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_cslice input) {
 }
 
 void tokenizer_destroy(tokenizer **self) {
-    alloc_arena_destroy((*self)->parent, &(*self)->strings);
+    arena_destroy((*self)->parent, &(*self)->strings);
 
     array_free((*self)->backtrack);
     array_free((*self)->buf);

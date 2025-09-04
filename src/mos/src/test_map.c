@@ -43,7 +43,7 @@ static int test_align(void) {
 static int test_map(void) {
     int        error = 0;
 
-    allocator *alloc = alloc_leak_detector_create();
+    allocator *alloc = leak_detector_create();
 
     hashmap   *map   = map_create(alloc, sizeof(int));
 
@@ -69,7 +69,7 @@ static int test_map(void) {
 
     map_destroy(&map);
 
-    alloc_leak_detector_destroy(&alloc);
+    leak_detector_destroy(&alloc);
     return error;
 }
 
@@ -85,7 +85,7 @@ static int test_big_map(void) {
 
     } pair_t;
 
-    allocator *alloc = alloc_default_allocator();
+    allocator *alloc = default_allocator();
     vector     vec   = VEC(pair_t);
     vec_reserve(alloc, &vec, N);
 
