@@ -63,14 +63,18 @@ void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *
     return ptr;
 }
 
-void *array_insert_impl(array_header_t *h, void *ptr, u32 index, u32 width, u16 align, void *data,
-                        u32 num) {
+void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32 width, u16 align,
+                        void *restrict data, u32 num) {
     assert(index < h->size);
 
-    ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
+    ptr            = array_reserve_impl(h, ptr, h->size + num, width, align);
 
-    memmove(&ptr[index + num], &ptr[index], (h->size - index) * alloc_align(width, align));
-    memcpy(&ptr[index + num], data, num * width);
+    size_t aligned = alloc_align(width, align);
+
+    memmove(&ptr[(index + num) * aligned], &ptr[index * aligned], (h->size - index) * aligned);
+    memcpy(&ptr[index * aligned], data, num * width);
+
+    h->size += num;
     return ptr;
 }
 

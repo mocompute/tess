@@ -67,7 +67,8 @@ nodiscard void *array_reserve_impl(array_header_t *, void *, u32, u32, u16);
 nodiscard void *array_push_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict);
 nodiscard void *array_copy_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict, u32);
 nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32);
-nodiscard void *array_insert_impl(array_header_t *h, void *ptr, u32 index, u32, u16, void *, u32);
+nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
+                                  void *restrict, u32);
 nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
 void            array_free_impl(array_header_t *, void *);
 
