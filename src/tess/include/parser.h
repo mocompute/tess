@@ -17,7 +17,7 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-nodiscard parser *parser_create(allocator *, char const *, size_t) mallocfun;
+nodiscard parser *parser_create(allocator *, char_cslice) mallocfun;
 void              parser_destroy(parser **);
 
 // -- access --

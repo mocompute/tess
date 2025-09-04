@@ -18,7 +18,7 @@ typedef struct tokenizer tokenizer;
 // Memory buffers of tokens created by the tokenizer are managed by
 // the tokenizer and are freed by tokenizer_destroy.
 
-nodiscard tokenizer *tokenizer_create(allocator *, char const *, size_t) mallocfun;
+nodiscard tokenizer *tokenizer_create(allocator *, char_cslice) mallocfun;
 void                 tokenizer_destroy(tokenizer **);
 
 // -- parsing --

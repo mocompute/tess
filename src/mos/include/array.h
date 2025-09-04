@@ -38,6 +38,16 @@ typedef struct {
 } char_array;
 
 typedef struct {
+    array_slice;
+    char *v;
+} char_slice;
+
+typedef struct {
+    array_slice;
+    char const *v;
+} char_cslice;
+
+typedef struct {
     array_header;
     char **v;
 } c_string_array;
@@ -90,6 +100,8 @@ typedef struct {
     (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof(p.v[0]))
 
 #define slice_all(x) {.v = (x).v, .end = (x).size}
+
+char_cslice char_cslice_from(char const *, u32);
 
 // -- implementation --
 

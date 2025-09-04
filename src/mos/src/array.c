@@ -96,3 +96,7 @@ void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
     h->capacity = h->size;
     return ptr;
 }
+
+char_cslice char_cslice_from(char const *str, u32 len) {
+    return (char_cslice){.v = str, .end = len};
+}

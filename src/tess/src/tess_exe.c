@@ -153,7 +153,7 @@ int compile(struct state *self) {
         array_push_val(input, '\0');
     }
 
-    parser *parser = parser_create(alloc_default_allocator(), input.v, input.size);
+    parser *parser = parser_create(alloc_default_allocator(), (char_cslice)slice_all(input));
     if (!parser) fatal("could not create parser");
 
     allocator     *nodes_alloc = alloc_arena_create(alloc_default_allocator(), 64 * 1024);

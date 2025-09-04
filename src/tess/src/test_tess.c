@@ -1,4 +1,5 @@
 #include "alloc.h"
+#include "array.h"
 #include "ast.h"
 #include "dbg.h"
 #include "parser.h"
@@ -25,7 +26,7 @@ static int compile_input_flag(char const *input, bool verbose) {
     allocator     *ast_alloc   = alloc_leak_detector_create();
     allocator     *ti_alloc    = alloc_leak_detector_create();
 
-    parser        *p           = parser_create(ast_alloc, input, strlen(input));
+    parser        *p           = parser_create(ast_alloc, char_cslice_from(input, (u32)strlen(input)));
 
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
@@ -142,7 +143,7 @@ static int test_tokenizer_basic(void) {
     char const *input = "  (  )  ";
 
     allocator  *alloc = alloc_default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    tokenizer  *t     = tokenizer_create(alloc, (char_cslice){.v = input, .end = (u32)strlen(input)});
     if (!t) return ++error;
 
     {
@@ -186,7 +187,7 @@ static int test_tokenizer_string(void) {
     char const *input = " \"abcdef\"  ";
 
     allocator  *alloc = alloc_default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
     if (!t) return ++error;
 
     {
@@ -211,7 +212,7 @@ static int test_tokenizer_terminal_static_string(void) {
 
     char const *input = "-";
     allocator  *alloc = alloc_default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, input, strlen(input));
+    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
     if (!t) return ++error;
 
     {
@@ -239,7 +240,7 @@ static int test_parser_node_to_string(void) {
     if (!alloc) return error + 1;
 
     {
-        parser *p = parser_create(alloc, input, strlen(input));
+        parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
         if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;
@@ -259,7 +260,7 @@ static int test_parser_node_to_string(void) {
     //
     {
         input     = "(a, b)";
-        parser *p = parser_create(alloc, input, strlen(input));
+        parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
         if (null == p) return error + 1;
 
         if (parser_next(p)) return error + 1;

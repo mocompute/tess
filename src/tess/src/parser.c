@@ -44,7 +44,7 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
+parser *parser_create(allocator *alloc, char_cslice input) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
@@ -55,7 +55,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->verbose      = false;
 
     // tokenizer
-    self->tokenizer = tokenizer_create(alloc, input, input_len);
+    self->tokenizer = tokenizer_create(alloc, input);
 
     // good_tokens
     self->tokens = (token_array){.alloc = self->parser_arena};

@@ -12,8 +12,7 @@
 struct tokenizer {
     allocator  *parent;
     allocator  *strings;
-    char const *input;
-    size_t      input_len;
+    char_cslice input;
     size_t      pos;
 
     token_array backtrack;
@@ -29,14 +28,13 @@ static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
 
 // -- allocation and deallocation --
 
-tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
+tokenizer *tokenizer_create(allocator *alloc, char_cslice input) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
     self->strings   = alloc_arena_create(alloc, 4096);
     self->input     = input;
-    self->input_len = len;
-    self->pos       = 0;
+    self->pos       = input.begin;
 
     self->buf       = (char_array){.alloc = alloc};
     self->backtrack = (token_array){.alloc = alloc};
@@ -125,7 +123,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         stop,
     } state          = start;
 
-    size_t const end = self->input_len;
+    size_t const end = self->input.end;
 
     // starting position for number or symbol or indent
     size_t start_capture = 0;
@@ -143,7 +141,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 goto finish;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
 
             switch (c) {
             case '=': state = in_equal; break;
@@ -214,7 +212,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             switch (c) {
             case '=':
                 replace_token(self->strings, &res, tok_colon_equal);
@@ -234,7 +232,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             switch (c) {
             case '>':
                 replace_token(self->strings, &res, tok_arrow);
@@ -253,7 +251,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             if (' ' == c || '\n' == c) {
                 replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
@@ -272,7 +270,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 goto finish;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             switch (c) {
             case '/': state = start_comment; continue;
             default:
@@ -290,7 +288,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 goto finish;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
 
             switch (c) {
             case '\n':
@@ -317,7 +315,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
 
             switch (c) {
             case ' ': continue;
@@ -356,7 +354,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
 
             if (c >= '0' && c <= '9') continue;
             switch (c) {
@@ -399,7 +397,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             }
 
             // + or - not start of a number
-            char const c = self->input[self->pos];
+            char const c = self->input.v[self->pos];
             switch (c) {
             case ' ':
             case ')': state = stop_symbol; break;
@@ -409,7 +407,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_number: {
             assert(self->pos >= start_capture);
-            replace_token_sn(self->strings, &res, tok_number, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_number, self->input.v + start_capture,
                              self->pos - start_capture);
             state = stop;
         } break;
@@ -425,7 +423,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             switch (c) {
             case '(':
             case ')':
@@ -453,7 +451,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_symbol: {
             assert(self->pos >= start_capture);
-            replace_token_sn(self->strings, &res, tok_symbol, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_symbol, self->input.v + start_capture,
                              self->pos - start_capture);
             state = stop;
 
@@ -469,7 +467,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_comment;
                 continue;
             }
-            i8 const c = self->input[self->pos++];
+            i8 const c = self->input.v[self->pos++];
             if (c < 0x20) { // c is signed so this catches c > 0x7f
                 --self->pos;
                 state = stop_comment;
@@ -478,7 +476,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_comment:
             assert(self->pos >= start_capture);
-            replace_token_sn(self->strings, &res, tok_comment, self->input + start_capture,
+            replace_token_sn(self->strings, &res, tok_comment, self->input.v + start_capture,
                              self->pos - start_capture);
             state = stop;
             break;
@@ -493,7 +491,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_string;
                 continue;
             }
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
@@ -508,7 +506,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_string;
                 continue;
             }
-            char const c = self->input[self->pos++];
+            char const c = self->input.v[self->pos++];
 
             // https://en.cppreference.com/w/cpp/language/escape.html
             // TODO: numeric escapes, octal, hex
