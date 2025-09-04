@@ -77,7 +77,9 @@ static void       dbg_constraint(constraint const *);
 static void       dbg_ast_nodes(ti_inferer *);
 static void       log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-ti_inferer       *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
+// -- allocation and deallocation --
+
+ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
     self->strings          = arena_create(alloc, STRINGS_ARENA_SIZE);
@@ -97,13 +99,17 @@ ti_inferer       *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
     return self;
 }
 
-void ti_inferer_destroy(allocator *alloc, ti_inferer **self) {
-    map_destroy(&(*self)->symbols);
-    arena_destroy(alloc, &(*self)->strings);
-    arena_destroy(alloc, &(*self)->type_arena);
-    alloc_free(alloc, *self);
-    *self = null;
+void ti_inferer_destroy(allocator *alloc, ti_inferer **pself) {
+    ti_inferer *self = *pself;
+
+    map_destroy(&self->symbols);
+    arena_destroy(alloc, &self->strings);
+    arena_destroy(alloc, &self->type_arena);
+    alloc_free(alloc, *pself);
+    *pself = null;
 }
+
+// -- operation --
 
 void ti_inferer_set_verbose(ti_inferer *self, bool val) {
     self->verbose = val;
@@ -112,18 +118,11 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
 int ti_inferer_run(ti_inferer *self) {
 
     ti_rename_variables(self);
-
     ti_assign_type_variables(self);
 
     if (self->verbose) {
         dbg("\n\nti_inferer_run: input nodes:\n");
-        {
-            for (size_t i = 0; i < self->nodes->size; ++i) {
-                char *str = ast_node_to_string_for_error(self->strings, self->nodes->v[i]);
-                dbg("%p: %s\n", self->nodes->v[i], str);
-                alloc_free(self->strings, str);
-            }
-        }
+        dbg_ast_nodes(self);
     }
 
     // 1. collect constraints, but don't constrain function applications at this stage
@@ -343,19 +342,21 @@ static void ti_rename_variables(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static bool apply_one_substitution(tess_type **type, tess_type *from, tess_type *to) {
+static bool apply_one_substitution(tess_type **ptype, tess_type *from, tess_type *to) {
     bool did_substitute = false;
 
-    assert(type && *type);
+    assert(ptype && *ptype);
     assert(from);
     assert(to);
 
-    if (*type == from) {
-        *type = to;
+    tess_type *type = *ptype;
+
+    if (*ptype == from) {
+        *ptype = to;
         return true;
     }
 
-    switch ((*type)->tag) {
+    switch (type->tag) {
     case type_nil:
     case type_bool:
     case type_int:
@@ -367,26 +368,27 @@ static bool apply_one_substitution(tess_type **type, tess_type *from, tess_type 
 
     case type_tuple:    {
 
-        for (size_t i = 0; i < (*type)->elements.size; ++i) {
-            if ((*type)->elements.v[i] == from) {
-                (*type)->elements.v[i] = to;
-                did_substitute         = true;
+        for (size_t i = 0; i < type->elements.size; ++i) {
+            if (type->elements.v[i] == from) {
+                type->elements.v[i] = to;
+                did_substitute      = true;
             }
         }
 
     } break;
 
     case type_arrow: {
-        if ((*type)->left == from) {
-            (*type)->left  = to;
+        if (type->left == from) {
+            type->left     = to;
             did_substitute = true;
         }
-        if ((*type)->right == from) {
-            (*type)->right = to;
+        if (type->right == from) {
+            type->right    = to;
             did_substitute = true;
         }
     } break;
     }
+
     return did_substitute;
 }
 
