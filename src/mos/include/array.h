@@ -19,6 +19,15 @@ typedef struct {
     u32        capacity
 
 typedef struct {
+    u32 begin;
+    u32 end;
+} array_span_t;
+
+#define array_span                                                                                         \
+    u32 begin;                                                                                             \
+    u32 end
+
+typedef struct {
     array_header;
     byte *v;
 } byte_array;
