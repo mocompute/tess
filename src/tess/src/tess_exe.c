@@ -142,7 +142,7 @@ int compile(struct state *self) {
                 if (new_cap > input.capacity) array_reserve(input, (u32)new_cap);
 
                 array_copy(input, buf, size);
-                input.v[input.size - 1] = '\n'; // overwrite \0
+                input.v[input.size++] = '\n';
             }
 
             alloc_free(file_arena, buf);
