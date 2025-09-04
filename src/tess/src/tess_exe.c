@@ -165,7 +165,9 @@ int compile(struct state *self) {
         if (parser_parse_all(parser, &nodes)) fatal("error while parsing.");
     }
 
-    syntax_checker *syntax = syntax_checker_create(alloc_default_allocator(), nodes.v, nodes.size);
+    syntax_checker *syntax =
+      syntax_checker_create(alloc_default_allocator(), (ast_node_slice)slice_all(nodes));
+
     if (syntax_checker_run(syntax)) {
         syntax_checker_report_errors(syntax);
         error = 1;

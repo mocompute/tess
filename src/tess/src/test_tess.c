@@ -50,7 +50,7 @@ static int compile_input_flag(char const *input, bool verbose) {
     dbg("\n");
 
     allocator      *syntax_alloc = alloc_leak_detector_create();
-    syntax_checker *syntax       = syntax_checker_create(syntax_alloc, nodes.v, nodes.size);
+    syntax_checker *syntax       = syntax_checker_create(syntax_alloc, (ast_node_slice)slice_all(nodes));
 
     // TODO syntax check, e.g. input of "a\nb\nc" parses correctly but
     // is not a correct program, it is just 3 symbol nodes

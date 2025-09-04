@@ -123,6 +123,11 @@ typedef struct {
     ast_node **v;
 } ast_node_array;
 
+typedef struct {
+    array_slice;
+    ast_node **v;
+} ast_node_slice;
+
 struct ast_node_iterator {
     struct vector_iterator_base base;
     struct ast_node           **ptr;

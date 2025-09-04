@@ -37,15 +37,14 @@ struct syntax_checker {
     allocator         *arena;
     type_registry     *type_registry;
 
-    ast_node         **nodes;
-    u32                n_nodes;
+    ast_node_slice     nodes;
 
     syntax_error_array errors;
 };
 
 // -- allocation and deallocation --
 
-syntax_checker *syntax_checker_create(allocator *alloc, ast_node **nodes, u32 count) {
+syntax_checker *syntax_checker_create(allocator *alloc, ast_node_slice nodes) {
     syntax_checker *self = alloc_calloc(alloc, 1, sizeof *self);
 
     self->alloc          = alloc;
@@ -55,7 +54,6 @@ syntax_checker *syntax_checker_create(allocator *alloc, ast_node **nodes, u32 co
     self->errors         = (syntax_error_array){.alloc = self->arena};
 
     self->nodes          = nodes;
-    self->n_nodes        = count;
 
     return self;
 }
@@ -152,7 +150,7 @@ static void register_user_type(void *ctx, ast_node *node) {
 nodiscard static int syntax_register_user_types(struct syntax_checker *self) {
 
     // ast user type nodes do not participate in depth first search
-    for (u32 i = 0; i < self->n_nodes; ++i) register_user_type(self, self->nodes[i]);
+    for (u32 i = self->nodes.begin; i < self->nodes.end; ++i) register_user_type(self, self->nodes.v[i]);
     return 0;
 }
 
@@ -180,7 +178,8 @@ static void check_annotation(void *ctx, ast_node *node) {
 }
 
 static int syntax_check_type_annotations(struct syntax_checker *self) {
-    for (u32 i = 0; i < self->n_nodes; ++i) ast_pool_dfs(self, self->nodes[i], check_annotation);
+    for (u32 i = self->nodes.begin; i < self->nodes.end; ++i)
+        ast_pool_dfs(self, self->nodes.v[i], check_annotation);
     return 0;
 }
 
@@ -190,13 +189,4 @@ static void syntax_error(struct syntax_checker *self, ast_node *node, enum tess_
     node->error = tag;
 
     array_push_val(self->errors, ((struct syntax_error){node, message}));
-
-    // if (!self->errors) {
-    //     self->cap_errors = 16;
-    //     self->errors     = alloc_calloc(self->arena, self->cap_errors, sizeof self->errors[0]);
-    // } else if (self->n_errors == self->cap_errors) {
-    //     alloc_resize(self->arena, &self->errors, &self->cap_errors, self->cap_errors * 2);
-    // }
-
-    // self->errors[self->n_errors++] = (struct syntax_error){node, message};
 }

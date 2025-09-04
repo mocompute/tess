@@ -21,9 +21,9 @@ typedef struct {
 typedef struct {
     u32 begin;
     u32 end;
-} array_span_t;
+} array_slice_t;
 
-#define array_span                                                                                         \
+#define array_slice                                                                                        \
     u32 begin;                                                                                             \
     u32 end
 
@@ -78,6 +78,8 @@ typedef struct {
 
 #define array_shrink(p)                                                                                    \
     (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof(p.v[0]))
+
+#define slice_all(x) {.v = (x).v, .end = (x).size}
 
 // -- implementation --
 
