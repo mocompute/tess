@@ -37,23 +37,30 @@ typedef struct {
 
 #define array_reserve(p, n)                                                                                \
     (p).v = array_reserve_impl((array_header_t *)&(p), (p).v, (n), sizeof(p).v[0], alignof((p).v[0]))
+
 #define array_push(p, x)                                                                                   \
     static_assert(sizeof((x)[0]) == sizeof((p).v[0]), "size mismatch");                                    \
     (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x));
+
 #define array_push_val(p, x)                                                                               \
     do {                                                                                                   \
         const typeof((p).v[0]) tmp = (x);                                                                  \
         array_push((p), &tmp);                                                                             \
     } while (0)
+
 #define array_free(p) array_free_impl((array_header_t *)&(p), (p).v)
+
 #define array_copy(p, xs, n)                                                                               \
+    static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                                   \
     (p).v = array_copy_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),              \
                             (void *)(xs), (u32)(n));
 #define array_move(p, xs, n)                                                                               \
+    static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                                   \
     (p).v = array_move_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),              \
                             (void *)(xs), (u32)(n));
 
 #define array_insert(p, i, xs, n)                                                                          \
+    static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                                   \
     (p).v =                                                                                                \
       array_insert_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]), (xs), (n))
 
