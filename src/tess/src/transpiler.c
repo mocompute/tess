@@ -174,6 +174,10 @@ static int a_user_type(transpiler *self, ast_node const *node) {
     out_put_start(self, "};\n");
 
     // constructor function
+
+    // FIXME this probably isn't right - it should be a tl function
+    // created by the type inferencer
+
     out_put_start(self, "struct ");
     out_put_fmt(self, "%s _make_%s_(", name, name); // type and name
 
