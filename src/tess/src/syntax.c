@@ -108,12 +108,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     char const *type_name = mos_string_str(&node->user_type.name->symbol.name);
 
     if (type_registry_find(self->type_registry, type_name)) {
-
-        int   len     = snprintf(null, 0, "%s", type_name) + 1;
-        char *message = alloc_malloc(self->arena, (u32)len);
-        snprintf(message, (u32)len, "%s", type_name);
-        syntax_error(self, node, tess_err_type_exists, message);
-
+        syntax_error(self, node, tess_err_type_exists, alloc_strdup(self->arena, type_name));
         return;
     }
 
@@ -126,21 +121,26 @@ static void register_user_type(void *ctx, ast_node *node) {
         node->user_type.field_types =
           alloc_calloc(self->arena, n_fields, sizeof node->user_type.field_types[0]);
 
+        struct tess_type **field_types = node->user_type.field_types;
+        ast_node         **annotations = node->user_type.field_annotations;
+
         for (u32 i = 0; i < n_fields; ++i) {
-
-            char const        *str = mos_string_str(&node->user_type.field_annotations[i]->symbol.name);
+            char const        *str = ast_node_name_string(annotations[i]);
             struct type_entry *te  = type_registry_find(self->type_registry, str);
-            if (!te) continue;
 
-            node->user_type.field_types[i] = te->type;
+            if (!te) fatal("register_user_types: couldn't find type '%s'", str);
+
+            field_types[i] = te->type;
         }
 
         // convert field names from ast symbols to simple strings
 
         field_names = alloc_calloc(self->arena, n_fields, sizeof field_names[0]);
         for (u16 i = 0; i < n_fields; ++i)
-            field_names[i] = mos_string_str(&node->user_type.field_names[i]->symbol.name);
+            field_names[i] = ast_node_name_string(node->user_type.field_names[i]);
     }
+
+    // make the user type and register it
 
     struct tess_type *user_type = tess_type_create_user_type(
       self->arena, type_name, node->user_type.field_types, field_names, n_fields);
