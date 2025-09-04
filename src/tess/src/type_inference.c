@@ -683,7 +683,7 @@ static bool is_type_compatible(tess_type const *a, tess_type const *b, bool stri
     }
 }
 
-static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_node_slice nodes,
+static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_node_sized nodes,
                                bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
@@ -693,7 +693,7 @@ static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_n
 
     if (!name) fatal("find_let_node: null search string");
 
-    for (u32 i = nodes.begin; i < nodes.end; ++i) {
+    for (u32 i = 0; i < nodes.size; ++i) {
         ast_node *candidate = nodes.v[i];
         if (ast_let != candidate->tag) continue;
 
@@ -967,14 +967,14 @@ static void specialize_node(void *ctx_, ast_node *node) {
       alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
 
     ast_node *let = null;
-    let           = find_let_node(name, args_ty->elements, (ast_node_slice)slice_all(ctx->ti->nodes), true);
+    let           = find_let_node(name, args_ty->elements, (ast_node_sized)sized_all(ctx->ti->nodes), true);
 
     if (let) {
         node->named_application.specialized = let;
         return;
     }
 
-    let = find_let_node(name, args_ty->elements, (ast_node_slice)slice_all(ctx->ti->nodes), false);
+    let = find_let_node(name, args_ty->elements, (ast_node_sized)sized_all(ctx->ti->nodes), false);
 
     // TODO compiler error
     if (null == let) return;

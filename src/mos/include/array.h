@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct {
     u32 size;
-}array_sized_t;
+} array_sized_t;
 
 #define array_sized u32 size
 
@@ -107,6 +107,7 @@ typedef struct {
 
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
 #define slice_size(x) ((x).end - (x).begin)
+#define sized_all(x)  {.v = (x).v, .size = (x).size}
 
 char_cslice char_cslice_from(char const *, u32);
 
