@@ -20,9 +20,10 @@ struct transpiler {
     char_array    *bytes;
 
     c_string_array results;
+    // a stack of result variable names, see also next_variable
 
-    u32            next_variable;
-    int            indent_level;
+    u32 next_variable;
+    int indent_level;
 };
 
 // -- embed externs --
@@ -32,18 +33,20 @@ extern char const *embed_std_c;
 // -- static forwards --
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
-static int a_toplevel(transpiler *, ast_node const *);
-static int a_main(transpiler *, ast_node const *);
-static int a_eval(transpiler *, ast_node const *);
-static int a_result_type_of(transpiler *, struct tess_type const *);
-// static int a_expression(transpiler *, ast_node const *);
-// static int a_body(transpiler *, ast_node const *);
-static int a_let(transpiler *, ast_node const *);
-static int a_fun_apply(transpiler *, ast_node const *);
-// static int  a_std_apply(transpiler *, ast_node const *, char const *);
-// static int  a_string(transpiler *, ast_node const *);
+
+static int   a_eval(transpiler *, ast_node const *);
+static int   a_infix(transpiler *, ast_node const *);
+static int   a_fun_apply(transpiler *, ast_node const *);
+static int   a_let(transpiler *, ast_node const *);
+static int   a_let_in(transpiler *, ast_node const *);
+static int   a_main(transpiler *, ast_node const *);
+static int   a_nil_expression(transpiler *, ast_node const *);
+static int   a_result_type_of(transpiler *, struct tess_type const *);
+static int   a_toplevel(transpiler *, ast_node const *);
+static int   a_user_type(transpiler *, ast_node const *);
 
 static char *next_variable(transpiler *);
+static bool  is_generic_function(ast_node const *node);
 
 static void  out_put_start(transpiler *, char const *);
 static void  out_put(transpiler *, char const *);
@@ -150,25 +153,54 @@ static int a_result_type_of(transpiler *self, struct tess_type const *ty) {
 }
 
 static int a_user_type(transpiler *self, ast_node const *node) {
-    char const *name = ast_node_name_string(node->user_type.name);
+    char const *name     = ast_node_name_string(node->user_type.name);
+
+    u32 const   n_fields = node->user_type.n_fields;
 
     out_put_start(self, "");
     out_put_fmt(self, "struct %s {\n", name);
 
     self->indent_level++;
-    for (u32 i = 0; i < node->user_type.n_fields; ++i) {
+    for (u32 i = 0; i < n_fields; ++i) {
         struct tess_type *ty         = node->user_type.field_types[i];
         char const       *field_name = ast_node_name_string(node->user_type.field_names[i]);
-
         char             *str        = tess_type_to_string(self->strings, ty);
         out_put_start(self, "");
         out_put_fmt(self, "%s %s;\n", str, field_name);
-
         alloc_free(self->strings, str);
     }
     self->indent_level--;
 
     out_put_start(self, "};\n");
+
+    // constructor function
+    out_put_start(self, "struct ");
+    out_put_fmt(self, "%s _make_%s_(", name, name); // type and name
+
+    for (u32 i = 0; i < n_fields; ++i) {
+        struct tess_type *ty         = node->user_type.field_types[i];
+        char const       *field_name = ast_node_name_string(node->user_type.field_names[i]);
+        char             *str        = tess_type_to_string(self->strings, ty);
+        out_put_start(self, "");
+        out_put_fmt(self, "%s %s", str, field_name);
+        if (i < n_fields - 1) out_put(self, ", ");
+        alloc_free(self->strings, str);
+    }
+    out_put(self, ") {\n");
+
+    self->indent_level++;
+
+    out_put_start(self, "");
+    out_put_fmt(self, "struct %s _out_;\n", name);
+
+    for (u32 i = 0; i < n_fields; ++i) {
+        char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
+        out_put_start(self, "");
+        out_put_fmt(self, "_out_.%s = %s;\n", field_name, field_name);
+    }
+
+    out_put_start(self, "return _out_;\n}\n");
+    self->indent_level--;
 
     return 0;
 }

@@ -341,14 +341,16 @@ static int a_end_of_expression(parser *p) {
         break;
 
     case tok_comma:
+    case tok_dot:
     case tok_colon:
+    case tok_colon_equal:
     case tok_arrow:
     case tok_open_round:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
     case tok_string:
-    case tok_comment:    break;
+    case tok_comment:     break;
     }
 
     p->error.tag = tess_err_unfinished_expression;
@@ -375,14 +377,16 @@ static int a_newline(parser *p) {
 
     case tok_symbol:
     case tok_comma:
+    case tok_dot:
     case tok_colon:
+    case tok_colon_equal:
     case tok_arrow:
     case tok_open_round:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
     case tok_string:
-    case tok_comment:    break;
+    case tok_comment:     break;
     }
 
     p->error.tag = tess_err_expected_newline;
