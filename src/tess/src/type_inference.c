@@ -17,15 +17,20 @@
 #define STRINGS_ARENA_SIZE 4 * 1024
 #define CONSTRAINTS_SIZE   1024
 
-struct constraint {
+typedef struct constraint {
     tess_type *left;
     tess_type *right;
-};
+} constraint;
 
 typedef struct {
     array_header;
-    struct constraint *v;
+    constraint *v;
 } constraint_array;
+
+typedef struct {
+    array_sized;
+    constraint *v;
+} constraint_sized;
 
 struct ti_inferer {
     allocator       *type_arena;
@@ -68,19 +73,20 @@ struct ti_inferer {
 
 // -- ti_inferer --
 
-static void ti_rename_variables(ti_inferer *);
-static void ti_assign_type_variables(ti_inferer *);
-static void ti_collect_constraints(ti_inferer *);
+static void       ti_rename_variables(ti_inferer *);
+static void       ti_assign_type_variables(ti_inferer *);
+static void       ti_collect_constraints(ti_inferer *);
 
-static void ti_apply_substitutions_to_ast(struct constraint *, u32, ast_node *[], u32);
-static void ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
-void        ti_run_solver(ti_inferer *);
+static void       ti_apply_substitutions_to_ast(constraint_sized, ast_node *[], u32);
+static void       ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
+void              ti_run_solver(ti_inferer *);
 
-static void dbg_constraint(struct constraint const *);
-static void dbg_ast_nodes(ti_inferer *);
-static void log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+static constraint make_constraint(tess_type *, tess_type *);
+static void       dbg_constraint(constraint const *);
+static void       dbg_ast_nodes(ti_inferer *);
+static void       log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
+ti_inferer       *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena       = alloc_arena_create(alloc, TYPE_ARENA_SIZE);
     self->strings          = alloc_arena_create(alloc, STRINGS_ARENA_SIZE);
@@ -138,7 +144,7 @@ int ti_inferer_run(ti_inferer *self) {
     ti_run_solver(self);
 
     // 3
-    ti_apply_substitutions_to_ast(self->substitutions.v, self->substitutions.size, self->nodes.v,
+    ti_apply_substitutions_to_ast((constraint_sized)sized_all(self->substitutions), self->nodes.v,
                                   self->nodes.size);
 
     // 4: specialize
@@ -165,7 +171,7 @@ int ti_inferer_run(ti_inferer *self) {
     ti_collect_constraints(self);
 
     ti_run_solver(self);
-    ti_apply_substitutions_to_ast(self->substitutions.v, self->substitutions.size, self->nodes.v,
+    ti_apply_substitutions_to_ast((constraint_sized)sized_all(self->substitutions), self->nodes.v,
                                   self->nodes.size);
 
     if (self->verbose) {
@@ -397,26 +403,20 @@ static bool apply_one_substitution(tess_type **type, tess_type *from, tess_type 
     return did_substitute;
 }
 
-struct constraint_buffer {
-    struct constraint *buffer;
-    u32                size;
-};
-
 void dfs_apply_substitutions(void *ctx, ast_node *node) {
-    struct constraint_buffer *subs = ctx;
+    constraint_sized *subs = ctx;
 
     for (u32 i = 0; i < subs->size; ++i) {
         switch (node->tag) {
         case ast_let:
-            apply_one_substitution(&node->type, subs->buffer[i].left, subs->buffer[i].right);
-            apply_one_substitution(&node->let.arrow, subs->buffer[i].left, subs->buffer[i].right);
+            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
+            apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
             break;
 
         case ast_user_defined_type:
-            apply_one_substitution(&node->type, subs->buffer[i].left, subs->buffer[i].right);
+            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
             for (u32 j = 0; j < node->user_type.n_fields; ++j)
-                apply_one_substitution(&node->user_type.field_types[j], subs->buffer[i].left,
-                                       subs->buffer[i].right);
+                apply_one_substitution(&node->user_type.field_types[j], subs->v[i].left, subs->v[i].right);
             break;
 
         case ast_eof:
@@ -436,21 +436,21 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
         case ast_lambda_declaration:
         case ast_lambda_function_application:
         case ast_named_function_application:
-            apply_one_substitution(&node->type, subs->buffer[i].left, subs->buffer[i].right);
+            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
             break;
         }
     }
 }
 
-static void ti_apply_substitutions_to_ast(struct constraint *substitutions, u32 n_substitutions,
-                                          ast_node *nodes[], u32 const count) {
-    struct constraint_buffer ctx = {substitutions, n_substitutions};
+static void ti_apply_substitutions_to_ast(constraint_sized substitutions, ast_node *nodes[],
+                                          u32 const count) {
+    constraint_sized ctx = substitutions;
     for (size_t i = 0; i < count; ++i) ast_node_dfs(&ctx, nodes[i], dfs_apply_substitutions);
 }
 
 // -- solver --
 
-static void dbg_constraint(struct constraint const *c) {
+static void dbg_constraint(constraint const *c) {
 
     int  len_left  = tess_type_snprint(null, 0, c->left) + 1;
     int  len_right = tess_type_snprint(null, 0, c->right) + 1;
@@ -468,8 +468,7 @@ static void dbg_ast_nodes(ti_inferer *self) {
     }
 }
 
-static bool substitute_constraints(struct constraint *begin, struct constraint *end,
-                                   struct constraint const sub) {
+static bool substitute_constraints(constraint *begin, constraint *end, constraint const sub) {
 
     // When a substitution e.g 'tv1 becomes tv2' has been added to the
     // sequence of substitutions to be applied, it should also be
@@ -491,15 +490,15 @@ static bool substitute_constraints(struct constraint *begin, struct constraint *
     return did_substitute != 0;
 }
 
-static bool unify_one(ti_inferer *self, struct constraint c) {
+static bool unify_one(ti_inferer *self, constraint c) {
 
     if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
-        tess_type        *orig      = type_type_var == c.left->tag ? c.left : c.right;
-        tess_type        *other     = type_type_var == c.left->tag ? c.right : c.left;
+        tess_type *orig      = type_type_var == c.left->tag ? c.left : c.right;
+        tess_type *other     = type_type_var == c.left->tag ? c.right : c.left;
 
-        struct constraint candidate = {orig, other};
+        constraint candidate = {orig, other};
 
         // check conditions to rule out the candidate
         switch (other->tag) {
@@ -544,14 +543,14 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
              c.left->elements.size == c.right->elements.size) {
 
         for (size_t i = 0; i < c.left->elements.size; ++i)
-            unify_one(self, (struct constraint){c.left->elements.v[i], c.right->elements.v[i]});
+            unify_one(self, make_constraint(c.left->elements.v[i], c.right->elements.v[i]));
 
     }
 
     // arrow types: unify matching arms
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
-        unify_one(self, (struct constraint){c.left->left, c.right->left});
-        unify_one(self, (struct constraint){c.left->right, c.right->right});
+        unify_one(self, make_constraint(c.left->left, c.right->left));
+        unify_one(self, make_constraint(c.left->right, c.right->right));
     }
 
     return true;
@@ -565,7 +564,7 @@ void ti_run_solver(ti_inferer *self) {
 
         for (u32 i = 0; i < self->constraints.size;) {
 
-            struct constraint *item = &self->constraints.v[i];
+            constraint *item = &self->constraints.v[i];
 
             // delete a = a constraints, and a = any constraints
             if (item->left == item->right || tess_type_equal(item->left, item->right) ||
@@ -721,12 +720,12 @@ static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_n
 }
 
 void collect_constraints(void *ctx_, ast_node *node) {
-    ti_inferer       *ctx = ctx_;
-    struct constraint c   = {0};
+    ti_inferer *ctx = ctx_;
+    constraint  c   = {0};
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
-        c = (struct constraint){(L), (R)};                                                                 \
+        c = (constraint){(L), (R)};                                                                        \
         array_push(ctx->constraints, &c);                                                                  \
     } while (0)
 
@@ -1021,4 +1020,8 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
     va_end(args);
 
 #pragma clang diagnostic push
+}
+
+constraint make_constraint(tess_type *l, tess_type *r) {
+    return (constraint){l, r};
 }
