@@ -855,7 +855,7 @@ static int infix_operation(parser *p) {
     ast_node    *op_node = p->result;
 
     ast_operator op;
-    if (string_to_ast_operator(mos_string_str(&op_node->symbol.name), &op)) {
+    if (string_to_ast_operator(ast_node_name_string(op_node), &op)) {
         log(p, "infix_operation: string conversion failed");
         return 1;
     }

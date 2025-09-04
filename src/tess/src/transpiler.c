@@ -277,7 +277,7 @@ static int a_let_in(transpiler *self, ast_node const *node) {
 
     // let a = 1 in a + 2 end => resN = 3
 
-    char const *name = mos_string_str(&node->let_in.name->symbol.name);
+    char const *name = ast_node_name_string(node->let_in.name);
 
     if (a_eval(self, node->let_in.value)) return 1;
     char *value = self->results.v[--self->results.size];
@@ -330,12 +330,12 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_symbol:
         out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, mos_string_str(&node->symbol.name));
+        out_put_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
         break;
 
     case ast_string:
         out_put_start(self, "");
-        out_put_fmt(self, "%s = \"%s\";\n", var, mos_string_str(&node->symbol.name));
+        out_put_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
         break;
 
     case ast_i64:
@@ -492,7 +492,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     for (u32 i = 0; i < node->let.n_parameters; ++i) {
         if (a_result_type_of(self, node->let.parameters[i]->type)) return 1;
         out_put(self, " ");
-        out_put(self, mos_string_str(&node->let.parameters[i]->symbol.name));
+        out_put(self, ast_node_name_string(node->let.parameters[i]));
         if (i < node->let.n_parameters - 1) out_put(self, ", ");
     }
     out_put(self, ")");

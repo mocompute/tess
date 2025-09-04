@@ -103,7 +103,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     if (ast_user_defined_type != node->tag) return;
     if (node->user_type.field_types) return;
 
-    char const *type_name = mos_string_str(&node->user_type.name->symbol.name);
+    char const *type_name = ast_node_name_string(node->user_type.name);
 
     if (type_registry_find(self->type_registry, type_name)) {
         syntax_error(self, node, tess_err_type_exists, alloc_strdup(self->arena, type_name));

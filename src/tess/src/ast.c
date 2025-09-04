@@ -280,7 +280,7 @@ sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
         type = sexp_init_sym(alloc, buf);
     }
     return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                 sexp_init_sym(alloc, mos_string_str(&node->symbol.name)), type);
+                                 sexp_init_sym(alloc, ast_node_name_string(node)), type);
 }
 
 sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
@@ -334,7 +334,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_u64:    return triple(alloc, sym("u64"), sexp_init_u64(alloc, node->u64.val), type);
     case ast_f64:    return triple(alloc, sym("f64"), sexp_init_f64(alloc, node->f64.val), type);
 
-    case ast_string: return triple(alloc, sym("string"), sym(mos_string_str(&node->symbol.name)), type);
+    case ast_string: return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
     case ast_infix:
         return penta(alloc, sym("infix"), sym(ast_operator_to_string(node->infix.op)),

@@ -227,7 +227,7 @@ static void rename_array_elements(struct rename_variables_ctx *self, ast_node **
         string_t var_name;
         next_variable_name(self, &var_name);
 
-        map_set(&self->map, mos_string_str(&name->symbol.name), (u16)mos_string_size(&name->symbol.name),
+        map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
                 &var_name);
 
         // rename the actual parameter symbol
@@ -269,7 +269,7 @@ static void rename_variables(struct rename_variables_ctx *self, ast_node *node) 
         ast_node const *name = node->let_in.name;
         assert(ast_symbol == name->tag);
 
-        map_set(&self->map, mos_string_str(&name->symbol.name), (u16)mos_string_size(&name->symbol.name),
+        map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
                 &var_name);
 
         rename_variables(self, node->let_in.name);
@@ -738,7 +738,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_user_defined_type: break;
 
     case ast_symbol:            {
-        char const *name_str = mos_string_str(&node->symbol.name);
+        char const *name_str = ast_node_name_string(node);
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
