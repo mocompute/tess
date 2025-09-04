@@ -1,6 +1,7 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
+#include "array.h"
 #include "token.h"
 
 #include <assert.h>
@@ -39,6 +40,8 @@ tokenizer *tokenizer_create(allocator *alloc, char const *input, size_t len) {
 
     self->buf       = (char_array){.alloc = alloc};
     self->backtrack = (token_array){.alloc = alloc};
+    array_reserve(self->buf, 32);
+    array_reserve(self->backtrack, 8);
 
     return self;
 }
