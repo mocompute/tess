@@ -18,8 +18,8 @@
 #define CONSTRAINTS_SIZE   1024
 
 struct constraint {
-    struct tess_type *left;
-    struct tess_type *right;
+    tess_type *left;
+    tess_type *right;
 };
 
 typedef struct {
@@ -91,7 +91,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
     self->constraints      = (constraint_array){.alloc = self->type_arena};
     self->substitutions    = (constraint_array){.alloc = self->type_arena};
 
-    self->symbols          = map_create(self->type_arena, sizeof(struct tess_type *));
+    self->symbols          = map_create(self->type_arena, sizeof(tess_type *));
 
     self->unify_monotypes  = true;
     self->next_type_var    = 1; // 0 is not valid
@@ -350,7 +350,7 @@ static void ti_rename_variables(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static bool apply_one_substitution(struct tess_type **type, struct tess_type *from, struct tess_type *to) {
+static bool apply_one_substitution(tess_type **type, tess_type *from, tess_type *to) {
     bool did_substitute = false;
 
     assert(type && *type);
@@ -496,8 +496,8 @@ static bool unify_one(ti_inferer *self, struct constraint c) {
     if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
-        struct tess_type *orig      = type_type_var == c.left->tag ? c.left : c.right;
-        struct tess_type *other     = type_type_var == c.left->tag ? c.right : c.left;
+        tess_type        *orig      = type_type_var == c.left->tag ? c.left : c.right;
+        tess_type        *other     = type_type_var == c.left->tag ? c.right : c.left;
 
         struct constraint candidate = {orig, other};
 
@@ -608,9 +608,9 @@ void ti_run_solver(ti_inferer *self) {
 
 void do_assign_type_variables(ti_inferer *self, ast_node *node) {
     if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        struct tess_type *left  = tess_type_create_type_var(self->type_arena, self->next_type_var++);
-        struct tess_type *right = tess_type_create_type_var(self->type_arena, self->next_type_var++);
-        struct tess_type *arrow = tess_type_create_arrow(self->type_arena, left, right);
+        tess_type *left  = tess_type_create_type_var(self->type_arena, self->next_type_var++);
+        tess_type *right = tess_type_create_type_var(self->type_arena, self->next_type_var++);
+        tess_type *arrow = tess_type_create_arrow(self->type_arena, left, right);
 
         if (ast_lambda_function == node->tag) {
             node->type = arrow;
@@ -620,8 +620,8 @@ void do_assign_type_variables(ti_inferer *self, ast_node *node) {
         }
 
     } else {
-        struct tess_type *tv = tess_type_create_type_var(self->type_arena, self->next_type_var++);
-        node->type           = tv;
+        tess_type *tv = tess_type_create_type_var(self->type_arena, self->next_type_var++);
+        node->type    = tv;
     }
 }
 
@@ -638,8 +638,8 @@ void ti_assign_type_variables(ti_inferer *self) {
 
 // -- collect_constraints --
 
-static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
-    struct tess_type *tuple = tess_type_create_tuple(alloc, n);
+static tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
+    tess_type *tuple = tess_type_create_tuple(alloc, n);
     assert(!n || tuple->elements);
 
     for (u16 i = 0; i < n; ++i) tuple->elements[i] = arguments[i]->type;
@@ -647,7 +647,7 @@ static struct tess_type *arguments_to_tuple_type(allocator *alloc, ast_node cons
     return tuple;
 }
 
-static bool is_type_compatible(struct tess_type const *a, struct tess_type const *b, bool strict) {
+static bool is_type_compatible(tess_type const *a, tess_type const *b, bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
@@ -683,8 +683,8 @@ static bool is_type_compatible(struct tess_type const *a, struct tess_type const
     }
 }
 
-static ast_node *find_let_node(char const *name, struct tess_type **elements, u32 n_elements,
-                               ast_node *nodes[], u32 count, bool strict) {
+static ast_node *find_let_node(char const *name, tess_type **elements, u32 n_elements, ast_node *nodes[],
+                               u32 count, bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
@@ -703,12 +703,12 @@ static ast_node *find_let_node(char const *name, struct tess_type **elements, u3
 
         assert(type_tuple == candidate->let.arrow->left->tag);
 
-        struct tess_type *params = candidate->let.arrow->left;
+        tess_type *params = candidate->let.arrow->left;
         if (n_elements != params->n_elements) continue;
 
         for (u32 j = 0; j < n_elements; ++j) {
-            struct tess_type *el    = elements[j];
-            struct tess_type *param = params->elements[j];
+            tess_type *el    = elements[j];
+            tess_type *param = params->elements[j];
             if (!is_type_compatible(el, param, strict)) goto skip;
         }
 
@@ -742,7 +742,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
-        struct tess_type **found = map_get(ctx->symbols, name_str, name_len);
+        tess_type **found = map_get(ctx->symbols, name_str, name_len);
 
         if (found) {
             push(node->type, *found);
@@ -761,7 +761,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_string: push(node->type, tess_type_prim(type_string)); break;
 
     case ast_tuple:  {
-        struct tess_type *els =
+        tess_type *els =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->type, els);
@@ -794,7 +794,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(node->let.arrow->tag == type_arrow);
 
         // left side of arrow is same as parameter tuple type
-        struct tess_type *params =
+        tess_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->let.arrow->left, params);
@@ -818,7 +818,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // argument tuple must be same type as parameter tuple
         assert(type_arrow == node->type->tag);
 
-        struct tess_type *tup =
+        tess_type *tup =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         push(node->type->left, tup);
 
@@ -837,9 +837,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_lambda_function == lambda->tag);
 
         // arguments must match parameters
-        struct tess_type *args =
+        tess_type *args =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        struct tess_type *params =
+        tess_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)lambda->array.nodes, lambda->array.n);
 
         push(args, params);
@@ -861,7 +861,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
             assert(fun && fun->tag == ast_let);
             assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
-            struct tess_type *args_type =
+            tess_type *args_type =
               arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->named_application.arguments,
                                       node->named_application.n_arguments);
 
@@ -914,8 +914,7 @@ static void reassign_typevars(void *ctx, ast_node *node) {
     node->type = tess_type_create_type_var(ti->type_arena, ti->next_type_var++);
 }
 
-static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node *src,
-                                  struct tess_type *args) {
+static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node *src, tess_type *args) {
 
     allocator *alloc = ctx->ti->type_arena;
 
@@ -964,7 +963,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
 
     // does a specialised function already exist?
 
-    struct tess_type *args_ty = arguments_to_tuple_type(
+    tess_type *args_ty = arguments_to_tuple_type(
       alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
 
     ast_node *let = null;

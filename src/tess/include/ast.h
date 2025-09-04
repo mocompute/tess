@@ -76,7 +76,7 @@ typedef struct ast_node {
             u16               n_parameters;
             struct string     name;
             struct ast_node  *body;
-            struct tess_type *arrow;            // because the node type itself is nil
+            tess_type        *arrow;            // because the node type itself is nil
             struct string     specialized_name; // set during function specialisation
         } let;
 
@@ -105,15 +105,15 @@ typedef struct ast_node {
         } tuple;
 
         struct {
-            struct ast_node   *name;
-            struct ast_node  **field_annotations;
-            struct ast_node  **field_names;
-            struct tess_type **field_types;
-            u16                n_fields;
+            struct ast_node  *name;
+            struct ast_node **field_annotations;
+            struct ast_node **field_names;
+            tess_type       **field_types;
+            u16               n_fields;
         } user_type;
     };
 
-    struct tess_type   *type;
+    tess_type          *type;
     ast_tag             tag;
     enum tess_error_tag error;
 } ast_node;

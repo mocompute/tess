@@ -237,7 +237,7 @@ char const *ast_operator_to_string(ast_operator);
 
 //
 
-// static sexp tess_type_to_sexp(allocator *alloc, struct tess_type const *type) {
+// static sexp tess_type_to_sexp(allocator *alloc, tess_type const *type) {
 //     // TODO this could be better in tess_type.h but that would require
 //     // exposing sexp to that header.
 //     switch (type->tag) {

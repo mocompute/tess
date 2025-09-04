@@ -7,73 +7,71 @@
 
 // -- tess_type allocation and deallocation --
 
-struct tess_type tess_type_init(tess_type_tag tag) {
-    struct tess_type self;
+tess_type tess_type_init(tess_type_tag tag) {
+    tess_type self;
     alloc_zero(&self);
     self.tag = tag;
     return self;
 }
 
-struct tess_type tess_type_init_type_var(u32 val) {
-    struct tess_type self;
+tess_type tess_type_init_type_var(u32 val) {
+    tess_type self;
     self          = tess_type_init(type_type_var);
     self.type_var = val;
     return self;
 }
 
-struct tess_type *tess_type_create_type_var(allocator *alloc, u32 val) {
-    struct tess_type *self = alloc_struct(alloc, self);
-    *self                  = tess_type_init_type_var(val);
+tess_type *tess_type_create_type_var(allocator *alloc, u32 val) {
+    tess_type *self = alloc_struct(alloc, self);
+    *self           = tess_type_init_type_var(val);
     return self;
 }
 
-struct tess_type tess_type_init_tuple() {
-    struct tess_type self = tess_type_init(type_tuple);
+tess_type tess_type_init_tuple() {
+    tess_type self = tess_type_init(type_tuple);
     return self;
 }
 
-struct tess_type *tess_type_create_tuple(allocator *alloc, u16 size) {
-    struct tess_type *self = alloc_struct(alloc, self);
-    *self                  = tess_type_init_tuple();
-    self->n_elements       = size;
+tess_type *tess_type_create_tuple(allocator *alloc, u16 size) {
+    tess_type *self  = alloc_struct(alloc, self);
+    *self            = tess_type_init_tuple();
+    self->n_elements = size;
     if (size) self->elements = alloc_calloc(alloc, size, sizeof *self->elements);
     return self;
 }
 
-struct tess_type tess_type_init_arrow(struct tess_type *left, struct tess_type *right) {
-    struct tess_type self = tess_type_init(type_arrow);
-    self.left             = left;
-    self.right            = right;
+tess_type tess_type_init_arrow(tess_type *left, tess_type *right) {
+    tess_type self = tess_type_init(type_arrow);
+    self.left      = left;
+    self.right     = right;
     return self;
 }
 
-struct tess_type *tess_type_create_arrow(allocator *alloc, struct tess_type *left,
-                                         struct tess_type *right) {
-    struct tess_type *self = alloc_struct(alloc, self);
-    *self                  = tess_type_init_arrow(left, right);
+tess_type *tess_type_create_arrow(allocator *alloc, tess_type *left, tess_type *right) {
+    tess_type *self = alloc_struct(alloc, self);
+    *self           = tess_type_init_arrow(left, right);
     return self;
 }
 
-struct tess_type tess_type_init_user_type(char const *name, struct tess_type **fields,
-                                          char const **field_names, u16 n) {
+tess_type tess_type_init_user_type(char const *name, tess_type **fields, char const **field_names, u16 n) {
 
-    struct tess_type self = tess_type_init(type_user);
-    self.name             = name;
-    self.fields           = fields;
-    self.field_names      = field_names;
-    self.n_fields         = n;
+    tess_type self   = tess_type_init(type_user);
+    self.name        = name;
+    self.fields      = fields;
+    self.field_names = field_names;
+    self.n_fields    = n;
     return self;
 }
 
-struct tess_type *tess_type_create_user_type(allocator *alloc, char const *name, struct tess_type **fields,
-                                             char const **field_names, u16 n) {
+tess_type *tess_type_create_user_type(allocator *alloc, char const *name, tess_type **fields,
+                                      char const **field_names, u16 n) {
 
-    struct tess_type *self = alloc_struct(alloc, self);
-    *self                  = tess_type_init_user_type(name, fields, field_names, n);
+    tess_type *self = alloc_struct(alloc, self);
+    *self           = tess_type_init_user_type(name, fields, field_names, n);
     return self;
 }
 
-void tess_type_deinit(allocator *alloc, struct tess_type *self) {
+void tess_type_deinit(allocator *alloc, tess_type *self) {
     switch (self->tag) {
     case type_nil:
     case type_bool:
@@ -100,13 +98,13 @@ void tess_type_deinit(allocator *alloc, struct tess_type *self) {
     alloc_invalidate(self);
 }
 
-struct tess_type *tess_type_prim(tess_type_tag tag) {
-    static struct tess_type nil_type    = {.tag = type_nil};
-    static struct tess_type bool_type   = {.tag = type_bool};
-    static struct tess_type int_type    = {.tag = type_int};
-    static struct tess_type float_type  = {.tag = type_float};
-    static struct tess_type string_type = {.tag = type_string};
-    static struct tess_type any_type    = {.tag = type_any};
+tess_type *tess_type_prim(tess_type_tag tag) {
+    static tess_type nil_type    = {.tag = type_nil};
+    static tess_type bool_type   = {.tag = type_bool};
+    static tess_type int_type    = {.tag = type_int};
+    static tess_type float_type  = {.tag = type_float};
+    static tess_type string_type = {.tag = type_string};
+    static tess_type any_type    = {.tag = type_any};
 
     switch (tag) {
     case type_nil:    return &nil_type;
@@ -126,7 +124,7 @@ struct tess_type *tess_type_prim(tess_type_tag tag) {
     assert(false);
 }
 
-bool tess_type_is_prim(struct tess_type const *self) {
+bool tess_type_is_prim(tess_type const *self) {
     switch (self->tag) {
     case type_nil:
     case type_bool:
@@ -142,11 +140,11 @@ bool tess_type_is_prim(struct tess_type const *self) {
     assert(false);
 }
 
-bool tess_type_equal(struct tess_type const *left, struct tess_type const *right) {
+bool tess_type_equal(tess_type const *left, tess_type const *right) {
     return tess_type_compare(left, right) == 0;
 }
 
-int tess_type_compare(struct tess_type const *left, struct tess_type const *right) {
+int tess_type_compare(tess_type const *left, tess_type const *right) {
     if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
 
     switch (left->tag) {
@@ -193,7 +191,7 @@ int tess_type_compare(struct tess_type const *left, struct tess_type const *righ
     }
 }
 
-int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
+int tess_type_snprint(char *buf, int sz, tess_type const *self) {
     int len = -1;
 
     if (null == self) return snprintf(buf, (size_t)sz, "[null]");
@@ -268,7 +266,7 @@ int tess_type_snprint(char *buf, int sz, struct tess_type const *self) {
     return len;
 }
 
-char *tess_type_to_string(allocator *alloc, struct tess_type const *type) {
+char *tess_type_to_string(allocator *alloc, tess_type const *type) {
     int   len = tess_type_snprint(null, 0, type) + 1;
     char *out = alloc_malloc(alloc, (size_t)len);
     tess_type_snprint(out, len, type);

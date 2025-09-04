@@ -9,8 +9,8 @@
 typedef struct type_registry type_registry;
 
 struct type_entry {
-    char const       *name;
-    struct tess_type *type;
+    char const *name;
+    tess_type  *type;
 };
 
 typedef struct {
