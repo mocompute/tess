@@ -30,6 +30,7 @@ typedef struct {
 
 #define array_reserve(p, n) p.v = array_reserve_impl(&p, p.v, (n), sizeof p.v[0], alignof(p.v[0]))
 #define array_push(p, x)                                                                                   \
+    static_assert(sizeof((x)[0]) == sizeof((p).v[0]), "size mismatch");                                    \
     (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x));
 #define array_push_val(p, x)                                                                               \
     do {                                                                                                   \

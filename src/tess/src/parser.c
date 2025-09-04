@@ -9,7 +9,6 @@
 #include "mos_string.h"
 #include "token.h"
 #include "tokenizer.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -39,11 +38,6 @@ struct parser {
 
     bool                   verbose;
     int                    indent_level;
-};
-
-struct token_iterator {
-    struct vector_iterator_base base;
-    struct token               *ptr;
 };
 
 static void tokens_push_back(struct parser *, struct token *);
@@ -660,10 +654,8 @@ static int function_declaration(parser *p) {
 
     if (a_try(p, a_identifier)) return 1;
 
-    ast_node *const name = p->result; // function name
-
-    vector          parameters;
-    ast_vector_init(&parameters);
+    ast_node *const name       = p->result; // function name
+    ast_node_array  parameters = {.alloc = p->parser_arena};
 
     // check: f () declares function with no parameters
     if (0 == a_try(p, a_nil)) {
@@ -681,14 +673,12 @@ static int function_declaration(parser *p) {
     // must have at least one parameter
     if (a_try(p, a_identifier_typed)) return 1;
 
-    struct ast_node_iterator iter = {.ptr = &p->result};
-    vec_iterator_init(&parameters, &iter.base);
-    vec_push_back(p->parser_arena, &parameters, &iter.base);
+    array_push(parameters, &p->result);
 
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
         if (0 == a_try(p, a_identifier_typed)) {
-            vec_push_back(p->parser_arena, &parameters, &iter.base);
+            array_push(parameters, &p->result);
             continue;
         }
 
@@ -696,7 +686,10 @@ static int function_declaration(parser *p) {
 
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
-            vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->array.nodes, &node->array.n);
+
+            array_shrink(parameters);
+            node->array.nodes = parameters.v;
+            node->array.n     = (u16)parameters.size;
 
             log(p, "function_declaration: returning %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
@@ -711,22 +704,21 @@ static int function_declaration(parser *p) {
 static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
-    vector parameters;
-    ast_vector_init(&parameters);
+    ast_node_array parameters = {.alloc = p->parser_arena};
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
         if (0 == a_try(p, a_identifier_typed)) {
-            struct ast_node_iterator iter = {.ptr = &p->result};
-            vec_iterator_init(&parameters, &iter.base);
-            vec_push_back(p->parser_arena, &parameters, &iter.base);
+            array_push(parameters, &p->result);
             continue;
         }
 
         if (0 == a_try(p, a_arrow)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
 
-            vec_move_plain_u16(p->parser_arena, &parameters, (void **)&node->array.nodes, &node->array.n);
+            array_shrink(parameters);
+            node->array.nodes = parameters.v;
+            node->array.n     = (u16)parameters.size;
 
             return result_ast_node(p, node);
         }
@@ -750,19 +742,16 @@ static int function_application(parser *p) {
     ast_node *const name = p->result;
     assert(ast_symbol == name->tag);
 
-    vector arguments;
-    ast_vector_init(&arguments);
+    ast_node_array arguments = {.alloc = p->parser_arena};
 
     // must have at least one argument
     if (a_try(p, function_argument)) return 1;
 
-    struct ast_node_iterator iter = {.ptr = &p->result};
-    vec_iterator_init(&arguments, &iter.base);
-    vec_push_back(p->parser_arena, &arguments, &iter.base);
+    array_push(arguments, &p->result);
 
     while (true) {
         if (0 == a_try(p, function_argument)) {
-            vec_push_back(p->parser_arena, &arguments, &iter.base);
+            array_push(arguments, &p->result);
             continue;
         }
 
@@ -773,7 +762,9 @@ static int function_application(parser *p) {
             ast_node *node = ast_node_create(p->ast_arena, ast_named_function_application);
             mos_string_copy(p->ast_arena, &node->named_application.name, &name->symbol.name);
 
-            vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->array.nodes, &node->array.n);
+            array_shrink(arguments);
+            node->array.nodes = arguments.v;
+            node->array.n     = (u16)arguments.size;
 
             log(p, "function_application: got %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
@@ -921,18 +912,15 @@ static int lambda_function_application(parser *p) {
     }
 
     // there must be at least one argument
-    vector arguments;
-    ast_vector_init(&arguments);
+    ast_node_array arguments = {.alloc = p->parser_arena};
 
     if (a_try(p, function_argument)) return 1;
 
-    struct ast_node_iterator iter = {.ptr = &p->result};
-    vec_iterator_init(&arguments, &iter.base);
-    vec_push_back(p->parser_arena, &arguments, &iter.base);
+    array_push(arguments, &p->result);
 
     while (true) {
         if (0 == a_try(p, function_argument)) {
-            vec_push_back(p->parser_arena, &arguments, &iter.base);
+            array_push(arguments, &p->result);
             continue;
         }
 
@@ -940,7 +928,9 @@ static int lambda_function_application(parser *p) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
             node->lambda_application.lambda = lambda;
 
-            vec_move_plain_u16(p->parser_arena, &arguments, (void **)&node->array.nodes, &node->array.n);
+            array_shrink(arguments);
+            node->array.nodes = arguments.v;
+            node->array.n     = (u16)arguments.size;
 
             return result_ast_node(p, node);
         }
@@ -1024,17 +1014,15 @@ static int tuple_expression(parser *p) {
 
     if (a_try(p, a_open_round)) return 1;
 
-    vector elements;
-    ast_vector_init(&elements);
+    ast_node_array elements = {.alloc = p->parser_arena};
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
     if (a_try(p, expression)) return 1;
 
-    struct ast_node_iterator iter = {.ptr = &p->result};
-    vec_iterator_init(&elements, &iter.base);
-    vec_push_back(p->parser_arena, &elements, &iter.base);
+    array_push(elements, &p->result);
+
     if (a_comma(p)) goto cleanup;
 
     int count = 0;
@@ -1044,7 +1032,9 @@ static int tuple_expression(parser *p) {
         if (0 == a_try(p, a_close_round)) {
             ast_node *node = ast_node_create(p->ast_arena, ast_tuple);
 
-            vec_move_plain_u16(p->parser_arena, &elements, (void **)&node->array.nodes, &node->array.n);
+            array_shrink(elements);
+            node->array.nodes = elements.v;
+            node->array.n     = (u16)elements.size;
 
             return result_ast_node(p, node);
         }
@@ -1055,14 +1045,14 @@ static int tuple_expression(parser *p) {
 
         // expression
         if (0 == a_try(p, expression)) {
-            vec_push_back(p->ast_arena, &elements, &iter.base);
+            array_push(elements, &p->result);
         }
 
         // loop to check for close round, or else
     }
 
 cleanup:
-    vec_deinit(p->parser_arena, &elements);
+    array_free(elements);
     return 1;
 }
 

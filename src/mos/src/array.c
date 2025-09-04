@@ -1,22 +1,28 @@
 #include "array.h"
 #include "alloc.h"
+
+#include <assert.h>
 #include <string.h>
 
 void *array_alloc_impl(array_header_t *h, u32 num, u32 width, u16 align) {
+    assert(h->alloc);
     width = (u32)alloc_align(width, align);
     return alloc_malloc(h->alloc, num * width);
 }
 
 void array_free_impl(array_header_t *h, void *ptr) {
+    assert(h->alloc);
     alloc_free(h->alloc, ptr);
 }
 
 void *array_realloc(array_header_t *h, void *ptr, u32 num, u32 width, u16 align) {
+    assert(h->alloc);
     width = (u32)alloc_align(width, align);
     return alloc_realloc(h->alloc, ptr, num * width);
 }
 
 void *array_reserve_impl(array_header_t *h, void *ptr, u32 num, u32 width, u16 align) {
+    assert(h->alloc);
     width = (u32)alloc_align(width, align);
     if (num > h->capacity) {
         void *new_ptr = ptr;
@@ -30,6 +36,7 @@ void *array_reserve_impl(array_header_t *h, void *ptr, u32 num, u32 width, u16 a
 
 void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
                       void const *restrict data) {
+    assert(h->alloc);
     if (h->size == h->capacity) {
         u32 new_cap = h->capacity ? h->capacity * 2 : 8;
         ptr         = array_reserve_impl(h, ptr, new_cap, width, align);
@@ -57,6 +64,7 @@ void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *
 }
 
 void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
+    assert(h->alloc);
     if (h->capacity == h->size) return ptr;
 
     ptr         = array_realloc(h, ptr, h->size, width, align);

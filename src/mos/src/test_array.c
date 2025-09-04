@@ -18,7 +18,8 @@ int test_array(void) {
     int       data  = 1;
 
     array_push(arr, &data);
-    data = 2, array_push(arr, &data);
+    data = 2;
+    array_push(arr, &data);
     error += arr.v[0] == 1 ? 0 : 1;
     error += arr.v[1] == 2 ? 0 : 1;
 
