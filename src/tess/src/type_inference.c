@@ -32,7 +32,7 @@ struct ti_inferer {
     allocator       *strings;
 
     ast_node_array  *in_out_nodes;
-    ast_node_array   nodes;
+    ast_node_array   nodes; // a shallow copy of in_out_nodes
 
     constraint_array constraints;
     constraint_array substitutions;
