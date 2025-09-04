@@ -193,6 +193,7 @@ nodiscard static int eat_newlines(parser *p) {
 
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
+            log(p, "eat_newlines: tokenizer error: %s", tess_error_tag_to_string(p->tokenizer_error.tag));
             p->error.tag = tess_err_tokenizer_error;
             return 1;
         }
@@ -987,9 +988,11 @@ static int let_form(parser *p) {
     if (a_try_s(p, the_symbol, "let")) return 1;
     if (a_try(p, function_declaration)) return 1;
     ast_node *decl = p->result;
+    log(p, "let_form: declaration: %s", ast_node_to_string(p->debug_arena, p->result));
 
     if (a_try(p, function_definition)) return 1;
     ast_node *defn = p->result;
+    log(p, "let_form: definition: %s", ast_node_to_string(p->debug_arena, p->result));
 
     ast_node *node = ast_node_create(p->ast_arena, ast_let);
 
@@ -1067,7 +1070,10 @@ static int grouped_expression(parser *p) {
 
 static int expression(parser *p) {
 
-    if (eat_newlines(p)) return 1;
+    if (eat_newlines(p)) {
+        log(p, "expression: eat_newlines error");
+        return 1;
+    }
 
     p->indent_level++;
 
