@@ -14,6 +14,7 @@ struct type_registry {
 
 // static int     compare_types(const void *, const void *);
 // static int     compare_type_entries(const void *, const void *);
+
 static int     compare_type_entry_names(const void *, const void *);
 static void    sorted_insert(type_entry_array *, struct type_entry);
 static void    register_basic_types(type_registry *);
