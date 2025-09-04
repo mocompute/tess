@@ -1,5 +1,6 @@
 #include "ast.h"
 #include "alloc.h"
+#include "array.h"
 #include "ast_tags.h"
 #include "dbg.h"
 #include "mos_string.h"
@@ -604,6 +605,13 @@ char *ast_node_to_string_for_error(allocator *alloc, ast_node const *node) {
     char *out  = sexp_to_string(alloc, expr);
     sexp_deinit(alloc, &expr);
     return out;
+}
+
+c_string_cslice ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
+    c_string_cslice strings = {.v = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0])};
+    for (u32 i = nodes.begin; i < nodes.end; ++i)
+        strings.v[strings.begin + i - nodes.begin] = ast_node_name_string(nodes.v[i]);
+    return strings;
 }
 
 static void validate_one_node(void *ctx, ast_node *node) {

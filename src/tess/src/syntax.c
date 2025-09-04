@@ -110,8 +110,9 @@ static void register_user_type(void *ctx, ast_node *node) {
         return;
     }
 
-    u16 const    n_fields    = node->user_type.n_fields;
-    char const **field_names = null;
+    u16 const       n_fields    = node->user_type.n_fields;
+    c_string_cslice field_names = {0};
+
     if (n_fields) {
 
         // convert symbol annotations to actual types
@@ -131,17 +132,14 @@ static void register_user_type(void *ctx, ast_node *node) {
             field_types[i] = te->type;
         }
 
-        // convert field names from ast symbols to simple strings
-
-        field_names = alloc_calloc(self->arena, n_fields, sizeof field_names[0]);
-        for (u16 i = 0; i < n_fields; ++i)
-            field_names[i] = ast_node_name_string(node->user_type.field_names[i]);
+        field_names = ast_nodes_get_names(
+          self->arena, (ast_node_slice){.v = node->user_type.field_names, .end = n_fields});
     }
 
     // make the user type and register it
 
     tess_type *user_type = tess_type_create_user_type(self->arena, type_name, node->user_type.field_types,
-                                                      field_names, n_fields);
+                                                      field_names.v, n_fields);
 
     if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
         fatal("syntax_register_user_types: unexpected failure");
@@ -160,7 +158,7 @@ static void check_annotation(void *ctx, ast_node *node) {
     if (ast_symbol != node->tag) return;
     if (!node->symbol.annotation) return;
 
-    char const        *str = mos_string_str(&node->symbol.annotation->symbol.name);
+    char const        *str = ast_node_name_string(node->symbol.annotation);
     struct type_entry *te  = type_registry_find(self->type_registry, str);
     if (!te) {
 
@@ -187,6 +185,5 @@ static void syntax_error(struct syntax_checker *self, ast_node *node, enum tess_
                          char const *message) {
 
     node->error = tag;
-
     array_push_val(self->errors, ((struct syntax_error){node, message}));
 }

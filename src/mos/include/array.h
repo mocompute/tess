@@ -42,6 +42,16 @@ typedef struct {
     char **v;
 } c_string_array;
 
+typedef struct {
+    array_slice;
+    char **v;
+} c_string_slice;
+
+typedef struct {
+    array_slice;
+    char const **v;
+} c_string_cslice;
+
 // -- interface --
 
 #define array_reserve(p, n)                                                                                \
