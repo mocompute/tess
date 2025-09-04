@@ -149,7 +149,6 @@ int                 ast_node_name_strcmp(ast_node const *, char const *);
 
 char       *ast_node_to_string(allocator *alloc, ast_node const *node);
 char       *ast_node_to_string_for_error(allocator *, ast_node const *);
-void        ast_vector_init(vector *);
 
 char const *ast_tag_to_string(ast_tag);
 int         string_to_ast_operator(char const *, ast_operator *);

@@ -592,10 +592,6 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
     return 1;
 }
 
-void ast_vector_init(vector *vec) {
-    *vec = VEC(ast_node *);
-}
-
 char *ast_node_to_string(allocator *alloc, ast_node const *node) {
     sexp  expr = ast_node_to_sexp(alloc, node);
     char *out  = sexp_to_string(alloc, expr);
