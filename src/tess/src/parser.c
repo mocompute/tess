@@ -28,9 +28,7 @@ struct parser {
 
     ast_node              *result;
 
-    struct token          *tokens; // (token) for backtracking
-    u32                    n_tokens;
-    u32                    cap_tokens;
+    token_array            tokens;
 
     struct parser_error    error;
     struct tokenizer_error tokenizer_error;
@@ -60,9 +58,7 @@ parser *parser_create(allocator *alloc, char const *input, size_t input_len) {
     self->tokenizer = tokenizer_create(alloc, input, input_len);
 
     // good_tokens
-    self->cap_tokens = 16;
-    self->n_tokens   = 0;
-    self->tokens     = alloc_calloc(self->parser_arena, self->cap_tokens, sizeof self->tokens[0]);
+    self->tokens = (token_array){.alloc = self->parser_arena};
 
     // error
     token_init(&self->token, tok_invalid);
@@ -233,15 +229,15 @@ nodiscard static int next_token(parser *p) {
 
 nodiscard static int a_try(parser *p, parse_fun fun) {
     int       result    = 0;
-    u32 const save_toks = p->n_tokens;
+    u32 const save_toks = p->tokens.size;
 
     if (fun(p)) {
-        assert(p->n_tokens >= save_toks);
-        if (p->n_tokens > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
+        assert(p->tokens.size >= save_toks);
+        if (p->tokens.size > save_toks) {
+            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
-            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
         result = 1;
@@ -255,14 +251,14 @@ cleanup:
 }
 
 static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
-    u32 const save_toks = p->n_tokens;
+    u32 const save_toks = p->tokens.size;
     if (fun(p, arg)) {
-        if (p->n_tokens > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
+        if (p->tokens.size > save_toks) {
+            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
 
-            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
 
@@ -276,15 +272,15 @@ static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
 nodiscard static int a_try_special(parser *p, parse_fun fun) {
     // if fun returns 2, tokens are restored as in the failure case,
     // but this function returns success.
-    u32 const save_toks = p->n_tokens;
+    u32 const save_toks = p->tokens.size;
     int const res       = fun(p);
     if (res) {
-        if (p->n_tokens > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->n_tokens - save_toks, str);
+        if (p->tokens.size > save_toks) {
+            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
 
-            tokenizer_put_back(p->tokenizer, &p->tokens[save_toks], p->n_tokens - save_toks);
+            tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
         return res == 2 ? 0 : 1;
@@ -1078,9 +1074,9 @@ static int expression(parser *p) {
     log(p, "expression: try lambda");
     if (0 == a_try(p, &lambda_function_application)) goto cleanup;
 
-    log(p, "expression: try infix, n_tokens = %u", p->n_tokens);
+    log(p, "expression: try infix, n_tokens = %u", p->tokens.size);
     if (0 == a_try(p, &infix_operation)) goto cleanup;
-    log(p, "expression: not infix, n_tokens = %u", p->n_tokens);
+    log(p, "expression: not infix, n_tokens = %u", p->tokens.size);
 
     log(p, "expression: try tuple");
     if (0 == a_try(p, &tuple_expression)) goto cleanup;
@@ -1190,11 +1186,11 @@ void parser_result(parser *p, ast_node **handle) {
 }
 
 static void tokens_push_back(struct parser *p, struct token *tok) {
-    alloc_push_back(p->parser_arena, &p->tokens, &p->n_tokens, &p->cap_tokens, tok);
+    array_push(p->tokens, tok);
 }
 
 static void tokens_shrink(struct parser *p, u32 n) {
-    p->n_tokens = n;
+    p->tokens.size = n;
 }
 
 void parser_report_errors(parser *self) {

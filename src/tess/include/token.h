@@ -2,6 +2,7 @@
 #define TESS_TOKEN_H
 
 #include "alloc.h"
+#include "array.h"
 #include "types.h"
 
 #ifndef MOS_TAG_NAME
@@ -34,6 +35,11 @@ typedef struct token {
     };
     token_tag tag;
 } token;
+
+typedef struct {
+    array_header;
+    struct token *v;
+} token_array;
 
 // -- allocation and deallocation --
 

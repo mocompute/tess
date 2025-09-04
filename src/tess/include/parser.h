@@ -6,7 +6,6 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
-#include "type_registry.h"
 
 typedef struct parser parser;
 
