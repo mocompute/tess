@@ -57,6 +57,9 @@ typedef struct {
     (p).v =                                                                                                \
       array_insert_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]), (xs), (n))
 
+#define array_erase(p, i)                                                                                  \
+    array_erase_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]))
+
 #define array_shrink(p)                                                                                    \
     (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof(p.v[0]))
 
@@ -70,6 +73,8 @@ nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32
 nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
                                   void *restrict, u32);
 nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
+
+void            array_erase_impl(array_header_t *h, void *ptr, u32 index, u32, u16);
 void            array_free_impl(array_header_t *, void *);
 
 #endif

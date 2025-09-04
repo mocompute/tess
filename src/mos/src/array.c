@@ -78,6 +78,16 @@ void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32 wi
     return ptr;
 }
 
+void array_erase_impl(array_header_t *h, void *ptr, u32 index, u32 width, u16 align) {
+    assert(index < h->size);
+
+    size_t aligned = alloc_align(width, align);
+
+    memmove(&ptr[index * aligned], &ptr[(index + 1) * aligned], (h->size - index - 1) * aligned);
+
+    h->size--;
+}
+
 void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
     assert(h->alloc);
     if (h->capacity == h->size) return ptr;

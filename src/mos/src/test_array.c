@@ -10,7 +10,7 @@ typedef struct {
     int *v;
 } int_array;
 
-int test_array(void) {
+static int test_array(void) {
     int       error = 0;
 
     int_array arr   = {.alloc = alloc_leak_detector_create()};
@@ -29,6 +29,72 @@ int test_array(void) {
     return error;
 }
 
+static int test_array_erase(void) {
+    int error = 0;
+
+    {
+        int_array arr = {.alloc = alloc_leak_detector_create()};
+
+        int       x   = 0;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+
+        array_erase(arr, 0);
+
+        error += arr.size == 2 ? 0 : 1;
+        error += arr.v[0] == 1 ? 0 : 1;
+        error += arr.v[1] == 2 ? 0 : 1;
+
+        array_free(arr);
+        alloc_leak_detector_destroy(&arr.alloc);
+    }
+
+    {
+        int_array arr = {.alloc = alloc_leak_detector_create()};
+
+        int       x   = 0;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+
+        array_erase(arr, 1);
+
+        error += arr.size == 2 ? 0 : 1;
+        error += arr.v[0] == 0 ? 0 : 1;
+        error += arr.v[1] == 2 ? 0 : 1;
+
+        array_free(arr);
+        alloc_leak_detector_destroy(&arr.alloc);
+    }
+
+    {
+        int_array arr = {.alloc = alloc_leak_detector_create()};
+
+        int       x   = 0;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+        x++;
+        array_push(arr, &x);
+
+        array_erase(arr, 2);
+
+        error += arr.size == 2 ? 0 : 1;
+        error += arr.v[0] == 0 ? 0 : 1;
+        error += arr.v[1] == 1 ? 0 : 1;
+
+        array_free(arr);
+        alloc_leak_detector_destroy(&arr.alloc);
+    }
+
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -41,6 +107,7 @@ int main(void) {
     int this_error = 0;
 
     T(test_array);
+    T(test_array_erase);
 
     return error;
 }

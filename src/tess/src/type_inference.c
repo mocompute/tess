@@ -571,11 +571,7 @@ void ti_run_solver(ti_inferer *self) {
             if (item->left == item->right || tess_type_equal(item->left, item->right) ||
                 item->left->tag == type_any || item->right->tag == type_any) {
 
-                // TODO: add array_delete
-                u32 len = self->constraints.size - i - 1;
-                memmove(&self->constraints.v[i], &self->constraints.v[i + 1],
-                        len * sizeof(self->constraints.v[0]));
-                self->constraints.size--;
+                array_erase(self->constraints, i);
 
                 // i does not increment
                 continue;
