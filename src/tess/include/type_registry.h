@@ -4,13 +4,13 @@
 #include "alloc.h"
 #include "array.h"
 
-#include "tess_type.h"
+#include "type.h"
 
 typedef struct type_registry type_registry;
 
 typedef struct type_entry {
     char const *name;
-    tess_type  *type;
+    tl_type    *type;
 } type_entry;
 
 typedef struct {

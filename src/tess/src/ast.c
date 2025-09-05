@@ -5,7 +5,7 @@
 #include "dbg.h"
 #include "mos_string.h"
 #include "sexp.h"
-#include "tess_type.h"
+#include "type.h"
 #include "vector.h"
 
 #include <assert.h>
@@ -245,8 +245,8 @@ char const *ast_operator_to_string(ast_operator);
 
 //
 
-// static sexp tess_type_to_sexp(allocator *alloc, tess_type const *type) {
-//     // TODO this could be better in tess_type.h but that would require
+// static sexp tl_type_to_sexp(allocator *alloc, tl_type const *type) {
+//     // TODO this could be better in type.h but that would require
 //     // exposing sexp to that header.
 //     switch (type->tag) {
 //     case type_nil:      return sexp_init_sym(alloc, "nil");
@@ -281,9 +281,9 @@ sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
     sexp type;
     {
-        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        int  len = tl_type_snprint(null, 0, node->type) + 1;
         char buf[len];
-        tess_type_snprint(buf, len, node->type);
+        tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
     }
     return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
@@ -294,9 +294,9 @@ sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
     sexp type;
     {
-        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        int  len = tl_type_snprint(null, 0, node->type) + 1;
         char buf[len];
-        tess_type_snprint(buf, len, node->type);
+        tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
     }
 
@@ -323,9 +323,9 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     sexp type;
     if (node->tag != ast_symbol) // symbols are delegated to symbol_fun
     {
-        int  len = tess_type_snprint(null, 0, node->type) + 1;
+        int  len = tl_type_snprint(null, 0, node->type) + 1;
         char buf[len];
-        tess_type_snprint(buf, len, node->type);
+        tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
     }
 
@@ -453,9 +453,9 @@ sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
 
     sexp expr = ast_node_to_sexp(alloc, node);
 
-    int  len  = tess_type_snprint(null, 0, node->type) + 1;
+    int  len  = tl_type_snprint(null, 0, node->type) + 1;
     char buf[len];
-    tess_type_snprint(buf, len, node->type);
+    tl_type_snprint(buf, len, node->type);
 
     sexp list = sexp_init_list_pair(alloc, expr, sexp_init_sym(alloc, buf));
 

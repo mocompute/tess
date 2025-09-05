@@ -1,5 +1,5 @@
-#ifndef TESS_TYPE_H
-#define TESS_TYPE_H
+#ifndef TYPE_H
+#define TYPE_H
 
 #include "alloc.h"
 #include "array.h"
@@ -9,7 +9,7 @@
 #define MOS_TAG_NAME(name, str) name,
 #endif
 
-#define TESS_TYPE_TAGS(X)                                                                                  \
+#define TL_TYPE_TAGS(X)                                                                                    \
     X(type_nil, "nil")                                                                                     \
     X(type_bool, "bool")                                                                                   \
     X(type_int, "int")                                                                                     \
@@ -21,65 +21,65 @@
     X(type_type_var, "type_var")                                                                           \
     X(type_any, "any")
 
-typedef enum { TESS_TYPE_TAGS(MOS_TAG_NAME) } tess_type_tag;
+typedef enum { TL_TYPE_TAGS(MOS_TAG_NAME) } tl_type_tag;
 
 typedef struct {
     array_sized;
-    struct tess_type **v;
-} tess_type_sized;
+    struct tl_type **v;
+} tl_type_sized;
 
-typedef struct tess_type {
+typedef struct tl_type {
     union {
         struct {
-            tess_type_sized elements;
+            tl_type_sized elements;
         }; // tuple
 
         struct {
-            struct tess_type *left;
-            struct tess_type *right;
+            struct tl_type *left;
+            struct tl_type *right;
         }; // arrow
 
         struct {
             // TODO this could more helpfully be a tuple type instead of an array of fields.
             char const        *name;
-            struct tess_type **fields;
+            struct tl_type **fields;
             char const       **field_names;
             u16                n_fields;
         }; // user
 
         u32 type_var;
     };
-    tess_type_tag tag;
-} tess_type;
+    tl_type_tag tag;
+} tl_type;
 
 typedef struct {
     array_header;
-    tess_type **v;
-} tess_type_array;
+    tl_type **v;
+} tl_type_array;
 
-tess_type   tess_type_init(tess_type_tag);
-tess_type   tess_type_init_type_var(u32);
-tess_type   tess_type_init_tuple();
-tess_type   tess_type_init_arrow(tess_type *, tess_type *);
+tl_type   tl_type_init(tl_type_tag);
+tl_type   tl_type_init_type_var(u32);
+tl_type   tl_type_init_tuple();
+tl_type   tl_type_init_arrow(tl_type *, tl_type *);
 
-tess_type   tess_type_init_user_type(char const *name, tess_type **fields, char const **field_names, u16 n);
+tl_type   tl_type_init_user_type(char const *name, tl_type **fields, char const **field_names, u16 n);
 
-void        tess_type_deinit(allocator *, tess_type *);
+void        tl_type_deinit(allocator *, tl_type *);
 
-tess_type  *tess_type_create_type_var(allocator *, u32) mallocfun;
-tess_type  *tess_type_create_tuple(allocator *, u16) mallocfun;
-tess_type  *tess_type_create_arrow(allocator *, tess_type *, tess_type *) mallocfun;
-tess_type  *tess_type_create_user_type(allocator *, char const *name, tess_type **fields,
+tl_type  *tl_type_create_type_var(allocator *, u32) mallocfun;
+tl_type  *tl_type_create_tuple(allocator *, u16) mallocfun;
+tl_type  *tl_type_create_arrow(allocator *, tl_type *, tl_type *) mallocfun;
+tl_type  *tl_type_create_user_type(allocator *, char const *name, tl_type **fields,
                                        char const **field_names, u16 n) mallocfun;
 
-tess_type  *tess_type_prim(tess_type_tag); // only primitives
+tl_type  *tl_type_prim(tl_type_tag); // only primitives
 
-bool        tess_type_is_prim(tess_type const *);
-bool        tess_type_equal(tess_type const *, tess_type const *);
-int         tess_type_compare(tess_type const *, tess_type const *);
+bool        tl_type_is_prim(tl_type const *);
+bool        tl_type_equal(tl_type const *, tl_type const *);
+int         tl_type_compare(tl_type const *, tl_type const *);
 
-int         tess_type_snprint(char *, int, tess_type const *);
-char       *tess_type_to_string(allocator *, tess_type const *);
-char const *type_tag_to_string(tess_type_tag);
+int         tl_type_snprint(char *, int, tl_type const *);
+char       *tl_type_to_string(allocator *, tl_type const *);
+char const *type_tag_to_string(tl_type_tag);
 
 #endif

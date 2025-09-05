@@ -6,7 +6,7 @@
 #include "ast_tags.h"
 #include "dbg.h"
 #include "mos_string.h"
-#include "tess_type.h"
+#include "type.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -41,7 +41,7 @@ static int   a_let(transpiler *, ast_node const *);
 static int   a_let_in(transpiler *, ast_node const *);
 static int   a_main(transpiler *, ast_node const *);
 static int   a_nil_expression(transpiler *, ast_node const *);
-static int   a_result_type_of(transpiler *, tess_type const *);
+static int   a_result_type_of(transpiler *, tl_type const *);
 static int   a_toplevel(transpiler *, ast_node const *);
 static int   a_user_type_definition(transpiler *, ast_node const *);
 
@@ -126,7 +126,7 @@ static void out_put_start(transpiler *self, char const *str) {
     return out_put(self, str);
 }
 
-static int a_result_type_of(transpiler *self, tess_type const *ty) {
+static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     if (!ty) fatal("a_result_type_of: null type");
 
@@ -140,7 +140,7 @@ static int a_result_type_of(transpiler *self, tess_type const *ty) {
     case type_any:    out_put(self, "int"); break;
     case type_arrow:  return a_result_type_of(self, ty->right);
     case type_user:   {
-        char *type_s = tess_type_to_string(self->strings, ty);
+        char *type_s = tl_type_to_string(self->strings, ty);
         out_put_fmt(self, "/* %s */ struct %s", type_s, ty->name);
         alloc_free(self->strings, type_s);
 
@@ -162,7 +162,7 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 
     self->indent_level++;
     for (u32 i = 0; i < n_fields; ++i) {
-        tess_type  *ty         = node->user_type_def.field_types[i];
+        tl_type    *ty         = node->user_type_def.field_types[i];
         char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
@@ -182,7 +182,7 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
     out_put_fmt(self, "%s _make_%s_(", name, name); // type and name
 
     for (u32 i = 0; i < n_fields; ++i) {
-        tess_type  *ty         = node->user_type_def.field_types[i];
+        tl_type    *ty         = node->user_type_def.field_types[i];
         char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
@@ -238,7 +238,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
 
 static int a_infix(transpiler *self, ast_node const *node) {
 
-    tess_type const *type = node->type;
+    tl_type const *type = node->type;
 
     // Eval left and right, resulting in two result variables on the
     // stack. Eval in reverse order so we can pop them in correct
@@ -531,10 +531,10 @@ static char *next_variable(transpiler *self) {
 static bool is_generic_function(ast_node const *node) {
     if (ast_let != node->tag) return false;
 
-    tess_type *arrow = node->let.arrow;
+    tl_type *arrow = node->let.arrow;
     if (arrow->right->tag == type_type_var) return true;
 
-    tess_type *left = arrow->left;
+    tl_type *left = arrow->left;
     assert(left->tag == type_tuple);
 
     for (u32 i = 0; i < left->elements.size; ++i)

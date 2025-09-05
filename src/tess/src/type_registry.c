@@ -2,7 +2,7 @@
 
 #include "alloc.h"
 #include "dbg.h"
-#include "tess_type.h"
+#include "type.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -55,15 +55,15 @@ type_entry *type_registry_find(type_registry *self, char const *name) {
 
 static void register_basic_types(type_registry *self) {
 
-    int              error       = 0;
+    int            error       = 0;
 
-    static tess_type nil_type    = {.tag = type_nil};
-    static tess_type bool_type   = {.tag = type_bool};
-    static tess_type int_type    = {.tag = type_int};
-    static tess_type float_type  = {.tag = type_float};
-    static tess_type string_type = {.tag = type_string};
-    static tess_type any_type    = {.tag = type_any};
-    type_entry       entry       = {0};
+    static tl_type nil_type    = {.tag = type_nil};
+    static tl_type bool_type   = {.tag = type_bool};
+    static tl_type int_type    = {.tag = type_int};
+    static tl_type float_type  = {.tag = type_float};
+    static tl_type string_type = {.tag = type_string};
+    static tl_type any_type    = {.tag = type_any};
+    type_entry     entry       = {0};
 
     //
     entry.name = type_tag_to_string(type_nil);
@@ -114,10 +114,10 @@ static void sorted_insert(type_entry_array *entries, type_entry entry) {
 }
 
 // static int compare_types(void const *a, void const *b) {
-//     tess_type const *left  = a;
-//     tess_type const *right = b;
+//     tl_type const *left  = a;
+//     tl_type const *right = b;
 
-//     return tess_type_compare(left, right);
+//     return tl_type_compare(left, right);
 // }
 
 // static int compare_type_entries(void const *a, void const *b) {

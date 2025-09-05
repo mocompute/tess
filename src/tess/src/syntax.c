@@ -125,8 +125,8 @@ static void register_user_type(void *ctx, ast_node *node) {
         node->user_type_def.field_types =
           alloc_calloc(self->arena, n_fields, sizeof node->user_type_def.field_types[0]);
 
-        tess_type **field_types = node->user_type_def.field_types;
-        ast_node  **annotations = node->user_type_def.field_annotations;
+        tl_type  **field_types = node->user_type_def.field_types;
+        ast_node **annotations = node->user_type_def.field_annotations;
 
         for (u32 i = 0; i < n_fields; ++i) {
             char const        *str = ast_node_name_string(annotations[i]);
@@ -143,8 +143,8 @@ static void register_user_type(void *ctx, ast_node *node) {
 
     // make the user type and register it
 
-    tess_type *user_type = tess_type_create_user_type(
-      self->arena, type_name, node->user_type_def.field_types, field_names.v, n_fields);
+    tl_type *user_type = tl_type_create_user_type(self->arena, type_name, node->user_type_def.field_types,
+                                                  field_names.v, n_fields);
 
     if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
         fatal("syntax_register_user_types: unexpected failure");

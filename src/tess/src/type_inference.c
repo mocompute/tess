@@ -7,7 +7,7 @@
 #include "dbg.h"
 #include "hashmap.h"
 #include "mos_string.h"
-#include "tess_type.h"
+#include "type.h"
 #include "type_registry.h"
 
 #include <assert.h>
@@ -19,8 +19,8 @@
 #define CONSTRAINTS_SIZE   1024
 
 typedef struct constraint {
-    tess_type *left;
-    tess_type *right;
+    tl_type *left;
+    tl_type *right;
 } constraint;
 
 typedef struct {
@@ -76,8 +76,8 @@ void              ti_run_solver(ti_inferer *);
 
 static bool       is_special_name(char const *);
 static bool       is_special_name_s(string_t const *);
-static constraint make_constraint(tess_type *, tess_type *);
-static tess_type *make_typevar(ti_inferer *);
+static constraint make_constraint(tl_type *, tl_type *);
+static tl_type   *make_typevar(ti_inferer *);
 static void       dbg_constraint(constraint const *);
 static void       dbg_ast_nodes(ti_inferer *);
 static void       log(ti_inferer *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -95,7 +95,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->constraints      = (constraint_array){.alloc = self->type_arena};
     self->substitutions    = (constraint_array){.alloc = self->type_arena};
 
-    self->symbols          = map_create(self->type_arena, sizeof(tess_type *));
+    self->symbols          = map_create(self->type_arena, sizeof(tl_type *));
 
     self->unify_monotypes  = true;
     self->next_type_var    = 1; // 0 is not valid
@@ -349,14 +349,14 @@ static void ti_rename_variables(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static bool apply_one_substitution(tess_type **ptype, tess_type *from, tess_type *to) {
+static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) {
     bool did_substitute = false;
 
     assert(ptype && *ptype);
     assert(from);
     assert(to);
 
-    tess_type *type = *ptype;
+    tl_type *type = *ptype;
 
     if (*ptype == from) {
         *ptype = to;
@@ -448,11 +448,11 @@ static void ti_apply_substitutions_to_ast(constraint_sized substitutions, ast_no
 
 static void dbg_constraint(constraint const *c) {
 
-    int  len_left  = tess_type_snprint(null, 0, c->left) + 1;
-    int  len_right = tess_type_snprint(null, 0, c->right) + 1;
+    int  len_left  = tl_type_snprint(null, 0, c->left) + 1;
+    int  len_right = tl_type_snprint(null, 0, c->right) + 1;
     char buf_left[len_left], buf_right[len_right];
-    tess_type_snprint(buf_left, len_left, c->left);
-    tess_type_snprint(buf_right, len_right, c->right);
+    tl_type_snprint(buf_left, len_left, c->left);
+    tl_type_snprint(buf_right, len_right, c->right);
     dbg("constraint %s = %s\n", buf_left, buf_right);
 }
 
@@ -488,11 +488,11 @@ static bool substitute_constraints(constraint *begin, constraint *end, constrain
 
 static bool unify_one(ti_inferer *self, constraint c) {
 
-    if (c.left == c.right || tess_type_equal(c.left, c.right)) return false;
+    if (c.left == c.right || tl_type_equal(c.left, c.right)) return false;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
-        tess_type *orig      = type_type_var == c.left->tag ? c.left : c.right;
-        tess_type *other     = type_type_var == c.left->tag ? c.right : c.left;
+        tl_type   *orig      = type_type_var == c.left->tag ? c.left : c.right;
+        tl_type   *other     = type_type_var == c.left->tag ? c.right : c.left;
 
         constraint candidate = {orig, other};
 
@@ -554,7 +554,7 @@ void ti_run_solver(ti_inferer *self) {
             constraint *item = &self->constraints.v[i];
 
             // delete a = a constraints, and a = any constraints
-            if (item->left == item->right || tess_type_equal(item->left, item->right) ||
+            if (item->left == item->right || tl_type_equal(item->left, item->right) ||
                 item->left->tag == type_any || item->right->tag == type_any) {
 
                 array_erase(self->constraints, i);
@@ -594,9 +594,9 @@ void ti_run_solver(ti_inferer *self) {
 
 void do_assign_type_variables(ti_inferer *self, ast_node *node) {
     if (ast_lambda_function == node->tag || ast_let == node->tag) {
-        tess_type *left  = make_typevar(self);
-        tess_type *right = make_typevar(self);
-        tess_type *arrow = tess_type_create_arrow(self->type_arena, left, right);
+        tl_type *left  = make_typevar(self);
+        tl_type *right = make_typevar(self);
+        tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right);
 
         if (ast_lambda_function == node->tag) {
             node->type = arrow;
@@ -606,8 +606,8 @@ void do_assign_type_variables(ti_inferer *self, ast_node *node) {
         }
 
     } else {
-        tess_type *tv = make_typevar(self);
-        node->type    = tv;
+        tl_type *tv = make_typevar(self);
+        node->type  = tv;
     }
 }
 
@@ -624,8 +624,8 @@ void ti_assign_type_variables(ti_inferer *self) {
 
 // -- collect_constraints --
 
-static tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
-    tess_type *tuple = tess_type_create_tuple(alloc, n);
+static tl_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
+    tl_type *tuple = tl_type_create_tuple(alloc, n);
     assert(!n || tuple->elements.v);
 
     for (u32 i = 0; i < n; ++i) tuple->elements.v[i] = arguments[i]->type;
@@ -633,7 +633,7 @@ static tess_type *arguments_to_tuple_type(allocator *alloc, ast_node const *argu
     return tuple;
 }
 
-static bool is_type_compatible(tess_type const *a, tess_type const *b, bool strict) {
+static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
@@ -661,7 +661,7 @@ static bool is_type_compatible(tess_type const *a, tess_type const *b, bool stri
         return b->tag == type_arrow && is_type_compatible(a->left, b->left, strict) &&
                is_type_compatible(a->right, b->right, strict);
 
-    case type_user:     return tess_type_equal(a, b);
+    case type_user:     return tl_type_equal(a, b);
 
     case type_type_var: return !strict;
 
@@ -669,7 +669,7 @@ static bool is_type_compatible(tess_type const *a, tess_type const *b, bool stri
     }
 }
 
-static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_node_sized nodes,
+static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_node_sized nodes,
                                bool strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
@@ -689,12 +689,12 @@ static ast_node *find_let_node(char const *name, tess_type_sized elements, ast_n
 
         assert(type_tuple == candidate->let.arrow->left->tag);
 
-        tess_type *params = candidate->let.arrow->left;
+        tl_type *params = candidate->let.arrow->left;
         if (elements.size != params->elements.size) continue;
 
         for (u32 j = 0; j < elements.size; ++j) {
-            tess_type *el    = elements.v[j];
-            tess_type *param = params->elements.v[j];
+            tl_type *el    = elements.v[j];
+            tl_type *param = params->elements.v[j];
             if (!is_type_compatible(el, param, strict)) goto skip;
         }
 
@@ -718,8 +718,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:                  push(node->type, tess_type_prim(type_nil)); break;
-    case ast_bool:                 push(node->type, tess_type_prim(type_bool)); break;
+    case ast_nil:                  push(node->type, tl_type_prim(type_nil)); break;
+    case ast_bool:                 push(node->type, tl_type_prim(type_bool)); break;
 
     case ast_user_type_definition: break;
 
@@ -728,7 +728,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
-        tess_type **found = map_get(ctx->symbols, name_str, name_len);
+        tl_type **found = map_get(ctx->symbols, name_str, name_len);
 
         if (found) {
             push(node->type, *found);
@@ -740,14 +740,14 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_i64:
     case ast_u64:
-        push(node->type, tess_type_prim(type_int)); // TODO unsigned
+        push(node->type, tl_type_prim(type_int)); // TODO unsigned
         break;
 
-    case ast_f64:    push(node->type, tess_type_prim(type_float)); break;
-    case ast_string: push(node->type, tess_type_prim(type_string)); break;
+    case ast_f64:    push(node->type, tl_type_prim(type_float)); break;
+    case ast_string: push(node->type, tl_type_prim(type_string)); break;
 
     case ast_tuple:  {
-        tess_type *els =
+        tl_type *els =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->type, els);
@@ -780,7 +780,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(node->let.arrow->tag == type_arrow);
 
         // left side of arrow is same as parameter tuple type
-        tess_type *params =
+        tl_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->let.arrow->left, params);
@@ -789,7 +789,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->let.arrow->right, node->let.body->type);
 
         // result is nil
-        push(node->type, tess_type_prim(type_nil));
+        push(node->type, tl_type_prim(type_nil));
     } break;
 
     case ast_if_then_else:
@@ -804,7 +804,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // argument tuple must be same type as parameter tuple
         assert(type_arrow == node->type->tag);
 
-        tess_type *tup =
+        tl_type *tup =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         push(node->type->left, tup);
 
@@ -823,9 +823,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_lambda_function == lambda->tag);
 
         // arguments must match parameters
-        tess_type *args =
+        tl_type *args =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        tess_type *params =
+        tl_type *params =
           arguments_to_tuple_type(ctx->type_arena, (ast_node const **)lambda->array.nodes, lambda->array.n);
 
         push(args, params);
@@ -846,7 +846,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
             assert(fun && fun->tag == ast_let);
             assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
-            tess_type *args_type =
+            tl_type *args_type =
               arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->named_application.arguments,
                                       node->named_application.n_arguments);
 
@@ -899,7 +899,7 @@ static void reassign_typevars(void *ctx, ast_node *node) {
     node->type = make_typevar(ti);
 }
 
-static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node *src, tess_type *args) {
+static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node *src, tl_type *args) {
 
     allocator *alloc = ctx->ti->type_arena;
 
@@ -911,7 +911,7 @@ static ast_node *make_specialized(struct specialize_functions_ctx *ctx, ast_node
     special->let.specialized_name = mos_string_init(
       ctx->ti->type_arena, make_specialized_name(ctx->ti, mos_string_str(&special->let.name)));
 
-    char *str = tess_type_to_string(alloc, args);
+    char *str = tl_type_to_string(alloc, args);
     log(ctx->ti, "specialized '%s' for type %s", mos_string_str(&special->let.name), str);
     alloc_free(alloc, str);
 
@@ -948,10 +948,10 @@ static void specialize_node(void *ctx_, ast_node *node) {
 
     // does a specialised function already exist?
 
-    tess_type *args_ty = arguments_to_tuple_type(
-      alloc, (ast_node const **)node->named_application.arguments, node->named_application.n_arguments);
+    tl_type  *args_ty = arguments_to_tuple_type(alloc, (ast_node const **)node->named_application.arguments,
+                                                node->named_application.n_arguments);
 
-    ast_node *let = null;
+    ast_node *let     = null;
     let = find_let_node(name, args_ty->elements, (ast_node_sized)sized_all(*ctx->ti->nodes), true);
 
     if (let) {
@@ -988,7 +988,7 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
 //
 
 static ast_node *make_type_constructor_function(ti_inferer *self, char const *name, ast_node *body,
-                                                tess_type *user_type) {
+                                                tl_type *user_type) {
 
     assert(type_user == user_type->tag);
 
@@ -1005,11 +1005,11 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
         out->let.parameters[i] = ast_node_create_sym(self->type_arena, user_type->field_names[i]);
 
     // make tuple type for params from user_type
-    tess_type *left = tess_type_create_tuple(self->type_arena, user_type->n_fields);
+    tl_type *left = tl_type_create_tuple(self->type_arena, user_type->n_fields);
     for (u32 i = 0; i < left->elements.size; ++i) left->elements.v[i] = user_type->fields[i];
 
     // make the arrow type
-    out->let.arrow = tess_type_create_arrow(self->type_arena, left, user_type);
+    out->let.arrow = tl_type_create_arrow(self->type_arena, left, user_type);
 
     return out;
 }
@@ -1027,7 +1027,7 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
         char const       *type_name = ast_node_name_string(node->user_type_def.name);
         type_entry const *te        = type_registry_find(self->type_registry, type_name);
         if (!te) fatal("generate_user_type_functions: could not find type '%s'", type_name);
-        tess_type      *ty          = te->type;
+        tl_type        *ty          = te->type;
 
         c_string_cslice field_names = {0};
         field_names =
@@ -1063,12 +1063,12 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
 #pragma clang diagnostic push
 }
 
-constraint make_constraint(tess_type *l, tess_type *r) {
+constraint make_constraint(tl_type *l, tl_type *r) {
     return (constraint){l, r};
 }
 
-tess_type *make_typevar(ti_inferer *self) {
-    return tess_type_create_type_var(self->type_arena, self->next_type_var++);
+tl_type *make_typevar(ti_inferer *self) {
+    return tl_type_create_type_var(self->type_arena, self->next_type_var++);
 }
 
 static bool is_special_name(char const *str) {

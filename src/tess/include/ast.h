@@ -7,7 +7,7 @@
 #include "error.h"
 #include "mos_string.h"
 #include "nodiscard.h"
-#include "tess_type.h"
+#include "type.h"
 
 #include "vector.h"
 
@@ -82,7 +82,7 @@ typedef struct ast_node {
             u16               n_parameters;
             struct string     name;
             struct ast_node  *body;
-            tess_type        *arrow;            // because the node type itself is nil
+            tl_type          *arrow;            // because the node type itself is nil
             struct string     specialized_name; // set during function specialisation
         } let;
 
@@ -114,12 +114,12 @@ typedef struct ast_node {
             struct ast_node  *name;
             struct ast_node **field_annotations;
             struct ast_node **field_names;
-            tess_type       **field_types;
+            tl_type         **field_types;
             u16               n_fields;
         } user_type_def;
     };
 
-    tess_type          *type;
+    tl_type            *type;
     ast_tag             tag;
     enum tess_error_tag error;
 } ast_node;
