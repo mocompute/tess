@@ -61,7 +61,7 @@ static int compile_input_flag(char const *input, bool verbose) {
         return 1;
     }
 
-    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes);
+    ti_inferer *ti = ti_inferer_create(ti_alloc, &nodes, syntax_checker_type_registry(syntax));
 
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);

@@ -35,8 +35,8 @@ typedef struct tl_type {
         }; // tuple
 
         struct {
-            tl_type_sized  fields;
-            c_string_sized names;
+            tl_type_sized   fields;
+            c_string_csized names;
         }; // labelled_tuple
 
         struct {
@@ -61,7 +61,7 @@ typedef struct {
 
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;
-nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_sized) mallocfun;
+nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_csized) mallocfun;
 nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *) mallocfun;
 nodiscard tl_type *tl_type_create_user_type(allocator *, char const *name,
                                             tl_type *labelled_tuple) mallocfun;

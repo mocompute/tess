@@ -154,13 +154,13 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
-void                ast_node_init(allocator *, ast_node *, ast_tag);
-void                ast_node_deinit(allocator *, ast_node *);
-void                ast_node_replace(allocator *, ast_node *, ast_tag);
-void                ast_node_move(ast_node *dst, ast_node *src);
+// void                ast_node_init(allocator *, ast_node *, ast_tag);
+// void                ast_node_deinit(allocator *, ast_node *);
+// void        ast_node_replace(allocator *, ast_node *, ast_tag);
+void        ast_node_move(ast_node *dst, ast_node *src);
 
-char const         *ast_node_name_string(ast_node const *);
-int                 ast_node_name_strcmp(ast_node const *, char const *);
+char const *ast_node_name_string(ast_node const *);
+int         ast_node_name_strcmp(ast_node const *, char const *);
 
 // -- utilities --
 
@@ -170,7 +170,7 @@ char           *ast_node_to_string_for_error(allocator *, ast_node const *);
 char const     *ast_tag_to_string(ast_tag);
 int             string_to_ast_operator(char const *, ast_operator *);
 
-c_string_cslice ast_nodes_get_names(allocator *, ast_node_slice);
+c_string_csized ast_nodes_get_names(allocator *, ast_node_slice);
 
 void            ast_node_dfs(void *, ast_node *, ast_op_fun);
 void            ast_node_cdfs(void *, ast_node const *, ast_op_cfun);

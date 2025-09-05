@@ -21,6 +21,14 @@ tl_type *tl_type_create_tuple(allocator *alloc, tl_type_sized elements) {
     return self;
 }
 
+tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, c_string_csized names) {
+    tl_type *self = alloc_struct(alloc, self);
+    self->tag     = type_labelled_tuple;
+    self->fields  = fields;
+    self->names   = names;
+    return self;
+}
+
 tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
     tl_type *self = alloc_struct(alloc, self);
     self->tag     = type_arrow;
@@ -130,9 +138,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len = 0;
         len += snprintf(buf, (size_t)sz, "(%s ", self->name);
 
-        tl_type tmp = *self;
-        tmp.tag     = type_labelled_tuple;
-        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, &tmp);
+        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, self->labelled_tuple);
 
         if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
         else len += snprintf(null, 0, ")");
@@ -164,7 +170,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len = 0;
         len += snprintf(buf, (size_t)sz, "(");
 
-        for (size_t i = 0; i < self->labelled_tuple->fields.size; ++i) {
+        for (size_t i = 0; i < self->fields.size; ++i) {
 
             if (buf && sz) {
                 len += snprintf(buf + len, (size_t)(sz - len), "%s : ", self->names.v[i]);

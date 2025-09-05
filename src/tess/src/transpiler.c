@@ -131,15 +131,16 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     if (!ty) fatal("a_result_type_of: null type");
 
     switch (ty->tag) {
-    case type_nil:    out_put(self, "void"); break;
-    case type_bool:   out_put(self, "bool"); break;
-    case type_int:    out_put(self, "int64_t"); break;
-    case type_float:  out_put(self, "double"); break;
-    case type_string: out_put(self, "char *"); break;
-    case type_tuple:  out_put(self, "FIXME"); break;
-    case type_any:    out_put(self, "int"); break;
-    case type_arrow:  return a_result_type_of(self, ty->right);
-    case type_user:   {
+    case type_nil:            out_put(self, "void"); break;
+    case type_bool:           out_put(self, "bool"); break;
+    case type_int:            out_put(self, "int64_t"); break;
+    case type_float:          out_put(self, "double"); break;
+    case type_string:         out_put(self, "char *"); break;
+    case type_tuple:          out_put(self, "FIXME"); break;
+    case type_labelled_tuple: out_put(self, "FIXME"); break;
+    case type_any:            out_put(self, "int"); break;
+    case type_arrow:          return a_result_type_of(self, ty->right);
+    case type_user:           {
         char *type_s = tl_type_to_string(self->strings, ty);
         out_put_fmt(self, "/* %s */ struct %s", type_s, ty->name);
         alloc_free(self->strings, type_s);

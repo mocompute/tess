@@ -14,38 +14,38 @@
 
 // -- ast_node init and deinit --
 
-void ast_node_deinit(allocator *alloc, struct ast_node *node) {
+// void ast_node_deinit(allocator *alloc, struct ast_node *node) {
 
-#define deinit(P) alloc_free(alloc, P)
+// #define deinit(P) alloc_free(alloc, P)
 
-    switch (node->tag) {
-    case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
-    case ast_function_declaration:        deinit(node->function_declaration.parameters); break;
-    case ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
-    case ast_let:                         deinit(node->let.parameters); break;
-    case ast_tuple:                       deinit(node->tuple.elements); break;
-    case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
-    case ast_named_function_application:  deinit(node->named_application.arguments); break;
-    case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
-    case ast_user_type_definition:
-        deinit(node->user_type_def.field_names);
-        deinit(node->user_type_def.field_annotations);
-        deinit(node->user_type_def.field_types);
-        break;
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_let_in:
-    case ast_if_then_else: break;
-    }
+//     switch (node->tag) {
+//     case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
+//     case ast_function_declaration:        deinit(node->function_declaration.parameters); break;
+//     case ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
+//     case ast_let:                         deinit(node->let.parameters); break;
+//     case ast_tuple:                       deinit(node->tuple.elements); break;
+//     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
+//     case ast_named_function_application:  deinit(node->named_application.arguments); break;
+//     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
+//     case ast_user_type_definition:
+//         deinit(node->user_type_def.field_names);
+//         deinit(node->user_type_def.field_annotations);
+//         deinit(node->user_type_def.field_types);
+//         break;
+//     case ast_eof:
+//     case ast_nil:
+//     case ast_bool:
+//     case ast_i64:
+//     case ast_u64:
+//     case ast_f64:
+//     case ast_string:
+//     case ast_infix:
+//     case ast_let_in:
+//     case ast_if_then_else: break;
+//     }
 
-#undef deinit
-}
+// #undef deinit
+// }
 
 ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // FIXME this should probably be called alloc, because it doesn't
@@ -61,49 +61,49 @@ ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
     return self;
 }
 
-void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
+// void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
 
-    // accepts pool = null in some cases
+//     // accepts pool = null in some cases
 
-#define init(P)                                                                                            \
-    do {                                                                                                   \
-        (P) = alloc_calloc(alloc, 1, sizeof *(P));                                                         \
-        return;                                                                                            \
-    } while (0)
+// #define init(P)                                                                                            \
+//     do {                                                                                                   \
+//         (P) = alloc_calloc(alloc, 1, sizeof *(P));                                                         \
+//         return;                                                                                            \
+//     } while (0)
 
-    alloc_zero(node);
-    node->tag = tag;
+//     alloc_zero(node);
+//     node->tag = tag;
 
-    switch (node->tag) {
-    case ast_lambda_function:             init(node->lambda_function.parameters);
-    case ast_function_declaration:        init(node->function_declaration.parameters);
-    case ast_lambda_declaration:          init(node->lambda_declaration.parameters);
-    case ast_let:                         init(node->let.parameters);
-    case ast_tuple:                       init(node->tuple.elements);
-    case ast_lambda_function_application: init(node->lambda_application.arguments);
-    case ast_named_function_application:  init(node->named_application.arguments);
+//     switch (node->tag) {
+//     case ast_lambda_function:             init(node->lambda_function.parameters);
+//     case ast_function_declaration:        init(node->function_declaration.parameters);
+//     case ast_lambda_declaration:          init(node->lambda_declaration.parameters);
+//     case ast_let:                         init(node->let.parameters);
+//     case ast_tuple:                       init(node->tuple.elements);
+//     case ast_lambda_function_application: init(node->lambda_application.arguments);
+//     case ast_named_function_application:  init(node->named_application.arguments);
 
-    case ast_user_type_definition:
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_let_in:
-    case ast_if_then_else:                return;
-    }
+//     case ast_user_type_definition:
+//     case ast_eof:
+//     case ast_nil:
+//     case ast_bool:
+//     case ast_symbol:
+//     case ast_i64:
+//     case ast_u64:
+//     case ast_f64:
+//     case ast_string:
+//     case ast_infix:
+//     case ast_let_in:
+//     case ast_if_then_else:                return;
+//     }
 
-#undef init
-}
+// #undef init
+// }
 
-void ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
-    ast_node_deinit(alloc, node);
-    return ast_node_init(alloc, node, tag);
-}
+// void ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
+//     ast_node_deinit(alloc, node);
+//     return ast_node_init(alloc, node, tag);
+// }
 
 void ast_node_move(ast_node *dst, ast_node *src) {
     alloc_copy(dst, src);
@@ -128,10 +128,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_tuple:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_user_type:
         clone->array.n     = orig->array.n;
         clone->array.nodes = alloc_malloc(alloc, orig->array.n * sizeof clone->array.nodes[0]);
         for (u32 i = 0; i < clone->array.n; ++i)
             clone->array.nodes[i] = ast_node_clone(alloc, orig->array.nodes[i]);
+        break;
+
         break;
 
     case ast_user_type_definition:
@@ -210,6 +213,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         mos_string_copy(alloc, &clone->named_application.name, &orig->named_application.name);
         clone->named_application.specialized = ast_node_clone(alloc, orig->named_application.specialized);
         break;
+
+    case ast_user_type: clone->user_type.name = ast_node_clone(alloc, orig->user_type.name); break;
 
     case ast_user_type_definition:
         clone->user_type_def.name     = ast_node_clone(alloc, orig->user_type_def.name);
@@ -408,6 +413,16 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     } break;
 
+    case ast_user_type: {
+        u16   n        = node->user_type.n_fields;
+        sexp *elements = alloc_malloc(alloc, sizeof(sexp) * n);
+        for (size_t i = 0; i < n; ++i) elements[i] = recur(node->user_type.fields[i]);
+        sexp field_list = sexp_init_list(alloc, elements, n);
+        alloc_free(alloc, elements);
+        return quad(alloc, sym("user-type"), recur(node->user_type.name), field_list, type);
+
+    } break;
+
     case ast_user_type_definition: {
         u16        n                 = node->user_type_def.n_fields;
         ast_node **field_names       = node->user_type_def.field_names;
@@ -423,8 +438,8 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         sexp annotations_list = sexp_init_list(alloc, sexp_elements, n);
 
         alloc_free(alloc, sexp_elements);
-        return penta(alloc, sym("user-type"), recur(node->user_type_def.name), names_list, annotations_list,
-                     type);
+        return penta(alloc, sym("def-user-type"), recur(node->user_type_def.name), names_list,
+                     annotations_list, type);
 
     } break;
     }
@@ -556,6 +571,8 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     } break;
 
+    case ast_user_type: recur_on_array(node->array.nodes, node->array.n, ctx, fun); return fun(ctx, node);
+
     case ast_user_type_definition:
         // excluded from dfs
         return;
@@ -614,10 +631,14 @@ char *ast_node_to_string_for_error(allocator *alloc, ast_node const *node) {
     return out;
 }
 
-c_string_cslice ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
-    c_string_cslice strings = {.v = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0])};
+c_string_csized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
+
+    c_string_csized strings = {.v    = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0]),
+                               .size = nodes.end - nodes.begin};
+
     for (u32 i = nodes.begin; i < nodes.end; ++i)
-        strings.v[strings.begin + i - nodes.begin] = ast_node_name_string(nodes.v[i]);
+        strings.v[i - nodes.begin] = ast_node_name_string(nodes.v[i]);
+
     return strings;
 }
 
@@ -643,6 +664,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_user_type:
     case ast_user_type_definition:        valid = true; break;
     }
     if (!valid) {

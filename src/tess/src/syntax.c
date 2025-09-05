@@ -8,6 +8,7 @@
 #include "error.h"
 #include "hashmap.h"
 #include "mos_string.h"
+#include "type.h"
 #include "type_registry.h"
 
 #include <stdio.h>
@@ -116,7 +117,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     }
 
     u16 const       n_fields    = node->user_type_def.n_fields;
-    c_string_cslice field_names = {0};
+    c_string_csized field_names = {0};
 
     if (n_fields) {
 
@@ -142,9 +143,12 @@ static void register_user_type(void *ctx, ast_node *node) {
     }
 
     // make the user type and register it
+    tl_type *lt = tl_type_create_labelled_tuple(
+      self->arena,
+      (tl_type_sized){.v = node->user_type_def.field_types, .size = node->user_type_def.n_fields},
+      (c_string_csized)sized_all(field_names));
 
-    tl_type *user_type = tl_type_create_user_type(self->arena, type_name, node->user_type_def.field_types,
-                                                  field_names.v, n_fields);
+    tl_type *user_type = tl_type_create_user_type(self->arena, type_name, lt);
 
     if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
         fatal("syntax_register_user_types: unexpected failure");
