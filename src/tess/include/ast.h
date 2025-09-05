@@ -160,7 +160,7 @@ struct ast_function_declaration *ast_node_fd(ast_node *);
 struct ast_lambda_declaration   *ast_node_let_ld(ast_node *);
 struct ast_let                  *ast_node_let(ast_node *);
 struct ast_if_then_else         *ast_node_ifthen(ast_node *);
-struct ast_lambda_application   *ast_node_lamda(ast_node *);
+struct ast_lambda_application   *ast_node_lambda(ast_node *);
 struct ast_named_application    *ast_node_named(ast_node *);
 struct ast_tuple                *ast_node_tuple(ast_node *);
 struct ast_user_type_def        *ast_node_utd(ast_node *);

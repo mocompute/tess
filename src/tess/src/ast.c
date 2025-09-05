@@ -134,8 +134,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_lambda_declaration:          break;
 
     case ast_lambda_function_application: {
-        struct ast_lambda_application *vclone = ast_node_lamda(clone),
-                                      *vorig  = ast_node_lamda((ast_node *)orig);
+        struct ast_lambda_application *vclone = ast_node_lambda(clone),
+                                      *vorig  = ast_node_lambda((ast_node *)orig);
         vclone->lambda                        = ast_node_clone(alloc, vorig->lambda);
     } break;
 
@@ -701,7 +701,7 @@ struct ast_if_then_else *ast_node_ifthen(ast_node *node) {
     return &node->if_then_else;
 }
 
-struct ast_lambda_application *ast_node_lamda(ast_node *node) {
+struct ast_lambda_application *ast_node_lambda(ast_node *node) {
     assert(node->tag == ast_lambda_function_application);
     return &node->lambda_application;
 }
