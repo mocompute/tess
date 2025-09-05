@@ -418,7 +418,8 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
         switch (node->tag) {
         case ast_let:
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
+            apply_one_substitution(&node->let.arrow->left, subs->v[i].left, subs->v[i].right);
+            apply_one_substitution(&node->let.arrow->right, subs->v[i].left, subs->v[i].right);
             break;
 
         case ast_user_type_definition:
@@ -1147,7 +1148,7 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
     int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
     if (offset < 0) return;
 
-    snprintf(buf + offset, sizeof buf - (u32)offset, "parser: %s\n", fmt);
+    snprintf(buf + offset, sizeof buf - (u32)offset, "ti: %s\n", fmt);
 
     va_list args;
     va_start(args, fmt);

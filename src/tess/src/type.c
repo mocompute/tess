@@ -139,6 +139,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len += snprintf(buf, (size_t)sz, "(%s ", self->name);
 
         if (buf && sz) len += tl_type_snprint(buf + len, sz - len, self->labelled_tuple);
+        else len += tl_type_snprint(null, 0, self->labelled_tuple);
 
         if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
         else len += snprintf(null, 0, ")");

@@ -22,8 +22,10 @@ struct transpiler {
     c_string_array results;
     // a stack of result variable names, see also next_variable
 
-    u32 next_variable;
-    int indent_level;
+    u32  next_variable;
+    int  indent_level;
+
+    bool verbose;
 };
 
 // -- embed externs --
@@ -53,6 +55,7 @@ static void  out_put(transpiler *, char const *);
 static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
 static bool  is_generic_function(ast_node const *node);
+static void  log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
 
@@ -62,6 +65,9 @@ transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
     self->bytes      = bytes;
 
     self->results    = (c_string_array){.alloc = self->strings};
+
+    self->verbose    = true;
+
     return self;
 }
 
@@ -474,7 +480,10 @@ static int a_let(transpiler *self, ast_node const *node) {
     char const *name = mos_string_str(&node->let.specialized_name);
     if (0 == strlen(name)) name = mos_string_str(&node->let.name);
 
-    if (is_generic_function(node)) return 0;
+    if (is_generic_function(node)) {
+        log(self, "skipping '%s' because it is a generic function", mos_string_str(&node->let.name));
+        return 0;
+    }
 
     // don't emit generic template functions
     if (mos_string_empty(&node->let.specialized_name)) return 0;
@@ -542,4 +551,25 @@ static bool is_generic_function(ast_node const *node) {
         if (type_type_var == left->elements.v[i]->tag) return true;
 
     return false;
+}
+
+void log(transpiler *self, char const *restrict fmt, ...) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+    if (!self->verbose) return;
+
+    int  spaces = self->indent_level * 2;
+
+    char buf[256];
+    int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
+    if (offset < 0) return;
+
+    snprintf(buf + offset, sizeof buf - (u32)offset, "transpiler: %s\n", fmt);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, buf, args); // NOLINT
+    va_end(args);
+
+#pragma clang diagnostic push
 }
