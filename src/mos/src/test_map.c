@@ -13,16 +13,16 @@
 static int test_power_of_two(void) {
     int error = 0;
 
-    error += 1 == map_next_power_of_two(0) ? 0 : 1;
-    error += 1 == map_next_power_of_two(1) ? 0 : 1;
-    error += 2 == map_next_power_of_two(2) ? 0 : 1;
-    error += 4 == map_next_power_of_two(3) ? 0 : 1;
-    error += 4 == map_next_power_of_two(4) ? 0 : 1;
-    error += 8 == map_next_power_of_two(5) ? 0 : 1;
-    error += 8 == map_next_power_of_two(8) ? 0 : 1;
-    error += 16 == map_next_power_of_two(9) ? 0 : 1;
-    error += 16 == map_next_power_of_two(16) ? 0 : 1;
-    error += 32 == map_next_power_of_two(17) ? 0 : 1;
+    error += 1 == alloc_next_power_of_two(0) ? 0 : 1;
+    error += 1 == alloc_next_power_of_two(1) ? 0 : 1;
+    error += 2 == alloc_next_power_of_two(2) ? 0 : 1;
+    error += 4 == alloc_next_power_of_two(3) ? 0 : 1;
+    error += 4 == alloc_next_power_of_two(4) ? 0 : 1;
+    error += 8 == alloc_next_power_of_two(5) ? 0 : 1;
+    error += 8 == alloc_next_power_of_two(8) ? 0 : 1;
+    error += 16 == alloc_next_power_of_two(9) ? 0 : 1;
+    error += 16 == alloc_next_power_of_two(16) ? 0 : 1;
+    error += 32 == alloc_next_power_of_two(17) ? 0 : 1;
 
     return error;
 }

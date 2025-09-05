@@ -51,6 +51,4 @@ bool map_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
 
 // -- utilities --
 
-u32 map_next_power_of_two(u32);
-
 #endif

@@ -237,33 +237,12 @@ hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
     return (hashmap_entry *)&map->entries[index * hashmap_entry_size(map)];
 }
 
-// Returns: input if already a power of two, or else the next higher
-// power of two.
-u32 map_next_power_of_two(u32 n) {
-
-    if (n > (1U << 31)) return 0; // overflow
-    if (n == 0) return 1;
-
-    // set all bits to the right of the highest set bit by masking.
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    return n + 1;
-}
-
 //
 
 hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
 
     size_t aligned_value_size = alloc_align_to_word_size(value_size);
-    if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) {
-        dbg("map_create_n: element size too large\n");
-        assert(false);
-        exit(1);
-    }
+    if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
 
     hashmap *map =
       alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * (sizeof(hashmap_entry) + aligned_value_size));
