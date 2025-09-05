@@ -359,7 +359,7 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
 
     tl_type *type = *ptype;
 
-    if (*ptype == from) {
+    if (tl_type_equal(*ptype, from)) {
         *ptype = to;
         return true;
     }
@@ -377,7 +377,7 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     case type_tuple:    {
 
         for (size_t i = 0; i < type->elements.size; ++i) {
-            if (type->elements.v[i] == from) {
+            if (tl_type_equal(type->elements.v[i], from)) {
                 type->elements.v[i] = to;
                 did_substitute      = true;
             }
@@ -388,7 +388,7 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     case type_labelled_tuple: {
 
         for (size_t i = 0; i < type->fields.size; ++i) {
-            if (type->fields.v[i] == from) {
+            if (tl_type_equal(type->fields.v[i], from)) {
                 type->fields.v[i] = to;
                 did_substitute    = true;
             }
@@ -397,11 +397,11 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     } break;
 
     case type_arrow: {
-        if (type->left == from) {
+        if (tl_type_equal(type->left, from)) {
             type->left     = to;
             did_substitute = true;
         }
-        if (type->right == from) {
+        if (tl_type_equal(type->right, from)) {
             type->right    = to;
             did_substitute = true;
         }
@@ -418,8 +418,7 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
         switch (node->tag) {
         case ast_let:
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            apply_one_substitution(&node->let.arrow->left, subs->v[i].left, subs->v[i].right);
-            apply_one_substitution(&node->let.arrow->right, subs->v[i].left, subs->v[i].right);
+            apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
             break;
 
         case ast_user_type_definition:

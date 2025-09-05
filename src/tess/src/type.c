@@ -72,6 +72,8 @@ bool tl_type_equal(tl_type const *left, tl_type const *right) {
 int tl_type_compare(tl_type const *left, tl_type const *right) {
     // structural equality and total ordering for tess_types
 
+    if (left == right) return 0;
+
     if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
 
     switch (left->tag) {
