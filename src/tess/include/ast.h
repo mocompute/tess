@@ -42,6 +42,12 @@ typedef struct ast_node {
         } array;
 
         struct {
+            struct ast_node **fields;
+            u16               n_fields;
+            struct ast_node  *name;
+        } user_type;
+
+        struct {
             ast_operator     op;
             struct ast_node *left;
             struct ast_node *right;
@@ -110,7 +116,7 @@ typedef struct ast_node {
             struct ast_node **field_names;
             tess_type       **field_types;
             u16               n_fields;
-        } user_type;
+        } user_type_def;
     };
 
     tess_type          *type;
@@ -146,6 +152,7 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
+nodiscard ast_node *ast_node_create_sym(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
 void                ast_node_init(allocator *, ast_node *, ast_tag);
 void                ast_node_deinit(allocator *, ast_node *);

@@ -8,10 +8,10 @@
 
 typedef struct type_registry type_registry;
 
-struct type_entry {
+typedef struct type_entry {
     char const *name;
     tess_type  *type;
-};
+} type_entry;
 
 typedef struct {
     array_header;

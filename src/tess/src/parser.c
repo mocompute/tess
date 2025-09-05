@@ -602,8 +602,8 @@ static int struct_declaration(parser *p) {
 
     // check for empty struct
     if (0 == a_try(p, a_end_of_block)) {
-        ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
-        node->user_type.name = name;
+        ast_node *node           = ast_node_create(p->ast_arena, ast_user_type_definition);
+        node->user_type_def.name = name;
         return result_ast_node(p, node);
     }
 
@@ -631,15 +631,15 @@ static int struct_declaration(parser *p) {
 
         if (0 == a_try(p, a_end_of_block)) {
 
-            ast_node *node       = ast_node_create(p->ast_arena, ast_user_defined_type);
-            node->user_type.name = name;
+            ast_node *node           = ast_node_create(p->ast_arena, ast_user_type_definition);
+            node->user_type_def.name = name;
 
             array_shrink(field_names);
-            node->user_type.field_names = field_names.v;
-            node->user_type.n_fields    = (u16)field_names.size;
+            node->user_type_def.field_names = field_names.v;
+            node->user_type_def.n_fields    = (u16)field_names.size;
 
             array_shrink(field_types);
-            node->user_type.field_annotations = field_types.v;
+            node->user_type_def.field_annotations = field_types.v;
 
             return result_ast_node(p, node);
         }

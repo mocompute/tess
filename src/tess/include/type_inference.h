@@ -3,12 +3,13 @@
 
 #include "alloc.h"
 #include "ast.h"
+#include "type_registry.h"
 
 typedef struct ti_inferer ti_inferer;
 
 // -- allocation and deallocation --
 
-nodiscard ti_inferer *ti_inferer_create(allocator *, ast_node_array *);
+nodiscard ti_inferer *ti_inferer_create(allocator *, ast_node_array *, type_registry *);
 void                  ti_inferer_destroy(allocator *, ti_inferer **);
 
 // -- operation --

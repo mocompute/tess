@@ -8,6 +8,7 @@
 #include "hashmap.h"
 #include "mos_string.h"
 #include "tess_type.h"
+#include "type_registry.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -37,6 +38,7 @@ struct ti_inferer {
     allocator       *strings;
 
     ast_node_array  *nodes;
+    type_registry   *type_registry;
 
     constraint_array constraints;
     constraint_array substitutions;
@@ -63,6 +65,7 @@ struct ti_inferer {
 
 // -- ti_inferer --
 
+static void       ti_generate_user_type_functions(ti_inferer *);
 static void       ti_rename_variables(ti_inferer *);
 static void       ti_assign_type_variables(ti_inferer *);
 static void       ti_collect_constraints(ti_inferer *);
@@ -71,6 +74,8 @@ static void       ti_apply_substitutions_to_ast(constraint_sized, ast_node_sized
 static void       ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
 void              ti_run_solver(ti_inferer *);
 
+static bool       is_special_name(char const *);
+static bool       is_special_name_s(string_t const *);
 static constraint make_constraint(tess_type *, tess_type *);
 static tess_type *make_typevar(ti_inferer *);
 static void       dbg_constraint(constraint const *);
@@ -79,12 +84,13 @@ static void       log(ti_inferer *, char const *restrict fmt, ...) __attribute__
 
 // -- allocation and deallocation --
 
-ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes) {
+ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_registry *type_registry) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
     self->strings          = arena_create(alloc, STRINGS_ARENA_SIZE);
 
     self->nodes            = nodes;
+    self->type_registry    = type_registry;
 
     self->constraints      = (constraint_array){.alloc = self->type_arena};
     self->substitutions    = (constraint_array){.alloc = self->type_arena};
@@ -117,6 +123,7 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
 
 int ti_inferer_run(ti_inferer *self) {
 
+    ti_generate_user_type_functions(self);
     ti_rename_variables(self);
     ti_assign_type_variables(self);
 
@@ -323,7 +330,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     case ast_string:
     case ast_function_declaration:
     case ast_lambda_declaration:
-    case ast_user_defined_type:    break;
+    case ast_user_type_definition: break;
     }
 }
 
@@ -402,10 +409,11 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
             apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
             break;
 
-        case ast_user_defined_type:
+        case ast_user_type_definition:
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            for (u32 j = 0; j < node->user_type.n_fields; ++j)
-                apply_one_substitution(&node->user_type.field_types[j], subs->v[i].left, subs->v[i].right);
+            for (u32 j = 0; j < node->user_type_def.n_fields; ++j)
+                apply_one_substitution(&node->user_type_def.field_types[j], subs->v[i].left,
+                                       subs->v[i].right);
             break;
 
         case ast_eof:
@@ -710,12 +718,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:               push(node->type, tess_type_prim(type_nil)); break;
-    case ast_bool:              push(node->type, tess_type_prim(type_bool)); break;
+    case ast_nil:                  push(node->type, tess_type_prim(type_nil)); break;
+    case ast_bool:                 push(node->type, tess_type_prim(type_bool)); break;
 
-    case ast_user_defined_type: break;
+    case ast_user_type_definition: break;
 
-    case ast_symbol:            {
+    case ast_symbol:               {
         char const *name_str = ast_node_name_string(node);
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
@@ -831,8 +839,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         if (!ctx->constrain_function_applications) return;
         else {
             // do not constraint c_ or std_ applications
-            char const *name = mos_string_str(&node->named_application.name);
-            if (0 == strncmp("c_", name, 2) || 0 == strncmp("std_", name, 4)) return;
+            if (is_special_name_s(&node->named_application.name)) return;
 
             // this pass happens after functions have been specialised
             ast_node *fun = node->named_application.specialized;
@@ -937,7 +944,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
     if (node->named_application.specialized) return;
 
     char const *name = mos_string_str(&node->named_application.name);
-    if (0 == strncmp("c_", name, 2) || 0 == strncmp("std_", name, 4)) return;
+    if (is_special_name(name)) return;
 
     // does a specialised function already exist?
 
@@ -980,6 +987,61 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
 
 //
 
+static ast_node *make_type_constructor_function(ti_inferer *self, char const *name, ast_node *body,
+                                                tess_type *user_type) {
+
+    assert(type_user == user_type->tag);
+
+    ast_node *out             = ast_node_create(self->type_arena, ast_let);
+    out->let.name             = mos_string_init(self->type_arena, name);
+    out->let.body             = body;
+    out->let.specialized_name = out->let.name; // indicates this is not a generic function
+
+    // make params array from user_type
+    out->let.n_parameters = user_type->n_fields;
+    out->let.parameters   = alloc_malloc(self->type_arena, user_type->n_fields);
+
+    for (u16 i = 0; i < out->let.n_parameters; ++i)
+        out->let.parameters[i] = ast_node_create_sym(self->type_arena, user_type->field_names[i]);
+
+    // make tuple type for params from user_type
+    tess_type *left = tess_type_create_tuple(self->type_arena, user_type->n_fields);
+    for (u32 i = 0; i < left->elements.size; ++i) left->elements.v[i] = user_type->fields[i];
+
+    // make the arrow type
+    out->let.arrow = tess_type_create_arrow(self->type_arena, left, user_type);
+
+    return out;
+}
+
+static void ti_generate_user_type_functions(ti_inferer *self) {
+    // generate required functions for user defined types: constructors, getters and setters.
+
+    ast_node_array added = {.alloc = self->type_arena};
+
+    for (u32 i = 0; i < self->nodes->size; ++i) {
+        ast_node const *node = self->nodes->v[i];
+        if (ast_user_type_definition != node->tag) continue;
+
+        // type must be registered
+        char const       *type_name = ast_node_name_string(node->user_type_def.name);
+        type_entry const *te        = type_registry_find(self->type_registry, type_name);
+        if (!te) fatal("generate_user_type_functions: could not find type '%s'", type_name);
+        tess_type      *ty          = te->type;
+
+        c_string_cslice field_names = {0};
+        field_names =
+          ast_nodes_get_names(self->strings, (ast_node_slice){.v   = node->user_type_def.field_names,
+                                                              .end = node->user_type_def.n_fields});
+
+        // constructor sig:
+        // _gen_make_foo : (x : int, y : float) -> foo
+        ast_node *constructor = make_type_constructor_function(self, type_name, BODY, ty);
+    }
+}
+
+//
+
 void log(ti_inferer *self, char const *restrict fmt, ...) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
@@ -1007,4 +1069,13 @@ constraint make_constraint(tess_type *l, tess_type *r) {
 
 tess_type *make_typevar(ti_inferer *self) {
     return tess_type_create_type_var(self->type_arena, self->next_type_var++);
+}
+
+static bool is_special_name(char const *str) {
+    return (0 == strncmp("_gen_", str, 5) || 0 == strncmp("c_", str, 2) || 0 == strncmp("std_", str, 4));
+}
+
+static bool is_special_name_s(string_t const *string) {
+    char const *str = mos_string_str(string);
+    return (0 == strncmp("_gen_", str, 5) || 0 == strncmp("c_", str, 2) || 0 == strncmp("std_", str, 4));
 }

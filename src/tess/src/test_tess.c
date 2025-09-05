@@ -332,7 +332,8 @@ static int test_user_struct(void) {
                         "\n"
                         "struct bar = \n"
                         "  x : foo\n"
-                        "end";
+                        "end\n"
+                        "\n";
 
     return compile_input_flag(input, false);
 }

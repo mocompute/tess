@@ -40,6 +40,7 @@ typedef struct tess_type {
         }; // arrow
 
         struct {
+            // TODO this could more helpfully be a tuple type instead of an array of fields.
             char const        *name;
             struct tess_type **fields;
             char const       **field_names;

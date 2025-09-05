@@ -16,7 +16,7 @@ struct type_registry {
 // static int     compare_type_entries(const void *, const void *);
 
 static int     compare_type_entry_names(const void *, const void *);
-static void    sorted_insert(type_entry_array *, struct type_entry);
+static void    sorted_insert(type_entry_array *, type_entry);
 static void    register_basic_types(type_registry *);
 
 type_registry *type_registry_create(allocator *alloc) {
@@ -36,17 +36,17 @@ void type_registry_destroy(type_registry **self) {
     *self = null;
 }
 
-int type_registry_add(type_registry *self, struct type_entry entry) {
+int type_registry_add(type_registry *self, type_entry entry) {
     if (type_registry_find(self, entry.name)) return 1;
     sorted_insert(&self->entries, entry);
     return 0;
 }
 
-struct type_entry *type_registry_find(type_registry *self, char const *name) {
-    struct type_entry  tmp = {.name = name};
+type_entry *type_registry_find(type_registry *self, char const *name) {
+    type_entry  tmp = {.name = name};
 
-    struct type_entry *out = bsearch(&tmp, self->entries.v, self->entries.size, sizeof self->entries.v[0],
-                                     compare_type_entry_names);
+    type_entry *out = bsearch(&tmp, self->entries.v, self->entries.size, sizeof self->entries.v[0],
+                              compare_type_entry_names);
 
     return out;
 }
@@ -55,15 +55,15 @@ struct type_entry *type_registry_find(type_registry *self, char const *name) {
 
 static void register_basic_types(type_registry *self) {
 
-    int               error       = 0;
+    int              error       = 0;
 
-    static tess_type  nil_type    = {.tag = type_nil};
-    static tess_type  bool_type   = {.tag = type_bool};
-    static tess_type  int_type    = {.tag = type_int};
-    static tess_type  float_type  = {.tag = type_float};
-    static tess_type  string_type = {.tag = type_string};
-    static tess_type  any_type    = {.tag = type_any};
-    struct type_entry entry       = {0};
+    static tess_type nil_type    = {.tag = type_nil};
+    static tess_type bool_type   = {.tag = type_bool};
+    static tess_type int_type    = {.tag = type_int};
+    static tess_type float_type  = {.tag = type_float};
+    static tess_type string_type = {.tag = type_string};
+    static tess_type any_type    = {.tag = type_any};
+    type_entry       entry       = {0};
 
     //
     entry.name = type_tag_to_string(type_nil);
@@ -95,7 +95,7 @@ static void register_basic_types(type_registry *self) {
 
 //
 
-static void sorted_insert(type_entry_array *entries, struct type_entry entry) {
+static void sorted_insert(type_entry_array *entries, type_entry entry) {
 
     if (entries->size == entries->capacity) array_reserve(*entries, entries->capacity * 2);
 
@@ -121,8 +121,8 @@ static void sorted_insert(type_entry_array *entries, struct type_entry entry) {
 // }
 
 // static int compare_type_entries(void const *a, void const *b) {
-//     struct type_entry const *left  = a;
-//     struct type_entry const *right = b;
+//     type_entry const *left  = a;
+//     type_entry const *right = b;
 
 //     int                      res;
 //     if ((res = strcmp(left->name, right->name)) != 0) return res;
@@ -130,8 +130,8 @@ static void sorted_insert(type_entry_array *entries, struct type_entry entry) {
 // }
 
 static int compare_type_entry_names(void const *a, void const *b) {
-    struct type_entry const *left  = a;
-    struct type_entry const *right = b;
+    type_entry const *left  = a;
+    type_entry const *right = b;
 
     return strcmp(left->name, right->name);
 }

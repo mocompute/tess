@@ -27,10 +27,10 @@ void ast_node_deinit(allocator *alloc, struct ast_node *node) {
     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
     case ast_named_function_application:  deinit(node->named_application.arguments); break;
     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
-    case ast_user_defined_type:
-        deinit(node->user_type.field_names);
-        deinit(node->user_type.field_annotations);
-        deinit(node->user_type.field_types);
+    case ast_user_type_definition:
+        deinit(node->user_type_def.field_names);
+        deinit(node->user_type_def.field_annotations);
+        deinit(node->user_type_def.field_types);
         break;
     case ast_eof:
     case ast_nil:
@@ -52,6 +52,12 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // init the node like other _create functions do.
     ast_node *self = alloc_calloc(alloc, 1, sizeof *self);
     self->tag      = tag;
+    return self;
+}
+
+ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
+    ast_node *self    = ast_node_create(alloc, ast_symbol);
+    self->symbol.name = mos_string_init(alloc, str);
     return self;
 }
 
@@ -77,7 +83,7 @@ void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
     case ast_lambda_function_application: init(node->lambda_application.arguments);
     case ast_named_function_application:  init(node->named_application.arguments);
 
-    case ast_user_defined_type:
+    case ast_user_type_definition:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -128,7 +134,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             clone->array.nodes[i] = ast_node_clone(alloc, orig->array.nodes[i]);
         break;
 
-    case ast_user_defined_type:
+    case ast_user_type_definition:
     case ast_symbol:
     case ast_eof:
     case ast_nil:
@@ -139,7 +145,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_string:
     case ast_infix:
     case ast_let_in:
-    case ast_if_then_else:      break;
+    case ast_if_then_else:         break;
     }
 
     // clone the rest of the fields
@@ -205,16 +211,17 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->named_application.specialized = ast_node_clone(alloc, orig->named_application.specialized);
         break;
 
-    case ast_user_defined_type:
-        clone->user_type.name        = ast_node_clone(alloc, orig->user_type.name);
+    case ast_user_type_definition:
+        clone->user_type_def.name     = ast_node_clone(alloc, orig->user_type_def.name);
 
-        clone->user_type.n_fields    = orig->user_type.n_fields;
-        clone->user_type.field_types = orig->user_type.field_types; // always in arena, never clone types
+        clone->user_type_def.n_fields = orig->user_type_def.n_fields;
+        clone->user_type_def.field_types =
+          orig->user_type_def.field_types; // always in arena, never clone types
 
-        for (u32 i = 0; i < clone->user_type.n_fields; ++i) {
-            clone->user_type.field_annotations[i] =
-              ast_node_clone(alloc, orig->user_type.field_annotations[i]);
-            clone->user_type.field_names[i] = ast_node_clone(alloc, orig->user_type.field_names[i]);
+        for (u32 i = 0; i < clone->user_type_def.n_fields; ++i) {
+            clone->user_type_def.field_annotations[i] =
+              ast_node_clone(alloc, orig->user_type_def.field_annotations[i]);
+            clone->user_type_def.field_names[i] = ast_node_clone(alloc, orig->user_type_def.field_names[i]);
         }
         break;
     }
@@ -401,10 +408,10 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     } break;
 
-    case ast_user_defined_type: {
-        u16        n                 = node->user_type.n_fields;
-        ast_node **field_names       = node->user_type.field_names;
-        ast_node **field_annotations = node->user_type.field_annotations;
+    case ast_user_type_definition: {
+        u16        n                 = node->user_type_def.n_fields;
+        ast_node **field_names       = node->user_type_def.field_names;
+        ast_node **field_annotations = node->user_type_def.field_annotations;
 
         sexp      *sexp_elements     = alloc_malloc(alloc, sizeof(sexp) * n);
 
@@ -416,7 +423,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         sexp annotations_list = sexp_init_list(alloc, sexp_elements, n);
 
         alloc_free(alloc, sexp_elements);
-        return penta(alloc, sym("user-type"), recur(node->user_type.name), names_list, annotations_list,
+        return penta(alloc, sym("user-type"), recur(node->user_type_def.name), names_list, annotations_list,
                      type);
 
     } break;
@@ -549,7 +556,7 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     } break;
 
-    case ast_user_defined_type:
+    case ast_user_type_definition:
         // excluded from dfs
         return;
     }
@@ -636,7 +643,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
-    case ast_user_defined_type:           valid = true; break;
+    case ast_user_type_definition:        valid = true; break;
     }
     if (!valid) {
 

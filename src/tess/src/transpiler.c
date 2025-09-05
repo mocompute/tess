@@ -43,7 +43,7 @@ static int   a_main(transpiler *, ast_node const *);
 static int   a_nil_expression(transpiler *, ast_node const *);
 static int   a_result_type_of(transpiler *, tess_type const *);
 static int   a_toplevel(transpiler *, ast_node const *);
-static int   a_user_type(transpiler *, ast_node const *);
+static int   a_user_type_definition(transpiler *, ast_node const *);
 
 static char *next_variable(transpiler *);
 static bool  is_generic_function(ast_node const *node);
@@ -152,18 +152,18 @@ static int a_result_type_of(transpiler *self, tess_type const *ty) {
     return 0;
 }
 
-static int a_user_type(transpiler *self, ast_node const *node) {
-    char const *name     = ast_node_name_string(node->user_type.name);
+static int a_user_type_definition(transpiler *self, ast_node const *node) {
+    char const *name     = ast_node_name_string(node->user_type_def.name);
 
-    u32 const   n_fields = node->user_type.n_fields;
+    u32 const   n_fields = node->user_type_def.n_fields;
 
     out_put_start(self, "");
     out_put_fmt(self, "struct %s {\n", name);
 
     self->indent_level++;
     for (u32 i = 0; i < n_fields; ++i) {
-        tess_type  *ty         = node->user_type.field_types[i];
-        char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
+        tess_type  *ty         = node->user_type_def.field_types[i];
+        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
         a_result_type_of(self, ty);
@@ -182,8 +182,8 @@ static int a_user_type(transpiler *self, ast_node const *node) {
     out_put_fmt(self, "%s _make_%s_(", name, name); // type and name
 
     for (u32 i = 0; i < n_fields; ++i) {
-        tess_type  *ty         = node->user_type.field_types[i];
-        char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
+        tess_type  *ty         = node->user_type_def.field_types[i];
+        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
         a_result_type_of(self, ty);
@@ -198,7 +198,7 @@ static int a_user_type(transpiler *self, ast_node const *node) {
     out_put_fmt(self, "struct %s _out_;\n", name);
 
     for (u32 i = 0; i < n_fields; ++i) {
-        char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
+        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
         out_put_start(self, "");
         out_put_fmt(self, "_out_.%s = %s;\n", field_name, field_name);
     }
@@ -221,6 +221,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
+    case ast_user_type:
     case ast_infix:
     case ast_tuple:
     case ast_let_in:
@@ -230,7 +231,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:  break;
-    case ast_user_defined_type:           return a_user_type(self, node); break;
+    case ast_user_type_definition:        return a_user_type_definition(self, node); break;
     }
     return 0;
 }
@@ -356,6 +357,10 @@ static int a_eval(transpiler *self, ast_node const *node) {
         else out_put_fmt(self, "%s = false;\n", var);
         break;
 
+    case ast_user_type:
+        // FIXME
+        break;
+
     case ast_infix: {
         if (a_infix(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
@@ -363,7 +368,9 @@ static int a_eval(transpiler *self, ast_node const *node) {
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
 
-    case ast_tuple:  break;
+    case ast_tuple:
+        // FIXME
+        break;
 
     case ast_let_in: {
         if (a_let_in(self, node)) return 1;
@@ -393,7 +400,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
 
-    case ast_user_defined_type: break;
+    case ast_user_type_definition: break;
     }
     return 0;
 }
