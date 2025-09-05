@@ -805,6 +805,15 @@ void collect_constraints(void *ctx_, ast_node *node) {
                   ast_node_name_string(node->user_type.name));
 
         push(node->type, e->type);
+
+        // each field must be constrained to its correct type
+        assert(type_user == e->type->tag);
+        tl_type *lt = e->type->labelled_tuple;
+        assert(node->user_type.n_fields == lt->fields.size);
+
+        for (u16 i = 0; i < node->user_type.n_fields; ++i)
+            push(node->user_type.fields[i]->type, lt->fields.v[i]);
+
     } break;
 
     case ast_tuple: {

@@ -571,7 +571,10 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     } break;
 
-    case ast_user_type: recur_on_array(node->array.nodes, node->array.n, ctx, fun); return fun(ctx, node);
+    case ast_user_type: {
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
+        return fun(ctx, node);
+    } break;
 
     case ast_user_type_definition:
         // excluded from dfs
