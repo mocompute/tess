@@ -59,6 +59,11 @@ typedef struct {
 } c_string_array;
 
 typedef struct {
+    array_sized;
+    char **v;
+} c_string_sized;
+
+typedef struct {
     array_slice;
     char **v;
 } c_string_slice;

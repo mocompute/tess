@@ -1,127 +1,42 @@
-#include "alloc.h"
 #include "type.h"
-#include "vector.h"
+#include "alloc.h"
 
 #include <assert.h>
 #include <stdio.h>
 
 // -- tl_type allocation and deallocation --
 
-tl_type tl_type_init(tl_type_tag tag) {
-    tl_type self;
-    alloc_zero(&self);
-    self.tag = tag;
-    return self;
-}
-
-tl_type tl_type_init_type_var(u32 val) {
-    tl_type self;
-    self          = tl_type_init(type_type_var);
-    self.type_var = val;
-    return self;
-}
-
 tl_type *tl_type_create_type_var(allocator *alloc, u32 val) {
-    tl_type *self = alloc_struct(alloc, self);
-    *self         = tl_type_init_type_var(val);
+    tl_type *self  = alloc_struct(alloc, self);
+    self->tag      = type_type_var;
+    self->type_var = val;
+
     return self;
 }
 
-tl_type tl_type_init_tuple() {
-    tl_type self = tl_type_init(type_tuple);
-    return self;
-}
-
-tl_type *tl_type_create_tuple(allocator *alloc, u16 size) {
-    tl_type *self       = alloc_struct(alloc, self);
-    *self               = tl_type_init_tuple();
-    self->elements.size = size;
-    if (size) self->elements.v = alloc_calloc(alloc, size, sizeof self->elements.v[0]);
-    return self;
-}
-
-tl_type tl_type_init_arrow(tl_type *left, tl_type *right) {
-    tl_type self = tl_type_init(type_arrow);
-    self.left    = left;
-    self.right   = right;
+tl_type *tl_type_create_tuple(allocator *alloc, tl_type_sized elements) {
+    tl_type *self  = alloc_struct(alloc, self);
+    self->tag      = type_tuple;
+    self->elements = elements;
     return self;
 }
 
 tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
     tl_type *self = alloc_struct(alloc, self);
-    *self         = tl_type_init_arrow(left, right);
+    self->tag     = type_arrow;
+    self->left    = left;
+    self->right   = right;
+
     return self;
 }
 
-tl_type tl_type_init_user_type(char const *name, tl_type **fields, char const **field_names, u16 n) {
+tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type *labelled_tuple) {
+    tl_type *self        = alloc_struct(alloc, self);
+    self->tag            = type_user;
+    self->name           = name;
+    self->labelled_tuple = labelled_tuple;
 
-    tl_type self     = tl_type_init(type_user);
-    self.name        = name;
-    self.fields      = fields;
-    self.field_names = field_names;
-    self.n_fields    = n;
     return self;
-}
-
-tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type **fields,
-                                  char const **field_names, u16 n) {
-
-    tl_type *self = alloc_struct(alloc, self);
-    *self         = tl_type_init_user_type(name, fields, field_names, n);
-    return self;
-}
-
-void tl_type_deinit(allocator *alloc, tl_type *self) {
-    switch (self->tag) {
-    case type_nil:
-    case type_bool:
-    case type_int:
-    case type_float:
-    case type_type_var:
-    case type_any:
-    case type_string:   break;
-
-    case type_user:
-        alloc_free(alloc, self->fields);
-        alloc_free(alloc, self->field_names);
-        break;
-
-    case type_arrow:
-        // Note: cast away const
-        tl_type_deinit(alloc, self->left);
-        tl_type_deinit(alloc, self->right);
-        break;
-
-    case type_tuple: alloc_free(alloc, self->elements.v); break;
-    }
-
-    alloc_invalidate(self);
-}
-
-tl_type *tl_type_prim(tl_type_tag tag) {
-    static tl_type nil_type    = {.tag = type_nil};
-    static tl_type bool_type   = {.tag = type_bool};
-    static tl_type int_type    = {.tag = type_int};
-    static tl_type float_type  = {.tag = type_float};
-    static tl_type string_type = {.tag = type_string};
-    static tl_type any_type    = {.tag = type_any};
-
-    switch (tag) {
-    case type_nil:    return &nil_type;
-    case type_bool:   return &bool_type;
-    case type_int:    return &int_type;
-    case type_float:  return &float_type;
-    case type_string: return &string_type;
-    case type_any:    return &any_type;
-    case type_tuple:
-    case type_arrow:
-    case type_user:
-    case type_type_var:
-        assert(false);
-        exit(1);
-        break;
-    }
-    assert(false);
 }
 
 bool tl_type_is_prim(tl_type const *self) {
@@ -131,67 +46,19 @@ bool tl_type_is_prim(tl_type const *self) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:      return true;
+    case type_any:            return true;
+
     case type_user:
     case type_tuple:
+    case type_labelled_tuple:
     case type_arrow:
-    case type_type_var: return false;
+    case type_type_var:       return false;
     }
     assert(false);
 }
 
 bool tl_type_equal(tl_type const *left, tl_type const *right) {
     return tl_type_compare(left, right) == 0;
-}
-
-int tl_type_compare(tl_type const *left, tl_type const *right) {
-    // structural equality for tl_types - TODO may not be necessary
-    // because we use reference equality for types.
-    if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
-
-    switch (left->tag) {
-    case type_nil:
-    case type_bool:
-    case type_int:
-    case type_float:
-    case type_string:
-    case type_any:    return 0;
-
-    case type_tuple:
-        if (left->elements.size != right->elements.size)
-            return left->elements.size < right->elements.size ? -1 : 1;
-        for (u32 i = 0; i < left->elements.size; i++) {
-            int res;
-            if ((res = tl_type_compare(left->elements.v[i], right->elements.v[i])) != 0) return res;
-        }
-        return 0;
-
-    case type_arrow: {
-        int res;
-        if ((res = tl_type_compare(left->left, right->left)) != 0) return res;
-        if ((res = tl_type_compare(left->right, right->right)) != 0) return res;
-        return 0;
-    }
-
-    case type_user: {
-        if (left->n_fields != right->n_fields) return left->n_fields < right->n_fields ? -1 : 1;
-        for (u16 i = 0; i < left->n_fields; ++i) {
-            int res;
-            if ((res = tl_type_compare(left->fields[i], right->fields[i])) != 0) return res;
-        }
-
-        for (u16 i = 0; i < left->n_fields; ++i) {
-            int res;
-            if ((res = strcmp(left->field_names[i], right->field_names[i])) != 0) return res;
-        }
-        return 0;
-
-    } break;
-
-    case type_type_var:
-        if (left->type_var == right->type_var) return 0;
-        return left->type_var < right->type_var ? -1 : 1;
-    }
 }
 
 int tl_type_snprint(char *buf, int sz, tl_type const *self) {
@@ -209,20 +76,11 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
 
     case type_user:   {
         len = 0;
-        len += snprintf(buf, (size_t)sz, "(");
+        len += snprintf(buf, (size_t)sz, "(%s ", self->name);
 
-        for (size_t i = 0; i < self->n_fields; ++i) {
-
-            if (buf && sz) {
-                len += snprintf(buf + len, (size_t)(sz - len), "%s : ", self->field_names[i]);
-                len += tl_type_snprint(buf + len, sz - len, self->fields[i]);
-                len += snprintf(buf + len, (size_t)(sz - len), ", ");
-            } else {
-                len += snprintf(null, 0, "%s : ", self->field_names[i]);
-                len += tl_type_snprint(null, 0, self->fields[i]);
-                len += snprintf(null, 0, ", ");
-            }
-        }
+        tl_type tmp = *self;
+        tmp.tag     = type_labelled_tuple;
+        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, &tmp);
 
         if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
         else len += snprintf(null, 0, ")");
@@ -240,6 +98,29 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
                 len += snprintf(buf + len, (size_t)(sz - len), ", ");
             } else {
                 len += tl_type_snprint(null, 0, self->elements.v[i]);
+                len += snprintf(null, 0, ", ");
+            }
+        }
+
+        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
+        else len += snprintf(null, 0, ")");
+
+    } break;
+
+    case type_labelled_tuple: {
+
+        len = 0;
+        len += snprintf(buf, (size_t)sz, "(");
+
+        for (size_t i = 0; i < self->labelled_tuple->fields.size; ++i) {
+
+            if (buf && sz) {
+                len += snprintf(buf + len, (size_t)(sz - len), "%s : ", self->names.v[i]);
+                len += tl_type_snprint(buf + len, sz - len, self->fields.v[i]);
+                len += snprintf(buf + len, (size_t)(sz - len), ", ");
+            } else {
+                len += snprintf(null, 0, "%s : ", self->names.v[i]);
+                len += tl_type_snprint(null, 0, self->fields.v[i]);
                 len += snprintf(null, 0, ", ");
             }
         }
@@ -274,6 +155,62 @@ char *tl_type_to_string(allocator *alloc, tl_type const *type) {
     char *out = alloc_malloc(alloc, (size_t)len);
     tl_type_snprint(out, len, type);
     return out;
+}
+
+bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
+    // type variables are not satisfied by any type
+
+    if (requires == candidate) return true; // self-satisfied
+
+    switch (requires->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string: return (requires->tag == candidate->tag);
+
+    case type_tuple:
+        // labelled tuples satisfy plain tuples if their types match.
+        if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return false;
+        if (requires->elements.size != candidate->elements.size) return false;
+
+        for (u32 i = 0; i < requires->elements.size; ++i)
+            if (!tl_type_satisfies(requires->elements.v[i], candidate->elements.v[i])) return false;
+
+        return true;
+
+    case type_labelled_tuple:
+        // plain tuples do not satisfy labelled tuples
+        if (type_labelled_tuple != candidate->tag) return false;
+        if (requires->elements.size != candidate->elements.size) return false;
+
+        // names and types must match
+        for (u32 i = 0; i < requires->elements.size; ++i) {
+            if (0 != strcmp(requires->names.v[i], candidate->names.v[i])) return false;
+            if (!tl_type_satisfies(requires->elements.v[i], candidate->elements.v[i])) return false;
+        }
+
+        return true;
+
+        break;
+
+    case type_arrow:
+        return candidate->tag == type_arrow && tl_type_satisfies(requires->left, candidate->left) &&
+               tl_type_satisfies(requires->right, candidate->right);
+
+    case type_user:
+        // same-named user types satisfy, though in that case they are expected to be the same identity
+        assert(requires == candidate);
+        return 0 == strcmp(requires->name, candidate->name);
+
+    case type_type_var:
+        // are never satisfied
+        return false;
+
+    case type_any:
+        // are always satisfied
+        return true;
+    }
 }
 
 #ifndef MOS_TAG_STRING

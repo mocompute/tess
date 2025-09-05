@@ -638,32 +638,52 @@ static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) 
     // used when looking for a specialised function, which should
     // exclude any generic functions.
 
+    if (tl_type_satisfies(a, b)) return true;
+    if (strict) return false;
+
+    // if not strict, we are additionally satisfied when using type variables
+
     switch (a->tag) {
     case type_nil:
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: return (a->tag == b->tag || (!strict && b->tag == type_type_var));
+    case type_string: return b->tag == type_type_var;
 
     case type_tuple:
-        if (!strict && type_type_var == b->tag) return true;
-        else if (type_tuple != b->tag) return false;
-        else {
-            if (a->elements.size != b->elements.size) return false;
+        if (type_type_var == b->tag) return true;
+        else if (type_tuple != b->tag && type_labelled_tuple != b->tag) return false;
 
-            for (u32 i = 0; i < a->elements.size; ++i)
-                if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
+        if (a->elements.size != b->elements.size) return false;
 
-            return true;
+        for (u32 i = 0; i < a->elements.size; ++i)
+            if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
+
+        return true;
+
+    case type_labelled_tuple:
+        if (type_type_var == b->tag) return true;
+
+        if (a->elements.size != b->elements.size) return false;
+
+        // regardless of typevars, names must match
+        for (u32 i = 0; i < a->elements.size; ++i) {
+            if (0 != strcmp(a->names.v[i], b->names.v[i])) return false;
+            if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
         }
+
+        return true;
 
     case type_arrow:
         return b->tag == type_arrow && is_type_compatible(a->left, b->left, strict) &&
                is_type_compatible(a->right, b->right, strict);
 
-    case type_user:     return tl_type_equal(a, b);
+    case type_user:
+        // user types are exclusively identified by reference
+        return a == b;
 
-    case type_type_var: return !strict;
+    case type_type_var:
+        // type variables match anything if not strict
 
     case type_any:      return true;
     }
