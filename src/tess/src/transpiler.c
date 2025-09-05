@@ -279,6 +279,7 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     char *var  = next_variable(self);
     array_push(self->results, &var);
 
+    out_put(self, "\n");
     out_put_start(self, "");
     a_result_type_of(self, node->let_in.body->type);
     out_put_fmt(self, " %s = %s;\n", var, body);
@@ -303,6 +304,11 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     char *var = next_variable(self);
     array_push(self->results, &var);
+
+    out_put(self, "\n");
+
+    out_put_start(self, "");
+    out_put_fmt(self, "/* %s */\n", ast_tag_to_string(node->tag));
 
     out_put_start(self, "");
     a_result_type_of(self, node->type);
@@ -355,6 +361,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         for (u16 i = 0; i < node->user_type.n_fields; ++i) {
             if (a_eval(self, node->user_type.fields[i])) return 1;
             char *res = self->results.v[--self->results.size];
+            out_put(self, "\n");
             out_put_start(self, "");
             out_put_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
         }
@@ -365,6 +372,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_infix: {
         if (a_infix(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -376,6 +384,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_let_in: {
         if (a_let_in(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
 
@@ -384,6 +393,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_let: {
         if (a_let(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -397,6 +407,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_named_function_application:  {
         if (a_fun_apply(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, res);
     } break;
@@ -458,6 +469,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 
         char *var = self->results.v[--self->results.size];
 
+        out_put(self, "\n");
         out_put_start(self, "");
         out_put_fmt(self, "return (int) %s;", var);
 
