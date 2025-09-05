@@ -7,6 +7,7 @@
 #include "dbg.h"
 #include "mos_string.h"
 #include "type.h"
+#include "type_registry.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -18,6 +19,8 @@ struct transpiler {
     allocator     *alloc;
     allocator     *strings;
     char_array    *bytes;
+
+    type_registry *type_registry;
 
     c_string_array results;
     // a stack of result variable names, see also next_variable
@@ -57,16 +60,17 @@ static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__(
 static bool  is_generic_function(ast_node const *node);
 static void  log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-transpiler  *transpiler_create(allocator *alloc, char_array *bytes) {
+transpiler  *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
 
-    transpiler *self = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc      = alloc;
-    self->strings    = arena_create(alloc, 1024);
-    self->bytes      = bytes;
+    transpiler *self    = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc         = alloc;
+    self->strings       = arena_create(alloc, 1024);
+    self->bytes         = bytes;
+    self->type_registry = tr;
 
-    self->results    = (c_string_array){.alloc = self->strings};
+    self->results       = (c_string_array){.alloc = self->strings};
 
-    self->verbose    = true;
+    self->verbose       = true;
 
     return self;
 }
@@ -367,9 +371,24 @@ static int a_eval(transpiler *self, ast_node const *node) {
         else out_put_fmt(self, "%s = false;\n", var);
         break;
 
-    case ast_user_type:
-        // FIXME
-        break;
+    case ast_user_type: {
+        // eval each field in the user_type and assign to its matching struct field
+
+        type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
+        if (!e)
+            fatal("a_eval: type '%s' not found in registry", ast_node_name_string(node->user_type.name));
+
+        tl_type *lt = e->type->labelled_tuple;
+
+        for (u16 i = 0; i < node->user_type.n_fields; ++i) {
+            if (a_eval(self, node->user_type.fields[i])) return 1;
+            char *res = self->results.v[--self->results.size];
+            out_put_start(self, "");
+            out_put_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
+        }
+    }
+
+    break;
 
     case ast_infix: {
         if (a_infix(self, node)) return 1;

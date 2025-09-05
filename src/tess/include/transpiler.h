@@ -4,13 +4,13 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
-#include "nodiscard.h"
+#include "type_registry.h"
 
 typedef struct transpiler transpiler;
 
 // -- allocation and deallocation --
 
-nodiscard transpiler *transpiler_create(allocator *, char_array *bytes) mallocfun;
+nodiscard transpiler *transpiler_create(allocator *, char_array *bytes, type_registry *) mallocfun;
 void                  transpiler_destroy(transpiler **);
 
 // -- operation --

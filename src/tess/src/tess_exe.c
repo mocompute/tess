@@ -5,6 +5,7 @@
 #include "syntax.h"
 #include "transpiler.h"
 #include "type_inference.h"
+#include "type_registry.h"
 #include "types.h"
 
 #include <stdbool.h>
@@ -173,7 +174,9 @@ int compile(struct state *self) {
         goto cleanup_syntax;
     }
 
-    ti_inferer *ti = ti_inferer_create(default_allocator(), &nodes, syntax_checker_type_registry(syntax));
+    type_registry *tr = syntax_checker_type_registry(syntax);
+
+    ti_inferer    *ti = ti_inferer_create(default_allocator(), &nodes, tr);
     ti_inferer_set_verbose(ti, self->verbose);
     if (ti_inferer_run(ti)) {
         ti_inferer_report_errors(ti);
@@ -184,7 +187,7 @@ int compile(struct state *self) {
     allocator  *transpile_alloc   = arena_create(default_allocator(), 64 * 1024);
     char_array  transpiler_output = {.alloc = transpile_alloc};
 
-    transpiler *transpiler        = transpiler_create(default_allocator(), &transpiler_output);
+    transpiler *transpiler        = transpiler_create(default_allocator(), &transpiler_output, tr);
     if (transpiler_compile(transpiler, nodes.v, nodes.size)) fatal("error while transpiling");
 
     if (self->out_path) {
