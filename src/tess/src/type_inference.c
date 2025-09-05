@@ -70,7 +70,7 @@ static void       ti_rename_variables(ti_inferer *);
 static void       ti_assign_type_variables(ti_inferer *);
 static void       ti_collect_constraints(ti_inferer *);
 
-static void       ti_apply_substitutions_to_ast(constraint_sized, ast_node_sized);
+static void       ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
 static void       ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
 void              ti_run_solver(ti_inferer *);
 
@@ -140,7 +140,7 @@ int ti_inferer_run(ti_inferer *self) {
     ti_run_solver(self);
 
     // 3
-    ti_apply_substitutions_to_ast((constraint_sized)sized_all(self->substitutions),
+    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
                                   (ast_node_sized)sized_all(*self->nodes));
 
     // 4: specialize
@@ -167,7 +167,7 @@ int ti_inferer_run(ti_inferer *self) {
     ti_collect_constraints(self);
 
     ti_run_solver(self);
-    ti_apply_substitutions_to_ast((constraint_sized)sized_all(self->substitutions),
+    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
                                   (ast_node_sized)sized_all(*self->nodes));
 
     if (self->verbose) {
@@ -375,36 +375,20 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     case type_any:      break;
 
     case type_tuple:    {
-
-        for (size_t i = 0; i < type->elements.size; ++i) {
-            if (tl_type_equal(type->elements.v[i], from)) {
-                type->elements.v[i] = to;
-                did_substitute      = true;
-            }
-        }
+        for (size_t i = 0; i < type->elements.size; ++i)
+            if (apply_one_substitution(&type->elements.v[i], from, to)) did_substitute = true;
 
     } break;
 
     case type_labelled_tuple: {
-
-        for (size_t i = 0; i < type->fields.size; ++i) {
-            if (tl_type_equal(type->fields.v[i], from)) {
-                type->fields.v[i] = to;
-                did_substitute    = true;
-            }
-        }
+        for (size_t i = 0; i < type->fields.size; ++i)
+            if (apply_one_substitution(&type->fields.v[i], from, to)) did_substitute = true;
 
     } break;
 
     case type_arrow: {
-        if (tl_type_equal(type->left, from)) {
-            type->left     = to;
-            did_substitute = true;
-        }
-        if (tl_type_equal(type->right, from)) {
-            type->right    = to;
-            did_substitute = true;
-        }
+        if (apply_one_substitution(&type->left, from, to)) did_substitute = true;
+        if (apply_one_substitution(&type->right, from, to)) did_substitute = true;
     } break;
     }
 
@@ -452,9 +436,13 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
     }
 }
 
-static void ti_apply_substitutions_to_ast(constraint_sized substitutions, ast_node_sized nodes) {
+static void ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized substitutions,
+                                          ast_node_sized nodes) {
     constraint_sized ctx = substitutions;
-    for (size_t i = 0; i < nodes.size; ++i) ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);
+    for (size_t i = 0; i < nodes.size; ++i) {
+        log(self, "apply sub to %s", ast_node_to_string(self->strings, nodes.v[i]));
+        ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);
+    }
 }
 
 // -- solver --

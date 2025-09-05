@@ -87,6 +87,9 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     // output toplevel forms
     for (size_t i = 0; i < n; ++i) {
         int res = 0;
+
+        log(self, "compile: %s", ast_node_to_string(self->strings, nodes[i]));
+
         if ((res = a_toplevel(self, nodes[i]))) return res;
     }
 
@@ -481,17 +484,23 @@ static int a_let(transpiler *self, ast_node const *node) {
     if (0 == strlen(name)) name = mos_string_str(&node->let.name);
 
     if (is_generic_function(node)) {
-        log(self, "skipping '%s' because it is a generic function", mos_string_str(&node->let.name));
+        log(self, "skipping '%s' ('%s') because it is a generic function", mos_string_str(&node->let.name),
+            mos_string_str(&node->let.specialized_name));
         return 0;
     }
 
     // don't emit generic template functions
-    if (mos_string_empty(&node->let.specialized_name)) return 0;
+    if (mos_string_empty(&node->let.specialized_name)) {
+        log(self, "skipping '%s' because it has an empty name", mos_string_str(&node->let.name));
+        return 0;
+    }
 
     if (0 == strcmp(mos_string_str(&node->let.name), "main")) {
         // skip here, let a_main process it.
         return 0;
     }
+
+    log(self, "processing '%s'...", mos_string_str(&node->let.specialized_name));
 
     // function declaration
 
