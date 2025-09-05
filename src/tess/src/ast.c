@@ -419,83 +419,79 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
     case ast_f64:
     case ast_string: return fun(ctx, node);
 
-    case ast_infix:
-        ast_node_dfs(ctx, node->infix.left, fun);
-        ast_node_dfs(ctx, node->infix.right, fun);
+    case ast_infix:  {
+        struct ast_infix *v = ast_node_infix(node);
+        ast_node_dfs(ctx, v->left, fun);
+        ast_node_dfs(ctx, v->right, fun);
         return fun(ctx, node);
+    }
 
     case ast_tuple: {
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
         return fun(ctx, node);
     } break;
 
-    case ast_let_in:
-        ast_node_dfs(ctx, node->let_in.name, fun);
-        ast_node_dfs(ctx, node->let_in.value, fun);
-        ast_node_dfs(ctx, node->let_in.body, fun);
-
+    case ast_let_in: {
+        struct ast_let_in *v = ast_node_let_in(node);
+        ast_node_dfs(ctx, v->name, fun);
+        ast_node_dfs(ctx, v->value, fun);
+        ast_node_dfs(ctx, v->body, fun);
         return fun(ctx, node);
+    }
 
     case ast_let: {
-
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
         ast_node_dfs(ctx, node->let.body, fun);
-
         return fun(ctx, node);
-    } break;
+    }
 
-    case ast_if_then_else:
-        ast_node_dfs(ctx, node->if_then_else.condition, fun);
-        ast_node_dfs(ctx, node->if_then_else.yes, fun);
-        ast_node_dfs(ctx, node->if_then_else.no, fun);
-
+    case ast_if_then_else: {
+        struct ast_if_then_else *v = ast_node_ifthen(node);
+        ast_node_dfs(ctx, v->condition, fun);
+        ast_node_dfs(ctx, v->yes, fun);
+        ast_node_dfs(ctx, v->no, fun);
         return fun(ctx, node);
+    }
 
     case ast_lambda_function: {
+        struct ast_lambda_function *v = ast_node_lf(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
-        ast_node_dfs(ctx, node->lambda_function.body, fun);
-
+        ast_node_dfs(ctx, v->body, fun);
         return fun(ctx, node);
-    } break;
+    }
 
     case ast_function_declaration: {
-        ast_node_dfs(ctx, node->function_declaration.name, fun);
-
+        struct ast_function_declaration *v = ast_node_fd(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
+        ast_node_dfs(ctx, v->name, fun);
         return fun(ctx, node);
-    } break;
+    }
 
     case ast_lambda_declaration: {
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
         return fun(ctx, node);
-
-    } break;
+    }
 
     case ast_lambda_function_application: {
-        ast_node_dfs(ctx, node->lambda_application.lambda, fun);
-
+        struct ast_lambda_application *v = ast_node_lambda(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
+        ast_node_dfs(ctx, v->lambda, fun);
         return fun(ctx, node);
-    } break;
+    }
 
     case ast_named_function_application: {
-        ast_node_dfs(ctx, node->named_application.specialized, fun);
-
+        struct ast_named_application *v = ast_node_named(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
-
+        ast_node_dfs(ctx, v->specialized, fun);
         return fun(ctx, node);
-    } break;
+    }
 
     case ast_user_type: {
-        ast_node_dfs(ctx, node->user_type.name, fun);
+        struct ast_user_type *v = ast_node_ut(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
+        ast_node_dfs(ctx, v->name, fun);
         return fun(ctx, node);
-    } break;
+    }
 
     case ast_user_type_definition:
         // excluded from dfs
