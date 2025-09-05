@@ -235,7 +235,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 }
 
 char const *ast_node_name_string(ast_node const *node) {
-    if (ast_symbol != node->tag && ast_string != node->tag) return null;
+    if (ast_symbol != node->tag && ast_string != node->tag)
+        fatal("ast_node_name_string: expected symbol or string");
 
     return mos_string_str(&node->symbol.name);
 }
@@ -249,22 +250,6 @@ int ast_node_name_strcmp(ast_node const *node, char const *target) {
 char const *ast_operator_to_string(ast_operator);
 
 //
-
-// static sexp tl_type_to_sexp(allocator *alloc, tl_type const *type) {
-//     // TODO this could be better in type.h but that would require
-//     // exposing sexp to that header.
-//     switch (type->tag) {
-//     case type_nil:      return sexp_init_sym(alloc, "nil");
-//     case type_bool:     return sexp_init_sym(alloc, "bool");
-//     case type_int:      return sexp_init_sym(alloc, "int");
-//     case type_float:    return sexp_init_sym(alloc, "float");
-//     case type_string:   return sexp_init_sym(alloc, "string");
-//     case type_tuple:    return sexp_init_sym(alloc, "[tuple]");
-//     case type_arrow:    return sexp_init_sym(alloc, "[arrow]");
-//     case type_user:     return sexp_init_sym(alloc, "[user]");
-//     case type_type_var: return sexp_init_sym(alloc, "[tv]"); break;
-//     }
-// }
 
 sexp        do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
                                 sexp (*symbol_fun)(allocator *, ast_node const *));

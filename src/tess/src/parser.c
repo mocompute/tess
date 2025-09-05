@@ -34,6 +34,8 @@ struct parser {
     struct tokenizer_error tokenizer_error;
     struct token           token;
 
+    u32                    next_nil_name;
+
     bool                   verbose;
     int                    indent_level;
 };
@@ -945,9 +947,26 @@ static int lambda_function_application(parser *p) {
     }
 }
 
+static char *make_nil_name(parser *p) {
+#define fmt "_gen_nil_%u_"
+    int len = snprintf(null, 0, fmt, p->next_nil_name) + 1;
+    if (len < 0) fatal("make_nil_name");
+    char *out = alloc_malloc(p->ast_arena, (u32)len);
+    snprintf(out, (u32)len, fmt, p->next_nil_name++);
+    return out;
+#undef fmt
+}
+
 static int simple_declaration(parser *p) {
-    // a = ... a single identifier, optionally typed, followed by an
+    // a = ... a single identifier or nil, optionally typed, followed by an
     // equal sign
+    if (0 == a_try(p, a_nil)) {
+        // need to match the equal sign too
+        if (a_try(p, a_equal_sign)) return 1;
+
+        return result_ast_str(p, ast_symbol, make_nil_name(p));
+    }
+
     if (a_try(p, a_identifier_typed)) return 1;
     ast_node *sym = p->result;
 
@@ -970,7 +989,7 @@ static int let_in_form(parser *p) {
     // let a = 2 in expression
     if (a_try_s(p, the_symbol, "let")) return 1;
     if (a_try(p, simple_declaration)) return 1;
-    ast_node *sym = p->result;
+    ast_node *sym_or_nil = p->result;
 
     if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
@@ -982,7 +1001,7 @@ static int let_in_form(parser *p) {
     if (a_try(p, a_end_of_block)) return 1;
 
     ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
-    node->let_in.name  = sym;
+    node->let_in.name  = sym_or_nil;
     node->let_in.value = defn;
     node->let_in.body  = body;
     log(p, "let_in_form: returning node %s", ast_node_to_string(p->debug_arena, node));
