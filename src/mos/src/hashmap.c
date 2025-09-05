@@ -14,10 +14,10 @@
 #define MAX_PROBE_LEN            (1 << 6) - 1
 #define HASHMAP_MAX_ELEMENT_SIZE 24
 
-struct hashmap_key {
+typedef struct hashmap_key {
     u16  size;
     byte data[];
-};
+} hashmap_key;
 
 struct hashmap {
 
@@ -30,18 +30,18 @@ struct hashmap {
     u16        value_size;
     u16        aligned_value_size;
 
-    alignas(struct hashmap_entry) byte entries[];
+    alignas(hashmap_entry) byte entries[];
 };
 
 // -- statics --
 
-static struct hashmap_entry *map_unchecked_at(hashmap *map, u32 index);
+static hashmap_entry *map_unchecked_at(hashmap *map, u32 index);
 
-static inline bool           is_occupied(u8 status) constfun;
-static inline bool           is_tombstone(u8 status) constfun;
-static inline u8             get_probe_distance(u8 status) constfun;
+static inline bool    is_occupied(u8 status) constfun;
+static inline bool    is_tombstone(u8 status) constfun;
+static inline u8      get_probe_distance(u8 status) constfun;
 
-static inline bool           is_occupied(u8 status) {
+static inline bool    is_occupied(u8 status) {
     return status & 1;
 }
 
@@ -64,7 +64,7 @@ static inline void set_tombstone(u8 *status) {
 }
 
 static inline size_t hashmap_entry_size(hashmap const *map) {
-    return map->aligned_value_size + sizeof(struct hashmap_entry);
+    return map->aligned_value_size + sizeof(hashmap_entry);
 }
 
 static inline u32 key_to_bucket(hashmap const *map, byte const *key, u16 key_len) {
@@ -79,7 +79,7 @@ static inline u32 incr_index(hashmap const *map, u32 index) {
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static struct hashmap_entry *map_find(hashmap *map, byte const *key, u16 key_len) {
+static hashmap_entry *map_find(hashmap *map, byte const *key, u16 key_len) {
     assert(map);
 
     u32 index          = key_to_bucket(map, key, key_len);
@@ -88,8 +88,8 @@ static struct hashmap_entry *map_find(hashmap *map, byte const *key, u16 key_len
     while (1) {
         if (probe_distance++ > MAX_PROBE_LEN) return 0;
 
-        struct hashmap_entry *const cell   = map_unchecked_at(map, index);
-        u8                          status = cell->status;
+        hashmap_entry *const cell   = map_unchecked_at(map, index);
+        u8                   status = cell->status;
 
         if (is_tombstone(status)) {
 
@@ -109,14 +109,14 @@ static struct hashmap_entry *map_find(hashmap *map, byte const *key, u16 key_len
     }
 }
 
-static int set_one(hashmap *map, struct hashmap_entry const *header, byte const *element) {
+static int set_one(hashmap *map, hashmap_entry const *header, byte const *element) {
 
-    byte to_store[HASHMAP_MAX_ELEMENT_SIZE + sizeof(struct hashmap_entry)];
-    byte tmp[HASHMAP_MAX_ELEMENT_SIZE + sizeof(struct hashmap_entry)];
+    byte to_store[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_entry)];
+    byte tmp[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_entry)];
 
     assert(map);
 
-    size_t const cell_size = sizeof(struct hashmap_entry) + map->value_size;
+    size_t const cell_size = sizeof(hashmap_entry) + map->value_size;
     assert(hashmap_entry_size(map) >= cell_size);
 
     // write header and data to to_store
@@ -135,11 +135,11 @@ static int set_one(hashmap *map, struct hashmap_entry const *header, byte const 
         }
         if (probe_distance > 16 && !warning_printed) {
             dbg("warning: high probe distance for key: %p, load factor: %f\n",
-                ((struct hashmap_entry *)to_store)->key, map_load_factor(map));
+                ((hashmap_entry *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
         }
 
-        struct hashmap_entry *const cell = map_unchecked_at(map, index);
+        hashmap_entry *const cell = map_unchecked_at(map, index);
 
         if (is_occupied(cell->status)) {
             if (probe_distance <= get_probe_distance(cell->status)) {
@@ -184,7 +184,7 @@ static int set_one(hashmap *map, struct hashmap_entry const *header, byte const 
     return 0;
 }
 
-// static int set_one_cell(hashmap *map, struct hashmap_entry *cell) {
+// static int set_one_cell(hashmap *map, hashmap_entry *cell) {
 //     return set_one(map, cell, cell->data);
 // }
 
@@ -203,7 +203,7 @@ static int grow_buckets(hashmap **map) {
     hashmap *new_map = map_create_n((*map)->parent_alloc, (*map)->value_size, (u32)new_buckets);
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
-        struct hashmap_entry *cell = map_unchecked_at(*map, i);
+        hashmap_entry *cell = map_unchecked_at(*map, i);
         if (is_occupied(cell->status)) {
             // use map_set api in order to copy keys to new storage,
             // under the assumption data locality would be better than
@@ -233,8 +233,8 @@ bool map_empty(hashmap const *map) {
     return map->n_occupied == 0;
 }
 
-struct hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
-    return (struct hashmap_entry *)&map->entries[index * hashmap_entry_size(map)];
+hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
+    return (hashmap_entry *)&map->entries[index * hashmap_entry_size(map)];
 }
 
 // Returns: input if already a power of two, or else the next higher
@@ -265,8 +265,8 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
         exit(1);
     }
 
-    hashmap *map = alloc_calloc(
-      alloc, 1, sizeof(struct hashmap) + n_buckets * (sizeof(struct hashmap_entry) + aligned_value_size));
+    hashmap *map =
+      alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * (sizeof(hashmap_entry) + aligned_value_size));
 
     map->parent_alloc       = alloc;
     map->key_alloc          = alloc;
@@ -291,8 +291,8 @@ hashmap *map_create(allocator *alloc, u16 value_size) {
 
 void map_destroy(hashmap **map) {
 
-    struct hashmap_iterator     iter = {0};
-    struct hashmap_entry const *entry;
+    hashmap_iterator     iter = {0};
+    hashmap_entry const *entry;
     while (map_citer(*map, &iter, &entry)) alloc_free((*map)->key_alloc, entry->key);
 
     alloc_free((*map)->parent_alloc, *map);
@@ -300,22 +300,21 @@ void map_destroy(hashmap **map) {
 }
 
 hashmap *map_copy(hashmap const *src) {
-    size_t   size = sizeof(struct hashmap) + src->n_cells * hashmap_entry_size(src);
+    size_t   size = sizeof(hashmap) + src->n_cells * hashmap_entry_size(src);
     hashmap *dst  = alloc_malloc(src->parent_alloc, size);
     memcpy(dst, src, size);
 
-    struct hashmap_iterator iter = {0};
-    struct hashmap_entry   *entry;
+    hashmap_iterator iter = {0};
+    hashmap_entry   *entry;
     while (map_iter(dst, &iter, &entry)) {
         if (!is_occupied(entry->status)) continue;
 
         // copy key storage
         dbg("index = %u\n", iter.index);
         assert(entry->key);
-        struct hashmap_key *key =
-          alloc_malloc(src->key_alloc, sizeof(struct hashmap_key) + entry->key->size);
+        hashmap_key *key = alloc_malloc(src->key_alloc, sizeof(hashmap_key) + entry->key->size);
 
-        key->size = entry->key->size;
+        key->size        = entry->key->size;
         memcpy(key->data, entry->key->data, key->size);
 
         entry->key = key;
@@ -324,28 +323,28 @@ hashmap *map_copy(hashmap const *src) {
     return dst;
 }
 
-bool map_iter(hashmap const *self, struct hashmap_iterator *iter, struct hashmap_entry **out) {
+bool map_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
 
     if (iter->index == self->n_cells) return false;
 
-    *out = (struct hashmap_entry *)&self->entries[hashmap_entry_size(self) * iter->index];
+    *out = (hashmap_entry *)&self->entries[hashmap_entry_size(self) * iter->index];
     iter->index++;
     return true;
 }
 
-bool map_citer(hashmap const *self, struct hashmap_iterator *iter, struct hashmap_entry const **out) {
-    return map_iter(self, iter, (struct hashmap_entry **)out);
+bool map_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry const **out) {
+    return map_iter(self, iter, (hashmap_entry **)out);
 }
 
 bool map_contains(hashmap *self, void const *key, u16 key_len) {
-    struct hashmap_entry *cell = map_find(self, key, key_len);
+    hashmap_entry *cell = map_find(self, key, key_len);
     return cell != null;
 }
 
 void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
 
     // Must check for existing key. Replace if present.
-    struct hashmap_entry *existing = map_find(*self, key, key_len);
+    hashmap_entry *existing = map_find(*self, key, key_len);
 
     if (existing) {
         memcpy(existing->data, data, (*self)->value_size);
@@ -360,8 +359,8 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
         }
     }
 
-    struct hashmap_entry entry = {
-      .key    = alloc_malloc((*self)->key_alloc, sizeof(struct hashmap_key) + key_len),
+    hashmap_entry entry = {
+      .key    = alloc_malloc((*self)->key_alloc, sizeof(hashmap_key) + key_len),
       .status = 0,
     };
 
@@ -377,13 +376,13 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
 }
 
 void *map_get(hashmap *map, void const *key, u16 key_len) {
-    struct hashmap_entry *cell = map_find(map, key, key_len);
+    hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;
 }
 
 void map_erase(hashmap *map, void const *key, u16 key_len) {
-    struct hashmap_entry *cell = map_find(map, key, key_len);
+    hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return;
 
     set_tombstone(&cell->status);

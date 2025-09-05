@@ -13,11 +13,11 @@
 
 typedef struct hashmap hashmap;
 
-typedef struct hashmap_iterator {
+typedef struct {
     u32 index;
 } hashmap_iterator;
 
-typedef struct hashmap_entry {
+typedef struct {
     struct hashmap_key *key;
     u8                  status;
     alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
@@ -46,8 +46,8 @@ void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
 
 // pass zero-init iterator to start
-bool map_iter(hashmap const *, hashmap_iterator *, struct hashmap_entry **out);
-bool map_citer(hashmap const *, hashmap_iterator *, struct hashmap_entry const **out);
+bool map_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
+bool map_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
 
 // -- utilities --
 
