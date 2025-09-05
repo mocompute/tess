@@ -830,8 +830,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // variable name same type as value
         push(node->let_in.name->type, node->let_in.value->type);
 
-        // result must be same type as value
-        push(node->type, node->let_in.value->type);
+        // result must be same type as body
+        push(node->type, node->let_in.body->type);
         break;
 
     case ast_let: {
@@ -901,6 +901,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
             // this pass happens after functions have been specialised
             ast_node *fun = node->named_application.specialized;
+            // TODO syntax check phase to check for successful specialisation
+            if (!fun) fatal("collect_constraints: function application is not specialised.");
             assert(fun && fun->tag == ast_let);
             assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
@@ -1052,9 +1054,20 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
 
     assert(type_user == user_type->tag);
 
+    // constructor name: _gen_make_{type}_
+    char *generated_name = null;
+    {
+#define fmt "_gen_make_%s_"
+        int len = snprintf(null, 0, fmt, name) + 1;
+        if (len < 0) fatal("make_type_constructor_function: generate name failed.");
+        generated_name = alloc_malloc(self->type_arena, (u32)len);
+        snprintf(generated_name, (u32)len, fmt, name);
+#undef fmt
+    }
+
     ast_node *out             = ast_node_create(self->type_arena, ast_let);
     out->let.name             = mos_string_init(self->type_arena, name);
-    out->let.specialized_name = out->let.name; // indicates this is not a generic function
+    out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
 
     // struct {
     //     struct ast_node **fields;

@@ -70,7 +70,7 @@ transpiler  *transpiler_create(allocator *alloc, char_array *bytes, type_registr
 
     self->results       = (c_string_array){.alloc = self->strings};
 
-    self->verbose       = true;
+    self->verbose       = false;
 
     return self;
 }
@@ -79,6 +79,10 @@ void transpiler_destroy(transpiler **self) {
     arena_destroy((*self)->alloc, &(*self)->strings);
     alloc_free((*self)->alloc, *self);
     *self = null;
+}
+
+void transpiler_set_verbose(transpiler *self, bool verbose) {
+    self->verbose = verbose;
 }
 
 int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
@@ -187,39 +191,6 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 
     out_put_start(self, "};\n");
 
-    // constructor function
-
-    // FIXME this probably isn't right - it should be a tl function
-    // created by the type inferencer
-
-    out_put_start(self, "struct ");
-    out_put_fmt(self, "%s _make_%s_(", name, name); // type and name
-
-    for (u32 i = 0; i < n_fields; ++i) {
-        tl_type    *ty         = node->user_type_def.field_types[i];
-        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
-
-        out_put_start(self, "");
-        a_result_type_of(self, ty);
-        out_put_fmt(self, " %s", field_name);
-        if (i < n_fields - 1) out_put(self, ", ");
-    }
-    out_put(self, ") {\n");
-
-    self->indent_level++;
-
-    out_put_start(self, "");
-    out_put_fmt(self, "struct %s _out_;\n", name);
-
-    for (u32 i = 0; i < n_fields; ++i) {
-        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
-        out_put_start(self, "");
-        out_put_fmt(self, "_out_.%s = %s;\n", field_name, field_name);
-    }
-
-    out_put_start(self, "return _out_;\n}\n");
-    self->indent_level--;
-
     return 0;
 }
 
@@ -293,6 +264,7 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     // let a = 1 in a + 2 end => resN = 3
 
     char const *name = ast_node_name_string(node->let_in.name);
+    log(self, "let_in: name = '%s'", name);
 
     if (a_eval(self, node->let_in.value)) return 1;
     char *value = self->results.v[--self->results.size];
@@ -308,7 +280,7 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     array_push(self->results, &var);
 
     out_put_start(self, "");
-    a_result_type_of(self, node->let_in.name->type);
+    a_result_type_of(self, node->let_in.body->type);
     out_put_fmt(self, " %s = %s;\n", var, body);
 
     return 0;

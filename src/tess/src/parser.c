@@ -160,7 +160,7 @@ static bool is_reserved(char const *s) {
 
 static bool is_start_of_expression(char const *s) {
     static char const *strings[] = {
-      "fun", "if", "let", "struct", null,
+      "fun", "if", "in", "let", "struct", null,
     };
     char const **it = strings;
     while (*it != null)

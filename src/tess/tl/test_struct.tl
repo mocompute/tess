@@ -2,4 +2,6 @@ struct foo =
     x : int
 end
 
-let main () = 0
+let main () =
+    let a = foo 1 in
+    0

@@ -15,6 +15,7 @@ void                  transpiler_destroy(transpiler **);
 
 // -- operation --
 
-int transpiler_compile(transpiler *, struct ast_node **nodes, u32);
+int  transpiler_compile(transpiler *, struct ast_node **nodes, u32);
+void transpiler_set_verbose(transpiler *, bool);
 
 #endif
