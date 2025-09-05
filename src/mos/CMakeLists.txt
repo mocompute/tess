@@ -9,7 +9,6 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap_internal.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/mos_string.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h

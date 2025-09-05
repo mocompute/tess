@@ -1,18 +1,27 @@
 #ifndef MOS_HASHMAP_H
 #define MOS_HASHMAP_H
 
-#include "hashmap_internal.h"
-
 #include "alloc.h"
 #include "nodiscard.h"
 #include "types.h"
 
 #include <assert.h>
+#include <stdalign.h>
 #include <stdbool.h>
 
 // -- hash map --
 
 typedef struct hashmap hashmap;
+
+typedef struct hashmap_iterator {
+    u32 index;
+} hashmap_iterator;
+
+typedef struct hashmap_entry {
+    struct hashmap_key *key;
+    u8                  status;
+    alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
+} hashmap_entry;
 
 // -- allocation and deallocation --
 
@@ -37,8 +46,8 @@ void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
 
 // pass zero-init iterator to start
-bool map_iter(hashmap const *, struct hashmap_iterator *, struct hashmap_entry **out);
-bool map_citer(hashmap const *, struct hashmap_iterator *, struct hashmap_entry const **out);
+bool map_iter(hashmap const *, hashmap_iterator *, struct hashmap_entry **out);
+bool map_citer(hashmap const *, hashmap_iterator *, struct hashmap_entry const **out);
 
 // -- utilities --
 

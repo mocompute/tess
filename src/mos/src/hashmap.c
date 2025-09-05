@@ -1,5 +1,4 @@
 #include "hashmap.h"
-#include "hashmap_internal.h"
 
 #include "alloc.h"
 #include "dbg.h"
@@ -10,9 +9,29 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR 0.75f
-#define DEFAULT_N_BUCKETS   64
-#define MAX_PROBE_LEN       (1 << 6) - 1
+#define DEFAULT_LOAD_FACTOR      0.75f
+#define DEFAULT_N_BUCKETS        64
+#define MAX_PROBE_LEN            (1 << 6) - 1
+#define HASHMAP_MAX_ELEMENT_SIZE 24
+
+struct hashmap_key {
+    u16  size;
+    byte data[];
+};
+
+struct hashmap {
+
+    allocator *parent_alloc;
+    allocator *key_alloc;
+
+    u32        n_cells;
+    u32        n_occupied;
+
+    u16        value_size;
+    u16        aligned_value_size;
+
+    alignas(struct hashmap_entry) byte entries[];
+};
 
 // -- statics --
 
