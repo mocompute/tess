@@ -671,3 +671,117 @@ void ast_validate_nodes(ast_node *nodes[], u32 count) {
 
     dbg("all nodes valid\n");
 }
+
+struct ast_symbol *ast_node_sym(ast_node *node) {
+    assert(node->tag == ast_symbol || node->tag == ast_string);
+    return &node->symbol;
+}
+
+struct ast_bool *ast_node_bool(ast_node *node) {
+    assert(node->tag == ast_bool);
+    return &node->bool_;
+}
+
+struct ast_i64 *ast_node_i64(ast_node *node) {
+    assert(node->tag == ast_i64);
+    return &node->i64;
+}
+
+struct ast_u64 *ast_node_u64(ast_node *node) {
+    assert(node->tag == ast_u64);
+    return &node->u64;
+}
+
+struct ast_f64 *ast_node_f64(ast_node *node) {
+    assert(node->tag == ast_f64);
+    return &node->f64;
+}
+
+struct ast_array *ast_node_arr(ast_node *node) {
+    switch (node->tag) {
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_infix:
+    case ast_let_in:
+    case ast_if_then_else:
+    case ast_user_type_definition:
+        assert(false);
+        fatal("ast_node_arr called on non-array variant");
+        break;
+
+    case ast_user_type:
+    case ast_tuple:
+    case ast_let:
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+    case ast_named_function_application:  return &node->array;
+    }
+}
+
+struct ast_user_type *ast_node_ut(ast_node *node) {
+    assert(node->tag == ast_user_type);
+    return &node->user_type;
+}
+
+struct ast_infix *ast_node_infix(ast_node *node) {
+    assert(node->tag == ast_infix);
+    return &node->infix;
+}
+
+struct ast_lambda_function *ast_node_lf(ast_node *node) {
+    assert(node->tag == ast_lambda_function);
+    return &node->lambda_function;
+}
+
+struct ast_let_in *ast_node_let_in(ast_node *node) {
+    assert(node->tag == ast_let_in);
+    return &node->let_in;
+}
+
+struct ast_function_declaration *ast_node_fd(ast_node *node) {
+    assert(node->tag == ast_function_declaration);
+    return &node->function_declaration;
+}
+
+struct ast_lambda_declaration *ast_node_let_ld(ast_node *node) {
+    assert(node->tag == ast_lambda_declaration);
+    return &node->lambda_declaration;
+}
+
+struct ast_let *ast_node_let(ast_node *node) {
+    assert(node->tag == ast_let);
+    return &node->let;
+}
+
+struct ast_if_then_else *ast_node_ifthen(ast_node *node) {
+    assert(node->tag == ast_if_then_else);
+    return &node->if_then_else;
+}
+
+struct ast_lambda_application *ast_node_lamda(ast_node *node) {
+    assert(node->tag == ast_lambda_function_application);
+    return &node->lambda_application;
+}
+
+struct ast_named_application *ast_node_named(ast_node *node) {
+    assert(node->tag == ast_named_function_application);
+    return &node->named_application;
+}
+
+struct ast_tuple *ast_node_tuple(ast_node *node) {
+    assert(node->tag == ast_tuple);
+    return &node->tuple;
+}
+
+struct ast_user_type_def *ast_node_utd(ast_node *node) {
+    assert(node->tag == ast_user_type_definition);
+    return &node->user_type_def;
+}

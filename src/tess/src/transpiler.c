@@ -351,15 +351,15 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_user_type: {
         // eval each field in the user_type and assign to its matching struct field
+        struct ast_user_type const *v = ast_node_ut((ast_node *)node);
 
-        type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
-        if (!e)
-            fatal("a_eval: type '%s' not found in registry", ast_node_name_string(node->user_type.name));
+        type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(v->name));
+        if (!e) fatal("a_eval: type '%s' not found in registry", ast_node_name_string(v->name));
 
         tl_type *lt = e->type->labelled_tuple;
 
-        for (u16 i = 0; i < node->user_type.n_fields; ++i) {
-            if (a_eval(self, node->user_type.fields[i])) return 1;
+        for (u16 i = 0; i < v->n_fields; ++i) {
+            if (a_eval(self, v->fields[i])) return 1;
             char *res = self->results.v[--self->results.size];
             out_put(self, "\n");
             out_put_start(self, "");
@@ -420,12 +420,14 @@ static int a_eval(transpiler *self, ast_node const *node) {
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    char const *name = null;
-    if (node->named_application.specialized) {
-        name = mos_string_str(&node->named_application.specialized->let.specialized_name);
+    struct ast_named_application const *v    = ast_node_named((ast_node *)node);
+
+    char const                         *name = null;
+    if (v->specialized) {
+        name = mos_string_str(&v->specialized->let.specialized_name);
     } else {
         // c_ and std_ etc...
-        name = mos_string_str(&node->named_application.name);
+        name = mos_string_str(&v->name);
     }
 
     char *var = next_variable(self);
@@ -433,10 +435,10 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
-    i32 const n_args = node->named_application.n_arguments;
+    i32 const n_args = v->n_arguments;
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
-            if (a_eval(self, node->named_application.arguments[i])) return 1;
+            if (a_eval(self, v->arguments[i])) return 1;
 
     out_put_start(self, "");
     a_result_type_of(self, node->type);
@@ -458,14 +460,16 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 static int a_main(transpiler *self, ast_node const *node) {
     if (ast_let != node->tag) return 0;
 
-    if (0 == strcmp(mos_string_str(&node->let.name), "main")) {
+    struct ast_let const *v = ast_node_let((ast_node *)node);
+
+    if (0 == strcmp(mos_string_str(&v->name), "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
         self->indent_level++;
 
         int res = 0;
-        if ((res = a_eval(self, node->let.body))) return res;
+        if ((res = a_eval(self, v->body))) return res;
 
         char *var = self->results.v[--self->results.size];
 
@@ -483,33 +487,35 @@ static int a_main(transpiler *self, ast_node const *node) {
 
 static int a_let(transpiler *self, ast_node const *node) {
 
-    char const *name = mos_string_str(&node->let.specialized_name);
-    if (0 == strlen(name)) name = mos_string_str(&node->let.name);
+    struct ast_let const *v    = ast_node_let((ast_node *)node);
+
+    char const           *name = mos_string_str(&v->specialized_name);
+    if (0 == strlen(name)) name = mos_string_str(&v->name);
 
     if (is_generic_function(node)) {
-        log(self, "skipping '%s' ('%s') because it is a generic function", mos_string_str(&node->let.name),
-            mos_string_str(&node->let.specialized_name));
+        log(self, "skipping '%s' ('%s') because it is a generic function", mos_string_str(&v->name),
+            mos_string_str(&v->specialized_name));
         return 0;
     }
 
     // don't emit generic template functions
-    if (mos_string_empty(&node->let.specialized_name)) {
-        log(self, "skipping '%s' because it has an empty name", mos_string_str(&node->let.name));
+    if (mos_string_empty(&v->specialized_name)) {
+        log(self, "skipping '%s' because it has an empty name", mos_string_str(&v->name));
         return 0;
     }
 
-    if (0 == strcmp(mos_string_str(&node->let.name), "main")) {
+    if (0 == strcmp(mos_string_str(&v->name), "main")) {
         // skip here, let a_main process it.
         return 0;
     }
 
-    log(self, "processing '%s'...", mos_string_str(&node->let.specialized_name));
+    log(self, "processing '%s'...", mos_string_str(&v->specialized_name));
 
     // function declaration
 
     // return type
     out_put_start(self, "static ");
-    if (a_result_type_of(self, node->let.arrow)) return 1;
+    if (a_result_type_of(self, v->arrow)) return 1;
     out_put(self, " ");
 
     // name
@@ -518,11 +524,11 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // params
     out_put(self, "(");
-    for (u32 i = 0; i < node->let.n_parameters; ++i) {
-        if (a_result_type_of(self, node->let.parameters[i]->type)) return 1;
+    for (u32 i = 0; i < v->n_parameters; ++i) {
+        if (a_result_type_of(self, v->parameters[i]->type)) return 1;
         out_put(self, " ");
-        out_put(self, ast_node_name_string(node->let.parameters[i]));
-        if (i < node->let.n_parameters - 1) out_put(self, ", ");
+        out_put(self, ast_node_name_string(v->parameters[i]));
+        if (i < v->n_parameters - 1) out_put(self, ", ");
     }
     out_put(self, ")");
 
@@ -530,7 +536,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     out_put(self, " {\n");
     self->indent_level++;
 
-    if (a_eval(self, node->let.body)) return 1;
+    if (a_eval(self, v->body)) return 1;
 
     char *body = self->results.v[--self->results.size];
     out_put_start(self, "");

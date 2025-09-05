@@ -238,17 +238,21 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     if (!node) return;
 
     switch (node->tag) {
-    case ast_symbol:
-        return rename_if_match(self->alloc, &node->symbol.name, self->map, &node->symbol.original);
+    case ast_symbol: {
+        struct ast_symbol *v = ast_node_sym(node);
+        return rename_if_match(self->alloc, &v->name, self->map, &v->original);
+    }
 
-    case ast_infix:
-        rename_variables(self, node->infix.left);
-        rename_variables(self, node->infix.right);
-        break;
+    case ast_infix: {
+        struct ast_infix *v = ast_node_infix(node);
+        rename_variables(self, v->left);
+        rename_variables(self, v->right);
+    } break;
 
-    case ast_tuple:
-        for (size_t i = 0; i < node->array.n; ++i) rename_variables(self, node->array.nodes[i]);
-        break;
+    case ast_tuple: {
+        struct ast_array *v = ast_node_arr(node);
+        for (size_t i = 0; i < v->n; ++i) rename_variables(self, v->nodes[i]);
+    } break;
 
     case ast_let_in: {
         // make a new variable for this let-in subexpression and recurse,
@@ -257,7 +261,9 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         // first apply rename to the value portion of the expression,
         // since it is not allowed to refer to the symbol being defined.
         // But it may refer to an outer let-in binding of the same name.
-        rename_variables(self, node->let_in.value);
+        struct ast_let_in *v = ast_node_let_in(node);
+
+        rename_variables(self, v->value);
 
         string_t var_name;
         next_variable_name(self, &var_name);
@@ -265,14 +271,14 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         hashmap *save = map_copy(self->map);
         assert(save);
 
-        ast_node const *name = node->let_in.name;
+        ast_node const *name = v->name;
         assert(ast_symbol == name->tag);
 
         map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
                 &var_name);
 
-        rename_variables(self, node->let_in.name);
-        rename_variables(self, node->let_in.body);
+        rename_variables(self, v->name);
+        rename_variables(self, v->body);
 
         map_destroy(&self->map);
         self->map = save;
@@ -282,33 +288,38 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     case ast_let: {
         // make new variables for all function parameters. save existing
         // map in case any of them shadow.
+        struct ast_let   *v    = ast_node_let(node);
+        struct ast_array *arr  = ast_node_arr(node);
 
-        hashmap *save = map_copy(self->map);
+        hashmap          *save = map_copy(self->map);
         assert(save);
 
-        rename_array_elements(self, node->array.nodes, node->array.n);
-        rename_variables(self, node->let.body);
+        rename_array_elements(self, arr->nodes, arr->n);
+        rename_variables(self, v->body);
 
         map_destroy(&self->map);
         self->map = save;
 
     } break;
 
-    case ast_if_then_else:
-        rename_variables(self, node->if_then_else.condition);
-        rename_variables(self, node->if_then_else.yes);
-        rename_variables(self, node->if_then_else.no);
-        break;
+    case ast_if_then_else: {
+        struct ast_if_then_else *v = ast_node_ifthen(node);
+        rename_variables(self, v->condition);
+        rename_variables(self, v->yes);
+        rename_variables(self, v->no);
+    } break;
 
     case ast_lambda_function: {
         // make new variable for function parameters, saving map in case of
         // shadowing.
+        struct ast_lambda_function *v    = ast_node_lf(node);
+        struct ast_array           *arr  = ast_node_arr(node);
 
-        hashmap *save = map_copy(self->map);
+        hashmap                    *save = map_copy(self->map);
         if (!save) fatal("rename_variables: map copy failed.");
 
-        rename_array_elements(self, node->array.nodes, node->array.n);
-        rename_variables(self, node->lambda_function.body);
+        rename_array_elements(self, arr->nodes, arr->n);
+        rename_variables(self, v->body);
 
         map_destroy(&self->map);
         self->map = save;
@@ -317,8 +328,8 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
 
     case ast_lambda_function_application:
     case ast_named_function_application:  {
-        for (size_t i = 0; i < node->array.n; ++i) rename_variables(self, node->array.nodes[i]);
-
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
     } break;
 
     case ast_eof:
@@ -400,16 +411,17 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
 
     for (u32 i = 0; i < subs->size; ++i) {
         switch (node->tag) {
-        case ast_let:
+        case ast_let: {
+            struct ast_let *v = ast_node_let(node);
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
-            break;
+            apply_one_substitution(&v->arrow, subs->v[i].left, subs->v[i].right);
+        } break;
 
         case ast_user_type_definition: {
-            struct ast_user_type_def *me = &node->user_type_def;
+            struct ast_user_type_def *v = ast_node_utd(node);
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            for (u32 j = 0; j < me->n_fields; ++j)
-                apply_one_substitution(&me->field_types[j], subs->v[i].left, subs->v[i].right);
+            for (u32 j = 0; j < v->n_fields; ++j)
+                apply_one_substitution(&v->field_types[j], subs->v[i].left, subs->v[i].right);
         } break;
 
         case ast_user_type:

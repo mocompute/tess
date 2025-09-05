@@ -108,26 +108,26 @@ static void register_user_type(void *ctx, ast_node *node) {
 
     if (ast_user_type_definition != node->tag) return;
     if (node->user_type_def.field_types) return;
+    struct ast_user_type_def *v         = ast_node_utd(node);
 
-    char const *type_name = ast_node_name_string(node->user_type_def.name);
+    char const               *type_name = ast_node_name_string(v->name);
 
     if (type_registry_find(self->type_registry, type_name)) {
         syntax_error(self, node, tess_err_type_exists, alloc_strdup(self->arena, type_name));
         return;
     }
 
-    u16 const       n_fields    = node->user_type_def.n_fields;
+    u16 const       n_fields    = v->n_fields;
     c_string_csized field_names = {0};
 
     if (n_fields) {
 
         // convert symbol annotations to actual types
 
-        node->user_type_def.field_types =
-          alloc_calloc(self->arena, n_fields, sizeof node->user_type_def.field_types[0]);
+        node->user_type_def.field_types = alloc_calloc(self->arena, n_fields, sizeof v->field_types[0]);
 
-        tl_type  **field_types = node->user_type_def.field_types;
-        ast_node **annotations = node->user_type_def.field_annotations;
+        tl_type  **field_types          = v->field_types;
+        ast_node **annotations          = v->field_annotations;
 
         for (u32 i = 0; i < n_fields; ++i) {
             char const        *str = ast_node_name_string(annotations[i]);
@@ -138,15 +138,14 @@ static void register_user_type(void *ctx, ast_node *node) {
             field_types[i] = te->type;
         }
 
-        field_names = ast_nodes_get_names(
-          self->arena, (ast_node_slice){.v = node->user_type_def.field_names, .end = n_fields});
+        field_names =
+          ast_nodes_get_names(self->arena, (ast_node_slice){.v = v->field_names, .end = n_fields});
     }
 
     // make the user type and register it
-    tl_type *lt = tl_type_create_labelled_tuple(
-      self->arena,
-      (tl_type_sized){.v = node->user_type_def.field_types, .size = node->user_type_def.n_fields},
-      (c_string_csized)sized_all(field_names));
+    tl_type *lt =
+      tl_type_create_labelled_tuple(self->arena, (tl_type_sized){.v = v->field_types, .size = v->n_fields},
+                                    (c_string_csized)sized_all(field_names));
 
     tl_type *user_type = tl_type_create_user_type(self->arena, type_name, lt);
 
