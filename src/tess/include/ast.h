@@ -41,7 +41,7 @@ typedef struct ast_node {
             u16               n;
         } array;
 
-        struct {
+        struct ast_user_type {
             struct ast_node **fields;
             u16               n_fields;
             struct ast_node  *name;
@@ -110,7 +110,7 @@ typedef struct ast_node {
             u16               n_elements;
         } tuple;
 
-        struct {
+        struct ast_user_type_def {
             struct ast_node  *name;
             struct ast_node **field_annotations;
             struct ast_node **field_names;

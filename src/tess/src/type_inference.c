@@ -405,12 +405,12 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
             apply_one_substitution(&node->let.arrow, subs->v[i].left, subs->v[i].right);
             break;
 
-        case ast_user_type_definition:
+        case ast_user_type_definition: {
+            struct ast_user_type_def *me = &node->user_type_def;
             apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            for (u32 j = 0; j < node->user_type_def.n_fields; ++j)
-                apply_one_substitution(&node->user_type_def.field_types[j], subs->v[i].left,
-                                       subs->v[i].right);
-            break;
+            for (u32 j = 0; j < me->n_fields; ++j)
+                apply_one_substitution(&me->field_types[j], subs->v[i].left, subs->v[i].right);
+        } break;
 
         case ast_user_type:
         case ast_eof:
