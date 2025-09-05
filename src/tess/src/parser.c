@@ -4,11 +4,11 @@
 #include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
-#include "dbg.h"
 #include "error.h"
 #include "mos_string.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "type.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -189,6 +189,10 @@ static bool is_relational_operator(char const *s) {
     return false;
 }
 
+static bool is_eof(parser *p) {
+    return p->tokenizer_error.tag == tess_err_eof;
+}
+
 nodiscard static int eat_newlines(parser *p) {
 
     while (true) {
@@ -320,7 +324,7 @@ static int a_close_round(parser *p) {
 static int a_end_of_expression(parser *p) {
 
     if (eat_newlines(p) || next_token(p)) {
-        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
+        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
 
@@ -360,7 +364,7 @@ static int a_end_of_expression(parser *p) {
 static int a_newline(parser *p) {
 
     if (next_token(p)) {
-        if (tess_err_eof == p->tokenizer_error.tag) return result_ast_str(p, ast_symbol, ";");
+        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
 
@@ -570,8 +574,7 @@ static int a_nil(parser *p) {
 static int a_end_of_block(parser *p) {
 
     if (eat_newlines(p) || next_token(p)) {
-        if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag)
-            return result_ast_str(p, ast_symbol, "end");
+        if (is_eof(p)) return result_ast_str(p, ast_symbol, "end");
 
         return 1;
     }
@@ -1161,7 +1164,7 @@ int parser_parse_all(parser *p, ast_node_array *out) {
         array_push(*out, &node);
     }
 
-    if (tess_err_tokenizer_error == p->error.tag && tess_err_eof == p->tokenizer_error.tag) return 0;
+    if (is_eof(p)) return 0;
 
     return res;
 }

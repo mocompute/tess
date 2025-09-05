@@ -61,6 +61,58 @@ bool tl_type_equal(tl_type const *left, tl_type const *right) {
     return tl_type_compare(left, right) == 0;
 }
 
+int tl_type_compare(tl_type const *left, tl_type const *right) {
+    // structural equality and total ordering for tess_types
+
+    if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
+
+    switch (left->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_any:    return 0;
+
+    case type_tuple:
+        if (left->elements.size != right->elements.size)
+            return left->elements.size < right->elements.size ? -1 : 1;
+        for (u32 i = 0; i < left->elements.size; i++) {
+            int res;
+            if ((res = tl_type_compare(left->elements.v[i], right->elements.v[i])) != 0) return res;
+        }
+        return 0;
+
+    case type_labelled_tuple:
+        if (left->fields.size != right->fields.size) return left->fields.size < right->fields.size ? -1 : 1;
+
+        for (u32 i = 0; i < left->fields.size; i++) {
+            int res = 0;
+            if ((res = strcmp(left->names.v[i], right->names.v[i])) != 0) return res;
+            if ((res = tl_type_compare(left->fields.v[i], right->fields.v[i])) != 0) return res;
+        }
+        return 0;
+
+    case type_arrow: {
+        int res;
+        if ((res = tl_type_compare(left->left, right->left)) != 0) return res;
+        if ((res = tl_type_compare(left->right, right->right)) != 0) return res;
+        return 0;
+    }
+
+    case type_user: {
+        int res = 0;
+        if ((res == strcmp(left->name, right->name)) != 0) return res;
+
+        return tl_type_compare(left->labelled_tuple, right->labelled_tuple);
+    } break;
+
+    case type_type_var:
+        if (left->type_var == right->type_var) return 0;
+        return left->type_var < right->type_var ? -1 : 1;
+    }
+}
+
 int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     int len = -1;
 

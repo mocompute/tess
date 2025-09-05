@@ -328,6 +328,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
+    case ast_user_type:
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_user_type_definition: break;
@@ -384,6 +385,17 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
 
     } break;
 
+    case type_labelled_tuple: {
+
+        for (size_t i = 0; i < type->fields.size; ++i) {
+            if (type->fields.v[i] == from) {
+                type->fields.v[i] = to;
+                did_substitute    = true;
+            }
+        }
+
+    } break;
+
     case type_arrow: {
         if (type->left == from) {
             type->left     = to;
@@ -416,6 +428,7 @@ void dfs_apply_substitutions(void *ctx, ast_node *node) {
                                        subs->v[i].right);
             break;
 
+        case ast_user_type:
         case ast_eof:
         case ast_nil:
         case ast_bool:
@@ -496,7 +509,8 @@ static bool unify_one(ti_inferer *self, constraint c) {
 
         constraint candidate = {orig, other};
 
-        // check conditions to rule out the candidate
+        // check conditions to rule out the candidate: original must
+        // not appear anywhere in the type replacing it.
         switch (other->tag) {
         case type_nil:
         case type_bool:
@@ -515,6 +529,13 @@ static bool unify_one(ti_inferer *self, constraint c) {
                 if (other->elements.v[i] == orig) return false;
 
             break;
+
+        case type_labelled_tuple:
+            for (size_t i = 0; i < other->fields.size; ++i)
+                if (other->fields.v[i] == orig) return false;
+
+            break;
+
         case type_arrow:
             if (other->left == orig || other->right == orig) return false;
             break;
@@ -625,10 +646,12 @@ void ti_assign_type_variables(ti_inferer *self) {
 // -- collect_constraints --
 
 static tl_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
-    tl_type *tuple = tl_type_create_tuple(alloc, n);
-    assert(!n || tuple->elements.v);
 
-    for (u32 i = 0; i < n; ++i) tuple->elements.v[i] = arguments[i]->type;
+    tl_type_array types = {.alloc = alloc};
+    array_reserve(types, n);
+    for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
+
+    tl_type *tuple = tl_type_create_tuple(alloc, (tl_type_sized)sized_all(types));
 
     return tuple;
 }
@@ -726,20 +749,28 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
     return null;
 }
 
+static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
+
+    type_entry *e = type_registry_find(self->type_registry, type_tag_to_string(tag));
+    if (!e) fatal("get_prim: failed to find '%s'", type_tag_to_string(tag));
+
+    return e->type;
+}
+
 void collect_constraints(void *ctx_, ast_node *node) {
-    ti_inferer *ctx = ctx_;
-    constraint  c   = {0};
+    ti_inferer *self = ctx_;
+    constraint  c    = {0};
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
         c = (constraint){(L), (R)};                                                                        \
-        array_push(ctx->constraints, &c);                                                                  \
+        array_push(self->constraints, &c);                                                                 \
     } while (0)
 
     switch (node->tag) {
     case ast_eof:
-    case ast_nil:                  push(node->type, tl_type_prim(type_nil)); break;
-    case ast_bool:                 push(node->type, tl_type_prim(type_bool)); break;
+    case ast_nil:                  push(node->type, get_prim(self, type_nil)); break;
+    case ast_bool:                 push(node->type, get_prim(self, type_bool)); break;
 
     case ast_user_type_definition: break;
 
@@ -748,27 +779,37 @@ void collect_constraints(void *ctx_, ast_node *node) {
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
-        tl_type **found = map_get(ctx->symbols, name_str, name_len);
+        tl_type **found = map_get(self->symbols, name_str, name_len);
 
         if (found) {
             push(node->type, *found);
         } else {
-            map_set(&ctx->symbols, name_str, name_len, &node->type);
+            map_set(&self->symbols, name_str, name_len, &node->type);
         }
 
     } break;
 
     case ast_i64:
     case ast_u64:
-        push(node->type, tl_type_prim(type_int)); // TODO unsigned
+        push(node->type, get_prim(self, type_int)); // TODO unsigned
         break;
 
-    case ast_f64:    push(node->type, tl_type_prim(type_float)); break;
-    case ast_string: push(node->type, tl_type_prim(type_string)); break;
+    case ast_f64:       push(node->type, get_prim(self, type_float)); break;
+    case ast_string:    push(node->type, get_prim(self, type_string)); break;
 
-    case ast_tuple:  {
+    case ast_user_type: {
+
+        type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
+        if (!e)
+            fatal("collect_constraints: failed to find type '%s'",
+                  ast_node_name_string(node->user_type.name));
+
+        push(node->type, e->type);
+    } break;
+
+    case ast_tuple: {
         tl_type *els =
-          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->type, els);
     } break;
@@ -801,7 +842,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // left side of arrow is same as parameter tuple type
         tl_type *params =
-          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
         push(node->let.arrow->left, params);
 
@@ -809,7 +850,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->let.arrow->right, node->let.body->type);
 
         // result is nil
-        push(node->type, tl_type_prim(type_nil));
+        push(node->type, get_prim(self, type_nil));
     } break;
 
     case ast_if_then_else:
@@ -825,7 +866,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(type_arrow == node->type->tag);
 
         tl_type *tup =
-          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
         push(node->type->left, tup);
 
         // body type must be same as right hand of arrow
@@ -844,9 +885,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // arguments must match parameters
         tl_type *args =
-          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        tl_type *params =
-          arguments_to_tuple_type(ctx->type_arena, (ast_node const **)lambda->array.nodes, lambda->array.n);
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        tl_type *params = arguments_to_tuple_type(self->type_arena, (ast_node const **)lambda->array.nodes,
+                                                  lambda->array.n);
 
         push(args, params);
 
@@ -856,7 +897,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     } break;
 
     case ast_named_function_application:
-        if (!ctx->constrain_function_applications) return;
+        if (!self->constrain_function_applications) return;
         else {
             // do not constraint c_ or std_ applications
             if (is_special_name_s(&node->named_application.name)) return;
@@ -866,9 +907,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
             assert(fun && fun->tag == ast_let);
             assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
-            tl_type *args_type =
-              arguments_to_tuple_type(ctx->type_arena, (ast_node const **)node->named_application.arguments,
-                                      node->named_application.n_arguments);
+            tl_type *args_type = arguments_to_tuple_type(
+              self->type_arena, (ast_node const **)node->named_application.arguments,
+              node->named_application.n_arguments);
 
             push(fun->let.arrow->left, args_type);
             push(fun->let.arrow->right, node->type);
