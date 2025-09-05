@@ -145,6 +145,8 @@ bool tess_type_equal(tess_type const *left, tess_type const *right) {
 }
 
 int tess_type_compare(tess_type const *left, tess_type const *right) {
+    // structural equality for tess_types - TODO may not be necessary
+    // because we use reference equality for types.
     if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
 
     switch (left->tag) {
