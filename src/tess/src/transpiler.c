@@ -140,9 +140,9 @@ static int a_result_type_of(transpiler *self, tess_type const *ty) {
     case type_any:    out_put(self, "int"); break;
     case type_arrow:  return a_result_type_of(self, ty->right);
     case type_user:   {
-        char *name = tess_type_to_string(self->strings, ty);
-        out_put(self, name);
-        alloc_free(self->strings, name);
+        char *type_s = tess_type_to_string(self->strings, ty);
+        out_put_fmt(self, "/* %s */ struct %s", type_s, ty->name);
+        alloc_free(self->strings, type_s);
 
     } break;
 
@@ -164,10 +164,10 @@ static int a_user_type(transpiler *self, ast_node const *node) {
     for (u32 i = 0; i < n_fields; ++i) {
         tess_type  *ty         = node->user_type.field_types[i];
         char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
-        char       *str        = tess_type_to_string(self->strings, ty);
+
         out_put_start(self, "");
-        out_put_fmt(self, "%s %s;\n", str, field_name);
-        alloc_free(self->strings, str);
+        a_result_type_of(self, ty);
+        out_put_fmt(self, " %s;\n", field_name);
     }
     self->indent_level--;
 
@@ -184,11 +184,11 @@ static int a_user_type(transpiler *self, ast_node const *node) {
     for (u32 i = 0; i < n_fields; ++i) {
         tess_type  *ty         = node->user_type.field_types[i];
         char const *field_name = ast_node_name_string(node->user_type.field_names[i]);
-        char       *str        = tess_type_to_string(self->strings, ty);
+
         out_put_start(self, "");
-        out_put_fmt(self, "%s %s", str, field_name);
+        a_result_type_of(self, ty);
+        out_put_fmt(self, " %s", field_name);
         if (i < n_fields - 1) out_put(self, ", ");
-        alloc_free(self->strings, str);
     }
     out_put(self, ") {\n");
 
