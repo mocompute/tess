@@ -12,41 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// -- ast_node init and deinit --
-
-// void ast_node_deinit(allocator *alloc, struct ast_node *node) {
-
-// #define deinit(P) alloc_free(alloc, P)
-
-//     switch (node->tag) {
-//     case ast_lambda_function:             deinit(node->lambda_function.parameters); break;
-//     case ast_function_declaration:        deinit(node->function_declaration.parameters); break;
-//     case ast_lambda_declaration:          deinit(node->lambda_declaration.parameters); break;
-//     case ast_let:                         deinit(node->let.parameters); break;
-//     case ast_tuple:                       deinit(node->tuple.elements); break;
-//     case ast_lambda_function_application: deinit(node->lambda_application.arguments); break;
-//     case ast_named_function_application:  deinit(node->named_application.arguments); break;
-//     case ast_symbol:                      mos_string_deinit(alloc, &node->symbol.name); break;
-//     case ast_user_type_definition:
-//         deinit(node->user_type_def.field_names);
-//         deinit(node->user_type_def.field_annotations);
-//         deinit(node->user_type_def.field_types);
-//         break;
-//     case ast_eof:
-//     case ast_nil:
-//     case ast_bool:
-//     case ast_i64:
-//     case ast_u64:
-//     case ast_f64:
-//     case ast_string:
-//     case ast_infix:
-//     case ast_let_in:
-//     case ast_if_then_else: break;
-//     }
-
-// #undef deinit
-// }
-
 ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // FIXME this should probably be called alloc, because it doesn't
     // init the node like other _create functions do.
@@ -60,50 +25,6 @@ ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
     self->symbol.name = mos_string_init(alloc, str);
     return self;
 }
-
-// void ast_node_init(allocator *alloc, ast_node *node, ast_tag tag) {
-
-//     // accepts pool = null in some cases
-
-// #define init(P)                                                                                            \
-//     do {                                                                                                   \
-//         (P) = alloc_calloc(alloc, 1, sizeof *(P));                                                         \
-//         return;                                                                                            \
-//     } while (0)
-
-//     alloc_zero(node);
-//     node->tag = tag;
-
-//     switch (node->tag) {
-//     case ast_lambda_function:             init(node->lambda_function.parameters);
-//     case ast_function_declaration:        init(node->function_declaration.parameters);
-//     case ast_lambda_declaration:          init(node->lambda_declaration.parameters);
-//     case ast_let:                         init(node->let.parameters);
-//     case ast_tuple:                       init(node->tuple.elements);
-//     case ast_lambda_function_application: init(node->lambda_application.arguments);
-//     case ast_named_function_application:  init(node->named_application.arguments);
-
-//     case ast_user_type_definition:
-//     case ast_eof:
-//     case ast_nil:
-//     case ast_bool:
-//     case ast_symbol:
-//     case ast_i64:
-//     case ast_u64:
-//     case ast_f64:
-//     case ast_string:
-//     case ast_infix:
-//     case ast_let_in:
-//     case ast_if_then_else:                return;
-//     }
-
-// #undef init
-// }
-
-// void ast_node_replace(allocator *alloc, ast_node *node, ast_tag tag) {
-//     ast_node_deinit(alloc, node);
-//     return ast_node_init(alloc, node, tag);
-// }
 
 void ast_node_move(ast_node *dst, ast_node *src) {
     alloc_copy(dst, src);
