@@ -49,14 +49,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_tuple:
     case ast_lambda_function_application:
     case ast_named_function_application:
-    case ast_user_type:
-        clone->array.n     = orig->array.n;
-        clone->array.nodes = alloc_malloc(alloc, orig->array.n * sizeof clone->array.nodes[0]);
-        for (u32 i = 0; i < clone->array.n; ++i)
-            clone->array.nodes[i] = ast_node_clone(alloc, orig->array.nodes[i]);
-        break;
-
-        break;
+    case ast_user_type:                   {
+        struct ast_array *vclone = ast_node_arr(clone), *vorig = ast_node_arr((ast_node *)orig);
+        vclone->n     = vorig->n;
+        vclone->nodes = alloc_malloc(alloc, vorig->n * sizeof vclone->nodes[0]);
+        for (u32 i = 0; i < vclone->n; ++i) vclone->nodes[i] = ast_node_clone(alloc, vorig->nodes[i]);
+    } break;
 
     case ast_user_type_definition:
     case ast_symbol:
@@ -75,81 +73,97 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     // clone the rest of the fields
     switch (clone->tag) {
     case ast_eof:
-    case ast_nil:  break;
-    case ast_bool: clone->bool_.val = orig->bool_.val; break;
+    case ast_nil:    break;
+    case ast_bool:   clone->bool_.val = orig->bool_.val; break;
 
-    case ast_i64:  clone->i64.val = orig->i64.val; break;
-    case ast_u64:  clone->u64.val = orig->u64.val; break;
-    case ast_f64:  clone->f64.val = orig->f64.val; break;
+    case ast_i64:    clone->i64.val = orig->i64.val; break;
+    case ast_u64:    clone->u64.val = orig->u64.val; break;
+    case ast_f64:    clone->f64.val = orig->f64.val; break;
 
     case ast_symbol:
-    case ast_string:
-        mos_string_copy(alloc, &clone->symbol.name, &orig->symbol.name);
-        mos_string_copy(alloc, &clone->symbol.original, &orig->symbol.original);
-        clone->symbol.annotation = ast_node_clone(alloc, orig->symbol.annotation);
-        break;
+    case ast_string: {
+        struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
+        mos_string_copy(alloc, &vclone->name, &vorig->name);
+        mos_string_copy(alloc, &vclone->original, &vorig->original);
+        vclone->annotation = ast_node_clone(alloc, vorig->annotation);
+    } break;
 
-    case ast_infix:
-        clone->infix.left  = ast_node_clone(alloc, orig->infix.left);
-        clone->infix.right = ast_node_clone(alloc, orig->infix.right);
-        clone->infix.op    = orig->infix.op;
-        break;
+    case ast_infix: {
+        struct ast_infix *vclone = ast_node_infix(clone), *vorig = ast_node_infix((ast_node *)orig);
+        vclone->left  = ast_node_clone(alloc, vorig->left);
+        vclone->right = ast_node_clone(alloc, vorig->right);
+        vclone->op    = vorig->op;
+    } break;
 
-    case ast_tuple: break;
+    case ast_tuple:  break;
 
-    case ast_let_in:
-        clone->let_in.name  = ast_node_clone(alloc, orig->let_in.name);
-        clone->let_in.value = ast_node_clone(alloc, orig->let_in.value);
-        clone->let_in.body  = ast_node_clone(alloc, orig->let_in.body);
-        break;
+    case ast_let_in: {
+        struct ast_let_in *vclone = ast_node_let_in(clone), *vorig = ast_node_let_in((ast_node *)orig);
+        vclone->name  = ast_node_clone(alloc, vorig->name);
+        vclone->value = ast_node_clone(alloc, vorig->value);
+        vclone->body  = ast_node_clone(alloc, vorig->body);
+    } break;
 
-    case ast_let:
-        mos_string_copy(alloc, &clone->let.name, &orig->let.name);
-        clone->let.body  = ast_node_clone(alloc, orig->let.body);
-        clone->let.arrow = orig->let.arrow;
-        mos_string_copy(alloc, &clone->let.specialized_name, &orig->let.specialized_name);
-        break;
+    case ast_let: {
+        struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
+        mos_string_copy(alloc, &vclone->name, &vorig->name);
+        vclone->body  = ast_node_clone(alloc, vorig->body);
+        vclone->arrow = vorig->arrow;
+        mos_string_copy(alloc, &vclone->specialized_name, &vorig->specialized_name);
+    } break;
 
-    case ast_if_then_else:
-        clone->if_then_else.condition = ast_node_clone(alloc, orig->if_then_else.condition);
-        clone->if_then_else.yes       = ast_node_clone(alloc, orig->if_then_else.yes);
-        clone->if_then_else.no        = ast_node_clone(alloc, orig->if_then_else.no);
-        break;
+    case ast_if_then_else: {
+        struct ast_if_then_else *vclone = ast_node_ifthen(clone),
+                                *vorig  = ast_node_ifthen((ast_node *)orig);
+        vclone->condition               = ast_node_clone(alloc, vorig->condition);
+        vclone->yes                     = ast_node_clone(alloc, vorig->yes);
+        vclone->no                      = ast_node_clone(alloc, vorig->no);
+    } break;
 
-    case ast_lambda_function:
-        clone->lambda_function.body = ast_node_clone(alloc, orig->lambda_function.body);
-        break;
+    case ast_lambda_function: {
+        struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
+        vclone->body = ast_node_clone(alloc, vorig->body);
+    } break;
 
-    case ast_function_declaration:
-        clone->function_declaration.name = ast_node_clone(alloc, orig->function_declaration.name);
-        break;
+    case ast_function_declaration: {
+        struct ast_function_declaration *vclone = ast_node_fd(clone),
+                                        *vorig  = ast_node_fd((ast_node *)orig);
+        vclone->name                            = ast_node_clone(alloc, vorig->name);
+    } break;
 
-    case ast_lambda_declaration: break;
+    case ast_lambda_declaration:          break;
 
-    case ast_lambda_function_application:
-        clone->lambda_application.lambda = ast_node_clone(alloc, orig->lambda_application.lambda);
-        break;
+    case ast_lambda_function_application: {
+        struct ast_lambda_application *vclone = ast_node_lamda(clone),
+                                      *vorig  = ast_node_lamda((ast_node *)orig);
+        vclone->lambda                        = ast_node_clone(alloc, vorig->lambda);
+    } break;
 
-    case ast_named_function_application:
-        mos_string_copy(alloc, &clone->named_application.name, &orig->named_application.name);
-        clone->named_application.specialized = ast_node_clone(alloc, orig->named_application.specialized);
-        break;
+    case ast_named_function_application: {
+        struct ast_named_application *vclone = ast_node_named(clone),
+                                     *vorig  = ast_node_named((ast_node *)orig);
+        mos_string_copy(alloc, &vclone->name, &vorig->name);
+        vclone->specialized = ast_node_clone(alloc, vorig->specialized);
+    } break;
 
-    case ast_user_type: clone->user_type.name = ast_node_clone(alloc, orig->user_type.name); break;
+    case ast_user_type: {
+        struct ast_user_type *vclone = ast_node_ut(clone), *vorig = ast_node_ut((ast_node *)orig);
+        vclone->name = ast_node_clone(alloc, vorig->name);
+    } break;
 
-    case ast_user_type_definition:
-        clone->user_type_def.name     = ast_node_clone(alloc, orig->user_type_def.name);
+    case ast_user_type_definition: {
+        struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
-        clone->user_type_def.n_fields = orig->user_type_def.n_fields;
-        clone->user_type_def.field_types =
-          orig->user_type_def.field_types; // always in arena, never clone types
+        vclone->name        = ast_node_clone(alloc, vorig->name);
 
-        for (u32 i = 0; i < clone->user_type_def.n_fields; ++i) {
-            clone->user_type_def.field_annotations[i] =
-              ast_node_clone(alloc, orig->user_type_def.field_annotations[i]);
-            clone->user_type_def.field_names[i] = ast_node_clone(alloc, orig->user_type_def.field_names[i]);
+        vclone->n_fields    = vorig->n_fields;
+        vclone->field_types = vorig->field_types; // always in arena, never clone types
+
+        for (u32 i = 0; i < vclone->n_fields; ++i) {
+            vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
+            vclone->field_names[i]       = ast_node_clone(alloc, vorig->field_names[i]);
         }
-        break;
+    } break;
     }
 
     return clone;
