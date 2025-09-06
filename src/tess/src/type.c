@@ -316,6 +316,21 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     }
 }
 
+tl_type *tl_type_find_field_type(tl_type const *user_type, char const *field_name) {
+    struct tlt_user           *v          = tl_type_user((tl_type *)user_type);
+    struct tlt_labelled_tuple *lt         = tl_type_lt(v->labelled_tuple);
+    tl_type                   *field_type = null;
+    for (u32 i = 0; i < lt->names.size; ++i) {
+        if (0 == strcmp(lt->names.v[i], field_name)) {
+            field_type = lt->fields.v[i];
+            break;
+        }
+    }
+    return field_type;
+}
+
+//
+
 struct tlt_array *tl_type_arr(tl_type *t) {
     assert(t->tag == type_tuple || t->tag == type_labelled_tuple);
     return &t->array;

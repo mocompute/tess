@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+
 struct transpiler {
     allocator     *alloc;
     allocator     *strings;
@@ -58,6 +61,7 @@ static void  out_put(transpiler *, char const *);
 static void  out_put_start_fmt(transpiler *, char const *restrict, ...)
   __attribute__((format(printf, 2, 3)));
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static void vout_put_fmt(transpiler *, char const *restrict, va_list);
 
 static bool is_generic_function(ast_node const *node);
 static void log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -330,16 +334,8 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     if (!e) fatal("a_field_access: could not find type '%s'", vuser->name);
 
     // find the type of the field by name, by iterating through the user type's labelled tuple
-    char const                *field_name_s = ast_node_name_string(v->field_name);
-    struct tlt_labelled_tuple *lt           = tl_type_lt(vuser->labelled_tuple);
-
-    tl_type                   *field_type   = null;
-    for (u32 i = 0; i < lt->names.size; ++i) {
-        if (0 == strcmp(lt->names.v[i], field_name_s)) {
-            field_type = lt->fields.v[i];
-            break;
-        }
-    }
+    char const *field_name_s = ast_node_name_string(v->field_name);
+    tl_type    *field_type   = tl_type_find_field_type(node->type, field_name_s);
     if (!field_type) fatal("a_field_access: could not find type of field '%s'", field_name_s);
 
     out_put_start(self, "");
@@ -641,8 +637,6 @@ static bool is_generic_function(ast_node const *node) {
 }
 
 void log(transpiler *self, char const *restrict fmt, ...) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -657,6 +651,6 @@ void log(transpiler *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
-
-#pragma clang diagnostic push
 }
+
+#pragma clang diagnostic pop

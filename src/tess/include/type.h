@@ -88,6 +88,8 @@ bool               tl_type_equal(tl_type const *, tl_type const *);
 int                tl_type_compare(tl_type const *, tl_type const *);
 bool               tl_type_satisfies(tl_type const *req, tl_type const *cand);
 
+tl_type           *tl_type_find_field_type(tl_type const *, char const *);
+
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);
 char const        *type_tag_to_string(tl_type_tag);
