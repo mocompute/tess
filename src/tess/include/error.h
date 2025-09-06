@@ -33,6 +33,7 @@
     X(tess_err_expected_comma, "expected_comma")                                                           \
     X(tess_err_expected_dot, "expected_dot")                                                               \
     X(tess_err_expected_colon, "expected_colon")                                                           \
+    X(tess_err_expected_colon_equal, "expected_colon_equal")                                               \
     X(tess_err_expected_end_of_block, "expected_end_of_block")                                             \
     X(tess_err_expected_open_round, "expected_open_round")                                                 \
     X(tess_err_expected_close_round, "expected_close_round")                                               \

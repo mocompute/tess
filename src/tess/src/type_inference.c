@@ -352,6 +352,12 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, v->struct_name);
     } break;
 
+    case ast_user_type_set: {
+        struct ast_user_type_set *v = ast_node_uts(node);
+        rename_variables(self, v->struct_name);
+        rename_variables(self, v->value);
+    } break;
+
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -460,6 +466,13 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
         struct ast_user_type_get *v = ast_node_utg(node);
         buf[0]                      = &v->struct_name->type;
         buf[1]                      = &v->field_name->type;
+    } break;
+
+    case ast_user_type_set: {
+        struct ast_user_type_set *v = ast_node_uts(node);
+        buf[0]                      = &v->struct_name->type;
+        buf[1]                      = &v->field_name->type;
+        buf[2]                      = &v->value->type;
     } break;
 
     case ast_user_type:
@@ -864,14 +877,19 @@ void collect_constraints(void *ctx_, ast_node *node) {
         tl_type                  *struct_name = v->struct_name->type;
 
         if (type_user == struct_name->tag) {
-            log(self, "user_type_get variable '%s' found type", ast_node_name_string(v->struct_name));
             tl_type *field_type = tl_type_find_field_type(struct_name, ast_node_name_string(v->field_name));
             push(node->type, field_type);
 
         } else {
-            log(self, "user_type_get variable '%s' unknown type", ast_node_name_string(v->struct_name));
+            // wait until a later repetition
         }
 
+    } break;
+
+    case ast_user_type_set: {
+        // node type is the type of the value being assigned
+        struct ast_user_type_set *v = ast_node_uts(node);
+        push(node->type, v->value->type);
     } break;
 
     case ast_tuple: {

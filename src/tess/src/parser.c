@@ -566,6 +566,15 @@ static int a_colon(parser *p) {
     return 1;
 }
 
+static int a_colon_equal(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
+
+    p->error.tag = tess_err_expected_colon_equal;
+    return 1;
+}
+
 static int a_arrow(parser *p) {
     if (next_token(p)) return 1;
 
@@ -610,12 +619,31 @@ static int a_field_access(parser *p) {
     if (a_try(p, a_dot)) return 1;
 
     if (a_try(p, a_identifier)) return 1;
-    ast_node                 *field = p->result;
+    ast_node *field = p->result;
 
-    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_get);
-    struct ast_user_type_get *v     = ast_node_utg(node);
-    v->struct_name                  = variable;
-    v->field_name                   = field;
+    log(p, "a_field_access looks good");
+    ast_node                 *node = ast_node_create(p->ast_arena, ast_user_type_get);
+    struct ast_user_type_get *v    = ast_node_utg(node);
+    v->struct_name                 = variable;
+    v->field_name                  = field;
+    return result_ast_node(p, node);
+}
+
+static int a_field_setter(parser *p) {
+    if (a_try(p, a_field_access)) return 1;
+    log(p, "a_field_setter got field_access");
+    ast_node *user_field = p->result;
+    if (a_try(p, a_colon_equal)) return 1;
+    if (a_try(p, expression)) return 1;
+    ast_node *value = p->result;
+
+    log(p, "a_field_setter looks good");
+    ast_node                 *node = ast_node_create(p->ast_arena, ast_user_type_set);
+    struct ast_user_type_set *v    = ast_node_uts(node);
+    struct ast_user_type_get *vget = ast_node_utg(user_field);
+    v->struct_name                 = vget->struct_name;
+    v->field_name                  = vget->field_name;
+    v->value                       = value;
     return result_ast_node(p, node);
 }
 
@@ -1023,6 +1051,7 @@ static int let_in_form(parser *p) {
     if (a_try(p, simple_declaration)) return 1;
     ast_node *sym_or_nil = p->result;
 
+    log(p, "let_in_form: looking for expression after declaration");
     if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
 
@@ -1166,6 +1195,9 @@ static int expression(parser *p) {
 
     log(p, "expression: function_application");
     if (0 == a_try(p, &function_application)) goto cleanup;
+
+    log(p, "expression: try field setter");
+    if (0 == a_try(p, &a_field_setter)) goto cleanup; // before field_access
 
     log(p, "expression: try field access");
     if (0 == a_try(p, &a_field_access)) goto cleanup;

@@ -56,6 +56,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     } break;
 
     case ast_user_type_get:
+    case ast_user_type_set:
     case ast_user_type_definition:
     case ast_symbol:
     case ast_eof:
@@ -155,6 +156,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_user_type_get *vclone = ast_node_utg(clone), *vorig = ast_node_utg((ast_node *)orig);
         vclone->struct_name = ast_node_clone(alloc, vorig->struct_name);
         vclone->field_name  = ast_node_clone(alloc, vorig->field_name);
+    } break;
+
+    case ast_user_type_set: {
+        struct ast_user_type_set *vclone = ast_node_uts(clone), *vorig = ast_node_uts((ast_node *)orig);
+        vclone->struct_name = ast_node_clone(alloc, vorig->struct_name);
+        vclone->field_name  = ast_node_clone(alloc, vorig->field_name);
+        vclone->value       = ast_node_clone(alloc, vorig->value);
     } break;
 
     case ast_user_type_definition: {
@@ -350,6 +358,12 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         return quad(alloc, sym("user-type-get"), recur(v->struct_name), recur(v->field_name), type);
     }
 
+    case ast_user_type_set: {
+        struct ast_user_type_set const *v = ast_node_uts((ast_node *)node);
+        return penta(alloc, sym("user-type-set"), recur(v->struct_name), recur(v->field_name),
+                     recur(v->value), type);
+    }
+
     case ast_user_type_definition: {
         u16        n                 = node->user_type_def.n_fields;
         ast_node **field_names       = node->user_type_def.field_names;
@@ -506,6 +520,14 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     }
 
+    case ast_user_type_set: {
+        struct ast_user_type_set *v = ast_node_uts(node);
+        ast_node_dfs(ctx, v->struct_name, fun);
+        ast_node_dfs(ctx, v->field_name, fun);
+        ast_node_dfs(ctx, v->value, fun);
+        return fun(ctx, node);
+    }
+
     case ast_user_type_definition:
         // excluded from dfs
         return;
@@ -599,6 +621,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_named_function_application:
     case ast_user_type:
     case ast_user_type_get:
+    case ast_user_type_set:
     case ast_user_type_definition:        valid = true; break;
     }
     if (!valid) {
@@ -662,6 +685,7 @@ struct ast_array *ast_node_arr(ast_node *node) {
 
     case ast_user_type:
     case ast_user_type_get:
+    case ast_user_type_set:
     case ast_tuple:
     case ast_let:
     case ast_lambda_function:
@@ -730,6 +754,11 @@ struct ast_user_type *ast_node_ut(ast_node *node) {
 struct ast_user_type_get *ast_node_utg(ast_node *node) {
     assert(node->tag == ast_user_type_get);
     return &node->user_type_get;
+}
+
+struct ast_user_type_set *ast_node_uts(ast_node *node) {
+    assert(node->tag == ast_user_type_set);
+    return &node->user_type_set;
 }
 
 struct ast_user_type_def *ast_node_utd(ast_node *node) {

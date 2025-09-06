@@ -107,6 +107,7 @@ tesslang_create_test(let_in_nil)
 tesslang_create_test(std_dbg)
 tesslang_create_test(struct)
 tesslang_create_test(struct_get)
+tesslang_create_test(struct_set)
 
 # -- doxygen --
 

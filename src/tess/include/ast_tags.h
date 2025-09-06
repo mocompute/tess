@@ -26,6 +26,7 @@
     X(ast_named_function_application, "named_function_application")                                        \
     X(ast_user_type, "user_type")                                                                          \
     X(ast_user_type_get, "user_type_get")                                                                  \
+    X(ast_user_type_set, "user_type_set")                                                                  \
     X(ast_user_type_definition, "user_type_definition")
 
 typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;

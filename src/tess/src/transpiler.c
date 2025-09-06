@@ -28,10 +28,10 @@ struct transpiler {
     c_string_array results;
     // a stack of result variable names, see also next_variable
 
-    u32  next_variable;
-    int  indent_level;
+    size_t next_variable;
+    int    indent_level;
 
-    bool verbose;
+    bool   verbose;
 };
 
 // -- embed externs --
@@ -248,7 +248,8 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_lambda_function_application:
     case ast_named_function_application:
     case ast_user_type:
-    case ast_user_type_get:               break;
+    case ast_user_type_get:
+    case ast_user_type_set:               break;
     case ast_user_type_definition:        return a_user_type_definition(self, node); break;
     }
     return 0;
@@ -337,6 +338,32 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_field_setter(transpiler *self, ast_node const *node) {
+
+    struct ast_user_type_set const *v = ast_node_uts((ast_node *)node);
+    log(self, "field_setter: '%s' . '%s'", ast_node_name_string(v->struct_name),
+        ast_node_name_string(v->field_name));
+
+    char const *struct_name = ast_node_name_string(v->struct_name);
+    char const *field_name  = ast_node_name_string(v->field_name);
+    char       *var         = next_variable(self);
+    array_push(self->results, &var);
+
+    // eval the value
+    if (a_eval(self, v->value)) return 1;
+    char *value = self->results.v[--self->results.size];
+
+    // output value is field set value
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_start_fmt(self, "%s = %s;\n", var, value);
+
+    // assign to struct field
+    out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
+
+    return 0;
+}
+
 static int a_nil_expression(transpiler *self, ast_node const *node) {
     // an expression of type nil: there is no need to capture its
     // result
@@ -421,6 +448,16 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_user_type_get: {
         // emit object field access
         if (a_field_access(self, node)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %s;\n", var, res);
+
+    } break;
+
+    case ast_user_type_set: {
+        // emit object field setter
+        if (a_field_setter(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
         out_put_start(self, "");
@@ -608,10 +645,10 @@ static int a_let(transpiler *self, ast_node const *node) {
 }
 
 static char *next_variable(transpiler *self) {
-    int   len = snprintf(null, 0, "_res%u_", self->next_variable) + 1;
+    int   len = snprintf(null, 0, "_res%zu_", self->next_variable) + 1;
 
     char *out = alloc_malloc(self->strings, (u32)len);
-    snprintf(out, (u32)len, "_res%u_", self->next_variable++);
+    snprintf(out, (u32)len, "_res%zu_", self->next_variable++);
     return out;
 }
 
