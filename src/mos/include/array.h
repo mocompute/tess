@@ -104,6 +104,13 @@ typedef struct {
                                 (void *)(xs), (u32)(n));                                                   \
     } while (0)
 
+#define array_copy_(p, ty, xs, n)                                                                          \
+    do {                                                                                                   \
+        static_assert(sizeof((xs)[0]) == sizeof(ty), "size mismatch");                                     \
+        (p).v =                                                                                            \
+          array_copy_impl((array_header_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), (u32)(n)); \
+    } while (0)
+
 #define array_move(p, xs, n)                                                                               \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \

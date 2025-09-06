@@ -2,9 +2,9 @@
 #define MOS_SEXP_H
 
 #include "alloc.h"
+#include "array.h"
 #include "mos_string.h"
 #include "nodiscard.h"
-#include "vector.h"
 
 #include <stdint.h>
 
@@ -27,7 +27,24 @@
 
 typedef enum { MOS_SEXP_BOXED_TAGS(MOS_TAG_NAME) } sexp_box_tag;
 
+typedef struct sexp {
+    union {
+        struct sexp_box *ptr;
+        i64              integer;
+    };
+} sexp;
+
 typedef struct {
+    array_header;
+    struct sexp *v;
+} sexp_array;
+
+typedef struct {
+    array_sized;
+    struct sexp *v;
+} sexp_sized;
+
+typedef struct sexp_box {
     union {
         struct {
             i64 val;
@@ -45,26 +62,13 @@ typedef struct {
             string_t name;
         } string;
         struct {
-            vector list;
+            struct sexp *v;
+            u32          size;
         } list;
     };
 
     sexp_box_tag tag;
 } sexp_box;
-
-typedef struct {
-
-    union {
-        sexp_box *ptr;
-        i64       integer;
-    };
-
-} sexp;
-
-struct sexp_iterator {
-    struct vector_iterator_base base;
-    sexp                       *ptr;
-};
 
 // -- allocation and deallocation --
 
@@ -84,7 +88,7 @@ void sexp_deinit(allocator *, sexp *);
 
 void sexp_box_init_empty(sexp_box *);
 void sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
-void sexp_box_init_move_list(sexp_box *, vector *);
+void sexp_box_init_move_list(sexp_box *, sexp_sized);
 void sexp_box_deinit(allocator *, sexp_box *);
 
 // -- access --

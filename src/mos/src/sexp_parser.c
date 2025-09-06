@@ -1,9 +1,9 @@
 #include "sexp_parser.h"
+#include "array.h"
 #include "mos_string.h"
 
 #include "alloc.h"
 #include "sexp.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -422,8 +422,8 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
             case sexp_tok_open_round: {
                 // this state loops recursively until close_round, error or eof
 
-                vector exprs = VEC(sexp);
-                vec_reserve(self->alloc, &exprs, 2);
+                sexp_array exprs = {.alloc = self->alloc};
+                array_reserve(exprs, 2);
 
                 while (true) {
 
@@ -432,7 +432,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                         if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
                             *out = sexp_init_boxed(self->alloc);
-                            sexp_box_init_move_list(sexp_box_get(*out), &exprs);
+                            sexp_box_init_move_list(sexp_box_get(*out), (sexp_sized)sized_all(exprs));
                             state = stop;
                         }
 
@@ -444,9 +444,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                     } else {
                         // append to list
-                        struct sexp_iterator iter = {.ptr = &sub_expr};
-                        vec_iterator_init(&exprs, &iter.base);
-                        vec_push_back(self->alloc, &exprs, &iter.base);
+                        array_push(exprs, &sub_expr);
                     }
                 } // while sub_expr
 
