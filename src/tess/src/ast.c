@@ -6,7 +6,6 @@
 #include "mos_string.h"
 #include "sexp.h"
 #include "type.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stdio.h>

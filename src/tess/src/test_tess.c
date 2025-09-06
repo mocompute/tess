@@ -5,10 +5,7 @@
 #include "parser.h"
 #include "syntax.h"
 #include "tokenizer.h"
-#include "transpiler.h"
 #include "type_inference.h"
-#include "type_registry.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stddef.h>

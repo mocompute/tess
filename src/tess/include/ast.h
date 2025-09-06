@@ -9,8 +9,6 @@
 #include "nodiscard.h"
 #include "type.h"
 
-#include "vector.h"
-
 typedef struct ast_node {
     union {
         struct ast_symbol {
