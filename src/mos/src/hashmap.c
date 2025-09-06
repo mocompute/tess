@@ -290,7 +290,6 @@ hashmap *map_copy(hashmap const *src) {
         if (!is_occupied(entry->status)) continue;
 
         // copy key storage
-        dbg("index = %u\n", iter.index);
         assert(entry->key);
         hashmap_key *key = alloc_malloc(src->key_alloc, sizeof(hashmap_key) + entry->key->size);
 

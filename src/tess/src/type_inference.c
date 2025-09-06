@@ -784,6 +784,8 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
         for (u32 j = 0; j < elements.size; ++j) {
             tl_type *el    = elements.v[j];
             tl_type *param = params->elements.v[j];
+            // If the callsite is looking for a typevar in this slot, skip it
+            if (type_type_var == el->tag) continue;
             if (!is_type_compatible(el, param, strict)) goto skip;
         }
 
@@ -1262,5 +1264,5 @@ static bool is_special_name(char const *str) {
 
 static bool is_special_name_s(string_t const *string) {
     char const *str = mos_string_str(string);
-    return (0 == strncmp("_gen_", str, 5) || 0 == strncmp("c_", str, 2) || 0 == strncmp("std_", str, 4));
+    return is_special_name(str);
 }

@@ -850,16 +850,19 @@ static int function_argument(parser *p) {
 
     p->indent_level++;
 
-    log(p, "try grouped_expression");
+    log(p, "function_argument: try grouped_expression");
     if (0 == a_try(p, grouped_expression)) goto cleanup;
 
-    log(p, "try nil");
+    log(p, "function_argument: try nil");
     if (0 == a_try(p, a_nil)) goto cleanup;
 
-    log(p, "try identifier");
+    log(p, "function_argument: try field access");
+    if (0 == a_try(p, &a_field_access)) goto cleanup;
+
+    log(p, "function_argument: try identifier");
     if (0 == a_try(p, a_identifier)) goto cleanup;
 
-    log(p, "try literal");
+    log(p, "function_argument: try literal");
     if (0 == a_try(p, a_literal)) goto cleanup;
 
     p->indent_level--;

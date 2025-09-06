@@ -405,7 +405,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_string:
         out_put_start(self, "");
-        out_put_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
+        out_put_fmt(self, "%s = R\"(%s)\";\n", var, ast_node_name_string(node));
         break;
 
     case ast_i64:

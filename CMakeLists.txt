@@ -71,6 +71,7 @@ else()
 
     # allow gnu extensions
     -Wno-gnu-alignof-expression
+    # -Wno-unused-function
   )
 
 
