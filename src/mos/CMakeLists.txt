@@ -13,7 +13,6 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/vector.h
 )
 
 set(SOURCES
@@ -26,7 +25,6 @@ set(SOURCES
   src/mos_string.c
   src/sexp.c
   src/sexp_parser.c
-  src/vector.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(mos BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
@@ -63,7 +61,6 @@ mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(string)
 mos_create_test(types)
-mos_create_test(vector)
 
 mos_create_exe(hash)
 
