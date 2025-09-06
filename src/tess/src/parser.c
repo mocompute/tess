@@ -1048,6 +1048,13 @@ struct tokenizer {
     size_t      pos;
 };
 
+// static int a_in_or_newline(parser *p) {
+//     if (0 == a_try_s(p, the_symbol, "in")) return 0;
+//     if (0 == a_try(p, a_newline)) return 0;
+//     if (is_start_of_expression(p->token.s)) return 0;
+//     return 1;
+// }
+
 static int let_in_form(parser *p) {
     // let a = 2 in expression
     if (a_try_s(p, the_symbol, "let")) return 1;
@@ -1058,7 +1065,8 @@ static int let_in_form(parser *p) {
     if (a_try(p, expression)) return 1;
     ast_node *defn = p->result;
 
-    if (a_try_s(p, the_symbol, "in")) return 1;
+    a_try_s(p, the_symbol, "in"); // optional
+    // if (a_try(p, a_in_or_newline)) return 1;
     if (a_try(p, expression)) return 1;
     ast_node *body = p->result;
 
