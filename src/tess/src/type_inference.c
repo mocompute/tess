@@ -383,23 +383,19 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     case type_string:
     case type_user:
     case type_type_var:
-    case type_any:      break;
+    case type_any:            break;
 
-    case type_tuple:    {
-        for (size_t i = 0; i < type->elements.size; ++i)
-            if (apply_one_substitution(&type->elements.v[i], from, to)) did_substitute = true;
-
-    } break;
-
+    case type_tuple:
     case type_labelled_tuple: {
-        for (size_t i = 0; i < type->fields.size; ++i)
-            if (apply_one_substitution(&type->fields.v[i], from, to)) did_substitute = true;
+        struct tlt_array *v = tl_type_arr(type);
+        for (size_t i = 0; i < v->elements.size; ++i)
+            if (apply_one_substitution(&v->elements.v[i], from, to)) did_substitute = true;
 
     } break;
 
     case type_arrow: {
-        if (apply_one_substitution(&type->left, from, to)) did_substitute = true;
-        if (apply_one_substitution(&type->right, from, to)) did_substitute = true;
+        if (apply_one_substitution(&type->arrow.left, from, to)) did_substitute = true;
+        if (apply_one_substitution(&type->arrow.right, from, to)) did_substitute = true;
     } break;
     }
 
@@ -522,22 +518,18 @@ static bool unify_one(ti_inferer *self, constraint c) {
             break;
 
         case type_type_var:
-        case type_any:      break;
+        case type_any:            break;
 
         case type_tuple:
-            for (size_t i = 0; i < other->elements.size; ++i)
-                if (other->elements.v[i] == orig) return false;
+        case type_labelled_tuple: {
+            struct tlt_array *v = tl_type_arr(other);
+            for (size_t i = 0; i < v->elements.size; ++i)
+                if (v->elements.v[i] == orig) return false;
 
-            break;
-
-        case type_labelled_tuple:
-            for (size_t i = 0; i < other->fields.size; ++i)
-                if (other->fields.v[i] == orig) return false;
-
-            break;
+        } break;
 
         case type_arrow:
-            if (other->left == orig || other->right == orig) return false;
+            if (other->arrow.left == orig || other->arrow.right == orig) return false;
             break;
         }
 
@@ -548,17 +540,17 @@ static bool unify_one(ti_inferer *self, constraint c) {
 
     // tuple constraints of equal size: unify matching elements
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
-             c.left->elements.size == c.right->elements.size) {
+             c.left->tuple.elements.size == c.right->tuple.elements.size) {
 
-        for (size_t i = 0; i < c.left->elements.size; ++i)
-            unify_one(self, make_constraint(c.left->elements.v[i], c.right->elements.v[i]));
+        for (size_t i = 0; i < c.left->tuple.elements.size; ++i)
+            unify_one(self, make_constraint(c.left->tuple.elements.v[i], c.right->tuple.elements.v[i]));
 
     }
 
     // arrow types: unify matching arms
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
-        unify_one(self, make_constraint(c.left->left, c.right->left));
-        unify_one(self, make_constraint(c.left->right, c.right->right));
+        unify_one(self, make_constraint(c.left->arrow.left, c.right->arrow.left));
+        unify_one(self, make_constraint(c.left->arrow.right, c.right->arrow.right));
     }
 
     return true;
@@ -673,33 +665,38 @@ static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) 
     case type_float:
     case type_string: return b->tag == type_type_var;
 
-    case type_tuple:
+    case type_tuple:  {
         if (type_type_var == b->tag) return true;
         else if (type_tuple != b->tag && type_labelled_tuple != b->tag) return false;
 
-        if (a->elements.size != b->elements.size) return false;
+        struct tlt_array const *va = tl_type_arr((tl_type *)a), *vb = tl_type_arr((tl_type *)b);
+        if (va->elements.size != vb->elements.size) return false;
 
-        for (u32 i = 0; i < a->elements.size; ++i)
-            if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
+        for (u32 i = 0; i < va->elements.size; ++i)
+            if (!is_type_compatible(va->elements.v[i], vb->elements.v[i], strict)) return false;
 
         return true;
+    }
 
-    case type_labelled_tuple:
+    case type_labelled_tuple: {
         if (type_type_var == b->tag) return true;
 
-        if (a->elements.size != b->elements.size) return false;
+        struct tlt_array const *varr = tl_type_arr((tl_type *)a), *vbarr = tl_type_arr((tl_type *)b);
+        struct tlt_labelled_tuple const *va = tl_type_lt((tl_type *)a), *vb = tl_type_lt((tl_type *)b);
+        if (varr->elements.size != vbarr->elements.size) return false;
 
         // regardless of typevars, names must match
-        for (u32 i = 0; i < a->elements.size; ++i) {
-            if (0 != strcmp(a->names.v[i], b->names.v[i])) return false;
-            if (!is_type_compatible(a->elements.v[i], b->elements.v[i], strict)) return false;
+        for (u32 i = 0; i < varr->elements.size; ++i) {
+            if (0 != strcmp(va->names.v[i], vb->names.v[i])) return false;
+            if (!is_type_compatible(varr->elements.v[i], vbarr->elements.v[i], strict)) return false;
         }
 
         return true;
+    }
 
     case type_arrow:
-        return b->tag == type_arrow && is_type_compatible(a->left, b->left, strict) &&
-               is_type_compatible(a->right, b->right, strict);
+        return b->tag == type_arrow && is_type_compatible(a->arrow.left, b->arrow.left, strict) &&
+               is_type_compatible(a->arrow.right, b->arrow.right, strict);
 
     case type_user:
         // user types are exclusively identified by reference
@@ -730,9 +727,9 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
 
         assert(candidate->let.arrow && type_arrow == candidate->let.arrow->tag);
 
-        assert(type_tuple == candidate->let.arrow->left->tag);
+        assert(type_tuple == candidate->let.arrow->arrow.left->tag);
 
-        tl_type *params = candidate->let.arrow->left;
+        struct tlt_array *params = tl_type_arr(candidate->let.arrow->arrow.left);
         if (elements.size != params->elements.size) continue;
 
         for (u32 j = 0; j < elements.size; ++j) {
@@ -807,8 +804,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, e->type);
 
         // each field must be constrained to its correct type
-        assert(type_user == e->type->tag);
-        tl_type *lt = e->type->labelled_tuple;
+        struct tlt_user           *user_type = tl_type_user(e->type);
+        struct tlt_labelled_tuple *lt        = tl_type_lt(user_type->labelled_tuple);
         assert(node->user_type.n_fields == lt->fields.size);
 
         for (u16 i = 0; i < node->user_type.n_fields; ++i)
@@ -853,10 +850,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
         tl_type *params =
           arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
-        push(node->let.arrow->left, params);
+        push(node->let.arrow->arrow.left, params);
 
         // right side of arrow is same as function body type
-        push(node->let.arrow->right, node->let.body->type);
+        push(node->let.arrow->arrow.right, node->let.body->type);
 
         // result is nil
         push(node->type, get_prim(self, type_nil));
@@ -872,17 +869,17 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_lambda_function: {
         // argument tuple must be same type as parameter tuple
-        assert(type_arrow == node->type->tag);
+        struct tlt_arrow *v = tl_type_arrow(node->type);
 
-        tl_type *tup =
+        tl_type          *tup =
           arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        push(node->type->left, tup);
+        push(v->left, tup);
 
         // body type must be same as right hand of arrow
-        push(node->type->right, node->lambda_function.body->type);
+        push(v->right, node->lambda_function.body->type);
 
         // result must be same as right hand of arrow
-        push(node->type, node->type->right);
+        push(node->type, v->right);
         break;
 
     } break;
@@ -901,8 +898,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(args, params);
 
         // result must be same as right hand of arrow
-        assert(type_arrow == lambda->type->tag);
-        push(node->type, lambda->type->right);
+        struct tlt_arrow *v = tl_type_arrow(lambda->type);
+        push(node->type, v->right);
     } break;
 
     case ast_named_function_application:
@@ -922,8 +919,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
               self->type_arena, (ast_node const **)node->named_application.arguments,
               node->named_application.n_arguments);
 
-            push(fun->let.arrow->left, args_type);
-            push(fun->let.arrow->right, node->type);
+            push(fun->let.arrow->arrow.left, args_type);
+            push(fun->let.arrow->arrow.right, node->type);
         }
 
         break;
@@ -1020,18 +1017,19 @@ static void specialize_node(void *ctx_, ast_node *node) {
 
     // does a specialised function already exist?
 
-    tl_type  *args_ty = arguments_to_tuple_type(alloc, (ast_node const **)node->named_application.arguments,
-                                                node->named_application.n_arguments);
+    tl_type *args_ty = arguments_to_tuple_type(alloc, (ast_node const **)node->named_application.arguments,
+                                               node->named_application.n_arguments);
+    struct tlt_tuple *vargs_ty = tl_type_tup(args_ty);
 
-    ast_node *let     = null;
-    let = find_let_node(name, args_ty->elements, (ast_node_sized)sized_all(*ctx->ti->nodes), true);
+    ast_node         *let      = null;
+    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*ctx->ti->nodes), true);
 
     if (let) {
         node->named_application.specialized = let;
         return;
     }
 
-    let = find_let_node(name, args_ty->elements, (ast_node_sized)sized_all(*ctx->ti->nodes), false);
+    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*ctx->ti->nodes), false);
 
     // TODO compiler error
     if (null == let) return;
@@ -1064,7 +1062,7 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     // create a let_node with parameters matching the user_type fields, and a body with a single node, a
     // user_type literal
 
-    assert(type_user == user_type->tag);
+    struct tlt_user *v = tl_type_user(user_type);
 
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
@@ -1088,9 +1086,9 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     // } user_type; // a type literal, generated by compiler as body of constructor
 
     // make params array from user_type's labelled_tuple
-    tl_type *lt = user_type->labelled_tuple;
-    assert(type_labelled_tuple == lt->tag);
+    struct tlt_labelled_tuple *lt = tl_type_lt(v->labelled_tuple);
     assert(lt->fields.size == lt->names.size);
+
     out->let.n_parameters = (u16)lt->fields.size;
     out->let.parameters   = alloc_malloc(self->type_arena, lt->fields.size);
     for (u16 i = 0; i < out->let.n_parameters; ++i)

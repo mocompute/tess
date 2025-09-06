@@ -30,26 +30,32 @@ typedef struct {
 
 typedef struct tl_type {
     union {
-        struct {
+        struct tlt_array {
             tl_type_sized elements;
-        }; // tuple
+        } array;
 
-        struct {
+        struct tlt_tuple {
+            tl_type_sized elements;
+        } tuple;
+
+        struct tlt_labelled_tuple {
             tl_type_sized   fields;
             c_string_csized names;
-        }; // labelled_tuple
+        } labelled_tuple;
 
-        struct {
+        struct tlt_arrow {
             struct tl_type *left;
             struct tl_type *right;
-        }; // arrow
+        } arrow;
 
-        struct {
+        struct tlt_user {
             char const     *name;
             struct tl_type *labelled_tuple;
-        }; // user
+        } user;
 
-        u32 type_var;
+        struct tlt_tv {
+            u32 val;
+        } type_var;
     };
     tl_type_tag tag;
 } tl_type;
@@ -58,6 +64,17 @@ typedef struct {
     array_header;
     struct tl_type **v;
 } tl_type_array;
+
+// -- variant access --
+
+struct tlt_array          *tl_type_arr(tl_type *);
+struct tlt_tuple          *tl_type_tup(tl_type *);
+struct tlt_labelled_tuple *tl_type_lt(tl_type *);
+struct tlt_arrow          *tl_type_arrow(tl_type *);
+struct tlt_user           *tl_type_user(tl_type *);
+struct tlt_tv             *tl_type_tv(tl_type *);
+
+// -- allocation --
 
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;

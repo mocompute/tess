@@ -156,15 +156,15 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     case type_tuple:          out_put(self, "FIXME"); break;
     case type_labelled_tuple: out_put(self, "FIXME"); break;
     case type_any:            out_put(self, "int"); break;
-    case type_arrow:          return a_result_type_of(self, ty->right);
+    case type_arrow:          return a_result_type_of(self, ty->arrow.right);
     case type_user:           {
         char *type_s = tl_type_to_string(self->strings, ty);
-        out_put_fmt(self, "/* %s */ struct %s", type_s, ty->name);
+        out_put_fmt(self, "/* %s */ struct %s", type_s, ty->user.name);
         alloc_free(self->strings, type_s);
 
     } break;
 
-    case type_type_var: out_put_fmt(self, "/* tv%u */ int", ty->type_var); break;
+    case type_type_var: out_put_fmt(self, "/* tv%u */ int", ty->type_var.val); break;
     }
 
     return 0;
@@ -356,7 +356,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
         type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(v->name));
         if (!e) fatal("a_eval: type '%s' not found in registry", ast_node_name_string(v->name));
 
-        tl_type *lt = e->type->labelled_tuple;
+        struct tlt_user const           *usertype = tl_type_user(e->type);
+        struct tlt_labelled_tuple const *lt       = tl_type_lt(usertype->labelled_tuple);
 
         for (u16 i = 0; i < v->n_fields; ++i) {
             if (a_eval(self, v->fields[i])) return 1;
@@ -560,13 +561,11 @@ static bool is_generic_function(ast_node const *node) {
     if (ast_let != node->tag) return false;
 
     tl_type *arrow = node->let.arrow;
-    if (arrow->right->tag == type_type_var) return true;
+    if (arrow->arrow.right->tag == type_type_var) return true;
 
-    tl_type *left = arrow->left;
-    assert(left->tag == type_tuple);
-
-    for (u32 i = 0; i < left->elements.size; ++i)
-        if (type_type_var == left->elements.v[i]->tag) return true;
+    struct tlt_tuple const *v = tl_type_tup(arrow->arrow.left);
+    for (u32 i = 0; i < v->elements.size; ++i)
+        if (type_type_var == v->elements.v[i]->tag) return true;
 
     return false;
 }
