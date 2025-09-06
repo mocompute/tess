@@ -1,8 +1,8 @@
 #include "alloc.h"
 #include "hashmap.h"
 
+#include "array.h"
 #include "dbg.h"
-#include "vector.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -82,12 +82,17 @@ static int test_big_map(void) {
     typedef struct pair_t {
         int left;
         int right;
-
     } pair_t;
 
+    typedef struct {
+        array_header;
+        pair_t *v;
+    } pair_array;
+
     allocator *alloc = default_allocator();
-    vector     vec   = VEC(pair_t);
-    vec_reserve(alloc, &vec, N);
+
+    pair_array vec   = {.alloc = alloc};
+    array_reserve(vec, N);
 
     hashmap *map = map_create(alloc, sizeof(int));
 
@@ -97,13 +102,13 @@ static int test_big_map(void) {
         while (map_contains(map, &key, sizeof key)) key = rand();
 
         pair_t pair = {key, rand()};
-        vec_push_back_void(alloc, &vec, &pair);
+        array_push(vec, &pair);
         map_set(&map, &pair.left, sizeof pair.left, &pair.right);
     }
 
     // verify
-    for (u32 i = 0; i < vec_size(&vec); ++i) {
-        pair_t *pair = vec_at(&vec, i);
+    for (u32 i = 0; i < vec.size; ++i) {
+        pair_t *pair = &vec.v[i];
         void   *res  = map_get(map, &pair->left, sizeof pair->left);
         if (!res) {
             fprintf(stderr, "verify not found %u: %u -> %i %p\n", i, pair->left, pair->right, res);
@@ -124,7 +129,7 @@ static int test_big_map(void) {
     map_destroy(&map);
 
 cleanup:
-    vec_deinit(alloc, &vec);
+    array_free(vec);
     return error;
 }
 
