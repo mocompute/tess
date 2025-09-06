@@ -122,6 +122,13 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
     self->verbose = val;
 }
 
+static void ti_collect_and_solve(ti_inferer *self) {
+    ti_collect_constraints(self);
+    ti_run_solver(self);
+    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
+                                  (ast_node_sized)sized_all(*self->nodes));
+}
+
 int ti_inferer_run(ti_inferer *self) {
 
     ti_generate_user_type_functions(self);
@@ -133,18 +140,11 @@ int ti_inferer_run(ti_inferer *self) {
         dbg_ast_nodes(self);
     }
 
-    // 1. collect constraints, but don't constrain function applications at this stage
+    // collect constraints, but don't constrain function applications at this stage
     self->constrain_function_applications = false;
-    ti_collect_constraints(self);
+    ti_collect_and_solve(self);
 
-    // 2
-    ti_run_solver(self);
-
-    // 3
-    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
-                                  (ast_node_sized)sized_all(*self->nodes));
-
-    // 4: specialize
+    // specialize
 
     if (self->verbose) {
         dbg("\n\nti_inferer_run: before specialisation:\n");
@@ -154,7 +154,7 @@ int ti_inferer_run(ti_inferer *self) {
     ast_node_array specialized = {.alloc = self->type_arena};
     ti_specialize_functions(self, &specialized);
 
-    // 5: add specialised nodes to program
+    // add specialised nodes to program
     array_copy(*self->nodes, specialized.v, specialized.size);
 
     if (self->verbose) {
@@ -164,14 +164,10 @@ int ti_inferer_run(ti_inferer *self) {
         dbg_ast_nodes(self);
     }
 
-    // 6. collect and solve constraints again, this time constraining function applications
+    // collect and solve constraints again, this time constraining function applications
     self->constrain_function_applications = true;
     self->constraints.size                = 0; // reset constraints from first phase
-    ti_collect_constraints(self);
-
-    ti_run_solver(self);
-    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
-                                  (ast_node_sized)sized_all(*self->nodes));
+    ti_collect_and_solve(self);
 
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
@@ -179,6 +175,11 @@ int ti_inferer_run(ti_inferer *self) {
         ti_inferer_dbg_substitutions(self);
         dbg_ast_nodes(self);
     }
+
+    // and one final time, because the previous pass will have
+    // completed without constraining user-defined type's getters
+    ti_collect_and_solve(self);
+    // FIXME: consider how to do this in a single pass
 
     // any remaining constraints indicate an ill-typed program
     if (self->constraints.size) return 1;
@@ -338,7 +339,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
 
     case ast_user_type_get: {
         struct ast_user_type_get *v = ast_node_utg(node);
-        rename_variables(self, v->var_name);
+        rename_variables(self, v->struct_name);
     } break;
 
     case ast_eof:
@@ -436,7 +437,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
 
     case ast_user_type_get: {
         struct ast_user_type_get *v = ast_node_utg(node);
-        buf[0]                      = &v->var_name->type;
+        buf[0]                      = &v->struct_name->type;
         buf[1]                      = &v->field_name->type;
     } break;
 
@@ -843,16 +844,17 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_user_type_get: {
         // node type is the type of the field being accessed
-        struct ast_user_type_get *v        = ast_node_utg(node);
-        tl_type                  *var_type = v->var_name->type;
+        struct ast_user_type_get *v           = ast_node_utg(node);
+        tl_type                  *struct_name = v->struct_name->type;
 
-        if (type_user == var_type->tag) {
-            log(self, "user_type_get variable '%s' found type", ast_node_name_string(v->var_name));
+        if (type_user == struct_name->tag) {
+            log(self, "user_type_get variable '%s' found type", ast_node_name_string(v->struct_name));
+            tl_type *field_type = tl_type_find_field_type(struct_name, ast_node_name_string(v->field_name));
+            push(node->type, field_type);
+
         } else {
-            log(self, "user_type_get variable '%s' unknown type", ast_node_name_string(v->var_name));
+            log(self, "user_type_get variable '%s' unknown type", ast_node_name_string(v->struct_name));
         }
-
-        push(node->type, var_type);
 
     } break;
 
@@ -1151,41 +1153,6 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     return out;
 }
 
-// static ast_node *make_getter(ti_inferer *self, char const *type_name, char const *field_name,
-//                              tl_type *type_type, tl_type *field_type) {
-
-//     allocator *arena = self->type_arena;
-
-//     // getter name: _gen_get_{type}_{field}_
-//     char *generated_name = null;
-//     {
-// #define fmt "_gen_get_%s_%s_"
-//         int len = snprintf(null, 0, fmt, type_name, field_name) + 1;
-//         if (len < 0) fatal("make_getter: generate name failed.");
-//         generated_name = alloc_malloc(self->type_arena, (u32)len);
-//         snprintf(generated_name, (u32)len, fmt, type_name, field_name);
-// #undef fmt
-//     }
-
-//     ast_node *out             = ast_node_create(self->type_arena, ast_let);
-//     out->let.name             = mos_string_init(self->type_arena, generated_name);
-//     out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
-
-//     out->let.n_parameters     = 2;
-//     out->let.parameters       = alloc_malloc(arena, 2 * sizeof out->let.parameters[0]);
-//     out->let.parameters[0]    = ast_node_create_sym(arena, "self");
-//     out->let.parameters[1]    = ast_node_create_sym(arena, "field");
-
-//     tl_type_sized param_types = {.size = 2, .v = alloc_malloc(arena, 2 * sizeof param_types.v[0])};
-//     param_types.v[0]          = type_type;
-//     param_types.v[1]          = get_prim(self, type_string);
-//     out->let.arrow = tl_type_create_arrow(arena, tl_type_create_tuple(arena, param_types), field_type);
-
-//     // FIXME maybe don't need a getter - just an ast node with a field
-//     // access, because we just need to emit c code with the dot
-//     // operator.
-// }
-
 static void ti_generate_user_type_functions(ti_inferer *self) {
     // generate required functions for user defined types: constructors, getters and setters.
 
@@ -1207,10 +1174,6 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
         ast_node *constructor = make_type_constructor_function(self, type_name, ty);
         array_push(added, &constructor);
-
-        // // make getters and setters
-        // c_string_csized field_names =
-        //   ast_nodes_get_names(self->strings, (ast_node_slice){.v = v->field_names, .end = v->n_fields});
     }
 
     // add nodes to program

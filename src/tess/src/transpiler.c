@@ -44,6 +44,7 @@ typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
 static int   a_eval(transpiler *, ast_node const *);
 static int   a_infix(transpiler *, ast_node const *);
+static int   a_field_access(transpiler *, ast_node const *);
 static int   a_fun_apply(transpiler *, ast_node const *);
 static int   a_let(transpiler *, ast_node const *);
 static int   a_let_in(transpiler *, ast_node const *);
@@ -322,25 +323,16 @@ static int a_let_in(transpiler *self, ast_node const *node) {
 static int a_field_access(transpiler *self, ast_node const *node) {
 
     struct ast_user_type_get const *v = ast_node_utg((ast_node *)node);
-    log(self, "field_access: '%s' . '%s'", ast_node_name_string(v->var_name),
+    log(self, "field_access: '%s' . '%s'", ast_node_name_string(v->struct_name),
         ast_node_name_string(v->field_name));
 
     char *var = next_variable(self);
     array_push(self->results, &var);
 
-    // get the user type from the node's result type
-    struct tlt_user const *vuser = tl_type_user(node->type);
-    type_entry            *e     = type_registry_find(self->type_registry, vuser->name);
-    if (!e) fatal("a_field_access: could not find type '%s'", vuser->name);
-
-    // find the type of the field by name, by iterating through the user type's labelled tuple
-    char const *field_name_s = ast_node_name_string(v->field_name);
-    tl_type    *field_type   = tl_type_find_field_type(node->type, field_name_s);
-    if (!field_type) fatal("a_field_access: could not find type of field '%s'", field_name_s);
-
     out_put_start(self, "");
-    a_result_type_of(self, field_type);
-    out_put_start_fmt(self, "%s = %s.%s;\n", var, ast_node_name_string(v->var_name), field_name_s);
+    a_result_type_of(self, node->type);
+    out_put_start_fmt(self, "%s = %s.%s;\n", var, ast_node_name_string(v->struct_name),
+                      ast_node_name_string(v->field_name));
 
     return 0;
 }

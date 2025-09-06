@@ -614,7 +614,7 @@ static int a_field_access(parser *p) {
 
     ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_get);
     struct ast_user_type_get *v     = ast_node_utg(node);
-    v->var_name                     = variable;
+    v->struct_name                  = variable;
     v->field_name                   = field;
     return result_ast_node(p, node);
 }

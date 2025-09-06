@@ -154,8 +154,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_user_type_get: {
         struct ast_user_type_get *vclone = ast_node_utg(clone), *vorig = ast_node_utg((ast_node *)orig);
-        vclone->var_name   = ast_node_clone(alloc, vorig->var_name);
-        vclone->field_name = ast_node_clone(alloc, vorig->field_name);
+        vclone->struct_name = ast_node_clone(alloc, vorig->struct_name);
+        vclone->field_name  = ast_node_clone(alloc, vorig->field_name);
     } break;
 
     case ast_user_type_definition: {
@@ -348,7 +348,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_user_type_get: {
         struct ast_user_type_get const *v = ast_node_utg((ast_node *)node);
-        return quad(alloc, sym("user-type-get"), recur(v->var_name), recur(v->field_name), type);
+        return quad(alloc, sym("user-type-get"), recur(v->struct_name), recur(v->field_name), type);
     }
 
     case ast_user_type_definition: {
@@ -502,7 +502,7 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
 
     case ast_user_type_get: {
         struct ast_user_type_get *v = ast_node_utg(node);
-        ast_node_dfs(ctx, v->var_name, fun);
+        ast_node_dfs(ctx, v->struct_name, fun);
         ast_node_dfs(ctx, v->field_name, fun);
         return fun(ctx, node);
     }
