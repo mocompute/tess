@@ -356,6 +356,7 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
 }
 
 void *map_get(hashmap *map, void const *key, u16 key_len) {
+    // returns pointer to value
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;

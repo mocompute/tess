@@ -130,12 +130,12 @@ static void register_user_type(void *ctx, ast_node *node) {
         ast_node **annotations          = v->field_annotations;
 
         for (u32 i = 0; i < n_fields; ++i) {
-            char const        *str = ast_node_name_string(annotations[i]);
-            struct type_entry *te  = type_registry_find(self->type_registry, str);
+            char const *str  = ast_node_name_string(annotations[i]);
+            tl_type   **type = type_registry_find(self->type_registry, str);
 
-            if (!te) fatal("register_user_types: couldn't find type '%s'", str);
+            if (!type) fatal("register_user_types: couldn't find type '%s'", str);
 
-            field_types[i] = te->type;
+            field_types[i] = *type;
         }
 
         field_names =
@@ -149,7 +149,7 @@ static void register_user_type(void *ctx, ast_node *node) {
 
     tl_type *user_type = tl_type_create_user_type(self->arena, type_name, lt);
 
-    if (type_registry_add(self->type_registry, (struct type_entry){.name = type_name, .type = user_type}))
+    if (type_registry_add(self->type_registry, type_name, user_type))
         fatal("syntax_register_user_types: unexpected failure");
 }
 
@@ -167,9 +167,9 @@ static void check_annotation(void *ctx, ast_node *node) {
     if (ast_symbol != node->tag) return;
     if (!node->symbol.annotation) return;
 
-    char const        *str = ast_node_name_string(node->symbol.annotation);
-    struct type_entry *te  = type_registry_find(self->type_registry, str);
-    if (!te) {
+    char const *str  = ast_node_name_string(node->symbol.annotation);
+    tl_type   **type = type_registry_find(self->type_registry, str);
+    if (!type) {
 
 #define fmt "unknown type: %s"
         char *message = null;

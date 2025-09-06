@@ -784,10 +784,10 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
 
 static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
 
-    type_entry *e = type_registry_find(self->type_registry, type_tag_to_string(tag));
-    if (!e) fatal("get_prim: failed to find '%s'", type_tag_to_string(tag));
+    tl_type **type = type_registry_find(self->type_registry, type_tag_to_string(tag));
+    if (!type) fatal("get_prim: failed to find '%s'", type_tag_to_string(tag));
 
-    return e->type;
+    return *type;
 }
 
 struct collect_constraints_ctx {
@@ -840,15 +840,16 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_user_type: {
 
-        type_entry *e = type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
-        if (!e)
+        tl_type **type =
+          type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
+        if (!type)
             fatal("collect_constraints: failed to find type '%s'",
                   ast_node_name_string(node->user_type.name));
 
-        push(node->type, e->type);
+        push(node->type, *type);
 
         // each field must be constrained to its correct type
-        struct tlt_user           *user_type = tl_type_user(e->type);
+        struct tlt_user           *user_type = tl_type_user(*type);
         struct tlt_labelled_tuple *lt        = tl_type_lt(user_type->labelled_tuple);
         assert(node->user_type.n_fields == lt->fields.size);
 
@@ -1189,14 +1190,13 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
         struct ast_user_type_def const *v = ast_node_utd((ast_node *)node);
 
         // type must be registered
-        char const       *type_name = ast_node_name_string(v->name);
-        type_entry const *te        = type_registry_find(self->type_registry, type_name);
-        if (!te) fatal("generate_user_type_functions: could not find type '%s'", type_name);
-        tl_type *ty = te->type;
+        char const *type_name = ast_node_name_string(v->name);
+        tl_type   **ty        = type_registry_find(self->type_registry, type_name);
+        if (!ty) fatal("generate_user_type_functions: could not find type '%s'", type_name);
 
         // make constructor
 
-        ast_node *constructor = make_type_constructor_function(self, type_name, ty);
+        ast_node *constructor = make_type_constructor_function(self, type_name, *ty);
         array_push(added, &constructor);
     }
 
