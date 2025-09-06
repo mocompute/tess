@@ -71,7 +71,7 @@ static void       ti_rename_variables(ti_inferer *);
 static void       ti_assign_type_variables(ti_inferer *);
 static void       ti_collect_constraints(ti_inferer *);
 
-static void       ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
+static size_t     ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
 static void       ti_specialize_functions(ti_inferer *, ast_node_array *out_nodes);
 void              ti_run_solver(ti_inferer *);
 
@@ -96,8 +96,6 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->constraints      = (constraint_array){.alloc = self->type_arena};
     self->substitutions    = (constraint_array){.alloc = self->type_arena};
 
-    self->symbols          = map_create(self->type_arena, sizeof(tl_type *));
-
     self->unify_monotypes  = true;
     self->next_type_var    = 1; // 0 is not valid
     self->next_var         = 1;
@@ -109,7 +107,6 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
 void ti_inferer_destroy(allocator *alloc, ti_inferer **pself) {
     ti_inferer *self = *pself;
 
-    map_destroy(&self->symbols);
     arena_destroy(alloc, &self->strings);
     arena_destroy(alloc, &self->type_arena);
     alloc_free(alloc, *pself);
@@ -122,11 +119,34 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
     self->verbose = val;
 }
 
-static void ti_collect_and_solve(ti_inferer *self) {
-    ti_collect_constraints(self);
-    ti_run_solver(self);
-    ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
-                                  (ast_node_sized)sized_all(*self->nodes));
+static void ti_collect_and_solve(ti_inferer *self, bool loop) {
+    size_t loop_count = 10;
+    while (--loop_count) {
+        self->constraints.size   = 0; // reset constraints from prior phase
+        self->substitutions.size = 0;
+
+        ti_collect_constraints(self);
+
+        log(self, "constraints collected before solving");
+        ti_inferer_dbg_constraints(self);
+
+        ti_run_solver(self);
+        size_t count = ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
+                                                     (ast_node_sized)sized_all(*self->nodes));
+        if (!loop || !count) break;
+
+        log(self, "collect_and_solve: looping again");
+        ti_inferer_dbg_constraints(self);
+        ti_inferer_dbg_substitutions(self);
+        dbg_ast_nodes(self);
+    }
+    if (!loop_count) {
+        log(self, "loop exhausted");
+        dbg_ast_nodes(self);
+    }
+
+    if (!loop_count) fatal("ti_collect_and_solve: loop exhausted.");
+    log(self, "ti_collect_and_solve: loop_count = %zu", loop_count);
 }
 
 int ti_inferer_run(ti_inferer *self) {
@@ -142,7 +162,7 @@ int ti_inferer_run(ti_inferer *self) {
 
     // collect constraints, but don't constrain function applications at this stage
     self->constrain_function_applications = false;
-    ti_collect_and_solve(self);
+    ti_collect_and_solve(self, false);
 
     // specialize
 
@@ -164,10 +184,14 @@ int ti_inferer_run(ti_inferer *self) {
         dbg_ast_nodes(self);
     }
 
-    // collect and solve constraints again, this time constraining function applications
+    // collect and solve constraints again, this time constraining
+    // function applications, and repeating until there are no further
+    // substitutions to be made. This is required because
+    // user-type-get nodes must defer their constraints until their
+    // struct types become known in a prior iteration.
     self->constrain_function_applications = true;
     self->constraints.size                = 0; // reset constraints from first phase
-    ti_collect_and_solve(self);
+    ti_collect_and_solve(self, true);
 
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
@@ -175,11 +199,6 @@ int ti_inferer_run(ti_inferer *self) {
         ti_inferer_dbg_substitutions(self);
         dbg_ast_nodes(self);
     }
-
-    // and one final time, because the previous pass will have
-    // completed without constraining user-defined type's getters
-    ti_collect_and_solve(self);
-    // FIXME: consider how to do this in a single pass
 
     // any remaining constraints indicate an ill-typed program
     if (self->constraints.size) return 1;
@@ -371,18 +390,30 @@ static void ti_rename_variables(ti_inferer *self) {
 
 // -- apply substitutions --
 
-static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) {
-    bool did_substitute = false;
+nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) {
+    size_t count = 0;
 
     assert(ptype && *ptype);
     assert(from);
     assert(to);
 
-    tl_type *type = *ptype;
+    if (!(type_type_var == from->tag || type_type_var == to->tag)) {
+        // a prior substitution has already taken place with these
+        // types as they are no longer type variables - reference
+        // identity
+        return 0;
+    }
 
-    if (tl_type_equal(*ptype, from)) {
-        *ptype = to;
-        return true;
+    tl_type *type    = *ptype;
+
+    tl_type *match   = type_type_var == from->tag ? from : to;
+    tl_type *replace = type_type_var == from->tag ? to : from;
+
+    if (tl_type_equal(*ptype, match)) {
+        *ptype = replace;
+        // dbg("applied: %s = %s\n", tl_type_to_string(default_allocator(), match),
+        //     tl_type_to_string(default_allocator(), replace));
+        return ++count;
     }
 
     switch (type->tag) {
@@ -399,22 +430,23 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     case type_labelled_tuple: {
         struct tlt_array *v = tl_type_arr(type);
         for (size_t i = 0; i < v->elements.size; ++i)
-            if (apply_one_substitution(&v->elements.v[i], from, to)) did_substitute = true;
+            count += apply_one_substitution(&v->elements.v[i], match, replace);
 
     } break;
 
     case type_arrow: {
-        if (apply_one_substitution(&type->arrow.left, from, to)) did_substitute = true;
-        if (apply_one_substitution(&type->arrow.right, from, to)) did_substitute = true;
+        count += apply_one_substitution(&type->arrow.left, match, replace);
+        count += apply_one_substitution(&type->arrow.right, match, replace);
     } break;
     }
 
-    return did_substitute;
+    return count;
 }
 
 struct apply_substitutions_ctx {
     ti_inferer       *ti;
     constraint_sized *substitutions;
+    size_t            count;
 };
 
 void dfs_apply_substitutions(void *ctx_, ast_node *node) {
@@ -462,24 +494,25 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     }
 
     for (u32 i = 0; i < subs->size; ++i) {
-        tl_type ***p = &buf[0];
-        apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
+        ctx->count += apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
 
+        tl_type ***p = &buf[0];
         while (*p) {
-            apply_one_substitution(*p, subs->v[i].left, subs->v[i].right);
-            p++;
+            ctx->count += apply_one_substitution(*p++, subs->v[i].left, subs->v[i].right);
         }
     }
 }
 
-static void ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized substitutions,
-                                          ast_node_sized nodes) {
-    struct apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions};
+static size_t ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized substitutions,
+                                            ast_node_sized nodes) {
+
+    struct apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions, .count = 0};
 
     for (size_t i = 0; i < nodes.size; ++i) {
-        log(self, "apply sub to %s", ast_node_to_string(self->strings, nodes.v[i]));
         ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);
     }
+
+    return ctx.count;
 }
 
 // -- solver --
@@ -512,21 +545,21 @@ static bool substitute_constraints(constraint *begin, constraint *end, constrain
     // tv1 = int. Without the step in this function, the constraint
     // tv1 = int would be lost.
 
-    int did_substitute = 0;
+    size_t count = 0;
 
     while (begin != end) {
-        did_substitute += apply_one_substitution(&begin->left, sub.left, sub.right);
-        did_substitute += apply_one_substitution(&begin->right, sub.left, sub.right);
+        count += apply_one_substitution(&begin->left, sub.left, sub.right);
+        count += apply_one_substitution(&begin->right, sub.left, sub.right);
 
         ++begin;
     }
 
-    return did_substitute != 0;
+    return count != 0;
 }
 
-static bool unify_one(ti_inferer *self, constraint c) {
+static u32 unify_one(ti_inferer *self, constraint c) {
 
-    if (c.left == c.right || tl_type_equal(c.left, c.right)) return false;
+    if (c.left == c.right || tl_type_equal(c.left, c.right)) return 0;
 
     else if (type_type_var == c.left->tag || type_type_var == c.right->tag) {
         tl_type   *orig      = type_type_var == c.left->tag ? c.left : c.right;
@@ -536,58 +569,62 @@ static bool unify_one(ti_inferer *self, constraint c) {
 
         // check conditions to rule out the candidate: original must
         // not appear anywhere in the type replacing it.
-        switch (other->tag) {
-        case type_nil:
-        case type_bool:
-        case type_int:
-        case type_float:
-        case type_string:
-        case type_user:
-            if (!self->unify_monotypes) return false;
-            break;
+        if (tl_type_contains(other, orig)) return 0;
 
-        case type_type_var:
-        case type_any:            break;
+        // further, original must not appear on the right hand side of any other substitution
+        // for (u32 i = 0; i < self->substitutions.size; ++i) {
+        //     tl_type *sub = self->substitutions.v[i].right;
+        //     if (tl_type_contains(sub, orig)) {
 
-        case type_tuple:
-        case type_labelled_tuple: {
-            struct tlt_array *v = tl_type_arr(other);
-            for (size_t i = 0; i < v->elements.size; ++i)
-                if (v->elements.v[i] == orig) return false;
+        //         dbg("rejected substitution '%s' due to type appearing in sub: %s = %s\n",
+        //             tl_type_to_string(self->strings, orig),
+        //             tl_type_to_string(self->strings, self->substitutions.v[i].left),
+        //             tl_type_to_string(self->strings, sub));
 
-        } break;
-
-        case type_arrow:
-            if (other->arrow.left == orig || other->arrow.right == orig) return false;
-            break;
-        }
+        //         return 0;
+        //     }
+        // }
 
         // push the candidate substitution
+        assert(type_type_var == candidate.left->tag);
+        dbg("adding substitution: %s = %s\n", tl_type_to_string(self->strings, candidate.left),
+            tl_type_to_string(self->strings, candidate.right));
         array_push(self->substitutions, &candidate);
 
+        return 1;
     }
 
     // tuple constraints of equal size: unify matching elements
     else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
              c.left->tuple.elements.size == c.right->tuple.elements.size) {
 
-        for (size_t i = 0; i < c.left->tuple.elements.size; ++i)
-            unify_one(self, make_constraint(c.left->tuple.elements.v[i], c.right->tuple.elements.v[i]));
+        u32 count = 0;
+        for (size_t i = 0; i < c.left->tuple.elements.size; ++i) {
+            dbg("unifying a tuple subtype %s = %s\n",
+                tl_type_to_string(self->strings, c.left->tuple.elements.v[i]),
+                tl_type_to_string(self->strings, c.right->tuple.elements.v[i]));
+            count +=
+              unify_one(self, make_constraint(c.left->tuple.elements.v[i], c.right->tuple.elements.v[i]));
+        }
+
+        return count;
 
     }
 
     // arrow types: unify matching arms
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
-        unify_one(self, make_constraint(c.left->arrow.left, c.right->arrow.left));
-        unify_one(self, make_constraint(c.left->arrow.right, c.right->arrow.right));
+        u32 count = 0;
+        count += unify_one(self, make_constraint(c.left->arrow.left, c.right->arrow.left));
+        count += unify_one(self, make_constraint(c.left->arrow.right, c.right->arrow.right));
+        return count;
     }
 
-    return true;
+    return 0;
 }
 
 void ti_run_solver(ti_inferer *self) {
-    int loop_count = 100;
-    while (loop_count--) {
+    size_t loop_count = 100;
+    while (--loop_count) {
 
         bool did_substitute = false;
 
@@ -629,7 +666,7 @@ void ti_run_solver(ti_inferer *self) {
         if (!did_substitute) break;
     }
 
-    if (loop_count == -1) fatal("ti_run_solver: loop exhausted");
+    if (!loop_count) fatal("ti_run_solver: loop exhausted");
 }
 
 // -- assign_type_variables --
@@ -790,8 +827,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
         c = (constraint){(L), (R)};                                                                        \
+        log(self, "pushing constraint %s = %s: %s", tl_type_to_string(self->strings, c.left),              \
+            tl_type_to_string(self->strings, c.right), ast_node_to_string(self->strings, node));           \
         array_push(self->constraints, &c);                                                                 \
     } while (0)
+
+    // if (c.right->tag == type_type_var && c.right->type_var.val > 30) assert(false);
 
     switch (node->tag) {
     case ast_eof:
@@ -878,6 +919,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, node->infix.right->type);
         push(node->type, node->infix.left->type);
 
+        log(self, "infix: %s, %s", tl_type_to_string(self->strings, node->infix.left->type),
+            tl_type_to_string(self->strings, node->infix.right->type));
+
         break;
 
     case ast_let_in:
@@ -891,17 +935,25 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_let: {
         assert(node->let.arrow->tag == type_arrow);
 
-        // left side of arrow is same as parameter tuple type
-        tl_type *params =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        // In phase one, we want all let nodes to participate in
+        // constraint satisfaction. In later phases, we want to
+        // exclude the generic nodes. FIXME: don't rely on empty
+        // string to detect generic function
 
-        push(node->let.arrow->arrow.left, params);
+        if (!self->constrain_function_applications || !mos_string_empty(&node->let.specialized_name)) {
 
-        // right side of arrow is same as function body type
-        push(node->let.arrow->arrow.right, node->let.body->type);
+            // left side of arrow is same as parameter tuple type
+            tl_type *params = arguments_to_tuple_type(self->type_arena,
+                                                      (ast_node const **)node->array.nodes, node->array.n);
 
-        // result is nil
-        push(node->type, get_prim(self, type_nil));
+            push(node->let.arrow->arrow.left, params);
+
+            // right side of arrow is same as function body type
+            push(node->let.arrow->arrow.right, node->let.body->type);
+
+            // result is nil
+            push(node->type, get_prim(self, type_nil));
+        }
     } break;
 
     case ast_if_then_else:
@@ -975,8 +1027,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
 }
 
 void ti_collect_constraints(ti_inferer *self) {
+    self->symbols = map_create(self->type_arena, sizeof(tl_type *));
+
     for (size_t i = 0; i < self->nodes->size; ++i)
         ast_node_dfs(self, self->nodes->v[i], collect_constraints);
+
+    map_destroy(&self->symbols);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {

@@ -329,6 +329,40 @@ tl_type *tl_type_find_field_type(tl_type const *user_type, char const *field_nam
     return field_type;
 }
 
+bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
+
+    if (haystack == needle || tl_type_equal(haystack, needle)) return true;
+
+    switch (haystack->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_type_var:
+    case type_any:            return false;
+
+    case type_tuple:
+    case type_labelled_tuple: {
+        struct tlt_array *v = tl_type_arr((tl_type *)haystack);
+        for (u32 i = 0; i < v->elements.size; ++i) {
+            if (tl_type_contains(v->elements.v[i], needle)) return true;
+        }
+        return false;
+    }
+
+    case type_arrow: {
+        struct tlt_arrow *v = tl_type_arrow((tl_type *)haystack);
+        return tl_type_contains(v->left, needle) || tl_type_contains(v->right, needle);
+    }
+
+    case type_user: {
+        struct tlt_user *v = tl_type_user((tl_type *)haystack);
+        return tl_type_contains(v->labelled_tuple, needle);
+    }
+    }
+}
+
 //
 
 struct tlt_array *tl_type_arr(tl_type *t) {

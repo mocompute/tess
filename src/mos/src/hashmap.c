@@ -269,6 +269,7 @@ hashmap *map_create(allocator *alloc, u16 value_size) {
 }
 
 void map_destroy(hashmap **map) {
+    if (!map) return;
 
     hashmap_iterator     iter = {0};
     hashmap_entry const *entry;
