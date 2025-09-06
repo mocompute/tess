@@ -62,8 +62,7 @@ typedef struct sexp_box {
             string_t name;
         } string;
         struct {
-            struct sexp *v;
-            u32          size;
+            sexp_sized list;
         } list;
     };
 

@@ -33,8 +33,7 @@ sexp_box *sexp_box_get(sexp self) {
 void sexp_box_init_empty(sexp_box *self) {
     alloc_zero(self);
     self->tag       = sexp_box_list;
-    self->list.v    = null;
-    self->list.size = 0;
+    self->list.list = (sexp_sized){0};
 }
 
 void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) {
@@ -44,8 +43,7 @@ void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) 
 
 void sexp_box_init_move_list(sexp_box *self, sexp_sized src) {
     self->tag       = sexp_box_list;
-    self->list.v    = src.v;
-    self->list.size = (u32)src.size;
+    self->list.list = src;
 }
 
 sexp sexp_init_boxed(allocator *alloc) {
@@ -105,9 +103,9 @@ sexp sexp_init_list(allocator *alloc, sexp const *elements, u32 count) {
     sexp_box *box = sexp_box_get(out);
     box->tag      = sexp_box_list;
     if (count) {
-        box->list.v    = alloc_malloc(alloc, count * sizeof(sexp));
-        box->list.size = count;
-        memcpy(box->list.v, elements, count * sizeof(sexp));
+        box->list.list.v    = alloc_malloc(alloc, count * sizeof box->list.list.v[0]);
+        box->list.list.size = count;
+        memcpy(box->list.list.v, elements, count * sizeof box->list.list.v[0]);
     }
 
     return out;
@@ -145,9 +143,9 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_symbol:
     case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
     case sexp_box_list:   {
-        if (self->list.v) {
-            for (u32 i = 0; i < self->list.size; ++i) sexp_deinit(alloc, &self->list.v[0]);
-            alloc_free(alloc, self->list.v);
+        if (self->list.list.size) {
+            for (u32 i = 0; i < self->list.list.size; ++i) sexp_deinit(alloc, &self->list.list.v[0]);
+            alloc_free(alloc, self->list.list.v);
         }
 
     } break;
@@ -202,9 +200,9 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
         do_print_init();
         do_print_literal("(");
 
-        for (u32 i = 0; i < box->list.size; ++i) {
-            do_print_node(&box->list.v[i]);
-            if (i < box->list.size - 1) do_print_literal(" ");
+        for (u32 i = 0; i < box->list.list.size; ++i) {
+            do_print_node(&box->list.list.v[i]);
+            if (i < box->list.list.size - 1) do_print_literal(" ");
         }
 
         do_print_literal(")");
