@@ -47,7 +47,6 @@ struct ti_inferer {
     u32              next_var;         // for rename_variables
     u32              next_type_var;    // for assign_type_variables
     u32              next_specialized; // for specialized function names
-    hashmap         *symbols;          // for collect_constraints
     int              indent_level;     // for log output
 
     // flags which do not affect operation
@@ -791,9 +790,15 @@ static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
     return e->type;
 }
 
+struct collect_constraints_ctx {
+    ti_inferer *ti;
+    hashmap    *symbols;
+};
+
 void collect_constraints(void *ctx_, ast_node *node) {
-    ti_inferer *self = ctx_;
-    constraint  c    = {0};
+    struct collect_constraints_ctx *ctx  = ctx_;
+    ti_inferer                     *self = ctx->ti;
+    constraint                      c    = {0};
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
@@ -815,12 +820,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
         u16         name_len = (u16)mos_string_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
-        tl_type **found = map_get(self->symbols, name_str, name_len);
+        tl_type **found = map_get(ctx->symbols, name_str, name_len);
 
         if (found) {
             push(node->type, *found);
         } else {
-            map_set(&self->symbols, name_str, name_len, &node->type);
+            map_set(&ctx->symbols, name_str, name_len, &node->type);
         }
 
     } break;
@@ -989,12 +994,13 @@ void collect_constraints(void *ctx_, ast_node *node) {
 }
 
 void ti_collect_constraints(ti_inferer *self) {
-    self->symbols = map_create(self->type_arena, sizeof(tl_type *));
+    struct collect_constraints_ctx ctx = {.ti      = self,
+                                          .symbols = map_create(self->type_arena, sizeof(tl_type *))};
 
     for (size_t i = 0; i < self->nodes->size; ++i)
-        ast_node_dfs(self, self->nodes->v[i], collect_constraints);
+        ast_node_dfs(&ctx, self->nodes->v[i], collect_constraints);
 
-    map_destroy(&self->symbols);
+    map_destroy(&ctx.symbols);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
