@@ -120,25 +120,18 @@ void ti_inferer_set_verbose(ti_inferer *self, bool val) {
 }
 
 static void ti_collect_and_solve(ti_inferer *self, bool loop) {
-    size_t loop_count = 10;
+    size_t loop_size  = 16;
+    size_t loop_count = loop_size;
     while (--loop_count) {
         self->constraints.size   = 0; // reset constraints from prior phase
         self->substitutions.size = 0;
 
         ti_collect_constraints(self);
 
-        log(self, "constraints collected before solving");
-        ti_inferer_dbg_constraints(self);
-
         ti_run_solver(self);
         size_t count = ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
                                                      (ast_node_sized)sized_all(*self->nodes));
         if (!loop || !count) break;
-
-        log(self, "collect_and_solve: looping again");
-        ti_inferer_dbg_constraints(self);
-        ti_inferer_dbg_substitutions(self);
-        dbg_ast_nodes(self);
     }
     if (!loop_count) {
         log(self, "loop exhausted");
@@ -146,7 +139,7 @@ static void ti_collect_and_solve(ti_inferer *self, bool loop) {
     }
 
     if (!loop_count) fatal("ti_collect_and_solve: loop exhausted.");
-    log(self, "ti_collect_and_solve: loop_count = %zu", loop_count);
+    log(self, "ti_collect_and_solve: loop count = %zu", loop_size - loop_count);
 }
 
 int ti_inferer_run(ti_inferer *self) {
@@ -190,7 +183,6 @@ int ti_inferer_run(ti_inferer *self) {
     // user-type-get nodes must defer their constraints until their
     // struct types become known in a prior iteration.
     self->constrain_function_applications = true;
-    self->constraints.size                = 0; // reset constraints from first phase
     ti_collect_and_solve(self, true);
 
     if (self->verbose) {
@@ -411,8 +403,6 @@ nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, t
 
     if (tl_type_equal(*ptype, match)) {
         *ptype = replace;
-        // dbg("applied: %s = %s\n", tl_type_to_string(default_allocator(), match),
-        //     tl_type_to_string(default_allocator(), replace));
         return ++count;
     }
 
@@ -571,24 +561,8 @@ static u32 unify_one(ti_inferer *self, constraint c) {
         // not appear anywhere in the type replacing it.
         if (tl_type_contains(other, orig)) return 0;
 
-        // further, original must not appear on the right hand side of any other substitution
-        // for (u32 i = 0; i < self->substitutions.size; ++i) {
-        //     tl_type *sub = self->substitutions.v[i].right;
-        //     if (tl_type_contains(sub, orig)) {
-
-        //         dbg("rejected substitution '%s' due to type appearing in sub: %s = %s\n",
-        //             tl_type_to_string(self->strings, orig),
-        //             tl_type_to_string(self->strings, self->substitutions.v[i].left),
-        //             tl_type_to_string(self->strings, sub));
-
-        //         return 0;
-        //     }
-        // }
-
         // push the candidate substitution
         assert(type_type_var == candidate.left->tag);
-        dbg("adding substitution: %s = %s\n", tl_type_to_string(self->strings, candidate.left),
-            tl_type_to_string(self->strings, candidate.right));
         array_push(self->substitutions, &candidate);
 
         return 1;
@@ -600,9 +574,6 @@ static u32 unify_one(ti_inferer *self, constraint c) {
 
         u32 count = 0;
         for (size_t i = 0; i < c.left->tuple.elements.size; ++i) {
-            dbg("unifying a tuple subtype %s = %s\n",
-                tl_type_to_string(self->strings, c.left->tuple.elements.v[i]),
-                tl_type_to_string(self->strings, c.right->tuple.elements.v[i]));
             count +=
               unify_one(self, make_constraint(c.left->tuple.elements.v[i], c.right->tuple.elements.v[i]));
         }
@@ -827,8 +798,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
         c = (constraint){(L), (R)};                                                                        \
-        log(self, "pushing constraint %s = %s: %s", tl_type_to_string(self->strings, c.left),              \
-            tl_type_to_string(self->strings, c.right), ast_node_to_string(self->strings, node));           \
         array_push(self->constraints, &c);                                                                 \
     } while (0)
 
@@ -935,25 +904,18 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_let: {
         assert(node->let.arrow->tag == type_arrow);
 
-        // In phase one, we want all let nodes to participate in
-        // constraint satisfaction. In later phases, we want to
-        // exclude the generic nodes. FIXME: don't rely on empty
-        // string to detect generic function
+        // left side of arrow is same as parameter tuple type
+        tl_type *params =
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
-        if (!self->constrain_function_applications || !mos_string_empty(&node->let.specialized_name)) {
+        push(node->let.arrow->arrow.left, params);
 
-            // left side of arrow is same as parameter tuple type
-            tl_type *params = arguments_to_tuple_type(self->type_arena,
-                                                      (ast_node const **)node->array.nodes, node->array.n);
+        // right side of arrow is same as function body type
+        push(node->let.arrow->arrow.right, node->let.body->type);
 
-            push(node->let.arrow->arrow.left, params);
+        // result is nil
+        push(node->type, get_prim(self, type_nil));
 
-            // right side of arrow is same as function body type
-            push(node->let.arrow->arrow.right, node->let.body->type);
-
-            // result is nil
-            push(node->type, get_prim(self, type_nil));
-        }
     } break;
 
     case ast_if_then_else:
