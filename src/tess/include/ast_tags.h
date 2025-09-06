@@ -14,7 +14,6 @@
     X(ast_u64, "u64")                                                                                      \
     X(ast_f64, "f64")                                                                                      \
     X(ast_string, "string")                                                                                \
-    X(ast_user_type, "user_type")                                                                          \
     X(ast_infix, "infix")                                                                                  \
     X(ast_tuple, "tuple")                                                                                  \
     X(ast_let_in, "let_in")                                                                                \
@@ -25,6 +24,8 @@
     X(ast_lambda_declaration, "lambda_declaration")                                                        \
     X(ast_lambda_function_application, "lambda_function_application")                                      \
     X(ast_named_function_application, "named_function_application")                                        \
+    X(ast_user_type, "user_type")                                                                          \
+    X(ast_user_type_get, "user_type_get")                                                                  \
     X(ast_user_type_definition, "user_type_definition")
 
 typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;

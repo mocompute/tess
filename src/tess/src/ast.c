@@ -56,6 +56,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         for (u32 i = 0; i < vclone->n; ++i) vclone->nodes[i] = ast_node_clone(alloc, vorig->nodes[i]);
     } break;
 
+    case ast_user_type_get:
     case ast_user_type_definition:
     case ast_symbol:
     case ast_eof:
@@ -149,6 +150,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_user_type: {
         struct ast_user_type *vclone = ast_node_ut(clone), *vorig = ast_node_ut((ast_node *)orig);
         vclone->name = ast_node_clone(alloc, vorig->name);
+    } break;
+
+    case ast_user_type_get: {
+        struct ast_user_type_get *vclone = ast_node_utg(clone), *vorig = ast_node_utg((ast_node *)orig);
+        vclone->var_name   = ast_node_clone(alloc, vorig->var_name);
+        vclone->field_name = ast_node_clone(alloc, vorig->field_name);
     } break;
 
     case ast_user_type_definition: {
@@ -313,14 +320,12 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_lambda_declaration: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return triple(alloc, sym("lambda-declaration"), list, type);
-
-    } break;
+    }
 
     case ast_lambda_function_application: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sym("lambda-application"), recur(node->lambda_application.lambda), list, type);
-
-    } break;
+    }
     case ast_named_function_application: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         if (node->named_application.specialized)
@@ -330,8 +335,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         else
             return quad(alloc, sym("named-application"), sym(mos_string_str(&node->named_application.name)),
                         list, type);
-
-    } break;
+    }
 
     case ast_user_type: {
         u16   n        = node->user_type.n_fields;
@@ -340,8 +344,12 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         sexp field_list = sexp_init_list(alloc, elements, n);
         alloc_free(alloc, elements);
         return quad(alloc, sym("user-type"), recur(node->user_type.name), field_list, type);
+    }
 
-    } break;
+    case ast_user_type_get: {
+        struct ast_user_type_get const *v = ast_node_utg((ast_node *)node);
+        return quad(alloc, sym("user-type-get"), recur(v->var_name), recur(v->field_name), type);
+    }
 
     case ast_user_type_definition: {
         u16        n                 = node->user_type_def.n_fields;
@@ -360,8 +368,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         alloc_free(alloc, sexp_elements);
         return penta(alloc, sym("def-user-type"), recur(node->user_type_def.name), names_list,
                      annotations_list, type);
-
-    } break;
+    }
     }
 
 #undef pair
@@ -493,6 +500,13 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     }
 
+    case ast_user_type_get: {
+        struct ast_user_type_get *v = ast_node_utg(node);
+        ast_node_dfs(ctx, v->var_name, fun);
+        ast_node_dfs(ctx, v->field_name, fun);
+        return fun(ctx, node);
+    }
+
     case ast_user_type_definition:
         // excluded from dfs
         return;
@@ -585,6 +599,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_lambda_function_application:
     case ast_named_function_application:
     case ast_user_type:
+    case ast_user_type_get:
     case ast_user_type_definition:        valid = true; break;
     }
     if (!valid) {
@@ -647,6 +662,7 @@ struct ast_array *ast_node_arr(ast_node *node) {
         break;
 
     case ast_user_type:
+    case ast_user_type_get:
     case ast_tuple:
     case ast_let:
     case ast_lambda_function:
@@ -655,11 +671,6 @@ struct ast_array *ast_node_arr(ast_node *node) {
     case ast_lambda_function_application:
     case ast_named_function_application:  return &node->array;
     }
-}
-
-struct ast_user_type *ast_node_ut(ast_node *node) {
-    assert(node->tag == ast_user_type);
-    return &node->user_type;
 }
 
 struct ast_infix *ast_node_infix(ast_node *node) {
@@ -710,6 +721,16 @@ struct ast_named_application *ast_node_named(ast_node *node) {
 struct ast_tuple *ast_node_tuple(ast_node *node) {
     assert(node->tag == ast_tuple);
     return &node->tuple;
+}
+
+struct ast_user_type *ast_node_ut(ast_node *node) {
+    assert(node->tag == ast_user_type);
+    return &node->user_type;
+}
+
+struct ast_user_type_get *ast_node_utg(ast_node *node) {
+    assert(node->tag == ast_user_type_get);
+    return &node->user_type_get;
 }
 
 struct ast_user_type_def *ast_node_utd(ast_node *node) {

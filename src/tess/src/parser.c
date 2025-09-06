@@ -42,6 +42,7 @@ struct parser {
 
 static void tokens_push_back(struct parser *, struct token *);
 static void tokens_shrink(struct parser *, u32);
+static int  too_many_arguments(parser *);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -304,6 +305,15 @@ static int a_comma(parser *p) {
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
 
     p->error.tag = tess_err_expected_comma;
+    return 1;
+}
+
+static int a_dot(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
+
+    p->error.tag = tess_err_expected_dot;
     return 1;
 }
 
@@ -593,6 +603,22 @@ static int a_end_of_block(parser *p) {
     return 1;
 }
 
+static int a_field_access(parser *p) {
+    if (a_try(p, a_identifier)) return 1;
+    ast_node *variable = p->result;
+
+    if (a_try(p, a_dot)) return 1;
+
+    if (a_try(p, a_identifier)) return 1;
+    ast_node                 *field = p->result;
+
+    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_get);
+    struct ast_user_type_get *v     = ast_node_utg(node);
+    v->var_name                     = variable;
+    v->field_name                   = field;
+    return result_ast_node(p, node);
+}
+
 static int struct_declaration(parser *p) {
     //     struct name = ... end
     if (a_try_s(p, the_symbol, "struct")) return 1;
@@ -641,7 +667,9 @@ static int struct_declaration(parser *p) {
 
             array_shrink(field_names);
             node->user_type_def.field_names = field_names.v;
-            node->user_type_def.n_fields    = (u16)field_names.size;
+
+            if (field_names.size > 0xff) return too_many_arguments(p);
+            node->user_type_def.n_fields = (u8)field_names.size;
 
             array_shrink(field_types);
             node->user_type_def.field_annotations = field_types.v;
@@ -695,7 +723,8 @@ static int function_declaration(parser *p) {
 
             array_shrink(parameters);
             node->array.nodes = parameters.v;
-            node->array.n     = (u16)parameters.size;
+            if (parameters.size > 0xff) return too_many_arguments(p);
+            node->array.n = (u8)parameters.size;
 
             log(p, "function_declaration: returning %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
@@ -724,7 +753,8 @@ static int lambda_declaration(parser *p) {
 
             array_shrink(parameters);
             node->array.nodes = parameters.v;
-            node->array.n     = (u16)parameters.size;
+            if (parameters.size > 0xff) return too_many_arguments(p);
+            node->array.n = (u8)parameters.size;
 
             return result_ast_node(p, node);
         }
@@ -770,7 +800,8 @@ static int function_application(parser *p) {
 
             array_shrink(arguments);
             node->array.nodes = arguments.v;
-            node->array.n     = (u16)arguments.size;
+            if (arguments.size > 0xff) return too_many_arguments(p);
+            node->array.n = (u8)arguments.size;
 
             log(p, "function_application: got %s", ast_node_to_string(p->debug_arena, node));
             return result_ast_node(p, node);
@@ -936,7 +967,8 @@ static int lambda_function_application(parser *p) {
 
             array_shrink(arguments);
             node->array.nodes = arguments.v;
-            node->array.n     = (u16)arguments.size;
+            if (arguments.size > 0xff) return too_many_arguments(p);
+            node->array.n = (u8)arguments.size;
 
             return result_ast_node(p, node);
         }
@@ -1059,7 +1091,8 @@ static int tuple_expression(parser *p) {
 
             array_shrink(elements);
             node->array.nodes = elements.v;
-            node->array.n     = (u16)elements.size;
+            if (elements.size > 0xff) return too_many_arguments(p);
+            node->array.n = (u8)elements.size;
 
             return result_ast_node(p, node);
         }
@@ -1133,6 +1166,9 @@ static int expression(parser *p) {
 
     log(p, "expression: function_application");
     if (0 == a_try(p, &function_application)) goto cleanup;
+
+    log(p, "expression: try field access");
+    if (0 == a_try(p, &a_field_access)) goto cleanup;
 
     log(p, "expression: try identifier");
     if (0 == a_try(p, &a_identifier)) goto cleanup;
@@ -1217,6 +1253,10 @@ void parser_report_errors(parser *self) {
     if (tess_err_ok == self->error.tag) return;
 
     fprintf(stderr, "parse error: %s\n", tess_error_tag_to_string(self->error.tag));
+}
+static int too_many_arguments(parser *self) {
+    self->error.tag = tess_err_too_many_arguments;
+    return 1;
 }
 
 void log(struct parser *self, char const *restrict fmt, ...) {

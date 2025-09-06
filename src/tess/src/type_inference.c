@@ -12,6 +12,7 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define TYPE_ARENA_SIZE    16 * 1024
@@ -158,6 +159,8 @@ int ti_inferer_run(ti_inferer *self) {
 
     if (self->verbose) {
         dbg("ti_inferer_run: after specialization:\n");
+        ti_inferer_dbg_constraints(self);
+        ti_inferer_dbg_substitutions(self);
         dbg_ast_nodes(self);
     }
 
@@ -173,6 +176,7 @@ int ti_inferer_run(ti_inferer *self) {
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
         ti_inferer_dbg_constraints(self);
+        ti_inferer_dbg_substitutions(self);
         dbg_ast_nodes(self);
     }
 
@@ -332,6 +336,11 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
     } break;
 
+    case ast_user_type_get: {
+        struct ast_user_type_get *v = ast_node_utg(node);
+        rename_variables(self, v->var_name);
+    } break;
+
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -402,51 +411,70 @@ static bool apply_one_substitution(tl_type **ptype, tl_type *from, tl_type *to) 
     return did_substitute;
 }
 
-void dfs_apply_substitutions(void *ctx, ast_node *node) {
-    constraint_sized *subs = ctx;
+struct apply_substitutions_ctx {
+    ti_inferer       *ti;
+    constraint_sized *substitutions;
+};
+
+void dfs_apply_substitutions(void *ctx_, ast_node *node) {
+    struct apply_substitutions_ctx *ctx  = ctx_;
+    constraint_sized               *subs = ctx->substitutions;
+
+    tl_type                       **buf[UINT8_MAX + 1];
+    memset(buf, 0, sizeof buf);
+
+    switch (node->tag) {
+    case ast_let: {
+        struct ast_let *v = ast_node_let(node);
+        buf[0]            = &v->arrow;
+    } break;
+
+    case ast_user_type_definition: {
+        struct ast_user_type_def *v = ast_node_utd(node);
+        for (u8 i = 0; i < v->n_fields; ++i) buf[i] = &v->field_types[i];
+    } break;
+
+    case ast_user_type_get: {
+        struct ast_user_type_get *v = ast_node_utg(node);
+        buf[0]                      = &v->var_name->type;
+        buf[1]                      = &v->field_name->type;
+    } break;
+
+    case ast_user_type:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_infix:
+    case ast_tuple:
+    case ast_let_in:
+    case ast_if_then_else:
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+    case ast_named_function_application:  break;
+    }
 
     for (u32 i = 0; i < subs->size; ++i) {
-        switch (node->tag) {
-        case ast_let: {
-            struct ast_let *v = ast_node_let(node);
-            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            apply_one_substitution(&v->arrow, subs->v[i].left, subs->v[i].right);
-        } break;
+        tl_type ***p = &buf[0];
+        apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
 
-        case ast_user_type_definition: {
-            struct ast_user_type_def *v = ast_node_utd(node);
-            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            for (u32 j = 0; j < v->n_fields; ++j)
-                apply_one_substitution(&v->field_types[j], subs->v[i].left, subs->v[i].right);
-        } break;
-
-        case ast_user_type:
-        case ast_eof:
-        case ast_nil:
-        case ast_bool:
-        case ast_symbol:
-        case ast_i64:
-        case ast_u64:
-        case ast_f64:
-        case ast_string:
-        case ast_infix:
-        case ast_tuple:
-        case ast_let_in:
-        case ast_if_then_else:
-        case ast_lambda_function:
-        case ast_function_declaration:
-        case ast_lambda_declaration:
-        case ast_lambda_function_application:
-        case ast_named_function_application:
-            apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
-            break;
+        while (*p) {
+            apply_one_substitution(*p, subs->v[i].left, subs->v[i].right);
+            p++;
         }
     }
 }
 
 static void ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized substitutions,
                                           ast_node_sized nodes) {
-    constraint_sized ctx = substitutions;
+    struct apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions};
+
     for (size_t i = 0; i < nodes.size; ++i) {
         log(self, "apply sub to %s", ast_node_to_string(self->strings, nodes.v[i]));
         ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);
@@ -467,7 +495,7 @@ static void dbg_constraint(constraint const *c) {
 
 static void dbg_ast_nodes(ti_inferer *self) {
     for (size_t i = 0; i < self->nodes->size; ++i) {
-        char *str = ast_node_to_string_for_error(self->strings, self->nodes->v[i]);
+        char *str = ast_node_to_string(self->strings, self->nodes->v[i]);
         dbg("%p: %s\n", self->nodes->v[i], str);
         alloc_free(self->strings, str);
     }
@@ -813,6 +841,21 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     } break;
 
+    case ast_user_type_get: {
+        // node type is the type of the field being accessed
+        struct ast_user_type_get *v        = ast_node_utg(node);
+        tl_type                  *var_type = v->var_name->type;
+
+        if (type_user == var_type->tag) {
+            log(self, "user_type_get variable '%s' found type", ast_node_name_string(v->var_name));
+        } else {
+            log(self, "user_type_get variable '%s' unknown type", ast_node_name_string(v->var_name));
+        }
+
+        push(node->type, var_type);
+
+    } break;
+
     case ast_tuple: {
         tl_type *els =
           arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
@@ -1079,18 +1122,12 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     out->let.name             = mos_string_init(self->type_arena, name);
     out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
 
-    // struct {
-    //     struct ast_node **fields;
-    //     u16               n_fields;
-    //     struct ast_node  *name;
-    // } user_type; // a type literal, generated by compiler as body of constructor
-
     // make params array from user_type's labelled_tuple
     struct tlt_labelled_tuple *lt = tl_type_lt(v->labelled_tuple);
     assert(lt->fields.size == lt->names.size);
 
-    out->let.n_parameters = (u16)lt->fields.size;
-    out->let.parameters   = alloc_malloc(self->type_arena, lt->fields.size);
+    out->let.n_parameters = (u8)lt->fields.size;
+    out->let.parameters   = alloc_malloc(self->type_arena, lt->fields.size * sizeof out->let.parameters[0]);
     for (u16 i = 0; i < out->let.n_parameters; ++i)
         out->let.parameters[i] = ast_node_create_sym(self->type_arena, lt->names.v[i]);
 
@@ -1114,6 +1151,41 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     return out;
 }
 
+// static ast_node *make_getter(ti_inferer *self, char const *type_name, char const *field_name,
+//                              tl_type *type_type, tl_type *field_type) {
+
+//     allocator *arena = self->type_arena;
+
+//     // getter name: _gen_get_{type}_{field}_
+//     char *generated_name = null;
+//     {
+// #define fmt "_gen_get_%s_%s_"
+//         int len = snprintf(null, 0, fmt, type_name, field_name) + 1;
+//         if (len < 0) fatal("make_getter: generate name failed.");
+//         generated_name = alloc_malloc(self->type_arena, (u32)len);
+//         snprintf(generated_name, (u32)len, fmt, type_name, field_name);
+// #undef fmt
+//     }
+
+//     ast_node *out             = ast_node_create(self->type_arena, ast_let);
+//     out->let.name             = mos_string_init(self->type_arena, generated_name);
+//     out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
+
+//     out->let.n_parameters     = 2;
+//     out->let.parameters       = alloc_malloc(arena, 2 * sizeof out->let.parameters[0]);
+//     out->let.parameters[0]    = ast_node_create_sym(arena, "self");
+//     out->let.parameters[1]    = ast_node_create_sym(arena, "field");
+
+//     tl_type_sized param_types = {.size = 2, .v = alloc_malloc(arena, 2 * sizeof param_types.v[0])};
+//     param_types.v[0]          = type_type;
+//     param_types.v[1]          = get_prim(self, type_string);
+//     out->let.arrow = tl_type_create_arrow(arena, tl_type_create_tuple(arena, param_types), field_type);
+
+//     // FIXME maybe don't need a getter - just an ast node with a field
+//     // access, because we just need to emit c code with the dot
+//     // operator.
+// }
+
 static void ti_generate_user_type_functions(ti_inferer *self) {
     // generate required functions for user defined types: constructors, getters and setters.
 
@@ -1123,19 +1195,22 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
         ast_node const *node = self->nodes->v[i];
         if (ast_user_type_definition != node->tag) continue;
 
+        struct ast_user_type_def const *v = ast_node_utd((ast_node *)node);
+
         // type must be registered
-        char const       *type_name = ast_node_name_string(node->user_type_def.name);
+        char const       *type_name = ast_node_name_string(v->name);
         type_entry const *te        = type_registry_find(self->type_registry, type_name);
         if (!te) fatal("generate_user_type_functions: could not find type '%s'", type_name);
         tl_type *ty = te->type;
 
-        // c_string_cslice field_names = {0};
-        // field_names =
-        //   ast_nodes_get_names(self->strings, (ast_node_slice){.v   = node->user_type_def.field_names,
-        //                                                       .end = node->user_type_def.n_fields});
+        // make constructor
 
         ast_node *constructor = make_type_constructor_function(self, type_name, ty);
         array_push(added, &constructor);
+
+        // // make getters and setters
+        // c_string_csized field_names =
+        //   ast_nodes_get_names(self->strings, (ast_node_slice){.v = v->field_names, .end = v->n_fields});
     }
 
     // add nodes to program

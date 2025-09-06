@@ -55,12 +55,14 @@ static bool  is_generic_function(ast_node const *node);
 
 static void  out_put_start(transpiler *, char const *);
 static void  out_put(transpiler *, char const *);
-static void  out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static void  out_put_start_fmt(transpiler *, char const *restrict, ...)
+  __attribute__((format(printf, 2, 3)));
+static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
-static bool  is_generic_function(ast_node const *node);
-static void  log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+static bool is_generic_function(ast_node const *node);
+static void log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-transpiler  *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
+transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
 
     transpiler *self    = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc         = alloc;
@@ -134,6 +136,22 @@ static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
     array_copy(*self->bytes, buf, strlen(buf));
 }
 
+static void vout_put_fmt(transpiler *self, char const *restrict fmt, va_list args) {
+
+    va_list args2;
+    va_copy(args2, args);
+
+    int len = vsnprintf(null, 0, fmt, args) + 1;
+    if (len <= 0) fatal("out_put_fmt: invalid fmt string: %s", fmt);
+
+    char buf[len];
+    vsnprintf(buf, (size_t)len, fmt, args2);
+
+    array_copy(*self->bytes, buf, strlen(buf));
+
+    va_end(args2);
+}
+
 static void out_put_start(transpiler *self, char const *str) {
 
     int indent = self->indent_level * 4;
@@ -141,6 +159,15 @@ static void out_put_start(transpiler *self, char const *str) {
     while (indent--) array_push_val(*self->bytes, ' ');
 
     return out_put(self, str);
+}
+
+static void out_put_start_fmt(transpiler *self, char const *restrict fmt, ...) {
+    out_put_start(self, "");
+    va_list args;
+
+    va_start(args, fmt);
+    vout_put_fmt(self, fmt, args);
+    va_end(args);
 }
 
 static int a_result_type_of(transpiler *self, tl_type const *ty) {
@@ -206,7 +233,6 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
-    case ast_user_type:
     case ast_infix:
     case ast_tuple:
     case ast_let_in:
@@ -215,7 +241,9 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_lambda_function_application:
-    case ast_named_function_application:  break;
+    case ast_named_function_application:
+    case ast_user_type:
+    case ast_user_type_get:               break;
     case ast_user_type_definition:        return a_user_type_definition(self, node); break;
     }
     return 0;
@@ -283,6 +311,40 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     out_put_start(self, "");
     a_result_type_of(self, node->let_in.body->type);
     out_put_fmt(self, " %s = %s;\n", var, body);
+
+    return 0;
+}
+
+static int a_field_access(transpiler *self, ast_node const *node) {
+
+    struct ast_user_type_get const *v = ast_node_utg((ast_node *)node);
+    log(self, "field_access: '%s' . '%s'", ast_node_name_string(v->var_name),
+        ast_node_name_string(v->field_name));
+
+    char *var = next_variable(self);
+    array_push(self->results, &var);
+
+    // get the user type from the node's result type
+    struct tlt_user const *vuser = tl_type_user(node->type);
+    type_entry            *e     = type_registry_find(self->type_registry, vuser->name);
+    if (!e) fatal("a_field_access: could not find type '%s'", vuser->name);
+
+    // find the type of the field by name, by iterating through the user type's labelled tuple
+    char const                *field_name_s = ast_node_name_string(v->field_name);
+    struct tlt_labelled_tuple *lt           = tl_type_lt(vuser->labelled_tuple);
+
+    tl_type                   *field_type   = null;
+    for (u32 i = 0; i < lt->names.size; ++i) {
+        if (0 == strcmp(lt->names.v[i], field_name_s)) {
+            field_type = lt->fields.v[i];
+            break;
+        }
+    }
+    if (!field_type) fatal("a_field_access: could not find type of field '%s'", field_name_s);
+
+    out_put_start(self, "");
+    a_result_type_of(self, field_type);
+    out_put_start_fmt(self, "%s = %s.%s;\n", var, ast_node_name_string(v->var_name), field_name_s);
 
     return 0;
 }
@@ -366,9 +428,17 @@ static int a_eval(transpiler *self, ast_node const *node) {
             out_put_start(self, "");
             out_put_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
         }
-    }
+    } break;
 
-    break;
+    case ast_user_type_get: {
+        // emit object field access
+        if (a_field_access(self, node)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
+        out_put_start(self, "");
+        out_put_fmt(self, "%s = %s;\n", var, res);
+
+    } break;
 
     case ast_infix: {
         if (a_infix(self, node)) return 1;
