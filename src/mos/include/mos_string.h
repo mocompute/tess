@@ -43,6 +43,7 @@ u32         mos_string_hash(struct string const *);
 
 // -- utilities --
 
+int mos_string_cmp_c(struct string const *, char const *);
 int mos_string_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
 

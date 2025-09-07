@@ -554,7 +554,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v = ast_node_let((ast_node *)node);
 
-    if (0 == strcmp(mos_string_str(&v->name), "main")) {
+    if (0 == mos_string_cmp_c(&v->name, "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
