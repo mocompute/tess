@@ -42,90 +42,79 @@ struct parser {
 typedef int (*parse_fun)(parser *);
 typedef int (*parse_fun_s)(parser *, char const *);
 
+// -- overview --
+
 static int           struct_declaration(parser *);
-static int           expression(parser *);
-static int           expression_let(parser *);
+static int           function_declaration(parser *);
+static int           lambda_declaration(parser *);
+static int           function_definition(parser *);
+static int           function_application(parser *);
 static int           function_argument(parser *);
-static int           grouped_expression(parser *);
 static int           if_then_else(parser *);
 static int           infix_operand(parser *);
 static int           infix_operation(parser *);
 static int           lambda_function(parser *);
-static int           lambda_function_application(parser *);
-static int           toplevel(parser *);
-static int           toplevel_let(parser *);
+static int           simple_declaration(parser *);
 static int           tuple_expression(parser *);
+static int           grouped_expression(parser *);
+static int           expression(parser *);
+static int           continue_let_in(parser *, ast_node *);
+static int           toplevel_let(parser *);
+static int           toplevel(parser *);
+static int           expression_let(parser *);
 
-static int           result_ast(parser *p, ast_tag tag);
-static int           result_ast_i64(parser *p, i64 val);
-static int           result_ast_u64(parser *p, u64 val);
-static int           result_ast_f64(parser *p, f64 val);
-static int           result_ast_bool(parser *p, bool val);
-static int           result_ast_str(parser *p, ast_tag tag, char const *s);
-static int           result_ast_node(parser *p, ast_node *node);
+static int           result_ast(parser *, ast_tag);
+static int           result_ast_i64(parser *, i64);
+static int           result_ast_u64(parser *, u64);
+static int           result_ast_f64(parser *, f64);
+static int           result_ast_bool(parser *, bool);
+static int           result_ast_str(parser *, ast_tag, char const *s);
+static int           result_ast_node(parser *, ast_node *);
 
-static bool          is_reserved(char const *s);
-static bool          is_start_of_expression(char const *s);
-static bool          is_arithmetic_operator(char const *s);
-static bool          is_relational_operator(char const *s);
-static bool          is_eof(parser *p);
+static bool          is_reserved(char const *);
+static bool          is_start_of_expression(char const *);
+static bool          is_arithmetic_operator(char const *);
+static bool          is_relational_operator(char const *);
+static bool          is_eof(parser *);
 
-nodiscard static int eat_newlines(parser *p);
-nodiscard static int next_token(parser *p);
-nodiscard static int a_try(parser *p, parse_fun fun);
-static int           a_try_s(parser *p, parse_fun_s fun, char const *arg);
-nodiscard static int a_try_special(parser *p, parse_fun fun);
+nodiscard static int a_try(parser *, parse_fun);
+nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
+nodiscard static int a_try_special(parser *, parse_fun);
 
-static int           a_comma(parser *p);
-static int           a_dot(parser *p);
-static int           a_open_round(parser *p);
-static int           a_close_round(parser *p);
-static int           a_end_of_expression(parser *p);
-static int           a_newline(parser *p);
-static int           a_identifier(parser *p);
-static int           a_type_identifier(parser *p);
-static int           a_identifier_typed(parser *p);
-static int           a_infix_operator(parser *p);
-static int           the_symbol(parser *p, char const *const want);
-static int           a_string(parser *p);
-static int           string_to_number(parser *parser, char const *const in);
-static int           a_number(parser *p);
-static int           a_bool(parser *p);
-static int           a_literal(parser *p);
-static int           a_equal_sign(parser *p);
-static int           a_colon(parser *p);
-static int           a_colon_equal(parser *p);
-static int           a_arrow(parser *p);
-static int           a_nil(parser *p);
-static int           a_end_of_block(parser *p);
-static int           a_field_access(parser *p);
-static int           a_field_setter(parser *p);
+static int           eat_newlines(parser *);
+static int           next_token(parser *);
 
-static int           struct_declaration(parser *self);
-static int           function_declaration(parser *p);
-static int           lambda_declaration(parser *p);
-static int           function_definition(parser *p);
-static int           function_application(parser *self);
-static int           function_argument(parser *p);
-static int           if_then_else(parser *self);
-static int           infix_operand(parser *p);
-static int           infix_operation(parser *self);
-static int           lambda_function(parser *self);
-static int           simple_declaration(parser *p);
-static int           tuple_expression(parser *self);
-static int           grouped_expression(parser *self);
-static int           expression(parser *self);
-static int           continue_let_in(parser *self, ast_node *name_or_nil);
-static int           toplevel_let(parser *self);
-static int           toplevel(parser *self);
-static int           expression_let(parser *self);
+static int           a_comma(parser *);
+static int           a_dot(parser *);
+static int           a_open_round(parser *);
+static int           a_close_round(parser *);
+static int           a_end_of_expression(parser *);
+static int           a_newline(parser *);
+static int           a_identifier(parser *);
+static int           a_type_identifier(parser *);
+static int           a_identifier_typed(parser *);
+static int           a_infix_operator(parser *);
+static int           the_symbol(parser *, char const *const);
+static int           a_string(parser *);
+static int           a_number(parser *);
+static int           a_bool(parser *);
+static int           a_literal(parser *);
+static int           a_equal_sign(parser *);
+static int           a_colon(parser *);
+static int           a_colon_equal(parser *);
+static int           a_arrow(parser *);
+static int           a_nil(parser *);
+static int           a_end_of_block(parser *);
+static int           a_field_access(parser *);
+static int           a_field_setter(parser *);
 
-static char         *make_nil_name(parser *p);
+static char         *make_nil_name(parser *);
+static int           string_to_number(parser *, char const *const);
 
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
 static int           too_many_arguments(parser *);
-static bool          has_error(parser *p);
+static bool          has_error(parser *);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -263,7 +252,7 @@ static bool is_eof(parser *p) {
     return p->tokenizer_error.tag == tess_err_eof;
 }
 
-nodiscard static int eat_newlines(parser *p) {
+static int eat_newlines(parser *p) {
 
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
@@ -285,7 +274,7 @@ nodiscard static int eat_newlines(parser *p) {
     }
 }
 
-nodiscard static int next_token(parser *p) {
+static int next_token(parser *p) {
     while (true) {
 
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
@@ -333,7 +322,7 @@ cleanup:
     return result;
 }
 
-static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
+nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     u32 const save_toks = p->tokens.size;
     if (fun(p, arg)) {
         if (p->tokens.size > save_toks) {
@@ -1410,7 +1399,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil) {
     ast_node *defn = self->result;
 
     // eat the optional 'in' token if it's present
-    a_try_s(self, the_symbol, "in");
+    (void)a_try_s(self, the_symbol, "in");
 
     if (a_try(self, expression)) {
         self->error.tag = tess_err_expected_body;
