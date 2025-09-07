@@ -157,6 +157,12 @@ typedef struct {
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
 #define slice_size(x) ((x).end - (x).begin)
 #define sized_all(x)  {.v = (x).v, .size = (x).size}
+#define slice_move(dst, src)                                                                               \
+    do {                                                                                                   \
+        (dst)       = *(src);                                                                              \
+        (src)->size = 0;                                                                                   \
+        (src)->v    = 0;                                                                                   \
+    } while (0)
 
 char_cslice char_cslice_from(char const *, u32);
 

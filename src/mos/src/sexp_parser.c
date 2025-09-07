@@ -432,7 +432,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                         if (sexp_tok_err_eof == *err || sexp_tok_err_close_round == *err) {
                             *out = sexp_init_boxed(self->alloc);
-                            sexp_box_init_move_list(sexp_box_get(*out), (sexp_sized)sized_all(exprs));
+                            sexp_box_init_move_list(sexp_box_get(*out), &(sexp_sized)sized_all(exprs));
                             state = stop;
                         }
 

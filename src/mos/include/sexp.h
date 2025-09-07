@@ -87,7 +87,7 @@ void sexp_deinit(allocator *, sexp *);
 
 void sexp_box_init_empty(sexp_box *);
 void sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
-void sexp_box_init_move_list(sexp_box *, sexp_sized);
+void sexp_box_init_move_list(sexp_box *, sexp_sized *);
 void sexp_box_deinit(allocator *, sexp_box *);
 
 // -- access --

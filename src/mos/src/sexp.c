@@ -41,9 +41,9 @@ void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) 
     mos_string_move(&self->symbol.name, src);
 }
 
-void sexp_box_init_move_list(sexp_box *self, sexp_sized src) {
-    self->tag       = sexp_box_list;
-    self->list.list = src;
+void sexp_box_init_move_list(sexp_box *self, sexp_sized *src) {
+    self->tag = sexp_box_list;
+    slice_move(self->list.list, src);
 }
 
 sexp sexp_init_boxed(allocator *alloc) {
@@ -143,10 +143,10 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_symbol:
     case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
     case sexp_box_list:   {
-        if (self->list.list.size) {
-            for (u32 i = 0; i < self->list.list.size; ++i) sexp_deinit(alloc, &self->list.list.v[0]);
-            alloc_free(alloc, self->list.list.v);
-        }
+        if (self->list.list.size)
+            for (u32 i = 0; i < self->list.list.size; ++i) sexp_deinit(alloc, &self->list.list.v[i]);
+
+        alloc_free(alloc, self->list.list.v);
 
     } break;
     }

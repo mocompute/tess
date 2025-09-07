@@ -25,7 +25,7 @@ static int test_sexp_parse(void) {
 
     char const *input = "(a (b \"str\"  c)  d -123)";
 
-    allocator  *alloc = default_allocator();
+    allocator  *alloc = leak_detector_create();
 
     sexp_parser p;
     if (sexp_parser_init(alloc, &p, input, strlen(input))) return error + 1;
@@ -49,6 +49,7 @@ static int test_sexp_parse(void) {
 
     sexp_parser_deinit(&p);
 
+    leak_detector_destroy(&alloc);
     return error;
 }
 
