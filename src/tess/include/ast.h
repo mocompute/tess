@@ -195,6 +195,14 @@ void        ast_node_move(ast_node *dst, ast_node *src);
 char const *ast_node_name_string(ast_node const *);
 int         ast_node_name_strcmp(ast_node const *, char const *);
 
+// -- traversal --
+
+typedef void (*ast_node_each_node_fun)(void *ctx, ast_node *);
+typedef void (*ast_node_each_type_fun)(void *ctx, tl_type *);
+
+void ast_node_each_node(void *, ast_node_each_node_fun, ast_node *);
+void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
+
 // -- utilities --
 
 char           *ast_node_to_string(allocator *alloc, ast_node const *node);

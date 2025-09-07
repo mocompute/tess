@@ -932,9 +932,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, node->infix.right->type);
         push(node->type, node->infix.left->type);
 
-        log(self, "infix: %s, %s", tl_type_to_string(self->strings, node->infix.left->type),
-            tl_type_to_string(self->strings, node->infix.right->type));
-
         break;
 
     case ast_let_in:
