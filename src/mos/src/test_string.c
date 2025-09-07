@@ -29,7 +29,7 @@ static int test_string(void) {
         string_t s = mos_string_init(alloc, data);
 
         error += (strlen(data) > MOS_STRING_MAX_SMALL_LEN) == mos_string_is_allocated(&s) ? 0 : 1;
-        error += 0 == strcmp(mos_string_str(&s), data) ? 0 : 1;
+        error += 0 == mos_string_cmp_c(&s, data) ? 0 : 1;
 
         if (error) {
             dbg("test_string: %s\n", data);

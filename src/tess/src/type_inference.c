@@ -806,7 +806,7 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
         ast_node *candidate = nodes.v[i];
         if (ast_let != candidate->tag) continue;
 
-        if (0 != strcmp(name, mos_string_str(&candidate->let.name))) continue;
+        if (0 != mos_string_cmp_c(&candidate->let.name, name)) continue;
 
         assert(candidate->let.arrow && type_arrow == candidate->let.arrow->tag);
 

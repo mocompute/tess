@@ -461,7 +461,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                 *out = sexp_init_boxed(self->alloc);
 
-                if (0 != strcmp("nil", mos_string_str(&tok.s))) {
+                if (0 != mos_string_cmp_c(&tok.s, "nil")) {
                     sexp_box_init_move_string(sexp_box_get(*out), sexp_box_symbol, &tok.s);
                 }
                 state = stop;

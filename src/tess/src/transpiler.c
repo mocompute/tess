@@ -595,7 +595,7 @@ static int a_let(transpiler *self, ast_node const *node) {
         return 0;
     }
 
-    if (0 == strcmp(mos_string_str(&v->name), "main")) {
+    if (0 == mos_string_cmp_c(&v->name, "main")) {
         // skip here, let a_main process it.
         return 0;
     }
