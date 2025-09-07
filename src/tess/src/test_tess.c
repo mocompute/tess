@@ -240,7 +240,11 @@ static int test_parser_node_to_string(void) {
         parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
         if (null == p) return error + 1;
 
-        if (parser_next(p)) return error + 1;
+        if (parser_next(p)) {
+            parser_report_errors(p);
+            dbg("failed input = '%s'\n", input);
+            return error + 1;
+        }
         ast_node *node;
         parser_result(p, &node);
 
@@ -260,7 +264,11 @@ static int test_parser_node_to_string(void) {
         parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
         if (null == p) return error + 1;
 
-        if (parser_next(p)) return error + 1;
+        if (parser_next(p)) {
+            parser_report_errors(p);
+            dbg("failed input = '%s'\n", input);
+            return error + 1;
+        }
         ast_node *node;
         parser_result(p, &node);
 

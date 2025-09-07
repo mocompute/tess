@@ -102,8 +102,7 @@ static int infix_operand(parser *);
 static int infix_operation(parser *);
 static int lambda_function(parser *);
 static int lambda_function_application(parser *);
-static int let_in_form(parser *);
-static int let_form(parser *);
+static int toplevel(parser *);
 static int toplevel_let(parser *);
 static int tuple_expression(parser *);
 
@@ -600,7 +599,6 @@ static int a_nil(parser *p) {
 
     if ((0 == a_open_round(p)) && (0 == a_close_round(p))) return result_ast(p, ast_nil);
 
-    p->error.tag = tess_err_expected_arrow;
     return 1;
 }
 
@@ -661,7 +659,10 @@ static int a_field_setter(parser *p) {
 
 static int struct_declaration(parser *self) {
     //     struct name = ... end
-    if (a_try_s(self, the_symbol, "struct")) return 1;
+    if (a_try_s(self, the_symbol, "struct")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     log(self, "struct begin");
     self->indent_level++;
 
@@ -827,15 +828,20 @@ static int lambda_declaration(parser *p) {
             ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
 
             array_shrink(parameters);
+            node->array.n     = (u8)parameters.size;
             node->array.nodes = parameters.v;
-            if (parameters.size > 0xff) return too_many_arguments(p);
-            node->array.n = (u8)parameters.size;
+
+            if (parameters.size > 0xff) {
+                too_many_arguments(p);
+                array_free(parameters);
+                return 1;
+            }
 
             return result_ast_node(p, node);
         }
 
         // anything else is an error
-        p->error.tag = tess_err_expected_argument;
+        p->error.tag = tess_err_unfinished_lambda_declaration;
         return 1;
     }
 }
@@ -844,48 +850,66 @@ static int function_definition(parser *p) {
     return expression(p);
 }
 
-static int function_application(parser *p) {
+static int function_application(parser *self) {
     // f a b c ..., terminated by semicolon or one_newline or two_newline
 
-    log(p, "try function_application");
-    if (a_try(p, a_identifier)) return 1;
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
-    ast_node *const name = p->result;
+    ast_node *const name = self->result;
     assert(ast_symbol == name->tag);
 
-    ast_node_array arguments = {.alloc = p->parser_arena};
+    ast_node_array arguments = {.alloc = self->parser_arena};
 
     // must have at least one argument
-    if (a_try(p, function_argument)) return 1;
+    if (a_try(self, function_argument)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
-    array_push(arguments, &p->result);
+    log(self, "begin function application");
+    self->indent_level++;
+
+    array_push(arguments, &self->result);
 
     while (true) {
-        if (0 == a_try(p, function_argument)) {
-            array_push(arguments, &p->result);
+        if (0 == a_try(self, function_argument)) {
+            array_push(arguments, &self->result);
             continue;
         }
 
-        if (0 == a_try_special(p, a_end_of_expression)) {
+        if (0 == a_try_special(self, a_end_of_expression)) {
             // 2: "fails" due to close_round, which must not be
             // consumed, so that grouped_expression catches it.
 
-            ast_node *node = ast_node_create(p->ast_arena, ast_named_function_application);
-            mos_string_copy(p->ast_arena, &node->named_application.name, &name->symbol.name);
+            ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
+            mos_string_copy(self->ast_arena, &node->named_application.name, &name->symbol.name);
 
             array_shrink(arguments);
+            node->array.n     = (u8)arguments.size;
             node->array.nodes = arguments.v;
-            if (arguments.size > 0xff) return too_many_arguments(p);
-            node->array.n = (u8)arguments.size;
+            if (arguments.size > 0xff) {
+                too_many_arguments(self);
+                goto error;
+            }
 
-            log(p, "function_application: got %s", ast_node_to_string(p->debug_arena, node));
-            return result_ast_node(p, node);
+            log(self, "function_application: got %s", ast_node_to_string(self->debug_arena, node));
+            result_ast_node(self, node);
+            goto success;
         }
 
-        p->error.tag = tess_err_expected_argument;
-        log(p, "not function_application");
-        return 1;
+        self->error.tag = tess_err_expected_function_application_argument;
+        goto error;
     }
+
+success:
+    self->indent_level--;
+    return 0;
+error:
+    self->indent_level--;
+    return 1;
 }
 
 //
@@ -927,7 +951,10 @@ static int if_then_else(parser *self) {
 
     ast_node *cond, *yes, *no;
 
-    if (a_try_s(self, the_symbol, "if")) return 1;
+    if (a_try_s(self, the_symbol, "if")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
     log(self, "begin if-then-else");
     self->indent_level++;
@@ -983,10 +1010,16 @@ static int infix_operand(parser *p) {
 static int infix_operation(parser *self) {
     // a * b
 
-    if (infix_operand(self)) return 1;
+    if (infix_operand(self)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     ast_node *const lhs = self->result;
 
-    if (a_try(self, a_infix_operator)) return 1;
+    if (a_try(self, a_infix_operator)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     ast_node *op_node = self->result;
 
     log(self, "begin infix");
@@ -1020,19 +1053,37 @@ error:
     return 1;
 }
 
-static int lambda_function(parser *p) {
+static int lambda_function(parser *self) {
     // fun a b c... -> rhs
 
-    if (a_try_s(p, the_symbol, "fun")) return 1;
+    if (a_try_s(self, the_symbol, "fun")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
-    if (a_try(p, lambda_declaration)) return 1;
-    ast_node *decl = p->result;
+    log(self, "begin lambda function");
+    self->indent_level++;
 
-    if (a_try(p, function_definition)) return 1;
-    ast_node *defn_h           = p->result;
+    if (a_try(self, lambda_declaration)) {
+        self->error.tag = tess_err_expected_lambda;
+        goto error;
+    }
+    ast_node *decl = self->result;
 
-    ast_node *node             = ast_node_create(p->ast_arena, ast_lambda_function);
-    node->lambda_function.body = defn_h;
+    if (a_try(self, function_definition)) {
+        self->error.tag = tess_err_expected_function_definition;
+        goto error;
+    }
+    ast_node *defn = self->result;
+
+    // require end keyword to end parse of lambda function definition
+    if (a_try(self, a_end_of_block)) {
+        self->error.tag = tess_err_expected_end_of_block;
+        goto error;
+    }
+
+    ast_node *node             = ast_node_create(self->ast_arena, ast_lambda_function);
+    node->lambda_function.body = defn;
 
     // move the vector from the function_declaration node to the new ast node
     node->array.nodes = decl->array.nodes;
@@ -1040,50 +1091,72 @@ static int lambda_function(parser *p) {
     decl->array.nodes = null;
     decl->array.n     = 0;
 
-    return result_ast_node(p, node);
+    result_ast_node(self, node);
+    goto success;
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
 }
 
-static int lambda_function_application(parser *p) {
+static int lambda_function_application(parser *self) {
 
-    if (a_try(p, grouped_expression)) return 1;
-    // a lambda application must be a grouped lambda function, i.e.
-    // surrounded by round braces
-    ast_node *lambda = p->result;
+    if (a_try(self, lambda_function)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
+    ast_node *lambda = self->result;
 
-    if (lambda->tag != ast_lambda_function) {
-        p->error.tag = tess_err_expected_lambda;
+    // there must be at least one argument
+    ast_node_array arguments = {.alloc = self->parser_arena};
+
+    if (a_try(self, function_argument)) {
+        self->error.tag = tess_err_ok;
         return 1;
     }
 
-    // there must be at least one argument
-    ast_node_array arguments = {.alloc = p->parser_arena};
+    log(self, "begin lambda function application");
+    self->indent_level++;
 
-    if (a_try(p, function_argument)) return 1;
-
-    array_push(arguments, &p->result);
+    array_push(arguments, &self->result);
 
     while (true) {
-        if (0 == a_try(p, function_argument)) {
-            array_push(arguments, &p->result);
+        if (0 == a_try(self, function_argument)) {
+            array_push(arguments, &self->result);
             continue;
         }
 
-        if (0 == a_try_special(p, a_end_of_expression)) {
-            ast_node *node = ast_node_create(p->ast_arena, ast_lambda_function_application);
+        if (0 == a_try_special(self, a_end_of_expression)) {
+            ast_node *node = ast_node_create(self->ast_arena, ast_lambda_function_application);
             node->lambda_application.lambda = lambda;
 
             array_shrink(arguments);
+            node->array.n     = (u8)arguments.size;
             node->array.nodes = arguments.v;
-            if (arguments.size > 0xff) return too_many_arguments(p);
-            node->array.n = (u8)arguments.size;
+            if (arguments.size > 0xff) {
+                too_many_arguments(self);
+                goto error;
+            }
 
-            return result_ast_node(p, node);
+            result_ast_node(self, node);
+            goto success;
         }
 
         // anything else is an error
-        p->error.tag = tess_err_expected_argument;
-        return 1;
+        self->error.tag = tess_err_expected_lambda_function_application_argument;
+        goto error;
     }
+
+success:
+    self->indent_level--;
+    return 0;
+error:
+    self->indent_level--;
+    return 1;
 }
 
 static char *make_nil_name(parser *p) {
@@ -1124,75 +1197,22 @@ struct tokenizer {
     size_t      pos;
 };
 
-// static int a_in_or_newline(parser *p) {
-//     if (0 == a_try_s(p, the_symbol, "in")) return 0;
-//     if (0 == a_try(p, a_newline)) return 0;
-//     if (is_start_of_expression(p->token.s)) return 0;
-//     return 1;
-// }
-
-static int let_in_form(parser *p) {
-    // let a = 2 in expression
-    if (a_try_s(p, the_symbol, "let")) return 1;
-    if (a_try(p, simple_declaration)) return 1;
-    ast_node *sym_or_nil = p->result;
-
-    log(p, "let_in_form: looking for expression after declaration");
-    if (a_try(p, expression)) return 1;
-    ast_node *defn = p->result;
-
-    a_try_s(p, the_symbol, "in"); // optional
-    // if (a_try(p, a_in_or_newline)) return 1;
-    if (a_try(p, expression)) return 1;
-    ast_node *body = p->result;
-
-    if (a_try(p, a_end_of_block)) return 1;
-
-    ast_node *node     = ast_node_create(p->ast_arena, ast_let_in);
-    node->let_in.name  = sym_or_nil;
-    node->let_in.value = defn;
-    node->let_in.body  = body;
-    log(p, "let_in_form: returning node %s", ast_node_to_string(p->debug_arena, node));
-    return result_ast_node(p, node);
-}
-
-static int let_form(parser *p) {
-    // let f a b c... = ...
-
-    if (a_try_s(p, the_symbol, "let")) return 1;
-    if (a_try(p, function_declaration)) return 1;
-    ast_node *decl = p->result;
-    log(p, "let_form: declaration: %s", ast_node_to_string(p->debug_arena, p->result));
-
-    if (a_try(p, function_definition)) return 1;
-    ast_node *defn = p->result;
-    log(p, "let_form: definition: %s", ast_node_to_string(p->debug_arena, p->result));
-
-    ast_node *node = ast_node_create(p->ast_arena, ast_let);
-
-    // get declaration out of pool to move into new node
-    mos_string_copy(p->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
-    node->let.body = defn;
-
-    // move the vector from the function_declaration node to the new ast node
-    node->array.nodes = decl->array.nodes;
-    node->array.n     = decl->array.n;
-    decl->array.nodes = null;
-    decl->array.n     = 0;
-
-    return result_ast_node(p, node);
-}
-
 static int tuple_expression(parser *self) {
 
-    if (a_try(self, a_open_round)) return 1;
+    if (a_try(self, a_open_round)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
     ast_node_array elements = {.alloc = self->parser_arena}; // will be moved to node on success
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
-    if (a_try(self, expression)) return 1;
+    if (a_try(self, expression)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
 
     array_push(elements, &self->result);
 
@@ -1239,30 +1259,27 @@ cleanup:
 }
 
 static int grouped_expression(parser *self) {
-    if (a_try(self, a_open_round)) return 1;
-
-    log(self, "begin grouped expression");
-    self->indent_level++;
-
-    if (a_try(self, expression)) {
-        self->error.tag = tess_err_expected_expression;
-        goto error;
+    if (a_try(self, a_open_round)) {
+        self->error.tag = tess_err_ok;
+        return 1;
     }
 
+    if (a_try(self, expression)) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     ast_node *const out = self->result;
+
+    log(self, "begin grouped expression");
 
     if (a_try(self, a_close_round)) {
         self->error.tag = tess_err_expected_close_round;
-        goto error;
+        return 1;
     }
 
     // replace parser result with expression node
     self->result = out;
     return 0;
-
-error:
-    self->indent_level--;
-    return 1;
 }
 
 static int expression(parser *self) {
@@ -1271,57 +1288,44 @@ static int expression(parser *self) {
 
     self->indent_level++;
 
-    if (0 == a_try(self, &expression_let)) goto cleanup;
-    if (has_error(self)) goto cleanup;
+    if (0 == a_try(self, &expression_let)) goto success;
+    if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &infix_operation)) goto cleanup;
-    if (has_error(self)) goto cleanup;
+    if (0 == a_try(self, &infix_operation)) goto success;
+    if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &tuple_expression)) goto cleanup;
-    if (has_error(self)) goto cleanup;
+    if (0 == a_try(self, &tuple_expression)) goto success;
+    if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &if_then_else)) goto cleanup;
-    if (has_error(self)) goto cleanup;
+    if (0 == a_try(self, &if_then_else)) goto success;
+    if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &lambda_function_application)) goto cleanup;
-    // FIXME
+    if (0 == a_try(self, &lambda_function_application)) goto success; // before lambda_function
+    if (has_error(self)) goto error;
 
-    // FIXME this logic will require a grouped expression at this
-    // point in the parse, which doesn't make sense.
-    if (0 == a_try(self, &grouped_expression)) goto cleanup;
-    if (has_error(self)) goto cleanup;
+    if (0 == a_try(self, &lambda_function)) goto success;
+    if (has_error(self)) goto error;
 
-    log(self, "expression: try nil");
-    if (0 == a_try(self, &a_nil)) goto cleanup;
+    if (0 == a_try(self, &function_application)) goto success;
+    if (has_error(self)) goto error;
 
-    log(self, "expression: try lambda");
-    if (0 == a_try(self, &lambda_function)) goto cleanup;
+    if (0 == a_try(self, &grouped_expression)) goto success;
+    if (has_error(self)) goto error;
 
-    log(self, "expression: function_application");
-    if (0 == a_try(self, &function_application)) goto cleanup;
+    // the rest of the cases are standalone values
 
-    log(self, "expression: try field setter");
-    if (0 == a_try(self, &a_field_setter)) goto cleanup; // before field_access
+    if (0 == a_try(self, &a_nil)) goto success;
+    if (0 == a_try(self, &a_field_setter)) goto success; // before field_access
+    if (0 == a_try(self, &a_field_access)) goto success;
+    if (0 == a_try(self, &a_identifier)) goto success;
+    if (0 == a_try(self, &a_number)) goto success;
+    if (0 == a_try(self, &a_bool)) goto success;
 
-    log(self, "expression: try field access");
-    if (0 == a_try(self, &a_field_access)) goto cleanup;
+    goto error;
 
-    log(self, "expression: try identifier");
-    if (0 == a_try(self, &a_identifier)) goto cleanup;
+    // if (0 == a_try(self, &a_end_of_expression)) goto success;
 
-    log(self, "expression: try number");
-    if (0 == a_try(self, &a_number)) goto cleanup;
-
-    log(self, "expression: try bool");
-    if (0 == a_try(self, &a_bool)) goto cleanup;
-
-    log(self, "expression: try end_of_expression");
-    if (0 == a_try(self, &a_end_of_expression)) goto cleanup;
-
-    self->indent_level--;
-    return 1;
-
-cleanup:
+success:
     self->indent_level--;
     return 0;
 
@@ -1372,7 +1376,10 @@ error:
 }
 
 static int toplevel_let(parser *self) {
-    if (a_try_s(self, the_symbol, "let")) return 1;
+    if (a_try_s(self, the_symbol, "let")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     log(self, "begin let");
 
     self->indent_level++;
@@ -1435,7 +1442,10 @@ static int toplevel(parser *self) {
 
 static int expression_let(parser *self) {
     // allows let-in but not let expressions
-    if (a_try_s(self, the_symbol, "let")) return 1;
+    if (a_try_s(self, the_symbol, "let")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
     log(self, "begin let expression");
 
     self->indent_level++;
