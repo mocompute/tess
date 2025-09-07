@@ -36,7 +36,14 @@ set(MOS_C_SHARED -fPIC -shared)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
 
-  set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra -Wswitch-enum -Wunused -Wconversion -Winline -Wimplicit-fallthrough)
+  set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra
+    -Wswitch-enum
+    -Wunused
+    -Wconversion
+    -Winline
+    -Wimplicit-fallthrough
+    -Wno-gnu-alignof-expression # allow gnu extension
+  )
 
 else()
 
