@@ -62,12 +62,12 @@ static void register_basic_types(type_registry *self) {
     static tl_type string_type = {.tag = type_string};
     static tl_type any_type    = {.tag = type_any};
 
-    error += type_registry_add(self, type_tag_to_string(type_nil), &nil_type);
-    error += type_registry_add(self, type_tag_to_string(type_bool), &bool_type);
-    error += type_registry_add(self, type_tag_to_string(type_int), &int_type);
-    error += type_registry_add(self, type_tag_to_string(type_float), &float_type);
-    error += type_registry_add(self, type_tag_to_string(type_string), &string_type);
-    error += type_registry_add(self, type_tag_to_string(type_any), &any_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_nil), &nil_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_bool), &bool_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_int), &int_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_float), &float_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_string), &string_type);
+    error += type_registry_add(self, tl_type_tag_to_string(type_any), &any_type);
 
     if (error) fatal("register_basic_types: failed to add types to registry.");
 }

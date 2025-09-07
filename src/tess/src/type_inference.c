@@ -812,8 +812,8 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
 
 static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
 
-    tl_type **type = type_registry_find(self->type_registry, type_tag_to_string(tag));
-    if (!type) fatal("get_prim: failed to find '%s'", type_tag_to_string(tag));
+    tl_type **type = type_registry_find(self->type_registry, tl_type_tag_to_string(tag));
+    if (!type) fatal("get_prim: failed to find '%s'", tl_type_tag_to_string(tag));
 
     return *type;
 }

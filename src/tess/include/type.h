@@ -93,6 +93,6 @@ tl_type           *tl_type_find_field_type(tl_type const *, char const *);
 
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);
-char const        *type_tag_to_string(tl_type_tag);
+char const        *tl_type_tag_to_string(tl_type_tag);
 
 #endif

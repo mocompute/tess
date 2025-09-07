@@ -150,7 +150,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:    len = snprintf(buf, (size_t)sz, "%s", type_tag_to_string(self->tag)); break;
+    case type_any:    len = snprintf(buf, (size_t)sz, "%s", tl_type_tag_to_string(self->tag)); break;
 
     case type_user:   {
         struct tlt_user const *v = tl_type_user((tl_type *)self);
@@ -399,7 +399,7 @@ struct tlt_tv *tl_type_tv(tl_type *t) {
 #define MOS_TAG_STRING(name, str) [name] = str,
 #endif
 
-char const *type_tag_to_string(tl_type_tag tag) {
+char const *tl_type_tag_to_string(tl_type_tag tag) {
     static char const *const strings[] = {TL_TYPE_TAGS(MOS_TAG_STRING)};
     return strings[tag];
 }
