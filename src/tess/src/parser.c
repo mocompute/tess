@@ -8,7 +8,6 @@
 #include "mos_string.h"
 #include "token.h"
 #include "tokenizer.h"
-#include "type.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -498,7 +497,7 @@ static int the_symbol(parser *p, char const *const want) {
         if (0 == strcmp(want, p->token.s)) return result_ast_str(p, ast_symbol, p->token.s);
     }
 
-    p->error.tag = tess_err_expected_symbol;
+    p->error.tag = tess_err_expected_specific_symbol;
     return 1;
 }
 
