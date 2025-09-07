@@ -115,6 +115,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         start_string,
         in_string,
         in_string_backslash,
+        in_string_backslash_unescaped,
         stop_string,
 
         start_symbol,
@@ -512,6 +513,22 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         } break;
 
         case in_string_backslash: {
+            if (self->pos == end) {
+                state = stop_string;
+                continue;
+            }
+            char const c = self->input.v[self->pos++];
+
+            // keep it literal
+            char backslash = '\\';
+            array_push(self->buf, &backslash);
+            array_push(self->buf, &c);
+
+            state = in_string;
+
+        } break;
+
+        case in_string_backslash_unescaped: {
             if (self->pos == end) {
                 state = stop_string;
                 continue;
