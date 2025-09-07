@@ -252,17 +252,17 @@ static bool is_relational_operator(char const *s) {
 }
 
 static bool is_eof(parser *p) {
-    return p->tokenizer_error.tag == tess_err_eof;
+    return p->tokenizer_error.tag == tl_err_eof;
 }
 
 static int eat_newlines(parser *p) {
 
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
-            log(p, "eat_newlines: tokenizer error: %s", tess_error_tag_to_string(p->tokenizer_error.tag));
+            log(p, "eat_newlines: tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
-            p->error.tag  = tess_err_tokenizer_error;
+            p->error.tag  = tl_err_tokenizer_error;
             return 1;
         }
 
@@ -283,7 +283,7 @@ static int next_token(parser *p) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
-            p->error.tag  = tess_err_tokenizer_error;
+            p->error.tag  = tl_err_tokenizer_error;
             return 1;
         }
 
@@ -371,7 +371,7 @@ static int a_comma(parser *p) {
 
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
 
-    p->error.tag = tess_err_expected_comma;
+    p->error.tag = tl_err_expected_comma;
     return 1;
 }
 
@@ -380,7 +380,7 @@ static int a_dot(parser *p) {
 
     if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
 
-    p->error.tag = tess_err_expected_dot;
+    p->error.tag = tl_err_expected_dot;
     return 1;
 }
 
@@ -388,7 +388,7 @@ static int a_open_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_open_round == p->token.tag) return result_ast_str(p, ast_symbol, "(");
 
-    p->error.tag = tess_err_expected_open_round;
+    p->error.tag = tl_err_expected_open_round;
     return 1;
 }
 
@@ -396,7 +396,7 @@ static int a_close_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_close_round == p->token.tag) return result_ast_str(p, ast_symbol, ")");
 
-    p->error.tag = tess_err_expected_close_round;
+    p->error.tag = tl_err_expected_close_round;
     return 1;
 }
 
@@ -438,7 +438,7 @@ static int a_end_of_expression(parser *p) {
     case tok_comment:     break;
     }
 
-    p->error.tag = tess_err_unfinished_expression;
+    p->error.tag = tl_err_unfinished_expression;
     return 1;
 }
 
@@ -474,7 +474,7 @@ static int a_newline(parser *p) {
     case tok_comment:     break;
     }
 
-    p->error.tag = tess_err_expected_newline;
+    p->error.tag = tl_err_expected_newline;
     return 1;
 }
 
@@ -505,7 +505,7 @@ static int a_identifier(parser *p) {
     }
 
 error:
-    p->error.tag = tess_err_expected_identifier;
+    p->error.tag = tl_err_expected_identifier;
     return 1;
 }
 
@@ -546,7 +546,7 @@ static int a_infix_operator(parser *p) {
             return result_ast_str(p, ast_symbol, p->token.s);
     }
 
-    p->error.tag = tess_err_expected_operator;
+    p->error.tag = tl_err_expected_operator;
     return 1;
 }
 
@@ -557,7 +557,7 @@ static int the_symbol(parser *p, char const *const want) {
         if (0 == strcmp(want, p->token.s)) return result_ast_str(p, ast_symbol, p->token.s);
     }
 
-    p->error.tag = tess_err_expected_specific_symbol;
+    p->error.tag = tl_err_expected_specific_symbol;
     return 1;
 }
 
@@ -566,7 +566,7 @@ static int a_string(parser *p) {
 
     if (tok_string == p->token.tag) return result_ast_str(p, ast_string, p->token.s);
 
-    p->error.tag = tess_err_expected_string;
+    p->error.tag = tl_err_expected_string;
     return 1;
 }
 
@@ -594,7 +594,7 @@ static int a_number(parser *self) {
     }
 
 error:
-    self->error.tag = tess_err_expected_number;
+    self->error.tag = tl_err_expected_number;
     return 1;
 }
 
@@ -606,7 +606,7 @@ static int a_bool(parser *p) {
         if (0 == strcmp("false", p->token.s)) return result_ast_bool(p, false);
     }
 
-    p->error.tag = tess_err_expected_bool;
+    p->error.tag = tl_err_expected_bool;
     return 1;
 }
 
@@ -614,7 +614,7 @@ static int a_literal(parser *p) {
     if (0 == a_try(p, a_string)) return 0;
     if (0 == a_try(p, a_number)) return 0;
     if (0 == a_try(p, a_bool)) return 0;
-    p->error.tag = tess_err_expected_literal;
+    p->error.tag = tl_err_expected_literal;
     return 1;
 }
 
@@ -623,7 +623,7 @@ static int a_equal_sign(parser *p) {
 
     if (tok_equal_sign == p->token.tag) return result_ast_str(p, ast_symbol, "=");
 
-    p->error.tag = tess_err_expected_equal_sign;
+    p->error.tag = tl_err_expected_equal_sign;
     return 1;
 }
 
@@ -632,7 +632,7 @@ static int a_colon(parser *p) {
 
     if (tok_colon == p->token.tag) return result_ast_str(p, ast_symbol, ":");
 
-    p->error.tag = tess_err_expected_colon;
+    p->error.tag = tl_err_expected_colon;
     return 1;
 }
 
@@ -641,7 +641,7 @@ static int a_colon_equal(parser *p) {
 
     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
-    p->error.tag = tess_err_expected_colon_equal;
+    p->error.tag = tl_err_expected_colon_equal;
     return 1;
 }
 
@@ -650,7 +650,7 @@ static int a_arrow(parser *p) {
 
     if (tok_arrow == p->token.tag) return result_ast_str(p, ast_symbol, "->");
 
-    p->error.tag = tess_err_expected_arrow;
+    p->error.tag = tl_err_expected_arrow;
     return 1;
 }
 
@@ -678,7 +678,7 @@ static int a_end_of_block(parser *p) {
         return result_ast_str(p, ast_symbol, "end");
     }
 
-    p->error.tag = tess_err_expected_end_of_block;
+    p->error.tag = tl_err_expected_end_of_block;
     return 1;
 }
 
@@ -718,14 +718,14 @@ static int a_field_setter(parser *p) {
 static int struct_declaration(parser *self) {
     //     struct name = ... end
     if (a_try_s(self, the_symbol, "struct")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     log(self, "struct begin");
     self->indent_level++;
 
     if (a_try(self, a_identifier)) {
-        self->error.tag = tess_err_expected_struct_name;
+        self->error.tag = tl_err_expected_struct_name;
         goto error;
     }
 
@@ -735,7 +735,7 @@ static int struct_declaration(parser *self) {
     ast_node_array field_types = {.alloc = self->ast_arena};
 
     if (a_try(self, a_equal_sign)) {
-        self->error.tag = tess_err_expected_equal_sign;
+        self->error.tag = tl_err_expected_equal_sign;
         goto error;
     }
 
@@ -750,7 +750,7 @@ static int struct_declaration(parser *self) {
     // accumulate names and types until end of block is seen
     while (true) {
         if (eat_newlines(self)) {
-            self->error.tag = tess_err_unfinished_struct;
+            self->error.tag = tl_err_unfinished_struct;
             goto error;
         }
 
@@ -759,12 +759,12 @@ static int struct_declaration(parser *self) {
             log(self, "struct_declaration: field %s", ast_node_to_string(self->debug_arena, field_name));
 
             if (a_try(self, a_colon)) {
-                self->error.tag = tess_err_expected_colon;
+                self->error.tag = tl_err_expected_colon;
                 goto error;
             }
 
             if (a_try(self, a_type_identifier)) {
-                self->error.tag = tess_err_expected_type;
+                self->error.tag = tl_err_expected_type;
                 goto error;
             }
             ast_node *type = self->result;
@@ -774,7 +774,7 @@ static int struct_declaration(parser *self) {
             array_push(field_types, &type);
 
             if (a_try_special(self, a_newline)) {
-                self->error.tag = tess_err_expected_newline;
+                self->error.tag = tl_err_expected_newline;
                 goto error; // expect ; or newline after field
             }
 
@@ -804,7 +804,7 @@ static int struct_declaration(parser *self) {
         }
 
         // anything else is an error
-        self->error.tag = tess_err_expected_end_of_block;
+        self->error.tag = tl_err_expected_end_of_block;
         return 1;
     }
 
@@ -865,7 +865,7 @@ static int function_declaration(parser *p) {
         }
 
         // anything else is an error
-        p->error.tag = tess_err_expected_argument;
+        p->error.tag = tl_err_expected_argument;
         return 1;
     }
 }
@@ -899,7 +899,7 @@ static int lambda_declaration(parser *p) {
         }
 
         // anything else is an error
-        p->error.tag = tess_err_unfinished_lambda_declaration;
+        p->error.tag = tl_err_unfinished_lambda_declaration;
         return 1;
     }
 }
@@ -912,7 +912,7 @@ static int function_application(parser *self) {
     // f a b c ..., terminated by semicolon or one_newline or two_newline
 
     if (a_try(self, a_identifier)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -923,7 +923,7 @@ static int function_application(parser *self) {
 
     // must have at least one argument
     if (a_try(self, function_argument)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -958,7 +958,7 @@ static int function_application(parser *self) {
             goto success;
         }
 
-        self->error.tag = tess_err_expected_function_application_argument;
+        self->error.tag = tl_err_expected_function_application_argument;
         goto error;
     }
 
@@ -1010,7 +1010,7 @@ static int if_then_else(parser *self) {
     ast_node *cond, *yes, *no;
 
     if (a_try_s(self, the_symbol, "if")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1018,29 +1018,29 @@ static int if_then_else(parser *self) {
     self->indent_level++;
 
     if (expression(self)) {
-        self->error.tag = tess_err_expected_if_condition;
+        self->error.tag = tl_err_expected_if_condition;
         goto error;
     }
     cond = self->result;
 
     if (a_try_s(self, the_symbol, "then")) {
-        self->error.tag = tess_err_expected_keyword_then;
+        self->error.tag = tl_err_expected_keyword_then;
         goto error;
     }
 
     if (expression(self)) {
-        self->error.tag = tess_err_expected_if_then_arm;
+        self->error.tag = tl_err_expected_if_then_arm;
         goto error;
     }
     yes = self->result;
 
     if (a_try_s(self, the_symbol, "else")) {
-        self->error.tag = tess_err_expected_keyword_else;
+        self->error.tag = tl_err_expected_keyword_else;
         goto error;
     }
 
     if (expression(self)) {
-        self->error.tag = tess_err_expected_if_else_arm;
+        self->error.tag = tl_err_expected_if_else_arm;
         goto error;
     }
     no                           = self->result;
@@ -1069,13 +1069,13 @@ static int infix_operation(parser *self) {
     // a * b
 
     if (infix_operand(self)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     ast_node *const lhs = self->result;
 
     if (a_try(self, a_infix_operator)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     ast_node *op_node = self->result;
@@ -1085,12 +1085,12 @@ static int infix_operation(parser *self) {
 
     ast_operator op;
     if (string_to_ast_operator(ast_node_name_string(op_node), &op)) {
-        self->error.tag = tess_err_expected_operator;
+        self->error.tag = tl_err_expected_operator;
         goto error;
     }
 
     if (infix_operand(self)) {
-        self->error.tag = tess_err_expected_infix_operand;
+        self->error.tag = tl_err_expected_infix_operand;
         goto error;
     }
 
@@ -1115,7 +1115,7 @@ static int lambda_function(parser *self) {
     // fun a b c... -> rhs
 
     if (a_try_s(self, the_symbol, "fun")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1123,20 +1123,20 @@ static int lambda_function(parser *self) {
     self->indent_level++;
 
     if (a_try(self, lambda_declaration)) {
-        self->error.tag = tess_err_expected_lambda;
+        self->error.tag = tl_err_expected_lambda;
         goto error;
     }
     ast_node *decl = self->result;
 
     if (a_try(self, function_definition)) {
-        if (self->error.tag == tess_err_ok) self->error.tag = tess_err_expected_function_definition;
+        if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
         goto error;
     }
     ast_node *defn = self->result;
 
     // require end keyword to end parse of lambda function definition
     if (a_try(self, a_end_of_block)) {
-        self->error.tag = tess_err_expected_end_of_block;
+        self->error.tag = tl_err_expected_end_of_block;
         goto error;
     }
 
@@ -1164,7 +1164,7 @@ error:
 static int lambda_function_application(parser *self) {
 
     if (a_try(self, lambda_function)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     ast_node *lambda = self->result;
@@ -1173,7 +1173,7 @@ static int lambda_function_application(parser *self) {
     ast_node_array arguments = {.alloc = self->parser_arena};
 
     if (a_try(self, function_argument)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1205,7 +1205,7 @@ static int lambda_function_application(parser *self) {
         }
 
         // anything else is an error
-        self->error.tag = tess_err_expected_lambda_function_application_argument;
+        self->error.tag = tl_err_expected_lambda_function_application_argument;
         goto error;
     }
 
@@ -1258,7 +1258,7 @@ struct tokenizer {
 static int tuple_expression(parser *self) {
 
     if (a_try(self, a_open_round)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1268,7 +1268,7 @@ static int tuple_expression(parser *self) {
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
     if (a_try(self, expression)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1299,7 +1299,7 @@ static int tuple_expression(parser *self) {
         // comma required if this is not the first time through the loop
         if (count++ > 0)
             if (a_try(self, a_comma)) {
-                self->error.tag = tess_err_expected_comma;
+                self->error.tag = tl_err_expected_comma;
                 goto cleanup;
             }
 
@@ -1318,7 +1318,7 @@ cleanup:
 
 static int begin_end_expression(parser *self) {
     if (a_try_s(self, the_symbol, "begin")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
@@ -1327,26 +1327,26 @@ static int begin_end_expression(parser *self) {
     ast_node_array exprs = {.alloc = self->parser_arena}; // will be moved to node on success
 
     if (eat_newlines(self)) {
-        self->error.tag = tess_err_unfinished_begin_end;
+        self->error.tag = tl_err_unfinished_begin_end;
         goto error;
     }
 
     // detect empty begin end block and reject
     if (0 == a_try_s(self, the_symbol, "end")) {
-        self->error.tag = tess_err_unfinished_begin_end;
+        self->error.tag = tl_err_unfinished_begin_end;
         goto error;
     }
 
     while (true) {
         if (a_try(self, expression)) {
-            self->error.tag = tess_err_unfinished_begin_end;
+            self->error.tag = tl_err_unfinished_begin_end;
             goto error;
         }
 
         array_push(exprs, &self->result);
 
         if (eat_newlines(self)) {
-            self->error.tag = tess_err_unfinished_begin_end;
+            self->error.tag = tl_err_unfinished_begin_end;
             goto error;
         }
 
@@ -1357,7 +1357,7 @@ static int begin_end_expression(parser *self) {
             node->array.n     = (u8)exprs.size;
             node->array.nodes = exprs.v;
             if (exprs.size > 0xff) {
-                self->error.tag = tess_err_too_many_expressions;
+                self->error.tag = tl_err_too_many_expressions;
                 goto error;
             }
 
@@ -1382,12 +1382,12 @@ error:
 
 static int grouped_expression(parser *self) {
     if (a_try(self, a_open_round)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
     if (a_try(self, expression)) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     ast_node *const out = self->result;
@@ -1395,7 +1395,7 @@ static int grouped_expression(parser *self) {
     log(self, "begin grouped expression");
 
     if (a_try(self, a_close_round)) {
-        self->error.tag = tess_err_expected_close_round;
+        self->error.tag = tl_err_expected_close_round;
         return 1;
     }
 
@@ -1446,7 +1446,7 @@ static int expression(parser *self) {
     if (0 == a_try(self, &a_number)) goto success;
     if (0 == a_try(self, &a_bool)) goto success;
 
-    self->error.tag = tess_err_expected_expression;
+    self->error.tag = tl_err_expected_expression;
 
     goto error;
 
@@ -1467,7 +1467,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil) {
     log(self, "begin let-in declaration");
 
     if (a_try(self, expression)) {
-        self->error.tag = tess_err_expected_value;
+        self->error.tag = tl_err_expected_value;
         goto error;
     }
     ast_node *defn = self->result;
@@ -1476,13 +1476,13 @@ static int continue_let_in(parser *self, ast_node *name_or_nil) {
     (void)a_try_s(self, the_symbol, "in");
 
     if (a_try(self, expression)) {
-        self->error.tag = tess_err_expected_body;
+        self->error.tag = tl_err_expected_body;
         goto error;
     }
     ast_node *body = self->result;
 
     if (a_try(self, a_end_of_block)) {
-        self->error.tag = tess_err_expected_end_of_block;
+        self->error.tag = tl_err_expected_end_of_block;
         goto error;
     }
     ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
@@ -1504,7 +1504,7 @@ error:
 
 static int toplevel_let(parser *self) {
     if (a_try_s(self, the_symbol, "let")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     log(self, "begin let");
@@ -1516,7 +1516,7 @@ static int toplevel_let(parser *self) {
         log(self, "begin let function declaration");
 
         if (a_try(self, function_definition)) {
-            if (self->error.tag == tess_err_ok) self->error.tag = tess_err_expected_function_definition;
+            if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
             goto error;
         }
         ast_node *defn = self->result;
@@ -1553,7 +1553,7 @@ error:
 static int toplevel(parser *self) {
     if (eat_newlines(self)) return 1;
 
-    self->error.tag = tess_err_ok;
+    self->error.tag = tl_err_ok;
 
     if (0 == a_try(self, struct_declaration)) return 0;
     if (has_error(self)) return 1;
@@ -1570,7 +1570,7 @@ static int toplevel(parser *self) {
 static int expression_let(parser *self) {
     // allows let-in but not let expressions
     if (a_try_s(self, the_symbol, "let")) {
-        self->error.tag = tess_err_ok;
+        self->error.tag = tl_err_ok;
         return 1;
     }
     log(self, "begin let expression");
@@ -1633,18 +1633,18 @@ static void tokens_shrink(struct parser *p, u32 n) {
 }
 
 void parser_report_errors(parser *self) {
-    if (tess_err_ok == self->error.tag) return;
+    if (tl_err_ok == self->error.tag) return;
 
     fprintf(stderr, "error: %s:%u: %s\n", self->error.file, self->error.line,
-            tess_error_tag_to_string(self->error.tag));
+            tl_error_tag_to_string(self->error.tag));
 }
 static int too_many_arguments(parser *self) {
-    self->error.tag = tess_err_too_many_arguments;
+    self->error.tag = tl_err_too_many_arguments;
     return 1;
 }
 
 static bool has_error(parser *self) {
-    return self->error.tag != tess_err_ok;
+    return self->error.tag != tl_err_ok;
 }
 
 void log(struct parser *self, char const *restrict fmt, ...) {

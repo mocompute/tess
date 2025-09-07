@@ -12,7 +12,7 @@ typedef struct parser parser;
 typedef struct parser_error {
     tokenizer_error *tokenizer;
     token           *token;
-    tess_error_tag   tag;
+    tl_error_tag     tag;
     char const      *file;
     u32              line;
 } parser_error;

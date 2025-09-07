@@ -163,13 +163,13 @@ static int test_tokenizer_basic(void) {
         // expect eof
         error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
-        error += tess_err_eof == err.tag ? 0 : 1;
+        error += tl_err_eof == err.tag ? 0 : 1;
         token_deinit(alloc, &tok);
 
         // still eof
         error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
-        error += tess_err_eof == err.tag ? 0 : 1;
+        error += tl_err_eof == err.tag ? 0 : 1;
         token_deinit(alloc, &tok);
     }
 

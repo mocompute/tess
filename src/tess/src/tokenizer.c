@@ -23,7 +23,7 @@ struct tokenizer {
 
 // -- statics --
 
-static void tok_error(tokenizer_error *err, tess_error_tag tag, char const *file, u32 line) {
+static void tok_error(tokenizer_error *err, tl_error_tag tag, char const *file, u32 line) {
     err->tag  = tag;
     err->file = file;
     err->line = line;
@@ -143,7 +143,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case start: {
             if (self->pos >= end) {
-                tok_error(out_err, tess_err_eof, self->file, self->line);
+                tok_error(out_err, tl_err_eof, self->file, self->line);
                 goto finish;
             }
 
@@ -340,7 +340,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_newline_indent:
             if (self->pos - start_capture > 0xff) {
-                if (out_err) tok_error(out_err, tess_err_indent_too_long, self->file, self->line);
+                if (out_err) tok_error(out_err, tl_err_indent_too_long, self->file, self->line);
                 return 1;
             }
 
@@ -395,7 +395,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                     state = stop_number;
                 } else {
                     --self->pos;
-                    if (out_err) tok_error(out_err, tess_err_invalid_token, self->file, self->line);
+                    if (out_err) tok_error(out_err, tl_err_invalid_token, self->file, self->line);
                     return 1;
                 }
             }
@@ -576,7 +576,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 finish:
 
     if (start == state) {
-        if (out_err) tok_error(out_err, tess_err_eof, self->file, self->line);
+        if (out_err) tok_error(out_err, tl_err_eof, self->file, self->line);
         return 1;
     }
 

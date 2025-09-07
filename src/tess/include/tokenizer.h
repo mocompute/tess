@@ -7,9 +7,9 @@
 #include "error.h"
 
 typedef struct tokenizer_error {
-    tess_error_tag tag;
-    char const    *file;
-    u32            line;
+    tl_error_tag tag;
+    char const  *file;
+    u32          line;
 } tokenizer_error;
 
 typedef struct tokenizer tokenizer;

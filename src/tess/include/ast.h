@@ -133,9 +133,9 @@ typedef struct ast_node {
         } user_type_def;
     };
 
-    tl_type            *type;
-    ast_tag             tag;
-    enum tess_error_tag error;
+    tl_type          *type;
+    ast_tag           tag;
+    enum tl_error_tag error;
 } ast_node;
 
 typedef struct {

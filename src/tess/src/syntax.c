@@ -15,7 +15,7 @@
 
 // -- forwards --
 
-static void syntax_error(struct syntax_checker *, ast_node *, enum tess_error_tag, char const *message);
+static void syntax_error(struct syntax_checker *, ast_node *, enum tl_error_tag, char const *message);
 
 nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
 nodiscard static int syntax_register_user_types(struct syntax_checker *);
@@ -89,12 +89,10 @@ void syntax_checker_report_errors(syntax_checker *self) {
         char *str = ast_node_to_string_for_error(self->arena, self->errors.v[i].node);
 
         if (self->errors.v[i].message)
-            fprintf(stderr, "error: %s: %s: %s\n", tess_error_tag_to_string(self->errors.v[i].node->error),
+            fprintf(stderr, "error: %s: %s: %s\n", tl_error_tag_to_string(self->errors.v[i].node->error),
                     self->errors.v[i].message, str);
 
-        else
-            fprintf(stderr, "error: %s: %s\n", tess_error_tag_to_string(self->errors.v[i].node->error),
-                    str);
+        else fprintf(stderr, "error: %s: %s\n", tl_error_tag_to_string(self->errors.v[i].node->error), str);
 
         alloc_free(self->arena, str);
     }
@@ -113,7 +111,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     char const               *type_name = ast_node_name_string(v->name);
 
     if (type_registry_find(self->type_registry, type_name)) {
-        syntax_error(self, node, tess_err_type_exists, alloc_strdup(self->arena, type_name));
+        syntax_error(self, node, tl_err_type_exists, alloc_strdup(self->arena, type_name));
         return;
     }
 
@@ -180,7 +178,7 @@ static void check_annotation(void *ctx, ast_node *node) {
         }
 #undef fmt
 
-        syntax_error(self, node, tess_err_expected_type, message);
+        syntax_error(self, node, tl_err_expected_type, message);
     }
 }
 
@@ -190,7 +188,7 @@ static int syntax_check_type_annotations(struct syntax_checker *self) {
     return 0;
 }
 
-static void syntax_error(struct syntax_checker *self, ast_node *node, enum tess_error_tag tag,
+static void syntax_error(struct syntax_checker *self, ast_node *node, enum tl_error_tag tag,
                          char const *message) {
 
     node->error = tag;
