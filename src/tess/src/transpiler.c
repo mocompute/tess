@@ -43,9 +43,9 @@ extern char const *embed_std_c;
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
 static int   a_eval(transpiler *, ast_node const *);
-static int   a_infix(transpiler *, ast_node const *);
 static int   a_field_access(transpiler *, ast_node const *);
 static int   a_fun_apply(transpiler *, ast_node const *);
+static int   a_infix(transpiler *, ast_node const *);
 static int   a_let(transpiler *, ast_node const *);
 static int   a_let_in(transpiler *, ast_node const *);
 static int   a_main(transpiler *, ast_node const *);
@@ -54,8 +54,8 @@ static int   a_result_type_of(transpiler *, tl_type const *);
 static int   a_toplevel(transpiler *, ast_node const *);
 static int   a_user_type_definition(transpiler *, ast_node const *);
 
-static char *next_variable(transpiler *);
 static bool  is_generic_function(ast_node const *node);
+static char *next_variable(transpiler *);
 
 static void  out_put_start(transpiler *, char const *);
 static void  out_put(transpiler *, char const *);
@@ -247,6 +247,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
     case ast_user_type_set:               break;
@@ -397,17 +398,14 @@ static int a_eval(transpiler *self, ast_node const *node) {
         out_put_start(self, "");
         out_put_fmt(self, "%s = NULL;\n", var);
         break;
-
     case ast_symbol:
         out_put_start(self, "");
         out_put_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
         break;
-
     case ast_string:
         out_put_start(self, "");
         out_put_fmt(self, "%s = R\"(%s)\";\n", var, ast_node_name_string(node));
         break;
-
     case ast_i64:
         out_put_start(self, "");
         out_put_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
@@ -425,6 +423,21 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (node->bool_.val) out_put_fmt(self, "%s = true;\n", var);
         else out_put_fmt(self, "%s = false;\n", var);
         break;
+
+    case ast_begin_end: {
+        struct ast_begin_end const *v = ast_node_begin_end((ast_node *)node);
+        if (v->n_expressions == 0) break;
+        for (u32 i = 0; i < v->n_expressions - 1; ++i) {
+            out_put_start(self, "");
+            if (a_eval(self, v->expressions[i])) return 1;
+            out_put(self, "\n");
+            --self->results.size; // ignore results of all but last expression
+        }
+        if (a_eval(self, v->expressions[v->n_expressions - 1])) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
+    } break;
 
     case ast_user_type: {
         // eval each field in the user_type and assign to its matching struct field

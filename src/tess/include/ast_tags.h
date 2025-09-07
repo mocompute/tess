@@ -24,6 +24,7 @@
     X(ast_lambda_declaration, "lambda_declaration")                                                        \
     X(ast_lambda_function_application, "lambda_function_application")                                      \
     X(ast_named_function_application, "named_function_application")                                        \
+    X(ast_begin_end, "begin_end")                                                                          \
     X(ast_user_type, "user_type")                                                                          \
     X(ast_user_type_get, "user_type_get")                                                                  \
     X(ast_user_type_set, "user_type_set")                                                                  \

@@ -44,6 +44,7 @@ typedef int (*parse_fun_s)(parser *, char const *);
 
 // -- overview --
 
+static int           begin_end_expression(parser *);
 static int           expression(parser *);
 static int           expression_let(parser *);
 static int           function_application(parser *);
@@ -309,7 +310,7 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
         assert(p->tokens.size >= save_toks);
         if (p->tokens.size > save_toks) {
             char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
+            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
@@ -329,7 +330,7 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     if (fun(p, arg)) {
         if (p->tokens.size > save_toks) {
             char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
+            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
@@ -351,7 +352,7 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
     if (res) {
         if (p->tokens.size > save_toks) {
             char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
-            log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
+            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->debug_arena, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
@@ -405,6 +406,8 @@ static int a_end_of_expression(parser *p) {
         if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
+
+    log(p, "end_of_expression token: %s", token_to_string(p->parser_arena, &p->token));
 
     switch (p->token.tag) {
     case tok_one_newline:
@@ -579,19 +582,19 @@ static int string_to_number(parser *parser, char const *const in) {
     }
 }
 
-static int a_number(parser *p) {
-    if (next_token(p)) return 1;
+static int a_number(parser *self) {
+    if (next_token(self)) return 1;
 
-    if (tok_number == p->token.tag) {
+    if (tok_number == self->token.tag) {
 
-        if (string_to_number(p, p->token.s)) goto error;
+        if (string_to_number(self, self->token.s)) goto error;
         // sets parser result
 
         return 0;
     }
 
 error:
-    p->error.tag = tess_err_expected_number;
+    self->error.tag = tess_err_expected_number;
     return 1;
 }
 
@@ -1126,7 +1129,7 @@ static int lambda_function(parser *self) {
     ast_node *decl = self->result;
 
     if (a_try(self, function_definition)) {
-        self->error.tag = tess_err_expected_function_definition;
+        if (self->error.tag == tess_err_ok) self->error.tag = tess_err_expected_function_definition;
         goto error;
     }
     ast_node *defn = self->result;
@@ -1313,6 +1316,70 @@ cleanup:
     return 1;
 }
 
+static int begin_end_expression(parser *self) {
+    if (a_try_s(self, the_symbol, "begin")) {
+        self->error.tag = tess_err_ok;
+        return 1;
+    }
+
+    log(self, "begin begin...end expression");
+    self->indent_level++;
+    ast_node_array exprs = {.alloc = self->parser_arena}; // will be moved to node on success
+
+    if (eat_newlines(self)) {
+        self->error.tag = tess_err_unfinished_begin_end;
+        goto error;
+    }
+
+    // detect empty begin end block and reject
+    if (0 == a_try_s(self, the_symbol, "end")) {
+        self->error.tag = tess_err_unfinished_begin_end;
+        goto error;
+    }
+
+    while (true) {
+        if (a_try(self, expression)) {
+            self->error.tag = tess_err_unfinished_begin_end;
+            goto error;
+        }
+
+        array_push(exprs, &self->result);
+
+        if (eat_newlines(self)) {
+            self->error.tag = tess_err_unfinished_begin_end;
+            goto error;
+        }
+
+        if (0 == a_try_s(self, the_symbol, "end")) {
+            ast_node *node = ast_node_create(self->ast_arena, ast_begin_end);
+
+            array_shrink(exprs);
+            node->array.n     = (u8)exprs.size;
+            node->array.nodes = exprs.v;
+            if (exprs.size > 0xff) {
+                self->error.tag = tess_err_too_many_expressions;
+                goto error;
+            }
+
+            result_ast_node(self, node);
+            goto success;
+        }
+
+        // some expressions eat the end_of_expression (e.g. function
+        // application), but some don't (e.g. numbers)
+        (void)a_try(self, a_end_of_expression);
+    }
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    array_free(exprs);
+    self->indent_level--;
+    return 1;
+}
+
 static int grouped_expression(parser *self) {
     if (a_try(self, a_open_round)) {
         self->error.tag = tess_err_ok;
@@ -1367,6 +1434,9 @@ static int expression(parser *self) {
     if (0 == a_try(self, &grouped_expression)) goto success;
     if (has_error(self)) goto error;
 
+    if (0 == a_try(self, &begin_end_expression)) goto success;
+    if (has_error(self)) goto error;
+
     // the rest of the cases are standalone values
 
     if (0 == a_try(self, &a_nil)) goto success;
@@ -1375,6 +1445,8 @@ static int expression(parser *self) {
     if (0 == a_try(self, &a_identifier)) goto success;
     if (0 == a_try(self, &a_number)) goto success;
     if (0 == a_try(self, &a_bool)) goto success;
+
+    self->error.tag = tess_err_expected_expression;
 
     goto error;
 
@@ -1444,7 +1516,7 @@ static int toplevel_let(parser *self) {
         log(self, "begin let function declaration");
 
         if (a_try(self, function_definition)) {
-            self->error.tag = tess_err_expected_function_definition;
+            if (self->error.tag == tess_err_ok) self->error.tag = tess_err_expected_function_definition;
             goto error;
         }
         ast_node *defn = self->result;

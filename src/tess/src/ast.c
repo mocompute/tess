@@ -48,6 +48,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_tuple:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_begin_end:
     case ast_user_type:                   {
         struct ast_array *vclone = ast_node_arr(clone), *vorig = ast_node_arr((ast_node *)orig);
         vclone->n     = vorig->n;
@@ -74,15 +75,16 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     // clone the rest of the fields
     switch (clone->tag) {
     case ast_eof:
-    case ast_nil:    break;
-    case ast_bool:   clone->bool_.val = orig->bool_.val; break;
+    case ast_nil:
+    case ast_begin_end: break;
+    case ast_bool:      clone->bool_.val = orig->bool_.val; break;
 
-    case ast_i64:    clone->i64.val = orig->i64.val; break;
-    case ast_u64:    clone->u64.val = orig->u64.val; break;
-    case ast_f64:    clone->f64.val = orig->f64.val; break;
+    case ast_i64:       clone->i64.val = orig->i64.val; break;
+    case ast_u64:       clone->u64.val = orig->u64.val; break;
+    case ast_f64:       clone->f64.val = orig->f64.val; break;
 
     case ast_symbol:
-    case ast_string: {
+    case ast_string:    {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         mos_string_copy(alloc, &vclone->name, &vorig->name);
         mos_string_copy(alloc, &vclone->original, &vorig->original);
@@ -344,6 +346,11 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
                         list, type);
     }
 
+    case ast_begin_end: {
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
+        return triple(alloc, sym("begin-end"), list, type);
+    } break;
+
     case ast_user_type: {
         u16   n        = node->user_type.n_fields;
         sexp *elements = alloc_malloc(alloc, sizeof(sexp) * n);
@@ -506,6 +513,11 @@ void ast_node_dfs(void *ctx, ast_node *node, ast_op_fun fun) {
         return fun(ctx, node);
     }
 
+    case ast_begin_end: {
+        recur_on_array(node->array.nodes, node->array.n, ctx, fun);
+        return fun(ctx, node);
+    } break;
+
     case ast_user_type: {
         struct ast_user_type *v = ast_node_ut(node);
         recur_on_array(node->array.nodes, node->array.n, ctx, fun);
@@ -619,6 +631,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
     case ast_user_type_set:
@@ -683,6 +696,7 @@ struct ast_array *ast_node_arr(ast_node *node) {
         fatal("ast_node_arr called on non-array variant");
         break;
 
+    case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
     case ast_user_type_set:
@@ -744,6 +758,11 @@ struct ast_named_application *ast_node_named(ast_node *node) {
 struct ast_tuple *ast_node_tuple(ast_node *node) {
     assert(node->tag == ast_tuple);
     return &node->tuple;
+}
+
+struct ast_begin_end *ast_node_begin_end(ast_node *node) {
+    assert(node->tag == ast_begin_end);
+    return &node->begin_end;
 }
 
 struct ast_user_type *ast_node_ut(ast_node *node) {

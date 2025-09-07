@@ -341,10 +341,22 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
 
     } break;
 
-    case ast_lambda_function_application:
-    case ast_named_function_application:  {
+    case ast_lambda_function_application: {
         struct ast_array *arr = ast_node_arr(node);
         for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+        rename_variables(self, node->lambda_application.lambda);
+    } break;
+
+    case ast_named_function_application: {
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+        rename_variables(self, node->named_application.specialized);
+    } break;
+
+    case ast_begin_end: {
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+
     } break;
 
     case ast_user_type_get: {
@@ -475,6 +487,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
         buf[2]                      = &v->value->type;
     } break;
 
+    case ast_begin_end:
     case ast_user_type:
     case ast_eof:
     case ast_nil:
@@ -852,6 +865,11 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_f64:       push(node->type, get_prim(self, type_float)); break;
     case ast_string:    push(node->type, get_prim(self, type_string)); break;
+
+    case ast_begin_end: {
+        struct ast_begin_end const *v = ast_node_begin_end(node);
+        if (v->n_expressions) push(node->type, v->expressions[v->n_expressions - 1]->type);
+    } break;
 
     case ast_user_type: {
 
