@@ -13,7 +13,9 @@ struct tokenizer {
     allocator  *parent;
     allocator  *strings;
     char_cslice input;
-    size_t      pos;
+    char const *file;
+    u32         line;
+    u32         pos;
 
     token_array backtrack;
     char_array  buf;
@@ -21,20 +23,23 @@ struct tokenizer {
 
 // -- statics --
 
-static void tok_error(tokenizer_error *err, tess_error_tag tag, size_t pos) {
-    err->tag = tag;
-    err->pos = pos;
+static void tok_error(tokenizer_error *err, tess_error_tag tag, char const *file, u32 line) {
+    err->tag  = tag;
+    err->file = file;
+    err->line = line;
 }
 
 // -- allocation and deallocation --
 
-tokenizer *tokenizer_create(allocator *alloc, char_cslice input) {
+tokenizer *tokenizer_create(allocator *alloc, char_cslice input, char const *file) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
     self->strings   = arena_create(alloc, 4096);
     self->input     = input;
     self->pos       = input.begin;
+    self->file      = file;
+    self->line      = 0;
 
     self->buf       = (char_array){.alloc = alloc};
     self->backtrack = (token_array){.alloc = alloc};
@@ -129,7 +134,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     size_t start_capture = 0;
 
     // return value, to be copied to *out
-    token res = {0};
+    token res = {.file = self->file};
 
     while (true) {
 
@@ -137,7 +142,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case start: {
             if (self->pos >= end) {
-                tok_error(out_err, tess_err_eof, self->pos);
+                tok_error(out_err, tess_err_eof, self->file, self->line);
                 goto finish;
             }
 
@@ -153,11 +158,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = start_number_sign;
                 continue;
 
-            case '"':  state = start_string; continue;
+            case '"': state = start_string; continue;
 
-            case '\n': state = in_newline; continue;
+            case '\n':
+                state = in_newline;
+                self->line++;
+                continue;
 
-            case '/':  state = forward_slash; continue;
+            case '/': state = forward_slash; continue;
 
             case '.':
                 replace_token(self->strings, &res, tok_dot);
@@ -255,6 +263,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             if (' ' == c || '\n' == c) {
                 replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
+                if ('\n' == c) self->line++;
                 goto finish;
             }
 
@@ -294,6 +303,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '\n':
                 replace_token(self->strings, &res, tok_two_newline);
                 state = stop;
+                self->line++;
                 break;
             case ' ':
                 start_capture = self->pos - 1;
@@ -329,7 +339,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case stop_newline_indent:
             if (self->pos - start_capture > 0xff) {
-                if (out_err) tok_error(out_err, tess_err_indent_too_long, self->pos);
+                if (out_err) tok_error(out_err, tess_err_indent_too_long, self->file, self->line);
                 return 1;
             }
 
@@ -384,7 +394,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                     state = stop_number;
                 } else {
                     --self->pos;
-                    if (out_err) tok_error(out_err, tess_err_invalid_token, self->pos);
+                    if (out_err) tok_error(out_err, tess_err_invalid_token, self->file, self->line);
                     return 1;
                 }
             }
@@ -549,11 +559,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 finish:
 
     if (start == state) {
-        if (out_err) tok_error(out_err, tess_err_eof, self->pos);
+        if (out_err) tok_error(out_err, tess_err_eof, self->file, self->line);
         return 1;
     }
 
     else if (stop == state) {
+        res.line = self->line;
         alloc_copy(out, &res);
         return 0;
 

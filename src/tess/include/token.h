@@ -35,7 +35,10 @@ typedef struct token {
         char *s;
         u8    val;
     };
-    token_tag tag;
+    char const *file;
+    u32         line;
+    token_tag   tag;
+
 } token;
 
 typedef struct {

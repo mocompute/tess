@@ -8,7 +8,8 @@
 
 typedef struct tokenizer_error {
     tess_error_tag tag;
-    size_t         pos;
+    char const    *file;
+    u32            line;
 } tokenizer_error;
 
 typedef struct tokenizer tokenizer;
@@ -18,7 +19,7 @@ typedef struct tokenizer tokenizer;
 // Memory buffers of tokens created by the tokenizer are managed by
 // the tokenizer and are freed by tokenizer_destroy.
 
-nodiscard tokenizer *tokenizer_create(allocator *, char_cslice) mallocfun;
+nodiscard tokenizer *tokenizer_create(allocator *, char_cslice, char const *) mallocfun;
 void                 tokenizer_destroy(tokenizer **);
 
 // -- parsing --

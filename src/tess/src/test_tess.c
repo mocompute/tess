@@ -140,7 +140,7 @@ static int test_tokenizer_basic(void) {
     char const *input = "  (  )  ";
 
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, (char_cslice){.v = input, .end = (u32)strlen(input)});
+    tokenizer  *t     = tokenizer_create(alloc, (char_cslice){.v = input, .end = (u32)strlen(input)}, "");
     if (!t) return ++error;
 
     {
@@ -184,7 +184,7 @@ static int test_tokenizer_string(void) {
     char const *input = " \"abcdef\"  ";
 
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
+    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)), "");
     if (!t) return ++error;
 
     {
@@ -209,7 +209,7 @@ static int test_tokenizer_terminal_static_string(void) {
 
     char const *input = "-";
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)));
+    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)), "");
     if (!t) return ++error;
 
     {

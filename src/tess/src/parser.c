@@ -58,7 +58,7 @@ parser *parser_create(allocator *alloc, char_cslice input) {
     self->verbose      = false;
 
     // tokenizer
-    self->tokenizer = tokenizer_create(alloc, input);
+    self->tokenizer = tokenizer_create(alloc, input, "");
 
     // good_tokens
     self->tokens = (token_array){.alloc = self->parser_arena};
