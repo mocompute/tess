@@ -39,10 +39,93 @@ struct parser {
     int                    indent_level;
 };
 
-static void tokens_push_back(struct parser *, struct token *);
-static void tokens_shrink(struct parser *, u32);
-static int  too_many_arguments(parser *);
-static bool has_error(parser *p);
+typedef int (*parse_fun)(parser *);
+typedef int (*parse_fun_s)(parser *, char const *);
+
+static int           struct_declaration(parser *);
+static int           expression(parser *);
+static int           expression_let(parser *);
+static int           function_argument(parser *);
+static int           grouped_expression(parser *);
+static int           if_then_else(parser *);
+static int           infix_operand(parser *);
+static int           infix_operation(parser *);
+static int           lambda_function(parser *);
+static int           lambda_function_application(parser *);
+static int           toplevel(parser *);
+static int           toplevel_let(parser *);
+static int           tuple_expression(parser *);
+
+static int           result_ast(parser *p, ast_tag tag);
+static int           result_ast_i64(parser *p, i64 val);
+static int           result_ast_u64(parser *p, u64 val);
+static int           result_ast_f64(parser *p, f64 val);
+static int           result_ast_bool(parser *p, bool val);
+static int           result_ast_str(parser *p, ast_tag tag, char const *s);
+static int           result_ast_node(parser *p, ast_node *node);
+
+static bool          is_reserved(char const *s);
+static bool          is_start_of_expression(char const *s);
+static bool          is_arithmetic_operator(char const *s);
+static bool          is_relational_operator(char const *s);
+static bool          is_eof(parser *p);
+
+nodiscard static int eat_newlines(parser *p);
+nodiscard static int next_token(parser *p);
+nodiscard static int a_try(parser *p, parse_fun fun);
+static int           a_try_s(parser *p, parse_fun_s fun, char const *arg);
+nodiscard static int a_try_special(parser *p, parse_fun fun);
+
+static int           a_comma(parser *p);
+static int           a_dot(parser *p);
+static int           a_open_round(parser *p);
+static int           a_close_round(parser *p);
+static int           a_end_of_expression(parser *p);
+static int           a_newline(parser *p);
+static int           a_identifier(parser *p);
+static int           a_type_identifier(parser *p);
+static int           a_identifier_typed(parser *p);
+static int           a_infix_operator(parser *p);
+static int           the_symbol(parser *p, char const *const want);
+static int           a_string(parser *p);
+static int           string_to_number(parser *parser, char const *const in);
+static int           a_number(parser *p);
+static int           a_bool(parser *p);
+static int           a_literal(parser *p);
+static int           a_equal_sign(parser *p);
+static int           a_colon(parser *p);
+static int           a_colon_equal(parser *p);
+static int           a_arrow(parser *p);
+static int           a_nil(parser *p);
+static int           a_end_of_block(parser *p);
+static int           a_field_access(parser *p);
+static int           a_field_setter(parser *p);
+
+static int           struct_declaration(parser *self);
+static int           function_declaration(parser *p);
+static int           lambda_declaration(parser *p);
+static int           function_definition(parser *p);
+static int           function_application(parser *self);
+static int           function_argument(parser *p);
+static int           if_then_else(parser *self);
+static int           infix_operand(parser *p);
+static int           infix_operation(parser *self);
+static int           lambda_function(parser *self);
+static int           simple_declaration(parser *p);
+static int           tuple_expression(parser *self);
+static int           grouped_expression(parser *self);
+static int           expression(parser *self);
+static int           continue_let_in(parser *self, ast_node *name_or_nil);
+static int           toplevel_let(parser *self);
+static int           toplevel(parser *self);
+static int           expression_let(parser *self);
+
+static char         *make_nil_name(parser *p);
+
+static void          tokens_push_back(struct parser *, struct token *);
+static void          tokens_shrink(struct parser *, u32);
+static int           too_many_arguments(parser *);
+static bool          has_error(parser *p);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -87,23 +170,6 @@ void parser_destroy(parser **self) {
 }
 
 // -- parser --
-
-typedef int (*parse_fun)(parser *);
-typedef int (*parse_fun_s)(parser *, char const *);
-
-static int struct_declaration(parser *);
-static int expression(parser *);
-static int expression_let(parser *);
-static int function_argument(parser *);
-static int grouped_expression(parser *);
-static int if_then_else(parser *);
-static int infix_operand(parser *);
-static int infix_operation(parser *);
-static int lambda_function(parser *);
-static int lambda_function_application(parser *);
-static int toplevel(parser *);
-static int toplevel_let(parser *);
-static int tuple_expression(parser *);
 
 // result_* functions construct a new ast_node and add it to the pool.
 // The parser then no longer has a valid copy of the actual ast_node,
@@ -598,6 +664,7 @@ static int a_nil(parser *p) {
 
     if ((0 == a_open_round(p)) && (0 == a_close_round(p))) return result_ast(p, ast_nil);
 
+    // FIXME needs a specific error
     return 1;
 }
 
@@ -628,31 +695,29 @@ static int a_field_access(parser *p) {
     if (a_try(p, a_dot)) return 1;
 
     if (a_try(p, a_identifier)) return 1;
-    ast_node *field = p->result;
+    ast_node                 *field = p->result;
 
-    log(p, "a_field_access looks good");
-    ast_node                 *node = ast_node_create(p->ast_arena, ast_user_type_get);
-    struct ast_user_type_get *v    = ast_node_utg(node);
-    v->struct_name                 = variable;
-    v->field_name                  = field;
+    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_get);
+    struct ast_user_type_get *v     = ast_node_utg(node);
+    v->struct_name                  = variable;
+    v->field_name                   = field;
     return result_ast_node(p, node);
 }
 
 static int a_field_setter(parser *p) {
     if (a_try(p, a_field_access)) return 1;
-    log(p, "a_field_setter got field_access");
+
     ast_node *user_field = p->result;
     if (a_try(p, a_colon_equal)) return 1;
     if (a_try(p, expression)) return 1;
-    ast_node *value = p->result;
+    ast_node                 *value = p->result;
 
-    log(p, "a_field_setter looks good");
-    ast_node                 *node = ast_node_create(p->ast_arena, ast_user_type_set);
-    struct ast_user_type_set *v    = ast_node_uts(node);
-    struct ast_user_type_get *vget = ast_node_utg(user_field);
-    v->struct_name                 = vget->struct_name;
-    v->field_name                  = vget->field_name;
-    v->value                       = value;
+    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_set);
+    struct ast_user_type_set *v     = ast_node_uts(node);
+    struct ast_user_type_get *vget  = ast_node_utg(user_field);
+    v->struct_name                  = vget->struct_name;
+    v->field_name                   = vget->field_name;
+    v->value                        = value;
     return result_ast_node(p, node);
 }
 
