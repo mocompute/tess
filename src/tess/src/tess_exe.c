@@ -161,9 +161,15 @@ int compile(struct state *self) {
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
     if (self->verbose_parse) {
-        if (parser_parse_all_verbose(parser, &nodes)) fatal("error while parsing.");
+        if (parser_parse_all_verbose(parser, &nodes)) {
+            parser_report_errors(parser);
+            fatal("error while parsing.");
+        }
     } else {
-        if (parser_parse_all(parser, &nodes)) fatal("error while parsing.");
+        if (parser_parse_all(parser, &nodes)) {
+            parser_report_errors(parser);
+            fatal("error while parsing.");
+        }
     }
 
     syntax_checker *syntax = syntax_checker_create(default_allocator(), (ast_node_slice)slice_all(nodes));

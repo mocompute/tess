@@ -564,6 +564,7 @@ finish:
     }
 
     else if (stop == state) {
+        res.file = self->file;
         res.line = self->line;
         alloc_copy(out, &res);
         return 0;

@@ -58,7 +58,7 @@ parser *parser_create(allocator *alloc, char_cslice input) {
     self->verbose      = false;
 
     // tokenizer
-    self->tokenizer = tokenizer_create(alloc, input, "");
+    self->tokenizer = tokenizer_create(alloc, input, "(no file)");
 
     // good_tokens
     self->tokens = (token_array){.alloc = self->parser_arena};
@@ -201,7 +201,9 @@ nodiscard static int eat_newlines(parser *p) {
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             log(p, "eat_newlines: tokenizer error: %s", tess_error_tag_to_string(p->tokenizer_error.tag));
-            p->error.tag = tess_err_tokenizer_error;
+            p->error.file = p->tokenizer_error.file;
+            p->error.line = p->tokenizer_error.line;
+            p->error.tag  = tess_err_tokenizer_error;
             return 1;
         }
 
@@ -220,9 +222,15 @@ nodiscard static int next_token(parser *p) {
     while (true) {
 
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
-            p->error.tag = tess_err_tokenizer_error;
+            p->error.file = p->tokenizer_error.file;
+            p->error.line = p->tokenizer_error.line;
+            p->error.tag  = tess_err_tokenizer_error;
             return 1;
         }
+
+        // always update file/line
+        p->error.file = p->token.file;
+        p->error.line = p->token.line;
 
         if (tok_comment == p->token.tag) continue;
 
@@ -1295,7 +1303,8 @@ static void tokens_shrink(struct parser *p, u32 n) {
 void parser_report_errors(parser *self) {
     if (tess_err_ok == self->error.tag) return;
 
-    fprintf(stderr, "parse error: %s\n", tess_error_tag_to_string(self->error.tag));
+    fprintf(stderr, "error: %s:%u: %s\n", self->error.file, self->error.line,
+            tess_error_tag_to_string(self->error.tag));
 }
 static int too_many_arguments(parser *self) {
     self->error.tag = tess_err_too_many_arguments;
