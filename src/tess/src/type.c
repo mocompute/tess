@@ -316,7 +316,7 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     }
 }
 
-tl_type *tl_type_find_field_type(tl_type const *user_type, char const *field_name) {
+tl_type *tl_type_find_user_field_type(tl_type const *user_type, char const *field_name) {
     struct tlt_user           *v          = tl_type_user((tl_type *)user_type);
     struct tlt_labelled_tuple *lt         = tl_type_lt(v->labelled_tuple);
     tl_type                   *field_type = null;
