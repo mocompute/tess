@@ -207,8 +207,7 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 
     u32 const   n_fields = node->user_type_def.n_fields;
 
-    out_put_start(self, "");
-    out_put_fmt(self, "struct %s {\n", name);
+    out_put_start_fmt(self, "struct %s {\n", name);
 
     self->indent_level++;
     for (u32 i = 0; i < n_fields; ++i) {
@@ -385,8 +384,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     out_put(self, "\n");
 
-    out_put_start(self, "");
-    out_put_fmt(self, "/* %s */\n", ast_tag_to_string(node->tag));
+    out_put_start_fmt(self, "/* %s */\n", ast_tag_to_string(node->tag));
 
     out_put_start(self, "");
     a_result_type_of(self, node->type);
@@ -395,33 +393,26 @@ static int a_eval(transpiler *self, ast_node const *node) {
     switch (node->tag) {
     case ast_eof:
     case ast_nil:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = NULL;\n", var);
+        out_put_start_fmt(self, "%s = NULL;\n", var);
         break;
     case ast_symbol:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
+        out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
         break;
     case ast_string:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
+        out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
         break;
     case ast_i64:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
+        out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
         break;
     case ast_u64:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val);
+        out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val);
         break;
     case ast_f64:
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %f;\n", var, node->f64.val);
+        out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val);
         break;
     case ast_bool:
-        out_put_start(self, "");
-        if (node->bool_.val) out_put_fmt(self, "%s = true;\n", var);
-        else out_put_fmt(self, "%s = false;\n", var);
+        if (node->bool_.val) out_put_start_fmt(self, "%s = true;\n", var);
+        else out_put_start_fmt(self, "%s = false;\n", var);
         break;
 
     case ast_begin_end: {
@@ -453,8 +444,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
             if (a_eval(self, v->fields[i])) return 1;
             char *res = self->results.v[--self->results.size];
             out_put(self, "\n");
-            out_put_start(self, "");
-            out_put_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
+            out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
         }
     } break;
 
@@ -463,8 +453,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_field_access(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
 
     } break;
 
@@ -473,8 +462,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_field_setter(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
 
     } break;
 
@@ -482,8 +470,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_infix(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
     } break;
 
     case ast_tuple:
@@ -494,8 +481,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_let_in(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
 
     } break;
 
@@ -503,8 +489,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_let(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
     } break;
 
     case ast_if_then_else:
@@ -517,8 +502,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (a_fun_apply(self, node)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "%s = %s;\n", var, res);
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
     } break;
 
     case ast_user_type_definition: break;
@@ -553,8 +537,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     a_result_type_of(self, node->type);
     out_put_fmt(self, " %s;\n", var);
 
-    out_put_start(self, "");
-    out_put_fmt(self, "%s = %s(", var, name);
+    out_put_start_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
         char *arg = self->results.v[--self->results.size];
@@ -583,8 +566,7 @@ static int a_main(transpiler *self, ast_node const *node) {
         char *var = self->results.v[--self->results.size];
 
         out_put(self, "\n");
-        out_put_start(self, "");
-        out_put_fmt(self, "return (int) %s;", var);
+        out_put_start_fmt(self, "return (int) %s;", var);
 
         self->indent_level--;
 
@@ -648,8 +630,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     if (a_eval(self, v->body)) return 1;
 
     char *body = self->results.v[--self->results.size];
-    out_put_start(self, "");
-    out_put_fmt(self, "return %s;", body);
+    out_put_start_fmt(self, "return %s;", body);
 
     self->indent_level--;
     out_put(self, "\n}\n\n");
