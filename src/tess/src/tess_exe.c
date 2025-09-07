@@ -163,12 +163,12 @@ int compile(struct state *self) {
     if (self->verbose_parse) {
         if (parser_parse_all_verbose(parser, &nodes)) {
             parser_report_errors(parser);
-            fatal("error while parsing.");
+            return ++error;
         }
     } else {
         if (parser_parse_all(parser, &nodes)) {
             parser_report_errors(parser);
-            fatal("error while parsing.");
+            return ++error;
         }
     }
 

@@ -16,9 +16,20 @@
     /* parser */                                                                                           \
     X(tess_err_unfinished_let, "unfinished_let")                                                           \
     X(tess_err_unfinished_expression, "unfinished_expression")                                             \
+    X(tess_err_unfinished_struct, "unfinished_struct")                                                     \
     X(tess_err_unexpected_error, "unexpected_error")                                                       \
     X(tess_err_bad_indent, "bad_indent")                                                                   \
+    X(tess_err_expected_struct_name, "expected_struct_name")                                               \
     X(tess_err_expected_argument, "expected_argument")                                                     \
+    X(tess_err_expected_body, "expected_body")                                                             \
+    X(tess_err_expected_expression, "expected_expression")                                                 \
+    X(tess_err_expected_keyword_then, "expected_keyword_then")                                             \
+    X(tess_err_expected_keyword_else, "expected_keyword_else")                                             \
+    X(tess_err_expected_value, "expected_value")                                                           \
+    X(tess_err_expected_function_definition, "expected_function_definition")                               \
+    X(tess_err_expected_if_condition, "expected_if_condition")                                             \
+    X(tess_err_expected_if_then_arm, "expected_if_then_arm")                                               \
+    X(tess_err_expected_if_else_arm, "expected_if_else_arm")                                               \
     X(tess_err_expected_lambda, "expected_lambda")                                                         \
     X(tess_err_expected_symbol, "expected_symbol")                                                         \
     X(tess_err_expected_string, "expected_string")                                                         \

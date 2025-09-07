@@ -43,6 +43,7 @@ struct parser {
 static void tokens_push_back(struct parser *, struct token *);
 static void tokens_shrink(struct parser *, u32);
 static int  too_many_arguments(parser *);
+static bool has_error(parser *p);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -93,6 +94,7 @@ typedef int (*parse_fun_s)(parser *, char const *);
 
 static int struct_declaration(parser *);
 static int expression(parser *);
+static int expression_let(parser *);
 static int function_argument(parser *);
 static int grouped_expression(parser *);
 static int if_then_else(parser *);
@@ -102,6 +104,7 @@ static int lambda_function(parser *);
 static int lambda_function_application(parser *);
 static int let_in_form(parser *);
 static int let_form(parser *);
+static int toplevel_let(parser *);
 static int tuple_expression(parser *);
 
 // result_* functions construct a new ast_node and add it to the pool.
@@ -418,6 +421,7 @@ static int a_newline(parser *p) {
 }
 
 static int a_identifier(parser *p) {
+    if (eat_newlines(p)) return 1; // FIXME I added this, is it ok?
     if (next_token(p)) return 1;
 
     if (tok_symbol != p->token.tag || 0 == strlen(p->token.s) || is_reserved(p->token.s)) goto error;
@@ -655,68 +659,103 @@ static int a_field_setter(parser *p) {
     return result_ast_node(p, node);
 }
 
-static int struct_declaration(parser *p) {
+static int struct_declaration(parser *self) {
     //     struct name = ... end
-    if (a_try_s(p, the_symbol, "struct")) return 1;
+    if (a_try_s(self, the_symbol, "struct")) return 1;
+    log(self, "struct begin");
+    self->indent_level++;
 
-    if (a_try(p, a_identifier)) return 1;
-    ast_node      *name        = p->result;
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tess_err_expected_struct_name;
+        goto error;
+    }
 
-    ast_node_array field_names = {.alloc = p->ast_arena};
-    ast_node_array field_types = {.alloc = p->ast_arena};
+    ast_node      *name        = self->result;
 
-    if (a_try(p, a_equal_sign)) return 1;
+    ast_node_array field_names = {.alloc = self->ast_arena};
+    ast_node_array field_types = {.alloc = self->ast_arena};
+
+    if (a_try(self, a_equal_sign)) {
+        self->error.tag = tess_err_expected_equal_sign;
+        goto error;
+    }
 
     // check for empty struct
-    if (0 == a_try(p, a_end_of_block)) {
-        ast_node *node           = ast_node_create(p->ast_arena, ast_user_type_definition);
+    if (0 == a_try(self, a_end_of_block)) {
+        ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
         node->user_type_def.name = name;
-        return result_ast_node(p, node);
+        result_ast_node(self, node);
+        goto success;
     }
 
     // accumulate names and types until end of block is seen
     while (true) {
-        if (eat_newlines(p)) return 1;
+        if (eat_newlines(self)) {
+            self->error.tag = tess_err_unfinished_struct;
+            goto error;
+        }
 
-        if (0 == a_try(p, a_identifier)) {
-            ast_node *field_name = p->result;
-            log(p, "struct_declaration: field %s", ast_node_to_string(p->debug_arena, field_name));
+        if (0 == a_try(self, a_identifier)) {
+            ast_node *field_name = self->result;
+            log(self, "struct_declaration: field %s", ast_node_to_string(self->debug_arena, field_name));
 
-            if (a_try(p, a_colon)) return 1;
+            if (a_try(self, a_colon)) {
+                self->error.tag = tess_err_expected_colon;
+                goto error;
+            }
 
-            if (a_try(p, a_type_identifier)) return 1;
-            ast_node *type = p->result;
-            log(p, "struct_declaration: type %s", ast_node_to_string(p->debug_arena, type));
+            if (a_try(self, a_type_identifier)) {
+                self->error.tag = tess_err_expected_type;
+                goto error;
+            }
+            ast_node *type = self->result;
+            log(self, "struct_declaration: type %s", ast_node_to_string(self->debug_arena, type));
 
             array_push(field_names, &field_name);
             array_push(field_types, &type);
 
-            if (a_try_special(p, a_newline)) return 1; // expect ; or newline after field
+            if (a_try_special(self, a_newline)) {
+                self->error.tag = tess_err_expected_newline;
+                goto error; // expect ; or newline after field
+            }
 
             continue;
         }
 
-        if (0 == a_try(p, a_end_of_block)) {
+        if (0 == a_try(self, a_end_of_block)) {
 
-            ast_node *node           = ast_node_create(p->ast_arena, ast_user_type_definition);
+            ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
             node->user_type_def.name = name;
 
             array_shrink(field_names);
             node->user_type_def.field_names = field_names.v;
 
-            if (field_names.size > 0xff) return too_many_arguments(p);
+            if (field_names.size > 0xff) {
+                too_many_arguments(self);
+                goto error;
+            }
+
             node->user_type_def.n_fields = (u8)field_names.size;
 
             array_shrink(field_types);
             node->user_type_def.field_annotations = field_types.v;
 
-            return result_ast_node(p, node);
+            result_ast_node(self, node);
+            goto success;
         }
 
         // anything else is an error
-        p->error.tag = tess_err_expected_end_of_block;
+        self->error.tag = tess_err_expected_end_of_block;
         return 1;
     }
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
 }
 
 static int function_declaration(parser *p) {
@@ -884,72 +923,101 @@ cleanup:
     return 0;
 }
 
-static int if_then_else(parser *p) {
+static int if_then_else(parser *self) {
 
     ast_node *cond, *yes, *no;
 
-    if (a_try_s(p, the_symbol, "if")) return 1;
-    if (expression(p)) return 1;
-    cond = p->result;
+    if (a_try_s(self, the_symbol, "if")) return 1;
 
-    if (a_try_s(p, the_symbol, "then")) return 1;
-    if (expression(p)) return 1;
-    yes = p->result;
+    log(self, "begin if-then-else");
+    self->indent_level++;
 
-    if (a_try_s(p, the_symbol, "else")) return 1;
-    if (expression(p)) return 1;
-    no                           = p->result;
+    if (expression(self)) {
+        self->error.tag = tess_err_expected_if_condition;
+        goto error;
+    }
+    cond = self->result;
 
-    ast_node *node               = ast_node_create(p->ast_arena, ast_if_then_else);
+    if (a_try_s(self, the_symbol, "then")) {
+        self->error.tag = tess_err_expected_keyword_then;
+        goto error;
+    }
+
+    if (expression(self)) {
+        self->error.tag = tess_err_expected_if_then_arm;
+        goto error;
+    }
+    yes = self->result;
+
+    if (a_try_s(self, the_symbol, "else")) {
+        self->error.tag = tess_err_expected_keyword_else;
+        goto error;
+    }
+
+    if (expression(self)) {
+        self->error.tag = tess_err_expected_if_else_arm;
+        goto error;
+    }
+    no                           = self->result;
+
+    ast_node *node               = ast_node_create(self->ast_arena, ast_if_then_else);
     node->if_then_else.condition = cond;
     node->if_then_else.yes       = yes;
     node->if_then_else.no        = no;
-    return result_ast_node(p, node);
+    result_ast_node(self, node);
+    goto success;
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
 }
 
 static int infix_operand(parser *p) {
     return a_try(p, function_argument);
 }
 
-static int infix_operation(parser *p) {
+static int infix_operation(parser *self) {
     // a * b
 
-    log(p, "try infix_operation");
+    if (infix_operand(self)) return 1;
+    ast_node *const lhs = self->result;
 
-    if (infix_operand(p)) {
-        log(p, "infix_operation: no first operand");
-        return 1;
-    }
-    ast_node *const lhs = p->result;
-    log(p, "infix_operation: got lhs: %s", ast_node_to_string(p->debug_arena, lhs));
+    if (a_try(self, a_infix_operator)) return 1;
+    ast_node *op_node = self->result;
 
-    if (a_try(p, a_infix_operator)) {
-        log(p, "infix_operation: no operator");
-        return 1;
-    }
-    ast_node    *op_node = p->result;
+    log(self, "begin infix");
+    self->indent_level++;
 
     ast_operator op;
     if (string_to_ast_operator(ast_node_name_string(op_node), &op)) {
-        log(p, "infix_operation: string conversion failed");
-        return 1;
-    }
-    log(p, "infix_operation: got operator");
-
-    if (infix_operand(p)) {
-        log(p, "infix_operation: no operand");
-        return 1;
+        self->error.tag = tess_err_expected_operator;
+        goto error;
     }
 
-    ast_node *const rhs = p->result;
-    log(p, "infix_operation: got rhs");
+    if (infix_operand(self)) {
+        self->error.tag = tess_err_expected_infix_operand;
+        goto error;
+    }
 
-    ast_node *node    = ast_node_create(p->ast_arena, ast_infix);
-    node->infix.left  = lhs;
-    node->infix.right = rhs;
-    node->infix.op    = op;
+    ast_node *const rhs  = self->result;
 
-    return result_ast_node(p, node);
+    ast_node       *node = ast_node_create(self->ast_arena, ast_infix);
+    node->infix.left     = lhs;
+    node->infix.right    = rhs;
+    node->infix.op       = op;
+
+    result_ast_node(self, node);
+
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
 }
 
 static int lambda_function(parser *p) {
@@ -979,7 +1047,7 @@ static int lambda_function_application(parser *p) {
 
     if (a_try(p, grouped_expression)) return 1;
     // a lambda application must be a grouped lambda function, i.e.
-    // surrouneded by round braces
+    // surrounded by round braces
     ast_node *lambda = p->result;
 
     if (lambda->tag != ast_lambda_function) {
@@ -1115,43 +1183,51 @@ static int let_form(parser *p) {
     return result_ast_node(p, node);
 }
 
-static int tuple_expression(parser *p) {
+static int tuple_expression(parser *self) {
 
-    if (a_try(p, a_open_round)) return 1;
+    if (a_try(self, a_open_round)) return 1;
 
-    ast_node_array elements = {.alloc = p->parser_arena};
+    ast_node_array elements = {.alloc = self->parser_arena}; // will be moved to node on success
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
-    if (a_try(p, expression)) return 1;
+    if (a_try(self, expression)) return 1;
 
-    array_push(elements, &p->result);
+    array_push(elements, &self->result);
 
-    if (a_comma(p)) goto cleanup;
+    if (a_comma(self)) goto cleanup;
+
+    log(self, "begin tuple");
 
     int count = 0;
 
     while (true) {
 
-        if (0 == a_try(p, a_close_round)) {
-            ast_node *node = ast_node_create(p->ast_arena, ast_tuple);
+        if (0 == a_try(self, a_close_round)) {
+            ast_node *node = ast_node_create(self->ast_arena, ast_tuple);
 
             array_shrink(elements);
+            node->array.n     = (u8)elements.size;
             node->array.nodes = elements.v;
-            if (elements.size > 0xff) return too_many_arguments(p);
-            node->array.n = (u8)elements.size;
+            if (elements.size > 0xff) {
+                too_many_arguments(self);
+                goto cleanup;
+            }
 
-            return result_ast_node(p, node);
+            return result_ast_node(self, node);
         }
 
         // comma required if this is not the first time through the loop
         if (count++ > 0)
-            if (a_try(p, a_comma)) goto cleanup;
+            if (a_try(self, a_comma)) {
+                self->error.tag = tess_err_expected_comma;
+                goto cleanup;
+            }
 
         // expression
-        if (0 == a_try(p, expression)) {
-            array_push(elements, &p->result);
+        if (0 == a_try(self, expression)) {
+            array_push(elements, &self->result);
         }
 
         // loop to check for close round, or else
@@ -1162,95 +1238,214 @@ cleanup:
     return 1;
 }
 
-static int grouped_expression(parser *p) {
-    if (a_try(p, a_open_round)) return 1;
+static int grouped_expression(parser *self) {
+    if (a_try(self, a_open_round)) return 1;
 
-    if (a_try(p, expression)) return 1;
-    ast_node *const out = p->result;
+    log(self, "begin grouped expression");
+    self->indent_level++;
 
-    if (a_try(p, a_close_round)) return 1;
-
-    // replace parser result with expression node
-    p->result = out;
-    return 0;
-}
-
-static int expression(parser *p) {
-
-    if (eat_newlines(p)) {
-        log(p, "expression: eat_newlines error");
-        return 1;
+    if (a_try(self, expression)) {
+        self->error.tag = tess_err_expected_expression;
+        goto error;
     }
 
-    p->indent_level++;
+    ast_node *const out = self->result;
 
-    log(p, "expression: try lambda");
-    if (0 == a_try(p, &lambda_function_application)) goto cleanup;
+    if (a_try(self, a_close_round)) {
+        self->error.tag = tess_err_expected_close_round;
+        goto error;
+    }
 
-    log(p, "expression: try infix, n_tokens = %u", p->tokens.size);
-    if (0 == a_try(p, &infix_operation)) goto cleanup;
-    log(p, "expression: not infix, n_tokens = %u", p->tokens.size);
+    // replace parser result with expression node
+    self->result = out;
+    return 0;
 
-    log(p, "expression: try tuple");
-    if (0 == a_try(p, &tuple_expression)) goto cleanup;
+error:
+    self->indent_level--;
+    return 1;
+}
 
-    log(p, "expression: try grouped");
-    if (0 == a_try(p, &grouped_expression)) goto cleanup;
+static int expression(parser *self) {
 
-    log(p, "expression: try nil");
-    if (0 == a_try(p, &a_nil)) goto cleanup;
+    if (eat_newlines(self)) return 1;
 
-    log(p, "expression: try lambda");
-    if (0 == a_try(p, &lambda_function)) goto cleanup;
+    self->indent_level++;
 
-    log(p, "expression: try let_in_form");
-    if (0 == a_try(p, &let_in_form)) goto cleanup;
+    if (0 == a_try(self, &expression_let)) goto cleanup;
+    if (has_error(self)) goto cleanup;
 
-    log(p, "expression: try let_form");
-    if (0 == a_try(p, &let_form)) goto cleanup;
+    if (0 == a_try(self, &infix_operation)) goto cleanup;
+    if (has_error(self)) goto cleanup;
 
-    log(p, "expression: try if_then");
-    if (0 == a_try(p, &if_then_else)) goto cleanup;
+    if (0 == a_try(self, &tuple_expression)) goto cleanup;
+    if (has_error(self)) goto cleanup;
 
-    log(p, "expression: function_application");
-    if (0 == a_try(p, &function_application)) goto cleanup;
+    if (0 == a_try(self, &if_then_else)) goto cleanup;
+    if (has_error(self)) goto cleanup;
 
-    log(p, "expression: try field setter");
-    if (0 == a_try(p, &a_field_setter)) goto cleanup; // before field_access
+    if (0 == a_try(self, &lambda_function_application)) goto cleanup;
+    // FIXME
 
-    log(p, "expression: try field access");
-    if (0 == a_try(p, &a_field_access)) goto cleanup;
+    // FIXME this logic will require a grouped expression at this
+    // point in the parse, which doesn't make sense.
+    if (0 == a_try(self, &grouped_expression)) goto cleanup;
+    if (has_error(self)) goto cleanup;
 
-    log(p, "expression: try identifier");
-    if (0 == a_try(p, &a_identifier)) goto cleanup;
+    log(self, "expression: try nil");
+    if (0 == a_try(self, &a_nil)) goto cleanup;
 
-    log(p, "expression: try number");
-    if (0 == a_try(p, &a_number)) goto cleanup;
+    log(self, "expression: try lambda");
+    if (0 == a_try(self, &lambda_function)) goto cleanup;
 
-    log(p, "expression: try bool");
-    if (0 == a_try(p, &a_bool)) goto cleanup;
+    log(self, "expression: function_application");
+    if (0 == a_try(self, &function_application)) goto cleanup;
 
-    log(p, "expression: try end_of_expression");
-    if (0 == a_try(p, &a_end_of_expression)) goto cleanup;
+    log(self, "expression: try field setter");
+    if (0 == a_try(self, &a_field_setter)) goto cleanup; // before field_access
 
-    p->indent_level--;
+    log(self, "expression: try field access");
+    if (0 == a_try(self, &a_field_access)) goto cleanup;
+
+    log(self, "expression: try identifier");
+    if (0 == a_try(self, &a_identifier)) goto cleanup;
+
+    log(self, "expression: try number");
+    if (0 == a_try(self, &a_number)) goto cleanup;
+
+    log(self, "expression: try bool");
+    if (0 == a_try(self, &a_bool)) goto cleanup;
+
+    log(self, "expression: try end_of_expression");
+    if (0 == a_try(self, &a_end_of_expression)) goto cleanup;
+
+    self->indent_level--;
     return 1;
 
 cleanup:
-    p->indent_level--;
+    self->indent_level--;
     return 0;
+
+error:
+    self->indent_level--;
+    return 1;
 }
 
-static int toplevel(parser *p) {
-    if (eat_newlines(p)) return 1;
+static int continue_let_in(parser *self, ast_node *name_or_nil) {
+    // assumes caller has incremented indent_level
 
-    if (0 == a_try(p, struct_declaration)) return 0;
+    log(self, "begin let-in declaration");
 
-    log(p, "toplevel: not a struct");
-    if (0 == a_try(p, expression)) return 0;
+    if (a_try(self, expression)) {
+        self->error.tag = tess_err_expected_value;
+        goto error;
+    }
+    ast_node *defn = self->result;
 
-    log(p, "toplevel: not an expression");
+    // eat the optional 'in' token if it's present
+    a_try_s(self, the_symbol, "in");
 
+    if (a_try(self, expression)) {
+        self->error.tag = tess_err_expected_body;
+        goto error;
+    }
+    ast_node *body = self->result;
+
+    if (a_try(self, a_end_of_block)) {
+        self->error.tag = tess_err_expected_end_of_block;
+        goto error;
+    }
+    ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
+    node->let_in.name  = name_or_nil;
+    node->let_in.value = defn;
+    node->let_in.body  = body;
+
+    result_ast_node(self, node);
+    goto success;
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
+}
+
+static int toplevel_let(parser *self) {
+    if (a_try_s(self, the_symbol, "let")) return 1;
+    log(self, "begin let");
+
+    self->indent_level++;
+
+    if (0 == a_try(self, function_declaration)) {
+        ast_node *decl = self->result;
+        log(self, "begin let function declaration");
+
+        if (a_try(self, function_definition)) {
+            self->error.tag = tess_err_expected_function_definition;
+            goto error;
+        }
+        ast_node *defn = self->result;
+        ast_node *node = ast_node_create(self->ast_arena, ast_let);
+
+        // move declaration into new node
+        mos_string_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
+        node->let.body = defn;
+
+        // move the vector from the function_declaration node to the new ast node
+        node->array.nodes = decl->array.nodes;
+        node->array.n     = decl->array.n;
+        decl->array.nodes = null;
+        decl->array.n     = 0;
+
+        result_ast_node(self, node);
+        goto success;
+    }
+
+    if (0 == a_try(self, simple_declaration)) {
+        ast_node *sym_or_nil = self->result;
+        return continue_let_in(self, sym_or_nil);
+    }
+
+success:
+    self->indent_level--;
+    return 0;
+
+error:
+    self->indent_level--;
+    return 1;
+}
+
+static int toplevel(parser *self) {
+    if (eat_newlines(self)) return 1;
+
+    self->error.tag = tess_err_ok;
+
+    if (0 == a_try(self, struct_declaration)) return 0;
+    if (has_error(self)) return 1;
+
+    if (0 == a_try(self, toplevel_let)) return 0;
+    if (has_error(self)) return 1;
+
+    if (0 == a_try(self, expression)) return 0;
+    if (has_error(self)) return 1;
+
+    return 1;
+}
+
+static int expression_let(parser *self) {
+    // allows let-in but not let expressions
+    if (a_try_s(self, the_symbol, "let")) return 1;
+    log(self, "begin let expression");
+
+    self->indent_level++;
+
+    if (0 == a_try(self, simple_declaration)) {
+        ast_node *sym_or_nil = self->result;
+        return continue_let_in(self, sym_or_nil);
+    }
+
+    self->indent_level--;
     return 1;
 }
 
@@ -1309,6 +1504,10 @@ void parser_report_errors(parser *self) {
 static int too_many_arguments(parser *self) {
     self->error.tag = tess_err_too_many_arguments;
     return 1;
+}
+
+static bool has_error(parser *self) {
+    return self->error.tag != tess_err_ok;
 }
 
 void log(struct parser *self, char const *restrict fmt, ...) {
