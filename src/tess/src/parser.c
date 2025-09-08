@@ -333,7 +333,6 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     if (fun(p, arg)) {
         if (p->tokens.size > save_toks) {
             char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->transient, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
@@ -355,7 +354,6 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
     if (res) {
         if (p->tokens.size > save_toks) {
             char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
             alloc_free(p->transient, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
@@ -644,8 +642,6 @@ static int a_labelled_tuple(parser *self) {
             node->array.n     = (u8)assignments.size;
             node->array.nodes = assignments.v;
 
-            log(self, "labelled_tuple: %s", ast_node_to_string(self->transient, node));
-
             return result_ast_node(self, node);
         }
 
@@ -732,8 +728,6 @@ static int a_assignment(parser *self) {
     ast_node *node         = ast_node_create(self->ast_arena, ast_assignment);
     node->assignment.name  = name;
     node->assignment.value = value;
-    log(self, "assignment: %s = %s", ast_node_to_string(self->transient, name),
-        ast_node_to_string(self->transient, value));
     return result_ast_node(self, node);
 }
 

@@ -284,7 +284,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_string: return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
     case ast_assignment:
-        return triple(alloc, recur(node->assignment.name), sym("="), recur(node->assignment.value));
+        return quad(alloc, recur(node->assignment.name), sym("="), recur(node->assignment.value), type);
 
     case ast_infix:
         return penta(alloc, sym("infix"), sym(ast_operator_to_string(node->infix.op)),
