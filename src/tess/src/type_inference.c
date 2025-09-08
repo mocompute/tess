@@ -1348,12 +1348,6 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     for (u16 i = 0; i < out->let.n_parameters; ++i)
         out->let.parameters[i] = ast_node_create_sym(self->type_arena, lt->names.v[i]);
 
-    // we can use lt->fields as the elements of parameters' tuple type
-    tl_type *left = tl_type_create_tuple(self->type_arena, lt->fields);
-
-    // make the arrow type
-    out->let.arrow = tl_type_create_arrow(self->type_arena, left, user_type);
-
     // the body is a single node with the type literal
     out->let.body = ast_node_create(self->type_arena, ast_user_type);
 
