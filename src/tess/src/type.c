@@ -1,5 +1,6 @@
 #include "type.h"
 #include "alloc.h"
+#include "hash.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -137,6 +138,64 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
         return vleft->val < vright->val ? -1 : 1;
     }
     }
+}
+
+u32 tl_type_hash(tl_type *self) {
+    u32 hash = hash32((byte *)&self->tag, sizeof self->tag);
+
+    // NOTE: Uses reference equality for subtypes, so it is possible
+    // that structurally-equal subtypes may be assigned different
+    // hashes.
+
+    switch (self->tag) {
+
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_any:
+        //
+        break;
+
+    case type_tuple: {
+        struct tlt_tuple *v = tl_type_tup(self);
+        for (u32 i = 0; i < v->elements.size; ++i)
+            hash = hash32_combine(hash, (byte *)&v->elements.v[i], sizeof v->elements.v[0]);
+
+    } break;
+
+        //
+    case type_labelled_tuple: {
+        struct tlt_labelled_tuple *v = tl_type_lt(self);
+
+        for (u32 i = 0; i < v->fields.size; ++i)
+            hash = hash32_combine(hash, (byte *)&v->fields.v[i], sizeof v->fields.v[0]);
+        for (u32 i = 0; i < v->names.size; ++i)
+            hash = hash32_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
+
+    } break;
+
+    case type_arrow: {
+        struct tlt_arrow *v = tl_type_arrow(self);
+        hash                = hash32_combine(hash, (byte *)&v->left, sizeof(tl_type *));
+        hash                = hash32_combine(hash, (byte *)&v->right, sizeof(tl_type *));
+    } break;
+
+    case type_user: {
+        struct tlt_user *v = tl_type_user(self);
+        hash               = hash32_combine(hash, (byte *)v->name, strlen(v->name));
+
+        u32 lt_hash        = tl_type_hash(v->labelled_tuple);
+        hash               = hash32_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
+    } break;
+
+    case type_type_var: {
+        hash = hash32_combine(hash, (byte *)&self->type_var.val, sizeof self->type_var.val);
+    }; break;
+    }
+
+    return hash;
 }
 
 int tl_type_snprint(char *buf, int sz, tl_type const *self) {

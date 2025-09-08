@@ -29,3 +29,15 @@ u32 hash32(byte const *data, size_t len) {
 
     return hash;
 }
+
+u32 hash32_combine(u32 seed, byte const *data, size_t len) {
+
+    u32 hash = seed;
+
+    for (size_t i = 0; i < len; ++i) {
+        hash ^= (size_t)data[i];
+        hash *= 0x01000193;
+    }
+
+    return hash;
+}

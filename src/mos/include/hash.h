@@ -10,5 +10,6 @@
 
 u64 hash64(byte const *, size_t) purefun;
 u32 hash32(byte const *, size_t) purefun;
+u32 hash32_combine(u32, byte const *, size_t) purefun;
 
 #endif
