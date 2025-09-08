@@ -1273,6 +1273,7 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     ast_node *special = ast_node_clone(alloc, src);
     if (null == special) fatal("specialize_node: clone failed.");
 
+    ast_node_set_is_specialized(special);
     special->let.specialized_name = mos_string_init(
       ctx->ti->type_arena, make_specialized_name(ctx->ti, mos_string_str(&special->let.name)));
 
@@ -1373,6 +1374,7 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     ast_node *out             = ast_node_create(self->type_arena, ast_let);
     out->let.name             = mos_string_init(self->type_arena, name);
     out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
+    ast_node_set_is_specialized(out);
 
     // make params array from user_type's labelled_tuple
     struct tlt_labelled_tuple *lt = tl_type_lt(v->labelled_tuple);
@@ -1449,6 +1451,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     out->type                 = *type_registry_find_name(self->type_registry, "nil");
     out->let.name             = mos_string_init(a, generated_name);
     out->let.specialized_name = mos_string_init(a, generated_name);
+    ast_node_set_is_specialized(out);
+    ast_node_set_is_tuple_constructor(out);
 
     if (ast_labelled_tuple == node->tag) {
         // make params array from labelled_tuple

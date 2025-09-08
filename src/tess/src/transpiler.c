@@ -587,8 +587,8 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     // don't emit generic template functions
-    if (mos_string_empty(&v->specialized_name)) {
-        log(self, "skipping '%s' because it has an empty name", mos_string_str(&v->name));
+    if (!ast_node_is_specialized(node)) {
+        log(self, "skipping '%s' because it is not specialized", mos_string_str(&v->name));
         return 0;
     }
 

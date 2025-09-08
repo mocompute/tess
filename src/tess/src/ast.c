@@ -6,6 +6,7 @@
 #include "mos_string.h"
 #include "sexp.h"
 #include "type.h"
+#include "util.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -830,4 +831,24 @@ struct ast_user_type_set *ast_node_uts(ast_node *node) {
 struct ast_user_type_def *ast_node_utd(ast_node *node) {
     assert(node->tag == ast_user_type_definition);
     return &node->user_type_def;
+}
+
+//
+
+bool ast_node_is_specialized(ast_node const *node) {
+    return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_SPECIALIZED));
+}
+
+bool ast_node_is_tuple_constructor(ast_node const *node) {
+    return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS));
+}
+
+void ast_node_set_is_specialized(ast_node *node) {
+    assert(ast_let == node->tag);
+    SET_BIT(node->let.flags, AST_LET_FLAG_SPECIALIZED);
+}
+
+void ast_node_set_is_tuple_constructor(ast_node *node) {
+    assert(ast_let == node->tag);
+    SET_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
 }
