@@ -1,37 +1,45 @@
 #ifndef TESS_AST_TAGS_H
 #define TESS_AST_TAGS_H
 
+#include "types.h"
+#include "util.h"
+
 #ifndef MOS_TAG_NAME
 #define MOS_TAG_NAME(name, str) name,
 #endif
 
-#define TESS_AST_TAGS(X)                                                                                   \
-    X(ast_eof, "eof")                                                                                      \
-    X(ast_nil, "nil")                                                                                      \
-    X(ast_bool, "bool")                                                                                    \
-    X(ast_symbol, "symbol")                                                                                \
-    X(ast_i64, "i64")                                                                                      \
-    X(ast_u64, "u64")                                                                                      \
-    X(ast_f64, "f64")                                                                                      \
-    X(ast_string, "string")                                                                                \
-    X(ast_infix, "infix")                                                                                  \
-    X(ast_tuple, "tuple")                                                                                  \
-    X(ast_labelled_tuple, "labelled_tuple")                                                                \
-    X(ast_let_in, "let_in")                                                                                \
-    X(ast_let, "let")                                                                                      \
-    X(ast_if_then_else, "if_then_else")                                                                    \
-    X(ast_lambda_function, "lambda_function")                                                              \
-    X(ast_function_declaration, "function_declaration")                                                    \
-    X(ast_lambda_declaration, "lambda_declaration")                                                        \
-    X(ast_lambda_function_application, "lambda_function_application")                                      \
-    X(ast_named_function_application, "named_function_application")                                        \
-    X(ast_begin_end, "begin_end")                                                                          \
-    X(ast_user_type, "user_type")                                                                          \
-    X(ast_user_type_get, "user_type_get")                                                                  \
-    X(ast_user_type_set, "user_type_set")                                                                  \
-    X(ast_user_type_definition, "user_type_definition")
+#define TL_AST_BIT_ARRAY     15
+#define TL_AST_HAS_ARRAY(x)  TEST_BIT((x), TL_AST_BIT_ARRAY)
+#define TL_AST_CLEAR_BITS(x) GET_FIELD((x), 0, TL_AST_BIT_ARRAY - 1)
 
-typedef enum ast_tag { TESS_AST_TAGS(MOS_TAG_NAME) } ast_tag;
+typedef enum ast_tag : u16 {
+    ast_bool,
+    ast_eof,
+    ast_f64,
+    ast_i64,
+    ast_if_then_else,
+    ast_infix,
+    ast_let_in,
+    ast_nil,
+    ast_string,
+    ast_symbol,
+    ast_u64,
+    ast_user_type_definition,
+    ast_user_type_get,
+    ast_user_type_set,
+
+    ast_begin_end = BIT(TL_AST_BIT_ARRAY),
+    ast_function_declaration,
+    ast_labelled_tuple,
+    ast_lambda_declaration,
+    ast_lambda_function,
+    ast_lambda_function_application,
+    ast_let,
+    ast_named_function_application,
+    ast_tuple,
+    ast_user_type,
+
+} ast_tag;
 
 // -- ast_node --
 

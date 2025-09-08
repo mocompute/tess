@@ -40,37 +40,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     clone->type = orig->type;
 
     // clone common array for some tags
-    switch (clone->tag) {
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_let:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-    case ast_begin_end:
-    case ast_user_type:                   {
+    if (TL_AST_HAS_ARRAY(clone->tag)) {
         struct ast_array *vclone = ast_node_arr(clone), *vorig = ast_node_arr((ast_node *)orig);
         vclone->n     = vorig->n;
         vclone->nodes = alloc_malloc(alloc, vorig->n * sizeof vclone->nodes[0]);
         for (u32 i = 0; i < vclone->n; ++i) vclone->nodes[i] = ast_node_clone(alloc, vorig->nodes[i]);
-    } break;
-
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_user_type_definition:
-    case ast_symbol:
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_let_in:
-    case ast_if_then_else:         break;
     }
 
     // clone the rest of the fields
@@ -454,35 +428,9 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     if (!node) return;
 
     // process node types that have a common ast_array
-    switch (node->tag) {
-    case ast_begin_end:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_let:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_user_type:                   {
+    if (TL_AST_HAS_ARRAY(node->tag)) {
         struct ast_array *v = ast_node_arr(node);
         for (u32 i = 0; i < v->n; ++i) fun(ctx, v->nodes[i]);
-    } break;
-
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_let_in:
-    case ast_if_then_else:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_user_type_definition: break;
     }
 
     // process node types that have additional or no-array links
@@ -660,9 +608,29 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 
 char const *ast_tag_to_string(ast_tag tag) {
 
-    static char const *const strings[] = {TESS_AST_TAGS(MOS_TAG_STRING)};
+    static char const *const strings1[] = {
+      "ast_bool",          "ast_eof",           "ast_f64",    "ast_i64",
+      "ast_if_then_else",  "ast_infix",         "ast_let_in", "ast_nil",
+      "ast_string",        "ast_symbol",        "ast_u64",    "ast_user_type_definition",
+      "ast_user_type_get", "ast_user_type_set",
+    };
 
-    return strings[tag];
+    static char const *const strings2[] = {
+      "ast_begin_end",
+      "ast_function_declaration",
+      "ast_labelled_tuple",
+      "ast_lambda_declaration",
+      "ast_lambda_function",
+      "ast_lambda_function_application",
+      "ast_let",
+      "ast_named_function_application",
+      "ast_tuple",
+      "ast_user_type",
+    };
+
+    if (!TL_AST_HAS_ARRAY(tag)) return strings1[tag];
+    tag = TL_AST_CLEAR_BITS(tag);
+    return strings2[tag];
 }
 
 char const *ast_operator_to_string(ast_operator tag) {
@@ -710,51 +678,6 @@ c_string_csized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
     return strings;
 }
 
-static void validate_one_node(void *ctx, ast_node *node) {
-    (void)ctx;
-    bool valid = false;
-    switch (node->tag) {
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_let_in:
-    case ast_let:
-    case ast_if_then_else:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-    case ast_begin_end:
-    case ast_user_type:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_user_type_definition:        valid = true; break;
-    }
-    if (!valid) {
-
-        dbg("found invalid node at %p\n", node);
-        assert(valid);
-    }
-}
-
-void ast_validate_nodes(ast_node *nodes[], u32 count) {
-
-    for (size_t i = 0; i < count; ++i) {
-        ast_node_dfs(null, nodes[i], validate_one_node);
-    }
-
-    dbg("all nodes valid\n");
-}
-
 //
 
 struct ast_symbol *ast_node_sym(ast_node *node) {
@@ -783,36 +706,8 @@ struct ast_f64 *ast_node_f64(ast_node *node) {
 }
 
 struct ast_array *ast_node_arr(ast_node *node) {
-    switch (node->tag) {
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_let_in:
-    case ast_if_then_else:
-    case ast_user_type_definition:
-        assert(false);
-        fatal("ast_node_arr called on non-array variant");
-        break;
-
-    case ast_begin_end:
-    case ast_user_type:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_let:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-    case ast_named_function_application:  return &node->array;
-    }
+    if (!TL_AST_HAS_ARRAY(node->tag)) fatal("ast_node_arr called on non-array variant");
+    return &node->array;
 }
 
 struct ast_infix *ast_node_infix(ast_node *node) {
