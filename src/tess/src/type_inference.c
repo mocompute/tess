@@ -695,21 +695,65 @@ static void ti_run_solver(ti_inferer *self) {
 void assign_type_variables(void *ctx, ast_node *node) {
     ti_inferer *self = ctx;
 
-    if (ast_lambda_function == node->tag || ast_let == node->tag) {
+    switch (node->tag) {
+    case ast_let: {
+        tl_type *left   = make_typevar(self);
+        tl_type *right  = make_typevar(self);
+        tl_type *arrow  = tl_type_create_arrow(self->type_arena, left, right);
+
+        node->let.arrow = arrow;
+        node->type      = make_typevar(self);
+    } break;
+
+    case ast_lambda_function: {
         tl_type *left  = make_typevar(self);
         tl_type *right = make_typevar(self);
         tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right);
+        node->type     = arrow;
+    } break;
 
-        if (ast_lambda_function == node->tag) {
-            node->type = arrow;
-        } else {
-            node->let.arrow = arrow;
-            node->type      = make_typevar(self);
+    case ast_tuple: {
+        struct ast_tuple *v   = ast_node_tuple(node);
+        tl_type_sized     els = {.size = v->n_elements,
+                                 .v = alloc_malloc(self->type_arena, v->n_elements * sizeof v->elements[0])};
+
+        for (u32 i = 0; i < els.size; ++i) {
+            // since this is run during a depth first search, all elements
+            // will already have been assigned a type
+            els.v[i] = v->elements[i]->type;
         }
 
-    } else {
+        tl_type *tup = tl_type_create_tuple(self->type_arena, els);
+
+        node->type   = tup;
+
+    } break;
+
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_infix:
+    case ast_let_in:
+    case ast_if_then_else:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+    case ast_named_function_application:
+    case ast_begin_end:
+    case ast_user_type:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_user_type_definition:        {
         tl_type *tv = make_typevar(self);
         node->type  = tv;
+    }
+
+    break;
     }
 }
 

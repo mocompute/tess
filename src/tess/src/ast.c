@@ -431,13 +431,14 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     // process node types that have a common ast_array
     switch (node->tag) {
+    case ast_begin_end:
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_let:
     case ast_lambda_function_application:
     case ast_named_function_application:
-    case ast_begin_end:
+    case ast_tuple:
     case ast_user_type:                   {
         struct ast_array *v = ast_node_arr(node);
         for (u32 i = 0; i < v->n; ++i) fun(ctx, v->nodes[i]);
@@ -452,7 +453,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_infix:
-    case ast_tuple:
     case ast_let_in:
     case ast_if_then_else:
     case ast_user_type_get:
@@ -586,10 +586,6 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     } break;
     }
 }
-
-// static void recur_on_array(struct ast_node **elements, u16 n, void *ctx, ast_op_fun fun) {
-//     for (size_t i = 0; i < n; ++i) ast_node_dfs(ctx, elements[i], fun);
-// }
 
 struct dfs_ctx {
     void      *caller_ctx;

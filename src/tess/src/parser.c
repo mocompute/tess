@@ -206,6 +206,7 @@ static int result_ast_str(parser *p, ast_tag tag, char const *s) {
 
 static int result_ast_node(parser *p, ast_node *node) {
     p->result = node;
+    log(p, "result: %s", ast_node_to_string(p->parser_arena, node));
     return 0;
 }
 
