@@ -344,11 +344,14 @@ static int test_user_struct(void) {
 }
 
 static int test_labelled_tuple(void) {
-    int         error = 0;
-    char const *input = "let x = (x1 = 1, x2 = 2) in x1 end";
-    return compile_input_flag(input, true);
+    char const *input = "let x = (x1 = 1, x2 = 2) in x end";
+    return compile_input_flag(input, false);
+}
 
-    return error;
+static int test_let_labelled_tuple(void) {
+    char const *input = "let tup = (x1 = 1, x2 = 2) in\n"
+                        "let (a = x1) = tup in a end";
+    return compile_input_flag(input, true);
 }
 
 #define T(name)                                                                                            \
@@ -379,6 +382,7 @@ int main(void) {
     T(test_user_struct_empty);
     T(test_user_struct);
     T(test_labelled_tuple);
+    T(test_let_labelled_tuple);
 
     return error;
 }

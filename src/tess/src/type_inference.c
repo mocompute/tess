@@ -349,6 +349,36 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
 
     } break;
 
+    case ast_let_match_in: {
+        // similar to let_in, only with multiple bindings
+        struct ast_let_match_in   *v  = ast_node_let_match_in(node);
+        struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+
+        rename_variables(self, v->value); // cannot refer to bindings
+
+        hashmap *save = map_copy(self->map);
+        assert(save);
+
+        for (u32 i = 0; i < lt->n_assignments; ++i) {
+            string_t var_name;
+            next_variable_name(self, &var_name);
+
+            ast_node const *name = lt->assignments[i];
+            assert(ast_symbol == name->tag);
+
+            map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
+                    &var_name);
+
+            rename_variables(self, lt->assignments[i]);
+        }
+
+        rename_variables(self, v->body);
+
+        map_destroy(&self->map);
+        self->map = save;
+
+    } break;
+
     case ast_let: {
         // make new variables for all function parameters. save existing
         // map in case any of them shadow.
@@ -557,6 +587,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
+    case ast_let_match_in:
     case ast_if_then_else:
     case ast_lambda_function:
     case ast_function_declaration:
@@ -766,6 +797,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_string:
     case ast_infix:
     case ast_let_in:
+    case ast_let_match_in:
     case ast_if_then_else:
     case ast_function_declaration:
     case ast_lambda_declaration:
@@ -946,6 +978,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_assignment:
         //
+        push(node->assignment.name->type, node->assignment.value->type);
         push(node->type, node->assignment.value->type);
         break;
 
@@ -1004,8 +1037,19 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, v->value->type);
     } break;
 
-    case ast_labelled_tuple:
-    case ast_tuple:          {
+    case ast_labelled_tuple: {
+        struct ast_labelled_tuple *v = ast_node_lt(node);
+        for (u32 i = 0; i < v->n_assignments; ++i) {
+            struct ast_assignment *ass = ast_node_assignment(v->assignments[i]);
+            push(ass->name->type, ass->value->type);
+        }
+
+        tl_type *els =
+          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        push(node->type, els);
+    } break;
+
+    case ast_tuple: {
         tl_type *els =
           arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 
@@ -1034,6 +1078,32 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // result must be same type as body
         push(node->type, node->let_in.body->type);
         break;
+
+    case ast_let_match_in: {
+        struct ast_let_match_in   *v  = ast_node_let_match_in(node);
+        struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+
+        for (u32 i = 0; i < lt->n_assignments; ++i) {
+            if (type_user == v->value->type->tag) {
+                tl_type *field_type = tl_type_find_user_field_type(
+                  v->value->type, ast_node_name_string(lt->assignments[i]->assignment.value));
+
+                push(lt->assignments[i]->assignment.name->type, field_type);
+
+            } else if (type_labelled_tuple == v->value->type->tag) {
+                tl_type *field_type = tl_type_find_labelled_field_type(
+                  v->value->type, ast_node_name_string(lt->assignments[i]->assignment.value));
+
+                push(lt->assignments[i]->assignment.name->type, field_type);
+
+            } else {
+                // wait until a later repetition
+            }
+        }
+
+        // result must be same type as body
+        push(node->type, v->body->type);
+    } break;
 
     case ast_let: {
         assert(node->let.arrow->tag == type_arrow);

@@ -388,6 +388,18 @@ tl_type *tl_type_find_user_field_type(tl_type const *user_type, char const *fiel
     return field_type;
 }
 
+tl_type *tl_type_find_labelled_field_type(tl_type const *lt_type, char const *field_name) {
+    struct tlt_labelled_tuple *lt         = tl_type_lt((tl_type *)lt_type);
+    tl_type                   *field_type = null;
+    for (u32 i = 0; i < lt->names.size; ++i) {
+        if (0 == strcmp(lt->names.v[i], field_name)) {
+            field_type = lt->fields.v[i];
+            break;
+        }
+    }
+    return field_type;
+}
+
 bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
 
     if (haystack == needle || tl_type_equal(haystack, needle)) return true;

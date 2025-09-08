@@ -90,6 +90,14 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->body  = ast_node_clone(alloc, vorig->body);
     } break;
 
+    case ast_let_match_in: {
+        struct ast_let_match_in *vclone = ast_node_let_match_in(clone),
+                                *vorig  = ast_node_let_match_in((ast_node *)orig);
+        vclone->lt                      = ast_node_clone(alloc, vorig->lt);
+        vclone->value                   = ast_node_clone(alloc, vorig->value);
+        vclone->body                    = ast_node_clone(alloc, vorig->body);
+    } break;
+
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
         mos_string_copy(alloc, &vclone->name, &vorig->name);
@@ -299,6 +307,10 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         return penta(alloc, sym("let-in"), recur(node->let_in.name), recur(node->let_in.value),
                      recur(node->let_in.body), type);
 
+    case ast_let_match_in:
+        return penta(alloc, sym("let-match-in"), recur(node->let_match_in.lt),
+                     recur(node->let_match_in.value), recur(node->let_match_in.body), type);
+
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         if (mos_string_empty(&node->let.specialized_name))
@@ -468,6 +480,12 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->let_in.body);
         break;
 
+    case ast_let_match_in:
+        fun(ctx, node->let_match_in.lt);
+        fun(ctx, node->let_match_in.value);
+        fun(ctx, node->let_match_in.body);
+        break;
+
     case ast_let:
         //
         fun(ctx, node->let.body);
@@ -545,6 +563,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
+    case ast_let_match_in:
     case ast_if_then_else:
     case ast_lambda_function:
     case ast_function_declaration:
@@ -613,21 +632,14 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_nil",
-      "ast_assignment",
-      "ast_bool",
-      "ast_eof",
-      "ast_f64",
-      "ast_i64",
-      "ast_if_then_else",
-      "ast_infix",
-      "ast_let_in",
-      "ast_string",
-      "ast_symbol",
-      "ast_u64",
-      "ast_user_type_definition",
-      "ast_user_type_get",
-      "ast_user_type_set",
+      "ast_nil",           "ast_assignment",
+      "ast_bool",          "ast_eof",
+      "ast_f64",           "ast_i64",
+      "ast_if_then_else",  "ast_infix",
+      "ast_let_in",        "ast_let_match_in",
+      "ast_string",        "ast_symbol",
+      "ast_u64",           "ast_user_type_definition",
+      "ast_user_type_get", "ast_user_type_set",
     };
 
     static char const *const strings2[] = {
@@ -643,8 +655,13 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_user_type",
     };
 
-    if (!TL_AST_HAS_ARRAY(tag)) return strings1[tag];
+    if (!TL_AST_HAS_ARRAY(tag)) {
+        assert(tag < sizeof(strings1));
+        return strings1[tag];
+    }
+
     tag = TL_AST_CLEAR_BITS(tag);
+    assert(tag < sizeof(strings2));
     return strings2[tag];
 }
 
@@ -743,6 +760,11 @@ struct ast_lambda_function *ast_node_lf(ast_node *node) {
 struct ast_let_in *ast_node_let_in(ast_node *node) {
     assert(node->tag == ast_let_in);
     return &node->let_in;
+}
+
+struct ast_let_match_in *ast_node_let_match_in(ast_node *node) {
+    assert(node->tag == ast_let_match_in);
+    return &node->let_match_in;
 }
 
 struct ast_function_declaration *ast_node_fd(ast_node *node) {

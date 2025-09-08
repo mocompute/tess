@@ -125,6 +125,12 @@ typedef struct ast_node {
             struct ast_node *body;
         } let_in;
 
+        struct ast_let_match_in {
+            struct ast_node *lt; // labelled_tuple
+            struct ast_node *value;
+            struct ast_node *body;
+        } let_match_in;
+
         struct ast_user_type_get {
             struct ast_node *struct_name;
             struct ast_node *field_name;
@@ -181,6 +187,7 @@ struct ast_array                *ast_node_arr(ast_node *);
 struct ast_infix                *ast_node_infix(ast_node *);
 struct ast_lambda_function      *ast_node_lf(ast_node *);
 struct ast_let_in               *ast_node_let_in(ast_node *);
+struct ast_let_match_in         *ast_node_let_match_in(ast_node *);
 struct ast_function_declaration *ast_node_fd(ast_node *);
 struct ast_lambda_declaration   *ast_node_let_ld(ast_node *);
 struct ast_let                  *ast_node_let(ast_node *);

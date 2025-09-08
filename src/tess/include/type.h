@@ -91,6 +91,7 @@ bool               tl_type_contains(tl_type const *, tl_type const *);
 u32                tl_type_hash(tl_type *);
 
 tl_type           *tl_type_find_user_field_type(tl_type const *, char const *);
+tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const *);
 
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);

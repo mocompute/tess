@@ -242,6 +242,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
+    case ast_let_match_in:
     case ast_if_then_else:
     case ast_lambda_function:
     case ast_function_declaration:
@@ -476,6 +477,10 @@ static int a_eval(transpiler *self, ast_node const *node) {
         out_put_start_fmt(self, "%s = %s;\n", var, res);
 
     } break;
+
+    case ast_let_match_in:
+        // FIXME
+        break;
 
     case ast_let: {
         if (a_let(self, node)) return 1;
