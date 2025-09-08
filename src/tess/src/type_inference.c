@@ -281,6 +281,17 @@ static void rename_array_elements(rename_variables_ctx *self, ast_node **element
 static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     if (!node) return;
 
+    // The purpose of this operation is to rename all variables in the
+    // program in order to respect lexical scoping rules and variable
+    // shadowing rules. Doing this at the start of type analysis lets
+    // us assume every occurence of a particular variable name must
+    // have the same type.
+    //
+    // Non variable symbols such as struct type field names do not
+    // need to participate in this transformation, because the
+    // constraint solver knows how to respect constraints relating to
+    // user type fields.
+
     switch (node->tag) {
     case ast_symbol: {
         struct ast_symbol *v = ast_node_sym(node);
