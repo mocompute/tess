@@ -36,7 +36,7 @@ typedef struct {
 
 struct ti_inferer {
     allocator       *type_arena;
-    allocator       *strings;
+    allocator       *transient;
 
     ast_node_array  *nodes;
     type_registry   *type_registry;
@@ -125,7 +125,7 @@ static void       log(ti_inferer *, char const *restrict, ...) __attribute__((fo
 ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_registry *type_registry) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
-    self->strings          = arena_create(alloc, STRINGS_ARENA_SIZE);
+    self->transient        = arena_create(alloc, STRINGS_ARENA_SIZE);
 
     self->nodes            = nodes;
     self->type_registry    = type_registry;
@@ -144,7 +144,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
 void ti_inferer_destroy(allocator *alloc, ti_inferer **pself) {
     ti_inferer *self = *pself;
 
-    arena_destroy(alloc, &self->strings);
+    arena_destroy(alloc, &self->transient);
     arena_destroy(alloc, &self->type_arena);
     alloc_free(alloc, *pself);
     *pself = null;
@@ -247,7 +247,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
 static void next_variable_name(rename_variables_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "_v%u_", self->ti->next_var++);
-    *out = mos_string_init(self->ti->strings, buf);
+    *out = mos_string_init(self->ti->type_arena, buf);
 }
 
 static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
@@ -628,9 +628,9 @@ static void dbg_constraint(constraint const *c) {
 
 static void dbg_ast_nodes(ti_inferer *self) {
     for (size_t i = 0; i < self->nodes->size; ++i) {
-        char *str = ast_node_to_string(self->strings, self->nodes->v[i]);
+        char *str = ast_node_to_string(self->transient, self->nodes->v[i]);
         dbg("%p: %s\n", self->nodes->v[i], str);
-        alloc_free(self->strings, str);
+        alloc_free(self->transient, str);
     }
 }
 
@@ -1386,7 +1386,8 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
     // add nodes to program
     for (u32 i = 0; i < added.size; ++i) {
-        log(self, "generate_user_type_functions: adding %s", ast_node_to_string(self->strings, added.v[i]));
+        log(self, "generate_user_type_functions: adding %s",
+            ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
 }
