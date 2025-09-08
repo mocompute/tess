@@ -354,7 +354,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         struct ast_let_match_in   *v  = ast_node_let_match_in(node);
         struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
 
-        rename_variables(self, v->value); // cannot refer to bindings
+        rename_variables(self, v->value); // cannot refer to bindings, so can rename before updating map
 
         hashmap *save = map_copy(self->map);
         assert(save);
@@ -363,7 +363,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
             string_t var_name;
             next_variable_name(self, &var_name);
 
-            ast_node const *name = lt->assignments[i];
+            ast_node const *name = lt->assignments[i]->assignment.name;
             assert(ast_symbol == name->tag);
 
             map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),

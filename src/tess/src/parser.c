@@ -57,6 +57,7 @@ static int           infix_operand(parser *);
 static int           infix_operation(parser *);
 static int           lambda_declaration(parser *);
 static int           lambda_function(parser *);
+static int           match_declaration(parser *);
 static int           simple_declaration(parser *);
 static int           struct_declaration(parser *);
 static int           toplevel(parser *);
@@ -628,12 +629,6 @@ static int a_labelled_tuple(parser *self) {
 
     array_push(assignments, &self->result);
 
-    if (a_try(self, a_comma)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    int count = 0;
     while (true) {
 
         if (0 == a_try(self, a_close_round)) {
@@ -654,12 +649,10 @@ static int a_labelled_tuple(parser *self) {
             return result_ast_node(self, node);
         }
 
-        // comma required if this is not the first time through the loop
-        if (count++ > 0)
-            if (a_try(self, a_comma)) {
-                self->error.tag = tl_err_expected_comma;
-                goto error;
-            }
+        if (a_try(self, a_comma)) {
+            self->error.tag = tl_err_expected_comma;
+            goto error;
+        }
 
         // next assignment expression
         if (0 == a_try(self, a_assignment)) array_push(assignments, &self->result);
@@ -1317,6 +1310,18 @@ static char *make_nil_name(parser *p) {
 #undef fmt
 }
 
+static int match_declaration(parser *self) {
+    // (a = x, ...) = ...
+
+    if (a_try(self, a_labelled_tuple)) return 1;
+
+    ast_node *lt = self->result;
+
+    if (a_try(self, a_equal_sign)) return 1;
+
+    return result_ast_node(self, lt);
+}
+
 static int simple_declaration(parser *p) {
     // a = ... a single identifier or nil, optionally typed, followed by an
     // equal sign
@@ -1552,7 +1557,7 @@ error:
     return 1;
 }
 
-static int continue_let_in(parser *self, ast_node *name_or_nil) {
+static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     // assumes caller has incremented indent_level
 
     log(self, "begin let-in declaration");
@@ -1576,12 +1581,27 @@ static int continue_let_in(parser *self, ast_node *name_or_nil) {
         self->error.tag = tl_err_expected_end_of_block;
         goto error;
     }
-    ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
-    node->let_in.name  = name_or_nil;
-    node->let_in.value = defn;
-    node->let_in.body  = body;
 
-    result_ast_node(self, node);
+    if (ast_labelled_tuple == name_or_nil_or_lt->tag) {
+
+        // let-match-in
+        ast_node *node           = ast_node_create(self->ast_arena, ast_let_match_in);
+        node->let_match_in.lt    = name_or_nil_or_lt;
+        node->let_match_in.value = defn;
+        node->let_match_in.body  = body;
+
+        result_ast_node(self, node);
+
+    } else {
+
+        ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
+        node->let_in.name  = name_or_nil_or_lt;
+        node->let_in.value = defn;
+        node->let_in.body  = body;
+
+        result_ast_node(self, node);
+    }
+
     goto success;
 
 success:
@@ -1669,8 +1689,11 @@ static int expression_let(parser *self) {
     self->indent_level++;
 
     if (0 == a_try(self, simple_declaration)) {
-        ast_node *sym_or_nil = self->result;
-        return continue_let_in(self, sym_or_nil);
+        return continue_let_in(self, self->result);
+    }
+
+    if (0 == a_try(self, match_declaration)) {
+        return continue_let_in(self, self->result);
     }
 
     self->indent_level--;
