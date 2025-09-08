@@ -96,7 +96,7 @@ static void       ti_rename_variables(ti_inferer *);
 static void       ti_run_solver(ti_inferer *);
 static void       ti_specialize_functions(ti_inferer *, ast_node_array *);
 
-static tl_type   *arguments_to_tuple_type(allocator *, ast_node const *[], u16);
+static tl_type   *make_args_type(allocator *, ast_node *[], u16);
 static ast_node  *find_let_node(char const *, tl_type_sized, ast_node_sized, bool);
 static tl_type   *get_prim(ti_inferer *, tl_type_tag);
 static void       next_variable_name(rename_variables_ctx *, string_t *);
@@ -113,6 +113,7 @@ static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_arr
 static bool       substitute_constraints(constraint *, constraint *, constraint const);
 static u32        unify_one(ti_inferer *, constraint);
 
+static tl_type   *make_arrow(allocator *, ast_node *[], u16, tl_type *);
 static ast_node  *make_specialized(specialize_functions_ctx *, ast_node *, tl_type *);
 static char      *make_specialized_name(ti_inferer *, char const *);
 static ast_node  *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
@@ -849,7 +850,7 @@ void ti_assign_type_variables(ti_inferer *self) {
 
 // -- collect_constraints --
 
-static tl_type *arguments_to_tuple_type(allocator *alloc, ast_node const *arguments[], u16 n) {
+static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
     tl_type_array types = {.alloc = alloc};
     array_reserve(types, n);
     for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
@@ -857,6 +858,11 @@ static tl_type *arguments_to_tuple_type(allocator *alloc, ast_node const *argume
     tl_type *tuple = tl_type_create_tuple(alloc, (tl_type_sized)sized_all(types));
 
     return tuple;
+}
+
+static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, tl_type *right) {
+    tl_type *left = make_args_type(alloc, args, n);
+    return tl_type_create_arrow(alloc, left, right);
 }
 
 static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) {
@@ -1085,8 +1091,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     } break;
 
     case ast_tuple: {
-        tl_type *els =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        tl_type *els = make_args_type(self->type_arena, node->array.nodes, node->array.n);
 
         push(node->type, els);
     } break;
@@ -1144,8 +1149,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(node->let.arrow->tag == type_arrow);
 
         // left side of arrow is same as parameter tuple type
-        tl_type *params =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        tl_type *params = make_args_type(self->type_arena, node->array.nodes, node->array.n);
 
         push(node->let.arrow->arrow.left, params);
 
@@ -1167,10 +1171,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_lambda_function: {
         // argument tuple must be same type as parameter tuple
-        struct tlt_arrow *v = tl_type_arrow(node->type);
+        struct tlt_arrow *v   = tl_type_arrow(node->type);
 
-        tl_type          *tup =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
+        tl_type          *tup = make_args_type(self->type_arena, node->array.nodes, node->array.n);
         push(v->left, tup);
 
         // body type must be same as right hand of arrow
@@ -1188,10 +1191,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         assert(ast_lambda_function == lambda->tag);
 
         // arguments must match parameters
-        tl_type *args =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        tl_type *params = arguments_to_tuple_type(self->type_arena, (ast_node const **)lambda->array.nodes,
-                                                  lambda->array.n);
+        tl_type *args   = make_args_type(self->type_arena, node->array.nodes, node->array.n);
+        tl_type *params = make_args_type(self->type_arena, lambda->array.nodes, lambda->array.n);
 
         push(args, params);
 
@@ -1213,9 +1214,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
             assert(fun && fun->tag == ast_let);
             assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
-            tl_type *args_type = arguments_to_tuple_type(
-              self->type_arena, (ast_node const **)node->named_application.arguments,
-              node->named_application.n_arguments);
+            tl_type *args_type = make_args_type(self->type_arena, node->named_application.arguments,
+                                                node->named_application.n_arguments);
 
             push(fun->let.arrow->arrow.left, args_type);
             push(fun->let.arrow->arrow.right, node->type);
@@ -1313,8 +1313,8 @@ static void specialize_node(void *ctx_, ast_node *node) {
 
     // does a specialised function already exist?
 
-    tl_type *args_ty = arguments_to_tuple_type(alloc, (ast_node const **)node->named_application.arguments,
-                                               node->named_application.n_arguments);
+    tl_type *args_ty =
+      make_args_type(alloc, node->named_application.arguments, node->named_application.n_arguments);
     struct tlt_tuple *vargs_ty = tl_type_tup(args_ty);
 
     ast_node         *let      = null;
@@ -1444,33 +1444,32 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
 #undef fmt
     }
 
-    ast_node *out             = ast_node_create(self->type_arena, ast_let);
+    allocator *a              = self->type_arena;
+    ast_node  *out            = ast_node_create(a, ast_let);
     out->type                 = *type_registry_find_name(self->type_registry, "nil");
-    out->let.name             = mos_string_init(self->type_arena, generated_name);
-    out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
+    out->let.name             = mos_string_init(a, generated_name);
+    out->let.specialized_name = mos_string_init(a, generated_name);
 
     if (ast_labelled_tuple == node->tag) {
         // make params array from labelled_tuple
         struct ast_labelled_tuple *lt = ast_node_lt(node);
 
         out->let.n_parameters         = (u8)lt->n_assignments;
-        out->let.parameters =
-          alloc_malloc(self->type_arena, out->let.n_parameters * sizeof out->let.parameters[0]);
+        out->let.parameters = alloc_malloc(a, out->let.n_parameters * sizeof out->let.parameters[0]);
 
         for (u16 i = 0; i < out->let.n_parameters; ++i)
             out->let.parameters[i] = lt->assignments[i]->assignment.name;
 
         // the body is a single node with the tuple literal
-        out->let.body                = ast_node_create(self->type_arena, ast_labelled_tuple);
+        out->let.body                = ast_node_create(a, ast_labelled_tuple);
         out->let.body->type          = node->type;
 
         struct ast_labelled_tuple *v = ast_node_lt(out->let.body);
         v->n_assignments             = out->let.n_parameters;
-        v->assignments = alloc_malloc(self->type_arena, v->n_assignments * sizeof v->assignments[0]);
+        v->assignments               = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
         for (u16 i = 0; i < v->n_assignments; ++i) {
-            v->assignments[i] = ast_node_create(self->type_arena, ast_assignment);
-            v->assignments[i]->assignment.name =
-              ast_node_clone(self->type_arena, lt->assignments[i]->assignment.name);
+            v->assignments[i]                   = ast_node_create(a, ast_assignment);
+            v->assignments[i]->assignment.name  = ast_node_clone(a, lt->assignments[i]->assignment.name);
             v->assignments[i]->assignment.value = out->let.parameters[i];
             v->assignments[i]->type             = lt->assignments[i]->type;
         }
@@ -1479,22 +1478,21 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         // need to construct names for the anonymous tuple elements
         struct ast_tuple *tup = ast_node_tuple(node);
         out->let.n_parameters = (u8)tup->n_elements;
-        out->let.parameters =
-          alloc_malloc(self->type_arena, out->let.n_parameters * sizeof out->let.parameters[0]);
+        out->let.parameters   = alloc_malloc(a, out->let.n_parameters * sizeof out->let.parameters[0]);
 
         for (u16 i = 0; i < out->let.n_parameters; ++i) {
             char buf[32];
             snprintf(buf, sizeof buf - 1, "x%u", i);
-            out->let.parameters[i] = ast_node_create_sym(self->type_arena, buf);
+            out->let.parameters[i] = ast_node_create_sym(a, buf);
         }
 
         // the body is a single node with the tuple literal
-        out->let.body       = ast_node_create(self->type_arena, ast_tuple);
+        out->let.body       = ast_node_create(a, ast_tuple);
         out->let.body->type = node->type;
 
         struct ast_tuple *v = ast_node_tuple(out->let.body);
         v->n_elements       = out->let.n_parameters;
-        v->elements         = alloc_malloc(self->type_arena, v->n_elements * sizeof v->elements[0]);
+        v->elements         = alloc_malloc(a, v->n_elements * sizeof v->elements[0]);
         for (u16 i = 0; i < v->n_elements; ++i) {
             v->elements[i]       = out->let.parameters[i];
             v->elements[i]->type = tup->elements[i]->type;
@@ -1502,10 +1500,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     }
 
     // make an arrow type for the generated function
-    tl_type *left  = arguments_to_tuple_type(self->type_arena, (ast_node const **)out->let.parameters,
-                                             out->let.n_parameters);
-    tl_type *right = node->type;
-    out->let.arrow = tl_type_create_arrow(self->type_arena, left, right);
+    out->let.arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, node->type);
 
     return out;
 }
