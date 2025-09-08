@@ -31,6 +31,7 @@ nodiscard allocator *arena_create(allocator *alloc, size_t) mallocfun;
 void                 arena_dealloc(allocator *parent, allocator **arena);
 void                 arena_destroy(allocator *, allocator **);
 void                 arena_init(allocator *, allocator *parent, size_t);
+void                 arena_reset(allocator *);
 void                 arena_deinit(allocator *);
 
 // -- allocator malloc and friends --

@@ -19,9 +19,9 @@
 
 struct parser {
     allocator             *parent_alloc;
-    allocator             *parser_arena; // for tokens
-    allocator             *ast_arena;    // for ast nodes
-    allocator             *debug_arena;  // for debug strings
+    allocator             *tokens_arena; // for tokens only
+    allocator             *ast_arena;    // for ast nodes and related
+    allocator             *transient;    // reset after each call to parser_next
 
     tokenizer             *tokenizer;
 
@@ -127,16 +127,16 @@ parser *parser_create(allocator *alloc, char_cslice input) {
 
     alloc_zero(self);
     self->parent_alloc = alloc;
-    self->parser_arena = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->tokens_arena = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->ast_arena    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->debug_arena  = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->transient    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->verbose      = false;
 
     // tokenizer
     self->tokenizer = tokenizer_create(alloc, input, "(no file)");
 
     // good_tokens
-    self->tokens = (token_array){.alloc = self->parser_arena};
+    self->tokens = (token_array){.alloc = self->tokens_arena};
 
     // error
     token_init(&self->token, tok_invalid);
@@ -154,9 +154,9 @@ void parser_destroy(parser **self) {
     tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
-    arena_destroy((*self)->parent_alloc, &(*self)->debug_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->transient);
     arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
-    arena_destroy((*self)->parent_alloc, &(*self)->parser_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->tokens_arena);
     alloc_free((*self)->parent_alloc, *self);
     *self = null;
 }
@@ -206,7 +206,7 @@ static int result_ast_str(parser *p, ast_tag tag, char const *s) {
 
 static int result_ast_node(parser *p, ast_node *node) {
     p->result = node;
-    log(p, "result: %s", ast_node_to_string(p->parser_arena, node));
+    log(p, "result: %s", ast_node_to_string(p->transient, node));
     return 0;
 }
 
@@ -294,9 +294,9 @@ static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        char *str = token_to_string(p->debug_arena, &p->token);
+        char *str = token_to_string(p->transient, &p->token);
         log(p, "next_token: %s", str);
-        alloc_free(p->debug_arena, str);
+        alloc_free(p->transient, str);
 
         tokens_push_back(p, &p->token);
         return 0;
@@ -310,9 +310,9 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     if (fun(p)) {
         assert(p->tokens.size >= save_toks);
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
             // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
-            alloc_free(p->debug_arena, str);
+            alloc_free(p->transient, str);
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
@@ -330,9 +330,9 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     u32 const save_toks = p->tokens.size;
     if (fun(p, arg)) {
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
             // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
-            alloc_free(p->debug_arena, str);
+            alloc_free(p->transient, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
@@ -352,9 +352,9 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
     int const res       = fun(p);
     if (res) {
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->debug_arena, &p->tokens.v[save_toks]);
+            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
             // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
-            alloc_free(p->debug_arena, str);
+            alloc_free(p->transient, str);
 
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
@@ -408,7 +408,7 @@ static int a_end_of_expression(parser *p) {
         return 1;
     }
 
-    log(p, "end_of_expression token: %s", token_to_string(p->parser_arena, &p->token));
+    log(p, "end_of_expression token: %s", token_to_string(p->transient, &p->token));
 
     switch (p->token.tag) {
     case tok_one_newline:
@@ -757,7 +757,7 @@ static int struct_declaration(parser *self) {
 
         if (0 == a_try(self, a_identifier)) {
             ast_node *field_name = self->result;
-            log(self, "struct_declaration: field %s", ast_node_to_string(self->debug_arena, field_name));
+            log(self, "struct_declaration: field %s", ast_node_to_string(self->transient, field_name));
 
             if (a_try(self, a_colon)) {
                 self->error.tag = tl_err_expected_colon;
@@ -769,7 +769,7 @@ static int struct_declaration(parser *self) {
                 goto error;
             }
             ast_node *type = self->result;
-            log(self, "struct_declaration: type %s", ast_node_to_string(self->debug_arena, type));
+            log(self, "struct_declaration: type %s", ast_node_to_string(self->transient, type));
 
             array_push(field_names, &field_name);
             array_push(field_types, &type);
@@ -824,7 +824,7 @@ static int function_declaration(parser *p) {
     if (a_try(p, a_identifier)) return 1;
 
     ast_node *const name       = p->result; // function name
-    ast_node_array  parameters = {.alloc = p->parser_arena};
+    ast_node_array  parameters = {.alloc = p->ast_arena};
 
     // check: f () declares function with no parameters
     if (0 == a_try(p, a_nil)) {
@@ -861,7 +861,7 @@ static int function_declaration(parser *p) {
             if (parameters.size > 0xff) return too_many_arguments(p);
             node->array.n = (u8)parameters.size;
 
-            log(p, "function_declaration: returning %s", ast_node_to_string(p->debug_arena, node));
+            log(p, "function_declaration: returning %s", ast_node_to_string(p->transient, node));
             return result_ast_node(p, node);
         }
 
@@ -874,7 +874,7 @@ static int function_declaration(parser *p) {
 static int lambda_declaration(parser *p) {
     // a b c... -> : only symbols allowed, terminated by ->
 
-    ast_node_array parameters = {.alloc = p->parser_arena};
+    ast_node_array parameters = {.alloc = p->ast_arena};
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
@@ -920,7 +920,7 @@ static int function_application(parser *self) {
     ast_node *const name = self->result;
     assert(ast_symbol == name->tag);
 
-    ast_node_array arguments = {.alloc = self->parser_arena};
+    ast_node_array arguments = {.alloc = self->ast_arena};
 
     // must have at least one argument
     if (a_try(self, function_argument)) {
@@ -954,7 +954,7 @@ static int function_application(parser *self) {
                 goto error;
             }
 
-            log(self, "function_application: got %s", ast_node_to_string(self->debug_arena, node));
+            log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
             result_ast_node(self, node);
             goto success;
         }
@@ -1171,7 +1171,7 @@ static int lambda_function_application(parser *self) {
     ast_node *lambda = self->result;
 
     // there must be at least one argument
-    ast_node_array arguments = {.alloc = self->parser_arena};
+    ast_node_array arguments = {.alloc = self->ast_arena};
 
     if (a_try(self, function_argument)) {
         self->error.tag = tl_err_ok;
@@ -1263,7 +1263,7 @@ static int tuple_expression(parser *self) {
         return 1;
     }
 
-    ast_node_array elements = {.alloc = self->parser_arena}; // will be moved to node on success
+    ast_node_array elements = {.alloc = self->ast_arena}; // will be moved to node on success
 
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
@@ -1325,7 +1325,7 @@ static int begin_end_expression(parser *self) {
 
     log(self, "begin begin...end expression");
     self->indent_level++;
-    ast_node_array exprs = {.alloc = self->parser_arena}; // will be moved to node on success
+    ast_node_array exprs = {.alloc = self->ast_arena}; // will be moved to node on success
 
     if (eat_newlines(self)) {
         self->error.tag = tl_err_unfinished_begin_end;
@@ -1588,7 +1588,10 @@ static int expression_let(parser *self) {
 }
 
 int parser_next(parser *parser) {
-    return toplevel(parser);
+    int res = toplevel(parser);
+
+    arena_reset(parser->transient);
+    return res;
 }
 
 int parser_parse_all(parser *p, ast_node_array *out) {
@@ -1598,7 +1601,7 @@ int parser_parse_all(parser *p, ast_node_array *out) {
         ast_node *node;
 
         parser_result(p, &node);
-        log(p, "parse_all: parsed node %s", ast_node_to_string(p->debug_arena, node));
+        log(p, "parse_all: parsed node %s", ast_node_to_string(p->transient, node));
 
         array_push(*out, &node);
     }

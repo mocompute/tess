@@ -326,6 +326,17 @@ void arena_deinit(allocator *arena_) {
     alloc_invalidate(arena);
 }
 
+void arena_reset(allocator *arena_) {
+    // resets every block to size 0 (plus arena_header)
+    arena_allocator *arena = (arena_allocator *)arena_;
+    arena_header    *next  = arena->head;
+
+    while (next) {
+        next->size = sizeof(arena_header);
+        next       = next->next;
+    }
+}
+
 // -- leak detector allocator --
 
 enum leak_status {
