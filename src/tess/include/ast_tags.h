@@ -13,6 +13,9 @@
 #define TL_AST_CLEAR_BITS(x) GET_FIELD((x), 0, TL_AST_BIT_ARRAY - 1)
 
 typedef enum ast_tag : u16 {
+    ast_nil,
+
+    ast_assignment,
     ast_bool,
     ast_eof,
     ast_f64,
@@ -20,7 +23,6 @@ typedef enum ast_tag : u16 {
     ast_if_then_else,
     ast_infix,
     ast_let_in,
-    ast_nil,
     ast_string,
     ast_symbol,
     ast_u64,

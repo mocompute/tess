@@ -51,17 +51,21 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     switch (clone->tag) {
     case ast_eof:
     case ast_nil:
-    case ast_begin_end:      break;
-    case ast_bool:           clone->bool_.val = orig->bool_.val; break;
+    case ast_begin_end:
+    case ast_lambda_declaration:
+    case ast_labelled_tuple:
+    case ast_tuple:              break;
 
-    case ast_i64:            clone->i64.val = orig->i64.val; break;
-    case ast_u64:            clone->u64.val = orig->u64.val; break;
-    case ast_f64:            clone->f64.val = orig->f64.val; break;
+    case ast_bool:               clone->bool_.val = orig->bool_.val; break;
+    case ast_i64:                clone->i64.val = orig->i64.val; break;
+    case ast_u64:                clone->u64.val = orig->u64.val; break;
+    case ast_f64:                clone->f64.val = orig->f64.val; break;
 
-    case ast_labelled_tuple: {
-        struct ast_labelled_tuple *vclone = ast_node_lt(clone), *vorig = ast_node_lt((ast_node *)orig);
-        for (u32 i = 0; i < vorig->n_elements; ++i)
-            vclone->names[i] = ast_node_clone(alloc, vorig->names[i]);
+    case ast_assignment:         {
+        struct ast_assignment *vclone = ast_node_assignment(clone),
+                              *vorig  = ast_node_assignment((ast_node *)orig);
+        vclone->name                  = ast_node_clone(alloc, vorig->name);
+        vclone->value                 = ast_node_clone(alloc, vorig->value);
     } break;
 
     case ast_symbol:
@@ -78,8 +82,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->right = ast_node_clone(alloc, vorig->right);
         vclone->op    = vorig->op;
     } break;
-
-    case ast_tuple:  break;
 
     case ast_let_in: {
         struct ast_let_in *vclone = ast_node_let_in(clone), *vorig = ast_node_let_in((ast_node *)orig);
@@ -114,8 +116,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                                         *vorig  = ast_node_fd((ast_node *)orig);
         vclone->name                            = ast_node_clone(alloc, vorig->name);
     } break;
-
-    case ast_lambda_declaration:          break;
 
     case ast_lambda_function_application: {
         struct ast_lambda_application *vclone = ast_node_lambda(clone),
@@ -196,18 +196,18 @@ static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 c
     return list;
 }
 
-static sexp named_elements_to_sexp(allocator *alloc, struct ast_node **names, ast_node **elements,
-                                   u16 const n, sexp (*symbol_fun)(allocator *, ast_node const *)) {
+// static sexp named_elements_to_sexp(allocator *alloc, struct ast_node **names, ast_node **elements,
+//                                    u16 const n, sexp (*symbol_fun)(allocator *, ast_node const *)) {
 
-    sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
-    for (size_t i = 0; i < n; ++i) {
-        sexp_elements[i] = sexp_init_list_pair(alloc, do_ast_node_to_sexp(alloc, names[i], symbol_fun),
-                                               do_ast_node_to_sexp(alloc, elements[i], symbol_fun));
-    }
-    sexp list = sexp_init_list(alloc, sexp_elements, n);
-    alloc_free(alloc, sexp_elements);
-    return list;
-}
+//     sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
+//     for (size_t i = 0; i < n; ++i) {
+//         sexp_elements[i] = sexp_init_list_pair(alloc, do_ast_node_to_sexp(alloc, names[i], symbol_fun),
+//                                                do_ast_node_to_sexp(alloc, elements[i], symbol_fun));
+//     }
+//     sexp list = sexp_init_list(alloc, sexp_elements, n);
+//     alloc_free(alloc, sexp_elements);
+//     return list;
+// }
 
 sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
@@ -275,13 +275,15 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_string: return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
+    case ast_assignment:
+        return triple(alloc, recur(node->assignment.name), sym("="), recur(node->assignment.value));
+
     case ast_infix:
         return penta(alloc, sym("infix"), sym(ast_operator_to_string(node->infix.op)),
                      recur(node->infix.left), recur(node->infix.right), type);
 
     case ast_labelled_tuple: {
-        struct ast_labelled_tuple *v = ast_node_lt((ast_node *)node);
-        sexp list = named_elements_to_sexp(alloc, v->names, v->elements, v->n_elements, symbol_fun);
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return triple(alloc, sym("labelled-tuple"), list, type);
 
     } break;
@@ -446,8 +448,14 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_tuple:
     case ast_lambda_declaration:
     case ast_begin_end:
+    case ast_labelled_tuple:
         //
         return;
+
+    case ast_assignment:
+        fun(ctx, node->assignment.name);
+        fun(ctx, node->assignment.value);
+        break;
 
     case ast_infix:
         fun(ctx, node->infix.left);
@@ -470,11 +478,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->if_then_else.yes);
         fun(ctx, node->if_then_else.no);
         break;
-
-    case ast_labelled_tuple: {
-        struct ast_labelled_tuple *v = ast_node_lt(node);
-        for (u32 i = 0; i < v->n_elements; ++i) fun(ctx, v->names[i]);
-    } break;
 
     case ast_lambda_function:
         //
@@ -529,6 +532,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     if (!node) return;
 
     switch (node->tag) {
+    case ast_assignment:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -609,10 +613,21 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_bool",          "ast_eof",           "ast_f64",    "ast_i64",
-      "ast_if_then_else",  "ast_infix",         "ast_let_in", "ast_nil",
-      "ast_string",        "ast_symbol",        "ast_u64",    "ast_user_type_definition",
-      "ast_user_type_get", "ast_user_type_set",
+      "ast_nil",
+      "ast_assignment",
+      "ast_bool",
+      "ast_eof",
+      "ast_f64",
+      "ast_i64",
+      "ast_if_then_else",
+      "ast_infix",
+      "ast_let_in",
+      "ast_string",
+      "ast_symbol",
+      "ast_u64",
+      "ast_user_type_definition",
+      "ast_user_type_get",
+      "ast_user_type_set",
     };
 
     static char const *const strings2[] = {
@@ -683,6 +698,11 @@ c_string_csized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
 struct ast_symbol *ast_node_sym(ast_node *node) {
     assert(node->tag == ast_symbol || node->tag == ast_string);
     return &node->symbol;
+}
+
+struct ast_assignment *ast_node_assignment(ast_node *node) {
+    assert(node->tag == ast_assignment);
+    return &node->assignment;
 }
 
 struct ast_bool *ast_node_bool(ast_node *node) {

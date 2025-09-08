@@ -87,7 +87,7 @@ static int           eat_newlines(parser *);
 static int           next_token(parser *);
 
 static int           a_arrow(parser *);
-static int           a_bool(parser *);
+static int           a_assignment(parser *);
 static int           a_bool(parser *);
 static int           a_close_round(parser *);
 static int           a_colon(parser *);
@@ -102,6 +102,7 @@ static int           a_field_setter(parser *);
 static int           a_identifier(parser *);
 static int           a_identifier_typed(parser *);
 static int           a_infix_operator(parser *);
+static int           a_labelled_tuple(parser *);
 static int           a_literal(parser *);
 static int           a_newline(parser *);
 static int           a_nil(parser *);
@@ -611,6 +612,66 @@ static int a_bool(parser *p) {
     return 1;
 }
 
+static int a_labelled_tuple(parser *self) {
+    // (label1 = expr1, ...)
+    if (a_try(self, a_open_round)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    ast_node_array assignments = {.alloc = self->ast_arena};
+
+    if (a_try(self, a_assignment)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    array_push(assignments, &self->result);
+
+    if (a_try(self, a_comma)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    int count = 0;
+    while (true) {
+
+        if (0 == a_try(self, a_close_round)) {
+
+            if (assignments.size > 0xff) {
+                too_many_arguments(self);
+                goto error;
+            }
+
+            ast_node *node = ast_node_create(self->ast_arena, ast_labelled_tuple);
+            array_shrink(assignments);
+
+            node->array.n     = (u8)assignments.size;
+            node->array.nodes = assignments.v;
+
+            log(self, "labelled_tuple: %s", ast_node_to_string(self->transient, node));
+
+            return result_ast_node(self, node);
+        }
+
+        // comma required if this is not the first time through the loop
+        if (count++ > 0)
+            if (a_try(self, a_comma)) {
+                self->error.tag = tl_err_expected_comma;
+                goto error;
+            }
+
+        // next assignment expression
+        if (0 == a_try(self, a_assignment)) array_push(assignments, &self->result);
+
+        // loop to check for close round
+    }
+
+error:
+    array_free(assignments);
+    return 1;
+}
+
 static int a_literal(parser *p) {
     if (0 == a_try(p, a_string)) return 0;
     if (0 == a_try(p, a_number)) return 0;
@@ -653,6 +714,34 @@ static int a_arrow(parser *p) {
 
     p->error.tag = tl_err_expected_arrow;
     return 1;
+}
+
+static int a_assignment(parser *self) {
+    // ident1 = expr1
+
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+    ast_node *name = self->result;
+
+    if (a_try(self, a_equal_sign)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    if (a_try(self, expression)) {
+        self->error.tag = tl_err_expected_assignment_value;
+        return 1;
+    }
+    ast_node *value        = self->result;
+
+    ast_node *node         = ast_node_create(self->ast_arena, ast_assignment);
+    node->assignment.name  = name;
+    node->assignment.value = value;
+    log(self, "assignment: %s = %s", ast_node_to_string(self->transient, name),
+        ast_node_to_string(self->transient, value));
+    return result_ast_node(self, node);
 }
 
 static int a_nil(parser *p) {
@@ -1275,24 +1364,24 @@ static int tuple_expression(parser *self) {
 
     array_push(elements, &self->result);
 
-    if (a_comma(self)) goto cleanup;
+    if (a_try(self, a_comma)) goto cleanup;
 
     log(self, "begin tuple");
 
     int count = 0;
-
     while (true) {
 
         if (0 == a_try(self, a_close_round)) {
+            if (elements.size > 0xff) {
+                too_many_arguments(self);
+                goto cleanup;
+            }
+
             ast_node *node = ast_node_create(self->ast_arena, ast_tuple);
 
             array_shrink(elements);
             node->array.n     = (u8)elements.size;
             node->array.nodes = elements.v;
-            if (elements.size > 0xff) {
-                too_many_arguments(self);
-                goto cleanup;
-            }
 
             return result_ast_node(self, node);
         }
@@ -1305,11 +1394,9 @@ static int tuple_expression(parser *self) {
             }
 
         // expression
-        if (0 == a_try(self, expression)) {
-            array_push(elements, &self->result);
-        }
+        if (0 == a_try(self, expression)) array_push(elements, &self->result);
 
-        // loop to check for close round, or else
+        // loop to check for close round
     }
 
 cleanup:
@@ -1411,41 +1498,44 @@ static int expression(parser *self) {
 
     self->indent_level++;
 
-    if (0 == a_try(self, &expression_let)) goto success;
+    if (0 == a_try(self, expression_let)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &infix_operation)) goto success;
+    if (0 == a_try(self, infix_operation)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &tuple_expression)) goto success;
+    if (0 == a_try(self, a_labelled_tuple)) goto success; // TODO naming is odd
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &if_then_else)) goto success;
+    if (0 == a_try(self, tuple_expression)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &lambda_function_application)) goto success; // before lambda_function
+    if (0 == a_try(self, if_then_else)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &lambda_function)) goto success;
+    if (0 == a_try(self, lambda_function_application)) goto success; // before lambda_function
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &function_application)) goto success;
+    if (0 == a_try(self, lambda_function)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &grouped_expression)) goto success;
+    if (0 == a_try(self, function_application)) goto success;
     if (has_error(self)) goto error;
 
-    if (0 == a_try(self, &begin_end_expression)) goto success;
+    if (0 == a_try(self, grouped_expression)) goto success;
+    if (has_error(self)) goto error;
+
+    if (0 == a_try(self, begin_end_expression)) goto success;
     if (has_error(self)) goto error;
 
     // the rest of the cases are standalone values
 
-    if (0 == a_try(self, &a_nil)) goto success;
-    if (0 == a_try(self, &a_field_setter)) goto success; // before field_access
-    if (0 == a_try(self, &a_field_access)) goto success;
-    if (0 == a_try(self, &a_identifier)) goto success;
-    if (0 == a_try(self, &a_number)) goto success;
-    if (0 == a_try(self, &a_bool)) goto success;
+    if (0 == a_try(self, a_nil)) goto success;
+    if (0 == a_try(self, a_field_setter)) goto success; // before field_access
+    if (0 == a_try(self, a_field_access)) goto success;
+    if (0 == a_try(self, a_identifier)) goto success;
+    if (0 == a_try(self, a_number)) goto success;
+    if (0 == a_try(self, a_bool)) goto success;
 
     self->error.tag = tl_err_expected_expression;
 

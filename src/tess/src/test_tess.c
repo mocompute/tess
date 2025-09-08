@@ -343,6 +343,14 @@ static int test_user_struct(void) {
     return compile_input_flag(input, false);
 }
 
+static int test_labelled_tuple(void) {
+    int         error = 0;
+    char const *input = "let x = (x1 = 1, x2 = 2) in x1 end";
+    return compile_input_flag(input, true);
+
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -370,6 +378,7 @@ int main(void) {
     T(test_grouped);
     T(test_user_struct_empty);
     T(test_user_struct);
+    T(test_labelled_tuple);
 
     return error;
 }

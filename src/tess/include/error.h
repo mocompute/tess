@@ -19,6 +19,7 @@
     X(tl_err_unfinished_lambda_declaration, "unfinished_lambda_declaration")                               \
     X(tl_err_expected_struct_name, "expected_struct_name")                                                 \
     X(tl_err_expected_argument, "expected_argument")                                                       \
+    X(tl_err_expected_assignment_value, "expected_assignment_value")                                       \
     X(tl_err_expected_expression, "expected_expression")                                                   \
     X(tl_err_expected_body, "expected_body")                                                               \
     X(tl_err_expected_keyword_then, "expected_keyword_then")                                               \

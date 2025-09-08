@@ -293,10 +293,17 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     // user type fields.
 
     switch (node->tag) {
+
     case ast_symbol: {
         struct ast_symbol *v = ast_node_sym(node);
         return rename_if_match(self->alloc, &v->name, self->map, &v->original);
     }
+
+    case ast_assignment: {
+        struct ast_assignment *v = ast_node_assignment(node);
+        rename_variables(self, v->name);
+        rename_variables(self, v->value);
+    } break;
 
     case ast_infix: {
         struct ast_infix *v = ast_node_infix(node);
@@ -503,23 +510,28 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     constraint_sized               *subs = ctx->substitutions;
 
     tl_type                       **buf[UINT8_MAX + 1];
-    memset(buf, 0, sizeof buf);
+    u32                             buf_size = 0;
 
+    // find additional types in ast variants
     switch (node->tag) {
+
     case ast_let: {
         struct ast_let *v = ast_node_let(node);
         buf[0]            = &v->arrow;
+        buf_size          = 1;
     } break;
 
     case ast_user_type_definition: {
         struct ast_user_type_def *v = ast_node_utd(node);
         for (u8 i = 0; i < v->n_fields; ++i) buf[i] = &v->field_types[i];
+        buf_size = v->n_fields;
     } break;
 
     case ast_user_type_get: {
         struct ast_user_type_get *v = ast_node_utg(node);
         buf[0]                      = &v->struct_name->type;
         buf[1]                      = &v->field_name->type;
+        buf_size                    = 2;
     } break;
 
     case ast_user_type_set: {
@@ -527,8 +539,10 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
         buf[0]                      = &v->struct_name->type;
         buf[1]                      = &v->field_name->type;
         buf[2]                      = &v->value->type;
+        buf_size                    = 3;
     } break;
 
+    case ast_assignment:
     case ast_begin_end:
     case ast_user_type:
     case ast_eof:
@@ -554,10 +568,8 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     for (u32 i = 0; i < subs->size; ++i) {
         ctx->count += apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
 
-        tl_type ***p = &buf[0];
-        while (*p) {
-            ctx->count += apply_one_substitution(*p++, subs->v[i].left, subs->v[i].right);
-        }
+        for (u32 j = 0; j < buf_size; ++j)
+            ctx->count += apply_one_substitution(buf[j], subs->v[i].left, subs->v[i].right);
     }
 }
 
@@ -743,6 +755,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
     } break;
 
+    case ast_assignment:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -930,6 +943,11 @@ void collect_constraints(void *ctx_, ast_node *node) {
         }
 
     } break;
+
+    case ast_assignment:
+        //
+        push(node->type, node->assignment.value->type);
+        break;
 
     case ast_i64:
     case ast_u64:

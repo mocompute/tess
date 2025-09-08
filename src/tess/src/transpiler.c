@@ -229,6 +229,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_let:                         return a_let(self, node);
+    case ast_assignment:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -392,13 +393,14 @@ static int a_eval(transpiler *self, ast_node const *node) {
     out_put_fmt(self, " %s;\n", var);
 
     switch (node->tag) {
+    case ast_assignment:
     case ast_eof:
-    case ast_nil:    out_put_start_fmt(self, "%s = NULL;\n", var); break;
-    case ast_symbol: out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node)); break;
-    case ast_string: out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
-    case ast_i64:    out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
-    case ast_u64:    out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
-    case ast_f64:    out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
+    case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
+    case ast_symbol:     out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node)); break;
+    case ast_string:     out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
+    case ast_i64:        out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
+    case ast_u64:        out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
+    case ast_f64:        out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
     case ast_bool:
         if (node->bool_.val) out_put_start_fmt(self, "%s = true;\n", var);
         else out_put_start_fmt(self, "%s = false;\n", var);
