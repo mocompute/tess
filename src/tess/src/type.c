@@ -175,7 +175,11 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
     }
 }
 
-u64 tl_type_hash(tl_type *self) {
+u64 tl_type_hash(tl_type const *self) {
+    return tl_type_hash_ext(self, false);
+}
+
+u64 tl_type_hash_ext(tl_type const *self, bool ignore_names) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
     // NOTE: Uses reference equality for subtypes, so it is possible
@@ -194,7 +198,7 @@ u64 tl_type_hash(tl_type *self) {
         break;
 
     case type_tuple: {
-        struct tlt_tuple *v = tl_type_tup(self);
+        struct tlt_tuple const *v = tl_type_tup((tl_type *)self);
         for (u32 i = 0; i < v->elements.size; ++i)
             hash = hash64_combine(hash, (byte *)&v->elements.v[i], sizeof v->elements.v[0]);
 
@@ -202,27 +206,29 @@ u64 tl_type_hash(tl_type *self) {
 
         //
     case type_labelled_tuple: {
-        struct tlt_labelled_tuple *v = tl_type_lt(self);
+        struct tlt_labelled_tuple const *v = tl_type_lt((tl_type *)self);
 
         for (u32 i = 0; i < v->fields.size; ++i)
             hash = hash64_combine(hash, (byte *)&v->fields.v[i], sizeof v->fields.v[0]);
-        for (u32 i = 0; i < v->names.size; ++i)
-            hash = hash64_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
+
+        if (!ignore_names)
+            for (u32 i = 0; i < v->names.size; ++i)
+                hash = hash64_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
 
     } break;
 
     case type_arrow: {
-        struct tlt_arrow *v = tl_type_arrow(self);
-        hash                = hash64_combine(hash, (byte *)&v->left, sizeof(tl_type *));
-        hash                = hash64_combine(hash, (byte *)&v->right, sizeof(tl_type *));
+        struct tlt_arrow const *v = tl_type_arrow((tl_type *)self);
+        hash                      = hash64_combine(hash, (byte *)&v->left, sizeof(tl_type *));
+        hash                      = hash64_combine(hash, (byte *)&v->right, sizeof(tl_type *));
     } break;
 
     case type_user: {
-        struct tlt_user *v = tl_type_user(self);
-        hash               = hash64_combine(hash, (byte *)v->name, strlen(v->name));
+        struct tlt_user const *v = tl_type_user((tl_type *)self);
+        hash                     = hash64_combine(hash, (byte *)v->name, strlen(v->name));
 
-        u64 lt_hash        = tl_type_hash(v->labelled_tuple);
-        hash               = hash64_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
+        u64 lt_hash              = tl_type_hash(v->labelled_tuple);
+        hash                     = hash64_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
     } break;
 
     case type_type_var: {

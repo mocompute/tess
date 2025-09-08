@@ -1528,7 +1528,7 @@ static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_a
                 fatal("generate_tuple_function: unexpected polymorphic type");
     }
 
-    u64 hash = tl_type_hash(node->type);
+    u64 hash = tl_type_hash_ext(node->type, true); // ignore labelled_tuple names
     if (type_registry_find_hash(self->type_registry, hash))
         fatal("generate_tuple_function: constructor already exists");
 
