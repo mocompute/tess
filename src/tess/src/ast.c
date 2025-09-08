@@ -45,6 +45,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_function_declaration:
     case ast_lambda_declaration:
     case ast_let:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_lambda_function_application:
     case ast_named_function_application:
@@ -76,15 +77,21 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     switch (clone->tag) {
     case ast_eof:
     case ast_nil:
-    case ast_begin_end: break;
-    case ast_bool:      clone->bool_.val = orig->bool_.val; break;
+    case ast_begin_end:      break;
+    case ast_bool:           clone->bool_.val = orig->bool_.val; break;
 
-    case ast_i64:       clone->i64.val = orig->i64.val; break;
-    case ast_u64:       clone->u64.val = orig->u64.val; break;
-    case ast_f64:       clone->f64.val = orig->f64.val; break;
+    case ast_i64:            clone->i64.val = orig->i64.val; break;
+    case ast_u64:            clone->u64.val = orig->u64.val; break;
+    case ast_f64:            clone->f64.val = orig->f64.val; break;
+
+    case ast_labelled_tuple: {
+        struct ast_labelled_tuple *vclone = ast_node_lt(clone), *vorig = ast_node_lt((ast_node *)orig);
+        for (u32 i = 0; i < vorig->n_elements; ++i)
+            vclone->names[i] = ast_node_clone(alloc, vorig->names[i]);
+    } break;
 
     case ast_symbol:
-    case ast_string:    {
+    case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         mos_string_copy(alloc, &vclone->name, &vorig->name);
         mos_string_copy(alloc, &vclone->original, &vorig->original);
@@ -209,11 +216,21 @@ static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 c
                              sexp (*symbol_fun)(allocator *, ast_node const *)) {
 
     sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
-
     for (size_t i = 0; i < n; ++i) sexp_elements[i] = do_ast_node_to_sexp(alloc, elements[i], symbol_fun);
-
     sexp list = sexp_init_list(alloc, sexp_elements, n);
+    alloc_free(alloc, sexp_elements);
+    return list;
+}
 
+static sexp named_elements_to_sexp(allocator *alloc, struct ast_node **names, ast_node **elements,
+                                   u16 const n, sexp (*symbol_fun)(allocator *, ast_node const *)) {
+
+    sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
+    for (size_t i = 0; i < n; ++i) {
+        sexp_elements[i] = sexp_init_list_pair(alloc, do_ast_node_to_sexp(alloc, names[i], symbol_fun),
+                                               do_ast_node_to_sexp(alloc, elements[i], symbol_fun));
+    }
+    sexp list = sexp_init_list(alloc, sexp_elements, n);
     alloc_free(alloc, sexp_elements);
     return list;
 }
@@ -287,6 +304,13 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_infix:
         return penta(alloc, sym("infix"), sym(ast_operator_to_string(node->infix.op)),
                      recur(node->infix.left), recur(node->infix.right), type);
+
+    case ast_labelled_tuple: {
+        struct ast_labelled_tuple *v = ast_node_lt((ast_node *)node);
+        sexp list = named_elements_to_sexp(alloc, v->names, v->elements, v->n_elements, symbol_fun);
+        return triple(alloc, sym("labelled-tuple"), list, type);
+
+    } break;
 
     case ast_tuple: {
 
@@ -438,6 +462,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_let:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_user_type:                   {
         struct ast_array *v = ast_node_arr(node);
@@ -497,6 +522,11 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->if_then_else.yes);
         fun(ctx, node->if_then_else.no);
         break;
+
+    case ast_labelled_tuple: {
+        struct ast_labelled_tuple *v = ast_node_lt(node);
+        for (u32 i = 0; i < v->n_elements; ++i) fun(ctx, v->names[i]);
+    } break;
 
     case ast_lambda_function:
         //
@@ -560,6 +590,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_infix:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
     case ast_if_then_else:
@@ -692,6 +723,7 @@ static void validate_one_node(void *ctx, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_infix:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
     case ast_let:
@@ -772,6 +804,7 @@ struct ast_array *ast_node_arr(ast_node *node) {
     case ast_user_type:
     case ast_user_type_get:
     case ast_user_type_set:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_let:
     case ast_lambda_function:
@@ -825,6 +858,11 @@ struct ast_lambda_application *ast_node_lambda(ast_node *node) {
 struct ast_named_application *ast_node_named(ast_node *node) {
     assert(node->tag == ast_named_function_application);
     return &node->named_application;
+}
+
+struct ast_labelled_tuple *ast_node_lt(ast_node *node) {
+    assert(node->tag == ast_labelled_tuple);
+    return &node->labelled_tuple;
 }
 
 struct ast_tuple *ast_node_tuple(ast_node *node) {

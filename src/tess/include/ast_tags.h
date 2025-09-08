@@ -16,6 +16,7 @@
     X(ast_string, "string")                                                                                \
     X(ast_infix, "infix")                                                                                  \
     X(ast_tuple, "tuple")                                                                                  \
+    X(ast_labelled_tuple, "labelled_tuple")                                                                \
     X(ast_let_in, "let_in")                                                                                \
     X(ast_let, "let")                                                                                      \
     X(ast_if_then_else, "if_then_else")                                                                    \

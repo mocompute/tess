@@ -293,7 +293,9 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, v->right);
     } break;
 
-    case ast_tuple: {
+    case ast_labelled_tuple:
+    case ast_tuple:          {
+        // for labelled tuples, the names do not need to be renamed
         struct ast_array *v = ast_node_arr(node);
         for (size_t i = 0; i < v->n; ++i) rename_variables(self, v->nodes[i]);
     } break;
@@ -527,6 +529,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_infix:
+    case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
     case ast_if_then_else:
@@ -712,15 +715,15 @@ void assign_type_variables(void *ctx, ast_node *node) {
         node->type     = arrow;
     } break;
 
-    case ast_tuple: {
-        struct ast_tuple *v   = ast_node_tuple(node);
-        tl_type_sized     els = {.size = v->n_elements,
-                                 .v = alloc_malloc(self->type_arena, v->n_elements * sizeof v->elements[0])};
+    case ast_labelled_tuple:
+    case ast_tuple:          {
+        struct ast_array *v = ast_node_arr(node);
+        tl_type_sized els = {.size = v->n, .v = alloc_malloc(self->type_arena, v->n * sizeof v->nodes[0])};
 
         for (u32 i = 0; i < els.size; ++i) {
             // since this is run during a depth first search, all elements
             // will already have been assigned a type
-            els.v[i] = v->elements[i]->type;
+            els.v[i] = v->nodes[i]->type;
         }
 
         tl_type *tup = tl_type_create_tuple(self->type_arena, els);
@@ -972,7 +975,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, v->value->type);
     } break;
 
-    case ast_tuple: {
+    case ast_labelled_tuple:
+    case ast_tuple:          {
         tl_type *els =
           arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
 

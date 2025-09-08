@@ -89,6 +89,12 @@ typedef struct ast_node {
             u8                n_elements;
         } tuple;
 
+        struct ast_labelled_tuple {
+            struct ast_node **elements;
+            u8                n_elements;
+            struct ast_node **names;
+        } labelled_tuple;
+
         struct ast_user_type {
             struct ast_node **fields;
             u8                n_fields;
@@ -177,6 +183,7 @@ struct ast_let                  *ast_node_let(ast_node *);
 struct ast_if_then_else         *ast_node_ifthen(ast_node *);
 struct ast_lambda_application   *ast_node_lambda(ast_node *);
 struct ast_named_application    *ast_node_named(ast_node *);
+struct ast_labelled_tuple       *ast_node_lt(ast_node *);
 struct ast_tuple                *ast_node_tuple(ast_node *);
 struct ast_begin_end            *ast_node_begin_end(ast_node *);
 struct ast_user_type            *ast_node_ut(ast_node *);
