@@ -81,10 +81,16 @@ typedef struct {
     ast_node_array specials;
 } specialize_functions_ctx;
 
+typedef struct {
+    ti_inferer     *self;
+    ast_node_array *added;
+} generate_tuple_function_ctx;
+
 static size_t     ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
 static void       ti_assign_type_variables(ti_inferer *);
 static void       ti_collect_and_solve(ti_inferer *, bool);
 static void       ti_collect_constraints(ti_inferer *);
+static void       ti_generate_tuple_functions(ti_inferer *);
 static void       ti_generate_user_type_functions(ti_inferer *);
 static void       ti_rename_variables(ti_inferer *);
 static void       ti_run_solver(ti_inferer *);
@@ -103,11 +109,13 @@ static void       specialize_node(void *, ast_node *);
 static size_t     apply_one_substitution(tl_type **, tl_type *, tl_type *);
 static void       assign_type_variables(void *, ast_node *);
 static void       collect_constraints(void *, ast_node *);
+static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_array *);
 static bool       substitute_constraints(constraint *, constraint *, constraint const);
 static u32        unify_one(ti_inferer *, constraint);
 
 static ast_node  *make_specialized(specialize_functions_ctx *, ast_node *, tl_type *);
 static char      *make_specialized_name(ti_inferer *, char const *);
+static ast_node  *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
 static ast_node  *make_type_constructor_function(ti_inferer *, char const *, tl_type *);
 static tl_type   *make_typevar(ti_inferer *);
 static constraint make_constraint(tl_type *, tl_type *);
@@ -193,7 +201,7 @@ int ti_inferer_run(ti_inferer *self) {
     self->constrain_function_applications = false;
     ti_collect_and_solve(self, false);
 
-    // specialize
+    // specialize generic functions
 
     if (self->verbose) {
         dbg("\n\nti_inferer_run: before specialisation:\n");
@@ -230,6 +238,10 @@ int ti_inferer_run(ti_inferer *self) {
 
     // any remaining constraints indicate an ill-typed program
     if (self->constraints.size) return 1;
+
+    // create tuple constructors now that we have complete type information
+    ti_generate_tuple_functions(self);
+
     return 0;
 }
 
@@ -655,6 +667,10 @@ static bool substitute_constraints(constraint *begin, constraint *end, constrain
     return count != 0;
 }
 
+static bool is_any_tuple(tl_type *self) {
+    return type_tuple == self->tag || type_labelled_tuple == self->tag;
+}
+
 static u32 unify_one(ti_inferer *self, constraint c) {
     if (c.left == c.right || tl_type_equal(c.left, c.right)) return 0;
 
@@ -676,13 +692,13 @@ static u32 unify_one(ti_inferer *self, constraint c) {
     }
 
     // tuple constraints of equal size: unify matching elements
-    else if (type_tuple == c.left->tag && type_tuple == c.right->tag &&
-             c.left->tuple.elements.size == c.right->tuple.elements.size) {
+    else if (is_any_tuple(c.left) && is_any_tuple(c.right) &&
+             c.left->array.elements.size == c.right->array.elements.size) {
 
         u32 count = 0;
-        for (size_t i = 0; i < c.left->tuple.elements.size; ++i) {
+        for (size_t i = 0; i < c.left->array.elements.size; ++i) {
             count +=
-              unify_one(self, make_constraint(c.left->tuple.elements.v[i], c.right->tuple.elements.v[i]));
+              unify_one(self, make_constraint(c.left->array.elements.v[i], c.right->array.elements.v[i]));
         }
 
         return count;
@@ -717,6 +733,15 @@ static void ti_run_solver(ti_inferer *self) {
                 array_erase(self->constraints, i);
 
                 // i does not increment
+                continue;
+            }
+
+            // consider tuples and labelled tuples equivalent if their
+            // types satisfy without regard to names
+            else if (is_any_tuple(item->left) && is_any_tuple(item->right) &&
+                     tl_type_satisfies(item->left, item->right)) {
+
+                array_erase(self->constraints, i);
                 continue;
             }
 
@@ -935,7 +960,7 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
 }
 
 static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
-    tl_type **type = type_registry_find(self->type_registry, tl_type_tag_to_string(tag));
+    tl_type **type = type_registry_find_name(self->type_registry, tl_type_tag_to_string(tag));
     if (!type) fatal("get_prim: failed to find '%s'", tl_type_tag_to_string(tag));
 
     return *type;
@@ -998,7 +1023,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_user_type: {
 
         tl_type **type =
-          type_registry_find(self->type_registry, ast_node_name_string(node->user_type.name));
+          type_registry_find_name(self->type_registry, ast_node_name_string(node->user_type.name));
         if (!type)
             fatal("collect_constraints: failed to find type '%s'",
                   ast_node_name_string(node->user_type.name));
@@ -1044,9 +1069,19 @@ void collect_constraints(void *ctx_, ast_node *node) {
             push(ass->name->type, ass->value->type);
         }
 
-        tl_type *els =
-          arguments_to_tuple_type(self->type_arena, (ast_node const **)node->array.nodes, node->array.n);
-        push(node->type, els);
+        // extract assignment names and value types into arrays
+        tl_type_array   fields = {.alloc = self->type_arena};
+        c_string_carray names  = {.alloc = self->type_arena};
+        for (u32 i = 0; i < v->n_assignments; ++i) {
+            char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
+            array_push(names, &name);
+            array_push(fields, &v->assignments[i]->assignment.value->type);
+        }
+
+        tl_type *lt = tl_type_create_labelled_tuple(self->type_arena, (tl_type_sized)sized_all(fields),
+                                                    (c_string_csized)sized_all(names));
+
+        push(node->type, lt);
     } break;
 
     case ast_tuple: {
@@ -1363,7 +1398,7 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
 }
 
 static void ti_generate_user_type_functions(ti_inferer *self) {
-    // generate required functions for user defined types: constructors, getters and setters.
+    // generate required functions for user defined types: constructors
 
     ast_node_array added = {.alloc = self->type_arena};
 
@@ -1375,7 +1410,7 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
         // type must be registered
         char const *type_name = ast_node_name_string(v->name);
-        tl_type   **ty        = type_registry_find(self->type_registry, type_name);
+        tl_type   **ty        = type_registry_find_name(self->type_registry, type_name);
         if (!ty) fatal("generate_user_type_functions: could not find type '%s'", type_name);
 
         // make constructor
@@ -1388,6 +1423,141 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
     for (u32 i = 0; i < added.size; ++i) {
         log(self, "generate_user_type_functions: adding %s",
             ast_node_to_string(self->transient, added.v[i]));
+        array_push(*self->nodes, &added.v[i]);
+    }
+}
+
+//
+
+static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast_node *node) {
+    // create a let_node with parameters matching the user_type fields, and a body with a single node, a
+    // user_type literal
+
+    // constructor name: _gen_make_{type}_
+    char *generated_name = null;
+    {
+#define fmt "_gen_make_tup_%zu_"
+        int len = snprintf(null, 0, fmt, hash) + 1;
+        if (len < 0) fatal("make_tuple_constructor_function: generate name failed.");
+        generated_name = alloc_malloc(self->type_arena, (u32)len);
+        snprintf(generated_name, (u32)len, fmt, hash);
+#undef fmt
+    }
+
+    ast_node *out             = ast_node_create(self->type_arena, ast_let);
+    out->type                 = *type_registry_find_name(self->type_registry, "nil");
+    out->let.name             = mos_string_init(self->type_arena, generated_name);
+    out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
+
+    if (ast_labelled_tuple == node->tag) {
+        // make params array from labelled_tuple
+        struct ast_labelled_tuple *lt = ast_node_lt(node);
+
+        out->let.n_parameters         = (u8)lt->n_assignments;
+        out->let.parameters =
+          alloc_malloc(self->type_arena, out->let.n_parameters * sizeof out->let.parameters[0]);
+
+        for (u16 i = 0; i < out->let.n_parameters; ++i)
+            out->let.parameters[i] = lt->assignments[i]->assignment.name;
+
+        // the body is a single node with the tuple literal
+        out->let.body                = ast_node_create(self->type_arena, ast_labelled_tuple);
+        out->let.body->type          = node->type;
+
+        struct ast_labelled_tuple *v = ast_node_lt(out->let.body);
+        v->n_assignments             = out->let.n_parameters;
+        v->assignments = alloc_malloc(self->type_arena, v->n_assignments * sizeof v->assignments[0]);
+        for (u16 i = 0; i < v->n_assignments; ++i) {
+            v->assignments[i] = ast_node_create(self->type_arena, ast_assignment);
+            v->assignments[i]->assignment.name =
+              ast_node_clone(self->type_arena, lt->assignments[i]->assignment.name);
+            v->assignments[i]->assignment.value = out->let.parameters[i];
+            v->assignments[i]->type             = lt->assignments[i]->type;
+        }
+
+    } else {
+        // need to construct names for the anonymous tuple elements
+        struct ast_tuple *tup = ast_node_tuple(node);
+        out->let.n_parameters = (u8)tup->n_elements;
+        out->let.parameters =
+          alloc_malloc(self->type_arena, out->let.n_parameters * sizeof out->let.parameters[0]);
+
+        for (u16 i = 0; i < out->let.n_parameters; ++i) {
+            char buf[32];
+            snprintf(buf, sizeof buf - 1, "x%u", i);
+            out->let.parameters[i] = ast_node_create_sym(self->type_arena, buf);
+        }
+
+        // the body is a single node with the tuple literal
+        out->let.body       = ast_node_create(self->type_arena, ast_tuple);
+        out->let.body->type = node->type;
+
+        struct ast_tuple *v = ast_node_tuple(out->let.body);
+        v->n_elements       = out->let.n_parameters;
+        v->elements         = alloc_malloc(self->type_arena, v->n_elements * sizeof v->elements[0]);
+        for (u16 i = 0; i < v->n_elements; ++i) {
+            v->elements[i]       = out->let.parameters[i];
+            v->elements[i]->type = tup->elements[i]->type;
+        }
+    }
+
+    // make an arrow type for the generated function
+    tl_type *left  = arguments_to_tuple_type(self->type_arena, (ast_node const **)out->let.parameters,
+                                             out->let.n_parameters);
+    tl_type *right = node->type;
+    out->let.arrow = tl_type_create_arrow(self->type_arena, left, right);
+
+    return out;
+}
+
+static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_array *added) {
+    if (ast_tuple != node->tag && ast_labelled_tuple != node->tag) return;
+
+    // we can't run this until type inference has been run far enough for us to infer all types about
+    // these tuples.
+
+    if (ast_tuple == node->tag) {
+        struct ast_tuple *v = ast_node_tuple(node);
+        for (u32 i = 0; i < v->n_elements; ++i)
+            if (tl_type_is_poly(v->elements[i]->type))
+                fatal("generate_tuple_function: unexpected polymorphic type");
+
+    } else {
+        struct ast_labelled_tuple *v = ast_node_lt(node);
+        for (u32 i = 0; i < v->n_assignments; ++i)
+            if (tl_type_is_poly(v->assignments[i]->type))
+                fatal("generate_tuple_function: unexpected polymorphic type");
+    }
+
+    u64 hash = tl_type_hash(node->type);
+    if (type_registry_find_hash(self->type_registry, hash))
+        fatal("generate_tuple_function: constructor already exists");
+
+    if (type_registry_add_hashed(self->type_registry, hash, node->type))
+        fatal("generate_tuple_function: error adding to registry");
+
+    ast_node *constructor = make_tuple_constructor_function(self, hash, node);
+    array_push(*added, &constructor);
+}
+
+static void generate_tuple_function_glue(void *ctx_, ast_node *node) {
+    generate_tuple_function_ctx *ctx  = ctx_;
+    ti_inferer                  *self = ctx->self;
+    return generate_tuple_function(self, node, ctx->added);
+}
+
+static void ti_generate_tuple_functions(ti_inferer *self) {
+    // generate constructor functions for every tuple type in the program.
+
+    ast_node_array              added = {.alloc = self->type_arena};
+    generate_tuple_function_ctx ctx   = {.self = self, .added = &added};
+
+    for (u32 i = 0; i < self->nodes->size; ++i)
+        ast_node_dfs(&ctx, self->nodes->v[i], generate_tuple_function_glue);
+
+    // add nodes to program
+    for (u32 i = 0; i < added.size; ++i) {
+        log(self, "generate_tuple_functions: adding %s", ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
 }

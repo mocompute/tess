@@ -349,9 +349,9 @@ static int test_labelled_tuple(void) {
 }
 
 static int test_let_labelled_tuple(void) {
-    char const *input = "let tup = (x1 = 1, x2 = 2) in\n"
+    char const *input = "let tup = (x1 = 1, x2 = 3) in\n"
                         "let (a = x1) = tup in a end";
-    return compile_input_flag(input, true);
+    return compile_input_flag(input, false);
 }
 
 #define T(name)                                                                                            \

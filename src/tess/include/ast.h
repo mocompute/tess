@@ -36,7 +36,7 @@ typedef struct ast_node {
         struct ast_assignment {
             struct ast_node *name;
             struct ast_node *value;
-        } assignment; // part of a labelled tuple, has no type
+        } assignment;
 
         struct ast_array {
             // all variants with arrays must use this layout

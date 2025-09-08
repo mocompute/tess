@@ -109,6 +109,7 @@ tesslang_create_test(std_dbg)
 tesslang_create_test(struct)
 tesslang_create_test(struct_get)
 tesslang_create_test(struct_set)
+# tesslang_create_test(tuple)
 
 # -- doxygen --
 

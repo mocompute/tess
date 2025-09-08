@@ -426,7 +426,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         // eval each field in the user_type and assign to its matching struct field
         struct ast_user_type const *v = ast_node_ut((ast_node *)node);
 
-        tl_type **type = type_registry_find(self->type_registry, ast_node_name_string(v->name));
+        tl_type **type = type_registry_find_name(self->type_registry, ast_node_name_string(v->name));
         if (!type) fatal("a_eval: type '%s' not found in registry", ast_node_name_string(v->name));
 
         struct tlt_user const           *usertype = tl_type_user(*type);

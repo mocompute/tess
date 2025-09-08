@@ -66,6 +66,41 @@ bool tl_type_is_prim(tl_type const *self) {
     assert(false);
 }
 
+bool tl_type_is_poly(tl_type const *self) {
+    switch (self->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_any:
+    case type_user:   return false;
+
+    case type_tuple:  {
+        struct tlt_tuple *v = tl_type_tup((tl_type *)self);
+        for (u32 i = 0; i < v->elements.size; ++i)
+            if (tl_type_is_poly(v->elements.v[i])) return true;
+        return false;
+
+    } break;
+
+    case type_labelled_tuple: {
+        struct tlt_labelled_tuple *v = tl_type_lt((tl_type *)self);
+        for (u32 i = 0; i < v->fields.size; ++i)
+            if (tl_type_is_poly(v->fields.v[i])) return true;
+        return false;
+
+    } break;
+
+    case type_arrow:
+        //
+        return tl_type_is_poly(self->arrow.left) || tl_type_is_poly(self->arrow.right);
+
+    case type_type_var: return true;
+    }
+    assert(false);
+}
+
 bool tl_type_equal(tl_type const *left, tl_type const *right) {
     return tl_type_compare(left, right) == 0;
 }
@@ -140,8 +175,8 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
     }
 }
 
-u32 tl_type_hash(tl_type *self) {
-    u32 hash = hash32((byte *)&self->tag, sizeof self->tag);
+u64 tl_type_hash(tl_type *self) {
+    u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
     // NOTE: Uses reference equality for subtypes, so it is possible
     // that structurally-equal subtypes may be assigned different
@@ -161,7 +196,7 @@ u32 tl_type_hash(tl_type *self) {
     case type_tuple: {
         struct tlt_tuple *v = tl_type_tup(self);
         for (u32 i = 0; i < v->elements.size; ++i)
-            hash = hash32_combine(hash, (byte *)&v->elements.v[i], sizeof v->elements.v[0]);
+            hash = hash64_combine(hash, (byte *)&v->elements.v[i], sizeof v->elements.v[0]);
 
     } break;
 
@@ -170,28 +205,28 @@ u32 tl_type_hash(tl_type *self) {
         struct tlt_labelled_tuple *v = tl_type_lt(self);
 
         for (u32 i = 0; i < v->fields.size; ++i)
-            hash = hash32_combine(hash, (byte *)&v->fields.v[i], sizeof v->fields.v[0]);
+            hash = hash64_combine(hash, (byte *)&v->fields.v[i], sizeof v->fields.v[0]);
         for (u32 i = 0; i < v->names.size; ++i)
-            hash = hash32_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
+            hash = hash64_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
 
     } break;
 
     case type_arrow: {
         struct tlt_arrow *v = tl_type_arrow(self);
-        hash                = hash32_combine(hash, (byte *)&v->left, sizeof(tl_type *));
-        hash                = hash32_combine(hash, (byte *)&v->right, sizeof(tl_type *));
+        hash                = hash64_combine(hash, (byte *)&v->left, sizeof(tl_type *));
+        hash                = hash64_combine(hash, (byte *)&v->right, sizeof(tl_type *));
     } break;
 
     case type_user: {
         struct tlt_user *v = tl_type_user(self);
-        hash               = hash32_combine(hash, (byte *)v->name, strlen(v->name));
+        hash               = hash64_combine(hash, (byte *)v->name, strlen(v->name));
 
-        u32 lt_hash        = tl_type_hash(v->labelled_tuple);
-        hash               = hash32_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
+        u64 lt_hash        = tl_type_hash(v->labelled_tuple);
+        hash               = hash64_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
     } break;
 
     case type_type_var: {
-        hash = hash32_combine(hash, (byte *)&self->type_var.val, sizeof self->type_var.val);
+        hash = hash64_combine(hash, (byte *)&self->type_var.val, sizeof self->type_var.val);
     }; break;
     }
 
@@ -313,9 +348,10 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: return (requires->tag == candidate->tag);
+    case type_string:         return (requires->tag == candidate->tag);
 
-    case type_tuple:  {
+    case type_labelled_tuple:
+    case type_tuple:          {
 
         // labelled tuples satisfy plain tuples if their types match.
         if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return false;
@@ -327,27 +363,6 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
 
         for (u32 i = 0; i < vreq->elements.size; ++i)
             if (!tl_type_satisfies(vreq->elements.v[i], vcand->elements.v[i])) return false;
-
-        return true;
-    }
-
-    case type_labelled_tuple: {
-        // plain tuples do not satisfy labelled tuples
-        if (type_labelled_tuple != candidate->tag) return false;
-
-        struct tlt_array const *vreqarr  = tl_type_arr((tl_type *) requires),
-                               *vcandarr = tl_type_arr((tl_type *)candidate);
-
-        if (vreqarr->elements.size != vcandarr->elements.size) return false;
-
-        struct tlt_labelled_tuple const *vreq  = tl_type_lt((tl_type *) requires),
-                                        *vcand = tl_type_lt((tl_type *)candidate);
-
-        // names and types must match
-        for (u32 i = 0; i < vreqarr->elements.size; ++i) {
-            if (0 != strcmp(vreq->names.v[i], vcand->names.v[i])) return false;
-            if (!tl_type_satisfies(vreqarr->elements.v[i], vcandarr->elements.v[i])) return false;
-        }
 
         return true;
     }

@@ -84,11 +84,12 @@ nodiscard tl_type *tl_type_create_user_type(allocator *, char const *name,
                                             tl_type *labelled_tuple) mallocfun;
 
 bool               tl_type_is_prim(tl_type const *);
+bool               tl_type_is_poly(tl_type const *);
 bool               tl_type_equal(tl_type const *, tl_type const *);
 int                tl_type_compare(tl_type const *, tl_type const *);
 bool               tl_type_satisfies(tl_type const *req, tl_type const *cand);
 bool               tl_type_contains(tl_type const *, tl_type const *);
-u32                tl_type_hash(tl_type *);
+u64                tl_type_hash(tl_type *);
 
 tl_type           *tl_type_find_user_field_type(tl_type const *, char const *);
 tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const *);
