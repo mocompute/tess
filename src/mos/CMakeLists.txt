@@ -9,9 +9,9 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/file.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/mos_string.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/string_t.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
 )
 
@@ -22,9 +22,9 @@ set(SOURCES
   src/hash.c
   src/file.c
   src/hashmap.c
-  src/mos_string.c
   src/sexp.c
   src/sexp_parser.c
+  src/string_t.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(mos BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})

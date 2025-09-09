@@ -7,7 +7,7 @@
 #include "dbg.h"
 #include "error.h"
 #include "hashmap.h"
-#include "mos_string.h"
+#include "string_t.h"
 #include "type.h"
 #include "type_registry.h"
 

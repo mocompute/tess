@@ -2,8 +2,8 @@
 #define MOS_SEXP_PARSER_H
 
 #include "alloc.h"
-#include "mos_string.h"
 #include "sexp.h"
+#include "string_t.h"
 
 #include <stddef.h>
 

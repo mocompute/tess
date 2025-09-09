@@ -3,8 +3,8 @@
 
 #include "alloc.h"
 #include "array.h"
-#include "mos_string.h"
 #include "nodiscard.h"
+#include "string_t.h"
 
 #include <stdint.h>
 

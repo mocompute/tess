@@ -2,7 +2,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "dbg.h"
-#include "mos_string.h"
+#include "string_t.h"
 
 #include <assert.h>
 #include <inttypes.h>

@@ -3,8 +3,8 @@
 #include "array.h"
 #include "ast_tags.h"
 #include "dbg.h"
-#include "mos_string.h"
 #include "sexp.h"
+#include "string_t.h"
 #include "type.h"
 #include "util.h"
 

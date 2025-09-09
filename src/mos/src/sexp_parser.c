@@ -1,6 +1,6 @@
 #include "sexp_parser.h"
 #include "array.h"
-#include "mos_string.h"
+#include "string_t.h"
 
 #include "alloc.h"
 #include "sexp.h"

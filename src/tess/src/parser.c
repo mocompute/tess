@@ -5,7 +5,7 @@
 #include "ast.h"
 #include "ast_tags.h"
 #include "error.h"
-#include "mos_string.h"
+#include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
 
