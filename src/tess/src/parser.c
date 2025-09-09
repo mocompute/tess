@@ -1750,10 +1750,16 @@ static int expression_let(parser *self) {
     return 1;
 }
 
-int parser_next(parser *parser) {
-    int res = toplevel(parser);
+int parser_next(parser *self) {
+    int res = toplevel(self);
 
-    arena_reset(parser->transient);
+    if (0 == res) {
+        self->result->file = self->error.file;
+        self->result->line = self->error.line;
+    }
+
+    arena_reset(self->transient);
+
     return res;
 }
 

@@ -162,6 +162,8 @@ typedef struct ast_node {
         } user_type_def;
     };
 
+    char const       *file;
+    u32               line;
     tl_type          *type;
     ast_tag           tag;
     enum tl_error_tag error;
