@@ -110,6 +110,7 @@ tesslang_create_test(struct)
 tesslang_create_test(struct_get)
 tesslang_create_test(struct_set)
 tesslang_create_test(tuple)
+tesslang_create_test(tuple_match)
 tesslang_create_test(labelled_tuple)
 
 # -- doxygen --

@@ -45,6 +45,7 @@ static int   a_fun_apply(transpiler *, ast_node const *);
 static int   a_infix(transpiler *, ast_node const *);
 static int   a_let(transpiler *, ast_node const *);
 static int   a_let_in(transpiler *, ast_node const *);
+static int   a_let_match_in(transpiler *, ast_node const *);
 static int   a_main(transpiler *, ast_node const *);
 static int   a_nil_expression(transpiler *, ast_node const *);
 static int   a_result_type_of(transpiler *, tl_type const *);
@@ -308,7 +309,6 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     // let a = 1 in a + 2 end => resN = 3
 
     char const *name = ast_node_name_string(node->let_in.name);
-    log(self, "let_in: name = '%s'", name);
 
     if (a_eval(self, node->let_in.value)) return 1;
     char *value = self->results.v[--self->results.size];
@@ -317,16 +317,39 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     a_result_type_of(self, node->let_in.name->type);
     out_put_fmt(self, " %s = %s;\n", name, value);
 
-    a_eval(self, node->let_in.body);
-    char *body = self->results.v[--self->results.size];
+    // eval the body and leave it on the stack
+    if (a_eval(self, node->let_in.body)) return 1;
 
-    char *var  = next_variable(self);
-    array_push(self->results, &var);
+    return 0;
+}
 
-    out_put(self, "\n");
-    out_put_start(self, "");
-    a_result_type_of(self, node->let_in.body->type);
-    out_put_fmt(self, " %s = %s;\n", var, body);
+static int a_let_match_in(transpiler *self, ast_node const *node) {
+
+    // let tup = (a = 1, b = 0) in
+    // let (res = b) = tup in res end
+
+    struct ast_let_match_in   *v  = ast_node_let_match_in((ast_node *)node);
+    struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+
+    // eval the value so we can access it
+    if (a_eval(self, v->value)) return 1;
+    char *value = self->results.v[--self->results.size];
+
+    // declare variables for each assignment
+    for (u32 i = 0; i < lt->n_assignments; ++i) {
+        // do a field access for the named field of the node's value
+        struct ast_assignment *ass        = ast_node_assignment(lt->assignments[i]);
+        char const            *var_name   = ast_node_name_string(ass->name);
+        char const            *field_name = ast_node_name_string(ass->value);
+
+        out_put_start(self, "");
+        a_result_type_of(self, ass->value->type);
+
+        out_put_start_fmt(self, "%s = %s.%s;\n", var_name, value, field_name);
+    }
+
+    // eval the body and leave it on the stack
+    if (a_eval(self, v->body)) return 1;
 
     return 0;
 }
@@ -484,9 +507,12 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     } break;
 
-    case ast_let_match_in:
-        // FIXME
-        break;
+    case ast_let_match_in: {
+        if (a_let_match_in(self, node)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
+    } break;
 
     case ast_let: {
         if (a_let(self, node)) return 1;
