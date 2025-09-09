@@ -15,9 +15,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
-
 struct transpiler {
     allocator     *alloc;
     allocator     *strings;
@@ -762,6 +759,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     log(self, "processing '%s'...", mos_string_str(&v->specialized_name));
 
     // for tuple constructors, also emit a tuple struct type
+    // TODO putting this here rather than a separate phase seems a bit janky
     if (ast_node_is_tuple_constructor(node)) {
         tl_type *tuple          = v->arrow->arrow.left;
         u64      hash           = tl_type_hash(tuple);
@@ -872,8 +870,6 @@ void log(transpiler *self, char const *restrict fmt, ...) {
 
     va_list args;
     va_start(args, fmt);
-    vfprintf(stderr, buf, args); // NOLINT
+    vfprintf(stderr, buf, args);
     va_end(args);
 }
-
-#pragma clang diagnostic pop

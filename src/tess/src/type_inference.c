@@ -1410,6 +1410,8 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
 
     struct tlt_user *v = tl_type_user(user_type);
 
+    // TODO this is a transpiler concern
+    //
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
     {
