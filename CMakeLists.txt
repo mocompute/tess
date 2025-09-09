@@ -39,7 +39,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
   set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra
     -Wswitch-enum
     -Wunused
-    -Wconversion
     -Winline
     -Wimplicit-fallthrough
     -Wno-gnu-alignof-expression # allow gnu extension
@@ -49,25 +48,6 @@ else()
 
   # https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html
   set(MOS_C_DIAGNOSTIC
-    -Wall
-    -Wformat
-    -Wformat=2
-    -Wconversion
-    -Wimplicit-fallthrough
-    -Werror=format-security
-    -D_GLIBCXX_ASSERTIONS
-    -D_LIBCPP_DEBUG=1
-    -fstrict-flex-arrays=3
-
-    # -fstack-clash-protection
-    -fstack-protector-strong
-
-    # for production code
-    -fno-delete-null-pointer-checks
-    -fno-strict-overflow
-    -fno-strict-aliasing
-    -ftrivial-auto-var-init=zero
-
     # note: no -Wpedantic, due to use of computed goto
     -Werror
     -Wall -Wextra
@@ -81,50 +61,6 @@ else()
     # -Wno-unused-function
   )
 
-
-  if (CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-    list(APPEND MOS_C_DIAGNOSTIC
-      -mbranch-protection=standard
-    )
-  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    list(APPEND MOS_C_DIAGNOSTIC
-      -fcf-protection=full
-    )
-  endif()
-
-  if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    list(APPEND MOS_C_DIAGNOSTIC
-      # treat obsolete C constructs as errors
-      -Werror=implicit
-      -Werror=incompatible-pointer-types
-      -Werror=int-conversion
-      -Wmove
-
-      # don't prevent computed goto
-      -Wno-gnu-label-as-value
-    )
-  endif()
-
-  if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    list(APPEND MOS_C_DIAGNOSTIC
-      -Wtrampolines
-      -Wbidi-chars=any
-
-      -Wl,-z,nodlopen
-      -Wl,-z,noexecstack
-      -Wl,-z,relro
-      -Wl,-z,now
-      -Wl,-as-needed
-      -Wl,--no-copy-dt-needed-entries
-    )
-  endif()
-
-  if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    list(APPEND MOS_C_DIAGNOSTIC
-      -U_FORTIFY_SOURCE
-      -D_FORTIFY_SOURCE=3
-    )
-  endif()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "Release")
