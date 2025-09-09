@@ -99,6 +99,7 @@ function(tesslang_create_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+tesslang_create_test(address_of)
 tesslang_create_test(basic)
 tesslang_create_test(begin_end)
 # tesslang_create_test(fun_apply_type_error)

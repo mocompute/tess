@@ -185,6 +185,16 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
 
+            case '&':
+                replace_token(self->strings, &res, tok_ampersand);
+                state = stop;
+                break;
+
+            case '*':
+                replace_token(self->strings, &res, tok_star);
+                state = stop;
+                break;
+
             case '(':
                 replace_token(self->strings, &res, tok_open_round);
                 state = stop;
@@ -445,6 +455,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ';':
             case ',':
             case '.':
+            case '&':
+            case '*':
                 // these tokens break a symbol TODO there should be more
                 --self->pos;
                 state = stop_symbol;

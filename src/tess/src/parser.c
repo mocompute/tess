@@ -87,6 +87,8 @@ nodiscard static int a_try_special(parser *, parse_fun);
 static int           eat_newlines(parser *);
 static int           next_token(parser *);
 
+static int           a_address_of(parser *);
+static int           a_ampersand(parser *);
 static int           a_arrow(parser *);
 static int           a_assignment(parser *);
 static int           a_bool(parser *);
@@ -430,6 +432,8 @@ static int a_end_of_expression(parser *p) {
     case tok_dot:
     case tok_colon:
     case tok_colon_equal:
+    case tok_ampersand:
+    case tok_star:
     case tok_arrow:
     case tok_open_round:
     case tok_equal_sign:
@@ -467,6 +471,8 @@ static int a_newline(parser *p) {
     case tok_colon:
     case tok_colon_equal:
     case tok_arrow:
+    case tok_ampersand:
+    case tok_star:
     case tok_open_round:
     case tok_equal_sign:
     case tok_invalid:
@@ -477,6 +483,26 @@ static int a_newline(parser *p) {
 
     p->error.tag = tl_err_expected_newline;
     return 1;
+}
+
+static int a_address_of(parser *self) {
+
+    if (a_try(self, a_ampersand)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    // FIXME for now only address of an identifier
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tl_err_expected_addressable;
+        return 1;
+    }
+
+    ast_node *target        = self->result;
+
+    ast_node *node          = ast_node_create(self->ast_arena, ast_address_of);
+    node->address_of.target = target;
+    return result_ast_node(self, node);
 }
 
 static int a_identifier(parser *p) {
@@ -693,6 +719,15 @@ static int a_colon_equal(parser *p) {
     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
     p->error.tag = tl_err_expected_colon_equal;
+    return 1;
+}
+
+static int a_ampersand(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_ampersand == p->token.tag) return result_ast_str(p, ast_symbol, "&");
+
+    p->error.tag = tl_err_expected_ampersand;
     return 1;
 }
 
@@ -1055,24 +1090,12 @@ static int function_argument(parser *p) {
     log(p, "try function_argument");
 
     p->indent_level++;
-
-    log(p, "function_argument: try grouped_expression");
     if (0 == a_try(p, grouped_expression)) goto cleanup;
-
-    log(p, "function_argument: try nil");
     if (0 == a_try(p, a_nil)) goto cleanup;
-
-    log(p, "function_argument: try field access");
     if (0 == a_try(p, &a_field_access)) goto cleanup;
-
-    log(p, "function_argument: try identifier");
     if (0 == a_try(p, a_identifier)) goto cleanup;
-
-    log(p, "function_argument: try literal");
     if (0 == a_try(p, a_literal)) goto cleanup;
-
     p->indent_level--;
-    log(p, "not function_argument");
 
     p->indent_level--;
     return 1;
@@ -1533,6 +1556,7 @@ static int expression(parser *self) {
     if (0 == a_try(self, a_field_setter)) goto success; // before field_access
     if (0 == a_try(self, a_field_access)) goto success;
     if (0 == a_try(self, a_identifier)) goto success;
+    if (0 == a_try(self, a_address_of)) goto success;
     if (0 == a_try(self, a_number)) goto success;
     if (0 == a_try(self, a_bool)) goto success;
 

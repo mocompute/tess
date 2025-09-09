@@ -110,6 +110,10 @@ typedef struct ast_node {
 
         // below have no array
 
+        struct ast_address_of {
+            struct ast_node *target;
+        } address_of;
+
         struct ast_if_then_else {
             struct ast_node *condition;
             struct ast_node *yes;
@@ -186,6 +190,7 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 
 // -- variant accessors --
 
+struct ast_address_of           *ast_node_address_of(ast_node *);
 struct ast_assignment           *ast_node_assignment(ast_node *);
 struct ast_bool                 *ast_node_bool(ast_node *);
 struct ast_i64                  *ast_node_i64(ast_node *);

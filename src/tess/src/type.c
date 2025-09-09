@@ -7,6 +7,12 @@
 
 // -- tl_type allocation and deallocation --
 
+tl_type *tl_type_create(allocator *alloc, tl_type_tag tag) {
+    tl_type *self = alloc_struct(alloc, self);
+    self->tag     = tag;
+    return self;
+}
+
 tl_type *tl_type_create_type_var(allocator *alloc, u32 val) {
     tl_type *self      = alloc_struct(alloc, self);
     self->tag          = type_type_var;

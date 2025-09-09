@@ -314,6 +314,11 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         return rename_if_match(self->alloc, &v->name, self->map, &v->original);
     }
 
+    case ast_address_of:
+        //
+        rename_variables(self, node->address_of.target);
+        break;
+
     case ast_assignment: {
         struct ast_assignment *v = ast_node_assignment(node);
         rename_variables(self, v->name);
@@ -589,6 +594,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
         buf_size                    = 3;
     } break;
 
+    case ast_address_of:
     case ast_assignment:
     case ast_begin_end:
     case ast_user_type:
@@ -809,6 +815,12 @@ void assign_type_variables(void *ctx, ast_node *node) {
         node->type = type_registry_ast_node_tuple(self->type_registry, node);
         break;
 
+    case ast_address_of:
+        node->type                 = tl_type_create(self->type_arena, type_pointer);
+        node->type->pointer.target = node->address_of.target->type;
+        assert(node->type->pointer.target);
+        break;
+
     case ast_assignment:
     case ast_eof:
     case ast_nil:
@@ -1016,6 +1028,13 @@ void collect_constraints(void *ctx_, ast_node *node) {
         } else {
             map_set(&ctx->symbols, name_str, name_len, &node->type);
         }
+
+    } break;
+
+    case ast_address_of: {
+
+        assert(type_pointer == node->type->tag);
+        push(node->type->pointer.target, node->address_of.target->type);
 
     } break;
 

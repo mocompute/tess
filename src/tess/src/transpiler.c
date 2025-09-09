@@ -46,6 +46,7 @@ static int   a_infix(transpiler *, ast_node const *);
 static int   a_let(transpiler *, ast_node const *);
 static int   a_let_in(transpiler *, ast_node const *);
 static int   a_let_match_in(transpiler *, ast_node const *);
+static int   a_let_struct_phase(transpiler *, ast_node const *);
 static int   a_main(transpiler *, ast_node const *);
 static int   a_nil_expression(transpiler *, ast_node const *);
 static int   a_result_type_of(transpiler *, tl_type const *);
@@ -53,7 +54,6 @@ static int   a_toplevel(transpiler *, ast_node const *);
 static int   a_tuple_cons(transpiler *, ast_node const *);
 static int   a_user_type_definition(transpiler *, ast_node const *);
 
-static bool  is_generic_function(ast_node const *node);
 static char *next_variable(transpiler *);
 static char *make_struct_name(allocator *, u64);
 static char *make_struct_constructor_name(allocator *, u64);
@@ -99,6 +99,13 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     // output std header
     out_put(self, embed_std_c);
     out_put(self, "\n\n");
+
+    // output generated structs
+    for (size_t i = 0; i < n; ++i) {
+        int res = 0;
+        if (ast_let == nodes[i]->tag)
+            if ((res = a_let_struct_phase(self, nodes[i]))) return res;
+    }
 
     // output toplevel forms
     for (size_t i = 0; i < n; ++i) {
@@ -242,6 +249,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_let:                         return a_let(self, node);
+    case ast_address_of:
     case ast_assignment:
     case ast_eof:
     case ast_nil:
@@ -435,6 +443,12 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_bool:
         if (node->bool_.val) out_put_start_fmt(self, "%s = true;\n", var);
         else out_put_start_fmt(self, "%s = false;\n", var);
+        break;
+
+    case ast_address_of:
+        if (a_eval(self, node->address_of.target)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put_start_fmt(self, "%s = &(%s);\n", var, res);
         break;
 
     case ast_begin_end: {
@@ -763,6 +777,58 @@ static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     return name;
 }
 
+static int a_let_struct_phase(transpiler *self, ast_node const *node) {
+
+    if (!ast_node_is_tuple_constructor(node)) return 0;
+
+    struct ast_let const *v    = ast_node_let((ast_node *)node);
+
+    char const           *name = mos_string_str(&v->specialized_name);
+    if (0 == strlen(name)) name = mos_string_str(&v->name);
+
+    log(self, "processing struct let '%s'...", mos_string_str(&v->specialized_name));
+
+    tl_type *tuple          = v->arrow->arrow.left;
+    u64      hash           = tl_type_hash(tuple);
+    char    *generated_name = make_struct_name(self->alloc, hash);
+
+    out_put_start_fmt(self, "struct %s {\n", generated_name);
+    self->indent_level++;
+
+    if (type_tuple == tuple->tag) {
+        struct tlt_tuple *tup = tl_type_tup(tuple);
+
+        for (u32 i = 0; i < tup->elements.size; ++i) {
+            char buf[32];
+            snprintf(buf, sizeof buf - 1, "x%u", i);
+
+            out_put_start(self, "");
+            a_result_type_of(self, tup->elements.v[i]);
+
+            out_put_fmt(self, " %s;\n", buf);
+        }
+    } else if (type_labelled_tuple == tuple->tag) {
+        struct tlt_labelled_tuple *lt = tl_type_lt(tuple);
+
+        for (u32 i = 0; i < lt->fields.size; ++i) {
+
+            out_put_start(self, "");
+            a_result_type_of(self, lt->fields.v[i]);
+
+            out_put_fmt(self, " %s;\n", lt->names.v[i]);
+        }
+
+    } else {
+        fatal("expected tuple type");
+    }
+
+    self->indent_level--;
+    out_put_start(self, "};\n");
+    alloc_free(self->alloc, generated_name);
+
+    return 0;
+}
+
 static int a_let(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
@@ -788,48 +854,6 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     log(self, "processing '%s'...", mos_string_str(&v->specialized_name));
-
-    // for tuple constructors, also emit a tuple struct type
-    // TODO putting this here rather than a separate phase seems a bit janky
-    if (ast_node_is_tuple_constructor(node)) {
-        tl_type *tuple          = v->arrow->arrow.left;
-        u64      hash           = tl_type_hash(tuple);
-        char    *generated_name = make_struct_name(self->alloc, hash);
-
-        out_put_start_fmt(self, "struct %s {\n", generated_name);
-        self->indent_level++;
-
-        if (type_tuple == tuple->tag) {
-            struct tlt_tuple *tup = tl_type_tup(tuple);
-
-            for (u32 i = 0; i < tup->elements.size; ++i) {
-                char buf[32];
-                snprintf(buf, sizeof buf - 1, "x%u", i);
-
-                out_put_start(self, "");
-                a_result_type_of(self, tup->elements.v[i]);
-
-                out_put_fmt(self, " %s;\n", buf);
-            }
-        } else if (type_labelled_tuple == tuple->tag) {
-            struct tlt_labelled_tuple *lt = tl_type_lt(tuple);
-
-            for (u32 i = 0; i < lt->fields.size; ++i) {
-
-                out_put_start(self, "");
-                a_result_type_of(self, lt->fields.v[i]);
-
-                out_put_fmt(self, " %s;\n", lt->names.v[i]);
-            }
-
-        } else {
-            fatal("expected tuple type");
-        }
-
-        self->indent_level--;
-        out_put_start(self, "};\n");
-        alloc_free(self->alloc, generated_name);
-    }
 
     // function declaration
 

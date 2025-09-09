@@ -35,6 +35,7 @@
     X(tl_err_expected_function_application_argument, "expected_function_application_argument")             \
     X(tl_err_expected_specific_symbol, "expected_specific_symbol")                                         \
     X(tl_err_expected_string, "expected_string")                                                           \
+    X(tl_err_expected_addressable, "expected_addressable")                                                 \
     X(tl_err_expected_identifier, "expected_identifier")                                                   \
     X(tl_err_expected_type, "expected_type")                                                               \
     X(tl_err_expected_literal, "expected_literal")                                                         \
@@ -42,6 +43,7 @@
     X(tl_err_expected_bool, "expected_bool")                                                               \
     X(tl_err_expected_operator, "expected_operator")                                                       \
     X(tl_err_expected_equal_sign, "expected_equal_sign")                                                   \
+    X(tl_err_expected_ampersand, "expected_ampersand")                                                     \
     X(tl_err_expected_arrow, "expected_arrow")                                                             \
     X(tl_err_expected_comma, "expected_comma")                                                             \
     X(tl_err_expected_dot, "expected_dot")                                                                 \

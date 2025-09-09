@@ -82,6 +82,7 @@ struct tlt_pointer        *tl_type_pointer(tl_type *);
 
 // -- allocation --
 
+nodiscard tl_type *tl_type_create(allocator *, tl_type_tag) mallocfun;
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;
 nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_csized) mallocfun;

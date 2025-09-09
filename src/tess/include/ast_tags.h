@@ -1,6 +1,7 @@
 #ifndef TESS_AST_TAGS_H
 #define TESS_AST_TAGS_H
 
+#include "ast.h"
 #include "types.h"
 #include "util.h"
 
@@ -15,6 +16,7 @@
 typedef enum ast_tag : u16 {
     ast_nil,
 
+    ast_address_of,
     ast_assignment,
     ast_bool,
     ast_eof,
