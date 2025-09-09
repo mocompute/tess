@@ -336,11 +336,9 @@ static int a_let_in(transpiler *self, ast_node const *node) {
 
 static int a_field_access(transpiler *self, ast_node const *node) {
 
-    struct ast_user_type_get const *v = ast_node_utg((ast_node *)node);
-    log(self, "field_access: '%s' . '%s'", ast_node_name_string(v->struct_name),
-        ast_node_name_string(v->field_name));
+    struct ast_user_type_get const *v   = ast_node_utg((ast_node *)node);
 
-    char *var = next_variable(self);
+    char                           *var = next_variable(self);
     array_push(self->results, &var);
 
     out_put_start(self, "");
@@ -353,13 +351,10 @@ static int a_field_access(transpiler *self, ast_node const *node) {
 
 static int a_field_setter(transpiler *self, ast_node const *node) {
 
-    struct ast_user_type_set const *v = ast_node_uts((ast_node *)node);
-    log(self, "field_setter: '%s' . '%s'", ast_node_name_string(v->struct_name),
-        ast_node_name_string(v->field_name));
-
-    char const *struct_name = ast_node_name_string(v->struct_name);
-    char const *field_name  = ast_node_name_string(v->field_name);
-    char       *var         = next_variable(self);
+    struct ast_user_type_set const *v           = ast_node_uts((ast_node *)node);
+    char const                     *struct_name = ast_node_name_string(v->struct_name);
+    char const                     *field_name  = ast_node_name_string(v->field_name);
+    char                           *var         = next_variable(self);
     array_push(self->results, &var);
 
     // eval the value
@@ -562,7 +557,49 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_tuple_init(transpiler *self, ast_node const *node) {
+
+    char *var = next_variable(self);
+    array_push(self->results, &var);
+
+    // eval arguments in reverse order, then generate function call,
+    // assigning to the result variable
+    struct ast_tuple const *v      = ast_node_tuple((ast_node *)node);
+    i32 const               n_args = v->n_elements;
+
+    u64                     hash   = tl_type_hash(node->type);
+    char                   *name   = make_struct_name(self->alloc, hash);
+
+    if (n_args)
+        for (i32 i = n_args - 1; i >= 0; --i)
+            if (a_eval(self, v->elements[i])) return 1;
+
+    // init result
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_fmt(self, " %s;\n", var);
+
+    for (u32 i = 0; i < (u32)n_args; ++i) {
+        char buf[32];
+        snprintf(buf, sizeof buf - 1, "x%u", i);
+
+        char *arg = self->results.v[--self->results.size];
+
+        out_put_start_fmt(self, "%s.%s = %s;\n", var, buf, arg);
+    }
+
+    alloc_free(self->alloc, name);
+
+    return 0;
+}
+
 static int a_tuple_cons(transpiler *self, ast_node const *node) {
+    // intercept tuple init to construct tuple in place rather than
+    // invoke constructor function
+    if (ast_tuple == node->tag && TEST_BIT(node->tuple.flags, AST_TUPLE_FLAG_INIT)) {
+        return a_tuple_init(self, node);
+    }
+
     char *name = make_struct_constructor_name(self->alloc, tl_type_hash_ext(node->type, true));
 
     char *var  = next_variable(self);

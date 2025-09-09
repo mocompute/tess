@@ -1497,6 +1497,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         struct ast_tuple *v = ast_node_tuple(out->let.body);
         v->n_elements       = out->let.n_parameters;
         v->elements         = alloc_malloc(a, v->n_elements * sizeof v->elements[0]);
+        SET_BIT(v->flags, AST_TUPLE_FLAG_INIT); // tell transpiler to emit initialisation code
+
         for (u16 i = 0; i < v->n_elements; ++i) {
             v->elements[i]       = out->let.parameters[i];
             v->elements[i]->type = tup->elements[i]->type;

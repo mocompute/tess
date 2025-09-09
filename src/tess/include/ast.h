@@ -90,15 +90,16 @@ typedef struct ast_node {
             struct ast_node  *specialized;
         } named_application;
 
-        struct ast_tuple {
-            struct ast_node **elements;
-            u8                n_elements;
-        } tuple;
-
         struct ast_labelled_tuple {
             struct ast_node **assignments;
             u8                n_assignments;
         } labelled_tuple;
+
+        struct ast_tuple {
+            struct ast_node **elements;
+            u8                n_elements;
+            u8                flags;
+        } tuple;
 
         struct ast_user_type {
             struct ast_node **fields;
@@ -174,6 +175,8 @@ typedef struct {
 
 #define AST_LET_FLAG_SPECIALIZED BIT(0)
 #define AST_LET_FLAG_TUPLE_CONS  BIT(1)
+
+#define AST_TUPLE_FLAG_INIT      BIT(0)
 
 // -- iterator functions --
 
