@@ -39,28 +39,32 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-static int   a_eval(transpiler *, ast_node const *);
-static int   a_field_access(transpiler *, ast_node const *);
-static int   a_fun_apply(transpiler *, ast_node const *);
-static int   a_infix(transpiler *, ast_node const *);
-static int   a_let(transpiler *, ast_node const *);
-static int   a_let_in(transpiler *, ast_node const *);
-static int   a_let_match_in(transpiler *, ast_node const *);
-static int   a_let_struct_phase(transpiler *, ast_node const *);
-static int   a_main(transpiler *, ast_node const *);
-static int   a_nil_expression(transpiler *, ast_node const *);
-static int   a_result_type_of(transpiler *, tl_type const *);
-static int   a_toplevel(transpiler *, ast_node const *);
-static int   a_tuple_cons(transpiler *, ast_node const *);
-static int   a_user_type_definition(transpiler *, ast_node const *);
+static int         a_eval(transpiler *, ast_node const *);
+static int         a_field_access(transpiler *, ast_node const *);
+static int         a_fun_apply(transpiler *, ast_node const *);
+static int         a_infix(transpiler *, ast_node const *);
+static int         a_let(transpiler *, ast_node const *);
+static int         a_let_in(transpiler *, ast_node const *);
+static int         a_let_match_in(transpiler *, ast_node const *);
+static int         a_let_struct_phase(transpiler *, ast_node const *);
+static int         a_main(transpiler *, ast_node const *);
+static int         a_nil_expression(transpiler *, ast_node const *);
+static int         a_result_type_of(transpiler *, tl_type const *);
+static int         a_toplevel(transpiler *, ast_node const *);
+static int         a_tuple_cons(transpiler *, ast_node const *);
+static int         a_user_type_definition(transpiler *, ast_node const *);
 
-static char *next_variable(transpiler *);
-static char *make_struct_name(allocator *, u64);
-static char *make_struct_constructor_name(allocator *, u64);
+static char       *next_variable(transpiler *);
+static char       *make_struct_name(allocator *, u64);
+static char       *make_struct_constructor_name(allocator *, u64);
 
-static void  out_put_start(transpiler *, char const *);
-static void  out_put(transpiler *, char const *);
-static void  out_put_start_fmt(transpiler *, char const *restrict, ...)
+static char const *pop_result(transpiler *);
+static void        push_result(transpiler *, char const *);
+static void        pop_and_assign(transpiler *, char const *);
+
+static void        out_put_start(transpiler *, char const *);
+static void        out_put(transpiler *, char const *);
+static void        out_put_start_fmt(transpiler *, char const *restrict, ...)
   __attribute__((format(printf, 2, 3)));
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 static void vout_put_fmt(transpiler *, char const *restrict, va_list);
@@ -248,37 +252,8 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 }
 
 static int a_toplevel(transpiler *self, ast_node const *node) {
-
-    switch (node->tag) {
-    case ast_let:                         return a_let(self, node);
-    case ast_address_of:
-    case ast_assignment:
-    case ast_dereference:
-    case ast_eof:
-    case ast_nil:
-    case ast_bool:
-    case ast_symbol:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_infix:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_let_in:
-    case ast_let_match_in:
-    case ast_if_then_else:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-    case ast_begin_end:
-    case ast_user_type:
-    case ast_user_type_get:
-    case ast_user_type_set:               break;
-    case ast_user_type_definition:        return a_user_type_definition(self, node); break;
-    }
+    if (ast_let == node->tag) return a_let(self, node);
+    if (ast_user_type_definition == node->tag) return a_user_type_definition(self, node);
     return 0;
 }
 
@@ -291,11 +266,10 @@ static int a_infix(transpiler *self, ast_node const *node) {
     // order.
     if (a_eval(self, node->infix.right)) return 1;
     if (a_eval(self, node->infix.left)) return 1;
-    char *left  = self->results.v[--self->results.size];
-    char *right = self->results.v[--self->results.size];
+    char const *left  = pop_result(self);
+    char const *right = pop_result(self);
 
-    char *var   = next_variable(self);
-    array_push(self->results, &var);
+    char       *var   = next_variable(self);
 
     out_put_start(self, "");
     if (a_result_type_of(self, type)) return 1;
@@ -327,7 +301,7 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     char const *name = ast_node_name_string(node->let_in.name);
 
     if (a_eval(self, node->let_in.value)) return 1;
-    char *value = self->results.v[--self->results.size];
+    char const *value = pop_result(self);
 
     out_put_start(self, "");
     a_result_type_of(self, node->let_in.name->type);
@@ -349,7 +323,7 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
 
     // eval the value so we can access it
     if (a_eval(self, v->value)) return 1;
-    char *value = self->results.v[--self->results.size];
+    char const *value = pop_result(self);
 
     // declare variables for each assignment
     for (u32 i = 0; i < lt->n_assignments; ++i) {
@@ -375,7 +349,6 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     struct ast_user_type_get const *v   = ast_node_utg((ast_node *)node);
 
     char                           *var = next_variable(self);
-    array_push(self->results, &var);
 
     out_put_start(self, "");
     a_result_type_of(self, node->type);
@@ -391,11 +364,10 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     char const                     *struct_name = ast_node_name_string(v->struct_name);
     char const                     *field_name  = ast_node_name_string(v->field_name);
     char                           *var         = next_variable(self);
-    array_push(self->results, &var);
 
     // eval the value
     if (a_eval(self, v->value)) return 1;
-    char *value = self->results.v[--self->results.size];
+    char const *value = pop_result(self);
 
     // output value is field set value
     out_put_start(self, "");
@@ -424,7 +396,6 @@ static int a_eval(transpiler *self, ast_node const *node) {
     }
 
     char *var = next_variable(self);
-    array_push(self->results, &var);
 
     out_put(self, "\n");
 
@@ -450,13 +421,13 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_address_of: {
         if (a_eval(self, node->address_of.target)) return 1;
-        char *res = self->results.v[--self->results.size];
+        char const *res = pop_result(self);
         out_put_start_fmt(self, "%s = &(%s);\n", var, res);
     } break;
 
     case ast_dereference: {
         if (a_eval(self, node->dereference.target)) return 1;
-        char *res = self->results.v[--self->results.size];
+        char const *res = pop_result(self);
         out_put_start_fmt(self, "%s = *(%s);\n", var, res);
     } break;
 
@@ -467,12 +438,10 @@ static int a_eval(transpiler *self, ast_node const *node) {
             out_put_start(self, "");
             if (a_eval(self, v->expressions[i])) return 1;
             out_put(self, "\n");
-            --self->results.size; // ignore results of all but last expression
+            (void)pop_result(self); // ignore results of all but last expression
         }
         if (a_eval(self, v->expressions[v->n_expressions - 1])) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
     } break;
 
     case ast_user_type: {
@@ -487,67 +456,50 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
         for (u16 i = 0; i < v->n_fields; ++i) {
             if (a_eval(self, v->fields[i])) return 1;
-            char *res = self->results.v[--self->results.size];
+            char const *res = pop_result(self);
             out_put(self, "\n");
             out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
         }
     } break;
 
-    case ast_user_type_get: {
+    case ast_user_type_get:
         // emit object field access
         if (a_field_access(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
+        break;
 
-    } break;
-
-    case ast_user_type_set: {
+    case ast_user_type_set:
         // emit object field setter
         if (a_field_setter(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
 
-    } break;
+        break;
 
-    case ast_infix: {
+    case ast_infix:
         if (a_infix(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
-    } break;
+        pop_and_assign(self, var);
+        break;
 
     case ast_labelled_tuple:
-    case ast_tuple:          {
+    case ast_tuple:
         if (a_tuple_cons(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
+        break;
 
-    } break;
-
-    case ast_let_in: {
+    case ast_let_in:
         if (a_let_in(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
+        break;
 
-    } break;
-
-    case ast_let_match_in: {
+    case ast_let_match_in:
         if (a_let_match_in(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
-    } break;
+        pop_and_assign(self, var);
+        break;
 
-    case ast_let: {
+    case ast_let:
         if (a_let(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
-    } break;
+        pop_and_assign(self, var);
+        break;
 
     case ast_if_then_else:
     case ast_lambda_function:
@@ -557,9 +509,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_named_function_application:  {
         if (a_fun_apply(self, node)) return 1;
-        char *res = self->results.v[--self->results.size];
-        out_put(self, "\n");
-        out_put_start_fmt(self, "%s = %s;\n", var, res);
+        pop_and_assign(self, var);
     } break;
 
     case ast_user_type_definition: break;
@@ -581,7 +531,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     }
 
     char *var = next_variable(self);
-    array_push(self->results, &var);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -599,7 +548,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
-        char *arg = self->results.v[--self->results.size];
+        char const *arg = pop_result(self);
         out_put(self, arg);
         if (i < n_args - 1) out_put(self, ", ");
     }
@@ -611,7 +560,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 static int a_tuple_init(transpiler *self, ast_node const *node) {
 
     char *var = next_variable(self);
-    array_push(self->results, &var);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -634,7 +582,7 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
         char buf[32];
         snprintf(buf, sizeof buf - 1, "x%u", i);
 
-        char *arg = self->results.v[--self->results.size];
+        char const *arg = pop_result(self);
 
         out_put_start_fmt(self, "%s.%s = %s;\n", var, buf, arg);
     }
@@ -647,7 +595,6 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
 static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
 
     char *var = next_variable(self);
-    array_push(self->results, &var);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -667,7 +614,7 @@ static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
 
     for (u32 i = 0; i < (u32)n_args; ++i) {
 
-        char *arg = self->results.v[--self->results.size];
+        char const *arg = pop_result(self);
 
         out_put_start_fmt(self, "%s.%s = %s;\n", var,
                           ast_node_name_string(v->assignments[i]->assignment.name), arg);
@@ -691,7 +638,6 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
     char *name = make_struct_constructor_name(self->alloc, tl_type_hash(node->type));
 
     char *var  = next_variable(self);
-    array_push(self->results, &var);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -720,7 +666,7 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
-        char *arg = self->results.v[--self->results.size];
+        char const *arg = pop_result(self);
         out_put(self, arg);
         if (i < n_args - 1) out_put(self, ", ");
     }
@@ -745,7 +691,7 @@ static int a_main(transpiler *self, ast_node const *node) {
         int res = 0;
         if ((res = a_eval(self, v->body))) return res;
 
-        char *var = self->results.v[--self->results.size];
+        char const *var = pop_result(self);
 
         out_put(self, "\n");
         out_put_start_fmt(self, "return (int) %s;", var);
@@ -891,7 +837,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     if (a_eval(self, v->body)) return 1;
 
-    char *body = self->results.v[--self->results.size];
+    char const *body = pop_result(self);
     out_put_start_fmt(self, "return %s;", body);
 
     self->indent_level--;
@@ -905,6 +851,7 @@ static char *next_variable(transpiler *self) {
 
     char *out = alloc_malloc(self->strings, (u32)len);
     snprintf(out, (u32)len, "_res%zu_", self->next_variable++);
+    push_result(self, out);
     return out;
 }
 
@@ -921,7 +868,7 @@ static bool is_generic_function(ast_node const *node) {
     return false;
 }
 
-void log(transpiler *self, char const *restrict fmt, ...) {
+static void log(transpiler *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -936,4 +883,19 @@ void log(transpiler *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args);
     va_end(args);
+}
+
+static char const *pop_result(transpiler *self) {
+    assert(self->results.size);
+    return self->results.v[--self->results.size];
+}
+
+static void push_result(transpiler *self, char const *var) {
+    array_push(self->results, &var);
+}
+
+static void pop_and_assign(transpiler *self, char const *var) {
+    char const *res = pop_result(self);
+    out_put(self, "\n");
+    out_put_start_fmt(self, "%s = %s;\n", var, res);
 }
