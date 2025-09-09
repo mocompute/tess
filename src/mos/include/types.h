@@ -22,10 +22,6 @@ typedef uint64_t      u64;
 typedef float         f32;
 typedef double        f64;
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
-#define null nullptr
-#else
-#define null NULL
-#endif
+#define null (void *)0
 
 #endif
