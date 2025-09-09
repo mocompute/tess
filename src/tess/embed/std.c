@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-int std_dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
-int std_dbg(char const *restrict fmt, ...) {
+static int std_dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
+static int std_dbg(char const *restrict fmt, ...) {
     va_list args;
 
     va_start(args, fmt);
