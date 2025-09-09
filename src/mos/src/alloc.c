@@ -55,7 +55,9 @@ static void *default_calloc(allocator *a, size_t num, size_t sz, char const *fil
     (void)file;
     (void)line;
     (void)a;
-    return calloc(num, sz);
+    void *ptr = malloc(num * sz); // TODO: overflow but really?
+    memset(ptr, 0xCD, num * sz);
+    return ptr;
 }
 
 static void *default_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
@@ -163,6 +165,20 @@ static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) 
     return null;
 }
 
+static void arena_header_init(arena_header *self, size_t capacity) {
+    alloc_zero(self);
+    self->next     = null;
+    self->capacity = capacity;
+    self->size     = sizeof(arena_header);
+}
+
+static arena_header *arena_header_create(allocator *alloc, size_t capacity) {
+    assert(capacity > sizeof(arena_header));
+    void *out = alloc_malloc(alloc, capacity);
+    arena_header_init(out, capacity);
+    return out;
+}
+
 static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int line) {
     arena_allocator *arena = (arena_allocator *)alloc;
 
@@ -194,14 +210,10 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     size_t new_capacity = last_capacity * 2;
     if (new_capacity < needed) new_capacity = alloc_next_power_of_two(needed);
 
-    last->next = alloc_malloc(arena->parent, new_capacity);
+    last->next = arena_header_create(arena->parent, new_capacity);
     if (null == last->next) return null;
 
     bucket = last->next;
-
-    alloc_zero(bucket);
-    bucket->capacity = new_capacity;
-    bucket->size     = sizeof(arena_header);
 
     return bump_alloc_assume_capacity(bucket, sz);
 }
@@ -258,7 +270,7 @@ static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *f
 
     sz        = alloc_align_to_word_size(sz);
     void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
-    if (out) memset(out, 0, num * sz);
+    if (out) memset(out, 0xCD, num * sz);
     return out;
 }
 
@@ -300,12 +312,8 @@ void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
     if (0 == sz) sz = 16;
-    arena->head = alloc_malloc(parent, sz);
 
-    alloc_zero(arena->head);
-    arena->head->capacity    = sz;
-    arena->head->size        = sizeof(arena_header);
-
+    arena->head              = arena_header_create(parent, sz);
     arena->allocator.malloc  = &arena_malloc;
     arena->allocator.calloc  = &arena_calloc;
     arena->allocator.realloc = &arena_realloc;

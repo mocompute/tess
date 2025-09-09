@@ -42,6 +42,7 @@ typedef struct ast_node {
             // all variants with arrays must use this layout
             struct ast_node **nodes;
             u8                n;
+            u8                flags;
         } array;
 
         struct ast_begin_end {

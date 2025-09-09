@@ -82,6 +82,8 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 
     self->results       = (c_string_array){.alloc = self->strings};
 
+    self->next_variable = 1;
+    self->indent_level  = 0;
     self->verbose       = false;
 
     return self;
@@ -746,6 +748,9 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     tl_type *tuple          = v->arrow->arrow.left;
     u64      hash           = tl_type_hash(tuple);
     char    *generated_name = make_struct_name(self->alloc, hash);
+
+    out_put_start_fmt(self, "/* %s flags = %b*/\n", ast_node_to_string(self->strings, node),
+                      node->let.flags);
 
     out_put_start_fmt(self, "struct %s {\n", generated_name);
     self->indent_level++;

@@ -48,10 +48,14 @@ noreturn void usage(int status, char const *argv0) {
 
 void state_init(state *self) {
     alloc_zero(self);
-    self->arena = arena_create(default_allocator(), 4096);
-
-    self->words = (c_string_array){.alloc = self->arena};
+    self->arena    = arena_create(default_allocator(), 4096);
+    self->argv0    = null;
+    self->out_path = null;
+    self->words    = (c_string_array){.alloc = self->arena};
     array_reserve(self->words, 32);
+    self->verbose       = 0;
+    self->verbose_parse = 0;
+    self->help          = 0;
 }
 
 void state_deinit(state *self) {

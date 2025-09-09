@@ -1458,6 +1458,11 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     }
 
     ast_node *out             = ast_node_create(self->type_arena, ast_let);
+    out->let.parameters       = null;
+    out->let.n_parameters     = 0;
+    out->let.flags            = 0;
+    out->let.body             = null;
+    out->let.arrow            = null;
     out->let.name             = string_t_init(self->type_arena, name);
     out->let.specialized_name = string_t_init(self->type_arena, generated_name);
     ast_node_set_is_specialized(out);
@@ -1472,7 +1477,10 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
         out->let.parameters[i] = ast_node_create_sym(self->type_arena, lt->names.v[i]);
 
     // the body is a single node with the type literal
-    out->let.body = ast_node_create(self->type_arena, ast_user_type);
+    out->let.body                     = ast_node_create(self->type_arena, ast_user_type);
+    out->let.body->user_type.fields   = null;
+    out->let.body->user_type.n_fields = 0;
+    out->let.body->user_type.name     = null;
 
     // with each parameter mapped directly to a field. We can share
     // references to the same symbol nodes here because their types
@@ -1535,6 +1543,11 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
 
     allocator *a              = self->type_arena;
     ast_node  *out            = ast_node_create(a, ast_let);
+    out->let.parameters       = null;
+    out->let.n_parameters     = 0;
+    out->let.flags            = 0;
+    out->let.body             = null;
+    out->let.arrow            = null;
     out->type                 = *type_registry_find_name(self->type_registry, "nil");
     out->let.name             = string_t_init(a, generated_name);
     out->let.specialized_name = string_t_init(a, generated_name);
@@ -1549,12 +1562,16 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         out->let.parameters           = ast_node_assignment_names(self->type_arena, node);
 
         // the body is a single node with the tuple literal
-        out->let.body                = ast_node_create(a, ast_labelled_tuple);
-        out->let.body->type          = node->type;
+        out->let.body                               = ast_node_create(a, ast_labelled_tuple);
+        out->let.body->labelled_tuple.assignments   = null;
+        out->let.body->labelled_tuple.n_assignments = 0;
+        out->let.body->labelled_tuple.flags         = 0;
 
-        struct ast_labelled_tuple *v = ast_node_lt(out->let.body);
-        v->n_assignments             = out->let.n_parameters;
-        v->assignments               = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
+        out->let.body->type                         = node->type;
+
+        struct ast_labelled_tuple *v                = ast_node_lt(out->let.body);
+        v->n_assignments                            = out->let.n_parameters;
+        v->assignments = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
         SET_BIT(v->flags, AST_TUPLE_FLAG_INIT);
         for (u16 i = 0; i < v->n_assignments; ++i) {
             v->assignments[i]                  = ast_node_create(a, ast_assignment);
@@ -1588,12 +1605,16 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         }
 
         // the body is a single node with the tuple literal
-        out->let.body       = ast_node_create(a, ast_tuple);
-        out->let.body->type = node->type;
+        out->let.body                   = ast_node_create(a, ast_tuple);
+        out->let.body->tuple.elements   = null;
+        out->let.body->tuple.n_elements = 0;
+        out->let.body->tuple.flags      = 0;
 
-        struct ast_tuple *v = ast_node_tuple(out->let.body);
-        v->n_elements       = out->let.n_parameters;
-        v->elements         = alloc_malloc(a, v->n_elements * sizeof v->elements[0]);
+        out->let.body->type             = node->type;
+
+        struct ast_tuple *v             = ast_node_tuple(out->let.body);
+        v->n_elements                   = out->let.n_parameters;
+        v->elements                     = alloc_malloc(a, v->n_elements * sizeof v->elements[0]);
         SET_BIT(v->flags, AST_TUPLE_FLAG_INIT); // tell transpiler to emit initialisation code
 
         for (u16 i = 0; i < v->n_elements; ++i) {

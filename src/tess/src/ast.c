@@ -16,13 +16,22 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // FIXME this should probably be called alloc, because it doesn't
     // init the node like other _create functions do.
     ast_node *self = alloc_calloc(alloc, 1, sizeof *self);
+
+    self->file     = null;
+    self->line     = 0;
+    self->type     = null;
+    self->error    = tl_err_ok;
+
     self->tag      = tag;
+
     return self;
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
-    ast_node *self    = ast_node_create(alloc, ast_symbol);
-    self->symbol.name = string_t_init(alloc, str);
+    ast_node *self          = ast_node_create(alloc, ast_symbol);
+    self->symbol.name       = string_t_init(alloc, str);
+    self->symbol.original   = string_t_init_empty();
+    self->symbol.annotation = null;
     return self;
 }
 
@@ -44,6 +53,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     if (TL_AST_HAS_ARRAY(clone->tag)) {
         struct ast_array *vclone = ast_node_arr(clone), *vorig = ast_node_arr((ast_node *)orig);
         vclone->n     = vorig->n;
+        vclone->flags = vorig->flags;
         vclone->nodes = alloc_malloc(alloc, vorig->n * sizeof vclone->nodes[0]);
         for (u32 i = 0; i < vclone->n; ++i) vclone->nodes[i] = ast_node_clone(alloc, vorig->nodes[i]);
     }
@@ -112,6 +122,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
+        vclone->flags = vorig->flags;
         string_t_copy(alloc, &vclone->name, &vorig->name);
         vclone->body  = ast_node_clone(alloc, vorig->body);
         vclone->arrow = vorig->arrow;

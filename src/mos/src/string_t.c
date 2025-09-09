@@ -13,7 +13,8 @@
 string_t string_t_init_empty() {
     string_t s;
     alloc_zero(&s);
-    s.small.tag = 1;
+    s.small.tag = 0;
+    memset(&s.small.data[0], 0, sizeof s.small.data);
     return s;
 }
 

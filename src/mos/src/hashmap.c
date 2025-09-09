@@ -184,10 +184,6 @@ static int set_one(hashmap *map, hashmap_entry const *header, byte const *elemen
     return 0;
 }
 
-// static int set_one_cell(hashmap *map, hashmap_entry *cell) {
-//     return set_one(map, cell, cell->data);
-// }
-
 static int grow_buckets(hashmap **map) {
     // make a new map with 1.618x the number of buckets. Copy all data to
     // the new map. Then release the old map's buffers, and overwrite
@@ -244,8 +240,9 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
     size_t aligned_value_size = alloc_align_to_word_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
 
-    hashmap *map =
-      alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * (sizeof(hashmap_entry) + aligned_value_size));
+    size_t   bucket_size    = (sizeof(hashmap_entry) + aligned_value_size);
+
+    hashmap *map            = alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * bucket_size);
 
     map->parent_alloc       = alloc;
     map->key_alloc          = alloc;
@@ -260,6 +257,8 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
         alloc_free(alloc, map);
         map = null;
     }
+
+    memset(map->entries, 0, n_buckets * bucket_size);
 
     return map;
 }

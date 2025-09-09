@@ -203,8 +203,10 @@ static int result_ast_bool(parser *p, bool val) {
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    p->result              = ast_node_create(p->ast_arena, tag);
-    p->result->symbol.name = string_t_init(p->ast_arena, s);
+    p->result                    = ast_node_create(p->ast_arena, tag);
+    p->result->symbol.name       = string_t_init(p->ast_arena, s);
+    p->result->symbol.original   = string_t_init_empty();
+    p->result->symbol.annotation = null;
     // syms and strs use same union
 
     return 0;
@@ -582,9 +584,11 @@ static int a_identifier_typed(parser *p) {
         annotation = p->result;
     }
 
-    ast_node *node    = ast_node_create(p->ast_arena, ast_symbol);
-    node->symbol.name = name->symbol.name;
+    ast_node *node        = ast_node_create(p->ast_arena, ast_symbol);
+    node->symbol.name     = name->symbol.name;
+    node->symbol.original = string_t_init_empty();
     if (annotation) node->symbol.annotation = annotation;
+    else node->symbol.annotation = null;
     return result_ast_node(p, node);
 }
 
@@ -699,8 +703,9 @@ static int a_labelled_tuple(parser *self) {
             ast_node *node = ast_node_create(self->ast_arena, ast_labelled_tuple);
             array_shrink(assignments);
 
-            node->array.n     = (u8)assignments.size;
-            node->array.nodes = assignments.v;
+            node->array.n              = (u8)assignments.size;
+            node->array.nodes          = assignments.v;
+            node->labelled_tuple.flags = 0;
 
             return result_ast_node(self, node);
         }
@@ -887,8 +892,12 @@ static int struct_declaration(parser *self) {
 
     // check for empty struct
     if (0 == a_try(self, a_end_of_block)) {
-        ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
-        node->user_type_def.name = name;
+        ast_node *node                        = ast_node_create(self->ast_arena, ast_user_type_definition);
+        node->user_type_def.name              = name;
+        node->user_type_def.field_annotations = null;
+        node->user_type_def.field_names       = null;
+        node->user_type_def.field_types       = null;
+        node->user_type_def.n_fields          = 0;
         result_ast_node(self, node);
         goto success;
     }
@@ -930,7 +939,13 @@ static int struct_declaration(parser *self) {
         if (0 == a_try(self, a_end_of_block)) {
 
             ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
-            node->user_type_def.name = name;
+            node->user_type_def.name = null;
+            node->user_type_def.field_annotations = null;
+            node->user_type_def.field_names       = null;
+            node->user_type_def.field_types       = null;
+            node->user_type_def.n_fields          = 0;
+
+            node->user_type_def.name              = name;
 
             array_shrink(field_names);
             node->user_type_def.field_names = field_names.v;
@@ -978,6 +993,8 @@ static int function_declaration(parser *p) {
         if (0 == a_try(p, a_equal_sign)) {
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
+            node->function_declaration.n_parameters = 0;
+            node->function_declaration.parameters   = null;
             return result_ast_node(p, node);
         }
 
@@ -1000,6 +1017,8 @@ static int function_declaration(parser *p) {
 
             ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
+            node->function_declaration.n_parameters = 0;
+            node->function_declaration.parameters   = null;
 
             array_shrink(parameters);
             node->array.nodes = parameters.v;
@@ -1029,7 +1048,9 @@ static int lambda_declaration(parser *p) {
         }
 
         if (0 == a_try(p, a_arrow)) {
-            ast_node *node = ast_node_create(p->ast_arena, ast_lambda_declaration);
+            ast_node *node                        = ast_node_create(p->ast_arena, ast_lambda_declaration);
+            node->lambda_declaration.n_parameters = 0;
+            node->lambda_declaration.parameters   = null;
 
             array_shrink(parameters);
             node->array.n     = (u8)parameters.size;
@@ -1089,6 +1110,9 @@ static int function_application(parser *self) {
             // consumed, so that grouped_expression catches it.
 
             ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
+            node->named_application.arguments   = null;
+            node->named_application.n_arguments = 0;
+            node->named_application.specialized = null;
             string_t_copy(self->ast_arena, &node->named_application.name, &name->symbol.name);
 
             array_shrink(arguments);
@@ -1274,8 +1298,10 @@ static int lambda_function(parser *self) {
         goto error;
     }
 
-    ast_node *node             = ast_node_create(self->ast_arena, ast_lambda_function);
-    node->lambda_function.body = defn;
+    ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
+    node->lambda_function.parameters   = null;
+    node->lambda_function.n_parameters = 0;
+    node->lambda_function.body         = defn;
 
     // move the vector from the function_declaration node to the new ast node
     node->array.nodes = decl->array.nodes;
@@ -1324,7 +1350,9 @@ static int lambda_function_application(parser *self) {
 
         if (0 == a_try_special(self, a_end_of_expression)) {
             ast_node *node = ast_node_create(self->ast_arena, ast_lambda_function_application);
-            node->lambda_application.lambda = lambda;
+            node->lambda_application.arguments   = null;
+            node->lambda_application.n_arguments = 0;
+            node->lambda_application.lambda      = lambda;
 
             array_shrink(arguments);
             node->array.n     = (u8)arguments.size;
@@ -1433,7 +1461,10 @@ static int tuple_expression(parser *self) {
                 goto cleanup;
             }
 
-            ast_node *node = ast_node_create(self->ast_arena, ast_tuple);
+            ast_node *node    = ast_node_create(self->ast_arena, ast_tuple);
+            node->array.n     = 0;
+            node->array.nodes = null;
+            node->tuple.flags = 0;
 
             array_shrink(elements);
             node->array.n     = (u8)elements.size;
@@ -1495,7 +1526,9 @@ static int begin_end_expression(parser *self) {
         }
 
         if (0 == a_try_s(self, the_symbol, "end")) {
-            ast_node *node = ast_node_create(self->ast_arena, ast_begin_end);
+            ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
+            node->begin_end.expressions   = null;
+            node->begin_end.n_expressions = 0;
 
             array_shrink(exprs);
             node->array.n     = (u8)exprs.size;
@@ -1683,8 +1716,14 @@ static int toplevel_let(parser *self) {
             if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
             goto error;
         }
-        ast_node *defn = self->result;
-        ast_node *node = ast_node_create(self->ast_arena, ast_let);
+        ast_node *defn             = self->result;
+        ast_node *node             = ast_node_create(self->ast_arena, ast_let);
+        node->let.parameters       = null;
+        node->let.n_parameters     = 0;
+        node->let.flags            = 0;
+        node->let.body             = null;
+        node->let.arrow            = null;
+        node->let.specialized_name = string_t_init_empty();
 
         // move declaration into new node
         string_t_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);

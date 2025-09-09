@@ -21,6 +21,7 @@ int sexp_tokenizer_init(allocator *alloc, sexp_tokenizer *t, char const *input, 
 
     t->buf       = alloc_malloc(alloc, TOKENIZER_BUF_SIZE);
     t->buf_len   = 0;
+    t->pos       = 0;
 
     if (null == t->buf) return 1;
     return 0;
