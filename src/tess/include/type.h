@@ -20,6 +20,7 @@
     X(type_arrow, "arrow")                                                                                 \
     X(type_user, "user")                                                                                   \
     X(type_type_var, "type_var")                                                                           \
+    X(type_pointer, "pointer")                                                                             \
     X(type_any, "any")
 typedef enum { TL_TYPE_TAGS(MOS_TAG_NAME) } tl_type_tag;
 
@@ -56,6 +57,10 @@ typedef struct tl_type {
         struct tlt_tv {
             u32 val;
         } type_var;
+
+        struct tlt_pointer {
+            struct tl_type *target;
+        } pointer;
     };
     tl_type_tag tag;
 } tl_type;
@@ -73,6 +78,7 @@ struct tlt_labelled_tuple *tl_type_lt(tl_type *);
 struct tlt_arrow          *tl_type_arrow(tl_type *);
 struct tlt_user           *tl_type_user(tl_type *);
 struct tlt_tv             *tl_type_tv(tl_type *);
+struct tlt_pointer        *tl_type_pointer(tl_type *);
 
 // -- allocation --
 

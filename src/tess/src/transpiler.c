@@ -205,6 +205,11 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     } break;
 
     case type_type_var: out_put_fmt(self, "/* tv%u */ int", ty->type_var.val); break;
+
+    case type_pointer:
+        a_result_type_of(self, ty->pointer.target);
+        out_put(self, "*");
+        break;
     }
 
     return 0;

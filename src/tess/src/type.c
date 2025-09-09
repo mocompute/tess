@@ -62,6 +62,8 @@ bool tl_type_is_prim(tl_type const *self) {
     case type_labelled_tuple:
     case type_arrow:
     case type_type_var:       return false;
+
+    case type_pointer:        return tl_type_is_prim(self->pointer.target);
     }
     assert(false);
 }
@@ -96,6 +98,10 @@ bool tl_type_is_poly(tl_type const *self) {
         //
         return tl_type_is_poly(self->arrow.left) || tl_type_is_poly(self->arrow.right);
 
+    case type_pointer:
+        //
+        return tl_type_is_poly(self->pointer.target);
+
     case type_type_var: return true;
     }
     assert(false);
@@ -118,9 +124,11 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:    return 0;
+    case type_any:     return 0;
 
-    case type_tuple:  {
+    case type_pointer: return tl_type_compare(left->pointer.target, right->pointer.target);
+
+    case type_tuple:   {
         struct tlt_tuple const *vleft  = tl_type_tup((tl_type *)left),
                                *vright = tl_type_tup((tl_type *)right);
 
@@ -197,6 +205,11 @@ u64 tl_type_hash_ext(tl_type const *self, bool ignore_names) {
         //
         break;
 
+    case type_pointer: {
+        u64 target_hash = tl_type_hash_ext(self->pointer.target, ignore_names);
+        hash            = hash64_combine(hash, (byte *)&target_hash, sizeof target_hash);
+    } break;
+
     case type_tuple: {
         struct tlt_tuple const *v = tl_type_tup((tl_type *)self);
         for (u32 i = 0; i < v->elements.size; ++i)
@@ -252,7 +265,15 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     case type_string:
     case type_any:    len = snprintf(buf, (size_t)sz, "%s", tl_type_tag_to_string(self->tag)); break;
 
-    case type_user:   {
+    case type_pointer:
+
+        len = tl_type_snprint(buf, sz, self->pointer.target);
+        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), " *");
+        else len += snprintf(null, 0, " *");
+
+        break;
+
+    case type_user: {
         struct tlt_user const *v = tl_type_user((tl_type *)self);
 
         len                      = 0;
@@ -354,7 +375,10 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     case type_bool:
     case type_int:
     case type_float:
-    case type_string:         return (requires->tag == candidate->tag);
+    case type_string: return (requires->tag == candidate->tag);
+    case type_pointer:
+        return (requires->tag == candidate->tag) &&
+               (tl_type_satisfies(requires->pointer.target, candidate->pointer.target));
 
     case type_labelled_tuple:
     case type_tuple:          {
@@ -433,6 +457,8 @@ bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
     case type_string:
     case type_type_var:
     case type_any:            return false;
+
+    case type_pointer:        return tl_type_contains(haystack->pointer.target, needle);
 
     case type_tuple:
     case type_labelled_tuple: {

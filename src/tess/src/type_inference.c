@@ -527,6 +527,8 @@ nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, t
     case type_type_var:
     case type_any:            break;
 
+    case type_pointer:        count += apply_one_substitution(&type->pointer.target, from, to); break;
+
     case type_tuple:
     case type_labelled_tuple: {
         struct tlt_array *v = tl_type_arr(type);
@@ -890,9 +892,11 @@ static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) 
     case type_bool:
     case type_int:
     case type_float:
-    case type_string: return b->tag == type_type_var;
+    case type_string:
+    case type_pointer: // FIXME not sure if this is correct for pointer
+        return b->tag == type_type_var;
 
-    case type_tuple:  {
+    case type_tuple: {
         if (type_type_var == b->tag) return true;
         else if (type_tuple != b->tag && type_labelled_tuple != b->tag) return false;
 
