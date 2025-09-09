@@ -216,27 +216,15 @@ static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 c
     return list;
 }
 
-// static sexp named_elements_to_sexp(allocator *alloc, struct ast_node **names, ast_node **elements,
-//                                    u16 const n, sexp (*symbol_fun)(allocator *, ast_node const *)) {
-
-//     sexp *sexp_elements = alloc_malloc(alloc, sizeof(sexp) * n);
-//     for (size_t i = 0; i < n; ++i) {
-//         sexp_elements[i] = sexp_init_list_pair(alloc, do_ast_node_to_sexp(alloc, names[i], symbol_fun),
-//                                                do_ast_node_to_sexp(alloc, elements[i], symbol_fun));
-//     }
-//     sexp list = sexp_init_list(alloc, sexp_elements, n);
-//     alloc_free(alloc, sexp_elements);
-//     return list;
-// }
-
 sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
     sexp type;
     {
-        int  len = tl_type_snprint(null, 0, node->type) + 1;
-        char buf[len];
+        int   len = tl_type_snprint(null, 0, node->type) + 1;
+        char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
+        alloc_free(alloc, buf);
     }
     return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
                                  sexp_init_sym(alloc, ast_node_name_string(node)), type);
@@ -246,10 +234,11 @@ sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
     sexp type;
     {
-        int  len = tl_type_snprint(null, 0, node->type) + 1;
-        char buf[len];
+        int   len = tl_type_snprint(null, 0, node->type) + 1;
+        char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
+        alloc_free(alloc, buf);
     }
 
     if (!string_t_empty(&node->symbol.original))
@@ -275,10 +264,11 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     sexp type;
     if (node->tag != ast_symbol) // symbols are delegated to symbol_fun
     {
-        int  len = tl_type_snprint(null, 0, node->type) + 1;
-        char buf[len];
+        int   len = tl_type_snprint(null, 0, node->type) + 1;
+        char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
         type = sexp_init_sym(alloc, buf);
+        alloc_free(alloc, buf);
     }
 
     switch (node->tag) {
@@ -440,13 +430,14 @@ void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {
 
 sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
 
-    sexp expr = ast_node_to_sexp(alloc, node);
+    sexp  expr = ast_node_to_sexp(alloc, node);
 
-    int  len  = tl_type_snprint(null, 0, node->type) + 1;
-    char buf[len];
+    int   len  = tl_type_snprint(null, 0, node->type) + 1;
+    char *buf  = alloc_malloc(alloc, len);
     tl_type_snprint(buf, len, node->type);
 
     sexp list = sexp_init_list_pair(alloc, expr, sexp_init_sym(alloc, buf));
+    alloc_free(alloc, buf);
 
     return list;
 }

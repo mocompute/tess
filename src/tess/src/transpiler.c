@@ -141,12 +141,13 @@ static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
     va_end(args);
     if (len <= 0) fatal("out_put_fmt: invalid fmt string: %s", fmt);
 
-    char buf[len];
+    char *buf = alloc_malloc(self->strings, len);
     va_start(args, fmt);
     vsnprintf(buf, (size_t)len, fmt, args);
     va_end(args);
 
     array_copy(*self->bytes, buf, strlen(buf));
+    alloc_free(self->strings, buf);
 }
 
 static void vout_put_fmt(transpiler *self, char const *restrict fmt, va_list args) {
@@ -157,10 +158,11 @@ static void vout_put_fmt(transpiler *self, char const *restrict fmt, va_list arg
     int len = vsnprintf(null, 0, fmt, args) + 1;
     if (len <= 0) fatal("out_put_fmt: invalid fmt string: %s", fmt);
 
-    char buf[len];
+    char *buf = alloc_malloc(self->strings, len);
     vsnprintf(buf, (size_t)len, fmt, args2);
 
     array_copy(*self->bytes, buf, strlen(buf));
+    alloc_free(self->strings, buf);
 
     va_end(args2);
 }
