@@ -52,6 +52,7 @@ static int   a_main(transpiler *, ast_node const *);
 static int   a_nil_expression(transpiler *, ast_node const *);
 static int   a_result_type_of(transpiler *, tl_type const *);
 static int   a_toplevel(transpiler *, ast_node const *);
+static int   a_tuple_cons(transpiler *, ast_node const *);
 static int   a_user_type_definition(transpiler *, ast_node const *);
 
 static bool  is_generic_function(ast_node const *node);
@@ -475,9 +476,13 @@ static int a_eval(transpiler *self, ast_node const *node) {
     } break;
 
     case ast_labelled_tuple:
-    case ast_tuple:
-        // FIXME
-        break;
+    case ast_tuple:          {
+        if (a_tuple_cons(self, node)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put(self, "\n");
+        out_put_start_fmt(self, "%s = %s;\n", var, res);
+
+    } break;
 
     case ast_let_in: {
         if (a_let_in(self, node)) return 1;
@@ -539,10 +544,54 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         for (i32 i = n_args - 1; i >= 0; --i)
             if (a_eval(self, v->arguments[i])) return 1;
 
+    // function call result
     out_put_start(self, "");
     a_result_type_of(self, node->type);
     out_put_fmt(self, " %s;\n", var);
 
+    // function call
+    out_put_start_fmt(self, "%s = %s(", var, name);
+
+    for (i32 i = 0; i < n_args; ++i) {
+        char *arg = self->results.v[--self->results.size];
+        out_put(self, arg);
+        if (i < n_args - 1) out_put(self, ", ");
+    }
+    out_put(self, ");\n");
+
+    return 0;
+}
+
+static int a_tuple_cons(transpiler *self, ast_node const *node) {
+    char *name = make_struct_constructor_name(self->alloc, tl_type_hash_ext(node->type, true));
+
+    char *var  = next_variable(self);
+    array_push(self->results, &var);
+
+    // eval arguments in reverse order, then generate function call,
+    // assigning to the result variable
+    i32 n_args = 0;
+
+    if (ast_tuple == node->tag) {
+        struct ast_tuple const *v = ast_node_tuple((ast_node *)node);
+        n_args                    = v->n_elements;
+        if (n_args)
+            for (i32 i = n_args - 1; i >= 0; --i)
+                if (a_eval(self, v->elements[i])) return 1;
+    } else {
+        struct ast_labelled_tuple const *v = ast_node_lt((ast_node *)node);
+        n_args                             = v->n_assignments;
+        if (n_args)
+            for (i32 i = n_args - 1; i >= 0; --i)
+                if (a_eval(self, v->assignments[i]->assignment.value)) return 1;
+    }
+
+    // function call result
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_fmt(self, " %s;\n", var);
+
+    // function call
     out_put_start_fmt(self, "%s = %s(", var, name);
 
     for (i32 i = 0; i < n_args; ++i) {
@@ -587,7 +636,7 @@ static char *make_struct_name(allocator *alloc, u64 hash) {
     {
 #define fmt "_gen_struct_tup_%zu_"
         int len = snprintf(null, 0, fmt, hash) + 1;
-        if (len < 0) fatal("make_struct_name: generate name failed.");
+        if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
         snprintf(name, (u32)len, fmt, hash);
 #undef fmt
@@ -601,7 +650,7 @@ static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     {
 #define fmt "_gen_make_tup_%zu_"
         int len = snprintf(null, 0, fmt, hash) + 1;
-        if (len < 0) fatal("make_struct_constructor_name: generate name failed.");
+        if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
         snprintf(name, (u32)len, fmt, hash);
 #undef fmt
