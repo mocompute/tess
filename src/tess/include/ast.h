@@ -250,4 +250,6 @@ bool            ast_node_is_tuple_constructor(ast_node const *);
 void            ast_node_set_is_specialized(ast_node *);
 void            ast_node_set_is_tuple_constructor(ast_node *);
 
+ast_node      **ast_node_assignment_names(allocator *, ast_node const *);
+
 #endif

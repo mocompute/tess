@@ -1470,10 +1470,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         struct ast_labelled_tuple *lt = ast_node_lt(node);
 
         out->let.n_parameters         = (u8)lt->n_assignments;
-        out->let.parameters = alloc_malloc(a, out->let.n_parameters * sizeof out->let.parameters[0]);
-
-        for (u16 i = 0; i < out->let.n_parameters; ++i)
-            out->let.parameters[i] = lt->assignments[i]->assignment.name;
+        out->let.parameters           = ast_node_assignment_names(self->type_arena, node);
 
         // the body is a single node with the tuple literal
         out->let.body                = ast_node_create(a, ast_labelled_tuple);
@@ -1484,8 +1481,10 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         v->assignments               = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
         SET_BIT(v->flags, AST_TUPLE_FLAG_INIT);
         for (u16 i = 0; i < v->n_assignments; ++i) {
-            v->assignments[i]                   = ast_node_create(a, ast_assignment);
-            v->assignments[i]->assignment.name  = ast_node_clone(a, lt->assignments[i]->assignment.name);
+            v->assignments[i]                  = ast_node_create(a, ast_assignment);
+            v->assignments[i]->assignment.name = ast_node_clone(a, lt->assignments[i]->assignment.name);
+
+            // init value from parameter
             v->assignments[i]->assignment.value = out->let.parameters[i];
             v->assignments[i]->type             = lt->assignments[i]->type;
         }

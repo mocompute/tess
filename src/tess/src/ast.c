@@ -852,3 +852,14 @@ void ast_node_set_is_tuple_constructor(ast_node *node) {
     assert(ast_let == node->tag);
     SET_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
 }
+
+//
+
+ast_node **ast_node_assignment_names(allocator *alloc, ast_node const *node) {
+    struct ast_labelled_tuple const *v        = ast_node_lt((ast_node *)node);
+    ast_node                       **elements = alloc_malloc(alloc, v->n_assignments * sizeof elements[0]);
+
+    for (u32 i = 0; i < v->n_assignments; ++i) elements[i] = v->assignments[i]->assignment.name;
+
+    return elements;
+}
