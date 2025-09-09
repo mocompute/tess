@@ -38,7 +38,7 @@ void sexp_box_init_empty(sexp_box *self) {
 
 void sexp_box_init_move_string(sexp_box *self, sexp_box_tag tag, string_t *src) {
     self->tag = tag;
-    mos_string_move(&self->symbol.name, src);
+    string_t_move(&self->symbol.name, src);
 }
 
 void sexp_box_init_move_list(sexp_box *self, sexp_sized *src) {
@@ -94,7 +94,7 @@ sexp sexp_init_sym(allocator *alloc, char const *str) {
     sexp      out    = sexp_init_boxed(alloc);
     sexp_box *box    = sexp_box_get(out);
     box->tag         = sexp_box_symbol;
-    box->symbol.name = mos_string_init(alloc, str);
+    box->symbol.name = string_t_init(alloc, str);
     return out;
 }
 
@@ -141,7 +141,7 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     case sexp_box_u64:
     case sexp_box_f64:    break;
     case sexp_box_symbol:
-    case sexp_box_string: mos_string_deinit(alloc, &self->symbol.name); break;
+    case sexp_box_string: string_t_deinit(alloc, &self->symbol.name); break;
     case sexp_box_list:   {
         if (self->list.list.size)
             for (u32 i = 0; i < self->list.list.size; ++i) sexp_deinit(alloc, &self->list.list.v[i]);
@@ -193,8 +193,8 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
     case sexp_box_i64:    return snprintf(buf, sz, "%" PRId64, box->i64.val);
     case sexp_box_u64:    return snprintf(buf, sz, "%" PRIu64, box->u64.val);
     case sexp_box_f64:    return snprintf(buf, sz, "%f", box->f64.val);
-    case sexp_box_symbol: return snprintf(buf, sz, "%s", mos_string_str(&box->symbol.name));
-    case sexp_box_string: return snprintf(buf, sz, "\"%s\"", mos_string_str(&box->symbol.name));
+    case sexp_box_symbol: return snprintf(buf, sz, "%s", string_t_str(&box->symbol.name));
+    case sexp_box_string: return snprintf(buf, sz, "\"%s\"", string_t_str(&box->symbol.name));
 
     case sexp_box_list:   {
         do_print_init();

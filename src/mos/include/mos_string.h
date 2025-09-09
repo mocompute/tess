@@ -26,28 +26,28 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-string_t mos_string_init(allocator *, char const *);
-string_t mos_string_init_n(allocator *, char const *, size_t);
-string_t mos_string_init_empty();
-void     mos_string_deinit(allocator *, string_t *);
-void     mos_string_replace(allocator *, string_t *, char const *);
-void     mos_string_move(string_t *, string_t *);
-void     mos_string_copy(allocator *, string_t *, string_t const *);
+string_t string_t_init(allocator *, char const *);
+string_t string_t_init_n(allocator *, char const *, size_t);
+string_t string_t_init_empty();
+void     string_t_deinit(allocator *, string_t *);
+void     string_t_replace(allocator *, string_t *, char const *);
+void     string_t_move(string_t *, string_t *);
+void     string_t_copy(allocator *, string_t *, string_t const *);
 
 // -- access --
 
-char const *mos_string_str(string_t const *);
-u32         mos_string_size(string_t const *);
-bool        mos_string_empty(string_t const *);
-u32         mos_string_hash(string_t const *);
+char const *string_t_str(string_t const *);
+u32         string_t_size(string_t const *);
+bool        string_t_empty(string_t const *);
+u32         string_t_hash(string_t const *);
 
 // -- utilities --
 
-int mos_string_cmp_c(string_t const *, char const *);
-int mos_string_parse_number(char const *, i64 *, u64 *, f64 *);
+int string_t_cmp_c(string_t const *, char const *);
+int string_t_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
 
-bool mos_string_is_allocated(string_t const *);
-u32  mos_string_hash32(string_t const *);
+bool string_t_is_allocated(string_t const *);
+u32  string_t_hash32(string_t const *);
 
 #endif

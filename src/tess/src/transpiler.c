@@ -572,10 +572,10 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     char const                         *name = null;
     if (v->specialized) {
-        name = mos_string_str(&v->specialized->let.specialized_name);
+        name = string_t_str(&v->specialized->let.specialized_name);
     } else {
         // c_ and std_ etc...
-        name = mos_string_str(&v->name);
+        name = string_t_str(&v->name);
     }
 
     char *var = next_variable(self);
@@ -734,7 +734,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v = ast_node_let((ast_node *)node);
 
-    if (0 == mos_string_cmp_c(&v->name, "main")) {
+    if (0 == string_t_cmp_c(&v->name, "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
@@ -790,10 +790,10 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
-    char const           *name = mos_string_str(&v->specialized_name);
-    if (0 == strlen(name)) name = mos_string_str(&v->name);
+    char const           *name = string_t_str(&v->specialized_name);
+    if (0 == strlen(name)) name = string_t_str(&v->name);
 
-    log(self, "processing struct let '%s'...", mos_string_str(&v->specialized_name));
+    log(self, "processing struct let '%s'...", string_t_str(&v->specialized_name));
 
     tl_type *tuple          = v->arrow->arrow.left;
     u64      hash           = tl_type_hash(tuple);
@@ -840,27 +840,27 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
-    char const           *name = mos_string_str(&v->specialized_name);
-    if (0 == strlen(name)) name = mos_string_str(&v->name);
+    char const           *name = string_t_str(&v->specialized_name);
+    if (0 == strlen(name)) name = string_t_str(&v->name);
 
     if (is_generic_function(node)) {
-        log(self, "skipping '%s' ('%s') because it is a generic function", mos_string_str(&v->name),
-            mos_string_str(&v->specialized_name));
+        log(self, "skipping '%s' ('%s') because it is a generic function", string_t_str(&v->name),
+            string_t_str(&v->specialized_name));
         return 0;
     }
 
     // don't emit generic template functions
     if (!ast_node_is_specialized(node)) {
-        log(self, "skipping '%s' because it is not specialized", mos_string_str(&v->name));
+        log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name));
         return 0;
     }
 
-    if (0 == mos_string_cmp_c(&v->name, "main")) {
+    if (0 == string_t_cmp_c(&v->name, "main")) {
         // skip here, let a_main process it.
         return 0;
     }
 
-    log(self, "processing '%s'...", mos_string_str(&v->specialized_name));
+    log(self, "processing '%s'...", string_t_str(&v->specialized_name));
 
     // function declaration
 

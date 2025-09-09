@@ -290,15 +290,15 @@ void ti_inferer_report_errors(ti_inferer *self) {
 static void next_variable_name(rename_variables_ctx *self, string_t *out) {
     char buf[64];
     snprintf(buf, sizeof buf, "_v%u_", self->ti->next_var++);
-    *out = mos_string_init(self->ti->type_arena, buf);
+    *out = string_t_init(self->ti->type_arena, buf);
 }
 
 static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
-    string_t const *found = map_get(map, mos_string_str(string), (u16)mos_string_size(string));
+    string_t const *found = map_get(map, string_t_str(string), (u16)string_t_size(string));
 
     if (found) {
-        mos_string_copy(alloc, copy_to, string); // preserve original name for errors
-        mos_string_copy(alloc, string, found);
+        string_t_copy(alloc, copy_to, string); // preserve original name for errors
+        string_t_copy(alloc, string, found);
     }
 }
 
@@ -313,8 +313,7 @@ static void rename_array_elements(rename_variables_ctx *self, ast_node **element
         string_t var_name;
         next_variable_name(self, &var_name);
 
-        map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
-                &var_name);
+        map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name), &var_name);
 
         // rename the actual parameter symbol
         rename_variables(self, elements[i]);
@@ -391,8 +390,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         ast_node const *name = v->name;
         assert(ast_symbol == name->tag);
 
-        map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
-                &var_name);
+        map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name), &var_name);
 
         rename_variables(self, v->name);
         rename_variables(self, v->body);
@@ -419,7 +417,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
             ast_node const *name = lt->assignments[i]->assignment.name;
             assert(ast_symbol == name->tag);
 
-            map_set(&self->map, ast_node_name_string(name), (u16)mos_string_size(&name->symbol.name),
+            map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name),
                     &var_name);
 
             rename_variables(self, lt->assignments[i]);
@@ -1013,7 +1011,7 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
         ast_node *candidate = nodes.v[i];
         if (ast_let != candidate->tag) continue;
 
-        if (0 != mos_string_cmp_c(&candidate->let.name, name)) continue;
+        if (0 != string_t_cmp_c(&candidate->let.name, name)) continue;
 
         assert(candidate->let.arrow && type_arrow == candidate->let.arrow->tag);
 
@@ -1065,7 +1063,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_symbol:               {
         char const *name_str = ast_node_name_string(node);
-        u16         name_len = (u16)mos_string_size(&node->symbol.name);
+        u16         name_len = (u16)string_t_size(&node->symbol.name);
 
         // ensure every symbol usage matches its definition
         tl_type **found = map_get(ctx->symbols, name_str, name_len);
@@ -1360,11 +1358,11 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     if (null == special) fatal("specialize_node: clone failed.");
 
     ast_node_set_is_specialized(special);
-    special->let.specialized_name = mos_string_init(
-      ctx->ti->type_arena, make_specialized_name(ctx->ti, mos_string_str(&special->let.name)));
+    special->let.specialized_name =
+      string_t_init(ctx->ti->type_arena, make_specialized_name(ctx->ti, string_t_str(&special->let.name)));
 
     char *str = tl_type_to_string(alloc, args);
-    log(ctx->ti, "specialized '%s' for type %s", mos_string_str(&special->let.name), str);
+    log(ctx->ti, "specialized '%s' for type %s", string_t_str(&special->let.name), str);
     alloc_free(alloc, str);
 
     // cloned arrow type needs to be reset
@@ -1395,7 +1393,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
     if (node->tag != ast_named_function_application) return;
     if (node->named_application.specialized) return;
 
-    char const *name = mos_string_str(&node->named_application.name);
+    char const *name = string_t_str(&node->named_application.name);
     if (is_special_name(name)) return;
 
     // does a specialised function already exist?
@@ -1460,8 +1458,8 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     }
 
     ast_node *out             = ast_node_create(self->type_arena, ast_let);
-    out->let.name             = mos_string_init(self->type_arena, name);
-    out->let.specialized_name = mos_string_init(self->type_arena, generated_name);
+    out->let.name             = string_t_init(self->type_arena, name);
+    out->let.specialized_name = string_t_init(self->type_arena, generated_name);
     ast_node_set_is_specialized(out);
 
     // make params array from user_type's labelled_tuple
@@ -1538,8 +1536,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     allocator *a              = self->type_arena;
     ast_node  *out            = ast_node_create(a, ast_let);
     out->type                 = *type_registry_find_name(self->type_registry, "nil");
-    out->let.name             = mos_string_init(a, generated_name);
-    out->let.specialized_name = mos_string_init(a, generated_name);
+    out->let.name             = string_t_init(a, generated_name);
+    out->let.specialized_name = string_t_init(a, generated_name);
     ast_node_set_is_specialized(out);
     ast_node_set_is_tuple_constructor(out);
 
@@ -1703,6 +1701,6 @@ static bool is_special_name(char const *str) {
 }
 
 static bool is_special_name_s(string_t const *string) {
-    char const *str = mos_string_str(string);
+    char const *str = string_t_str(string);
     return is_special_name(str);
 }

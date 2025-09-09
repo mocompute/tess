@@ -204,7 +204,7 @@ static int result_ast_bool(parser *p, bool val) {
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     p->result              = ast_node_create(p->ast_arena, tag);
-    p->result->symbol.name = mos_string_init(p->ast_arena, s);
+    p->result->symbol.name = string_t_init(p->ast_arena, s);
     // syms and strs use same union
 
     return 0;
@@ -635,7 +635,7 @@ static int string_to_number(parser *parser, char const *const in) {
     i64 i;
     u64 u;
     f64 d;
-    switch (mos_string_parse_number(in, &i, &u, &d)) {
+    switch (string_t_parse_number(in, &i, &u, &d)) {
     case 1:  return result_ast_i64(parser, i);
     case 2:  return result_ast_u64(parser, u);
     case 3:  return result_ast_f64(parser, d);
@@ -1089,7 +1089,7 @@ static int function_application(parser *self) {
             // consumed, so that grouped_expression catches it.
 
             ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
-            mos_string_copy(self->ast_arena, &node->named_application.name, &name->symbol.name);
+            string_t_copy(self->ast_arena, &node->named_application.name, &name->symbol.name);
 
             array_shrink(arguments);
             node->array.n     = (u8)arguments.size;
@@ -1687,7 +1687,7 @@ static int toplevel_let(parser *self) {
         ast_node *node = ast_node_create(self->ast_arena, ast_let);
 
         // move declaration into new node
-        mos_string_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
+        string_t_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
         node->let.body = defn;
 
         // move the vector from the function_declaration node to the new ast node

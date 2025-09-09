@@ -352,7 +352,7 @@ finish:
 void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
     alloc_zero(self);
     self->tag = tag;
-    self->s   = mos_string_init_empty();
+    self->s   = string_t_init_empty();
 }
 
 // -- token --
@@ -360,7 +360,7 @@ void sexp_token_init(sexp_token *self, sexp_token_tag tag) {
 nodiscard int sexp_token_init_str(allocator *alloc, sexp_token *self, sexp_token_tag tag, char const *src,
                                   size_t len) {
 
-    self->s   = mos_string_init_n(alloc, src, len);
+    self->s   = string_t_init_n(alloc, src, len);
     self->tag = tag;
 
     return 0;
@@ -373,7 +373,7 @@ void sexp_token_deinit(allocator *alloc, sexp_token *self) {
     case sexp_tok_number:
     case sexp_tok_string:
     case sexp_tok_symbol:
-    case sexp_tok_comment:     mos_string_deinit(alloc, &self->s); break;
+    case sexp_tok_comment:     string_t_deinit(alloc, &self->s); break;
     }
 
     alloc_invalidate(self);
@@ -461,7 +461,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                 *out = sexp_init_boxed(self->alloc);
 
-                if (0 != mos_string_cmp_c(&tok.s, "nil")) {
+                if (0 != string_t_cmp_c(&tok.s, "nil")) {
                     sexp_box_init_move_string(sexp_box_get(*out), sexp_box_symbol, &tok.s);
                 }
                 state = stop;
@@ -478,7 +478,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                 u64 xu;
                 f64 xd;
 
-                switch (mos_string_parse_number(mos_string_str(&tok.s), &xi, &xu, &xd)) {
+                switch (string_t_parse_number(string_t_str(&tok.s), &xi, &xu, &xd)) {
                 case 1:
                     *out  = sexp_init_i64(self->alloc, xi);
                     state = stop;

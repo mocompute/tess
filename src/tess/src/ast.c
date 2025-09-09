@@ -22,7 +22,7 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 
 ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
     ast_node *self    = ast_node_create(alloc, ast_symbol);
-    self->symbol.name = mos_string_init(alloc, str);
+    self->symbol.name = string_t_init(alloc, str);
     return self;
 }
 
@@ -83,8 +83,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_symbol:
     case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
-        mos_string_copy(alloc, &vclone->name, &vorig->name);
-        mos_string_copy(alloc, &vclone->original, &vorig->original);
+        string_t_copy(alloc, &vclone->name, &vorig->name);
+        string_t_copy(alloc, &vclone->original, &vorig->original);
         vclone->annotation = ast_node_clone(alloc, vorig->annotation);
     } break;
 
@@ -112,10 +112,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
-        mos_string_copy(alloc, &vclone->name, &vorig->name);
+        string_t_copy(alloc, &vclone->name, &vorig->name);
         vclone->body  = ast_node_clone(alloc, vorig->body);
         vclone->arrow = vorig->arrow;
-        mos_string_copy(alloc, &vclone->specialized_name, &vorig->specialized_name);
+        string_t_copy(alloc, &vclone->specialized_name, &vorig->specialized_name);
     } break;
 
     case ast_if_then_else: {
@@ -146,7 +146,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_named_function_application: {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
-        mos_string_copy(alloc, &vclone->name, &vorig->name);
+        string_t_copy(alloc, &vclone->name, &vorig->name);
         vclone->specialized = ast_node_clone(alloc, vorig->specialized);
     } break;
 
@@ -190,7 +190,7 @@ char const *ast_node_name_string(ast_node const *node) {
     if (ast_symbol != node->tag && ast_string != node->tag)
         fatal("ast_node_name_string: expected symbol or string");
 
-    return mos_string_str(&node->symbol.name);
+    return string_t_str(&node->symbol.name);
 }
 
 int ast_node_name_strcmp(ast_node const *node, char const *target) {
@@ -252,12 +252,12 @@ sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
         type = sexp_init_sym(alloc, buf);
     }
 
-    if (!mos_string_empty(&node->symbol.original))
+    if (!string_t_empty(&node->symbol.original))
         return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                     sexp_init_sym(alloc, mos_string_str(&node->symbol.original)), type);
+                                     sexp_init_sym(alloc, string_t_str(&node->symbol.original)), type);
     else
         return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                     sexp_init_sym(alloc, mos_string_str(&node->symbol.name)), type);
+                                     sexp_init_sym(alloc, string_t_str(&node->symbol.name)), type);
 }
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
@@ -328,11 +328,11 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        if (mos_string_empty(&node->let.specialized_name))
-            return penta(alloc, sym("let"), sym(mos_string_str(&node->let.name)), list,
-                         recur(node->let.body), type);
+        if (string_t_empty(&node->let.specialized_name))
+            return penta(alloc, sym("let"), sym(string_t_str(&node->let.name)), list, recur(node->let.body),
+                         type);
         else
-            return penta(alloc, sym("let"), sym(mos_string_str(&node->let.specialized_name)), list,
+            return penta(alloc, sym("let"), sym(string_t_str(&node->let.specialized_name)), list,
                          recur(node->let.body), type);
 
     } break;
@@ -366,10 +366,10 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         if (node->named_application.specialized)
             return quad(alloc, sym("named-application"),
-                        sym(mos_string_str(&node->named_application.specialized->let.specialized_name)),
-                        list, type);
+                        sym(string_t_str(&node->named_application.specialized->let.specialized_name)), list,
+                        type);
         else
-            return quad(alloc, sym("named-application"), sym(mos_string_str(&node->named_application.name)),
+            return quad(alloc, sym("named-application"), sym(string_t_str(&node->named_application.name)),
                         list, type);
     }
 

@@ -26,19 +26,19 @@ static int test_string(void) {
         }
         data[n]    = '\0';
 
-        string_t s = mos_string_init(alloc, data);
+        string_t s = string_t_init(alloc, data);
 
-        error += (strlen(data) > MOS_STRING_MAX_SMALL_LEN) == mos_string_is_allocated(&s) ? 0 : 1;
-        error += 0 == mos_string_cmp_c(&s, data) ? 0 : 1;
+        error += (strlen(data) > MOS_STRING_MAX_SMALL_LEN) == string_t_is_allocated(&s) ? 0 : 1;
+        error += 0 == string_t_cmp_c(&s, data) ? 0 : 1;
 
         if (error) {
             dbg("test_string: %s\n", data);
-            mos_string_deinit(alloc, &s);
+            string_t_deinit(alloc, &s);
             free(data);
             return error;
         }
 
-        mos_string_deinit(alloc, &s);
+        string_t_deinit(alloc, &s);
         free(data);
     }
 
