@@ -638,6 +638,8 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
     }
     out_put(self, ");\n");
 
+    alloc_free(self->alloc, name);
+
     return 0;
 }
 
