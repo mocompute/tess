@@ -13,8 +13,9 @@ typedef struct ast_node {
     union {
         struct ast_symbol {
             string_t         name;
-            string_t         original; // set by syntax_rename_variable
+            string_t         original;
             struct ast_node *annotation;
+            tl_type         *annotation_type;
         } symbol;
 
         struct ast_bool {
@@ -32,6 +33,11 @@ typedef struct ast_node {
         struct ast_f64 {
             f64 val;
         } f64;
+
+        struct ast_arrow {
+            struct ast_node *left;
+            struct ast_node *right;
+        } arrow;
 
         struct ast_assignment {
             struct ast_node *name;
@@ -72,7 +78,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             u8                flags;
-            string_t          name;
+            struct ast_node  *name;
             struct ast_node  *body;
             tl_type          *arrow;            // because the node type itself is nil
             string_t          specialized_name; // set during function specialisation
@@ -198,6 +204,7 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 // -- variant accessors --
 
 struct ast_address_of           *ast_node_address_of(ast_node *);
+struct ast_arrow                *ast_node_arrow(ast_node *);
 struct ast_assignment           *ast_node_assignment(ast_node *);
 struct ast_bool                 *ast_node_bool(ast_node *);
 struct ast_dereference          *ast_node_deref(ast_node *);
@@ -236,6 +243,8 @@ void        ast_node_move(ast_node *dst, ast_node *src);
 
 char const *ast_node_name_string(ast_node const *);
 int         ast_node_name_strcmp(ast_node const *, char const *);
+
+tl_type    *ast_node_annotation(ast_node const *);
 
 // -- traversal --
 

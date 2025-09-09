@@ -28,10 +28,11 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
-    ast_node *self          = ast_node_create(alloc, ast_symbol);
-    self->symbol.name       = string_t_init(alloc, str);
-    self->symbol.original   = string_t_init_empty();
-    self->symbol.annotation = null;
+    ast_node *self               = ast_node_create(alloc, ast_symbol);
+    self->symbol.name            = string_t_init(alloc, str);
+    self->symbol.original        = string_t_init_empty();
+    self->symbol.annotation      = null;
+    self->symbol.annotation_type = null;
     return self;
 }
 
@@ -78,6 +79,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->target                = ast_node_clone(alloc, vorig->target);
     } break;
 
+    case ast_arrow: {
+        struct ast_arrow *vclone = ast_node_arrow(clone), *vorig = ast_node_arrow((ast_node *)orig);
+        vclone->left  = ast_node_clone(alloc, vorig->left);
+        vclone->right = ast_node_clone(alloc, vorig->right);
+    } break;
+
     case ast_assignment: {
         struct ast_assignment *vclone = ast_node_assignment(clone),
                               *vorig  = ast_node_assignment((ast_node *)orig);
@@ -95,7 +102,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         string_t_copy(alloc, &vclone->name, &vorig->name);
         string_t_copy(alloc, &vclone->original, &vorig->original);
-        vclone->annotation = ast_node_clone(alloc, vorig->annotation);
+        vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
+        vclone->annotation_type = vorig->annotation_type;
     } break;
 
     case ast_infix: {
@@ -123,7 +131,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
         vclone->flags = vorig->flags;
-        string_t_copy(alloc, &vclone->name, &vorig->name);
+        vclone->name  = ast_node_clone(alloc, vorig->name);
         vclone->body  = ast_node_clone(alloc, vorig->body);
         vclone->arrow = vorig->arrow;
         string_t_copy(alloc, &vclone->specialized_name, &vorig->specialized_name);
@@ -297,6 +305,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_string:      return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
     case ast_address_of:  return triple(alloc, sym("&"), recur(node->address_of.target), type);
+    case ast_arrow:       return triple(alloc, recur(node->arrow.left), recur(node->arrow.right), type);
     case ast_dereference: return triple(alloc, sym("*"), recur(node->dereference.target), type);
 
     case ast_assignment:
@@ -330,8 +339,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         if (string_t_empty(&node->let.specialized_name))
-            return penta(alloc, sym("let"), sym(string_t_str(&node->let.name)), list, recur(node->let.body),
-                         type);
+            return penta(alloc, sym("let"), recur(node->let.name), list, recur(node->let.body), type);
         else
             return penta(alloc, sym("let"), sym(string_t_str(&node->let.specialized_name)), list,
                          recur(node->let.body), type);
@@ -486,6 +494,11 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->address_of.target);
         break;
 
+    case ast_arrow:
+        fun(ctx, node->arrow.left);
+        fun(ctx, node->arrow.right);
+        break;
+
     case ast_assignment:
         fun(ctx, node->assignment.name);
         fun(ctx, node->assignment.value);
@@ -578,12 +591,12 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
 
     switch (node->tag) {
     case ast_address_of:
+    case ast_arrow:
     case ast_assignment:
     case ast_dereference:
     case ast_eof:
     case ast_nil:
     case ast_bool:
-    case ast_symbol:
     case ast_i64:
     case ast_u64:
     case ast_f64:
@@ -604,6 +617,11 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_user_type_get:
     case ast_user_type_set:
         //
+        break;
+
+    case ast_symbol:
+        //
+        fun(ctx, node->symbol.annotation_type);
         break;
 
     case ast_let:
@@ -661,11 +679,25 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_nil",           "ast_address_of",    "ast_assignment", "ast_bool",
-      "ast_dereference",   "ast_eof",           "ast_f64",        "ast_i64",
-      "ast_if_then_else",  "ast_infix",         "ast_let_in",     "ast_let_match_in",
-      "ast_string",        "ast_symbol",        "ast_u64",        "ast_user_type_definition",
-      "ast_user_type_get", "ast_user_type_set",
+      "ast_nil",
+      "ast_address_of",
+      "ast_arrow",
+      "ast_assignment",
+      "ast_bool",
+      "ast_dereference",
+      "ast_eof",
+      "ast_f64",
+      "ast_i64",
+      "ast_if_then_else",
+      "ast_infix",
+      "ast_let_in",
+      "ast_let_match_in",
+      "ast_string",
+      "ast_symbol",
+      "ast_u64",
+      "ast_user_type_definition",
+      "ast_user_type_get",
+      "ast_user_type_set",
     };
 
     static char const *const strings2[] = {
@@ -746,6 +778,11 @@ struct ast_symbol *ast_node_sym(ast_node *node) {
 struct ast_address_of *ast_node_address_of(ast_node *node) {
     assert(node->tag == ast_address_of);
     return &node->address_of;
+}
+
+struct ast_arrow *ast_node_arrow(ast_node *node) {
+    assert(node->tag == ast_arrow);
+    return &node->arrow;
 }
 
 struct ast_assignment *ast_node_assignment(ast_node *node) {
@@ -886,6 +923,10 @@ void ast_node_set_is_specialized(ast_node *node) {
 void ast_node_set_is_tuple_constructor(ast_node *node) {
     assert(ast_let == node->tag);
     SET_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
+}
+
+tl_type *ast_node_annotation(ast_node const *node) {
+    return (ast_symbol == node->tag) ? node->symbol.annotation_type : null;
 }
 
 //

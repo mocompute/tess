@@ -346,6 +346,12 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, node->address_of.target);
         break;
 
+    case ast_arrow:
+        //
+        rename_variables(self, node->arrow.left);
+        rename_variables(self, node->arrow.right);
+        break;
+
     case ast_dereference:
         //
         rename_variables(self, node->dereference.target);
@@ -431,13 +437,23 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     } break;
 
     case ast_let: {
-        // make new variables for all function parameters. save existing
-        // map in case any of them shadow.
+        // make new variables for all function parameters. save
+        // existing map in case any of them shadow.
+
+        // Also apply renaming of variables to any type annotations.
+        // The let node defines a function - if the function name is
+        // annotated, it may be defining user-defined type variables.
+        // Those variables need to be available for use in annotations
+        // in the body of the function.
         struct ast_let   *v    = ast_node_let(node);
         struct ast_array *arr  = ast_node_arr(node);
 
         hashmap          *save = map_copy(self->map);
         assert(save);
+
+        // annotations, if any:
+        // FIXME
+        assert(ast_symbol == v->name->tag);
 
         rename_array_elements(self, arr->nodes, arr->n);
         rename_variables(self, v->body);
@@ -626,6 +642,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     } break;
 
     case ast_address_of:
+    case ast_arrow:
     case ast_assignment:
     case ast_begin_end:
     case ast_user_type:
@@ -866,6 +883,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
     } break;
 
+    case ast_arrow:
     case ast_assignment:
     case ast_eof:
     case ast_nil:
@@ -1011,7 +1029,7 @@ static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_nod
         ast_node *candidate = nodes.v[i];
         if (ast_let != candidate->tag) continue;
 
-        if (0 != string_t_cmp_c(&candidate->let.name, name)) continue;
+        if (0 != string_t_cmp_c(&candidate->let.name->symbol.name, name)) continue;
 
         assert(candidate->let.arrow && type_arrow == candidate->let.arrow->tag);
 
@@ -1059,6 +1077,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_nil:                  push(node->type, get_prim(self, type_nil)); break;
     case ast_bool:                 push(node->type, get_prim(self, type_bool)); break;
 
+    case ast_arrow:                // only used for annotation
     case ast_user_type_definition: break;
 
     case ast_symbol:               {
@@ -1067,12 +1086,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // ensure every symbol usage matches its definition
         tl_type **found = map_get(ctx->symbols, name_str, name_len);
+        if (found) push(node->type, *found);
+        else map_set(&ctx->symbols, name_str, name_len, &node->type);
 
-        if (found) {
-            push(node->type, *found);
-        } else {
-            map_set(&ctx->symbols, name_str, name_len, &node->type);
-        }
+        // ensure symbol type matches its annotated type, if any
+        tl_type *annotation = ast_node_annotation(node);
+        if (annotation) push(node->type, annotation);
 
     } break;
 
@@ -1358,11 +1377,11 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     if (null == special) fatal("specialize_node: clone failed.");
 
     ast_node_set_is_specialized(special);
-    special->let.specialized_name =
-      string_t_init(ctx->ti->type_arena, make_specialized_name(ctx->ti, string_t_str(&special->let.name)));
+    special->let.specialized_name = string_t_init(
+      ctx->ti->type_arena, make_specialized_name(ctx->ti, string_t_str(&special->let.name->symbol.name)));
 
     char *str = tl_type_to_string(alloc, args);
-    log(ctx->ti, "specialized '%s' for type %s", string_t_str(&special->let.name), str);
+    log(ctx->ti, "specialized '%s' for type %s", string_t_str(&special->let.name->symbol.name), str);
     alloc_free(alloc, str);
 
     // cloned arrow type needs to be reset
@@ -1463,7 +1482,7 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     out->let.flags            = 0;
     out->let.body             = null;
     out->let.arrow            = null;
-    out->let.name             = string_t_init(self->type_arena, name);
+    out->let.name             = ast_node_create_sym(self->type_arena, name);
     out->let.specialized_name = string_t_init(self->type_arena, generated_name);
     ast_node_set_is_specialized(out);
 
@@ -1549,7 +1568,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     out->let.body             = null;
     out->let.arrow            = null;
     out->type                 = *type_registry_find_name(self->type_registry, "nil");
-    out->let.name             = string_t_init(a, generated_name);
+    out->let.name             = ast_node_create_sym(a, generated_name);
     out->let.specialized_name = string_t_init(a, generated_name);
     ast_node_set_is_specialized(out);
     ast_node_set_is_tuple_constructor(out);

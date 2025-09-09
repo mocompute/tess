@@ -114,6 +114,7 @@ static int           a_number(parser *);
 static int           a_open_round(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
+static int           a_type_annotation(parser *);
 static int           a_type_identifier(parser *);
 static int           the_symbol(parser *, char const *const);
 
@@ -203,10 +204,12 @@ static int result_ast_bool(parser *p, bool val) {
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    p->result                    = ast_node_create(p->ast_arena, tag);
-    p->result->symbol.name       = string_t_init(p->ast_arena, s);
-    p->result->symbol.original   = string_t_init_empty();
-    p->result->symbol.annotation = null;
+    p->result                         = ast_node_create(p->ast_arena, tag);
+    p->result->symbol.name            = string_t_init(p->ast_arena, s);
+    p->result->symbol.original        = string_t_init_empty();
+    p->result->symbol.annotation      = null;
+    p->result->symbol.annotation_type = null;
+
     // syms and strs use same union
 
     return 0;
@@ -563,33 +566,33 @@ error:
     return 1;
 }
 
-static int a_type_identifier(parser *p) {
-    return a_try(p, a_identifier);
+static int a_type_identifier(parser *self) {
+    return a_try(self, a_identifier);
 }
 
-static int a_colon(parser *p);
-
-static int a_identifier_typed(parser *p) {
-    if (a_try(p, a_identifier)) return 1;
-    ast_node *name       = p->result;
-
-    ast_node *annotation = 0;
-
-    if (0 == a_try(p, a_colon)) {
-
-        if (a_try(p, a_type_identifier)) {
-            return 1;
-        }
-
-        annotation = p->result;
+static int a_type_annotation(parser *self) {
+    if (0 == a_try(self, a_colon)) {
+        return a_try(self, a_type_identifier);
     }
 
-    ast_node *node        = ast_node_create(p->ast_arena, ast_symbol);
+    self->error.tag = tl_err_expected_colon;
+    return 1;
+}
+
+static int a_identifier_typed(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name       = self->result;
+
+    ast_node *annotation = null;
+    if (0 == a_try(self, a_type_annotation)) annotation = self->result;
+
+    ast_node *node        = ast_node_create(self->ast_arena, ast_symbol);
     node->symbol.name     = name->symbol.name;
     node->symbol.original = string_t_init_empty();
     if (annotation) node->symbol.annotation = annotation;
     else node->symbol.annotation = null;
-    return result_ast_node(p, node);
+    node->symbol.annotation_type = null;
+    return result_ast_node(self, node);
 }
 
 static int a_infix_operator(parser *p) {
@@ -805,48 +808,48 @@ static int a_assignment(parser *self) {
     return result_ast_node(self, node);
 }
 
-static int a_nil(parser *p) {
+static int a_nil(parser *self) {
 
-    if ((0 == a_open_round(p)) && (0 == a_close_round(p))) return result_ast(p, ast_nil);
+    if ((0 == a_open_round(self)) && (0 == a_close_round(self))) return result_ast(self, ast_nil);
 
-    // FIXME needs a specific error
+    self->error.tag = tl_err_expected_nil;
     return 1;
 }
 
-static int a_end_of_block(parser *p) {
+static int a_end_of_block(parser *self) {
 
-    if (eat_newlines(p) || next_token(p)) {
-        if (is_eof(p)) return result_ast_str(p, ast_symbol, "end");
+    if (eat_newlines(self) || next_token(self)) {
+        if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
 
         return 1;
     }
 
-    if (tok_symbol == p->token.tag && 0 == strcmp("end", p->token.s)) {
-        return result_ast_str(p, ast_symbol, "end");
+    if (tok_symbol == self->token.tag && 0 == strcmp("end", self->token.s)) {
+        return result_ast_str(self, ast_symbol, "end");
     }
 
-    if (tok_one_newline == p->token.tag || tok_two_newline == p->token.tag) {
-        return result_ast_str(p, ast_symbol, "end");
+    if (tok_one_newline == self->token.tag || tok_two_newline == self->token.tag) {
+        return result_ast_str(self, ast_symbol, "end");
     }
 
-    p->error.tag = tl_err_expected_end_of_block;
+    self->error.tag = tl_err_expected_end_of_block;
     return 1;
 }
 
-static int a_field_access(parser *p) {
-    if (a_try(p, a_identifier)) return 1;
-    ast_node *variable = p->result;
+static int a_field_access(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *variable = self->result;
 
-    if (a_try(p, a_dot)) return 1;
+    if (a_try(self, a_dot)) return 1;
 
-    if (a_try(p, a_identifier)) return 1;
-    ast_node                 *field = p->result;
+    if (a_try(self, a_identifier)) return 1;
+    ast_node                 *field = self->result;
 
-    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_get);
+    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_get);
     struct ast_user_type_get *v     = ast_node_utg(node);
     v->struct_name                  = variable;
     v->field_name                   = field;
-    return result_ast_node(p, node);
+    return result_ast_node(self, node);
 }
 
 static int a_field_setter(parser *p) {
@@ -980,6 +983,8 @@ error:
 
 static int function_declaration(parser *p) {
     // f a b c... = : only symbols allowed, terminated by =.
+
+    // annotated: f a b c : (int,int,int) -> int = ...
 
     if (a_try(p, a_identifier)) return 1;
 
@@ -1721,12 +1726,14 @@ static int toplevel_let(parser *self) {
         node->let.parameters       = null;
         node->let.n_parameters     = 0;
         node->let.flags            = 0;
+        node->let.name             = null;
         node->let.body             = null;
         node->let.arrow            = null;
         node->let.specialized_name = string_t_init_empty();
 
         // move declaration into new node
-        string_t_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
+        // string_t_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
+        node->let.name = decl->function_declaration.name;
         node->let.body = defn;
 
         // move the vector from the function_declaration node to the new ast node
@@ -1743,6 +1750,9 @@ static int toplevel_let(parser *self) {
         ast_node *sym_or_nil = self->result;
         return continue_let_in(self, sym_or_nil);
     }
+
+    self->error.tag = tl_err_expected_declaration;
+    goto error;
 
 success:
     self->indent_level--;

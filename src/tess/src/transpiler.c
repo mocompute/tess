@@ -409,6 +409,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     switch (node->tag) {
     case ast_assignment:
+    case ast_arrow:
     case ast_eof:
     case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
     case ast_symbol:     out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node)); break;
@@ -684,7 +685,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v = ast_node_let((ast_node *)node);
 
-    if (0 == string_t_cmp_c(&v->name, "main")) {
+    if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
@@ -741,7 +742,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
     char const           *name = string_t_str(&v->specialized_name);
-    if (0 == strlen(name)) name = string_t_str(&v->name);
+    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
 
     log(self, "processing struct let '%s'...", string_t_str(&v->specialized_name));
 
@@ -749,8 +750,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     u64      hash           = tl_type_hash(tuple);
     char    *generated_name = make_struct_name(self->alloc, hash);
 
-    out_put_start_fmt(self, "/* %s flags = %b*/\n", ast_node_to_string(self->strings, node),
-                      node->let.flags);
+    out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
     out_put_start_fmt(self, "struct %s {\n", generated_name);
     self->indent_level++;
@@ -794,21 +794,21 @@ static int a_let(transpiler *self, ast_node const *node) {
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
     char const           *name = string_t_str(&v->specialized_name);
-    if (0 == strlen(name)) name = string_t_str(&v->name);
+    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
 
     if (is_generic_function(node)) {
-        log(self, "skipping '%s' ('%s') because it is a generic function", string_t_str(&v->name),
-            string_t_str(&v->specialized_name));
+        log(self, "skipping '%s' ('%s') because it is a generic function",
+            string_t_str(&v->name->symbol.name), string_t_str(&v->specialized_name));
         return 0;
     }
 
     // don't emit generic template functions
     if (!ast_node_is_specialized(node)) {
-        log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name));
+        log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name->symbol.name));
         return 0;
     }
 
-    if (0 == string_t_cmp_c(&v->name, "main")) {
+    if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
         // skip here, let a_main process it.
         return 0;
     }
