@@ -584,18 +584,18 @@ nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, t
     return count;
 }
 
-struct apply_substitutions_ctx {
+typedef struct {
     ti_inferer       *ti;
     constraint_sized *substitutions;
     size_t            count;
-};
+} apply_substitutions_ctx;
 
 void dfs_apply_substitutions(void *ctx_, ast_node *node) {
-    struct apply_substitutions_ctx *ctx  = ctx_;
-    constraint_sized               *subs = ctx->substitutions;
+    apply_substitutions_ctx *ctx  = ctx_;
+    constraint_sized        *subs = ctx->substitutions;
 
-    tl_type                       **buf[UINT8_MAX + 1];
-    u32                             buf_size = 0;
+    tl_type                **buf[UINT8_MAX + 1];
+    u32                      buf_size = 0;
 
     // find additional types in ast variants
     switch (node->tag) {
@@ -663,7 +663,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
 
 static size_t ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized substitutions,
                                             ast_node_sized nodes) {
-    struct apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions, .count = 0};
+    apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions, .count = 0};
 
     for (size_t i = 0; i < nodes.size; ++i) {
         ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);

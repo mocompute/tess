@@ -18,7 +18,7 @@
 #include "readline/history.h"
 #include "readline/readline.h"
 
-struct state {
+typedef struct {
     allocator     *arena;
 
     char const    *argv0;
@@ -29,7 +29,7 @@ struct state {
     bool           verbose;
     bool           verbose_parse;
     bool           help;
-};
+} state;
 
 noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
@@ -46,7 +46,7 @@ noreturn void usage(int status, char const *argv0) {
     exit(status);
 }
 
-void state_init(struct state *self) {
+void state_init(state *self) {
     alloc_zero(self);
     self->arena = arena_create(default_allocator(), 4096);
 
@@ -54,13 +54,13 @@ void state_init(struct state *self) {
     array_reserve(self->words, 32);
 }
 
-void state_deinit(struct state *self) {
+void state_deinit(state *self) {
     arena_destroy(default_allocator(), &self->arena);
 
     alloc_invalidate(self);
 }
 
-void state_gather_single_options(struct state *self, char *str) {
+void state_gather_single_options(state *self, char *str) {
     u32 len = (u32)strlen(str);
     for (u32 i = 1; i < len; ++i) {
         switch (str[i]) {
@@ -71,11 +71,11 @@ void state_gather_single_options(struct state *self, char *str) {
     }
 }
 
-void state_gather_long_option(struct state *self, char *str) {
+void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = true;
 }
 
-void state_gather_options(struct state *self, int argc, char *argv[]) {
+void state_gather_options(state *self, int argc, char *argv[]) {
 
     self->argv0 = argv[0];
 
@@ -101,7 +101,7 @@ void eval_print(char *in) {
     printf("you said: '%s'\n", in);
 }
 
-int repl(struct state *self) {
+int repl(state *self) {
     (void)self;
     while (true) {
         char *line = readline("tess > ");
@@ -117,7 +117,7 @@ int repl(struct state *self) {
     return 0;
 }
 
-int compile(struct state *self) {
+int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
     int        error = 0;
@@ -226,9 +226,9 @@ cleanup_syntax:
 
 int main(int argc, char *argv[]) {
 
-    int          result = 0;
+    int   result = 0;
 
-    struct state self;
+    state self;
     state_init(&self);
     state_gather_options(&self, argc, argv);
     if (self.help) usage(0, argv[0]);
