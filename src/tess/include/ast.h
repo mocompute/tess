@@ -93,6 +93,7 @@ typedef struct ast_node {
         struct ast_labelled_tuple {
             struct ast_node **assignments;
             u8                n_assignments;
+            u8                flags;
         } labelled_tuple;
 
         struct ast_tuple {

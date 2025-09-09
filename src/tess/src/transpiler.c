@@ -593,11 +593,48 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
+
+    char *var = next_variable(self);
+    array_push(self->results, &var);
+
+    // eval arguments in reverse order, then generate function call,
+    // assigning to the result variable
+    struct ast_labelled_tuple const *v      = ast_node_lt((ast_node *)node);
+    i32 const                        n_args = v->n_assignments;
+    u64                              hash   = tl_type_hash(node->type);
+    char                            *name   = make_struct_name(self->alloc, hash);
+
+    if (n_args)
+        for (i32 i = n_args - 1; i >= 0; --i)
+            if (a_eval(self, v->assignments[i]->assignment.value)) return 1;
+
+    // init result
+    out_put_start(self, "");
+    a_result_type_of(self, node->type);
+    out_put_fmt(self, " %s;\n", var);
+
+    for (u32 i = 0; i < (u32)n_args; ++i) {
+
+        char *arg = self->results.v[--self->results.size];
+
+        out_put_start_fmt(self, "%s.%s = %s;\n", var,
+                          ast_node_name_string(v->assignments[i]->assignment.name), arg);
+    }
+
+    alloc_free(self->alloc, name);
+
+    return 0;
+}
+
 static int a_tuple_cons(transpiler *self, ast_node const *node) {
     // intercept tuple init to construct tuple in place rather than
     // invoke constructor function
     if (ast_tuple == node->tag && TEST_BIT(node->tuple.flags, AST_TUPLE_FLAG_INIT)) {
         return a_tuple_init(self, node);
+    }
+    if (ast_labelled_tuple == node->tag && TEST_BIT(node->labelled_tuple.flags, AST_TUPLE_FLAG_INIT)) {
+        return a_labelled_tuple_init(self, node);
     }
 
     char *name = make_struct_constructor_name(self->alloc, tl_type_hash_ext(node->type, true));
@@ -726,34 +763,42 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // for tuple constructors, also emit a tuple struct type
     if (ast_node_is_tuple_constructor(node)) {
-        tl_type          *tuple          = v->arrow->arrow.left;
-        struct tlt_tuple *tup            = tl_type_tup(tuple);
-        u64               hash           = tl_type_hash_ext(tuple, true); // ignore names
-        char             *generated_name = null;
-        {
-#define fmt "_gen_struct_tup_%zu_"
-            int len = snprintf(null, 0, fmt, hash) + 1;
-            if (len < 0) fatal("a_let: generate name failed.");
-            generated_name = alloc_malloc(self->alloc, (u32)len);
-            snprintf(generated_name, (u32)len, fmt, hash);
-#undef fmt
-        }
+        tl_type *tuple          = v->arrow->arrow.left;
+        u64      hash           = tl_type_hash(tuple);
+        char    *generated_name = make_struct_name(self->alloc, hash);
 
         out_put_start_fmt(self, "struct %s {\n", generated_name);
-
         self->indent_level++;
-        for (u32 i = 0; i < tup->elements.size; ++i) {
-            char buf[32];
-            snprintf(buf, sizeof buf - 1, "x%u", i);
 
-            out_put_start(self, "");
-            a_result_type_of(self, tup->elements.v[i]);
+        if (type_tuple == tuple->tag) {
+            struct tlt_tuple *tup = tl_type_tup(tuple);
 
-            out_put_fmt(self, " %s;\n", buf);
+            for (u32 i = 0; i < tup->elements.size; ++i) {
+                char buf[32];
+                snprintf(buf, sizeof buf - 1, "x%u", i);
+
+                out_put_start(self, "");
+                a_result_type_of(self, tup->elements.v[i]);
+
+                out_put_fmt(self, " %s;\n", buf);
+            }
+        } else if (type_labelled_tuple == tuple->tag) {
+            struct tlt_labelled_tuple *lt = tl_type_lt(tuple);
+
+            for (u32 i = 0; i < lt->fields.size; ++i) {
+
+                out_put_start(self, "");
+                a_result_type_of(self, lt->fields.v[i]);
+
+                out_put_fmt(self, " %s;\n", lt->names.v[i]);
+            }
+
+        } else {
+            fatal("expected tuple type");
         }
+
         self->indent_level--;
         out_put_start(self, "};\n");
-
         alloc_free(self->alloc, generated_name);
     }
 
@@ -807,7 +852,7 @@ static bool is_generic_function(ast_node const *node) {
     tl_type *arrow = node->let.arrow;
     if (arrow->arrow.right->tag == type_type_var) return true;
 
-    struct tlt_tuple const *v = tl_type_tup(arrow->arrow.left);
+    struct tlt_array const *v = tl_type_arr(arrow->arrow.left);
     for (u32 i = 0; i < v->elements.size; ++i)
         if (type_type_var == v->elements.v[i]->tag) return true;
 

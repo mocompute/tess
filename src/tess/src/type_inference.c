@@ -97,6 +97,7 @@ static void       ti_run_solver(ti_inferer *);
 static void       ti_specialize_functions(ti_inferer *, ast_node_array *);
 
 static tl_type   *make_args_type(allocator *, ast_node *[], u16);
+static tl_type   *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
 static ast_node  *find_let_node(char const *, tl_type_sized, ast_node_sized, bool);
 static tl_type   *get_prim(ti_inferer *, tl_type_tag);
 static void       next_variable_name(rename_variables_ctx *, string_t *);
@@ -113,7 +114,7 @@ static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_arr
 static bool       substitute_constraints(constraint *, constraint *, constraint const);
 static u32        unify_one(ti_inferer *, constraint);
 
-static tl_type   *make_arrow(allocator *, ast_node *[], u16, tl_type *);
+static tl_type   *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *);
 static ast_node  *make_specialized(specialize_functions_ctx *, ast_node *, tl_type *);
 static char      *make_specialized_name(ti_inferer *, char const *);
 static ast_node  *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
@@ -860,8 +861,23 @@ static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
     return tuple;
 }
 
-static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, tl_type *right) {
-    tl_type *left = make_args_type(alloc, args, n);
+static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[], char const *names[],
+                                        u16 n) {
+    tl_type_array types = {.alloc = alloc};
+    array_reserve(types, n);
+    for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
+
+    tl_type *tuple = tl_type_create_labelled_tuple(alloc, (tl_type_sized)sized_all(types),
+                                                   (c_string_csized){.v = names, .size = n});
+
+    return tuple;
+}
+
+static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const *names[], tl_type *right) {
+    tl_type *left = null;
+    if (names) left = make_labelled_args_type(alloc, args, names, n);
+    else left = make_args_type(alloc, args, n);
+
     return tl_type_create_arrow(alloc, left, right);
 }
 
@@ -1471,12 +1487,23 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         struct ast_labelled_tuple *v = ast_node_lt(out->let.body);
         v->n_assignments             = out->let.n_parameters;
         v->assignments               = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
+        SET_BIT(v->flags, AST_TUPLE_FLAG_INIT);
         for (u16 i = 0; i < v->n_assignments; ++i) {
             v->assignments[i]                   = ast_node_create(a, ast_assignment);
             v->assignments[i]->assignment.name  = ast_node_clone(a, lt->assignments[i]->assignment.name);
             v->assignments[i]->assignment.value = out->let.parameters[i];
             v->assignments[i]->type             = lt->assignments[i]->type;
         }
+
+        c_string_array names = {.alloc = self->type_arena};
+        for (u16 i = 0; i < v->n_assignments; ++i) {
+            char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
+            array_push(names, &name);
+        }
+
+        // make an arrow type for the generated function
+        out->let.arrow =
+          make_arrow(a, out->let.parameters, out->let.n_parameters, (char const **)names.v, node->type);
 
     } else {
         // need to construct names for the anonymous tuple elements
@@ -1503,10 +1530,10 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
             v->elements[i]       = out->let.parameters[i];
             v->elements[i]->type = tup->elements[i]->type;
         }
-    }
 
-    // make an arrow type for the generated function
-    out->let.arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, node->type);
+        // make an arrow type for the generated function
+        out->let.arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, null, node->type);
+    }
 
     return out;
 }
