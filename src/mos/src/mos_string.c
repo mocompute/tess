@@ -76,7 +76,7 @@ char const *mos_string_str(string_t const *s) {
     return &s->small.data[0];
 }
 
-int mos_string_cmp_c(struct string const *s, char const *cs) {
+int mos_string_cmp_c(string_t const *s, char const *cs) {
     return strcmp(mos_string_str(s), cs);
 }
 

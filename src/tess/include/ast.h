@@ -71,10 +71,10 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             u8                flags;
-            struct string     name;
+            string_t          name;
             struct ast_node  *body;
             tl_type          *arrow;            // because the node type itself is nil
-            struct string     specialized_name; // set during function specialisation
+            string_t          specialized_name; // set during function specialisation
         } let;
 
         struct ast_lambda_application {
@@ -86,7 +86,7 @@ typedef struct ast_node {
         struct ast_named_application {
             struct ast_node **arguments;
             u8                n_arguments;
-            struct string     name;
+            string_t          name;
             struct ast_node  *specialized;
         } named_application;
 

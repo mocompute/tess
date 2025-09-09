@@ -10,7 +10,7 @@
 #define MOS_STRING_MAX_LEN       UINT32_MAX
 
 // TODO: get rid of this typedef
-typedef struct string {
+typedef struct {
     union {
         struct {
             char *buf;
@@ -26,28 +26,28 @@ typedef struct string {
 
 // -- allocation and deallocation --
 
-struct string mos_string_init(allocator *, char const *);
-struct string mos_string_init_n(allocator *, char const *, size_t);
-struct string mos_string_init_empty();
-void          mos_string_deinit(allocator *, struct string *);
-void          mos_string_replace(allocator *, struct string *, char const *);
-void          mos_string_move(struct string *, struct string *);
-void          mos_string_copy(allocator *, struct string *, struct string const *);
+string_t mos_string_init(allocator *, char const *);
+string_t mos_string_init_n(allocator *, char const *, size_t);
+string_t mos_string_init_empty();
+void     mos_string_deinit(allocator *, string_t *);
+void     mos_string_replace(allocator *, string_t *, char const *);
+void     mos_string_move(string_t *, string_t *);
+void     mos_string_copy(allocator *, string_t *, string_t const *);
 
 // -- access --
 
-char const *mos_string_str(struct string const *);
-u32         mos_string_size(struct string const *);
-bool        mos_string_empty(struct string const *);
-u32         mos_string_hash(struct string const *);
+char const *mos_string_str(string_t const *);
+u32         mos_string_size(string_t const *);
+bool        mos_string_empty(string_t const *);
+u32         mos_string_hash(string_t const *);
 
 // -- utilities --
 
-int mos_string_cmp_c(struct string const *, char const *);
+int mos_string_cmp_c(string_t const *, char const *);
 int mos_string_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
 
-bool mos_string_is_allocated(struct string const *);
-u32  mos_string_hash32(struct string const *);
+bool mos_string_is_allocated(string_t const *);
+u32  mos_string_hash32(string_t const *);
 
 #endif
