@@ -354,8 +354,13 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
     }
 }
 
+void map_set_v(hashmap **self, void const *key, u16 key_len, void const *data) {
+    assert((*self)->value_size <= sizeof(void *));
+    map_set(self, key, key_len, &data);
+}
+
 void *map_get(hashmap *map, void const *key, u16 key_len) {
-    // returns pointer to value
+    // returns pointer to value or null
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;

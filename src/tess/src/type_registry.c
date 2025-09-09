@@ -1,6 +1,8 @@
 #include "type_registry.h"
 
 #include "alloc.h"
+#include "array.h"
+#include "ast.h"
 #include "dbg.h"
 #include "hashmap.h"
 #include "type.h"
@@ -77,4 +79,60 @@ static void register_basic_types(type_registry *self) {
     error += type_registry_add_named(self, tl_type_tag_to_string(type_any), &any_type);
 
     if (error) fatal("register_basic_types: failed to add types to registry.");
+}
+
+//
+
+tl_type *type_registry_ast_node_tuple(type_registry *self, ast_node const *node) {
+    struct ast_tuple const *v        = ast_node_tuple((ast_node *)node);
+    tl_type_array           elements = {.alloc = self->alloc};
+    array_reserve(elements, v->n_elements);
+
+    for (u32 i = 0; i < v->n_elements; ++i) {
+        assert(v->elements[i]->type);
+        array_push(elements, &v->elements[i]->type);
+    }
+
+    tl_type  *out      = tl_type_create_tuple(self->alloc, (tl_type_sized)sized_all(elements));
+    u64       hash     = tl_type_hash(out);
+
+    tl_type **existing = type_registry_find_hash(self, hash);
+    if (existing) {
+        alloc_free(self->alloc, out);
+        array_free(elements);
+        return *existing;
+    }
+
+    if (type_registry_add_hashed(self, hash, out)) fatal("failed to add type");
+    return out;
+}
+
+tl_type *type_registry_ast_node_labelled_tuple(type_registry *self, ast_node const *node) {
+    struct ast_labelled_tuple const *v        = ast_node_lt((ast_node *)node);
+    tl_type_array                    elements = {.alloc = self->alloc};
+    c_string_carray                  names    = {.alloc = self->alloc};
+    array_reserve(elements, v->n_assignments);
+    array_reserve(names, v->n_assignments);
+
+    for (u32 i = 0; i < v->n_assignments; ++i) {
+        assert(v->assignments[i]->assignment.value->type);
+        array_push(elements, &v->assignments[i]->assignment.value->type);
+
+        char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
+        array_push(names, &name);
+    }
+
+    tl_type  *out      = tl_type_create_labelled_tuple(self->alloc, (tl_type_sized)sized_all(elements),
+                                                       (c_string_csized)sized_all(names));
+    u64       hash     = tl_type_hash(out);
+    tl_type **existing = type_registry_find_hash(self, hash);
+    if (existing) {
+        alloc_free(self->alloc, out);
+        array_free(elements);
+        array_free(names);
+        return *existing;
+    }
+
+    if (type_registry_add_hashed(self, hash, out)) fatal("failed to add type");
+    return out;
 }

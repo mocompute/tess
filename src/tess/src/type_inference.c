@@ -84,6 +84,7 @@ typedef struct {
 typedef struct {
     ti_inferer     *self;
     ast_node_array *added;
+    hashmap        *map;
 } generate_tuple_function_ctx;
 
 static size_t     ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
@@ -110,7 +111,7 @@ static void       specialize_node(void *, ast_node *);
 static size_t     apply_one_substitution(tl_type **, tl_type *, tl_type *);
 static void       assign_type_variables(void *, ast_node *);
 static void       collect_constraints(void *, ast_node *);
-static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_array *);
+static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_array *, hashmap **);
 static bool       substitute_constraints(constraint *, constraint *, constraint const);
 static u32        unify_one(ti_inferer *, constraint);
 
@@ -797,46 +798,14 @@ void assign_type_variables(void *ctx, ast_node *node) {
         node->type     = arrow;
     } break;
 
-    case ast_labelled_tuple: {
-        struct ast_labelled_tuple *v     = ast_node_lt(node);
-        tl_type_sized              els   = {.size = v->n_assignments,
-                                            .v =
-                                              alloc_malloc(self->type_arena, v->n_assignments * sizeof v->assignments[0])};
-        c_string_array             names = {.alloc = self->type_arena};
+    case ast_labelled_tuple:
+        node->type = type_registry_ast_node_labelled_tuple(self->type_registry, node);
+        break;
 
-        for (u32 i = 0; i < els.size; ++i) {
-            // since this is run during a depth first search, all elements
-            // will already have been assigned a type
-            els.v[i]         = v->assignments[i]->assignment.value->type;
-            char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
-            array_push(names, &name);
-        }
-
-        // TODO: we seeem to extract names from assignments in multiple places in order to create a
-        // type_labelled_tuple. Also this const casting is annoying.
-
-        tl_type *tup = tl_type_create_labelled_tuple(
-          self->type_arena, els, (c_string_csized){.size = names.size, .v = (char const **)names.v});
-
-        node->type = tup;
-
-    } break;
-
-    case ast_tuple: {
-        struct ast_array *v = ast_node_arr(node);
-        tl_type_sized els = {.size = v->n, .v = alloc_malloc(self->type_arena, v->n * sizeof v->nodes[0])};
-
-        for (u32 i = 0; i < els.size; ++i) {
-            // since this is run during a depth first search, all elements
-            // will already have been assigned a type
-            els.v[i] = v->nodes[i]->type;
-        }
-
-        tl_type *tup = tl_type_create_tuple(self->type_arena, els);
-
-        node->type   = tup;
-
-    } break;
+    case ast_tuple:
+        //
+        node->type = type_registry_ast_node_tuple(self->type_registry, node);
+        break;
 
     case ast_assignment:
     case ast_eof:
@@ -1103,7 +1072,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
                 if (0 == strcmp(lt->names.v[i], field_name)) push(node->type, lt->fields.v[i]);
             }
 
-            // FIXME
         }
 
         else {
@@ -1119,24 +1087,14 @@ void collect_constraints(void *ctx_, ast_node *node) {
     } break;
 
     case ast_labelled_tuple: {
+
         struct ast_labelled_tuple *v = ast_node_lt(node);
         for (u32 i = 0; i < v->n_assignments; ++i) {
             struct ast_assignment *ass = ast_node_assignment(v->assignments[i]);
             push(ass->name->type, ass->value->type);
         }
 
-        // extract assignment names and value types into arrays
-        tl_type_array   fields = {.alloc = self->type_arena};
-        c_string_carray names  = {.alloc = self->type_arena};
-        for (u32 i = 0; i < v->n_assignments; ++i) {
-            char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
-            array_push(names, &name);
-            array_push(fields, &v->assignments[i]->assignment.value->type);
-        }
-
-        tl_type *lt = tl_type_create_labelled_tuple(self->type_arena, (tl_type_sized)sized_all(fields),
-                                                    (c_string_csized)sized_all(names));
-
+        tl_type *lt = type_registry_ast_node_labelled_tuple(self->type_registry, node);
         push(node->type, lt);
     } break;
 
@@ -1575,7 +1533,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     return out;
 }
 
-static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_array *added) {
+static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_array *added,
+                                    hashmap **map) {
     if (ast_tuple != node->tag && ast_labelled_tuple != node->tag) return;
 
     // we can't run this until type inference has been run far enough for us to infer all types about
@@ -1595,27 +1554,29 @@ static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_a
     }
 
     u64 hash = tl_type_hash(node->type);
-    if (type_registry_find_hash(self->type_registry, hash))
-        fatal("generate_tuple_function: constructor already exists");
-
-    if (type_registry_add_hashed(self->type_registry, hash, node->type))
-        fatal("generate_tuple_function: error adding to registry");
+    if (map_get(*map, &hash, sizeof hash)) return;
 
     ast_node *constructor = make_tuple_constructor_function(self, hash, node);
+
+    map_set_v(map, &hash, sizeof hash, (void *)1);
     array_push(*added, &constructor);
 }
 
 static void generate_tuple_function_glue(void *ctx_, ast_node *node) {
     generate_tuple_function_ctx *ctx  = ctx_;
     ti_inferer                  *self = ctx->self;
-    return generate_tuple_function(self, node, ctx->added);
+    return generate_tuple_function(self, node, ctx->added, &ctx->map);
 }
 
 static void ti_generate_tuple_functions(ti_inferer *self) {
     // generate constructor functions for every tuple type in the program.
 
     ast_node_array              added = {.alloc = self->type_arena};
-    generate_tuple_function_ctx ctx   = {.self = self, .added = &added};
+    generate_tuple_function_ctx ctx   = {
+        .self  = self,
+        .added = &added,
+        .map   = map_create(self->transient, sizeof(int)),
+    };
 
     for (u32 i = 0; i < self->nodes->size; ++i)
         ast_node_dfs(&ctx, self->nodes->v[i], generate_tuple_function_glue);
@@ -1625,6 +1586,8 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
         log(self, "generate_tuple_functions: adding %s", ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
+
+    map_destroy(&ctx.map);
 }
 
 //

@@ -41,6 +41,7 @@ f32    map_load_factor(hashmap const *);
 // -- insertion and removal --
 
 void  map_set(hashmap **, void const *key, u16 key_len, void const *data);
+void  map_set_v(hashmap **, void const *key, u16 key_len, void const *data); // value fits in void*
 bool  map_contains(hashmap *, void const *key, u16 key_len);
 void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
