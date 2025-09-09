@@ -707,7 +707,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 static char *make_struct_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_struct_tup_%zu_"
+#define fmt "_gen_struct_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
@@ -721,7 +721,7 @@ static char *make_struct_name(allocator *alloc, u64 hash) {
 static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_make_tup_%zu_"
+#define fmt "_gen_make_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);

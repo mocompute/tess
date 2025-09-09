@@ -1491,7 +1491,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
     {
-#define fmt "_gen_make_tup_%zu_"
+#define fmt "_gen_make_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         generated_name = alloc_malloc(self->type_arena, (u32)len);
