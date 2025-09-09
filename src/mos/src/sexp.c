@@ -18,7 +18,7 @@ static bool is_boxed(sexp self) {
 sexp sexp_init_unboxed(i64 val) {
     assert(val <= SEXP_MAX_UNBOXED_INT && val >= SEXP_MIN_UNBOXED_INT);
     sexp out;
-    out.integer = (val << 1) | 1;
+    out.integer = (i64)((u64)val << 1) | 1;
     return out;
 }
 
