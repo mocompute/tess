@@ -191,7 +191,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     case type_labelled_tuple:
     case type_tuple:          {
-        u64   hash = tl_type_hash_ext(ty, true); // ignore names
+        u64   hash = tl_type_hash(ty);
         char *name = make_struct_name(self->alloc, hash);
         out_put_fmt(self, "struct %s", name);
         alloc_free(self->alloc, name);
@@ -637,7 +637,7 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
         return a_labelled_tuple_init(self, node);
     }
 
-    char *name = make_struct_constructor_name(self->alloc, tl_type_hash_ext(node->type, true));
+    char *name = make_struct_constructor_name(self->alloc, tl_type_hash(node->type));
 
     char *var  = next_variable(self);
     array_push(self->results, &var);
