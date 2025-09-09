@@ -39,7 +39,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_cslice input, char const *fil
     self->input     = input;
     self->pos       = input.begin;
     self->file      = file;
-    self->line      = 0;
+    self->line      = 1;
 
     self->buf       = (char_array){.alloc = alloc};
     self->backtrack = (token_array){.alloc = alloc};

@@ -248,7 +248,35 @@ int ti_inferer_run(ti_inferer *self) {
     return 0;
 }
 
+typedef struct {
+    ti_inferer *self;
+    u32         error_count;
+} ti_report_errors_ctx;
+
+static void find_error(void *ctx_, ast_node *node) {
+    ti_report_errors_ctx *ctx  = ctx_;
+    ti_inferer           *self = ctx->self;
+
+    if (!tl_type_is_poly(node->type)) return;
+    if (!node->file) return;
+
+    ctx->error_count++;
+    fprintf(stderr, "%s:%u: cannot infer type of %s\n", node->file, node->line,
+            ast_node_to_string_for_error(self->transient, node));
+
+    arena_reset(self->transient);
+}
+
 void ti_inferer_report_errors(ti_inferer *self) {
+
+    // Find the deepest node with a polymorphic type and report it.
+    // Exclude polymorphic functions.
+
+    ti_report_errors_ctx ctx = {.self = self};
+    for (u32 i = 0; i < self->nodes->size; ++i) {
+        ast_node_dfs(&ctx, self->nodes->v[i], find_error);
+    }
+
     dbg("error: unsatisfied constraints\n");
     ti_inferer_dbg_constraints(self);
 
