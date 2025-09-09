@@ -36,6 +36,7 @@
     X(tl_err_expected_specific_symbol, "expected_specific_symbol")                                         \
     X(tl_err_expected_string, "expected_string")                                                           \
     X(tl_err_expected_addressable, "expected_addressable")                                                 \
+    X(tl_err_expected_dereferenceable, "expected_dereferenceable")                                         \
     X(tl_err_expected_identifier, "expected_identifier")                                                   \
     X(tl_err_expected_type, "expected_type")                                                               \
     X(tl_err_expected_literal, "expected_literal")                                                         \
@@ -55,6 +56,7 @@
     X(tl_err_expected_close_round, "expected_close_round")                                                 \
     X(tl_err_expected_infix_operand, "expected_infix_operand")                                             \
     X(tl_err_expected_newline, "expected_newline")                                                         \
+    X(tl_err_expected_star, "expected_star")                                                               \
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \
     X(tl_err_type_exists, "type_exists")                                                                   \

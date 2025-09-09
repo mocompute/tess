@@ -251,6 +251,7 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     case ast_let:                         return a_let(self, node);
     case ast_address_of:
     case ast_assignment:
+    case ast_dereference:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -445,11 +446,17 @@ static int a_eval(transpiler *self, ast_node const *node) {
         else out_put_start_fmt(self, "%s = false;\n", var);
         break;
 
-    case ast_address_of:
+    case ast_address_of: {
         if (a_eval(self, node->address_of.target)) return 1;
         char *res = self->results.v[--self->results.size];
         out_put_start_fmt(self, "%s = &(%s);\n", var, res);
-        break;
+    } break;
+
+    case ast_dereference: {
+        if (a_eval(self, node->dereference.target)) return 1;
+        char *res = self->results.v[--self->results.size];
+        out_put_start_fmt(self, "%s = *(%s);\n", var, res);
+    } break;
 
     case ast_begin_end: {
         struct ast_begin_end const *v = ast_node_begin_end((ast_node *)node);

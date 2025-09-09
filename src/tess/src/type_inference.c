@@ -319,6 +319,11 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, node->address_of.target);
         break;
 
+    case ast_dereference:
+        //
+        rename_variables(self, node->dereference.target);
+        break;
+
     case ast_assignment: {
         struct ast_assignment *v = ast_node_assignment(node);
         rename_variables(self, v->name);
@@ -598,6 +603,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_assignment:
     case ast_begin_end:
     case ast_user_type:
+    case ast_dereference:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -724,6 +730,11 @@ static u32 unify_one(ti_inferer *self, constraint c) {
         return count;
     }
 
+    // pointer types
+    else if (type_pointer == c.left->tag && type_pointer == c.right->tag) {
+        return unify_one(self, make_constraint(c.left->pointer.target, c.right->pointer.target));
+    }
+
     return 0;
 }
 
@@ -820,6 +831,14 @@ void assign_type_variables(void *ctx, ast_node *node) {
         node->type->pointer.target = node->address_of.target->type;
         assert(node->type->pointer.target);
         break;
+
+    case ast_dereference: {
+        struct ast_dereference *v       = ast_node_deref(node);
+        v->target->type                 = tl_type_create(self->type_arena, type_pointer);
+        v->target->type->pointer.target = make_typevar(self);
+        node->type                      = make_typevar(self);
+
+    } break;
 
     case ast_assignment:
     case ast_eof:
@@ -1034,7 +1053,15 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_address_of: {
 
         assert(type_pointer == node->type->tag);
+        // node type set by assign_type_variables
         push(node->type->pointer.target, node->address_of.target->type);
+
+    } break;
+
+    case ast_dereference: {
+
+        assert(type_pointer == node->dereference.target->type->tag);
+        push(node->type, node->dereference.target->type->pointer.target);
 
     } break;
 

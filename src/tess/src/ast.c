@@ -75,6 +75,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->value                 = ast_node_clone(alloc, vorig->value);
     } break;
 
+    case ast_dereference: {
+        struct ast_dereference *vclone = ast_node_deref(clone), *vorig = ast_node_deref((ast_node *)orig);
+        vclone->target = ast_node_clone(alloc, vorig->target);
+    } break;
+
     case ast_symbol:
     case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
@@ -278,19 +283,20 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     switch (node->tag) {
 
-    case ast_eof:        return pair(alloc, sym("eof"), type);
-    case ast_nil:        return pair(alloc, sym("nil"), type);
-    case ast_bool:       return pair(alloc, node->bool_.val ? sym("true") : sym("false"), type);
+    case ast_eof:         return pair(alloc, sym("eof"), type);
+    case ast_nil:         return pair(alloc, sym("nil"), type);
+    case ast_bool:        return pair(alloc, node->bool_.val ? sym("true") : sym("false"), type);
 
-    case ast_symbol:     return symbol_fun(alloc, node);
+    case ast_symbol:      return symbol_fun(alloc, node);
 
-    case ast_i64:        return triple(alloc, sym("i64"), sexp_init_i64(alloc, node->i64.val), type);
-    case ast_u64:        return triple(alloc, sym("u64"), sexp_init_u64(alloc, node->u64.val), type);
-    case ast_f64:        return triple(alloc, sym("f64"), sexp_init_f64(alloc, node->f64.val), type);
+    case ast_i64:         return triple(alloc, sym("i64"), sexp_init_i64(alloc, node->i64.val), type);
+    case ast_u64:         return triple(alloc, sym("u64"), sexp_init_u64(alloc, node->u64.val), type);
+    case ast_f64:         return triple(alloc, sym("f64"), sexp_init_f64(alloc, node->f64.val), type);
 
-    case ast_string:     return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
+    case ast_string:      return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
-    case ast_address_of: return triple(alloc, sym("&"), recur(node->address_of.target), type);
+    case ast_address_of:  return triple(alloc, sym("&"), recur(node->address_of.target), type);
+    case ast_dereference: return triple(alloc, sym("*"), recur(node->dereference.target), type);
 
     case ast_assignment:
         return quad(alloc, recur(node->assignment.name), sym("="), recur(node->assignment.value), type);
@@ -483,6 +489,11 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->assignment.value);
         break;
 
+    case ast_dereference:
+        //
+        fun(ctx, node->dereference.target);
+        break;
+
     case ast_infix:
         fun(ctx, node->infix.left);
         fun(ctx, node->infix.right);
@@ -566,6 +577,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     switch (node->tag) {
     case ast_address_of:
     case ast_assignment:
+    case ast_dereference:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -647,9 +659,10 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_nil",           "ast_address_of",    "ast_assignment",   "ast_bool",  "ast_eof",
-      "ast_f64",           "ast_i64",           "ast_if_then_else", "ast_infix", "ast_let_in",
-      "ast_let_match_in",  "ast_string",        "ast_symbol",       "ast_u64",   "ast_user_type_definition",
+      "ast_nil",           "ast_address_of",    "ast_assignment", "ast_bool",
+      "ast_dereference",   "ast_eof",           "ast_f64",        "ast_i64",
+      "ast_if_then_else",  "ast_infix",         "ast_let_in",     "ast_let_match_in",
+      "ast_string",        "ast_symbol",        "ast_u64",        "ast_user_type_definition",
       "ast_user_type_get", "ast_user_type_set",
     };
 
@@ -741,6 +754,11 @@ struct ast_assignment *ast_node_assignment(ast_node *node) {
 struct ast_bool *ast_node_bool(ast_node *node) {
     assert(node->tag == ast_bool);
     return &node->bool_;
+}
+
+struct ast_dereference *ast_node_deref(ast_node *node) {
+    assert(node->tag == ast_dereference);
+    return &node->dereference;
 }
 
 struct ast_i64 *ast_node_i64(ast_node *node) {

@@ -96,6 +96,7 @@ static int           a_close_round(parser *);
 static int           a_colon(parser *);
 static int           a_colon_equal(parser *);
 static int           a_comma(parser *);
+static int           a_dereference(parser *);
 static int           a_dot(parser *);
 static int           a_end_of_block(parser *);
 static int           a_end_of_expression(parser *);
@@ -111,6 +112,7 @@ static int           a_newline(parser *);
 static int           a_nil(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
+static int           a_star(parser *);
 static int           a_string(parser *);
 static int           a_type_identifier(parser *);
 static int           the_symbol(parser *, char const *const);
@@ -505,6 +507,26 @@ static int a_address_of(parser *self) {
     return result_ast_node(self, node);
 }
 
+static int a_dereference(parser *self) {
+
+    if (a_try(self, a_star)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    // FIXME for now only address of an identifier
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tl_err_expected_dereferenceable;
+        return 1;
+    }
+
+    ast_node *target         = self->result;
+
+    ast_node *node           = ast_node_create(self->ast_arena, ast_dereference);
+    node->dereference.target = target;
+    return result_ast_node(self, node);
+}
+
 static int a_identifier(parser *p) {
     if (eat_newlines(p)) return 1; // FIXME I added this, is it ok?
     if (next_token(p)) return 1;
@@ -585,6 +607,15 @@ static int the_symbol(parser *p, char const *const want) {
     }
 
     p->error.tag = tl_err_expected_specific_symbol;
+    return 1;
+}
+
+static int a_star(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
+
+    p->error.tag = tl_err_expected_star;
     return 1;
 }
 
@@ -1557,6 +1588,7 @@ static int expression(parser *self) {
     if (0 == a_try(self, a_field_access)) goto success;
     if (0 == a_try(self, a_identifier)) goto success;
     if (0 == a_try(self, a_address_of)) goto success;
+    if (0 == a_try(self, a_dereference)) goto success;
     if (0 == a_try(self, a_number)) goto success;
     if (0 == a_try(self, a_bool)) goto success;
 
