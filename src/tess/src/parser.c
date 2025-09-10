@@ -5,6 +5,7 @@
 #include "ast.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "file.h"
 #include "hashmap.h"
 #include "string_t.h"
 #include "token.h"
@@ -20,9 +21,14 @@
 
 struct parser {
     allocator             *parent_alloc;
+    allocator             *file_arena;
     allocator             *tokens_arena; // for tokens only
     allocator             *ast_arena;    // for ast nodes and related
     allocator             *transient;    // reset after each call to parser_next
+
+    c_string_csized        files;
+    u16                    files_index;
+    char_csized            current_file_data;
 
     tokenizer             *tokenizer;
 
@@ -132,27 +138,35 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, char_cslice input) {
+parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized files) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
-    self->parent_alloc = alloc;
-    self->tokens_arena = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->ast_arena    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->transient    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->verbose      = false;
+    self->parent_alloc           = alloc;
+    self->file_arena             = arena_create(self->parent_alloc, 64 * 1024);
+    self->tokens_arena           = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->ast_arena              = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->transient              = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->files                  = files;
+    self->files_index            = 0;
+    self->current_file_data.v    = null;
+    self->current_file_data.size = 0;
+    self->verbose                = false;
 
-    self->forwards     = map_create(self->parent_alloc, sizeof(ast_node *));
+    self->forwards               = map_create(self->parent_alloc, sizeof(ast_node *));
 
-    self->tokenizer    = tokenizer_create(alloc, input, "(no file)");
-
-    self->tokens       = (token_array){.alloc = self->tokens_arena};
+    self->tokenizer              = tokenizer_create(alloc, preamble, "std_preamble");
+    self->tokens                 = (token_array){.alloc = self->tokens_arena};
 
     token_init(&self->token, tok_invalid);
     self->error.token     = &self->token;
     self->error.tokenizer = &self->tokenizer_error;
 
     return self;
+}
+
+parser *parser_create_simple(allocator *alloc, char const *in, u32 len) {
+    return parser_create(alloc, (char_csized){.v = in, .size = len}, (c_string_csized){.v = null});
 }
 
 void parser_destroy(parser **self) {
@@ -162,12 +176,13 @@ void parser_destroy(parser **self) {
     map_destroy(&(*self)->forwards);
 
     // tokenizer
-    tokenizer_destroy(&(*self)->tokenizer);
+    if ((*self)->tokenizer) tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
     arena_destroy((*self)->parent_alloc, &(*self)->transient);
     arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
     arena_destroy((*self)->parent_alloc, &(*self)->tokens_arena);
+    arena_destroy((*self)->parent_alloc, &(*self)->file_arena);
     alloc_free((*self)->parent_alloc, *self);
     *self = null;
 }
@@ -271,7 +286,7 @@ static bool is_relational_operator(char const *s) {
 }
 
 static bool is_eof(parser *p) {
-    return p->tokenizer_error.tag == tl_err_eof;
+    return p->error.tag == tl_err_eof || p->tokenizer_error.tag == tl_err_eof;
 }
 
 static int eat_comments(parser *p) {
@@ -1864,11 +1879,40 @@ static int expression_let(parser *self) {
 }
 
 int parser_next(parser *self) {
+    if (!self->tokenizer) {
+
+        if (self->files_index >= self->files.size) {
+            self->error.tag = tl_err_eof;
+            return 1;
+        }
+
+        // free prior data
+        if (self->current_file_data.v) {
+            alloc_free(self->file_arena, (void *)self->current_file_data.v);
+            self->current_file_data.v    = null;
+            self->current_file_data.size = 0;
+        }
+
+        // read file
+        char const *file = self->files.v[self->files_index++];
+        file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                  &self->current_file_data.size);
+
+        self->tokenizer = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+    }
+
     int res = toplevel(self);
 
     if (0 == res) {
         self->result->file = self->error.file;
         self->result->line = self->error.line;
+    } else if (is_eof(self)) {
+        if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
+        self->tokenizer   = null;
+        self->tokens.size = 0;
+
+        // keep going with next file if possible
+        res = parser_next(self);
     }
 
     arena_reset(self->transient);

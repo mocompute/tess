@@ -23,7 +23,8 @@ static int compile_input_flag(char const *input, bool verbose) {
     allocator     *ast_alloc   = leak_detector_create();
     allocator     *ti_alloc    = leak_detector_create();
 
-    parser        *p           = parser_create(ast_alloc, char_cslice_from(input, (u32)strlen(input)));
+    parser        *p           = parser_create(ast_alloc, (char_csized){.v = input, .size = strlen(input)},
+                                               (c_string_csized){.v = null});
 
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
@@ -133,7 +134,7 @@ static int test_tokenizer_basic(void) {
     char const *input = "  (  )  ";
 
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, (char_cslice){.v = input, .end = (u32)strlen(input)}, "");
+    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = (u32)strlen(input)}, "");
     if (!t) return ++error;
 
     {
@@ -177,7 +178,7 @@ static int test_tokenizer_string(void) {
     char const *input = " \"abcdef\"  ";
 
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)), "");
+    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = strlen(input)}, "");
     if (!t) return ++error;
 
     {
@@ -202,7 +203,7 @@ static int test_tokenizer_terminal_static_string(void) {
 
     char const *input = "-";
     allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, char_cslice_from(input, (u32)strlen(input)), "");
+    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = strlen(input)}, "");
     if (!t) return ++error;
 
     {
@@ -230,7 +231,7 @@ static int test_parser_node_to_string(void) {
     if (!alloc) return error + 1;
 
     {
-        parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
+        parser *p = parser_create_simple(alloc, input, strlen(input));
         if (null == p) return error + 1;
 
         if (parser_next(p)) {
@@ -254,7 +255,7 @@ static int test_parser_node_to_string(void) {
     //
     {
         input     = "(a, b)";
-        parser *p = parser_create(alloc, char_cslice_from(input, (u32)strlen(input)));
+        parser *p = parser_create_simple(alloc, input, strlen(input));
         if (null == p) return error + 1;
 
         if (parser_next(p)) {

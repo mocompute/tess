@@ -49,6 +49,21 @@ typedef struct {
 } char_array;
 
 typedef struct {
+    array_header;
+    char const *v;
+} char_carray;
+
+typedef struct {
+    array_sized;
+    char *v;
+} char_sized;
+
+typedef struct {
+    array_sized;
+    char const *v;
+} char_csized;
+
+typedef struct {
     array_slice;
     char *v;
 } char_slice;

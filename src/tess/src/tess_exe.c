@@ -22,16 +22,16 @@
 extern char const *embed_std_tl;
 
 typedef struct {
-    allocator     *arena;
+    allocator      *arena;
 
-    char const    *argv0;
-    char const    *out_path;
+    char const     *argv0;
+    char const     *out_path;
 
-    c_string_array words;
+    c_string_carray words;
 
-    bool           verbose;
-    bool           verbose_parse;
-    bool           help;
+    bool            verbose;
+    bool            verbose_parse;
+    bool            help;
 } state;
 
 noreturn void usage(int status, char const *argv0) {
@@ -54,7 +54,7 @@ void state_init(state *self) {
     self->arena    = arena_create(default_allocator(), 4096);
     self->argv0    = null;
     self->out_path = null;
-    self->words    = (c_string_array){.alloc = self->arena};
+    self->words    = (c_string_carray){.alloc = self->arena};
     array_reserve(self->words, 32);
     self->verbose       = 0;
     self->verbose_parse = 0;
@@ -127,45 +127,16 @@ int repl(state *self) {
 int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
-    int        error = 0;
+    int        error    = 0;
 
-    char_array input = {.alloc = default_allocator()};
-    array_reserve(input, 64 * 1024);
+    char_array preamble = {.alloc = default_allocator()};
+    array_reserve(preamble, 32 * 1024);
 
     // embed std_tl header
-    array_copy(input, embed_std_tl, strlen(embed_std_tl));
-    array_push_val(input, '\n');
+    array_copy(preamble, embed_std_tl, strlen(embed_std_tl));
 
-    {
-        allocator *file_arena = arena_create(default_allocator(), 32 * 1024);
-
-        for (u32 i = 1; i < self->words.size; ++i) {
-            char  *buf;
-            size_t size;
-            file_read(file_arena, self->words.v[i], &buf, &size);
-
-            if (size) {
-                size_t new_cap = input.capacity;
-                while (input.size + size + 2 >= new_cap) {
-                    new_cap *= 2;
-                    if (new_cap > UINT32_MAX) fatal("overflow: input files too large.");
-                }
-
-                if (new_cap > input.capacity) array_reserve(input, (u32)new_cap);
-
-                array_copy(input, buf, size);
-                input.v[input.size++] = '\n';
-            }
-
-            alloc_free(file_arena, buf);
-        }
-
-        arena_destroy(default_allocator(), &file_arena);
-
-        array_push_val(input, '\0');
-    }
-
-    parser *parser = parser_create(default_allocator(), (char_cslice)slice_all(input));
+    parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
+                                   (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
     if (!parser) fatal("could not create parser");
 
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
@@ -230,7 +201,6 @@ cleanup_syntax:
     parser_destroy(&parser);
 
     arena_destroy(default_allocator(), &nodes_alloc);
-    array_free(input);
 
     return error;
 }

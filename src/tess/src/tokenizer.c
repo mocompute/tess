@@ -12,7 +12,7 @@
 struct tokenizer {
     allocator  *parent;
     allocator  *strings;
-    char_cslice input;
+    char_csized input;
     char const *file;
     u32         line;
     u32         pos;
@@ -31,13 +31,13 @@ static void tok_error(tokenizer_error *err, tl_error_tag tag, char const *file, 
 
 // -- allocation and deallocation --
 
-tokenizer *tokenizer_create(allocator *alloc, char_cslice input, char const *file) {
+tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *file) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
     self->strings   = arena_create(alloc, 4096);
     self->input     = input;
-    self->pos       = input.begin;
+    self->pos       = 0;
     self->file      = file;
     self->line      = 1;
 
@@ -120,7 +120,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         stop,
     } state          = start;
 
-    size_t const end = self->input.end;
+    size_t const end = self->input.size;
 
     // starting position for number or symbol or indent
     size_t start_capture = 0;

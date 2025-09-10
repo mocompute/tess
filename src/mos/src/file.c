@@ -1,10 +1,11 @@
 #include "file.h"
 #include "types.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-void file_read(allocator *alloc, char const *filename, char **out, size_t *out_size) {
+void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size) {
 
     *out      = null;
     *out_size = 0;
@@ -38,7 +39,7 @@ void file_read(allocator *alloc, char const *filename, char **out, size_t *out_s
     if (!buf) goto cleanup;
 
     size_t const n = fread(buf, 1, (size_t)size, f);
-    if (n != (size_t)size) {
+    if (n != (size_t)size || n > UINT32_MAX) {
         perror("failed to read file");
         alloc_free(alloc, buf);
         buf = null;
@@ -48,7 +49,7 @@ void file_read(allocator *alloc, char const *filename, char **out, size_t *out_s
 cleanup:
     fclose(f);
     *out      = buf;
-    *out_size = (size_t)size;
+    *out_size = (u32)size;
 }
 
 char const *file_basename(char const *input) {

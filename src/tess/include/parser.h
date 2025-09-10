@@ -1,6 +1,7 @@
 #ifndef TESS_PARSER_H
 #define TESS_PARSER_H
 
+#include "array.h"
 #include "ast.h"
 #include "nodiscard.h"
 #include "tokenizer.h"
@@ -19,7 +20,8 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-nodiscard parser *parser_create(allocator *, char_cslice) mallocfun;
+nodiscard parser *parser_create(allocator *, char_csized, c_string_csized) mallocfun;
+nodiscard parser *parser_create_simple(allocator *, char const *, u32) mallocfun;
 void              parser_destroy(parser **);
 
 // -- access --
