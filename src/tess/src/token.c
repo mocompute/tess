@@ -38,8 +38,6 @@ int token_init_sn(allocator *alloc, token *tok, token_tag tag, char const *s, si
 
 void token_deinit(allocator *alloc, token *tok) {
     switch (tok->tag) {
-    case tok_one_newline:
-    case tok_two_newline:
     case tok_comma:
     case tok_dot:
     case tok_colon:
@@ -51,12 +49,11 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_open_round:
     case tok_close_round:
     case tok_equal_sign:
-    case tok_invalid:
-    case tok_newline_indent: break;
+    case tok_invalid:     break;
     case tok_number:
     case tok_symbol:
     case tok_string:
-    case tok_comment:        alloc_free(alloc, tok->s); break;
+    case tok_comment:     alloc_free(alloc, tok->s); break;
     }
 
     alloc_invalidate(tok);
@@ -75,8 +72,6 @@ char *token_to_string(allocator *alloc, token const *tok) {
     char buf[64];
 
     switch (tok->tag) {
-    case tok_one_newline:
-    case tok_two_newline:
     case tok_comma:
     case tok_dot:
     case tok_colon:
@@ -88,13 +83,12 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_open_round:
     case tok_close_round:
     case tok_equal_sign:
-    case tok_invalid:        sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
-    case tok_newline_indent: sprintf(buf, "(%s %d)", token_tag_to_string(tok->tag), tok->val); break;
+    case tok_invalid:     sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
 
     case tok_number:
     case tok_symbol:
     case tok_string:
-    case tok_comment:        {
+    case tok_comment:     {
         char *big = alloc_malloc(alloc, strlen(tok->s) + 64);
         if (!big) return big;
         sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);

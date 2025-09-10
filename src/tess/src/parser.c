@@ -287,8 +287,7 @@ static int eat_newlines(parser *p) {
         }
 
         token_tag const tag = p->token.tag;
-        if (tok_comment == tag || tok_one_newline == tag || tok_two_newline == tag ||
-            tok_newline_indent == tag) {
+        if (tok_comment == tag) {
             continue;
         } else {
             tokenizer_put_back(p->tokenizer, &p->token, 1);
@@ -428,10 +427,7 @@ static int a_end_of_expression(parser *p) {
     log(p, "end_of_expression token: %s", token_to_string(p->transient, &p->token));
 
     switch (p->token.tag) {
-    case tok_one_newline:
-    case tok_newline_indent:
-    case tok_two_newline:
-    case tok_semicolon:      return result_ast_str(p, ast_symbol, ";");
+    case tok_semicolon: return result_ast_str(p, ast_symbol, ";");
 
     case tok_close_round:
         // signal special failure so the token gets put back, but use a magic
@@ -470,10 +466,7 @@ static int a_newline(parser *p) {
     }
 
     switch (p->token.tag) {
-    case tok_one_newline:
-    case tok_newline_indent:
-    case tok_two_newline:
-    case tok_semicolon:      return result_ast_str(p, ast_symbol, ";");
+    case tok_semicolon: return result_ast_str(p, ast_symbol, ";");
 
     case tok_close_round:
         // signal special failure so the token gets put back, but use a magic
@@ -910,10 +903,6 @@ static int a_end_of_block(parser *self) {
     }
 
     if (tok_symbol == self->token.tag && 0 == strcmp("end", self->token.s)) {
-        return result_ast_str(self, ast_symbol, "end");
-    }
-
-    if (tok_one_newline == self->token.tag || tok_two_newline == self->token.tag) {
         return result_ast_str(self, ast_symbol, "end");
     }
 

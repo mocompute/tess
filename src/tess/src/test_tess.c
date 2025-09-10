@@ -113,13 +113,6 @@ static int test_tess_token_string(void) {
     }
 
     {
-        token_init_v(&tok, tok_newline_indent, 4);
-        char *s = token_to_string(alloc, &tok);
-        error += 0 == strcmp("(newline_indent 4)", s) ? 0 : 1;
-        alloc_free(alloc, s);
-    }
-
-    {
         error += 0 == token_init_s(alloc, &tok, tok_number, "123") ? 0 : 1;
         if (error) return error;
 
@@ -314,8 +307,8 @@ static int test_grouped(void) {
 
 static int test_let_fun_user_types(void) {
     char const *input = "struct foo = \n"
-                        "  a : int\n"
-                        "  b : string\n"
+                        "  a : int ;\n"
+                        "  b : string ;\n"
                         "end\n"
                         "\n"
                         "let add (a : foo) b = a.a + b\n"

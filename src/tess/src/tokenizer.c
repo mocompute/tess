@@ -66,11 +66,6 @@ static void replace_token(allocator *alloc, token *tok, token_tag tag) {
     token_init(tok, tag);
 }
 
-static void replace_token_v(allocator *alloc, token *tok, token_tag tag, u8 val) {
-    token_deinit(alloc, tok);
-    token_init_v(tok, tag, val);
-}
-
 static void replace_token_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
     token_deinit(alloc, tok);
     token_init_s(alloc, tok, tag, s);
@@ -93,10 +88,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     // state machine
     enum {
         start,
-
-        in_newline,
-        in_newline_indent,
-        stop_newline_indent,
 
         in_minus,
 
@@ -159,14 +150,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = start_number_sign;
                 continue;
 
-            case '"': state = start_string; continue;
+            case '"':  state = start_string; continue;
 
-            case '\n':
-                state = in_newline;
-                self->line++;
-                continue;
+            case '\n': self->line++; continue;
 
-            case '/': state = forward_slash; continue;
+            case '/':  state = forward_slash; continue;
 
             case '.':
                 replace_token(self->strings, &res, tok_dot);
@@ -300,63 +288,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             }
 
         } break;
-
-        case in_newline: {
-            if (self->pos == end) {
-                replace_token(self->strings, &res, tok_one_newline);
-                state = stop;
-                goto finish;
-            }
-
-            char const c = self->input.v[self->pos++];
-
-            switch (c) {
-            case '\n':
-                replace_token(self->strings, &res, tok_two_newline);
-                state = stop;
-                self->line++;
-                break;
-            case ' ':
-                start_capture = self->pos - 1;
-                state         = in_newline_indent;
-                continue; // TODO tab indent
-
-            default:
-                replace_token(self->strings, &res, tok_one_newline);
-                --self->pos;
-                state = stop;
-                break;
-            }
-
-        } break;
-
-        case in_newline_indent: {
-            if (self->pos == end) {
-                state = stop_newline_indent;
-                continue;
-            }
-
-            char const c = self->input.v[self->pos++];
-
-            switch (c) {
-            case ' ': continue;
-            default:
-                --self->pos;
-                state = stop_newline_indent;
-                continue;
-            }
-
-        } break;
-
-        case stop_newline_indent:
-            if (self->pos - start_capture > 0xff) {
-                if (out_err) tok_error(out_err, tl_err_indent_too_long, self->file, self->line);
-                return 1;
-            }
-
-            replace_token_v(self->strings, &res, tok_newline_indent, (u8)(self->pos - start_capture));
-            state = stop;
-            break;
 
         case start_number: {
             start_capture = self->pos;

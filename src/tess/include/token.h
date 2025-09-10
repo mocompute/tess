@@ -10,8 +10,6 @@
 #endif
 
 #define TESS_TOKEN_TAGS(X)                                                                                 \
-    X(tok_one_newline, "one_newline")                                                                      \
-    X(tok_two_newline, "two_newline")                                                                      \
     X(tok_comma, "comma")                                                                                  \
     X(tok_dot, "dot")                                                                                      \
     X(tok_colon, "colon")                                                                                  \
@@ -24,7 +22,6 @@
     X(tok_close_round, "close_round")                                                                      \
     X(tok_equal_sign, "equal_sign")                                                                        \
     X(tok_invalid, "invalid")                                                                              \
-    X(tok_newline_indent, "newline_indent")                                                                \
     X(tok_number, "number")                                                                                \
     X(tok_symbol, "symbol")                                                                                \
     X(tok_string, "string")                                                                                \
