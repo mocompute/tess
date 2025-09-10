@@ -88,7 +88,7 @@ nodiscard static int a_try(parser *, parse_fun);
 nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
 nodiscard static int a_try_special(parser *, parse_fun);
 
-static int           eat_newlines(parser *);
+static int           eat_comments(parser *);
 static int           next_token(parser *);
 
 static int           a_address_of(parser *);
@@ -274,11 +274,10 @@ static bool is_eof(parser *p) {
     return p->tokenizer_error.tag == tl_err_eof;
 }
 
-static int eat_newlines(parser *p) {
-    // TODO: we're not sensitive to whitespace now so get rid of all this
+static int eat_comments(parser *p) {
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
-            log(p, "eat_newlines: tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
+            log(p, "tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
             p->error.tag  = tl_err_tokenizer_error;
@@ -296,6 +295,8 @@ static int eat_newlines(parser *p) {
 }
 
 static int next_token(parser *p) {
+    if (eat_comments(p)) return 1;
+
     while (true) {
 
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
@@ -418,7 +419,7 @@ static int a_close_round(parser *p) {
 
 static int a_end_of_expression(parser *p) {
 
-    if (eat_newlines(p) || next_token(p)) {
+    if (next_token(p)) {
         if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
         return 1;
     }
@@ -498,7 +499,6 @@ static int a_dereference(parser *self) {
 }
 
 static int a_identifier(parser *p) {
-    if (eat_newlines(p)) return 1; // FIXME I added this, is it ok?
     if (next_token(p)) return 1;
 
     if (tok_symbol != p->token.tag || 0 == strlen(p->token.s) || is_reserved(p->token.s)) goto error;
@@ -860,7 +860,7 @@ static int a_nil(parser *self) {
 
 static int a_end_of_block(parser *self) {
 
-    if (eat_newlines(self) || next_token(self)) {
+    if (next_token(self)) {
         if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
 
         return 1;
@@ -945,10 +945,6 @@ static int struct_declaration(parser *self) {
 
     // accumulate names and types until end of block is seen
     while (true) {
-        if (eat_newlines(self)) {
-            self->error.tag = tl_err_unfinished_struct;
-            goto error;
-        }
 
         if (0 == a_try(self, a_identifier)) {
             ast_node *field_name = self->result;
@@ -1576,11 +1572,6 @@ static int begin_end_expression(parser *self) {
     self->indent_level++;
     ast_node_array exprs = {.alloc = self->ast_arena}; // will be moved to node on success
 
-    if (eat_newlines(self)) {
-        self->error.tag = tl_err_unfinished_begin_end;
-        goto error;
-    }
-
     // detect empty begin end block and reject
     if (0 == a_try_s(self, the_symbol, "end")) {
         self->error.tag = tl_err_unfinished_begin_end;
@@ -1598,11 +1589,6 @@ static int begin_end_expression(parser *self) {
         // some expressions eat the end_of_expression (e.g. function
         // application), but some don't (e.g. numbers)
         (void)a_try(self, a_end_of_expression);
-
-        if (eat_newlines(self)) {
-            self->error.tag = tl_err_unfinished_begin_end;
-            goto error;
-        }
 
         if (0 == a_try_s(self, the_symbol, "end")) {
             ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
@@ -1657,8 +1643,6 @@ static int grouped_expression(parser *self) {
 }
 
 static int expression(parser *self) {
-
-    if (eat_newlines(self)) return 1;
 
     self->indent_level++;
 
@@ -1842,7 +1826,6 @@ error:
 }
 
 static int toplevel(parser *self) {
-    if (eat_newlines(self)) return 1;
 
     self->error.tag = tl_err_ok;
 
