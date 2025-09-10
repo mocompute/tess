@@ -18,6 +18,9 @@
 #include "readline/history.h"
 #include "readline/readline.h"
 
+// -- embed externs --
+extern char const *embed_std_tl;
+
 typedef struct {
     allocator     *arena;
 
@@ -128,6 +131,10 @@ int compile(state *self) {
 
     char_array input = {.alloc = default_allocator()};
     array_reserve(input, 64 * 1024);
+
+    // embed std_tl header
+    array_copy(input, embed_std_tl, strlen(embed_std_tl));
+    array_push_val(input, '\n');
 
     {
         allocator *file_arena = arena_create(default_allocator(), 32 * 1024);

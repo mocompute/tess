@@ -10,6 +10,7 @@ add_custom_command(
   DEPENDS
     $<TARGET_FILE:mos_embed>
     ${CMAKE_CURRENT_SOURCE_DIR}/embed/std.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/embed/std.tl
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Processing embedded files from directory ${CMAKE_CURRENT_SOURCE_DIR}/embed"
 )

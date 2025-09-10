@@ -573,7 +573,30 @@ error:
 
 static int a_type_identifier(parser *self) {
     // TODO rename this because it's no longer just an identifier
-    if (0 == a_try(self, a_identifier)) return 0;
+
+    // TODO code is duplicated for cases:
+    // a ->b  and (a, ) -> b
+    if (0 == a_try(self, a_identifier)) {
+        ast_node *left  = self->result;
+        ast_node *right = null;
+        // followed by arrow?
+        if (0 == a_try(self, a_arrow)) {
+            if (a_try(self, a_type_identifier)) {
+                self->error.tag = tl_err_expected_type;
+                return 1;
+            }
+            right = self->result;
+        }
+
+        if (right) {
+            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
+            node->arrow.left  = left;
+            node->arrow.right = right;
+            return result_ast_node(self, node);
+        }
+        self->result = left;
+        return 0;
+    }
 
     if (0 == a_try(self, tuple_expression)) {
         ast_node *left  = self->result;
@@ -1722,8 +1745,6 @@ static int expression(parser *self) {
     self->error.tag = tl_err_expected_expression;
 
     goto error;
-
-    // if (0 == a_try(self, &a_end_of_expression)) goto success;
 
 success:
     self->indent_level--;
