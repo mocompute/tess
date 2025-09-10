@@ -91,11 +91,11 @@ u32 string_t_size(string_t const *s) {
     return (u32)strlen(s->small.data);
 }
 
-bool string_t_empty(string_t const *s) {
+int string_t_empty(string_t const *s) {
     return string_t_size(s) == 0;
 }
 
-bool string_t_is_allocated(string_t const *s) {
+int string_t_is_allocated(string_t const *s) {
     return s->small.tag == 1;
 }
 

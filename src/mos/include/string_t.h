@@ -4,8 +4,6 @@
 #include "alloc.h"
 #include "types.h"
 
-#include <stdbool.h>
-
 #define MOS_STRING_MAX_SMALL_LEN 14
 #define MOS_STRING_MAX_LEN       UINT32_MAX
 
@@ -38,7 +36,7 @@ void     string_t_copy(allocator *, string_t *, string_t const *);
 
 char const *string_t_str(string_t const *);
 u32         string_t_size(string_t const *);
-bool        string_t_empty(string_t const *);
+int         string_t_empty(string_t const *);
 u32         string_t_hash(string_t const *);
 
 // -- utilities --
@@ -47,7 +45,7 @@ int string_t_cmp_c(string_t const *, char const *);
 int string_t_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
 
-bool string_t_is_allocated(string_t const *);
-u32  string_t_hash32(string_t const *);
+int string_t_is_allocated(string_t const *);
+u32 string_t_hash32(string_t const *);
 
 #endif
