@@ -160,26 +160,29 @@ nodiscard static int syntax_register_user_types(struct syntax_checker *self) {
 
 static void check_annotation(void *ctx, ast_node *node) {
     // checks if annotations are for a known type
-    struct syntax_checker *self = ctx;
+    // struct syntax_checker *self = ctx;
 
     if (ast_symbol != node->tag) return;
     if (!node->symbol.annotation) return;
 
-    char const *str  = ast_node_name_string(node->symbol.annotation);
-    tl_type   **type = type_registry_find_name(self->type_registry, str);
-    if (!type) {
+    // FIXME this rotted
+    (void)ctx;
 
-#define fmt "unknown type: %s"
-        char *message = null;
-        int   len     = snprintf(null, 0, fmt, str) + 1;
-        if (len > 0) {
-            message = alloc_malloc(self->arena, (size_t)len);
-            snprintf(message, (size_t)len, fmt, str);
-        }
-#undef fmt
+    //     char const *str  = ast_node_name_string(node->symbol.annotation);
+    //     tl_type   **type = type_registry_find_name(self->type_registry, str);
+    //     if (!type) {
 
-        syntax_error(self, node, tl_err_expected_type, message);
-    }
+    // #define fmt "unknown type: %s"
+    //         char *message = null;
+    //         int   len     = snprintf(null, 0, fmt, str) + 1;
+    //         if (len > 0) {
+    //             message = alloc_malloc(self->arena, (size_t)len);
+    //             snprintf(message, (size_t)len, fmt, str);
+    //         }
+    // #undef fmt
+
+    //         syntax_error(self, node, tl_err_expected_type, message);
+    //     }
 }
 
 static int syntax_check_type_annotations(struct syntax_checker *self) {

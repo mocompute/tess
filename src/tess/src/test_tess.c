@@ -318,8 +318,8 @@ static int test_let_fun_user_types(void) {
                         "  b : string\n"
                         "end\n"
                         "\n"
-                        "let add (a : foo) b = a + b\n"
-                        "let main () = add 1 2\n";
+                        "let add (a : foo) b = a.a + b\n"
+                        "let main () = add (foo 1 \"hello\") 2\n";
     return compile_input_flag(input, false);
 }
 

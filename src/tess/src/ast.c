@@ -235,6 +235,9 @@ static sexp elements_to_sexp(allocator *alloc, struct ast_node **elements, u16 c
     return list;
 }
 
+sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
+                         sexp (*symbol_fun)(allocator *, ast_node const *));
+
 sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
     sexp type;
@@ -528,6 +531,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     case ast_let:
         //
+        fun(ctx, node->let.name);
         fun(ctx, node->let.body);
         break;
 
@@ -621,7 +625,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
 
     case ast_symbol:
         //
-        fun(ctx, node->symbol.annotation_type);
+        if (node->symbol.annotation_type) fun(ctx, node->symbol.annotation_type);
         break;
 
     case ast_let:
