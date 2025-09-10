@@ -249,7 +249,8 @@ int ti_inferer_run(ti_inferer *self) {
     // create tuple constructors now that we have complete type information
     ti_generate_tuple_functions(self);
 
-    // FIXME: one more round of specialisation
+    // FIXME: one more round of specialisation: need this for
+    // functions with function pointer arguments.
     specialized.size = 0;
     ti_specialize_functions(self, &specialized);
     array_copy(*self->nodes, specialized.v, specialized.size);

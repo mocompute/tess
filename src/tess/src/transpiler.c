@@ -39,6 +39,8 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
+// static int         a_assignment(transpiler *, tl_type const *, char const *, char const *);
+static int         a_declaration(transpiler *, tl_type const *, char const *);
 static int         a_eval(transpiler *, ast_node const *);
 static int         a_field_access(transpiler *, ast_node const *);
 static int         a_fun_apply(transpiler *, ast_node const *);
@@ -191,6 +193,28 @@ static void out_put_start_fmt(transpiler *self, char const *restrict fmt, ...) {
     va_end(args);
 }
 
+static int a_declaration(transpiler *self, tl_type const *type, char const *var) {
+
+    if (type->tag != type_arrow) {
+        a_result_type_of(self, type);
+        out_put_fmt(self, " %s", var);
+    } else {
+        // make a function pointer type
+        tl_type *left = type->arrow.left;
+
+        a_declaration(self, type->arrow.right, "");
+        out_put_fmt(self, " (*%s) (", var);
+
+        for (u32 i = 0; i < left->array.elements.size; ++i) {
+            a_declaration(self, left->array.elements.v[i], "");
+            if (i < left->array.elements.size - 1) out_put(self, ", ");
+        }
+
+        out_put(self, ") ");
+    }
+    return 0;
+}
+
 static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     if (!ty) fatal("a_result_type_of: null type");
@@ -212,23 +236,9 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     case type_any:   out_put(self, "int"); break;
 
-    case type_arrow: {
-        // make a function pointer type
-        tl_type *left = ty->arrow.left;
+    case type_arrow: fatal("logic error"); break;
 
-        a_result_type_of(self, ty->arrow.right);
-        out_put(self, " (*) (");
-
-        for (u32 i = 0; i < left->array.elements.size; ++i) {
-            a_result_type_of(self, left->array.elements.v[i]);
-            if (i < left->array.elements.size - 1) out_put(self, ", ");
-        }
-
-        out_put(self, ") ");
-
-    } break;
-
-    case type_user: {
+    case type_user:  {
         char *type_s = tl_type_to_string(self->strings, ty);
         out_put_fmt(self, "/* %s */ struct %s", type_s, ty->user.name);
         alloc_free(self->strings, type_s);
@@ -259,8 +269,8 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
         char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
-        a_result_type_of(self, ty);
-        out_put_fmt(self, " %s;\n", field_name);
+        a_declaration(self, ty, field_name);
+        out_put(self, ";\n");
     }
     self->indent_level--;
 
@@ -290,8 +300,8 @@ static int a_infix(transpiler *self, ast_node const *node) {
     char       *var   = next_variable(self);
 
     out_put_start(self, "");
-    if (a_result_type_of(self, type)) return 1;
-    out_put_fmt(self, " %s = %s ", var, left);
+    if (a_declaration(self, type, var)) return 1;
+    out_put_fmt(self, " = %s ", left);
 
     switch (node->infix.op) {
     case ast_op_addition:           out_put(self, " + "); break;
@@ -322,8 +332,8 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     char const *value = pop_result(self);
 
     out_put_start(self, "");
-    a_result_type_of(self, node->let_in.name->type);
-    out_put_fmt(self, " %s = %s;\n", name, value);
+    a_declaration(self, node->let_in.name->type, name);
+    out_put_fmt(self, " = %s;\n", value);
 
     // eval the body and leave it on the stack
     if (a_eval(self, node->let_in.body)) return 1;
@@ -351,9 +361,8 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
         char const            *field_name = ast_node_name_string(ass->value);
 
         out_put_start(self, "");
-        a_result_type_of(self, ass->value->type);
-
-        out_put_start_fmt(self, "%s = %s.%s;\n", var_name, value, field_name);
+        a_declaration(self, ass->value->type, var_name);
+        out_put_start_fmt(self, " = %s.%s;\n", value, field_name);
     }
 
     // eval the body and leave it on the stack
@@ -369,8 +378,8 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     char                           *var = next_variable(self);
 
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_start_fmt(self, "%s = %s.%s;\n", var, ast_node_name_string(v->struct_name),
+    a_declaration(self, node->type, var);
+    out_put_start_fmt(self, " = %s.%s;\n", ast_node_name_string(v->struct_name),
                       ast_node_name_string(v->field_name));
 
     return 0;
@@ -389,8 +398,8 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
 
     // output value is field set value
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_start_fmt(self, "%s = %s;\n", var, value);
+    a_declaration(self, node->type, var);
+    out_put_start_fmt(self, " = %s;\n", value);
 
     // assign to struct field
     out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
@@ -420,8 +429,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_fmt(self, " %s;\n", var);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
 
     switch (node->tag) {
     case ast_assignment:
@@ -560,8 +569,8 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     // function call result
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_fmt(self, " %s;\n", var);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
 
     // function call
     out_put_start_fmt(self, "%s = %s(", var, name);
@@ -594,8 +603,8 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
 
     // init result
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_fmt(self, " %s;\n", var);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
 
     for (u32 i = 0; i < (u32)n_args; ++i) {
         char buf[32];
@@ -628,8 +637,8 @@ static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
 
     // init result
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_fmt(self, " %s;\n", var);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
 
     for (u32 i = 0; i < (u32)n_args; ++i) {
 
@@ -678,8 +687,8 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
 
     // function call result
     out_put_start(self, "");
-    a_result_type_of(self, node->type);
-    out_put_fmt(self, " %s;\n", var);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
 
     // function call
     out_put_start_fmt(self, "%s = %s(", var, name);
@@ -779,9 +788,8 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
             snprintf(buf, sizeof buf - 1, "x%u", i);
 
             out_put_start(self, "");
-            a_result_type_of(self, tup->elements.v[i]);
-
-            out_put_fmt(self, " %s;\n", buf);
+            a_declaration(self, tup->elements.v[i], buf);
+            out_put(self, ";\n");
         }
     } else if (type_labelled_tuple == tuple->tag) {
         struct tlt_labelled_tuple *lt = tl_type_lt(tuple);
@@ -789,9 +797,8 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
         for (u32 i = 0; i < lt->fields.size; ++i) {
 
             out_put_start(self, "");
-            a_result_type_of(self, lt->fields.v[i]);
-
-            out_put_fmt(self, " %s;\n", lt->names.v[i]);
+            a_declaration(self, lt->fields.v[i], lt->names.v[i]);
+            out_put(self, ";\n");
         }
 
     } else {
@@ -818,11 +825,14 @@ static int a_let(transpiler *self, ast_node const *node) {
         return 0;
     }
 
-    // don't emit generic template functions
-    if (!ast_node_is_specialized(node)) {
-        log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name->symbol.name));
-        return 0;
-    }
+    // don't emit generic template functions FIXME: with function
+    // pointers, if the function is not generic, we still need to emit
+    // it because we don't know if it's in use.
+
+    // if (!ast_node_is_specialized(node)) {
+    //     log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name->symbol.name));
+    //     return 0;
+    // }
 
     if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
         // skip here, let a_main process it.
@@ -833,21 +843,15 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // function declaration
 
-    // return type
+    // return type and name
     out_put_start(self, "static ");
-    if (a_result_type_of(self, v->arrow)) return 1;
-    out_put(self, " ");
-
-    // name
-    out_put(self, name);
+    a_declaration(self, v->arrow->arrow.right, name);
     out_put(self, " ");
 
     // params
     out_put(self, "(");
     for (u32 i = 0; i < v->n_parameters; ++i) {
-        if (a_result_type_of(self, v->parameters[i]->type)) return 1;
-        out_put(self, " ");
-        out_put(self, ast_node_name_string(v->parameters[i]));
+        a_declaration(self, v->parameters[i]->type, ast_node_name_string(v->parameters[i]));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
     out_put(self, ")");
