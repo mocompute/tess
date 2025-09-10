@@ -276,7 +276,7 @@ static bool is_eof(parser *p) {
 }
 
 static int eat_newlines(parser *p) {
-
+    // TODO: we're not sensitive to whitespace now so get rid of all this
     while (true) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             log(p, "eat_newlines: tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
@@ -1636,11 +1636,15 @@ static int begin_end_expression(parser *self) {
 
     while (true) {
         if (a_try(self, expression)) {
-            self->error.tag = tl_err_unfinished_begin_end;
+            // propagate error
             goto error;
         }
 
         array_push(exprs, &self->result);
+
+        // some expressions eat the end_of_expression (e.g. function
+        // application), but some don't (e.g. numbers)
+        (void)a_try(self, a_end_of_expression);
 
         if (eat_newlines(self)) {
             self->error.tag = tl_err_unfinished_begin_end;
@@ -1663,10 +1667,6 @@ static int begin_end_expression(parser *self) {
             result_ast_node(self, node);
             goto success;
         }
-
-        // some expressions eat the end_of_expression (e.g. function
-        // application), but some don't (e.g. numbers)
-        (void)a_try(self, a_end_of_expression);
     }
 
 success:
@@ -1778,7 +1778,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     (void)a_try_s(self, the_symbol, "in");
 
     if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_body;
+        // let the error propagate
         goto error;
     }
     ast_node *body = self->result;
