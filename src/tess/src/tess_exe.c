@@ -145,12 +145,14 @@ int compile(state *self) {
     if (self->verbose_parse) {
         if (parser_parse_all_verbose(parser, &nodes)) {
             parser_report_errors(parser);
-            return ++error;
+            ++error;
+            goto cleanup_parser;
         }
     } else {
         if (parser_parse_all(parser, &nodes)) {
             parser_report_errors(parser);
-            return ++error;
+            ++error;
+            goto cleanup_parser;
         }
     }
 
@@ -199,9 +201,10 @@ cleanup_ti:
 cleanup_syntax:
     syntax_checker_destroy(&syntax);
     parser_destroy(&parser);
-
     arena_destroy(default_allocator(), &nodes_alloc);
 
+cleanup_parser:
+    array_free(preamble);
     return error;
 }
 
