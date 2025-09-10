@@ -982,6 +982,9 @@ static int struct_declaration(parser *self) {
             array_push(field_types, &type);
 
             if (a_try_special(self, a_end_of_expression)) {
+                // accept an 'end' instead of final semicolon
+                if (0 == a_try(self, a_end_of_block)) goto end_of_block;
+
                 self->error.tag = tl_err_expected_end_of_expression;
                 goto error; // expect ; after field
             }
@@ -991,6 +994,7 @@ static int struct_declaration(parser *self) {
 
         if (0 == a_try(self, a_end_of_block)) {
 
+        end_of_block: {
             ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
             node->user_type_def.name = null;
             node->user_type_def.field_annotations = null;
@@ -1015,6 +1019,7 @@ static int struct_declaration(parser *self) {
 
             result_ast_node(self, node);
             goto success;
+        }
         }
 
         // anything else is an error
