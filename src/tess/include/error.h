@@ -62,6 +62,7 @@
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \
     X(tl_err_type_exists, "type_exists")                                                                   \
+    X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
                                                                                                            \
     /* analyzer */                                                                                         \
     X(tl_err_too_many_arguments, "too_many_arguments")

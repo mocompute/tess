@@ -5,6 +5,7 @@
 #include "ast.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "hashmap.h"
 #include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
@@ -27,6 +28,8 @@ struct parser {
 
     ast_node              *result;
 
+    hashmap               *forwards;
+
     token_array            tokens;
 
     struct parser_error    error;
@@ -47,6 +50,7 @@ typedef int (*parse_fun_s)(parser *, char const *);
 static int           begin_end_expression(parser *);
 static int           expression(parser *);
 static int           expression_let(parser *);
+static int           forward_declaration(parser *);
 static int           function_application(parser *);
 static int           function_argument(parser *);
 static int           function_declaration(parser *);
@@ -139,13 +143,12 @@ parser *parser_create(allocator *alloc, char_cslice input) {
     self->transient    = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
     self->verbose      = false;
 
-    // tokenizer
-    self->tokenizer = tokenizer_create(alloc, input, "(no file)");
+    self->forwards     = map_create(self->parent_alloc, sizeof(ast_node *));
 
-    // good_tokens
-    self->tokens = (token_array){.alloc = self->tokens_arena};
+    self->tokenizer    = tokenizer_create(alloc, input, "(no file)");
 
-    // error
+    self->tokens       = (token_array){.alloc = self->tokens_arena};
+
     token_init(&self->token, tok_invalid);
     self->error.token     = &self->token;
     self->error.tokenizer = &self->tokenizer_error;
@@ -156,6 +159,8 @@ parser *parser_create(allocator *alloc, char_cslice input) {
 void parser_destroy(parser **self) {
     // error token: arena
     // tokens: arena
+
+    map_destroy(&(*self)->forwards);
 
     // tokenizer
     tokenizer_destroy(&(*self)->tokenizer);
@@ -629,6 +634,21 @@ static int a_identifier_typed(parser *self) {
     return result_ast_node(self, node);
 }
 
+static int forward_declaration(parser *self) {
+    // sym : type
+
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *sym = self->result;
+
+    if (a_try(self, a_type_annotation)) return 1;
+    ast_node *ann               = self->result;
+
+    sym->symbol.original        = string_t_init_empty();
+    sym->symbol.annotation      = ann;
+    sym->symbol.annotation_type = null;
+    return result_ast_node(self, sym);
+}
+
 static int a_infix_operator(parser *p) {
     // + - * /, relationals: < <= == <> >= >
     if (next_token(p)) return 1;
@@ -1020,9 +1040,13 @@ static int function_declaration(parser *self) {
 
     // annotated: f a b c : (int,int,int) -> int = ...
 
+    // check annotations in self->forwards
+
     if (a_try(self, a_identifier)) return 1;
 
     ast_node *const name       = self->result; // function name
+    char const     *name_str   = ast_node_name_string(name);
+
     ast_node_array  parameters = {.alloc = self->ast_arena};
     ast_node       *annotation = null;
 
@@ -1045,8 +1069,14 @@ static int function_declaration(parser *self) {
 
     // must have at least one parameter
     if (a_try(self, a_identifier_typed)) return 1;
-
     array_push(parameters, &self->result);
+
+    // check forward declarations.
+    ast_node **forward = map_get(self->forwards, name_str, strlen(name_str));
+    if (forward) {
+        assert(ast_symbol == (*forward)->tag);
+        annotation = (*forward)->symbol.annotation;
+    }
 
     int require_equal_sign = 0;
 
@@ -1058,6 +1088,11 @@ static int function_declaration(parser *self) {
         }
 
         if (0 == a_try(self, a_type_annotation)) {
+            if (annotation) {
+                // error, cannot provide inline annotation to a forward declared function
+                self->error.tag = tl_err_unexpected_inline_annotation;
+                return 1;
+            }
             annotation         = self->result;
             require_equal_sign = 1;
         }
@@ -1800,6 +1835,16 @@ static int toplevel_let(parser *self) {
     if (0 == a_try(self, simple_declaration)) {
         ast_node *sym_or_nil = self->result;
         return continue_let_in(self, sym_or_nil);
+    }
+
+    if (0 == a_try(self, forward_declaration)) {
+        ast_node *sym = self->result;
+        assert(ast_symbol == sym->tag);
+        map_set_v(&self->forwards, string_t_str(&sym->symbol.name), string_t_size(&sym->symbol.name), sym);
+
+        // TODO error on duplicate declaration
+
+        goto success;
     }
 
     self->error.tag = tl_err_expected_declaration;
