@@ -5,4 +5,9 @@ end
 
 let main ()  =
     let (p : point *) = c_malloc 16 in
-    0
+    let obj = *p in
+    begin
+        obj.x := 1;
+        obj.y := 2;
+        0
+    end
