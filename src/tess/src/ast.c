@@ -154,7 +154,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_function_declaration *vclone = ast_node_fd(clone),
                                         *vorig  = ast_node_fd((ast_node *)orig);
         vclone->name                            = ast_node_clone(alloc, vorig->name);
-        vclone->annotation                      = ast_node_clone(alloc, vorig->annotation);
     } break;
 
     case ast_lambda_function_application: {
@@ -359,8 +358,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_function_declaration: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        return penta(alloc, sym("function-declaration"), list, recur(node->function_declaration.name),
-                     recur(node->function_declaration.annotation), type);
+        return quad(alloc, sym("function-declaration"), list, recur(node->function_declaration.name), type);
 
     } break;
 
@@ -547,7 +545,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_function_declaration:
         //
         fun(ctx, node->function_declaration.name);
-        fun(ctx, node->function_declaration.annotation);
         break;
 
     case ast_lambda_function_application:

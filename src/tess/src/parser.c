@@ -1037,7 +1037,6 @@ static int function_declaration(parser *self) {
             node->function_declaration.name = name;
             node->function_declaration.n_parameters = 0;
             node->function_declaration.parameters   = null;
-            node->function_declaration.annotation   = null;
             return result_ast_node(self, node);
         }
 
@@ -1069,12 +1068,15 @@ static int function_declaration(parser *self) {
             node->function_declaration.name = name;
             node->function_declaration.n_parameters = 0;
             node->function_declaration.parameters   = null;
-            node->function_declaration.annotation   = annotation;
 
             array_shrink(parameters);
             node->array.nodes = parameters.v;
             if (parameters.size > 0xff) return too_many_arguments(self);
             node->array.n = (u8)parameters.size;
+
+            // attach annotation to function name
+            assert(ast_symbol == name->tag);
+            name->symbol.annotation = annotation;
 
             log(self, "function_declaration: returning %s", ast_node_to_string(self->transient, node));
             return result_ast_node(self, node);
