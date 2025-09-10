@@ -7,7 +7,6 @@
 
 #include <assert.h>
 #include <stdalign.h>
-#include <stdbool.h>
 
 // -- hash map --
 
@@ -33,7 +32,7 @@ nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 // -- read-only access --
 
 size_t map_size(hashmap const *);
-bool   map_empty(hashmap const *);
+int    map_empty(hashmap const *);
 f32    map_load_factor(hashmap const *);
 
 // -- data and iterator access --
@@ -42,13 +41,13 @@ f32    map_load_factor(hashmap const *);
 
 void  map_set(hashmap **, void const *key, u16 key_len, void const *data);
 void  map_set_v(hashmap **, void const *key, u16 key_len, void const *data); // value fits in void*
-bool  map_contains(hashmap *, void const *key, u16 key_len);
+int   map_contains(hashmap *, void const *key, u16 key_len);
 void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
 
 // pass zero-init iterator to start
-bool map_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
-bool map_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
+int map_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
+int map_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
 
 // -- utilities --
 

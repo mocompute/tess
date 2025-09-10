@@ -225,7 +225,7 @@ size_t map_size(hashmap const *map) {
     return map->n_occupied;
 }
 
-bool map_empty(hashmap const *map) {
+int map_empty(hashmap const *map) {
     return map->n_occupied == 0;
 }
 
@@ -301,20 +301,20 @@ hashmap *map_copy(hashmap const *src) {
     return dst;
 }
 
-bool map_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
+int map_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
 
-    if (iter->index == self->n_cells) return false;
+    if (iter->index == self->n_cells) return 0;
 
     *out = (hashmap_entry *)&self->entries[hashmap_entry_size(self) * iter->index];
     iter->index++;
-    return true;
+    return 1;
 }
 
-bool map_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry const **out) {
+int map_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry const **out) {
     return map_iter(self, iter, (hashmap_entry **)out);
 }
 
-bool map_contains(hashmap *self, void const *key, u16 key_len) {
+int map_contains(hashmap *self, void const *key, u16 key_len) {
     hashmap_entry *cell = map_find(self, key, key_len);
     return cell != null;
 }
