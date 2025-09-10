@@ -567,7 +567,34 @@ error:
 }
 
 static int a_type_identifier(parser *self) {
-    return a_try(self, a_identifier);
+    // TODO rename this because it's no longer just an identifier
+    if (0 == a_try(self, a_identifier)) return 0;
+
+    if (0 == a_try(self, tuple_expression)) {
+        ast_node *left  = self->result;
+        ast_node *right = null;
+
+        // followed by arrow?
+        if (0 == a_try(self, a_arrow)) {
+            if (a_try(self, a_type_identifier)) {
+                self->error.tag = tl_err_expected_type;
+                return 1;
+            }
+            right = self->result;
+        }
+
+        if (right) {
+            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
+            node->arrow.left  = left;
+            node->arrow.right = right;
+            return result_ast_node(self, node);
+        }
+
+        self->result = left;
+        return 0;
+    }
+
+    return 1;
 }
 
 static int a_type_annotation(parser *self) {
@@ -580,11 +607,18 @@ static int a_type_annotation(parser *self) {
 }
 
 static int a_identifier_typed(parser *self) {
+    // either an identifier or a group: (a : int)
+    if (0 == a_try(self, a_identifier)) return 0;
+
+    if (a_try(self, a_open_round)) return 1;
+
     if (a_try(self, a_identifier)) return 1;
     ast_node *name       = self->result;
 
     ast_node *annotation = null;
     if (0 == a_try(self, a_type_annotation)) annotation = self->result;
+
+    if (a_try(self, a_close_round)) return 1;
 
     ast_node *node        = ast_node_create(self->ast_arena, ast_symbol);
     node->symbol.name     = name->symbol.name;
@@ -981,79 +1015,94 @@ error:
     return 1;
 }
 
-static int function_declaration(parser *p) {
+static int function_declaration(parser *self) {
     // f a b c... = : only symbols allowed, terminated by =.
 
     // annotated: f a b c : (int,int,int) -> int = ...
 
-    if (a_try(p, a_identifier)) return 1;
+    if (a_try(self, a_identifier)) return 1;
 
-    ast_node *const name       = p->result; // function name
-    ast_node_array  parameters = {.alloc = p->ast_arena};
+    ast_node *const name       = self->result; // function name
+    ast_node_array  parameters = {.alloc = self->ast_arena};
+    ast_node       *annotation = null;
 
     // check: f () declares function with no parameters
-    if (0 == a_try(p, a_nil)) {
+    if (0 == a_try(self, a_nil)) {
+
+        // FIXME does not parse an annotation in this case
 
         // next token must be equal sign
-        if (0 == a_try(p, a_equal_sign)) {
-            ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
+        if (0 == a_try(self, a_equal_sign)) {
+            ast_node *node                  = ast_node_create(self->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
             node->function_declaration.n_parameters = 0;
             node->function_declaration.parameters   = null;
-            return result_ast_node(p, node);
+            node->function_declaration.annotation   = null;
+            return result_ast_node(self, node);
         }
 
         return 1;
     }
 
     // must have at least one parameter
-    if (a_try(p, a_identifier_typed)) return 1;
+    if (a_try(self, a_identifier_typed)) return 1;
 
-    array_push(parameters, &p->result);
+    array_push(parameters, &self->result);
+
+    int require_equal_sign = 0;
 
     // accumulate identifiers as parameters until equal sign is seen
     while (true) {
-        if (0 == a_try(p, a_identifier_typed)) {
-            array_push(parameters, &p->result);
+        if (0 == a_try(self, a_identifier_typed)) {
+            array_push(parameters, &self->result);
             continue;
         }
 
-        if (0 == a_try(p, a_equal_sign)) {
+        if (0 == a_try(self, a_type_annotation)) {
+            annotation         = self->result;
+            require_equal_sign = 1;
+        }
 
-            ast_node *node                  = ast_node_create(p->ast_arena, ast_function_declaration);
+        if (0 == a_try(self, a_equal_sign)) {
+
+            ast_node *node                  = ast_node_create(self->ast_arena, ast_function_declaration);
             node->function_declaration.name = name;
             node->function_declaration.n_parameters = 0;
             node->function_declaration.parameters   = null;
+            node->function_declaration.annotation   = annotation;
 
             array_shrink(parameters);
             node->array.nodes = parameters.v;
-            if (parameters.size > 0xff) return too_many_arguments(p);
+            if (parameters.size > 0xff) return too_many_arguments(self);
             node->array.n = (u8)parameters.size;
 
-            log(p, "function_declaration: returning %s", ast_node_to_string(p->transient, node));
-            return result_ast_node(p, node);
+            log(self, "function_declaration: returning %s", ast_node_to_string(self->transient, node));
+            return result_ast_node(self, node);
+        } else if (require_equal_sign) {
+            self->error.tag = tl_err_expected_equal_sign;
+            return 1;
         }
 
         // anything else is an error
-        p->error.tag = tl_err_expected_argument;
+        self->error.tag = tl_err_expected_argument;
         return 1;
     }
 }
 
-static int lambda_declaration(parser *p) {
+static int lambda_declaration(parser *self) {
     // a b c... -> : only symbols allowed, terminated by ->
 
-    ast_node_array parameters = {.alloc = p->ast_arena};
+    ast_node_array parameters = {.alloc = self->ast_arena};
 
     // accumulate identifiers as parameters until an arrow is seen
     while (true) {
-        if (0 == a_try(p, a_identifier_typed)) {
-            array_push(parameters, &p->result);
+        if (0 == a_try(self, a_identifier_typed)) {
+            array_push(parameters, &self->result);
             continue;
         }
 
-        if (0 == a_try(p, a_arrow)) {
-            ast_node *node                        = ast_node_create(p->ast_arena, ast_lambda_declaration);
+        if (0 == a_try(self, a_arrow)) {
+            ast_node *node = ast_node_create(self->ast_arena, ast_lambda_declaration);
             node->lambda_declaration.n_parameters = 0;
             node->lambda_declaration.parameters   = null;
 
@@ -1062,16 +1111,16 @@ static int lambda_declaration(parser *p) {
             node->array.nodes = parameters.v;
 
             if (parameters.size > 0xff) {
-                too_many_arguments(p);
+                too_many_arguments(self);
                 array_free(parameters);
                 return 1;
             }
 
-            return result_ast_node(p, node);
+            return result_ast_node(self, node);
         }
 
         // anything else is an error
-        p->error.tag = tl_err_unfinished_lambda_declaration;
+        self->error.tag = tl_err_unfinished_lambda_declaration;
         return 1;
     }
 }

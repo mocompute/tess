@@ -67,6 +67,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             struct ast_node  *name;
+            struct ast_node  *annotation;
         } function_declaration;
 
         struct ast_lambda_declaration {

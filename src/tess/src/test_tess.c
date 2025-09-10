@@ -288,7 +288,7 @@ static int test_parser_node_to_string(void) {
 
 static int test_parse_all(void) {
 
-    char const *input = "let a : int = 1 in\n"
+    char const *input = "let (a : int) = 1 in\n"
                         "let b = 2 in\n"
                         "let a = b in\n"  // a = 2
                         "let b = a in\n"  // b = 2
@@ -318,7 +318,7 @@ static int test_let_fun_user_types(void) {
                         "  b : string\n"
                         "end\n"
                         "\n"
-                        "let add a : foo b = a + b\n"
+                        "let add (a : foo) b = a + b\n"
                         "let main () = add 1 2\n";
     return compile_input_flag(input, false);
 }
