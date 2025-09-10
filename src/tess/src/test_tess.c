@@ -324,12 +324,12 @@ static int test_user_struct_empty(void) {
 
 static int test_user_struct(void) {
     char const *input = "struct foo = \n"
-                        "  a : int\n"
-                        "  b : string\n"
+                        "  a : int ;\n"
+                        "  b : string ;\n"
                         "end\n"
                         "\n"
                         "struct bar = \n"
-                        "  x : foo\n"
+                        "  x : foo ;\n"
                         "end\n"
                         "\n";
 

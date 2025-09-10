@@ -112,7 +112,6 @@ static int           a_identifier_typed(parser *);
 static int           a_infix_operator(parser *);
 static int           a_labelled_tuple(parser *);
 static int           a_literal(parser *);
-static int           a_newline(parser *);
 static int           a_nil(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
@@ -455,41 +454,6 @@ static int a_end_of_expression(parser *p) {
     }
 
     p->error.tag = tl_err_unfinished_expression;
-    return 1;
-}
-
-static int a_newline(parser *p) {
-
-    if (next_token(p)) {
-        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
-        return 1;
-    }
-
-    switch (p->token.tag) {
-    case tok_semicolon: return result_ast_str(p, ast_symbol, ";");
-
-    case tok_close_round:
-        // signal special failure so the token gets put back, but use a magic
-        // error code so that consumers of end_of_expression can treat it as a success
-        return 2;
-
-    case tok_symbol:
-    case tok_comma:
-    case tok_dot:
-    case tok_colon:
-    case tok_colon_equal:
-    case tok_arrow:
-    case tok_ampersand:
-    case tok_star:
-    case tok_open_round:
-    case tok_equal_sign:
-    case tok_invalid:
-    case tok_number:
-    case tok_string:
-    case tok_comment:     break;
-    }
-
-    p->error.tag = tl_err_expected_newline;
     return 1;
 }
 
@@ -1005,9 +969,9 @@ static int struct_declaration(parser *self) {
             array_push(field_names, &field_name);
             array_push(field_types, &type);
 
-            if (a_try_special(self, a_newline)) {
-                self->error.tag = tl_err_expected_newline;
-                goto error; // expect ; or newline after field
+            if (a_try_special(self, a_end_of_expression)) {
+                self->error.tag = tl_err_expected_end_of_expression;
+                goto error; // expect ; after field
             }
 
             continue;
