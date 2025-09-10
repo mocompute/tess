@@ -1,5 +1,5 @@
 struct point =
-       x : int
+       x : int ;
        y : int
 end
 
