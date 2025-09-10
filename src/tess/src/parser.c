@@ -1169,7 +1169,7 @@ static int function_application(parser *self) {
             node->named_application.arguments   = null;
             node->named_application.n_arguments = 0;
             node->named_application.specialized = null;
-            string_t_copy(self->ast_arena, &node->named_application.name, &name->symbol.name);
+            node->named_application.name        = name;
 
             array_shrink(arguments);
             node->array.n     = (u8)arguments.size;

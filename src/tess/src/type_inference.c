@@ -249,6 +249,11 @@ int ti_inferer_run(ti_inferer *self) {
     // create tuple constructors now that we have complete type information
     ti_generate_tuple_functions(self);
 
+    // FIXME: one more round of specialisation
+    specialized.size = 0;
+    ti_specialize_functions(self, &specialized);
+    array_copy(*self->nodes, specialized.v, specialized.size);
+
     return 0;
 }
 
@@ -500,6 +505,7 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     case ast_named_function_application: {
         struct ast_array *arr = ast_node_arr(node);
         for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+        rename_variables(self, node->named_application.name);
         rename_variables(self, node->named_application.specialized);
     } break;
 
@@ -1370,23 +1376,39 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_named_function_application:
         if (!self->constrain_function_applications) return;
         else {
+            struct ast_named_application *v = ast_node_named(node);
             // do not constraint c_ or std_ applications
-            if (is_special_name_s(&node->named_application.name)) return;
+            assert(ast_symbol == v->name->tag);
+            if (is_special_name_s(&v->name->symbol.name)) return;
 
             // this pass happens after functions have been specialised
-            ast_node *fun = node->named_application.specialized;
+            ast_node *fun = v->specialized;
+            if (fun) {
+                // TODO syntax check phase to check for successful specialisation
+                // FIXME: this should be a type inferencing error and reported to the user
+                if (!fun) fatal("collect_constraints: function application is not specialised.");
+                assert(fun && fun->tag == ast_let);
+                assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
 
-            // TODO syntax check phase to check for successful specialisation
-            // FIXME: this should be a type inferencing error and reported to the user
-            if (!fun) fatal("collect_constraints: function application is not specialised.");
-            assert(fun && fun->tag == ast_let);
-            assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
+                tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
 
-            tl_type *args_type = make_args_type(self->type_arena, node->named_application.arguments,
-                                                node->named_application.n_arguments);
+                push(fun->let.arrow->arrow.left, args_type);
+                push(fun->let.arrow->arrow.right, node->type);
+            } else {
+                // FIXME: should we even continue if we haven't been
+                // able to specialise this callsite?
 
-            push(fun->let.arrow->arrow.left, args_type);
-            push(fun->let.arrow->arrow.right, node->type);
+                // constrain arguments against the function symbol's arrow type
+                tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
+
+                assert(ast_symbol == v->name->tag);
+                if (type_arrow == v->name->type->tag) {
+                    tl_type *left  = v->name->type->arrow.left;
+                    tl_type *right = v->name->type->arrow.right;
+                    push(left, args_type);
+                    push(node->type, right);
+                }
+            }
         }
 
         break;
@@ -1479,7 +1501,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
     if (node->tag != ast_named_function_application) return;
     if (node->named_application.specialized) return;
 
-    char const *name = string_t_str(&node->named_application.name);
+    char const *name = ast_node_name_string(node->named_application.name);
     if (is_special_name(name)) return;
 
     // does a specialised function already exist?

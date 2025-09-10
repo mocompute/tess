@@ -92,7 +92,7 @@ typedef struct ast_node {
         struct ast_named_application {
             struct ast_node **arguments;
             u8                n_arguments;
-            string_t          name;
+            struct ast_node  *name;
             struct ast_node  *specialized;
         } named_application;
 

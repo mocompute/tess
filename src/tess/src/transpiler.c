@@ -211,8 +211,24 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     } break;
 
     case type_any:   out_put(self, "int"); break;
-    case type_arrow: return a_result_type_of(self, ty->arrow.right);
-    case type_user:  {
+
+    case type_arrow: {
+        // make a function pointer type
+        tl_type *left = ty->arrow.left;
+
+        a_result_type_of(self, ty->arrow.right);
+        out_put(self, " (*) (");
+
+        for (u32 i = 0; i < left->array.elements.size; ++i) {
+            a_result_type_of(self, left->array.elements.v[i]);
+            if (i < left->array.elements.size - 1) out_put(self, ", ");
+        }
+
+        out_put(self, ") ");
+
+    } break;
+
+    case type_user: {
         char *type_s = tl_type_to_string(self->strings, ty);
         out_put_fmt(self, "/* %s */ struct %s", type_s, ty->user.name);
         alloc_free(self->strings, type_s);
@@ -530,7 +546,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         name = string_t_str(&v->specialized->let.specialized_name);
     } else {
         // c_ and std_ etc...
-        name = string_t_str(&v->name);
+        name = ast_node_name_string(v->name);
     }
 
     char *var = next_variable(self);

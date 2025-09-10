@@ -404,6 +404,8 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     }
 
     case type_arrow: {
+        if (type_arrow != candidate->tag) return false;
+
         struct tlt_arrow const *vreq  = tl_type_arrow((tl_type *) requires),
                                *vcand = tl_type_arrow((tl_type *)candidate);
         return candidate->tag == type_arrow && tl_type_satisfies(vreq->left, vcand->left) &&

@@ -165,8 +165,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_named_function_application: {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
-        string_t_copy(alloc, &vclone->name, &vorig->name);
-        vclone->specialized = ast_node_clone(alloc, vorig->specialized);
+        vclone->name                         = ast_node_clone(alloc, vorig->name);
+        vclone->specialized                  = ast_node_clone(alloc, vorig->specialized);
     } break;
 
     case ast_user_type: {
@@ -380,9 +380,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
             return quad(alloc, sym("named-application"),
                         sym(string_t_str(&node->named_application.specialized->let.specialized_name)), list,
                         type);
-        else
-            return quad(alloc, sym("named-application"), sym(string_t_str(&node->named_application.name)),
-                        list, type);
+        else return quad(alloc, sym("named-application"), recur(node->named_application.name), list, type);
     }
 
     case ast_begin_end: {
@@ -558,6 +556,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     case ast_named_function_application:
         //
+        fun(ctx, node->named_application.name);
         fun(ctx, node->named_application.specialized);
         break;
 
