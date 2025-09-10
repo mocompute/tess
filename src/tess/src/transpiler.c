@@ -72,6 +72,7 @@ static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((
 static void vout_put_fmt(transpiler *, char const *restrict, va_list);
 
 static bool is_generic_function(ast_node const *node);
+
 static void log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
@@ -556,6 +557,10 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     } else {
         // c_ and std_ etc...
         name = ast_node_name_string(v->name);
+
+        if (0 == strncmp("c_", name, 2)) {
+            name += 2; // strip off c_ prefix
+        }
     }
 
     char *var = next_variable(self);

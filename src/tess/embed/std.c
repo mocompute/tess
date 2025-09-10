@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static int std_dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
 static int std_dbg(char const *restrict fmt, ...) {
