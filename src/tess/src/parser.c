@@ -1943,7 +1943,7 @@ int parser_parse_all_verbose(parser *p, ast_node_array *out) {
 
     log(p, "begin parse");
     int res = parser_parse_all(p, out);
-    log(p, "end parse");
+    log(p, "end parse status %i", res);
 
     p->verbose = false;
     return res;

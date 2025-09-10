@@ -78,6 +78,7 @@ static void replace_token_sn(allocator *alloc, token *tok, token_tag tag, char c
 
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
+    out_err->tag = tl_err_ok;
 
     // support backtracking by parser
     if (self->backtrack.size) {
