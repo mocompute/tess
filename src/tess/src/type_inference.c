@@ -887,6 +887,13 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann) {
         return tl_type_create_arrow(self->type_arena, left, right);
     }
 
+    if (ast_address_of == ann->tag) {
+        tl_type *target     = make_type_annotation(self, ann->address_of.target);
+        tl_type *ptr        = tl_type_create(self->type_arena, type_pointer);
+        ptr->pointer.target = target;
+        return ptr;
+    }
+
     fatal("unknown annotation type: '%s'", ast_tag_to_string(ann->tag));
 }
 

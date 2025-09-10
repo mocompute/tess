@@ -579,6 +579,14 @@ static int a_type_identifier(parser *self) {
     if (0 == a_try(self, a_identifier)) {
         ast_node *left  = self->result;
         ast_node *right = null;
+
+        // followed by * ?
+        if (0 == a_try(self, a_star)) {
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = left;
+            left                   = ptr;
+        }
+
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
             if (a_try(self, a_type_identifier)) {

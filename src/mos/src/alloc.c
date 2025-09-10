@@ -663,7 +663,7 @@ noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...)
 
     //
 
-    int len = snprintf(buf, buf_size, "fatal: %s:%i: ", file, line);
+    int len = snprintf(buf, buf_size, "%s:%i: fatal: ", file, line);
     if (len < 0) exit(1);
 
     va_start(args, fmt);
