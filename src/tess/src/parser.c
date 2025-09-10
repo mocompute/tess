@@ -152,6 +152,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->current_file_data.v    = null;
     self->current_file_data.size = 0;
     self->verbose                = false;
+    self->indent_level           = 0;
 
     self->forwards               = map_create(self->parent_alloc, sizeof(ast_node *));
 
