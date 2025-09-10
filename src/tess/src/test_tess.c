@@ -14,7 +14,7 @@
 #include <string.h>
 #include <time.h>
 
-static int compile_input_flag(char const *input, bool verbose) {
+static int compile_input_flag(char const *input, int verbose) {
 
     dbg("\n---------------------------\n");
     dbg("Compiling input string:\n\n%s\n\n", input);
@@ -94,7 +94,7 @@ static int compile_input_flag(char const *input, bool verbose) {
 }
 
 static int compile_input(char const *input) {
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_tess_token_string(void) {
@@ -288,7 +288,7 @@ static int test_parse_all(void) {
                         "let b = a in\n"  // b = 2
                         "b           \n"; // value = 2
 
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_let_fun(void) {
@@ -314,13 +314,13 @@ static int test_let_fun_user_types(void) {
                         "\n"
                         "let add (a : foo) b = a.a + b\n"
                         "let main () = add (foo 1 \"hello\") 2\n";
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_user_struct_empty(void) {
     char const *input = "struct foo = end\n";
 
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_user_struct(void) {
@@ -334,18 +334,18 @@ static int test_user_struct(void) {
                         "end\n"
                         "\n";
 
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_labelled_tuple(void) {
     char const *input = "let x = (x1 = 1, x2 = 2) in x end";
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 static int test_let_labelled_tuple(void) {
     char const *input = "let tup = (x1 = 1, x2 = 3) in\n"
                         "let (a = x1) = tup in a end";
-    return compile_input_flag(input, false);
+    return compile_input_flag(input, 0);
 }
 
 #define T(name)                                                                                            \

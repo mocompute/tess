@@ -8,7 +8,6 @@
 #include "type_registry.h"
 #include "types.h"
 
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,9 +28,9 @@ typedef struct {
 
     c_string_carray words;
 
-    bool            verbose;
-    bool            verbose_parse;
-    bool            help;
+    int             verbose;
+    int             verbose_parse;
+    int             help;
 } state;
 
 noreturn void usage(int status, char const *argv0) {
@@ -71,15 +70,15 @@ void state_gather_single_options(state *self, char *str) {
     u32 len = (u32)strlen(str);
     for (u32 i = 1; i < len; ++i) {
         switch (str[i]) {
-        case 'h': self->help = true; break;
-        case 'v': self->verbose = true; break;
+        case 'h': self->help = 1; break;
+        case 'v': self->verbose = 1; break;
         default:  break;
         }
     }
 }
 
 void state_gather_long_option(state *self, char *str) {
-    if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = true;
+    if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
 }
 
 void state_gather_options(state *self, int argc, char *argv[]) {
@@ -110,7 +109,7 @@ void eval_print(char *in) {
 
 int repl(state *self) {
     (void)self;
-    while (true) {
+    while (1) {
         char *line = readline("tess > ");
 
         if (!line) continue;

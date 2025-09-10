@@ -54,27 +54,27 @@ tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type *l
     return self;
 }
 
-bool tl_type_is_prim(tl_type const *self) {
+int tl_type_is_prim(tl_type const *self) {
     switch (self->tag) {
     case type_nil:
     case type_bool:
     case type_int:
     case type_float:
     case type_string:
-    case type_any:            return true;
+    case type_any:            return 1;
 
     case type_user:
     case type_tuple:
     case type_labelled_tuple:
     case type_arrow:
-    case type_type_var:       return false;
+    case type_type_var:       return 0;
 
     case type_pointer:        return tl_type_is_prim(self->pointer.target);
     }
-    assert(false);
+    assert(0);
 }
 
-bool tl_type_is_poly(tl_type const *self) {
+int tl_type_is_poly(tl_type const *self) {
     switch (self->tag) {
     case type_nil:
     case type_bool:
@@ -82,21 +82,21 @@ bool tl_type_is_poly(tl_type const *self) {
     case type_float:
     case type_string:
     case type_any:
-    case type_user:   return false;
+    case type_user:   return 0;
 
     case type_tuple:  {
         struct tlt_tuple *v = tl_type_tup((tl_type *)self);
         for (u32 i = 0; i < v->elements.size; ++i)
-            if (tl_type_is_poly(v->elements.v[i])) return true;
-        return false;
+            if (tl_type_is_poly(v->elements.v[i])) return 1;
+        return 0;
 
     } break;
 
     case type_labelled_tuple: {
         struct tlt_labelled_tuple *v = tl_type_lt((tl_type *)self);
         for (u32 i = 0; i < v->fields.size; ++i)
-            if (tl_type_is_poly(v->fields.v[i])) return true;
-        return false;
+            if (tl_type_is_poly(v->fields.v[i])) return 1;
+        return 0;
 
     } break;
 
@@ -108,12 +108,12 @@ bool tl_type_is_poly(tl_type const *self) {
         //
         return tl_type_is_poly(self->pointer.target);
 
-    case type_type_var: return true;
+    case type_type_var: return 1;
     }
-    assert(false);
+    assert(0);
 }
 
-bool tl_type_equal(tl_type const *left, tl_type const *right) {
+int tl_type_equal(tl_type const *left, tl_type const *right) {
     return tl_type_compare(left, right) == 0;
 }
 
@@ -190,10 +190,10 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
 }
 
 u64 tl_type_hash(tl_type const *self) {
-    return tl_type_hash_ext(self, false);
+    return tl_type_hash_ext(self, 0);
 }
 
-u64 tl_type_hash_ext(tl_type const *self, bool ignore_names) {
+u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
     // NOTE: Uses reference equality for subtypes, so it is possible
@@ -371,10 +371,10 @@ char *tl_type_to_string(allocator *alloc, tl_type const *type) {
     return out;
 }
 
-bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
+int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     // type variables are not satisfied by any type
 
-    if (requires == candidate) return true; // self-satisfied
+    if (requires == candidate) return 1; // self-satisfied
 
     switch (requires->tag) {
     case type_nil:
@@ -390,21 +390,21 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     case type_tuple:          {
 
         // labelled tuples satisfy plain tuples if their types match.
-        if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return false;
+        if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return 0;
 
         struct tlt_array const *vreq  = tl_type_arr((tl_type *) requires),
                                *vcand = tl_type_arr((tl_type *)candidate);
 
-        if (vreq->elements.size != vcand->elements.size) return false;
+        if (vreq->elements.size != vcand->elements.size) return 0;
 
         for (u32 i = 0; i < vreq->elements.size; ++i)
-            if (!tl_type_satisfies(vreq->elements.v[i], vcand->elements.v[i])) return false;
+            if (!tl_type_satisfies(vreq->elements.v[i], vcand->elements.v[i])) return 0;
 
-        return true;
+        return 1;
     }
 
     case type_arrow: {
-        if (type_arrow != candidate->tag) return false;
+        if (type_arrow != candidate->tag) return 0;
 
         struct tlt_arrow const *vreq  = tl_type_arrow((tl_type *) requires),
                                *vcand = tl_type_arrow((tl_type *)candidate);
@@ -420,11 +420,11 @@ bool tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
 
     case type_type_var:
         // are never satisfied
-        return false;
+        return 0;
 
     case type_any:
         // are always satisfied
-        return true;
+        return 1;
     }
 }
 
@@ -453,9 +453,9 @@ tl_type *tl_type_find_labelled_field_type(tl_type const *lt_type, char const *fi
     return field_type;
 }
 
-bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
+int tl_type_contains(tl_type const *haystack, tl_type const *needle) {
 
-    if (haystack == needle || tl_type_equal(haystack, needle)) return true;
+    if (haystack == needle || tl_type_equal(haystack, needle)) return 1;
 
     switch (haystack->tag) {
     case type_nil:
@@ -464,7 +464,7 @@ bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
     case type_float:
     case type_string:
     case type_type_var:
-    case type_any:            return false;
+    case type_any:            return 0;
 
     case type_pointer:        return tl_type_contains(haystack->pointer.target, needle);
 
@@ -472,9 +472,9 @@ bool tl_type_contains(tl_type const *haystack, tl_type const *needle) {
     case type_labelled_tuple: {
         struct tlt_array *v = tl_type_arr((tl_type *)haystack);
         for (u32 i = 0; i < v->elements.size; ++i) {
-            if (tl_type_contains(v->elements.v[i], needle)) return true;
+            if (tl_type_contains(v->elements.v[i], needle)) return 1;
         }
-        return false;
+        return 0;
     }
 
     case type_arrow: {

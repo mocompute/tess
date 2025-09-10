@@ -129,7 +129,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     // return value, to be copied to *out
     token res = {.file = self->file};
 
-    while (true) {
+    while (1) {
 
         switch (state) {
 
@@ -531,7 +531,7 @@ finish:
         return 0;
 
     } else {
-        assert(false);
+        assert(0);
     }
 
     return 0;

@@ -6,7 +6,6 @@
 #include <assert.h>
 #include <stdalign.h>
 #include <stdarg.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdnoreturn.h>
@@ -137,9 +136,9 @@ static size_t *block_size(byte const *p) {
     return &block->size;
 }
 
-static bool is_last_block(arena_header const *bucket, void const *p) {
+static int is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
-    if (((byte *)p) < ((byte *)bucket)) return false;
+    if (((byte *)p) < ((byte *)bucket)) return 0;
     return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size - sizeof(arena_header);
 }
 
@@ -147,7 +146,7 @@ static void maybe_free_block(arena_header *bucket, void const *ptr) {
     if (is_last_block(bucket, ptr)) bucket->size -= *block_size(ptr) + sizeof(arena_block);
 }
 
-static bool bucket_has_capacity(arena_header const *bucket, size_t size) {
+static int bucket_has_capacity(arena_header const *bucket, size_t size) {
     return (bucket->capacity - bucket->size >= sizeof(arena_block) + size);
 }
 
@@ -227,7 +226,7 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
     sz                   = alloc_align_to_word_size(sz);
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
     if (null == bucket) {
-        assert(false);
+        assert(0);
         return null;
     }
 
@@ -372,7 +371,7 @@ typedef struct {
     struct leak_allocation *data;
     i64                     capacity;
     i64                     size;
-    bool                    reported;
+    int                     was_reported;
 } leak_detector;
 
 static void *leak_detector_malloc(allocator *alloc, size_t sz, char const *file, int line) mallocfun;
@@ -395,7 +394,7 @@ allocator   *leak_detector_create() {
     self->capacity          = 1024;
     self->size              = 0;
     self->data              = calloc((size_t)self->capacity, sizeof(struct leak_allocation));
-    self->reported          = false;
+    self->was_reported      = 0;
 
     return (allocator *)self;
 }
@@ -403,7 +402,7 @@ allocator   *leak_detector_create() {
 void leak_detector_destroy(allocator **alloc) {
     leak_detector *self = (leak_detector *)*alloc;
 
-    if (!self->reported) leak_detector_report(*alloc);
+    if (!self->was_reported) leak_detector_report(*alloc);
 
     free(self->data);
 
@@ -421,7 +420,7 @@ void leak_detector_report(allocator *alloc) {
     }
     memcpy(records, self->data, (size_t)self->size * sizeof *records);
 
-    self->reported = true;
+    self->was_reported = 1;
 
     // match reallocs with previous allocs
     for (i64 i = 0; i < self->size; ++i) {
@@ -481,7 +480,7 @@ void leak_detector_report(allocator *alloc) {
         if (leak_error_alloc_leak != records[i].status) continue;
 
         if (records[i].realloc_ptr) {
-            bool found = false;
+            int found = 0;
             for (i64 j = i - 1; j >= 0; --j) {
                 if (records[i].realloc_ptr == records[j].ptr) {
                     fprintf(stderr,
@@ -489,7 +488,7 @@ void leak_detector_report(allocator *alloc) {
                             "allocation at %p %s:%i\n",
                             records[i].size, records[i].ptr, records[i].file, records[i].line,
                             records[j].ptr, records[j].file, records[j].line);
-                    found = true;
+                    found = 1;
                     break;
                 }
             }
@@ -672,6 +671,6 @@ noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...)
 
     fprintf(stderr, "%s\n", buf);
 
-    assert(false);
+    assert(0);
     exit(1);
 }

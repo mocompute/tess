@@ -37,15 +37,15 @@ struct hashmap {
 
 static hashmap_entry *map_unchecked_at(hashmap *map, u32 index);
 
-static inline bool    is_occupied(u8 status) constfun;
-static inline bool    is_tombstone(u8 status) constfun;
+static inline int     is_occupied(u8 status) constfun;
+static inline int     is_tombstone(u8 status) constfun;
 static inline u8      get_probe_distance(u8 status) constfun;
 
-static inline bool    is_occupied(u8 status) {
+static inline int     is_occupied(u8 status) {
     return status & 1;
 }
 
-static inline bool is_tombstone(u8 status) {
+static inline int is_tombstone(u8 status) {
     return status & 2;
 }
 
@@ -53,9 +53,9 @@ static inline u8 get_probe_distance(u8 status) {
     return status >> 2;
 }
 
-static inline void set_status(u8 *status, bool occupied, u8 probe_distance) {
+static inline void set_status(u8 *status, int is_occupied, u8 probe_distance) {
     assert(probe_distance <= MAX_PROBE_LEN);
-    *status = (u8)(probe_distance << 2) | (occupied ? 1 : 0);
+    *status = (u8)(probe_distance << 2) | (is_occupied ? 1 : 0);
 }
 
 static inline void set_tombstone(u8 *status) {
@@ -159,7 +159,7 @@ static int set_one(hashmap *map, hashmap_entry const *header, byte const *elemen
                 memcpy(cell, to_store, cell_size);
 
                 // set correct status for installed cell
-                set_status(&cell->status, true, probe_distance);
+                set_status(&cell->status, 1, probe_distance);
 
                 // write evicted cell (header + data) into to_store
                 memcpy(to_store, tmp, cell_size);
@@ -175,7 +175,7 @@ static int set_one(hashmap *map, hashmap_entry const *header, byte const *elemen
             // write cell (header + data) to bucket and set status
             memcpy(cell, to_store, cell_size);
 
-            set_status(&cell->status, true, probe_distance);
+            set_status(&cell->status, 1, probe_distance);
             map->n_occupied++;
 
             return 0;
@@ -332,7 +332,7 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
     if (map_load_factor(*self) >= DEFAULT_LOAD_FACTOR) {
         if (grow_buckets(self)) {
             dbg("map_set: oom\n");
-            assert(false);
+            assert(0);
             exit(1);
         }
     }
@@ -348,7 +348,7 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
 
     if (set_one(*self, &entry, data)) {
         dbg("map_set: error in set_one\n");
-        assert(false);
+        assert(0);
         exit(1);
     }
 }

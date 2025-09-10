@@ -92,7 +92,7 @@ void sexp_box_deinit(allocator *, sexp_box *);
 
 // -- access --
 
-bool      sexp_is_boxed(sexp);
+int       sexp_is_boxed(sexp);
 i64       sexp_unboxed_get(sexp);
 sexp_box *sexp_box_get(sexp);
 

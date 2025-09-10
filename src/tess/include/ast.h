@@ -19,7 +19,7 @@ typedef struct ast_node {
         } symbol;
 
         struct ast_bool {
-            bool val;
+            int val;
         } bool_;
 
         struct ast_i64 {
@@ -266,8 +266,8 @@ c_string_csized ast_nodes_get_names(allocator *, ast_node_slice);
 void            ast_node_dfs(void *, ast_node *, ast_op_fun);
 void            ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
 
-bool            ast_node_is_specialized(ast_node const *);
-bool            ast_node_is_tuple_constructor(ast_node const *);
+int             ast_node_is_specialized(ast_node const *);
+int             ast_node_is_tuple_constructor(ast_node const *);
 void            ast_node_set_is_specialized(ast_node *);
 void            ast_node_set_is_tuple_constructor(ast_node *);
 

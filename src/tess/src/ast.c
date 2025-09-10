@@ -214,7 +214,7 @@ char const *ast_node_name_string(ast_node const *node) {
 
 int ast_node_name_strcmp(ast_node const *node, char const *target) {
     char const *name = ast_node_name_string(node);
-    if (!name) return false;
+    if (!name) return 0;
     return strcmp(name, target);
 }
 
@@ -910,11 +910,11 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 
 //
 
-bool ast_node_is_specialized(ast_node const *node) {
+int ast_node_is_specialized(ast_node const *node) {
     return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_SPECIALIZED));
 }
 
-bool ast_node_is_tuple_constructor(ast_node const *node) {
+int ast_node_is_tuple_constructor(ast_node const *node) {
     return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS));
 }
 

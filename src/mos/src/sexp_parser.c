@@ -6,7 +6,6 @@
 #include "sexp.h"
 
 #include <assert.h>
-#include <stdbool.h>
 
 static const size_t TOKENIZER_BUF_SIZE = 1024;
 
@@ -65,7 +64,7 @@ int sexp_tokenizer_next(sexp_tokenizer *self, sexp_token *out, sexp_err_tag *err
     // starting position for number or symbol
     size_t start_capture = 0;
 
-    while (true) {
+    while (1) {
 
         switch (state) {
 
@@ -342,7 +341,7 @@ finish:
     } else if (error == state) {
         return 1;
     } else {
-        assert(false);
+        assert(0);
         *err     = sexp_tok_err_unexpected_error;
         *err_pos = self->pos;
         return 1;
@@ -407,7 +406,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
     enum { start, error, stop } state = start;
 
-    while (true) {
+    while (1) {
         switch (state) {
 
         case start: {
@@ -426,7 +425,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                 sexp_array exprs = {.alloc = self->alloc};
                 array_reserve(exprs, 2);
 
-                while (true) {
+                while (1) {
 
                     sexp sub_expr;
                     if (sexp_parser_next(self, &sub_expr, err, err_loc)) {
@@ -507,7 +506,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
                 // ignored
                 break;
             default: {
-                assert(false);
+                assert(0);
 
             } break;
             }
@@ -522,7 +521,7 @@ finish:
     if (stop == state) return 0;
     else if (error == state) return 1;
     else {
-        assert(false);
+        assert(0);
         *err = sexp_tok_err_unexpected_error;
         return 1;
     }

@@ -9,9 +9,9 @@
 #include <limits.h>
 #include <stdio.h>
 
-static bool is_boxed(sexp) constfun;
+static int is_boxed(sexp) constfun;
 
-static bool is_boxed(sexp self) {
+static int is_boxed(sexp self) {
     return (self.integer & 1) == 0;
 }
 
@@ -154,7 +154,7 @@ void sexp_box_deinit(allocator *alloc, sexp_box *self) {
     alloc_invalidate(self);
 }
 
-bool sexp_is_boxed(sexp self) {
+int sexp_is_boxed(sexp self) {
     return (self.integer & 1) == 0;
 }
 

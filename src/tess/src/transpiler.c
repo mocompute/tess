@@ -28,7 +28,7 @@ struct transpiler {
     size_t next_variable;
     int    indent_level;
 
-    bool   verbose;
+    int    verbose;
 };
 
 // -- embed externs --
@@ -71,7 +71,7 @@ static void        out_put_start_fmt(transpiler *, char const *restrict, ...)
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 static void vout_put_fmt(transpiler *, char const *restrict, va_list);
 
-static bool is_generic_function(ast_node const *node);
+static int  is_generic_function(ast_node const *node);
 
 static void log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
@@ -87,7 +87,7 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 
     self->next_variable = 1;
     self->indent_level  = 0;
-    self->verbose       = false;
+    self->verbose       = 0;
 
     return self;
 }
@@ -98,7 +98,7 @@ void transpiler_destroy(transpiler **self) {
     *self = null;
 }
 
-void transpiler_set_verbose(transpiler *self, bool verbose) {
+void transpiler_set_verbose(transpiler *self, int verbose) {
     self->verbose = verbose;
 }
 
@@ -222,7 +222,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     switch (ty->tag) {
     case type_nil:            out_put(self, "void"); break;
-    case type_bool:           out_put(self, "bool"); break;
+    case type_bool:           out_put(self, "int"); break;
     case type_int:            out_put(self, "int64_t"); break;
     case type_float:          out_put(self, "double"); break;
     case type_string:         out_put(self, "char *"); break;
@@ -444,8 +444,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_u64:        out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
     case ast_f64:        out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
     case ast_bool:
-        if (node->bool_.val) out_put_start_fmt(self, "%s = true;\n", var);
-        else out_put_start_fmt(self, "%s = false;\n", var);
+        if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
+        else out_put_start_fmt(self, "%s = 0;\n", var);
         break;
 
     case ast_address_of: {
@@ -885,17 +885,17 @@ static char *next_variable(transpiler *self) {
     return out;
 }
 
-static bool is_generic_function(ast_node const *node) {
-    if (ast_let != node->tag) return false;
+static int is_generic_function(ast_node const *node) {
+    if (ast_let != node->tag) return 0;
 
     tl_type *arrow = node->let.arrow;
-    if (arrow->arrow.right->tag == type_type_var) return true;
+    if (arrow->arrow.right->tag == type_type_var) return 1;
 
     struct tlt_array const *v = tl_type_arr(arrow->arrow.left);
     for (u32 i = 0; i < v->elements.size; ++i)
-        if (type_type_var == v->elements.v[i]->tag) return true;
+        if (type_type_var == v->elements.v[i]->tag) return 1;
 
-    return false;
+    return 0;
 }
 
 static void log(transpiler *self, char const *restrict fmt, ...) {

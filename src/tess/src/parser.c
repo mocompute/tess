@@ -44,7 +44,7 @@ struct parser {
 
     u32                    next_nil_name;
 
-    bool                   verbose;
+    int                    verbose;
     int                    indent_level;
 };
 
@@ -77,18 +77,18 @@ static int           tuple_expression(parser *);
 static int           continue_let_in(parser *, ast_node *);
 
 static int           result_ast(parser *, ast_tag);
-static int           result_ast_bool(parser *, bool);
+static int           result_ast_bool(parser *, int);
 static int           result_ast_f64(parser *, f64);
 static int           result_ast_i64(parser *, i64);
 static int           result_ast_node(parser *, ast_node *);
 static int           result_ast_str(parser *, ast_tag, char const *s);
 static int           result_ast_u64(parser *, u64);
 
-static bool          is_arithmetic_operator(char const *);
-static bool          is_eof(parser *);
-static bool          is_relational_operator(char const *);
-static bool          is_reserved(char const *);
-static bool          is_start_of_expression(char const *);
+static int           is_arithmetic_operator(char const *);
+static int           is_eof(parser *);
+static int           is_relational_operator(char const *);
+static int           is_reserved(char const *);
+static int           is_start_of_expression(char const *);
 
 nodiscard static int a_try(parser *, parse_fun);
 nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
@@ -130,7 +130,7 @@ static int           the_symbol(parser *, char const *const);
 static char         *make_nil_name(parser *);
 static int           string_to_number(parser *, char const *const);
 
-static bool          has_error(parser *);
+static int           has_error(parser *);
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
 static int           too_many_arguments(parser *);
@@ -151,7 +151,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->files_index            = 0;
     self->current_file_data.v    = null;
     self->current_file_data.size = 0;
-    self->verbose                = false;
+    self->verbose                = 0;
     self->indent_level           = 0;
 
     self->forwards               = map_create(self->parent_alloc, sizeof(ast_node *));
@@ -217,7 +217,7 @@ static int result_ast_f64(parser *p, f64 val) {
     return 0;
 }
 
-static int result_ast_bool(parser *p, bool val) {
+static int result_ast_bool(parser *p, int val) {
     p->result            = ast_node_create(p->ast_arena, ast_bool);
     p->result->bool_.val = val;
     return 0;
@@ -244,54 +244,54 @@ static int result_ast_node(parser *p, ast_node *node) {
     return 0;
 }
 
-static bool is_reserved(char const *s) {
+static int is_reserved(char const *s) {
     static char const *strings[] = {
       "begin", "else", "end", "false", "fun", "if", "in", "let", "then", "true", null,
     };
     char const **it = strings;
     while (*it != null)
-        if (0 == strcmp(*it++, s)) return true;
+        if (0 == strcmp(*it++, s)) return 1;
 
-    return false;
+    return 0;
 }
 
-static bool is_start_of_expression(char const *s) {
+static int is_start_of_expression(char const *s) {
     static char const *strings[] = {
       "begin", "fun", "if", "in", "let", "struct", null,
     };
     char const **it = strings;
     while (*it != null)
-        if (0 == strcmp(*it++, s)) return true;
+        if (0 == strcmp(*it++, s)) return 1;
 
-    return false;
+    return 0;
 }
 
-static bool is_arithmetic_operator(char const *s) {
+static int is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
       "+", "-", "*", "/", null,
     };
     char const **it = strings;
     while (*it != null)
-        if (0 == strcmp(*it++, s)) return true;
-    return false;
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
 }
 
-static bool is_relational_operator(char const *s) {
+static int is_relational_operator(char const *s) {
     static char const *strings[] = {
       "<", "<=", "==", "<>", ">=", ">", null,
     };
     char const **it = strings;
     while (*it != null)
-        if (0 == strcmp(*it++, s)) return true;
-    return false;
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
 }
 
-static bool is_eof(parser *p) {
+static int is_eof(parser *p) {
     return p->error.tag == tl_err_eof || p->tokenizer_error.tag == tl_err_eof;
 }
 
 static int eat_comments(parser *p) {
-    while (true) {
+    while (1) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             log(p, "tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
             p->error.file = p->tokenizer_error.file;
@@ -313,7 +313,7 @@ static int eat_comments(parser *p) {
 static int next_token(parser *p) {
     if (eat_comments(p)) return 1;
 
-    while (true) {
+    while (1) {
 
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             p->error.file = p->tokenizer_error.file;
@@ -728,8 +728,8 @@ static int a_bool(parser *p) {
     if (next_token(p)) return 1;
 
     if (tok_symbol == p->token.tag) {
-        if (0 == strcmp("true", p->token.s)) return result_ast_bool(p, true);
-        if (0 == strcmp("false", p->token.s)) return result_ast_bool(p, false);
+        if (0 == strcmp("true", p->token.s)) return result_ast_bool(p, 1);
+        if (0 == strcmp("false", p->token.s)) return result_ast_bool(p, 0);
     }
 
     p->error.tag = tl_err_expected_bool;
@@ -752,7 +752,7 @@ static int a_labelled_tuple(parser *self) {
 
     array_push(assignments, &self->result);
 
-    while (true) {
+    while (1) {
 
         if (0 == a_try(self, a_close_round)) {
 
@@ -960,7 +960,7 @@ static int struct_declaration(parser *self) {
     }
 
     // accumulate names and types until end of block is seen
-    while (true) {
+    while (1) {
 
         if (0 == a_try(self, a_identifier)) {
             ast_node *field_name = self->result;
@@ -1082,7 +1082,7 @@ static int function_declaration(parser *self) {
     int require_equal_sign = 0;
 
     // accumulate identifiers as parameters until equal sign is seen
-    while (true) {
+    while (1) {
         if (0 == a_try(self, a_identifier_typed)) {
             array_push(parameters, &self->result);
             continue;
@@ -1133,7 +1133,7 @@ static int lambda_declaration(parser *self) {
     ast_node_array parameters = {.alloc = self->ast_arena};
 
     // accumulate identifiers as parameters until an arrow is seen
-    while (true) {
+    while (1) {
         if (0 == a_try(self, a_identifier_typed)) {
             array_push(parameters, &self->result);
             continue;
@@ -1191,7 +1191,7 @@ static int function_application(parser *self) {
 
     array_push(arguments, &self->result);
 
-    while (true) {
+    while (1) {
         if (0 == a_try(self, function_argument)) {
             array_push(arguments, &self->result);
             continue;
@@ -1434,7 +1434,7 @@ static int lambda_function_application(parser *self) {
 
     array_push(arguments, &self->result);
 
-    while (true) {
+    while (1) {
         if (0 == a_try(self, function_argument)) {
             array_push(arguments, &self->result);
             continue;
@@ -1545,7 +1545,7 @@ static int tuple_expression(parser *self) {
     log(self, "begin tuple");
 
     int count = 0;
-    while (true) {
+    while (1) {
 
         if (0 == a_try(self, a_close_round)) {
             if (elements.size > 0xff) {
@@ -1599,7 +1599,7 @@ static int begin_end_expression(parser *self) {
         goto error;
     }
 
-    while (true) {
+    while (1) {
         if (a_try(self, expression)) {
             // propagate error
             goto error;
@@ -1944,13 +1944,13 @@ int parser_parse_all(parser *p, ast_node_array *out) {
 }
 
 int parser_parse_all_verbose(parser *p, ast_node_array *out) {
-    p->verbose = true;
+    p->verbose = 1;
 
     log(p, "begin parse");
     int res = parser_parse_all(p, out);
     log(p, "end parse status %i", res);
 
-    p->verbose = false;
+    p->verbose = 0;
     return res;
 }
 
@@ -1979,7 +1979,7 @@ static int too_many_arguments(parser *self) {
     return 1;
 }
 
-static bool has_error(parser *self) {
+static int has_error(parser *self) {
     return self->error.tag != tl_err_ok;
 }
 

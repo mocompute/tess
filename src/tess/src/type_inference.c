@@ -50,14 +50,14 @@ struct ti_inferer {
     int              indent_level;     // for log output
 
     // flags which do not affect operation
-    bool verbose;
+    int verbose;
 
     // flags which affect operation
-    bool constrain_function_applications;
+    int constrain_function_applications;
     // To implement function specialisation, the first pass of
     // collect_constraints does not constrain function applications.
 
-    bool unify_monotypes;
+    int unify_monotypes;
     // can be set to false to find type variables that may have
     // contradictory constraints. This will aid in reporting to the
     // user which program forms are ill-typed.
@@ -89,7 +89,7 @@ typedef struct {
 
 static size_t     ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
 static void       ti_assign_type_variables(ti_inferer *);
-static void       ti_collect_and_solve(ti_inferer *, bool);
+static void       ti_collect_and_solve(ti_inferer *, int);
 static void       ti_collect_constraints(ti_inferer *);
 static void       ti_generate_tuple_functions(ti_inferer *);
 static void       ti_generate_user_type_functions(ti_inferer *);
@@ -99,7 +99,7 @@ static void       ti_specialize_functions(ti_inferer *, ast_node_array *);
 
 static tl_type   *make_args_type(allocator *, ast_node *[], u16);
 static tl_type   *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
-static ast_node  *find_let_node(char const *, tl_type_sized, ast_node_sized, bool);
+static ast_node  *find_let_node(char const *, tl_type_sized, ast_node_sized, int);
 static tl_type   *get_prim(ti_inferer *, tl_type_tag);
 static void       next_variable_name(rename_variables_ctx *, string_t *);
 static void       reassign_typevars(void *, ast_node *);
@@ -112,7 +112,7 @@ static size_t     apply_one_substitution(tl_type **, tl_type *, tl_type *);
 static void       assign_type_variables(void *, ast_node *);
 static void       collect_constraints(void *, ast_node *);
 static void       generate_tuple_function(ti_inferer *, ast_node *, ast_node_array *, hashmap **);
-static bool       substitute_constraints(constraint *, constraint *, constraint const);
+static int        substitute_constraints(constraint *, constraint *, constraint const);
 static u32        unify_one(ti_inferer *, constraint);
 
 static tl_type   *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *);
@@ -123,9 +123,9 @@ static ast_node  *make_type_constructor_function(ti_inferer *, char const *, tl_
 static tl_type   *make_typevar(ti_inferer *);
 static constraint make_constraint(tl_type *, tl_type *);
 
-static bool       is_special_name(char const *);
-static bool       is_special_name_s(string_t const *);
-static bool       is_type_compatible(tl_type const *, tl_type const *, bool);
+static int        is_special_name(char const *);
+static int        is_special_name_s(string_t const *);
+static int        is_type_compatible(tl_type const *, tl_type const *, int);
 
 static void       dbg_ast_nodes(ti_inferer *);
 static void       dbg_constraint(constraint const *);
@@ -149,9 +149,9 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->next_specialized                = 1;
     self->indent_level                    = 0;
 
-    self->verbose                         = false;
-    self->constrain_function_applications = false;
-    self->unify_monotypes                 = true;
+    self->verbose                         = 0;
+    self->constrain_function_applications = 0;
+    self->unify_monotypes                 = 1;
 
     return self;
 }
@@ -167,11 +167,11 @@ void ti_inferer_destroy(allocator *alloc, ti_inferer **pself) {
 
 // -- operation --
 
-void ti_inferer_set_verbose(ti_inferer *self, bool val) {
+void ti_inferer_set_verbose(ti_inferer *self, int val) {
     self->verbose = val;
 }
 
-static void ti_collect_and_solve(ti_inferer *self, bool loop) {
+static void ti_collect_and_solve(ti_inferer *self, int loop) {
     size_t loop_size  = 16;
     size_t loop_count = loop_size;
     while (--loop_count) {
@@ -205,8 +205,8 @@ int ti_inferer_run(ti_inferer *self) {
     }
 
     // collect constraints, but don't constrain function applications at this stage
-    self->constrain_function_applications = false;
-    ti_collect_and_solve(self, false);
+    self->constrain_function_applications = 0;
+    ti_collect_and_solve(self, 0);
 
     // specialize generic functions
 
@@ -233,8 +233,8 @@ int ti_inferer_run(ti_inferer *self) {
     // substitutions to be made. This is required because
     // user-type-get nodes must defer their constraints until their
     // struct types become known in a prior iteration.
-    self->constrain_function_applications = true;
-    ti_collect_and_solve(self, true);
+    self->constrain_function_applications = 1;
+    ti_collect_and_solve(self, 1);
 
     if (self->verbose) {
         dbg("\nti_inferer_run: final constraints:\n");
@@ -724,7 +724,7 @@ static void dbg_ast_nodes(ti_inferer *self) {
     }
 }
 
-static bool substitute_constraints(constraint *begin, constraint *end, constraint const sub) {
+static int substitute_constraints(constraint *begin, constraint *end, constraint const sub) {
     // When a substitution e.g 'tv1 becomes tv2' has been added to the
     // sequence of substitutions to be applied, it should also be
     // immediately applied to the rest of the constraints, so that
@@ -745,7 +745,7 @@ static bool substitute_constraints(constraint *begin, constraint *end, constrain
     return count != 0;
 }
 
-static bool is_any_tuple(tl_type *self) {
+static int is_any_tuple(tl_type *self) {
     return type_tuple == self->tag || type_labelled_tuple == self->tag;
 }
 
@@ -803,7 +803,7 @@ static void ti_run_solver(ti_inferer *self) {
     size_t loop_count = 100;
     while (--loop_count) {
 
-        bool did_substitute = false;
+        int did_substitute = 0;
 
         for (u32 i = 0; i < self->constraints.size;) {
 
@@ -835,7 +835,7 @@ static void ti_run_solver(ti_inferer *self) {
                     // iterate through remainder of constraints and substitute
                     if (substitute_constraints(&item[1], &self->constraints.v[self->constraints.size],
                                                *item))
-                        did_substitute = true;
+                        did_substitute = 1;
                 }
             }
 
@@ -847,7 +847,7 @@ static void ti_run_solver(ti_inferer *self) {
 
             if (substitute_constraints(self->constraints.v, &self->constraints.v[self->constraints.size],
                                        self->substitutions.v[i]))
-                did_substitute = true;
+                did_substitute = 1;
         }
 
         if (!did_substitute) break;
@@ -1020,13 +1020,13 @@ static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const
     return tl_type_create_arrow(alloc, left, right);
 }
 
-static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) {
+static int is_type_compatible(tl_type const *a, tl_type const *b, int strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
 
-    if (tl_type_satisfies(a, b)) return true;
-    if (strict) return false;
+    if (tl_type_satisfies(a, b)) return 1;
+    if (strict) return 0;
 
     // if not strict, we are additionally satisfied when using type variables
 
@@ -1040,32 +1040,32 @@ static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) 
         return b->tag == type_type_var;
 
     case type_tuple: {
-        if (type_type_var == b->tag) return true;
-        else if (type_tuple != b->tag && type_labelled_tuple != b->tag) return false;
+        if (type_type_var == b->tag) return 1;
+        else if (type_tuple != b->tag && type_labelled_tuple != b->tag) return 0;
 
         struct tlt_array const *va = tl_type_arr((tl_type *)a), *vb = tl_type_arr((tl_type *)b);
-        if (va->elements.size != vb->elements.size) return false;
+        if (va->elements.size != vb->elements.size) return 0;
 
         for (u32 i = 0; i < va->elements.size; ++i)
-            if (!is_type_compatible(va->elements.v[i], vb->elements.v[i], strict)) return false;
+            if (!is_type_compatible(va->elements.v[i], vb->elements.v[i], strict)) return 0;
 
-        return true;
+        return 1;
     }
 
     case type_labelled_tuple: {
-        if (type_type_var == b->tag) return true;
+        if (type_type_var == b->tag) return 1;
 
         struct tlt_array const *varr = tl_type_arr((tl_type *)a), *vbarr = tl_type_arr((tl_type *)b);
         struct tlt_labelled_tuple const *va = tl_type_lt((tl_type *)a), *vb = tl_type_lt((tl_type *)b);
-        if (varr->elements.size != vbarr->elements.size) return false;
+        if (varr->elements.size != vbarr->elements.size) return 0;
 
         // regardless of typevars, names must match
         for (u32 i = 0; i < varr->elements.size; ++i) {
-            if (0 != strcmp(va->names.v[i], vb->names.v[i])) return false;
-            if (!is_type_compatible(varr->elements.v[i], vbarr->elements.v[i], strict)) return false;
+            if (0 != strcmp(va->names.v[i], vb->names.v[i])) return 0;
+            if (!is_type_compatible(varr->elements.v[i], vbarr->elements.v[i], strict)) return 0;
         }
 
-        return true;
+        return 1;
     }
 
     case type_arrow:
@@ -1079,12 +1079,11 @@ static bool is_type_compatible(tl_type const *a, tl_type const *b, bool strict) 
     case type_type_var:
         // type variables match anything if not strict
 
-    case type_any:      return true;
+    case type_any:      return 1;
     }
 }
 
-static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_node_sized nodes,
-                               bool strict) {
+static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_node_sized nodes, int strict) {
     // strict => do not accept typevars for compatibility. This is
     // used when looking for a specialised function, which should
     // exclude any generic functions.
@@ -1519,7 +1518,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
     struct tlt_tuple *vargs_ty = tl_type_tup(args_ty);
 
     ast_node         *let      = null;
-    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), true);
+    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), 1);
 
     if (let) {
         // ensure its specialised status is set, because it could be a user-annotated function
@@ -1533,7 +1532,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
         return;
     }
 
-    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), false);
+    let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), 0);
 
     // TODO compiler error
     if (null == let) return;
@@ -1840,11 +1839,11 @@ tl_type *make_typevar(ti_inferer *self) {
     return tl_type_create_type_var(self->type_arena, self->next_type_var++);
 }
 
-static bool is_special_name(char const *str) {
+static int is_special_name(char const *str) {
     return (0 == strncmp("_gen_", str, 5) || 0 == strncmp("c_", str, 2) || 0 == strncmp("std_", str, 4));
 }
 
-static bool is_special_name_s(string_t const *string) {
+static int is_special_name_s(string_t const *string) {
     char const *str = string_t_str(string);
     return is_special_name(str);
 }
