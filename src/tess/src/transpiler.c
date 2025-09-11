@@ -547,6 +547,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_intrinsic_application: {
         if (a_intrinsic_apply(self, node)) return 1;
+        pop_and_assign(self, var);
     } break;
 
     case ast_user_type_definition: break;
@@ -620,7 +621,7 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 
         out_put_start_fmt(self, "%s = (sizeof (", var);
         expand_value(self, v->arguments[0]);
-        out_put(self, "));");
+        out_put(self, "));\n");
     }
 
     else

@@ -481,6 +481,8 @@ static int a_address_of(parser *self) {
         return 1;
     }
 
+    log(self, "begin address_of");
+
     // FIXME for now only address of an identifier
     if (a_try(self, a_identifier)) {
         self->error.tag = tl_err_expected_addressable;
@@ -514,6 +516,8 @@ static int a_dereference(parser *self) {
         self->error.tag = tl_err_ok;
         return 1;
     }
+
+    log(self, "begin dereference");
 
     ast_node *node           = ast_node_create(self->ast_arena, ast_dereference);
     node->dereference.target = target;
@@ -783,6 +787,8 @@ static int a_labelled_tuple(parser *self) {
         return 1;
     }
 
+    log(self, "begin labelled tuple");
+
     array_push(assignments, &self->result);
 
     while (1) {
@@ -936,6 +942,8 @@ static int a_field_access(parser *self) {
 
     if (a_try(self, a_dot)) return 1;
 
+    log(self, "begin field access");
+
     if (a_try(self, a_identifier)) return 1;
     ast_node                 *field = self->result;
 
@@ -946,21 +954,24 @@ static int a_field_access(parser *self) {
     return result_ast_node(self, node);
 }
 
-static int a_field_setter(parser *p) {
-    if (a_try(p, a_field_access)) return 1;
+static int a_field_setter(parser *self) {
+    if (a_try(self, a_field_access)) return 1;
 
-    ast_node *user_field = p->result;
-    if (a_try(p, a_colon_equal)) return 1;
-    if (a_try(p, expression)) return 1;
-    ast_node                 *value = p->result;
+    ast_node *user_field = self->result;
+    if (a_try(self, a_colon_equal)) return 1;
 
-    ast_node                 *node  = ast_node_create(p->ast_arena, ast_user_type_set);
+    log(self, "begin field setter");
+
+    if (a_try(self, expression)) return 1;
+    ast_node                 *value = self->result;
+
+    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_set);
     struct ast_user_type_set *v     = ast_node_uts(node);
     struct ast_user_type_get *vget  = ast_node_utg(user_field);
     v->struct_name                  = vget->struct_name;
     v->field_name                   = vget->field_name;
     v->value                        = value;
-    return result_ast_node(p, node);
+    return result_ast_node(self, node);
 }
 
 static int struct_declaration(parser *self) {
@@ -1676,6 +1687,7 @@ static int begin_end_expression(parser *self) {
             goto error;
         }
 
+        log(self, "begin-end got %s", ast_node_to_string(self->transient, self->result));
         array_push(exprs, &self->result);
 
         // some expressions eat the end_of_expression (e.g. function
