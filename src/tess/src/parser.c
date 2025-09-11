@@ -47,6 +47,7 @@ struct parser {
 
     int                    verbose;
     int                    indent_level;
+    int                    in_chained_expression;
 };
 
 typedef int (*parse_fun)(parser *);
@@ -55,6 +56,7 @@ typedef int (*parse_fun_s)(parser *, char const *);
 // -- overview --
 
 static int           begin_end_expression(parser *);
+static int           chained_expression(parser *);
 static int           expression(parser *);
 static int           expression_let(parser *);
 static int           forward_declaration(parser *);
@@ -94,6 +96,7 @@ static int           is_start_of_expression(char const *);
 nodiscard static int a_try(parser *, parse_fun);
 nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
 nodiscard static int a_try_special(parser *, parse_fun);
+nodiscard static int a_try_special_ext(parser *, parse_fun);
 
 static int           eat_comments(parser *);
 static int           next_token(parser *);
@@ -111,6 +114,7 @@ static int           a_dereference(parser *);
 static int           a_dot(parser *);
 static int           a_end_of_block(parser *);
 static int           a_end_of_expression(parser *);
+static int           a_eof_or_start_next_expression(parser *);
 static int           a_equal_sign(parser *);
 static int           a_field_access(parser *);
 static int           a_field_setter(parser *);
@@ -124,6 +128,7 @@ static int           a_value(parser *);
 static int           a_nil(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
+static int           a_semicolon(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
 static int           a_type_annotation(parser *);
@@ -156,6 +161,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->current_file_data.size = 0;
     self->verbose                = 0;
     self->indent_level           = 0;
+    self->in_chained_expression  = 0;
 
     self->forwards               = map_create(self->parent_alloc, sizeof(ast_node *));
 
@@ -308,7 +314,7 @@ static int eat_comments(parser *p) {
             continue;
         } else {
             tokenizer_put_back(p->tokenizer, &p->token, 1);
-            return result_ast(p, ast_eof);
+            return 0;
         }
     }
 }
@@ -384,6 +390,13 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
 nodiscard static int a_try_special(parser *p, parse_fun fun) {
     // if fun returns 2, tokens are restored as in the failure case,
     // but this function returns success.
+    int const res = a_try_special_ext(p, fun);
+    return res == 0 || res == 2 ? 0 : 1;
+}
+
+nodiscard static int a_try_special_ext(parser *p, parse_fun fun) {
+    // if fun returns 2, tokens are restored as in the failure case,
+    // but this function returns success.
     u32 const save_toks = p->tokens.size;
     int const res       = fun(p);
     if (res) {
@@ -394,7 +407,7 @@ nodiscard static int a_try_special(parser *p, parse_fun fun) {
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
-        return res == 2 ? 0 : 1;
+        return res;
     }
 
     // do not reset tokens on success, because calls to a_try may be
@@ -408,6 +421,15 @@ static int a_comma(parser *p) {
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
 
     p->error.tag = tl_err_expected_comma;
+    return 1;
+}
+
+static int a_semicolon(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_semicolon == p->token.tag) return result_ast_str(p, ast_symbol, ";");
+
+    p->error.tag = tl_err_expected_semicolon;
     return 1;
 }
 
@@ -443,8 +465,6 @@ static int a_end_of_expression(parser *p) {
         return 1;
     }
 
-    log(p, "end_of_expression token: %s", token_to_string(p->transient, &p->token));
-
     switch (p->token.tag) {
     case tok_semicolon: return result_ast_str(p, ast_symbol, ";");
 
@@ -454,10 +474,45 @@ static int a_end_of_expression(parser *p) {
         return 2;
 
     case tok_symbol:
+        if (is_start_of_expression(p->token.s)) return 2;
+        if (is_arithmetic_operator(p->token.s)) return 2;
+        if (is_relational_operator(p->token.s)) return 2;
+        break;
 
+    case tok_comma:
+    case tok_dot:
+    case tok_colon:
+    case tok_colon_equal:
+    case tok_ampersand:
+    case tok_star:
+    case tok_arrow:
+    case tok_open_round:
+    case tok_equal_sign:
+    case tok_invalid:
+    case tok_number:
+    case tok_string:
+    case tok_comment:     break;
+    }
+
+    p->error.tag = tl_err_unfinished_expression;
+    return 1;
+}
+
+static int a_eof_or_start_next_expression(parser *p) {
+
+    if (next_token(p)) {
+        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
+        return 1;
+    }
+
+    switch (p->token.tag) {
+
+    case tok_symbol:
         if (is_start_of_expression(p->token.s)) return 2;
         break;
 
+    case tok_close_round:
+    case tok_semicolon:
     case tok_comma:
     case tok_dot:
     case tok_colon:
@@ -1302,9 +1357,9 @@ static int function_application(parser *self) {
             continue;
         }
 
+        log(self, "no arg, looking for end");
         if (0 == a_try_special(self, a_end_of_expression)) {
-            // 2: "fails" due to close_round, which must not be
-            // consumed, so that grouped_expression catches it.
+            log(self, "got end");
 
             // catch intrinsic names here
             char const *name_str = ast_node_name_string(name);
@@ -1380,7 +1435,7 @@ static int function_argument(parser *p) {
     return 1;
 
 cleanup:
-    p->indent_level--;
+    p->indent_level -= 2;
     return 0;
 }
 
@@ -1713,6 +1768,55 @@ cleanup:
     return 1;
 }
 
+static int continue_begin_end_expression(parser *self, ast_node *expr) {
+    ast_node_array exprs = {.alloc = self->ast_arena}; // will be moved to node on success
+    array_push(exprs, &expr);
+
+    while (1) {
+        self->in_chained_expression = 1;
+        if (a_try(self, expression)) {
+            // propagate error
+            goto error;
+        }
+
+        array_push(exprs, &self->result);
+
+        // some expressions eat the end_of_expression (e.g. function
+        // application), but some don't (e.g. numbers)
+        int done = 0;
+        if (2 == a_try_special_ext(self, a_end_of_expression)) {
+            done = 1;
+        }
+
+        if (done || 0 == a_try_s(self, the_symbol, "end")) {
+            ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
+            node->begin_end.expressions   = null;
+            node->begin_end.n_expressions = 0;
+
+            array_shrink(exprs);
+            node->array.n     = (u8)exprs.size;
+            node->array.nodes = exprs.v;
+            if (exprs.size > 0xff) {
+                self->error.tag = tl_err_too_many_expressions;
+                goto error;
+            }
+
+            result_ast_node(self, node);
+            goto success;
+        }
+    }
+success:
+    self->indent_level--;
+    self->in_chained_expression = 0;
+    return 0;
+
+error:
+    array_free(exprs);
+    self->indent_level--;
+    self->in_chained_expression = 0;
+    return 1;
+}
+
 static int begin_end_expression(parser *self) {
     if (a_try_s(self, the_symbol, "begin")) {
         self->error.tag = tl_err_ok;
@@ -1730,12 +1834,12 @@ static int begin_end_expression(parser *self) {
     }
 
     while (1) {
+        self->in_chained_expression = 1;
         if (a_try(self, expression)) {
             // propagate error
             goto error;
         }
 
-        log(self, "begin-end got %s", ast_node_to_string(self->transient, self->result));
         array_push(exprs, &self->result);
 
         // some expressions eat the end_of_expression (e.g. function
@@ -1762,11 +1866,13 @@ static int begin_end_expression(parser *self) {
 
 success:
     self->indent_level--;
+    self->in_chained_expression = 0;
     return 0;
 
 error:
     array_free(exprs);
     self->indent_level--;
+    self->in_chained_expression = 0;
     return 1;
 }
 
@@ -1838,6 +1944,14 @@ static int expression(parser *self) {
 
 success:
     self->indent_level--;
+
+    // check for chained expression
+    ast_node *expr = self->result;
+
+    if (!self->in_chained_expression && 0 == a_try(self, a_semicolon))
+        return continue_begin_end_expression(self, expr);
+
+    self->result = expr;
     return 0;
 
 error:

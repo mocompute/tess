@@ -35,6 +35,7 @@
       "expected_lambda_function_application_argument")                                                     \
     X(tl_err_expected_function_application_argument, "expected_function_application_argument")             \
     X(tl_err_expected_nil, "expected_nil")                                                                 \
+    X(tl_err_expected_semicolon, "expected_semicolon")                                                     \
     X(tl_err_expected_specific_symbol, "expected_specific_symbol")                                         \
     X(tl_err_expected_string, "expected_string")                                                           \
     X(tl_err_expected_addressable, "expected_addressable")                                                 \

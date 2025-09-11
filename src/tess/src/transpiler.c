@@ -461,9 +461,10 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     if (!node || !node->type) fatal("a_eval: node or type is null");
 
-    if (node->type->tag == type_nil) {
-        return a_nil_expression(self, node);
-    }
+    // FIXME what is this trying to do?
+    // if (node->type->tag == type_nil) {
+    //     return a_nil_expression(self, node);
+    // }
 
     char *var = next_variable(self);
 

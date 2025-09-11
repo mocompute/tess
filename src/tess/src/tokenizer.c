@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "dbg.h"
 #include "token.h"
 
 #include <assert.h>
@@ -542,6 +543,7 @@ finish:
 void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 
     for (size_t i = n_toks; i != 0; --i) {
+        // dbg("tokenizer put back: %s\n", token_to_string(self->strings, &toks[i - 1]));
         array_push(self->backtrack, &toks[i - 1]);
     }
 }
