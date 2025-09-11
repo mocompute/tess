@@ -7,4 +7,4 @@ let print p =
 let main () =
     let tup = (1, 2)
     let ptr = &tup
-    print ptr
+    in print ptr

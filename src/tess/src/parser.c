@@ -543,8 +543,7 @@ static int a_address_of(parser *self) {
 
     log(self, "begin address_of");
 
-    // FIXME for now only address of an identifier
-    if (a_try(self, a_identifier)) {
+    if (a_try(self, expression)) {
         self->error.tag = tl_err_expected_addressable;
         return 1;
     }
@@ -1363,9 +1362,7 @@ static int function_application(parser *self) {
             continue;
         }
 
-        log(self, "no arg, looking for end");
         if (0 == a_try_special(self, a_end_of_expression)) {
-            log(self, "got end");
 
             // catch intrinsic names here
             char const *name_str = ast_node_name_string(name);
