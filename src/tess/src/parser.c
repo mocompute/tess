@@ -10,6 +10,7 @@
 #include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "util.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -113,6 +114,8 @@ static int           a_end_of_expression(parser *);
 static int           a_equal_sign(parser *);
 static int           a_field_access(parser *);
 static int           a_field_setter(parser *);
+static int           a_field_pointer_access(parser *);
+static int           a_field_pointer_setter(parser *);
 static int           a_identifier(parser *);
 static int           a_identifier_typed(parser *);
 static int           a_infix_operator(parser *);
@@ -560,9 +563,12 @@ static int a_type_identifier(parser *self) {
     // * int -> int ==> (*int) -> int, not *(int -> int)
     // * has higher precedence than ->
 
+    if (0 == a_try(self, a_nil)) return 0;
+
     int is_pointer = 0;
     if (0 == a_try(self, a_star)) {
         is_pointer = 1;
+        log(self, "begin pointer type");
     }
 
     // TODO so much duplication in this function...
@@ -571,8 +577,17 @@ static int a_type_identifier(parser *self) {
         ast_node *left  = self->result;
         ast_node *right = null;
 
+        if (is_pointer) {
+            // star precedence is higher than arrow
+            // TODO reusing this ast type to mean something different
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = left;
+            left                   = ptr;
+        }
+
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
+            log(self, "begin arrow type");
             if (a_try(self, a_type_identifier)) {
                 self->error.tag = tl_err_expected_type;
                 return 1;
@@ -583,21 +598,9 @@ static int a_type_identifier(parser *self) {
             node->arrow.left  = left;
             node->arrow.right = right;
 
-            if (is_pointer) {
-                // TODO reusing this ast type to mean something different
-                ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
-                ptr->address_of.target = node;
-                node                   = ptr;
-            }
             return result_ast_node(self, node);
         }
 
-        if (is_pointer) {
-            // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
-            ptr->address_of.target = left;
-            left                   = ptr;
-        }
         self->result = left;
         return 0;
     }
@@ -605,6 +608,14 @@ static int a_type_identifier(parser *self) {
     if (0 == a_try(self, tuple_expression)) {
         ast_node *left  = self->result;
         ast_node *right = null;
+
+        if (is_pointer) {
+            // star precedence is higher than arrow
+            // TODO reusing this ast type to mean something different
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = left;
+            left                   = ptr;
+        }
 
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
@@ -620,22 +631,9 @@ static int a_type_identifier(parser *self) {
             node->arrow.left  = left;
             node->arrow.right = right;
 
-            if (is_pointer) {
-                // TODO reusing this ast type to mean something different
-                ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
-                ptr->address_of.target = node;
-                node                   = ptr;
-            }
-
             return result_ast_node(self, node);
         }
 
-        if (is_pointer) {
-            // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
-            ptr->address_of.target = left;
-            left                   = ptr;
-        }
         self->result = left;
         return 0;
     }
@@ -645,6 +643,7 @@ static int a_type_identifier(parser *self) {
 
 static int a_type_annotation(parser *self) {
     if (0 == a_try(self, a_colon)) {
+        log(self, "begin type annotation");
         return a_try(self, a_type_identifier);
     }
 
@@ -828,7 +827,9 @@ error:
 
 static int a_value(parser *self) {
     if (0 == a_try(self, a_nil)) return 0;
-    if (0 == a_try(self, a_field_setter)) return 0; // before field_access
+    if (0 == a_try(self, a_field_pointer_setter)) return 0; // before field_access
+    if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
+    if (0 == a_try(self, a_field_pointer_access)) return 0;
     if (0 == a_try(self, a_field_access)) return 0;
     if (0 == a_try(self, a_dereference)) return 0; // before identifier
     if (0 == a_try(self, a_identifier)) return 0;
@@ -951,6 +952,29 @@ static int a_field_access(parser *self) {
     struct ast_user_type_get *v     = ast_node_utg(node);
     v->struct_name                  = variable;
     v->field_name                   = field;
+    v->flags                        = 0;
+    return result_ast_node(self, node);
+}
+
+static int a_field_pointer_access(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *variable = self->result;
+
+    if (a_try(self, a_dot)) return 1;
+    if (a_try(self, a_star)) return 1;
+    if (a_try(self, a_dot)) return 1;
+
+    log(self, "begin field pointer access");
+
+    if (a_try(self, a_identifier)) return 1;
+    ast_node                 *field = self->result;
+
+    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_get);
+    struct ast_user_type_get *v     = ast_node_utg(node);
+    v->struct_name                  = variable;
+    v->field_name                   = field;
+    v->flags                        = 0;
+    SET_BIT(v->flags, AST_UT_FLAG_POINTER);
     return result_ast_node(self, node);
 }
 
@@ -971,6 +995,30 @@ static int a_field_setter(parser *self) {
     v->struct_name                  = vget->struct_name;
     v->field_name                   = vget->field_name;
     v->value                        = value;
+    v->flags                        = 0;
+    return result_ast_node(self, node);
+}
+
+static int a_field_pointer_setter(parser *self) {
+    if (a_try(self, a_field_pointer_access)) return 1;
+    ast_node *user_field = self->result;
+    log(self, "field pointer setter got an access");
+
+    if (a_try(self, a_colon_equal)) return 1;
+
+    log(self, "begin field pointer setter");
+
+    if (a_try(self, expression)) return 1;
+    ast_node                 *value = self->result;
+
+    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_set);
+    struct ast_user_type_set *v     = ast_node_uts(node);
+    struct ast_user_type_get *vget  = ast_node_utg(user_field);
+    v->struct_name                  = vget->struct_name;
+    v->field_name                   = vget->field_name;
+    v->value                        = value;
+    v->flags                        = 0;
+    SET_BIT(v->flags, AST_UT_FLAG_POINTER);
     return result_ast_node(self, node);
 }
 
@@ -1783,15 +1831,6 @@ static int expression(parser *self) {
     // the rest of the cases are standalone values
 
     if (0 == a_try(self, a_value)) goto success;
-
-    // if (0 == a_try(self, a_nil)) goto success;
-    // if (0 == a_try(self, a_field_setter)) goto success; // before field_access
-    // if (0 == a_try(self, a_field_access)) goto success;
-    // if (0 == a_try(self, a_dereference)) goto success; // before identifier
-    // if (0 == a_try(self, a_identifier)) goto success;
-    // if (0 == a_try(self, a_address_of)) goto success;
-    // if (0 == a_try(self, a_number)) goto success;
-    // if (0 == a_try(self, a_bool)) goto success;
 
     self->error.tag = tl_err_expected_expression;
 

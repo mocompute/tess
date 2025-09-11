@@ -866,6 +866,12 @@ static void ti_run_solver(ti_inferer *self) {
 // -- assign_type_variables --
 
 static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann) {
+    if (ast_nil == ann->tag) {
+        tl_type **found = type_registry_find_name(self->type_registry, "nil");
+        if (found) return *found;
+        fatal("nil type not found");
+    }
+
     if (ast_symbol == ann->tag) {
         // either a prim or user type, or a generic/typevar
         tl_type **found = type_registry_find_name(self->type_registry, string_t_str(&ann->symbol.name));
@@ -1234,12 +1240,16 @@ void collect_constraints(void *ctx_, ast_node *node) {
         struct ast_user_type_get *v           = ast_node_utg(node);
         tl_type                  *struct_name = v->struct_name->type;
 
-        if (type_user == struct_name->tag) {
+        tl_type                  *name_type   = null;
+        if (type_pointer == struct_name->tag) name_type = struct_name->pointer.target;
+        else name_type = struct_name;
+
+        if (type_user == name_type->tag) {
             tl_type *field_type =
-              tl_type_find_user_field_type(struct_name, ast_node_name_string(v->field_name));
+              tl_type_find_user_field_type(name_type, ast_node_name_string(v->field_name));
             push(node->type, field_type);
-        } else if (type_labelled_tuple == struct_name->tag) {
-            struct tlt_labelled_tuple *lt = tl_type_lt(struct_name);
+        } else if (type_labelled_tuple == name_type->tag) {
+            struct tlt_labelled_tuple *lt = tl_type_lt(name_type);
 
             // node type is the field type, find the matching name in the lt
             char const *field_name = ast_node_name_string(v->field_name);

@@ -282,9 +282,9 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
 
     case type_pointer:
 
-        len = tl_type_snprint(buf, sz, self->pointer.target);
-        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), " *");
-        else len += snprintf(null, 0, " *");
+        len = snprintf(buf, sz, "*");
+        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, self->pointer.target);
+        else len += tl_type_snprint(null, 0, self->pointer.target);
 
         break;
 

@@ -9,6 +9,7 @@
 #include "string_t.h"
 #include "type.h"
 #include "type_registry.h"
+#include "util.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -198,9 +199,35 @@ static void out_put_start_fmt(transpiler *self, char const *restrict fmt, ...) {
     va_end(args);
 }
 
+static int is_nil_result(tl_type const *type) {
+    switch (type->tag) {
+    case type_nil:            return 1;
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:         return 0;
+    case type_tuple:
+    case type_labelled_tuple: return type->array.elements.size == 0;
+
+    case type_arrow:          {
+        tl_type *right = type->arrow.right;
+        if (right->tag == type_nil) return 1;
+        if (right->tag == type_tuple && right->array.elements.size == 0) return 1;
+        return 0;
+    }
+    case type_user:
+    case type_type_var:
+    case type_pointer:
+    case type_any:      return 0;
+    }
+}
+
 static int a_declaration(transpiler *self, tl_type const *type, char const *var) {
 
     if (type->tag != type_arrow) {
+        // don't emit a declaration if the return type is nil
+        if (is_nil_result(type)) return 0;
+
         a_result_type_of(self, type);
         out_put_fmt(self, " %s", var);
     } else {
@@ -233,6 +260,11 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
 
     case type_labelled_tuple:
     case type_tuple:          {
+        if (ty->array.elements.size == 0) {
+            out_put(self, "void");
+            return 0;
+        };
+
         u64   hash = tl_type_hash(ty);
         char *name = make_struct_name(self->alloc, hash);
         out_put_fmt(self, "struct %s", name);
@@ -384,8 +416,12 @@ static int a_field_access(transpiler *self, ast_node const *node) {
 
     out_put_start(self, "");
     a_declaration(self, node->type, var);
-    out_put_start_fmt(self, " = %s.%s;\n", ast_node_name_string(v->struct_name),
-                      ast_node_name_string(v->field_name));
+    if (TEST_BIT(v->flags, AST_UT_FLAG_POINTER))
+        out_put_start_fmt(self, " = %s->%s;\n", ast_node_name_string(v->struct_name),
+                          ast_node_name_string(v->field_name));
+    else
+        out_put_start_fmt(self, " = %s.%s;\n", ast_node_name_string(v->struct_name),
+                          ast_node_name_string(v->field_name));
 
     return 0;
 }
@@ -407,7 +443,9 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, " = %s;\n", value);
 
     // assign to struct field
-    out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
+    if (TEST_BIT(v->flags, AST_UT_FLAG_POINTER))
+        out_put_start_fmt(self, "%s->%s = %s;\n", struct_name, field_name, var);
+    else out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
 
     return 0;
 }
@@ -662,14 +700,23 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put(self, ";\n");
 
     // function call
-    out_put_start_fmt(self, "%s = %s(", var, name);
 
+    tl_type *fun_type = node->named_application.name->type;
+    log(self, "fun: %s, type: %s", ast_node_name_string(node->named_application.name),
+        tl_type_to_string(self->strings, fun_type));
+
+    if (is_nil_result(fun_type)) out_put_start(self, "");
+    else out_put_start_fmt(self, "%s = ", var);
+
+    out_put_fmt(self, "%s(", name);
     for (i32 i = 0; i < n_args; ++i) {
         char const *arg = pop_result(self);
         out_put(self, arg);
         if (i < n_args - 1) out_put(self, ", ");
     }
     out_put(self, ");\n");
+
+    if (is_nil_result(fun_type)) out_put_start_fmt(self, "%s = 0;/* void */\n", var);
 
     return 0;
 }

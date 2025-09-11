@@ -157,12 +157,14 @@ typedef struct ast_node {
         struct ast_user_type_get {
             struct ast_node *struct_name;
             struct ast_node *field_name;
+            u8               flags;
         } user_type_get;
 
         struct ast_user_type_set {
             struct ast_node *struct_name;
             struct ast_node *field_name;
             struct ast_node *value;
+            u8               flags;
         } user_type_set;
 
         struct ast_user_type_def {
@@ -200,6 +202,8 @@ typedef struct {
 #define AST_LET_FLAG_TUPLE_CONS  BIT(1)
 
 #define AST_TUPLE_FLAG_INIT      BIT(0)
+
+#define AST_UT_FLAG_POINTER      BIT(0)
 
 // -- iterator functions --
 
