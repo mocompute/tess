@@ -8,7 +8,7 @@ let main ()  =
     let (p : * Point) = c_malloc (_tl_sizeof_ pt)
     in
     std_dbg "p = %p\n" p ;
-    p.*.x := 12313;
+    p.*.x := 12313;             // FIXME parser is greedy an setting x to 0
     p.*.y := 100
     std_dbg "p.*.x = %i\n" p.*.x ;
     std_dbg "p.*.y = %i\n" p.*.y ;
