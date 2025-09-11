@@ -6,13 +6,19 @@ end
 // recall we want to keep everything prefix or infix, not postfix
 
 let pp : * point = c_malloc 16
-let pp : point * = c_malloc 16
+
+// what about
+
+let pp : *.point = c_malloc (_tl_sizeof_ point) // this sizeof doesn't work yet
+
+*.(int, int) or *(int, int)
+*(a -> b) vs (*a -> b)
+
 
 let p = point 1 2 in ...
 
 let tup : (int, int) = (1, 2)
 let ptup : *(int, int) = &tup
-let ptup : (int, int)* = &tup
 
 
 let main ()  =

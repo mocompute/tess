@@ -553,18 +553,19 @@ error:
 static int a_type_identifier(parser *self) {
     // TODO rename this because it's no longer just an identifier
 
-    // TODO code is duplicated for cases:
-    // a ->b  and (a, ) -> b
+    // * int -> int ==> (*int) -> int, not *(int -> int)
+    // * has higher precedence than ->
+
+    int is_pointer = 0;
+    if (0 == a_try(self, a_star)) {
+        is_pointer = 1;
+    }
+
+    // TODO so much duplication in this function...
+
     if (0 == a_try(self, a_identifier)) {
         ast_node *left  = self->result;
         ast_node *right = null;
-
-        // followed by * ?
-        if (0 == a_try(self, a_star)) {
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
-            ptr->address_of.target = left;
-            left                   = ptr;
-        }
 
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
@@ -572,14 +573,26 @@ static int a_type_identifier(parser *self) {
                 self->error.tag = tl_err_expected_type;
                 return 1;
             }
-            right = self->result;
-        }
+            right             = self->result;
 
-        if (right) {
             ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
             node->arrow.left  = left;
             node->arrow.right = right;
+
+            if (is_pointer) {
+                // TODO reusing this ast type to mean something different
+                ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+                ptr->address_of.target = node;
+                node                   = ptr;
+            }
             return result_ast_node(self, node);
+        }
+
+        if (is_pointer) {
+            // TODO reusing this ast type to mean something different
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = left;
+            left                   = ptr;
         }
         self->result = left;
         return 0;
@@ -602,9 +615,23 @@ static int a_type_identifier(parser *self) {
             ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
             node->arrow.left  = left;
             node->arrow.right = right;
+
+            if (is_pointer) {
+                // TODO reusing this ast type to mean something different
+                ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+                ptr->address_of.target = node;
+                node                   = ptr;
+            }
+
             return result_ast_node(self, node);
         }
 
+        if (is_pointer) {
+            // TODO reusing this ast type to mean something different
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = left;
+            left                   = ptr;
+        }
         self->result = left;
         return 0;
     }
@@ -1837,7 +1864,8 @@ static int toplevel_let(parser *self) {
         node->let.specialized_name = string_t_init_empty();
 
         // move declaration into new node
-        // string_t_copy(self->ast_arena, &node->let.name, &decl->function_declaration.name->symbol.name);
+        // string_t_copy(self->ast_arena, &node->let.name,
+        // &decl->function_declaration.name->symbol.name);
         node->let.name = decl->function_declaration.name;
         node->let.body = defn;
 
