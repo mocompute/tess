@@ -47,7 +47,8 @@ struct parser {
 
     int                    verbose;
     int                    indent_level;
-    int                    in_chained_expression;
+    int                    in_chained_expression; // these enable greedy parsing
+    int                    in_function_application;
 };
 
 typedef int (*parse_fun)(parser *);
@@ -150,23 +151,24 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
-    self->parent_alloc           = alloc;
-    self->file_arena             = arena_create(self->parent_alloc, 64 * 1024);
-    self->tokens_arena           = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->ast_arena              = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->transient              = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->files                  = files;
-    self->files_index            = 0;
-    self->current_file_data.v    = null;
-    self->current_file_data.size = 0;
-    self->verbose                = 0;
-    self->indent_level           = 0;
-    self->in_chained_expression  = 0;
+    self->parent_alloc            = alloc;
+    self->file_arena              = arena_create(self->parent_alloc, 64 * 1024);
+    self->tokens_arena            = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->ast_arena               = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->transient               = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->files                   = files;
+    self->files_index             = 0;
+    self->current_file_data.v     = null;
+    self->current_file_data.size  = 0;
+    self->verbose                 = 0;
+    self->indent_level            = 0;
+    self->in_chained_expression   = 0;
+    self->in_function_application = 0;
 
-    self->forwards               = map_create(self->parent_alloc, sizeof(ast_node *));
+    self->forwards                = map_create(self->parent_alloc, sizeof(ast_node *));
 
-    self->tokenizer              = tokenizer_create(alloc, preamble, "std_preamble");
-    self->tokens                 = (token_array){.alloc = self->tokens_arena};
+    self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
+    self->tokens                  = (token_array){.alloc = self->tokens_arena};
 
     token_init(&self->token, tok_invalid);
     self->error.token     = &self->token;
@@ -882,6 +884,7 @@ error:
 
 static int a_value(parser *self) {
     if (0 == a_try(self, a_nil)) return 0;
+    if (!self->in_function_application && 0 == a_try(self, function_application)) return 0;
     if (0 == a_try(self, a_field_pointer_setter)) return 0; // before field_access
     if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
     if (0 == a_try(self, a_field_pointer_access)) return 0;
@@ -1328,7 +1331,7 @@ static void repair_single_nil_argument(ast_node_array *arguments) {
 }
 
 static int function_application(parser *self) {
-    // f a b c ..., terminated by semicolon or one_newline or two_newline
+    // f a b c ...
 
     if (a_try(self, a_identifier)) {
         self->error.tag = tl_err_ok;
@@ -1341,8 +1344,10 @@ static int function_application(parser *self) {
     ast_node_array arguments = {.alloc = self->ast_arena};
 
     // must have at least one argument
+    self->in_function_application = 1;
     if (a_try(self, function_argument)) {
-        self->error.tag = tl_err_ok;
+        self->error.tag               = tl_err_ok;
+        self->in_function_application = 0;
         return 1;
     }
 
@@ -1352,6 +1357,7 @@ static int function_application(parser *self) {
     array_push(arguments, &self->result);
 
     while (1) {
+        self->in_function_application = 1;
         if (0 == a_try(self, function_argument)) {
             array_push(arguments, &self->result);
             continue;
@@ -1413,9 +1419,11 @@ static int function_application(parser *self) {
 
 success:
     self->indent_level--;
+    self->in_function_application--;
     return 0;
 error:
     self->indent_level--;
+    self->in_function_application--;
     return 1;
 }
 
