@@ -911,12 +911,12 @@ static int a_end_of_block(parser *self) {
 
     if (next_token(self)) {
         if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
-
+        log(self, "end_of_block: other error");
         return 1;
     }
-
-    if (tok_symbol == self->token.tag && 0 == strcmp("end", self->token.s)) {
-        return result_ast_str(self, ast_symbol, "end");
+    if (tok_symbol == self->token.tag) {
+        if (0 == strcmp("end", self->token.s)) return result_ast_str(self, ast_symbol, "end");
+        if (is_start_of_expression(self->token.s)) return 2;
     }
 
     self->error.tag = tl_err_expected_end_of_block;
@@ -981,7 +981,7 @@ static int struct_declaration(parser *self) {
     }
 
     // check for empty struct
-    if (0 == a_try(self, a_end_of_block)) {
+    if (0 == a_try_special(self, a_end_of_block)) {
         ast_node *node                        = ast_node_create(self->ast_arena, ast_user_type_definition);
         node->user_type_def.name              = name;
         node->user_type_def.field_annotations = null;
@@ -1016,7 +1016,7 @@ static int struct_declaration(parser *self) {
 
             if (a_try_special(self, a_end_of_expression)) {
                 // accept an 'end' instead of final semicolon
-                if (0 == a_try(self, a_end_of_block)) goto end_of_block;
+                if (0 == a_try_special(self, a_end_of_block)) goto end_of_block;
 
                 self->error.tag = tl_err_expected_end_of_expression;
                 goto error; // expect ; after field
@@ -1025,7 +1025,7 @@ static int struct_declaration(parser *self) {
             continue;
         }
 
-        if (0 == a_try(self, a_end_of_block)) {
+        if (0 == a_try_special(self, a_end_of_block)) {
 
         end_of_block: {
             ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
@@ -1200,6 +1200,12 @@ static int function_definition(parser *p) {
     return expression(p);
 }
 
+static void repair_single_nil_argument(ast_node_array *arguments) {
+    // detect special case of a single nil argument and replace with
+    // empty argument list
+    if (arguments->size == 1 && ast_nil == arguments->v[0]->tag) arguments->size = 0;
+}
+
 static int function_application(parser *self) {
     // f a b c ..., terminated by semicolon or one_newline or two_newline
 
@@ -1245,6 +1251,7 @@ static int function_application(parser *self) {
                 // TODO remove duplication with the other branch
 
                 array_shrink(arguments);
+                repair_single_nil_argument(&arguments);
                 node->array.n     = (u8)arguments.size;
                 node->array.nodes = arguments.v;
                 if (arguments.size > 0xff) {
@@ -1265,6 +1272,7 @@ static int function_application(parser *self) {
                 node->named_application.name        = name;
 
                 array_shrink(arguments);
+                repair_single_nil_argument(&arguments);
                 node->array.n     = (u8)arguments.size;
                 node->array.nodes = arguments.v;
                 if (arguments.size > 0xff) {
@@ -1443,7 +1451,8 @@ static int lambda_function(parser *self) {
     }
     ast_node *defn = self->result;
 
-    // require end keyword to end parse of lambda function definition
+    // require end keyword to end parse of lambda function definition: do not use try_special, as we really
+    // want the actual 'end' keyword
     if (a_try(self, a_end_of_block)) {
         self->error.tag = tl_err_expected_end_of_block;
         goto error;
@@ -1668,7 +1677,7 @@ static int begin_end_expression(parser *self) {
 
         // some expressions eat the end_of_expression (e.g. function
         // application), but some don't (e.g. numbers)
-        (void)a_try(self, a_end_of_expression);
+        (void)a_try_special(self, a_end_of_expression);
 
         if (0 == a_try_s(self, the_symbol, "end")) {
             ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
@@ -1783,7 +1792,7 @@ error:
 static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     // assumes caller has incremented indent_level
 
-    log(self, "begin let-in declaration");
+    log(self, "begin let-in declaration line %i", self->token.line);
 
     if (a_try(self, expression)) {
         self->error.tag = tl_err_expected_value;
@@ -1800,7 +1809,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     }
     ast_node *body = self->result;
 
-    if (a_try(self, a_end_of_block)) {
+    if (a_try_special(self, a_end_of_block)) {
         self->error.tag = tl_err_expected_end_of_block;
         goto error;
     }
@@ -1825,6 +1834,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
         result_ast_node(self, node);
     }
 
+    log(self, "end let-in declaration line %i", self->token.line);
     goto success;
 
 success:

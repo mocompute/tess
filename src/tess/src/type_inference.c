@@ -999,6 +999,7 @@ void ti_assign_type_variables(ti_inferer *self) {
 // -- collect_constraints --
 
 static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
+
     tl_type_array types = {.alloc = alloc};
     array_reserve(types, n);
     for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
@@ -1010,6 +1011,7 @@ static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
 
 static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[], char const *names[],
                                         u16 n) {
+
     tl_type_array types = {.alloc = alloc};
     array_reserve(types, n);
     for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);

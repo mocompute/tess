@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
+#include "hashmap.h"
 
 #include "ast_tags.h"
 #include "dbg.h"
@@ -21,6 +22,7 @@ struct transpiler {
     char_array    *bytes;
 
     type_registry *type_registry;
+    hashmap       *processed_structs;
 
     c_string_array results;
     // a stack of result variable names, see also next_variable
@@ -77,22 +79,24 @@ static void log(transpiler *, char const *restrict fmt, ...) __attribute__((form
 
 transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
 
-    transpiler *self    = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc         = alloc;
-    self->strings       = arena_create(alloc, 1024);
-    self->bytes         = bytes;
-    self->type_registry = tr;
+    transpiler *self        = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc             = alloc;
+    self->strings           = arena_create(alloc, 1024);
+    self->bytes             = bytes;
+    self->type_registry     = tr;
+    self->processed_structs = map_create(alloc, sizeof(char *));
 
-    self->results       = (c_string_array){.alloc = self->strings};
+    self->results           = (c_string_array){.alloc = self->strings};
 
-    self->next_variable = 1;
-    self->indent_level  = 0;
-    self->verbose       = 0;
+    self->next_variable     = 1;
+    self->indent_level      = 0;
+    self->verbose           = 0;
 
     return self;
 }
 
 void transpiler_destroy(transpiler **self) {
+    map_destroy(&(*self)->processed_structs);
     arena_destroy((*self)->alloc, &(*self)->strings);
     alloc_free((*self)->alloc, *self);
     *self = null;
@@ -853,6 +857,8 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     tl_type *tuple          = v->arrow->arrow.left;
     u64      hash           = tl_type_hash(tuple);
     char    *generated_name = make_struct_name(self->alloc, hash);
+    if (map_get(self->processed_structs, generated_name, strlen(generated_name))) return 0;
+    map_set(&self->processed_structs, generated_name, strlen(generated_name), generated_name);
 
     out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
@@ -886,6 +892,37 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     self->indent_level--;
     out_put_start(self, "};\n");
+
+    // function declaration
+    // TODO copied from a_let
+    name = string_t_str(&v->specialized_name);
+    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+
+    // return type and name
+    out_put_start(self, "static ");
+    a_declaration(self, v->arrow->arrow.right, name);
+    out_put(self, " ");
+
+    // params
+    out_put(self, "(");
+    for (u32 i = 0; i < v->n_parameters; ++i) {
+        a_declaration(self, v->parameters[i]->type, ast_node_name_string(v->parameters[i]));
+        if (i < v->n_parameters - 1) out_put(self, ", ");
+    }
+    out_put(self, ")");
+
+    // body
+    out_put(self, " {\n");
+    self->indent_level++;
+
+    if (a_eval(self, v->body)) return 1;
+
+    char const *body = pop_result(self);
+    out_put_start_fmt(self, "return %s;", body);
+
+    self->indent_level--;
+    out_put(self, "\n}\n\n");
+
     alloc_free(self->alloc, generated_name);
 
     return 0;
@@ -903,6 +940,8 @@ static int a_let(transpiler *self, ast_node const *node) {
             string_t_str(&v->name->symbol.name), string_t_str(&v->specialized_name));
         return 0;
     }
+
+    if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
 
     // don't emit generic template functions FIXME: with function
     // pointers, if the function is not generic, we still need to emit

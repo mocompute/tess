@@ -117,10 +117,19 @@ int tl_type_equal(tl_type const *left, tl_type const *right) {
     return tl_type_compare(left, right) == 0;
 }
 
+static int is_nil_or_empty_tuple(tl_type const *self) {
+    if (self->tag == type_nil) return 1;
+    if (self->tag == type_tuple || self->tag == type_labelled_tuple) return self->array.elements.size == 0;
+    return 0;
+}
+
 int tl_type_compare(tl_type const *left, tl_type const *right) {
     // structural equality and total ordering for types
 
     if (left == right) return 0;
+
+    if (is_nil_or_empty_tuple(left) && is_nil_or_empty_tuple(right))
+        return 0; // tags are different but they're equal
 
     if (left->tag != right->tag) return left->tag < right->tag ? -1 : 1;
 
