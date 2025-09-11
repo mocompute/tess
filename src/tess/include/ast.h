@@ -56,6 +56,12 @@ typedef struct ast_node {
             u8                n_expressions;
         } begin_end;
 
+        struct ast_intrinsic_application {
+            struct ast_node **arguments;
+            u8                n_arguments;
+            struct ast_node  *name;
+        } intrinsic_application;
+
         struct ast_lambda_function {
             struct ast_node **parameters;
             u8                n_parameters;
@@ -202,33 +208,34 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 
 // -- variant accessors --
 
-struct ast_address_of           *ast_node_address_of(ast_node *);
-struct ast_arrow                *ast_node_arrow(ast_node *);
-struct ast_assignment           *ast_node_assignment(ast_node *);
-struct ast_bool                 *ast_node_bool(ast_node *);
-struct ast_dereference          *ast_node_deref(ast_node *);
-struct ast_i64                  *ast_node_i64(ast_node *);
-struct ast_u64                  *ast_node_u64(ast_node *);
-struct ast_f64                  *ast_node_f64(ast_node *);
-struct ast_array                *ast_node_arr(ast_node *);
-struct ast_infix                *ast_node_infix(ast_node *);
-struct ast_lambda_function      *ast_node_lf(ast_node *);
-struct ast_let_in               *ast_node_let_in(ast_node *);
-struct ast_let_match_in         *ast_node_let_match_in(ast_node *);
-struct ast_function_declaration *ast_node_fd(ast_node *);
-struct ast_lambda_declaration   *ast_node_let_ld(ast_node *);
-struct ast_let                  *ast_node_let(ast_node *);
-struct ast_if_then_else         *ast_node_ifthen(ast_node *);
-struct ast_lambda_application   *ast_node_lambda(ast_node *);
-struct ast_named_application    *ast_node_named(ast_node *);
-struct ast_labelled_tuple       *ast_node_lt(ast_node *);
-struct ast_symbol               *ast_node_sym(ast_node *);
-struct ast_tuple                *ast_node_tuple(ast_node *);
-struct ast_begin_end            *ast_node_begin_end(ast_node *);
-struct ast_user_type            *ast_node_ut(ast_node *);
-struct ast_user_type_get        *ast_node_utg(ast_node *);
-struct ast_user_type_set        *ast_node_uts(ast_node *);
-struct ast_user_type_def        *ast_node_utd(ast_node *);
+struct ast_address_of            *ast_node_address_of(ast_node *);
+struct ast_arrow                 *ast_node_arrow(ast_node *);
+struct ast_assignment            *ast_node_assignment(ast_node *);
+struct ast_bool                  *ast_node_bool(ast_node *);
+struct ast_dereference           *ast_node_deref(ast_node *);
+struct ast_i64                   *ast_node_i64(ast_node *);
+struct ast_u64                   *ast_node_u64(ast_node *);
+struct ast_f64                   *ast_node_f64(ast_node *);
+struct ast_array                 *ast_node_arr(ast_node *);
+struct ast_infix                 *ast_node_infix(ast_node *);
+struct ast_intrinsic_application *ast_node_intrinsic(ast_node *);
+struct ast_lambda_function       *ast_node_lf(ast_node *);
+struct ast_let_in                *ast_node_let_in(ast_node *);
+struct ast_let_match_in          *ast_node_let_match_in(ast_node *);
+struct ast_function_declaration  *ast_node_fd(ast_node *);
+struct ast_lambda_declaration    *ast_node_let_ld(ast_node *);
+struct ast_let                   *ast_node_let(ast_node *);
+struct ast_if_then_else          *ast_node_ifthen(ast_node *);
+struct ast_lambda_application    *ast_node_lambda(ast_node *);
+struct ast_named_application     *ast_node_named(ast_node *);
+struct ast_labelled_tuple        *ast_node_lt(ast_node *);
+struct ast_symbol                *ast_node_sym(ast_node *);
+struct ast_tuple                 *ast_node_tuple(ast_node *);
+struct ast_begin_end             *ast_node_begin_end(ast_node *);
+struct ast_user_type             *ast_node_ut(ast_node *);
+struct ast_user_type_get         *ast_node_utg(ast_node *);
+struct ast_user_type_set         *ast_node_uts(ast_node *);
+struct ast_user_type_def         *ast_node_utd(ast_node *);
 
 // -- ast_node --
 

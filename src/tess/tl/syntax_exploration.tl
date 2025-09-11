@@ -8,7 +8,7 @@ end
 let pp : * point = c_malloc 16
 let pp : point * = c_malloc 16
 
-let p = point 1 2 in ... 
+let p = point 1 2 in ...
 
 let tup : (int, int) = (1, 2)
 let ptup : *(int, int) = &tup
@@ -26,28 +26,41 @@ let main ()  =
         .p.x := 1;
 
 
-        .p.x := 1;
-
+        .p.x := 1;              // no good because of chaining .p.x.y.z what is going on?
         .p.x = 1 ;
 
 
-        !p.x := 1;  
+        !p.x := 1;
         p!.x := 1;
-        
+
         (deref p) . x := 1 ;
-        
+
 
         p:x := 1;
         p:x <- 1;
 
         a : int <- 1;           // oof
 
-        * ptr.x := 1
+        * ptr . x := 1
+        // chaining?
+        * ptr . * pp ...
+        // or
+        ptr . * . pp . * . x ?
+        ptr.*.pp.*.x
+        ptr.*.y := 2
+        (assign (dot (deref ptr) x) 2)
+
+
         obj.x := 1 ;
         obj.y := 2 ;
         0 ;
     end
-    
-    
+
+
 let map f xs =
-     for 
+     for
+
+// compiler intrinsics
+
+let x = _tl_sizeof_ foo
+    => (intrinsic-application _tl_sizeof_ (symbol foo))

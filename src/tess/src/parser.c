@@ -1201,23 +1201,48 @@ static int function_application(parser *self) {
             // 2: "fails" due to close_round, which must not be
             // consumed, so that grouped_expression catches it.
 
-            ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments   = null;
-            node->named_application.n_arguments = 0;
-            node->named_application.specialized = null;
-            node->named_application.name        = name;
+            // catch intrinsic names here
+            char const *name_str = ast_node_name_string(name);
+            if (0 == strncmp("_tl_", name_str, 4)) {
+                ast_node *node = ast_node_create(self->ast_arena, ast_intrinsic_application);
+                node->intrinsic_application.arguments   = null;
+                node->intrinsic_application.n_arguments = 0;
+                node->intrinsic_application.name        = name;
 
-            array_shrink(arguments);
-            node->array.n     = (u8)arguments.size;
-            node->array.nodes = arguments.v;
-            if (arguments.size > 0xff) {
-                too_many_arguments(self);
-                goto error;
+                // TODO remove duplication with the other branch
+
+                array_shrink(arguments);
+                node->array.n     = (u8)arguments.size;
+                node->array.nodes = arguments.v;
+                if (arguments.size > 0xff) {
+                    too_many_arguments(self);
+                    goto error;
+                }
+
+                log(self, "function_application: got intrinsic %s",
+                    ast_node_to_string(self->transient, node));
+                result_ast_node(self, node);
+                goto success;
+
+            } else {
+                ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
+                node->named_application.arguments   = null;
+                node->named_application.n_arguments = 0;
+                node->named_application.specialized = null;
+                node->named_application.name        = name;
+
+                array_shrink(arguments);
+                node->array.n     = (u8)arguments.size;
+                node->array.nodes = arguments.v;
+                if (arguments.size > 0xff) {
+                    too_many_arguments(self);
+                    goto error;
+                }
+
+                log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
+                result_ast_node(self, node);
+                goto success;
             }
-
-            log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
-            result_ast_node(self, node);
-            goto success;
         }
 
         self->error.tag = tl_err_expected_function_application_argument;
@@ -1242,6 +1267,7 @@ static int function_argument(parser *p) {
     p->indent_level++;
     if (0 == a_try(p, grouped_expression)) goto cleanup;
     if (0 == a_try(p, a_nil)) goto cleanup;
+    if (0 == a_try(p, tuple_expression)) goto cleanup;
     if (0 == a_try(p, &a_field_access)) goto cleanup;
     if (0 == a_try(p, a_identifier)) goto cleanup;
     if (0 == a_try(p, a_literal)) goto cleanup;
@@ -1971,7 +1997,7 @@ static void tokens_shrink(struct parser *p, u32 n) {
 void parser_report_errors(parser *self) {
     if (tl_err_ok == self->error.tag) return;
 
-    fprintf(stderr, "error: %s:%u: %s\n", self->error.file, self->error.line,
+    fprintf(stderr, "%s:%u: %s\n", self->error.file, self->error.line,
             tl_error_tag_to_string(self->error.tag));
 }
 static int too_many_arguments(parser *self) {

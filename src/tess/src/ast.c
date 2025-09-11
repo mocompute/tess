@@ -169,6 +169,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->specialized                  = ast_node_clone(alloc, vorig->specialized);
     } break;
 
+    case ast_intrinsic_application: {
+        struct ast_intrinsic_application *vclone = ast_node_intrinsic(clone),
+                                         *vorig  = ast_node_intrinsic((ast_node *)orig);
+        vclone->name                             = ast_node_clone(alloc, vorig->name);
+    } break;
+
     case ast_user_type: {
         struct ast_user_type *vclone = ast_node_ut(clone), *vorig = ast_node_ut((ast_node *)orig);
         vclone->name = ast_node_clone(alloc, vorig->name);
@@ -374,6 +380,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return quad(alloc, sym("lambda-application"), recur(node->lambda_application.lambda), list, type);
     }
+
     case ast_named_function_application: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         if (node->named_application.specialized)
@@ -381,6 +388,11 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
                         sym(string_t_str(&node->named_application.specialized->let.specialized_name)), list,
                         type);
         else return quad(alloc, sym("named-application"), recur(node->named_application.name), list, type);
+    }
+
+    case ast_intrinsic_application: {
+        sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
+        return quad(alloc, sym("intrinsic-application"), recur(node->named_application.name), list, type);
     }
 
     case ast_begin_end: {
@@ -560,6 +572,11 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->named_application.specialized);
         break;
 
+    case ast_intrinsic_application:
+        //
+        fun(ctx, node->intrinsic_application.name);
+        break;
+
     case ast_user_type:
         //
         fun(ctx, node->user_type.name);
@@ -615,6 +632,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_intrinsic_application:
     case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
@@ -712,6 +730,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_lambda_function_application",
       "ast_let",
       "ast_named_function_application",
+      "ast_intrinsic_application",
       "ast_tuple",
       "ast_user_type",
     };
@@ -826,6 +845,11 @@ struct ast_array *ast_node_arr(ast_node *node) {
 struct ast_infix *ast_node_infix(ast_node *node) {
     assert(node->tag == ast_infix);
     return &node->infix;
+}
+
+struct ast_intrinsic_application *ast_node_intrinsic(ast_node *node) {
+    assert(node->tag == ast_intrinsic_application);
+    return &node->intrinsic_application;
 }
 
 struct ast_lambda_function *ast_node_lf(ast_node *node) {

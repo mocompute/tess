@@ -510,6 +510,12 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, node->named_application.specialized);
     } break;
 
+    case ast_intrinsic_application: {
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+        rename_variables(self, node->intrinsic_application.name);
+    } break;
+
     case ast_begin_end: {
         struct ast_array *arr = ast_node_arr(node);
         for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
@@ -682,6 +688,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
+    case ast_intrinsic_application:
     case ast_lambda_function_application:
     case ast_named_function_application:  break;
     }
@@ -969,6 +976,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_named_function_application:
+    case ast_intrinsic_application:
     case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
@@ -1380,45 +1388,66 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(node->type, v->right);
     } break;
 
-    case ast_named_function_application:
+    case ast_intrinsic_application: {
         if (!self->constrain_function_applications) return;
-        else {
-            struct ast_named_application *v = ast_node_named(node);
-            // do not constraint c_ or std_ applications
+
+        // TODO duplication with named_function_application
+        struct ast_intrinsic_application *v = ast_node_intrinsic(node);
+
+        assert(ast_symbol == v->name->tag);
+
+        // constrain arguments against the function symbol's arrow type
+        tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
+
+        assert(ast_symbol == v->name->tag);
+        if (type_arrow == v->name->type->tag) {
+            tl_type *left  = v->name->type->arrow.left;
+            tl_type *right = v->name->type->arrow.right;
+            push(left, args_type);
+            push(node->type, right);
+        }
+
+    } break;
+
+    case ast_named_function_application: {
+        if (!self->constrain_function_applications) return;
+
+        struct ast_named_application *v = ast_node_named(node);
+        // FIXME: do not constraint c_ or std_ applications - is this correct?
+        // FIXME: instead, should those applications be specialised?
+        assert(ast_symbol == v->name->tag);
+        if (is_special_name_s(&v->name->symbol.name)) return;
+
+        // this pass happens after functions have been specialised
+        ast_node *fun = v->specialized;
+        if (fun) {
+            // TODO syntax check phase to check for successful specialisation
+            // FIXME: this should be a type inferencing error and reported to the user
+            if (!fun) fatal("collect_constraints: function application is not specialised.");
+            assert(fun && fun->tag == ast_let);
+            assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
+
+            tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
+
+            push(fun->let.arrow->arrow.left, args_type);
+            push(fun->let.arrow->arrow.right, node->type);
+        } else {
+            // FIXME: should we even continue if we haven't been
+            // able to specialise this callsite?
+
+            // constrain arguments against the function symbol's arrow type
+            tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
+
             assert(ast_symbol == v->name->tag);
-            if (is_special_name_s(&v->name->symbol.name)) return;
-
-            // this pass happens after functions have been specialised
-            ast_node *fun = v->specialized;
-            if (fun) {
-                // TODO syntax check phase to check for successful specialisation
-                // FIXME: this should be a type inferencing error and reported to the user
-                if (!fun) fatal("collect_constraints: function application is not specialised.");
-                assert(fun && fun->tag == ast_let);
-                assert(fun->let.arrow && fun->let.arrow->tag == type_arrow);
-
-                tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
-
-                push(fun->let.arrow->arrow.left, args_type);
-                push(fun->let.arrow->arrow.right, node->type);
-            } else {
-                // FIXME: should we even continue if we haven't been
-                // able to specialise this callsite?
-
-                // constrain arguments against the function symbol's arrow type
-                tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
-
-                assert(ast_symbol == v->name->tag);
-                if (type_arrow == v->name->type->tag) {
-                    tl_type *left  = v->name->type->arrow.left;
-                    tl_type *right = v->name->type->arrow.right;
-                    push(left, args_type);
-                    push(node->type, right);
-                }
+            if (type_arrow == v->name->type->tag) {
+                tl_type *left  = v->name->type->arrow.left;
+                tl_type *right = v->name->type->arrow.right;
+                push(left, args_type);
+                push(node->type, right);
             }
         }
 
-        break;
+    } break;
     }
 
 #undef push
@@ -1521,7 +1550,8 @@ static void specialize_node(void *ctx_, ast_node *node) {
     let = find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), 1);
 
     if (let) {
-        // ensure its specialised status is set, because it could be a user-annotated function
+        // ensure its specialised status is set, because we could have
+        // found a user-annotated function
         ast_node_set_is_specialized(let);
         if (string_t_empty(&let->let.specialized_name)) {
             let->let.specialized_name = string_t_init(

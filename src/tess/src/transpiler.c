@@ -39,10 +39,10 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-// static int         a_assignment(transpiler *, tl_type const *, char const *, char const *);
 static int         a_declaration(transpiler *, tl_type const *, char const *);
 static int         a_eval(transpiler *, ast_node const *);
 static int         a_field_access(transpiler *, ast_node const *);
+static int         a_intrinsic_apply(transpiler *, ast_node const *);
 static int         a_fun_apply(transpiler *, ast_node const *);
 static int         a_infix(transpiler *, ast_node const *);
 static int         a_let(transpiler *, ast_node const *);
@@ -541,8 +541,82 @@ static int a_eval(transpiler *self, ast_node const *node) {
         pop_and_assign(self, var);
     } break;
 
+    case ast_intrinsic_application: {
+        if (a_intrinsic_apply(self, node)) return 1;
+    } break;
+
     case ast_user_type_definition: break;
     }
+    return 0;
+}
+
+static int expand_value(transpiler *self, ast_node const *node) {
+    switch (node->tag) {
+
+    case ast_symbol:
+        //
+        out_put(self, ast_node_name_string(node));
+        break;
+
+    case ast_nil:
+    case ast_address_of:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_infix:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_intrinsic_application:
+    case ast_tuple:
+    case ast_user_type:
+        //
+        out_put(self, "FIXME:expand");
+        break;
+    }
+    return 0;
+}
+
+static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
+    assert(ast_intrinsic_application == node->tag);
+    struct ast_intrinsic_application *v    = ast_node_intrinsic((ast_node *)node);
+
+    char const                       *name = ast_node_name_string(v->name);
+
+    if (0 == strcmp("_tl_sizeof_", name)) {
+        if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+
+        // function call result
+        char *var = next_variable(self);
+        out_put_start(self, "");
+        a_declaration(self, node->type, var);
+        out_put(self, ";\n");
+
+        out_put_start_fmt(self, "%s = (sizeof (", var);
+        expand_value(self, v->arguments[0]);
+        out_put(self, "));");
+    }
+
+    else
+        fatal("unknown intrinsic: '%s'", name);
+
     return 0;
 }
 
