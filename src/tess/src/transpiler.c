@@ -566,8 +566,13 @@ static int expand_value(transpiler *self, ast_node const *node) {
     case ast_address_of:
     case ast_arrow:
     case ast_assignment:
-    case ast_bool:
+    case ast_bool:       break;
+
     case ast_dereference:
+        out_put(self, "* ");
+        expand_value(self, node->dereference.target);
+        break;
+
     case ast_eof:
     case ast_f64:
     case ast_i64:

@@ -117,7 +117,7 @@ static int           a_identifier(parser *);
 static int           a_identifier_typed(parser *);
 static int           a_infix_operator(parser *);
 static int           a_labelled_tuple(parser *);
-static int           a_literal(parser *);
+static int           a_value(parser *);
 static int           a_nil(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
@@ -820,11 +820,18 @@ error:
     return 1;
 }
 
-static int a_literal(parser *p) {
-    if (0 == a_try(p, a_string)) return 0;
-    if (0 == a_try(p, a_number)) return 0;
-    if (0 == a_try(p, a_bool)) return 0;
-    p->error.tag = tl_err_expected_literal;
+static int a_value(parser *self) {
+    if (0 == a_try(self, a_nil)) return 0;
+    if (0 == a_try(self, a_field_setter)) return 0; // before field_access
+    if (0 == a_try(self, a_field_access)) return 0;
+    if (0 == a_try(self, a_dereference)) return 0; // before identifier
+    if (0 == a_try(self, a_identifier)) return 0;
+    if (0 == a_try(self, a_address_of)) return 0;
+    if (0 == a_try(self, a_number)) return 0;
+    if (0 == a_try(self, a_string)) return 0;
+    if (0 == a_try(self, a_bool)) return 0;
+
+    self->error.tag = tl_err_expected_value;
     return 1;
 }
 
@@ -1306,12 +1313,8 @@ static int function_argument(parser *p) {
     log(p, "try function_argument");
 
     p->indent_level++;
+    if (0 == a_try(p, a_value)) goto cleanup;
     if (0 == a_try(p, grouped_expression)) goto cleanup;
-    if (0 == a_try(p, a_nil)) goto cleanup;
-    if (0 == a_try(p, tuple_expression)) goto cleanup;
-    if (0 == a_try(p, &a_field_access)) goto cleanup;
-    if (0 == a_try(p, a_identifier)) goto cleanup;
-    if (0 == a_try(p, a_literal)) goto cleanup;
     p->indent_level--;
 
     p->indent_level--;
@@ -1767,14 +1770,16 @@ static int expression(parser *self) {
 
     // the rest of the cases are standalone values
 
-    if (0 == a_try(self, a_nil)) goto success;
-    if (0 == a_try(self, a_field_setter)) goto success; // before field_access
-    if (0 == a_try(self, a_field_access)) goto success;
-    if (0 == a_try(self, a_dereference)) goto success; // before identifier
-    if (0 == a_try(self, a_identifier)) goto success;
-    if (0 == a_try(self, a_address_of)) goto success;
-    if (0 == a_try(self, a_number)) goto success;
-    if (0 == a_try(self, a_bool)) goto success;
+    if (0 == a_try(self, a_value)) goto success;
+
+    // if (0 == a_try(self, a_nil)) goto success;
+    // if (0 == a_try(self, a_field_setter)) goto success; // before field_access
+    // if (0 == a_try(self, a_field_access)) goto success;
+    // if (0 == a_try(self, a_dereference)) goto success; // before identifier
+    // if (0 == a_try(self, a_identifier)) goto success;
+    // if (0 == a_try(self, a_address_of)) goto success;
+    // if (0 == a_try(self, a_number)) goto success;
+    // if (0 == a_try(self, a_bool)) goto success;
 
     self->error.tag = tl_err_expected_expression;
 
