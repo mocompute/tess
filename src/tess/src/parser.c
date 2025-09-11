@@ -496,18 +496,24 @@ static int a_address_of(parser *self) {
 
 static int a_dereference(parser *self) {
 
-    if (a_try(self, a_star)) {
+    // FIXME for now only address of an identifier
+
+    if (a_try(self, a_identifier)) {
         self->error.tag = tl_err_ok;
         return 1;
     }
 
-    // FIXME for now only address of an identifier
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_expected_dereferenceable;
+    ast_node *target = self->result;
+
+    if (a_try(self, a_dot)) {
+        self->error.tag = tl_err_ok;
         return 1;
     }
 
-    ast_node *target         = self->result;
+    if (a_try(self, a_star)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
 
     ast_node *node           = ast_node_create(self->ast_arena, ast_dereference);
     node->dereference.target = target;
@@ -1728,9 +1734,9 @@ static int expression(parser *self) {
     if (0 == a_try(self, a_nil)) goto success;
     if (0 == a_try(self, a_field_setter)) goto success; // before field_access
     if (0 == a_try(self, a_field_access)) goto success;
+    if (0 == a_try(self, a_dereference)) goto success; // before identifier
     if (0 == a_try(self, a_identifier)) goto success;
     if (0 == a_try(self, a_address_of)) goto success;
-    if (0 == a_try(self, a_dereference)) goto success;
     if (0 == a_try(self, a_number)) goto success;
     if (0 == a_try(self, a_bool)) goto success;
 
