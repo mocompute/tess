@@ -12,7 +12,34 @@ let pp : * point = c_malloc 16
 let pp : *.point = c_malloc (_tl_sizeof_ point) // this sizeof doesn't work yet
 
 *.(int, int) or *(int, int)
-*(a -> b) vs (*a -> b)
+*(a -> b) vs ( *a -> b )
+
+// chaining blocks, only in some cases
+let x1 = val 
+// in begin are implied
+step1; step2; result end 
+
+let x1 = val in
+let x2 = step1 x1 in
+let x3 = step2 x2 in
+let x4 = step3 x3 in
+  x4
+end
+
+let x1 = val in
+  x1 |> step1 |> step2 |> step3
+end
+// or with keyword "it"
+pipe x1 = val
+  in  step1 it 
+  and step2 it extra 
+  and step3 flipped it more
+  and it became a function
+end
+// again, prefer prefix notation for everything 
+
+
+  
 
 
 let p = point 1 2 in ...
