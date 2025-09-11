@@ -702,8 +702,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     // function call
 
     tl_type *fun_type = node->named_application.name->type;
-    log(self, "fun: %s, type: %s", ast_node_name_string(node->named_application.name),
-        tl_type_to_string(self->strings, fun_type));
 
     if (is_nil_result(fun_type)) out_put_start(self, "");
     else out_put_start_fmt(self, "%s = ", var);
@@ -995,15 +993,6 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
-
-    // don't emit generic template functions FIXME: with function
-    // pointers, if the function is not generic, we still need to emit
-    // it because we don't know if it's in use.
-
-    // if (!ast_node_is_specialized(node)) {
-    //     log(self, "skipping '%s' because it is not specialized", string_t_str(&v->name->symbol.name));
-    //     return 0;
-    // }
 
     if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
         // skip here, let a_main process it.

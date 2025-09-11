@@ -1,13 +1,17 @@
-struct point =
+struct Point =
        x : int ;
        y : int
 end
 
 let main ()  =
-    let (p : point *) = c_malloc 16 in
-    let obj = *p in
+    let pt = Point 1 2
+    let (p : * Point) = c_malloc (_tl_sizeof_ pt) in
     begin
-        obj.x := 1 ;
-        obj.y := 2 ;
-        0 ;
+        std_dbg "p = %p\n" p ;
+        p.*.x := 99;
+        p.*.y := 100
+        std_dbg "p.*.x = %i\n" p.*.x ;
+        std_dbg "p.*.y = %i\n" p.*.y ;
+        c_free p ;
+        0
     end

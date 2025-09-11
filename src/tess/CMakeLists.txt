@@ -101,6 +101,7 @@ function(tesslang_create_test NAME)
 endfunction()
 
 tesslang_create_test(address_of)
+tesslang_create_test(alloc)
 tesslang_create_test(basic)
 tesslang_create_test(begin_end)
 tesslang_create_test(dereference)
