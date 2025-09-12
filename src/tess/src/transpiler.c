@@ -20,6 +20,7 @@
 struct transpiler {
     allocator     *alloc;
     allocator     *strings;
+    allocator     *transient;
     char_array    *bytes;
 
     type_registry *type_registry;
@@ -44,6 +45,7 @@ typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
 static int         a_declaration(transpiler *, tl_type const *, char const *);
 static int         a_eval(transpiler *, ast_node const *);
+static int         a_if_then_else(transpiler *, ast_node const *);
 static int         a_field_access(transpiler *, ast_node const *);
 static int         a_intrinsic_apply(transpiler *, ast_node const *);
 static int         a_fun_apply(transpiler *, ast_node const *);
@@ -55,13 +57,17 @@ static int         a_let_struct_phase(transpiler *, ast_node const *);
 static int         a_main(transpiler *, ast_node const *);
 static int         a_result_type_of(transpiler *, tl_type const *);
 static int         a_toplevel(transpiler *, ast_node const *);
+static int         a_thunk(transpiler *, ast_node const *);
 static int         a_tuple_cons(transpiler *, ast_node const *);
 static int         a_user_type_definition(transpiler *, ast_node const *);
 
 static char       *next_variable(transpiler *);
 static char       *make_struct_name(allocator *, u64);
 static char       *make_struct_constructor_name(allocator *, u64);
+static char       *make_thunk_name(allocator *, u64);
 static char       *make_function_name(allocator *, char const *);
+
+static void        generate_thunks(transpiler *, ast_node **, u32);
 
 static char const *pop_result(transpiler *);
 static void        push_result(transpiler *, char const *);
@@ -82,7 +88,8 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 
     transpiler *self        = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc             = alloc;
-    self->strings           = arena_create(alloc, 1024);
+    self->strings           = arena_create(alloc, 2048);
+    self->transient         = arena_create(alloc, 2048);
     self->bytes             = bytes;
     self->type_registry     = tr;
     self->processed_structs = map_create(alloc, sizeof(char *));
@@ -98,6 +105,7 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 
 void transpiler_destroy(transpiler **self) {
     map_destroy(&(*self)->processed_structs);
+    arena_destroy((*self)->alloc, &(*self)->transient);
     arena_destroy((*self)->alloc, &(*self)->strings);
     alloc_free((*self)->alloc, *self);
     *self = null;
@@ -107,7 +115,7 @@ void transpiler_set_verbose(transpiler *self, int verbose) {
     self->verbose = verbose;
 }
 
-int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
+int transpiler_compile(transpiler *self, ast_node **nodes, u32 n) {
     (void)self;
 
     // output std header
@@ -131,6 +139,10 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
         a_let_prototypes(self, nodes[i]);
     }
     out_put_start(self, "\n// -- end prototypes -- \n\n");
+
+    out_put_start(self, "\n// -- begin thunks -- \n\n");
+    generate_thunks(self, nodes, n);
+    out_put_start(self, "\n// -- end thunks -- \n\n");
 
     // output toplevel forms
     out_put_start(self, "\n// -- begin program -- \n\n");
@@ -156,6 +168,91 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
 }
 
 // -- statics --
+
+typedef struct {
+    transpiler *self;
+    hashmap    *map;
+} generate_thunks_ctx;
+
+static void generate_one_thunk(void *ctx_, ast_node *node) {
+    generate_thunks_ctx *ctx  = ctx_;
+    transpiler          *self = ctx->self;
+
+    if (ast_if_then_else != node->tag) return;
+
+    // yes branch
+    {
+        u64 hash = ast_node_hash(node->if_then_else.yes);
+        if (map_get(ctx->map, &hash, sizeof hash)) return;
+
+        int one = 1;
+        map_set(&ctx->map, &hash, sizeof hash, &one);
+
+        // function declaration
+        char *name = make_thunk_name(self->strings, hash);
+
+        // return type and name
+        out_put_start(self, "static ");
+        a_declaration(self, node->type, name);
+        out_put(self, " ");
+
+        // params
+        out_put(self, "()");
+
+        // body
+        out_put(self, " {\n");
+        self->indent_level++;
+
+        a_thunk(self, node->if_then_else.yes);
+
+        char const *body = pop_result(self);
+        out_put_start_fmt(self, "return %s;", body);
+
+        self->indent_level--;
+        out_put(self, "\n}\n\n");
+    }
+
+    // no branch
+
+    {
+        u64 hash = ast_node_hash(node->if_then_else.no);
+        if (map_get(ctx->map, &hash, sizeof hash)) return;
+
+        int one = 1;
+        map_set(&ctx->map, &hash, sizeof hash, &one);
+
+        // function declaration
+        char *name = make_thunk_name(self->strings, hash);
+
+        // return type and name
+        out_put_start(self, "static ");
+        a_declaration(self, node->type, name);
+        out_put(self, " ");
+
+        // params
+        out_put(self, "()");
+
+        // body
+        out_put(self, " {\n");
+        self->indent_level++;
+
+        a_thunk(self, node->if_then_else.no);
+
+        char const *body = pop_result(self);
+        out_put_start_fmt(self, "return %s;", body);
+
+        self->indent_level--;
+        out_put(self, "\n}\n\n");
+    }
+}
+
+static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
+    generate_thunks_ctx ctx;
+    ctx.self = self;
+    ctx.map  = map_create(self->transient, sizeof(int));
+    for (u32 i = 0; i < n; i++) ast_node_dfs(&ctx, nodes[i], generate_one_thunk);
+    map_destroy(&ctx.map);
+}
 
 static void out_put(transpiler *self, char const *str) {
     array_copy(*self->bytes, str, strlen(str));
@@ -385,6 +482,32 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int a_thunk(transpiler *self, ast_node const *node) {
+    // a function which evaluates itself and returns its value, used
+    // to defer evaluation such as with short-circuit conditionals.
+    return a_eval(self, node);
+}
+
+static int a_if_then_else(transpiler *self, ast_node const *node) {
+    // if cond then yes else no
+    struct ast_if_then_else *v = ast_node_ifthen((ast_node *)node);
+
+    // get the thunk names for each arm
+    char *yes = make_thunk_name(self->strings, ast_node_hash(v->yes));
+    char *no  = make_thunk_name(self->strings, ast_node_hash(v->no));
+
+    // eval the condition
+    if (a_eval(self, v->condition)) return 1;
+    char const *condition = pop_result(self);
+
+    // dispatch to thunks
+    char *var = next_variable(self);
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
+    out_put_start_fmt(self, "if (%s) %s = %s(); else %s = %s();\n", condition, var, yes, var, no);
+    return 0;
+}
+
 static int a_field_access(transpiler *self, ast_node const *node) {
 
     struct ast_user_type_get const *v   = ast_node_utg((ast_node *)node);
@@ -427,21 +550,9 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-// static int a_nil_expression(transpiler *self, ast_node const *node) {
-//     // an expression of type nil: there is no need to capture its
-//     // result
-//     assert(type_nil == node->type->tag);
-//     return a_eval(self, node);
-// }
-
 static int a_eval(transpiler *self, ast_node const *node) {
 
     if (!node || !node->type) fatal("a_eval: node or type is null");
-
-    // FIXME what is this trying to do?
-    // if (node->type->tag == type_nil) {
-    //     return a_nil_expression(self, node);
-    // }
 
     char *var = next_variable(self);
 
@@ -555,6 +666,9 @@ static int a_eval(transpiler *self, ast_node const *node) {
         break;
 
     case ast_if_then_else:
+        if (a_if_then_else(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
@@ -954,6 +1068,20 @@ static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     return name;
 }
 
+static char *make_thunk_name(allocator *alloc, u64 hash) {
+    char *name = null;
+    {
+#define fmt "_gen_thunk_%" PRIu64 "_"
+        int len = snprintf(null, 0, fmt, hash) + 1;
+        if (len < 0) fatal("generate name failed.");
+        name = alloc_malloc(alloc, (u32)len);
+        snprintf(name, (u32)len, fmt, hash);
+#undef fmt
+    }
+
+    return name;
+}
+
 static char *make_function_name(allocator *alloc, char const *base) {
     char *name = null;
     {
@@ -982,6 +1110,9 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     tl_type *tuple          = v->arrow->arrow.left;
     u64      hash           = tl_type_hash(tuple);
     char    *generated_name = make_struct_name(self->alloc, hash);
+
+    // TODO since tuple types are not named, the program doesn't know
+    // it already has a tuple matching a particular type signature.
     if (map_get(self->processed_structs, generated_name, strlen(generated_name))) return 0;
     map_set(&self->processed_structs, generated_name, strlen(generated_name), generated_name);
 

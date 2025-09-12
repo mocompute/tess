@@ -273,4 +273,6 @@ void            ast_node_set_is_tuple_constructor(ast_node *);
 
 ast_node      **ast_node_assignment_names(allocator *, ast_node const *);
 
+u64             ast_node_hash(ast_node const *);
+
 #endif
