@@ -656,68 +656,68 @@ static int expand_value(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
+    struct ast_named_application *v    = ast_node_named((ast_node *)node);
+    char const                   *name = ast_node_name_string(v->name);
+    if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
+
+    // function call result
+    char *var = next_variable(self);
+    out_put_start(self, "");
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
+
+    // eval the args
+    a_eval(self, v->arguments[1]);
+    a_eval(self, v->arguments[0]);
+    char const *lhs = pop_result(self);
+    char const *rhs = pop_result(self);
+
+    out_put_start_fmt(self, "%s = %s %s %s;\n", var, lhs, (char const *)op, rhs);
+    return 0;
+}
+
+static int tl_sizeof(transpiler *self, ast_node const *node, void *extra) {
+    (void)extra;
+    struct ast_named_application *v    = ast_node_named((ast_node *)node);
+    char const                   *name = ast_node_name_string(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+
+    // function call result
+    char *var = next_variable(self);
+    out_put_start(self, "");
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
+
+    out_put_start_fmt(self, "%s = (sizeof (", var);
+    expand_value(self, v->arguments[0]);
+    out_put(self, "));\n");
+    return 0;
+}
+
 static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-
     char const                   *name = ast_node_name_string(v->name);
 
-    // TODO intrinsics dispatch table
+    struct dispatch {
+        char const *name;
+        int (*fun)(transpiler *, ast_node const *, void *extra);
+        void *extra;
+    };
 
-    if (0 == strcmp("_tl_sizeof_", name)) {
-        if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+    static const struct dispatch table[] = {
+      {"_tl_add_", tl_binary_op, "+"},  {"_tl_div_", tl_binary_op, "/"}, {"_tl_mul_", tl_binary_op, "*"},
+      {"_tl_sizeof_", tl_sizeof, null}, {"_tl_sub_", tl_binary_op, "-"}, {"", null, null},
+    };
 
-        // function call result
-        char *var = next_variable(self);
-        out_put_start(self, "");
-        a_declaration(self, node->type, var);
-        out_put(self, ";\n");
+    struct dispatch const *p = table;
+    for (; p && p->name[0]; ++p)
+        if (0 == strcmp(p->name, name)) return p->fun(self, node, p->extra);
 
-        out_put_start_fmt(self, "%s = (sizeof (", var);
-        expand_value(self, v->arguments[0]);
-        out_put(self, "));\n");
-    }
+    fatal("unknown intrinsic: '%s'", name);
 
-    else if (0 == strcmp("_tl_add_", name)) {
-        if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
-
-        // function call result
-        char *var = next_variable(self);
-        out_put_start(self, "");
-        a_declaration(self, node->type, var);
-        out_put(self, ";\n");
-
-        // eval the args
-        a_eval(self, v->arguments[1]);
-        a_eval(self, v->arguments[0]);
-        char const *lhs = pop_result(self);
-        char const *rhs = pop_result(self);
-
-        out_put_start_fmt(self, "%s = %s + %s;\n", var, lhs, rhs);
-    }
-
-    else if (0 == strcmp("_tl_sub_", name)) {
-        if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
-
-        // function call result
-        char *var = next_variable(self);
-        out_put_start(self, "");
-        a_declaration(self, node->type, var);
-        out_put(self, ";\n");
-
-        // eval the args
-        a_eval(self, v->arguments[1]);
-        a_eval(self, v->arguments[0]);
-        char const *lhs = pop_result(self);
-        char const *rhs = pop_result(self);
-
-        out_put_start_fmt(self, "%s = %s - %s;\n", var, lhs, rhs);
-    }
-
-    else
-        fatal("unknown intrinsic: '%s'", name);
-
-    return 0;
+    return 1;
 }
 
 static int a_fun_apply(transpiler *self, ast_node const *node) {
