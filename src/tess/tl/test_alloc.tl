@@ -4,9 +4,8 @@ struct Point =
 end
 
 let main ()  =
-    let pt = Point 1 2
-    let (p : * Point) = c_malloc (_tl_sizeof_ pt)
-    in
+    let pt = Point 1 2 in
+    let (p : * Point) = c_malloc (_tl_sizeof_ pt) in begin
     std_dbg "p = %p\n" p ;
     p.*.x := 12313;             // FIXME parser is greedy an setting x to 0
     p.*.y := 100
@@ -14,3 +13,4 @@ let main ()  =
     std_dbg "p.*.y = %i\n" p.*.y ;
     c_free p ;
     0
+    end

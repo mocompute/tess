@@ -47,8 +47,7 @@ struct parser {
 
     int                    verbose;
     int                    indent_level;
-    int                    in_chained_expression; // these enable greedy parsing
-    int                    in_function_application;
+    int                    in_function_application; // enable greedy parsing
 };
 
 typedef int (*parse_fun)(parser *);
@@ -57,7 +56,6 @@ typedef int (*parse_fun_s)(parser *, char const *);
 // -- overview --
 
 static int           begin_end_expression(parser *);
-static int           chained_expression(parser *);
 static int           expression(parser *);
 static int           expression_let(parser *);
 static int           forward_declaration(parser *);
@@ -67,8 +65,6 @@ static int           function_declaration(parser *);
 static int           function_definition(parser *);
 static int           grouped_expression(parser *);
 static int           if_then_else(parser *);
-static int           infix_operand(parser *);
-static int           infix_operation(parser *);
 static int           lambda_declaration(parser *);
 static int           lambda_function(parser *);
 static int           match_declaration(parser *);
@@ -115,7 +111,6 @@ static int           a_dereference(parser *);
 static int           a_dot(parser *);
 static int           a_end_of_block(parser *);
 static int           a_end_of_expression(parser *);
-static int           a_eof_or_start_next_expression(parser *);
 static int           a_equal_sign(parser *);
 static int           a_field_access(parser *);
 static int           a_field_setter(parser *);
@@ -123,13 +118,11 @@ static int           a_field_pointer_access(parser *);
 static int           a_field_pointer_setter(parser *);
 static int           a_identifier(parser *);
 static int           a_identifier_typed(parser *);
-static int           a_infix_operator(parser *);
 static int           a_labelled_tuple(parser *);
 static int           a_value(parser *);
 static int           a_nil(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
-static int           a_semicolon(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
 static int           a_type_annotation(parser *);
@@ -162,7 +155,6 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->current_file_data.size  = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
-    self->in_chained_expression   = 0;
     self->in_function_application = 0;
 
     self->forwards                = map_create(self->parent_alloc, sizeof(ast_node *));
@@ -426,15 +418,6 @@ static int a_comma(parser *p) {
     return 1;
 }
 
-static int a_semicolon(parser *p) {
-    if (next_token(p)) return 1;
-
-    if (tok_semicolon == p->token.tag) return result_ast_str(p, ast_symbol, ";");
-
-    p->error.tag = tl_err_expected_semicolon;
-    return 1;
-}
-
 static int a_dot(parser *p) {
     if (next_token(p)) return 1;
 
@@ -476,7 +459,6 @@ static int a_end_of_expression(parser *p) {
             return 2;
         }
         return 0;
-        // return (p->in_function_application && p->in_chained_expression) ? 2 : 0;
 
     case tok_close_round:
         // signal special failure so the token gets put back, but use a magic
@@ -512,40 +494,6 @@ next_expression:
     return 2;
 }
 
-static int a_eof_or_start_next_expression(parser *p) {
-
-    if (next_token(p)) {
-        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
-        return 1;
-    }
-
-    switch (p->token.tag) {
-
-    case tok_symbol:
-        if (is_start_of_expression(p->token.s)) return 2;
-        break;
-
-    case tok_close_round:
-    case tok_semicolon:
-    case tok_comma:
-    case tok_dot:
-    case tok_colon:
-    case tok_colon_equal:
-    case tok_ampersand:
-    case tok_star:
-    case tok_arrow:
-    case tok_open_round:
-    case tok_equal_sign:
-    case tok_invalid:
-    case tok_number:
-    case tok_string:
-    case tok_comment:     break;
-    }
-
-    p->error.tag = tl_err_unfinished_expression;
-    return 1;
-}
-
 static int a_address_of(parser *self) {
 
     if (a_try(self, a_ampersand)) {
@@ -555,7 +503,6 @@ static int a_address_of(parser *self) {
 
     log(self, "begin address_of");
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         self->error.tag = tl_err_expected_addressable;
         return 1;
@@ -758,20 +705,6 @@ static int forward_declaration(parser *self) {
     return result_ast_node(self, sym);
 }
 
-static int a_infix_operator(parser *p) {
-    // + - * /, relationals: < <= == <> >= >
-    if (next_token(p)) return 1;
-
-    if (tok_symbol == p->token.tag) {
-
-        if (is_arithmetic_operator(p->token.s) || is_relational_operator(p->token.s))
-            return result_ast_str(p, ast_symbol, p->token.s);
-    }
-
-    p->error.tag = tl_err_expected_operator;
-    return 1;
-}
-
 static int the_symbol(parser *p, char const *const want) {
     if (next_token(p)) return 1;
 
@@ -972,7 +905,6 @@ static int a_assignment(parser *self) {
         return 1;
     }
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         self->error.tag = tl_err_expected_assignment_value;
         return 1;
@@ -1058,7 +990,6 @@ static int a_field_setter(parser *self) {
 
     log(self, "begin field setter");
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) return 1;
     ast_node                 *value = self->result;
 
@@ -1081,7 +1012,6 @@ static int a_field_pointer_setter(parser *self) {
 
     log(self, "begin field pointer setter");
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) return 1;
     ast_node                 *value = self->result;
 
@@ -1337,7 +1267,6 @@ static int lambda_declaration(parser *self) {
 }
 
 static int function_definition(parser *self) {
-    self->in_chained_expression = 0;
     return expression(self);
 }
 
@@ -1383,49 +1312,29 @@ static int function_application(parser *self) {
         if (0 == a_try_special(self, a_end_of_expression)) {
 
             // catch intrinsic names here
-            char const *name_str = ast_node_name_string(name);
-            if (0 == strncmp("_tl_", name_str, 4)) {
-                ast_node *node = ast_node_create(self->ast_arena, ast_intrinsic_application);
-                node->intrinsic_application.arguments   = null;
-                node->intrinsic_application.n_arguments = 0;
-                node->intrinsic_application.name        = name;
+            char const *name_str     = ast_node_name_string(name);
+            int         is_intrinsic = (0 == strncmp("_tl_", name_str, 4));
 
-                // TODO remove duplication with the other branch
+            ast_node   *node         = ast_node_create(self->ast_arena, ast_named_function_application);
+            node->named_application.arguments   = null;
+            node->named_application.n_arguments = 0;
+            node->named_application.flags       = 0;
+            node->named_application.specialized = null;
+            node->named_application.name        = name;
+            if (is_intrinsic) SET_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
-                array_shrink(arguments);
-                repair_single_nil_argument(&arguments);
-                node->array.n     = (u8)arguments.size;
-                node->array.nodes = arguments.v;
-                if (arguments.size > 0xff) {
-                    too_many_arguments(self);
-                    goto error;
-                }
-
-                log(self, "function_application: got intrinsic %s",
-                    ast_node_to_string(self->transient, node));
-                result_ast_node(self, node);
-                goto success;
-
-            } else {
-                ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
-                node->named_application.arguments   = null;
-                node->named_application.n_arguments = 0;
-                node->named_application.specialized = null;
-                node->named_application.name        = name;
-
-                array_shrink(arguments);
-                repair_single_nil_argument(&arguments);
-                node->array.n     = (u8)arguments.size;
-                node->array.nodes = arguments.v;
-                if (arguments.size > 0xff) {
-                    too_many_arguments(self);
-                    goto error;
-                }
-
-                log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
-                result_ast_node(self, node);
-                goto success;
+            array_shrink(arguments);
+            repair_single_nil_argument(&arguments);
+            node->array.n     = (u8)arguments.size;
+            node->array.nodes = arguments.v;
+            if (arguments.size > 0xff) {
+                too_many_arguments(self);
+                goto error;
             }
+
+            log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
+            result_ast_node(self, node);
+            goto success;
         }
 
         self->error.tag = tl_err_expected_function_application_argument;
@@ -1476,7 +1385,6 @@ static int if_then_else(parser *self) {
     log(self, "begin if-then-else");
     self->indent_level++;
 
-    self->in_chained_expression = 0;
     if (expression(self)) {
         self->error.tag = tl_err_expected_if_condition;
         goto error;
@@ -1488,7 +1396,6 @@ static int if_then_else(parser *self) {
         goto error;
     }
 
-    self->in_chained_expression = 0;
     if (expression(self)) {
         self->error.tag = tl_err_expected_if_then_arm;
         goto error;
@@ -1500,7 +1407,6 @@ static int if_then_else(parser *self) {
         goto error;
     }
 
-    self->in_chained_expression = 0;
     if (expression(self)) {
         self->error.tag = tl_err_expected_if_else_arm;
         goto error;
@@ -1515,57 +1421,6 @@ static int if_then_else(parser *self) {
     goto success;
 
 success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
-
-static int infix_operand(parser *self) {
-    self->in_function_application = 0;
-    return a_try(self, function_argument);
-}
-
-static int infix_operation(parser *self) {
-    // a * b
-
-    if (infix_operand(self)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    ast_node *const lhs = self->result;
-
-    if (a_try(self, a_infix_operator)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    ast_node *op_node = self->result;
-
-    log(self, "begin infix");
-    self->indent_level++;
-
-    ast_operator op;
-    if (string_to_ast_operator(ast_node_name_string(op_node), &op)) {
-        self->error.tag = tl_err_expected_operator;
-        goto error;
-    }
-
-    if (infix_operand(self)) {
-        self->error.tag = tl_err_expected_infix_operand;
-        goto error;
-    }
-
-    ast_node *const rhs  = self->result;
-
-    ast_node       *node = ast_node_create(self->ast_arena, ast_infix);
-    node->infix.left     = lhs;
-    node->infix.right    = rhs;
-    node->infix.op       = op;
-
-    result_ast_node(self, node);
-
     self->indent_level--;
     return 0;
 
@@ -1749,7 +1604,6 @@ static int tuple_expression(parser *self) {
     // first, expect an expression, which must be followed by a comma
     // then, zero or more expressions before a close round. So (expr,)
     // is a valid tuple.
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         self->error.tag = tl_err_ok;
         return 1;
@@ -1790,7 +1644,6 @@ static int tuple_expression(parser *self) {
             }
 
         // expression
-        self->in_chained_expression = 0;
         if (0 == a_try(self, expression)) array_push(elements, &self->result);
 
         // loop to check for close round
@@ -1798,63 +1651,6 @@ static int tuple_expression(parser *self) {
 
 cleanup:
     array_free(elements);
-    return 1;
-}
-
-static int continue_begin_end_expression(parser *self, ast_node *expr) {
-    ast_node_array exprs = {.alloc = self->ast_arena}; // will be moved to node on success
-    array_push(exprs, &expr);
-
-    while (1) {
-        int done = 0;
-
-        log(self, "looking for next chained expression");
-        self->in_chained_expression = 1;
-        if (a_try(self, expression)) {
-            if (is_eof(self)) {
-                done = 1;
-                goto done;
-            } else {
-                // propagate error
-                goto error;
-            }
-        }
-
-        array_push(exprs, &self->result);
-
-        // some expressions eat the end_of_expression (e.g. function
-        // application), but some don't (e.g. numbers)
-        if (2 == a_try_special_ext(self, a_end_of_expression)) {
-            done = 1;
-        }
-
-    done:
-        if (done || 0 == a_try_s(self, the_symbol, "end")) {
-            ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
-            node->begin_end.expressions   = null;
-            node->begin_end.n_expressions = 0;
-
-            array_shrink(exprs);
-            node->array.n     = (u8)exprs.size;
-            node->array.nodes = exprs.v;
-            if (exprs.size > 0xff) {
-                self->error.tag = tl_err_too_many_expressions;
-                goto error;
-            }
-
-            result_ast_node(self, node);
-            goto success;
-        }
-    }
-success:
-    self->indent_level--;
-    self->in_chained_expression = 0;
-    return 0;
-
-error:
-    array_free(exprs);
-    self->indent_level--;
-    self->in_chained_expression = 0;
     return 1;
 }
 
@@ -1875,8 +1671,7 @@ static int begin_end_expression(parser *self) {
     }
 
     while (1) {
-        int done                    = 0;
-        self->in_chained_expression = 1;
+        int done = 0;
         if (a_try(self, expression)) {
             if (is_eof(self)) {
                 done = 1;
@@ -1914,13 +1709,11 @@ static int begin_end_expression(parser *self) {
 
 success:
     self->indent_level--;
-    self->in_chained_expression = 0;
     return 0;
 
 error:
     array_free(exprs);
     self->indent_level--;
-    self->in_chained_expression = 0;
     return 1;
 }
 
@@ -1930,7 +1723,6 @@ static int grouped_expression(parser *self) {
         return 1;
     }
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         self->error.tag = tl_err_ok;
         return 1;
@@ -1954,9 +1746,6 @@ static int expression(parser *self) {
     self->indent_level++;
 
     if (0 == a_try(self, expression_let)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, infix_operation)) goto success;
     if (has_error(self)) goto error;
 
     if (0 == a_try(self, a_labelled_tuple)) goto success; // TODO naming is odd
@@ -1994,16 +1783,6 @@ static int expression(parser *self) {
 
 success:
     self->indent_level--;
-
-    // check for chained expression
-    ast_node *expr = self->result;
-
-    if (!self->in_chained_expression && 0 == a_try(self, a_semicolon)) {
-        log(self, "activating chained expression");
-        return continue_begin_end_expression(self, expr);
-    }
-
-    self->result = expr;
     return 0;
 
 error:
@@ -2016,7 +1795,6 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
 
     log(self, "begin let-in declaration line %i", self->token.line);
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         self->error.tag = tl_err_expected_value;
         goto error;
@@ -2026,7 +1804,6 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     // eat the optional 'in' token if it's present
     (void)a_try_s(self, the_symbol, "in");
 
-    self->in_chained_expression = 0;
     if (a_try(self, expression)) {
         // let the error propagate
         goto error;
@@ -2151,7 +1928,6 @@ static int toplevel(parser *self) {
     if (0 == a_try(self, toplevel_let)) return 0;
     if (has_error(self)) return 1;
 
-    self->in_chained_expression = 0;
     if (0 == a_try(self, expression)) return 0;
     if (has_error(self)) return 1;
 

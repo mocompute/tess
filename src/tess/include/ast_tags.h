@@ -43,7 +43,6 @@ typedef enum ast_tag : u16 {
     ast_lambda_function_application,
     ast_let,
     ast_named_function_application,
-    ast_intrinsic_application,
     ast_tuple,
     ast_user_type,
 

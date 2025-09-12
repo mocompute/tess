@@ -42,18 +42,19 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-static int         a_declaration(transpiler *, tl_type const *, char const *);
-static int         a_eval(transpiler *, ast_node const *);
-static int         a_field_access(transpiler *, ast_node const *);
-static int         a_intrinsic_apply(transpiler *, ast_node const *);
-static int         a_fun_apply(transpiler *, ast_node const *);
-static int         a_infix(transpiler *, ast_node const *);
-static int         a_let(transpiler *, ast_node const *);
-static int         a_let_in(transpiler *, ast_node const *);
-static int         a_let_match_in(transpiler *, ast_node const *);
-static int         a_let_struct_phase(transpiler *, ast_node const *);
-static int         a_main(transpiler *, ast_node const *);
-static int         a_nil_expression(transpiler *, ast_node const *);
+static int a_declaration(transpiler *, tl_type const *, char const *);
+static int a_eval(transpiler *, ast_node const *);
+static int a_field_access(transpiler *, ast_node const *);
+static int a_intrinsic_apply(transpiler *, ast_node const *);
+static int a_fun_apply(transpiler *, ast_node const *);
+static int a_infix(transpiler *, ast_node const *);
+static int a_let(transpiler *, ast_node const *);
+static int a_let_prototypes(transpiler *, ast_node const *);
+static int a_let_in(transpiler *, ast_node const *);
+static int a_let_match_in(transpiler *, ast_node const *);
+static int a_let_struct_phase(transpiler *, ast_node const *);
+static int a_main(transpiler *, ast_node const *);
+// static int         a_nil_expression(transpiler *, ast_node const *);
 static int         a_result_type_of(transpiler *, tl_type const *);
 static int         a_toplevel(transpiler *, ast_node const *);
 static int         a_tuple_cons(transpiler *, ast_node const *);
@@ -115,13 +116,25 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
     out_put(self, "\n\n");
 
     // output generated structs
+    out_put_start(self, "\n// -- begin structs -- \n\n");
+
     for (size_t i = 0; i < n; ++i) {
         int res = 0;
         if (ast_let == nodes[i]->tag)
             if ((res = a_let_struct_phase(self, nodes[i]))) return res;
     }
 
+    out_put_start(self, "\n// -- end structs -- \n\n");
+
+    // output all function prototypes
+    out_put_start(self, "\n// -- begin prototypes -- \n\n");
+    for (size_t i = 0; i < n; ++i) {
+        a_let_prototypes(self, nodes[i]);
+    }
+    out_put_start(self, "\n// -- end prototypes -- \n\n");
+
     // output toplevel forms
+    out_put_start(self, "\n// -- begin program -- \n\n");
     for (size_t i = 0; i < n; ++i) {
         int res = 0;
 
@@ -135,6 +148,8 @@ int transpiler_compile(transpiler *self, struct ast_node **nodes, u32 n) {
         int res = 0;
         if ((res = a_main(self, nodes[i]))) return res;
     }
+
+    out_put_start(self, "\n// -- end program -- \n\n");
 
     array_push_val(*self->bytes, '\0');
 
@@ -450,12 +465,12 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_nil_expression(transpiler *self, ast_node const *node) {
-    // an expression of type nil: there is no need to capture its
-    // result
-    assert(type_nil == node->type->tag);
-    return a_eval(self, node);
-}
+// static int a_nil_expression(transpiler *self, ast_node const *node) {
+//     // an expression of type nil: there is no need to capture its
+//     // result
+//     assert(type_nil == node->type->tag);
+//     return a_eval(self, node);
+// }
 
 static int a_eval(transpiler *self, ast_node const *node) {
 
@@ -580,12 +595,11 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_lambda_function_application: break;
 
     case ast_named_function_application:  {
-        if (a_fun_apply(self, node)) return 1;
-        pop_and_assign(self, var);
-    } break;
-
-    case ast_intrinsic_application: {
-        if (a_intrinsic_apply(self, node)) return 1;
+        if (TEST_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
+            if (a_intrinsic_apply(self, node)) return 1;
+        } else {
+            if (a_fun_apply(self, node)) return 1;
+        }
         pop_and_assign(self, var);
     } break;
 
@@ -633,7 +647,6 @@ static int expand_value(transpiler *self, ast_node const *node) {
     case ast_lambda_function_application:
     case ast_let:
     case ast_named_function_application:
-    case ast_intrinsic_application:
     case ast_tuple:
     case ast_user_type:
         //
@@ -644,10 +657,12 @@ static int expand_value(transpiler *self, ast_node const *node) {
 }
 
 static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
-    assert(ast_intrinsic_application == node->tag);
-    struct ast_intrinsic_application *v    = ast_node_intrinsic((ast_node *)node);
+    assert(ast_named_function_application == node->tag);
+    struct ast_named_application *v    = ast_node_named((ast_node *)node);
 
-    char const                       *name = ast_node_name_string(v->name);
+    char const                   *name = ast_node_name_string(v->name);
+
+    // TODO intrinsics dispatch table
 
     if (0 == strcmp("_tl_sizeof_", name)) {
         if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
@@ -661,6 +676,42 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
         out_put_start_fmt(self, "%s = (sizeof (", var);
         expand_value(self, v->arguments[0]);
         out_put(self, "));\n");
+    }
+
+    else if (0 == strcmp("_tl_add_", name)) {
+        if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
+
+        // function call result
+        char *var = next_variable(self);
+        out_put_start(self, "");
+        a_declaration(self, node->type, var);
+        out_put(self, ";\n");
+
+        // eval the args
+        a_eval(self, v->arguments[1]);
+        a_eval(self, v->arguments[0]);
+        char const *lhs = pop_result(self);
+        char const *rhs = pop_result(self);
+
+        out_put_start_fmt(self, "%s = %s + %s;\n", var, lhs, rhs);
+    }
+
+    else if (0 == strcmp("_tl_sub_", name)) {
+        if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
+
+        // function call result
+        char *var = next_variable(self);
+        out_put_start(self, "");
+        a_declaration(self, node->type, var);
+        out_put(self, ";\n");
+
+        // eval the args
+        a_eval(self, v->arguments[1]);
+        a_eval(self, v->arguments[0]);
+        char const *lhs = pop_result(self);
+        char const *rhs = pop_result(self);
+
+        out_put_start_fmt(self, "%s = %s - %s;\n", var, lhs, rhs);
     }
 
     else
@@ -976,6 +1027,37 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     out_put(self, "\n}\n\n");
 
     alloc_free(self->alloc, generated_name);
+
+    return 0;
+}
+
+static int a_let_prototypes(transpiler *self, ast_node const *node) {
+    if (ast_let != node->tag) return 0;
+    if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
+
+    struct ast_let const *v    = ast_node_let((ast_node *)node);
+    char const           *name = string_t_str(&v->specialized_name);
+    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+
+    if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
+        // skip here, let a_main process it.
+        return 0;
+    }
+
+    // function declaration
+
+    // return type and name
+    out_put_start(self, "static ");
+    a_declaration(self, v->arrow->arrow.right, name);
+    out_put(self, " ");
+
+    // params
+    out_put(self, "(");
+    for (u32 i = 0; i < v->n_parameters; ++i) {
+        a_declaration(self, v->parameters[i]->type, ast_node_name_string(v->parameters[i]));
+        if (i < v->n_parameters - 1) out_put(self, ", ");
+    }
+    out_put(self, ");\n");
 
     return 0;
 }

@@ -223,39 +223,15 @@ static int test_tokenizer_terminal_static_string(void) {
 }
 
 static int test_parser_node_to_string(void) {
-    int         error = 0;
+    int        error = 0;
 
-    char const *input = "1 + 2";
-
-    allocator  *alloc = leak_detector_create();
+    allocator *alloc = leak_detector_create();
     if (!alloc) return error + 1;
-
-    {
-        parser *p = parser_create_simple(alloc, input, strlen(input));
-        if (null == p) return error + 1;
-
-        if (parser_next(p)) {
-            parser_report_errors(p);
-            dbg("failed input = '%s'\n", input);
-            return error + 1;
-        }
-        ast_node *node;
-        parser_result(p, &node);
-
-        error += ast_infix == node->tag ? 0 : 1;
-
-        char *str = ast_node_to_string(alloc, node);
-        dbg("str 1 = %s\n", str);
-        error += 0 == strcmp("(infix + (i64 1 [null]) (i64 2 [null]) [null])", str) ? 0 : 1;
-        alloc_free(alloc, str);
-
-        parser_destroy(&p);
-    }
 
     //
     {
-        input     = "(a, b)";
-        parser *p = parser_create_simple(alloc, input, strlen(input));
+        char const *input = "(a, b)";
+        parser     *p     = parser_create_simple(alloc, input, strlen(input));
         if (null == p) return error + 1;
 
         if (parser_next(p)) {
@@ -292,14 +268,14 @@ static int test_parse_all(void) {
 }
 
 static int test_let_fun(void) {
-    char const *input = "let add a b = a + b\n"
+    char const *input = "let add a b = _tl_add_ a b\n"
                         "let main () = add 1 2\n";
     return compile_input(input);
 }
 
 static int test_grouped(void) {
-    char const *input = "let add a b = a + b\n"
-                        "let sub a b = a - b\n"
+    char const *input = "let add a b = _tl_add_ a b\n"
+                        "let sub a b = _tl_sub_ a b\n"
                         "\n"
                         "let main () = \n"
                         "    sub (add 1 2) 3\n";
@@ -312,7 +288,7 @@ static int test_let_fun_user_types(void) {
                         "  b : string ;\n"
                         "end\n"
                         "\n"
-                        "let add (a : foo) b = a.a + b\n"
+                        "let add (a : foo) b = _tl_add_ a.a b\n"
                         "let main () = add (foo 1 \"hello\") 2\n";
     return compile_input_flag(input, 0);
 }
