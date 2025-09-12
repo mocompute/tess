@@ -42,19 +42,18 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-static int a_declaration(transpiler *, tl_type const *, char const *);
-static int a_eval(transpiler *, ast_node const *);
-static int a_field_access(transpiler *, ast_node const *);
-static int a_intrinsic_apply(transpiler *, ast_node const *);
-static int a_fun_apply(transpiler *, ast_node const *);
-static int a_infix(transpiler *, ast_node const *);
-static int a_let(transpiler *, ast_node const *);
-static int a_let_prototypes(transpiler *, ast_node const *);
-static int a_let_in(transpiler *, ast_node const *);
-static int a_let_match_in(transpiler *, ast_node const *);
-static int a_let_struct_phase(transpiler *, ast_node const *);
-static int a_main(transpiler *, ast_node const *);
-// static int         a_nil_expression(transpiler *, ast_node const *);
+static int         a_declaration(transpiler *, tl_type const *, char const *);
+static int         a_eval(transpiler *, ast_node const *);
+static int         a_field_access(transpiler *, ast_node const *);
+static int         a_intrinsic_apply(transpiler *, ast_node const *);
+static int         a_fun_apply(transpiler *, ast_node const *);
+static int         a_infix(transpiler *, ast_node const *);
+static int         a_let(transpiler *, ast_node const *);
+static int         a_let_prototypes(transpiler *, ast_node const *);
+static int         a_let_in(transpiler *, ast_node const *);
+static int         a_let_match_in(transpiler *, ast_node const *);
+static int         a_let_struct_phase(transpiler *, ast_node const *);
+static int         a_main(transpiler *, ast_node const *);
 static int         a_result_type_of(transpiler *, tl_type const *);
 static int         a_toplevel(transpiler *, ast_node const *);
 static int         a_tuple_cons(transpiler *, ast_node const *);
@@ -63,6 +62,7 @@ static int         a_user_type_definition(transpiler *, ast_node const *);
 static char       *next_variable(transpiler *);
 static char       *make_struct_name(allocator *, u64);
 static char       *make_struct_constructor_name(allocator *, u64);
+static char       *make_function_name(allocator *, char const *);
 
 static char const *pop_result(transpiler *);
 static void        push_result(transpiler *, char const *);
@@ -496,11 +496,20 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_arrow:
     case ast_eof:
     case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
-    case ast_symbol:     out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node)); break;
-    case ast_string:     out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
-    case ast_i64:        out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
-    case ast_u64:        out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
-    case ast_f64:        out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
+    case ast_symbol:
+        // if symbol is a function name, we have to mangle it
+        if (type_arrow == node->type->tag) {
+            out_put_start_fmt(self, "%s = %s;\n", var,
+                              make_function_name(self->strings, ast_node_name_string(node)));
+        } else {
+            out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
+        }
+        break;
+
+    case ast_string: out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
+    case ast_i64:    out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
+    case ast_u64:    out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
+    case ast_f64:    out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
     case ast_bool:
         if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
         else out_put_start_fmt(self, "%s = 0;\n", var);
@@ -728,8 +737,10 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     char const                         *name = null;
     if (v->specialized) {
         name = string_t_str(&v->specialized->let.specialized_name);
+        // mangle the name
+        name = make_function_name(self->strings, name);
     } else {
-        // c_ and std_ etc...
+        // c_ and std_ , or variables
         name = ast_node_name_string(v->name);
 
         if (0 == strncmp("c_", name, 2)) {
@@ -946,6 +957,20 @@ static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     return name;
 }
 
+static char *make_function_name(allocator *alloc, char const *base) {
+    char *name = null;
+    {
+#define fmt "tl_fun_%s"
+        int len = snprintf(null, 0, fmt, base) + 1;
+        if (len < 0) fatal("generate name failed.");
+        name = alloc_malloc(alloc, (u32)len);
+        snprintf(name, (u32)len, fmt, base);
+#undef fmt
+    }
+
+    return name;
+}
+
 static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     if (!ast_node_is_tuple_constructor(node)) return 0;
@@ -1035,6 +1060,10 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
     if (ast_let != node->tag) return 0;
     if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
 
+    // don't emit generic prototypes: they are generic because they
+    // are not used by the program.
+    if (is_generic_function(node)) return 0;
+
     struct ast_let const *v    = ast_node_let((ast_node *)node);
     char const           *name = string_t_str(&v->specialized_name);
     if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
@@ -1043,6 +1072,9 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
         // skip here, let a_main process it.
         return 0;
     }
+
+    // mangle the name
+    name = make_function_name(self->strings, name);
 
     // function declaration
 
@@ -1082,7 +1114,10 @@ static int a_let(transpiler *self, ast_node const *node) {
         return 0;
     }
 
-    log(self, "processing '%s'...", string_t_str(&v->specialized_name));
+    log(self, "processing '%s'...", name);
+
+    // mangle the name
+    name = make_function_name(self->strings, name);
 
     // function declaration
 

@@ -1481,7 +1481,8 @@ void ti_inferer_dbg_substitutions(ti_inferer const *self) {
 // -- specialize function applications --
 
 char *make_specialized_name(ti_inferer *self, char const *name) {
-#define fmt "_%s_%u_"
+    // These names will be further mangled by the transpiler.
+#define fmt "%s_%u"
     int len = snprintf(null, 0, fmt, name, self->next_specialized) + 1;
     if (len < 0) fatal("make_specialized_name: failed");
 
