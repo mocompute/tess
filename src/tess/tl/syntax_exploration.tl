@@ -63,7 +63,10 @@
 //
 // Used to define a function:
 
-let
+let fact x =
+    if   eq x 0
+    then 1
+    else mul x (fact (decr x))
 
 // Top level: struct
 

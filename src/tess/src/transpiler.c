@@ -215,6 +215,9 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
 
     log(self, "if-then-else: %s", ast_node_to_string(self->strings, node));
 
+    // FIXME: the branches need to capture their lexical context
+    // E.g.:     if eq x 0 then 1 else mul x (fact (decr x))
+
     make_one_thunk(ctx, node->if_then_else.yes);
     make_one_thunk(ctx, node->if_then_else.no);
 }

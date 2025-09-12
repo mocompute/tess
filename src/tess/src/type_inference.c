@@ -79,6 +79,7 @@ typedef struct {
 typedef struct {
     ti_inferer    *ti;
     ast_node_array specials;
+    int            found_count;
 } specialize_functions_ctx;
 
 typedef struct {
@@ -95,7 +96,7 @@ static void       ti_generate_tuple_functions(ti_inferer *);
 static void       ti_generate_user_type_functions(ti_inferer *);
 static void       ti_rename_variables(ti_inferer *);
 static void       ti_run_solver(ti_inferer *);
-static void       ti_specialize_functions(ti_inferer *, ast_node_array *);
+static int        ti_specialize_functions(ti_inferer *, ast_node_array *);
 
 static tl_type   *make_args_type(allocator *, ast_node *[], u16);
 static tl_type   *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
@@ -210,10 +211,10 @@ int ti_inferer_run(ti_inferer *self) {
 
     // specialize generic functions
 
-    if (self->verbose) {
-        dbg("\n\nti_inferer_run: before specialisation:\n");
-        dbg_ast_nodes(self);
-    }
+    // if (self->verbose) {
+    //     dbg("\n\nti_inferer_run: before specialisation:\n");
+    //     dbg_ast_nodes(self);
+    // }
 
     ast_node_array specialized = {.alloc = self->type_arena};
     ti_specialize_functions(self, &specialized);
@@ -221,12 +222,12 @@ int ti_inferer_run(ti_inferer *self) {
     // add specialised nodes to program
     array_copy(*self->nodes, specialized.v, specialized.size);
 
-    if (self->verbose) {
-        dbg("ti_inferer_run: after specialization:\n");
-        ti_inferer_dbg_constraints(self);
-        ti_inferer_dbg_substitutions(self);
-        dbg_ast_nodes(self);
-    }
+    // if (self->verbose) {
+    //     dbg("ti_inferer_run: after specialization:\n");
+    //     ti_inferer_dbg_constraints(self);
+    //     ti_inferer_dbg_substitutions(self);
+    //     dbg_ast_nodes(self);
+    // }
 
     // collect and solve constraints again, this time constraining
     // function applications, and repeating until there are no further
@@ -251,9 +252,12 @@ int ti_inferer_run(ti_inferer *self) {
 
     // FIXME: one more round of specialisation: need this for
     // functions with function pointer arguments.
-    specialized.size = 0;
-    ti_specialize_functions(self, &specialized);
-    array_copy(*self->nodes, specialized.v, specialized.size);
+    while (1) {
+        specialized.size = 0;
+        int found        = ti_specialize_functions(self, &specialized);
+        array_copy(*self->nodes, specialized.v, specialized.size);
+        if (0 == found) break;
+    }
 
     return 0;
 }
@@ -1545,6 +1549,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
         if (string_t_empty(&let->let.specialized_name)) {
             let->let.specialized_name = string_t_init(
               self->type_arena, make_specialized_name(self, string_t_str(&let->let.name->symbol.name)));
+            ctx->found_count++;
             log(self, "found matching fun with no specialized name, setting it to '%s'",
                 string_t_str(&let->let.specialized_name));
         }
@@ -1566,11 +1571,10 @@ static void specialize_node(void *ctx_, ast_node *node) {
     array_push(ctx->specials, &node->named_application.specialized);
 }
 
-static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes) {
-    specialize_functions_ctx ctx;
-    ctx.ti       = self;
-
-    ctx.specials = (ast_node_array){.alloc = self->type_arena};
+static int ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes) {
+    specialize_functions_ctx ctx = {0};
+    ctx.ti                       = self;
+    ctx.specials                 = (ast_node_array){.alloc = self->type_arena};
     array_reserve(ctx.specials, 128);
 
     for (size_t i = 0; i < self->nodes->size; ++i)
@@ -1579,6 +1583,7 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
     if (ctx.specials.size) array_shrink(ctx.specials);
     if (!ctx.specials.v) fatal("ti_specialize_functions: realloc failed.");
     *out_nodes = ctx.specials;
+    return ctx.found_count;
 }
 
 //
