@@ -526,14 +526,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
         return rename_if_match(self->type_arena, &v->name, *lexical_map, &v->original);
     }
 
-    case ast_address_of:
-    case ast_arrow:
-    case ast_dereference:
-    case ast_assignment:
-    case ast_labelled_tuple:
-    case ast_tuple:          break;
-
-    case ast_let_in:         {
+    case ast_let_in: {
 
         // make a new variable for this let-in subexpression and recurse,
         // but save prior value in case this is a shadowing binding.
@@ -621,6 +614,12 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
         }
     } break;
 
+    case ast_address_of:
+    case ast_arrow:
+    case ast_dereference:
+    case ast_assignment:
+    case ast_labelled_tuple:
+    case ast_tuple:
     case ast_lambda_function_application:
     case ast_named_function_application:
     case ast_begin_end:
