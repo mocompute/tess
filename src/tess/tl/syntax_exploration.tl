@@ -1,3 +1,86 @@
+// Basics
+
+// Comments: line comments only, no block comments
+
+//
+// Whitespace: is not significant.
+//
+// One of three things can be used to tell the parser that an expression has terminated:
+//
+// - the `end` keyword
+// - the semicolon: `;`
+// - any builtin keyword which begins a new expression, such as `let` and `if`
+//
+
+//
+// Keywords
+//
+// begin, else, end, false, fun, if, in, let, then, true
+//
+
+//
+// Reserved symbols
+//
+// - Anything that is surrounded by a single underscore, e.g. `_special_`
+// - Anything that starts with `std_`
+//
+// In addition, the symbol prefix `c_` is recognized as an invocation
+// of a C function. For example, `c_malloc` can be used to access the
+// `malloc` function.
+//
+
+//
+// Compiler intrinsics
+//
+// These are functions which start with `_tl_` and end with `_`. They
+// may or may not evaluate their arguments. They are intended for use
+// by the `std` preamble. For example, `_tl_add_` is an intrinsic
+// function that invokes the arithmetic addition operator `+`.
+//
+// Intrinsics are type-checked like all other functions. They are
+// type-annotated in `std.tl`.
+
+// Top level declarations:
+// 1. let
+// 2. struct
+
+// Top level: let
+
+// Top level: struct
+
+struct Point =
+    x : int ;
+    y : int
+end
+
+
+// Expressions
+
+// Let expression
+
+// Simple let expression
+
+// Matching let expression
+
+// Block expression
+
+// Multiple expressions separated by `;`. Expression value is the
+// value of the final expression.
+
+// Type annotations
+
+// Type annotations on let symbols
+
+// Type annotations on function parameter symbols
+
+// Type annotations on function values
+
+// Tuples
+
+// Labelled tuples
+
+
+
 struct point =
        x : int ;
        y : int
@@ -15,9 +98,9 @@ let pp : *.point = c_malloc (_tl_sizeof_ point) // this sizeof doesn't work yet
 *(a -> b) vs ( *a -> b )
 
 // chaining blocks, only in some cases
-let x1 = val 
+let x1 = val
 // in begin are implied
-step1; step2; result end 
+step1; step2; result end
 
 let x1 = val in
 let x2 = step1 x1 in
@@ -31,15 +114,15 @@ let x1 = val in
 end
 // or with keyword "it"
 pipe x1 = val
-  in  step1 it 
-  and step2 it extra 
+  in  step1 it
+  and step2 it extra
   and step3 flipped it more
   and it became a function
 end
-// again, prefer prefix notation for everything 
+// again, prefer prefix notation for everything
 
 
-  
+
 
 
 let p = point 1 2 in ...

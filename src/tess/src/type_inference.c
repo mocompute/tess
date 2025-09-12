@@ -915,7 +915,12 @@ static void handle_symbol_annotation(ti_inferer *self, ast_node *node) {
 
     assert(ast_symbol == node->tag);
 
-    hashmap  *map = map_create(self->transient, sizeof(tl_type *));
+    // this map ensures that user-defined type variables (e.g. a, b, c
+    // etc) are assigned the same typevars, rather than unique tvars.
+    // This is necessary in particular for intrinsic functions which
+    // have no bodies that the type solver can analyze to discover
+    // constraints.
+    hashmap  *map = map_create_n(self->transient, sizeof(tl_type *), 8);
 
     ast_node *ann = node->symbol.annotation;
     if (ann) node->symbol.annotation_type = make_type_annotation(self, ann, &map);
