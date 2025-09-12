@@ -1,19 +1,30 @@
+// -*- mode: fsharp -*-
+
 // Basics
 
 // Comments: line comments only, no block comments
 
 //
-// Whitespace: is not significant.
+// Whitespace is not significant.
 //
-// One of three things can be used to tell the parser that an expression has terminated:
+
+// The parser determines that an expression has terminated when it
+// encounters one of the following:
 //
 // - the `end` keyword
 // - the semicolon: `;`
 // - any builtin keyword which begins a new expression, such as `let` and `if`
+// - end of file
+//
+// Note: the semicolon `;` is only valid for use in certain contexts:
+// within a `struct` declaration and within a block expression
+// (between `begin` and `end` keywords).
 //
 
 //
 // Keywords
+//
+// Any symbol not in this list is a valid identifier.
 //
 // begin, else, end, false, fun, if, in, let, then, true
 //
@@ -45,6 +56,10 @@
 // 2. struct
 
 // Top level: let
+//
+// Used to define a function:
+
+let
 
 // Top level: struct
 

@@ -720,6 +720,7 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 
       {"_tl_add_", tl_binary_op, "+"},
       {"_tl_sub_", tl_binary_op, "-"},
+      {"_tl_mod_", tl_binary_op, "%"},
       {"_tl_mul_", tl_binary_op, "*"},
       {"_tl_div_", tl_binary_op, "/"},
 
@@ -728,6 +729,10 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
       {"_tl_eq_", tl_binary_op, "=="},
       {"_tl_gte_", tl_binary_op, ">="},
       {"_tl_gt_", tl_binary_op, ">"},
+
+      {"_tl_band_", tl_binary_op, "&"},
+      {"_tl_bor_", tl_binary_op, "|"},
+      {"_tl_bxor_", tl_binary_op, "^"},
 
       {"", null, null},
     };
