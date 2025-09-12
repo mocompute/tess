@@ -809,28 +809,13 @@ static void ti_run_solver(ti_inferer *self) {
 
             constraint *item = &self->constraints.v[i];
 
-            // delete a = a constraints, and a = any constraints
-            if (item->left == item->right || tl_type_equal(item->left, item->right) ||
-                item->left->tag == type_any || item->right->tag == type_any) {
-
+            // erase constraints that are self-satisfied
+            if (tl_type_satisfies(item->left, item->right)) {
                 array_erase(self->constraints, i);
-
-                // i does not increment
                 continue;
             }
 
-            // FIXME
-            // consider tuples and labelled tuples equivalent if their
-            // types satisfy without regard to names
-            // else if (is_any_tuple(item->left) && is_any_tuple(item->right) &&
-            //          tl_type_satisfies(item->left, item->right)) {
-
-            //     array_erase(self->constraints, i);
-            //     continue;
-            // }
-
             else {
-
                 if (unify_one(self, *item)) {
                     // iterate through remainder of constraints and substitute
                     if (substitute_constraints(&item[1], &self->constraints.v[self->constraints.size],
@@ -898,6 +883,14 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
     if (ast_arrow == ann->tag) {
         tl_type *left  = make_type_annotation(self, ann->arrow.left, map);
         tl_type *right = make_type_annotation(self, ann->arrow.right, map);
+
+        // promote simple arrows like a -> b to tuple form: (a, ) -> b
+        if (!is_any_tuple(left)) {
+            tl_type_sized elements = {.v = alloc_malloc(self->type_arena, sizeof elements.v[0]), .size = 1};
+            elements.v[0]          = left;
+            left                   = tl_type_create_tuple(self->type_arena, elements);
+        }
+
         return tl_type_create_arrow(self->type_arena, left, right);
     }
 

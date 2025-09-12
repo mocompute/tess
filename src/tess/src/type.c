@@ -422,6 +422,8 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     }
 
     case type_user: {
+        if (type_arrow != candidate->tag) return 0;
+
         // same-named user types satisfy, though in that case they are expected to be the same identity
         assert(requires == candidate);
         return 0 == strcmp(requires->user.name, candidate->user.name);
