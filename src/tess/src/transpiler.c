@@ -174,83 +174,56 @@ typedef struct {
     hashmap    *map;
 } generate_thunks_ctx;
 
-static void generate_one_thunk(void *ctx_, ast_node *node) {
+static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
+    transpiler *self = ctx->self;
+
+    u64         hash = ast_node_hash(node);
+    if (map_get(ctx->map, &hash, sizeof hash)) return;
+
+    int one = 1;
+    map_set(&ctx->map, &hash, sizeof hash, &one);
+
+    // function declaration
+    char *name = make_thunk_name(self->strings, hash);
+
+    // return type and name
+    out_put_start(self, "static ");
+    a_declaration(self, node->type, name);
+    out_put(self, " ");
+
+    // params
+    out_put(self, "()");
+
+    // body
+    out_put(self, " {\n");
+    self->indent_level++;
+
+    a_thunk(self, node);
+
+    char const *body = pop_result(self);
+    out_put_start_fmt(self, "return %s;", body);
+
+    self->indent_level--;
+    out_put(self, "\n}\n\n");
+}
+
+static void look_for_thunks(void *ctx_, ast_node *node) {
     generate_thunks_ctx *ctx  = ctx_;
     transpiler          *self = ctx->self;
 
     if (ast_if_then_else != node->tag) return;
 
-    // yes branch
-    {
-        u64 hash = ast_node_hash(node->if_then_else.yes);
-        if (map_get(ctx->map, &hash, sizeof hash)) return;
+    log(self, "if-then-else: %s", ast_node_to_string(self->strings, node));
 
-        int one = 1;
-        map_set(&ctx->map, &hash, sizeof hash, &one);
-
-        // function declaration
-        char *name = make_thunk_name(self->strings, hash);
-
-        // return type and name
-        out_put_start(self, "static ");
-        a_declaration(self, node->type, name);
-        out_put(self, " ");
-
-        // params
-        out_put(self, "()");
-
-        // body
-        out_put(self, " {\n");
-        self->indent_level++;
-
-        a_thunk(self, node->if_then_else.yes);
-
-        char const *body = pop_result(self);
-        out_put_start_fmt(self, "return %s;", body);
-
-        self->indent_level--;
-        out_put(self, "\n}\n\n");
-    }
-
-    // no branch
-
-    {
-        u64 hash = ast_node_hash(node->if_then_else.no);
-        if (map_get(ctx->map, &hash, sizeof hash)) return;
-
-        int one = 1;
-        map_set(&ctx->map, &hash, sizeof hash, &one);
-
-        // function declaration
-        char *name = make_thunk_name(self->strings, hash);
-
-        // return type and name
-        out_put_start(self, "static ");
-        a_declaration(self, node->type, name);
-        out_put(self, " ");
-
-        // params
-        out_put(self, "()");
-
-        // body
-        out_put(self, " {\n");
-        self->indent_level++;
-
-        a_thunk(self, node->if_then_else.no);
-
-        char const *body = pop_result(self);
-        out_put_start_fmt(self, "return %s;", body);
-
-        self->indent_level--;
-        out_put(self, "\n}\n\n");
-    }
+    make_one_thunk(ctx, node->if_then_else.yes);
+    make_one_thunk(ctx, node->if_then_else.no);
 }
 
 static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     generate_thunks_ctx ctx;
     ctx.self = self;
     ctx.map  = map_create(self->transient, sizeof(int));
-    for (u32 i = 0; i < n; i++) ast_node_dfs(&ctx, nodes[i], generate_one_thunk);
+    for (u32 i = 0; i < n; i++) ast_node_dfs(&ctx, nodes[i], look_for_thunks);
     map_destroy(&ctx.map);
 }
 
@@ -502,6 +475,7 @@ static int a_if_then_else(transpiler *self, ast_node const *node) {
 
     // dispatch to thunks
     char *var = next_variable(self);
+    out_put_start(self, "");
     a_declaration(self, node->type, var);
     out_put(self, ";\n");
     out_put_start_fmt(self, "if (%s) %s = %s(); else %s = %s();\n", condition, var, yes, var, no);

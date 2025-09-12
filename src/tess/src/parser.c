@@ -259,8 +259,10 @@ static int is_reserved(char const *s) {
 }
 
 static int is_start_of_expression(char const *s) {
+    // these keywords always begina new expression
+
     static char const *strings[] = {
-      "begin", "fun", "if", "in", "let", "struct", null,
+      "begin", "else", "fun", "if", "in", "let", "then", "struct", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1718,10 +1720,14 @@ error:
 }
 
 static int grouped_expression(parser *self) {
+    log(self, "enter grouped expression");
+
     if (a_try(self, a_open_round)) {
         self->error.tag = tl_err_ok;
         return 1;
     }
+
+    log(self, "try grouped expression");
 
     if (a_try(self, expression)) {
         self->error.tag = tl_err_ok;
@@ -1745,6 +1751,9 @@ static int expression(parser *self) {
 
     self->indent_level++;
 
+    if (0 == a_try(self, grouped_expression)) goto success;
+    // ignore grouped_expression failure because it could be a tuple
+
     if (0 == a_try(self, expression_let)) goto success;
     if (has_error(self)) goto error;
 
@@ -1764,9 +1773,6 @@ static int expression(parser *self) {
     if (has_error(self)) goto error;
 
     if (0 == a_try(self, function_application)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, grouped_expression)) goto success;
     if (has_error(self)) goto error;
 
     if (0 == a_try(self, begin_end_expression)) goto success;
