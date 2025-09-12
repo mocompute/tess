@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "ast.h"
+#include "hashmap.h"
 #include "type_registry.h"
 
 typedef struct ti_inferer ti_inferer;
@@ -20,5 +21,8 @@ void          ti_inferer_report_errors(ti_inferer *);
 void          ti_inferer_set_verbose(ti_inferer *, int);
 void          ti_inferer_dbg_constraints(ti_inferer const *);
 void          ti_inferer_dbg_substitutions(ti_inferer const *);
+
+typedef void (*ti_traverse_lexical_fun)(void *, ast_node *, hashmap **);
+void ti_traverse_lexical(ti_inferer *, void *, ast_node *, ti_traverse_lexical_fun);
 
 #endif

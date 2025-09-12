@@ -102,11 +102,9 @@ static tl_type   *make_args_type(allocator *, ast_node *[], u16);
 static tl_type   *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
 static ast_node  *find_let_node(char const *, tl_type_sized, ast_node_sized, int, ast_node_array *);
 static tl_type   *get_prim(ti_inferer *, tl_type_tag);
-static void       next_variable_name(rename_variables_ctx *, string_t *);
+static void       next_variable_name(ti_inferer *, string_t *);
 static void       reassign_typevars(void *, ast_node *);
-static void       rename_array_elements(rename_variables_ctx *, ast_node **, u16);
 static void       rename_if_match(allocator *, string_t *, hashmap *, string_t *);
-static void       rename_variables(rename_variables_ctx *, ast_node *);
 static void       specialize_node(void *, ast_node *);
 
 static size_t     apply_one_substitution(tl_type **, tl_type *, tl_type *);
@@ -301,10 +299,10 @@ void ti_inferer_report_errors(ti_inferer *self) {
 
 // -- rename variables --
 
-static void next_variable_name(rename_variables_ctx *self, string_t *out) {
+static void next_variable_name(ti_inferer *self, string_t *out) {
     char buf[64];
-    snprintf(buf, sizeof buf, "_v%u_", self->ti->next_var++);
-    *out = string_t_init(self->ti->type_arena, buf);
+    snprintf(buf, sizeof buf, "_v%u_", self->next_var++);
+    *out = string_t_init(self->type_arena, buf);
 }
 
 static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
@@ -316,213 +314,172 @@ static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, st
     }
 }
 
-static void rename_variables(rename_variables_ctx *, ast_node *);
+typedef void (*ti_traverse_lexical_fun)(void *ctx, ast_node *, hashmap **lexical_map);
 
-static void rename_array_elements(rename_variables_ctx *self, ast_node **elements, u16 n) {
-    for (size_t i = 0; i < n; ++i) {
-        ast_node const *name = elements[i];
-        // parameter may be a symbol or nil
-        if (ast_symbol != name->tag) break; // nil can only be sole param
-
-        string_t var_name;
-        next_variable_name(self, &var_name);
-
-        map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name), &var_name);
-
-        // rename the actual parameter symbol
-        rename_variables(self, elements[i]);
-    }
-}
-
-static void rename_variables(rename_variables_ctx *self, ast_node *node) {
+void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun, hashmap **map) {
     if (!node) return;
-
-    // The purpose of this operation is to rename all variables in the
-    // program in order to respect lexical scoping rules and variable
-    // shadowing rules. Doing this at the start of type analysis lets
-    // us assume every occurence of a particular variable name must
-    // have the same type.
-    //
-    // Non variable symbols such as struct type field names do not
-    // need to participate in this transformation, because the
-    // constraint solver knows how to respect constraints relating to
-    // user type fields.
 
     switch (node->tag) {
 
-    case ast_symbol: {
-        struct ast_symbol *v = ast_node_sym(node);
-        return rename_if_match(self->alloc, &v->name, self->map, &v->original);
-    }
+    case ast_symbol:
+        // symbol nodes are affected by the lexical context
+        fun(ctx, node, map);
+        break;
 
     case ast_address_of:
-        //
-        rename_variables(self, node->address_of.target);
+        // not affected by lexical context
+        do_traverse_lexical(ctx, node->address_of.target, fun, map);
         break;
 
     case ast_arrow:
-        //
-        rename_variables(self, node->arrow.left);
-        rename_variables(self, node->arrow.right);
+        // not affected by lexical context
+        do_traverse_lexical(ctx, node->arrow.left, fun, map);
+        do_traverse_lexical(ctx, node->arrow.right, fun, map);
         break;
 
     case ast_dereference:
-        //
-        rename_variables(self, node->dereference.target);
+        // not affected by lexical context
+        do_traverse_lexical(ctx, node->dereference.target, fun, map);
         break;
 
     case ast_assignment: {
+        // a utility node, does nothing on its own. It is part of
+        // let_match_in, or labelled_tuple.
         struct ast_assignment *v = ast_node_assignment(node);
-        rename_variables(self, v->name);
-        rename_variables(self, v->value);
+        do_traverse_lexical(ctx, v->name, fun, map);
+        do_traverse_lexical(ctx, v->value, fun, map);
     } break;
 
     case ast_labelled_tuple:
     case ast_tuple:          {
-        // for labelled tuples, the names do not need to be renamed
+        // not affected by lexical context
         struct ast_array *v = ast_node_arr(node);
-        for (size_t i = 0; i < v->n; ++i) rename_variables(self, v->nodes[i]);
+        for (size_t i = 0; i < v->n; ++i) do_traverse_lexical(ctx, v->nodes[i], fun, map);
     } break;
 
     case ast_let_in: {
-        // make a new variable for this let-in subexpression and recurse,
-        // but save prior value in case this is a shadowing binding.
+        // This node type creates a lexical context. So we traverse is
+        // a specific order: first the value, because it operates in
+        // the pre-existing lexical context. Next the let_in node
+        // itself, allowing fun() to update map. Then the name and
+        // body, which exist in the created context.
+        struct ast_let_in *v    = ast_node_let_in(node);
 
-        // first apply rename to the value portion of the expression,
-        // since it is not allowed to refer to the symbol being defined.
-        // But it may refer to an outer let-in binding of the same name.
-        struct ast_let_in *v = ast_node_let_in(node);
+        hashmap           *save = map_copy(*map);
 
-        rename_variables(self, v->value);
+        do_traverse_lexical(ctx, v->value, fun, map);
+        fun(ctx, node, map);
+        do_traverse_lexical(ctx, v->name, fun, map);
+        do_traverse_lexical(ctx, v->body, fun, map);
+        fun(ctx, node, map);
 
-        string_t var_name;
-        next_variable_name(self, &var_name);
-
-        hashmap *save = map_copy(self->map);
-        assert(save);
-
-        ast_node const *name = v->name;
-        assert(ast_symbol == name->tag);
-
-        map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name), &var_name);
-
-        rename_variables(self, v->name);
-        rename_variables(self, v->body);
-
-        map_destroy(&self->map);
-        self->map = save;
+        map_destroy(map);
+        *map = save;
 
     } break;
 
     case ast_let_match_in: {
         // similar to let_in, only with multiple bindings
-        struct ast_let_match_in   *v  = ast_node_let_match_in(node);
-        struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+        struct ast_let_match_in   *v    = ast_node_let_match_in(node);
+        struct ast_labelled_tuple *lt   = ast_node_lt(v->lt);
 
-        rename_variables(self, v->value); // cannot refer to bindings, so can rename before updating map
+        hashmap                   *save = map_copy(*map);
 
-        hashmap *save = map_copy(self->map);
-        assert(save);
+        do_traverse_lexical(ctx, v->value, fun, map);
+
+        fun(ctx, node, map);
 
         for (u32 i = 0; i < lt->n_assignments; ++i) {
-            string_t var_name;
-            next_variable_name(self, &var_name);
-
-            ast_node const *name = lt->assignments[i]->assignment.name;
-            assert(ast_symbol == name->tag);
-
-            map_set(&self->map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name),
-                    &var_name);
-
-            rename_variables(self, lt->assignments[i]);
+            do_traverse_lexical(ctx, lt->assignments[i], fun, map);
         }
 
-        rename_variables(self, v->body);
+        do_traverse_lexical(ctx, v->body, fun, map);
 
-        map_destroy(&self->map);
-        self->map = save;
+        map_destroy(map);
+        *map = save;
 
     } break;
 
     case ast_let: {
-        // make new variables for all function parameters. save
-        // existing map in case any of them shadow.
-
-        // Also apply renaming of variables to any type annotations.
-        // The let node defines a function - if the function name is
-        // annotated, it may be defining user-defined type variables.
-        // Those variables need to be available for use in annotations
-        // in the body of the function.
+        // creates lexical context
         struct ast_let   *v    = ast_node_let(node);
         struct ast_array *arr  = ast_node_arr(node);
 
-        hashmap          *save = map_copy(self->map);
-        assert(save);
+        hashmap          *save = map_copy(*map);
 
-        // annotations, if any:
-        // FIXME
-        assert(ast_symbol == v->name->tag);
+        fun(ctx, node, map);
 
-        rename_array_elements(self, arr->nodes, arr->n);
-        rename_variables(self, v->body);
+        for (size_t i = 0; i < arr->n; ++i) {
+            do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+        }
 
-        map_destroy(&self->map);
-        self->map = save;
+        do_traverse_lexical(ctx, v->body, fun, map);
+
+        map_destroy(map);
+        *map = save;
 
     } break;
 
     case ast_if_then_else: {
+        // not affected by lexical context
         struct ast_if_then_else *v = ast_node_ifthen(node);
-        rename_variables(self, v->condition);
-        rename_variables(self, v->yes);
-        rename_variables(self, v->no);
+        do_traverse_lexical(ctx, v->condition, fun, map);
+        do_traverse_lexical(ctx, v->yes, fun, map);
+        do_traverse_lexical(ctx, v->no, fun, map);
     } break;
 
     case ast_lambda_function: {
-        // make new variable for function parameters, saving map in case of
-        // shadowing.
+        // creates lexical context
         struct ast_lambda_function *v    = ast_node_lf(node);
         struct ast_array           *arr  = ast_node_arr(node);
 
-        hashmap                    *save = map_copy(self->map);
-        if (!save) fatal("rename_variables: map copy failed.");
+        hashmap                    *save = map_copy(*map);
 
-        rename_array_elements(self, arr->nodes, arr->n);
-        rename_variables(self, v->body);
+        fun(ctx, node, map);
 
-        map_destroy(&self->map);
-        self->map = save;
+        for (size_t i = 0; i < arr->n; ++i) {
+            do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+        }
+        do_traverse_lexical(ctx, v->body, fun, map);
+
+        map_destroy(map);
+        *map = save;
 
     } break;
 
     case ast_lambda_function_application: {
+        // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
-        rename_variables(self, node->lambda_application.lambda);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+        do_traverse_lexical(ctx, node->lambda_application.lambda, fun, map);
     } break;
 
     case ast_named_function_application: {
+        // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
-        rename_variables(self, node->named_application.name);
-        rename_variables(self, node->named_application.specialized);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+        do_traverse_lexical(ctx, node->named_application.name, fun, map);
+        do_traverse_lexical(ctx, node->named_application.specialized, fun, map);
     } break;
 
     case ast_begin_end: {
+        // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) rename_variables(self, arr->nodes[i]);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
 
     } break;
 
     case ast_user_type_get: {
+        // not affected by lexical context
         struct ast_user_type_get *v = ast_node_utg(node);
-        rename_variables(self, v->struct_name);
+        do_traverse_lexical(ctx, v->struct_name, fun, map);
     } break;
 
     case ast_user_type_set: {
+        // not affected by lexical context
         struct ast_user_type_set *v = ast_node_uts(node);
-        rename_variables(self, v->struct_name);
-        rename_variables(self, v->value);
+        do_traverse_lexical(ctx, v->struct_name, fun, map);
+        do_traverse_lexical(ctx, v->value, fun, map);
     } break;
 
     case ast_eof:
@@ -539,17 +496,154 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
     }
 }
 
-static void ti_rename_variables(ti_inferer *self) {
-    rename_variables_ctx ctx;
-    ctx.ti    = self;
-    ctx.alloc = self->type_arena;
-    ctx.map   = map_create(self->type_arena, sizeof(string_t));
+void ti_traverse_lexical(ti_inferer *self, void *ctx, ast_node *node, ti_traverse_lexical_fun fun) {
+    hashmap *lexical_map = map_create(self->type_arena, sizeof(string_t));
 
-    for (u32 i = 0; i < self->nodes->size; ++i) {
-        rename_variables(&ctx, self->nodes->v[i]);
+    do_traverse_lexical(ctx, node, fun, &lexical_map);
+
+    map_destroy(&lexical_map);
+}
+
+void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
+    if (!node) return;
+    ti_inferer *self = ctx;
+
+    // The purpose of this operation is to rename all variables in the
+    // program in order to respect lexical scoping rules and variable
+    // shadowing rules. Doing this at the start of type analysis lets
+    // us assume every occurence of a particular variable name must
+    // have the same type.
+    //
+    // Non variable symbols such as struct type field names do not
+    // need to participate in this transformation, because the
+    // constraint solver knows how to respect constraints relating to
+    // user type fields.
+
+    switch (node->tag) {
+
+    case ast_symbol: {
+        struct ast_symbol *v = ast_node_sym(node);
+        return rename_if_match(self->type_arena, &v->name, *lexical_map, &v->original);
     }
 
-    map_destroy(&ctx.map);
+    case ast_address_of:
+    case ast_arrow:
+    case ast_dereference:
+    case ast_assignment:
+    case ast_labelled_tuple:
+    case ast_tuple:          break;
+
+    case ast_let_in:         {
+
+        // make a new variable for this let-in subexpression and recurse,
+        // but save prior value in case this is a shadowing binding.
+
+        // first apply rename to the value portion of the expression,
+        // since it is not allowed to refer to the symbol being defined.
+        // But it may refer to an outer let-in binding of the same name.
+        struct ast_let_in *v = ast_node_let_in(node);
+
+        string_t           var_name;
+        next_variable_name(self, &var_name);
+
+        ast_node const *name = v->name;
+        assert(ast_symbol == name->tag);
+
+        map_set(lexical_map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name), &var_name);
+
+    } break;
+
+    case ast_let_match_in: {
+        // similar to let_in, only with multiple bindings
+        struct ast_let_match_in   *v  = ast_node_let_match_in(node);
+        struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+
+        for (u32 i = 0; i < lt->n_assignments; ++i) {
+            string_t var_name;
+            next_variable_name(self, &var_name);
+
+            ast_node const *name = lt->assignments[i]->assignment.name;
+            assert(ast_symbol == name->tag);
+
+            map_set(lexical_map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name),
+                    &var_name);
+        }
+
+    } break;
+
+    case ast_let: {
+        // make new variables for all function parameters. save
+        // existing map in case any of them shadow.
+
+        // Also apply renaming of variables to any type annotations.
+        // The let node defines a function - if the function name is
+        // annotated, it may be defining user-defined type variables.
+        // Those variables need to be available for use in annotations
+        // in the body of the function.
+
+        // annotations, if any:
+        // FIXME: we should do the annotations too
+
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) {
+            ast_node const *name = arr->nodes[i];
+            // parameter may be a symbol or nil
+            if (ast_symbol != name->tag) break; // nil can only be sole param
+
+            string_t var_name;
+            next_variable_name(self, &var_name);
+
+            map_set(lexical_map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name),
+                    &var_name);
+
+            // rename the actual parameter symbol
+            rename_one_variables(ctx, arr->nodes[i], lexical_map);
+        }
+
+    } break;
+
+    case ast_if_then_else:
+    case ast_lambda_function: {
+        struct ast_array *arr = ast_node_arr(node);
+        for (size_t i = 0; i < arr->n; ++i) {
+            ast_node const *name = arr->nodes[i];
+            // parameter may be a symbol or nil
+            if (ast_symbol != name->tag) break; // nil can only be sole param
+
+            string_t var_name;
+            next_variable_name(self, &var_name);
+
+            map_set(lexical_map, ast_node_name_string(name), (u16)string_t_size(&name->symbol.name),
+                    &var_name);
+
+            // rename the actual parameter symbol
+            rename_one_variables(ctx, arr->nodes[i], lexical_map);
+        }
+    } break;
+
+    case ast_lambda_function_application:
+    case ast_named_function_application:
+    case ast_begin_end:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_user_type:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_user_type_definition:        break;
+    }
+}
+
+static void ti_rename_variables(ti_inferer *self) {
+    for (u32 i = 0; i < self->nodes->size; ++i) {
+        ti_traverse_lexical(self, self, self->nodes->v[i], rename_one_variables);
+    }
 }
 
 // -- apply substitutions --
@@ -1504,14 +1598,7 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     // rename variables in the specialized function, since at this
     // point every variable name must have 1-1 map to its type
     // rename variables in specialised copies
-    {
-        rename_variables_ctx rename;
-        rename.ti    = ctx->ti;
-        rename.alloc = ctx->ti->type_arena;
-        rename.map   = map_create(ctx->ti->type_arena, sizeof(string_t));
-        rename_variables(&rename, special);
-        map_destroy(&rename.map);
-    }
+    ti_traverse_lexical(ctx->ti, ctx->ti, special, rename_one_variables);
 
     return special;
 }
