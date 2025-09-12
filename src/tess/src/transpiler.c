@@ -223,7 +223,8 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     generate_thunks_ctx ctx;
     ctx.self = self;
     ctx.map  = map_create(self->transient, sizeof(int));
-    for (u32 i = 0; i < n; i++) ast_node_dfs(&ctx, nodes[i], look_for_thunks);
+    for (u32 i = 0; i < n; i++)
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes[i], look_for_thunks);
     map_destroy(&ctx.map);
 }
 

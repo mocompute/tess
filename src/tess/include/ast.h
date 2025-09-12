@@ -265,6 +265,7 @@ c_string_csized ast_nodes_get_names(allocator *, ast_node_slice);
 
 void            ast_node_dfs(void *, ast_node *, ast_op_fun);
 void            ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
+void            ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
 
 int             ast_node_is_specialized(ast_node const *);
 int             ast_node_is_tuple_constructor(ast_node const *);

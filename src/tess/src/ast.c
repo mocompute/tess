@@ -4,6 +4,7 @@
 #include "ast_tags.h"
 #include "dbg.h"
 #include "hash.h"
+#include "hashmap.h"
 #include "sexp.h"
 #include "string_t.h"
 #include "type.h"
@@ -627,6 +628,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
 struct dfs_ctx {
     void      *caller_ctx;
     ast_op_fun fun;
+    hashmap   *visited;
 };
 
 void        ast_node_dfs(void *caller_ctx, ast_node *node, ast_op_fun fun);
@@ -639,6 +641,12 @@ static void dfs_one(void *ctx_, ast_node *node) {
     // exclude user type defs from dfs
     if (ast_user_type_definition == node->tag) return;
 
+    if (ctx->visited) {
+        int one = 1;
+        if (map_get(ctx->visited, &node, sizeof(ast_node *))) return;
+        map_set(&ctx->visited, &node, sizeof(ast_node *), &one);
+    }
+
     ast_node_each_node(ctx, dfs_one, node);
     ctx->fun(ctx->caller_ctx, node);
 }
@@ -649,9 +657,27 @@ void ast_node_dfs(void *caller_ctx, ast_node *node, ast_op_fun fun) {
 
     if (!node) return;
 
-    struct dfs_ctx ctx = {.caller_ctx = caller_ctx, .fun = fun};
+    struct dfs_ctx ctx = {.caller_ctx = caller_ctx, .fun = fun, .visited = null};
     ast_node_each_node(&ctx, dfs_one, node);
     fun(caller_ctx, node);
+}
+
+void ast_node_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *node, ast_op_fun fun) {
+
+    // Note: const dfs also uses this function.
+
+    if (!node) return;
+
+    struct dfs_ctx ctx = {
+      .caller_ctx = caller_ctx,
+      .fun        = fun,
+      .visited    = map_create(alloc, sizeof(int)),
+    };
+
+    ast_node_each_node(&ctx, dfs_one, node);
+    fun(caller_ctx, node);
+
+    map_destroy(&ctx.visited);
 }
 
 void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {

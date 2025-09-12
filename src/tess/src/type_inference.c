@@ -284,7 +284,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
 
     ti_report_errors_ctx ctx = {.self = self};
     for (u32 i = 0; i < self->nodes->size; ++i) {
-        ast_node_dfs(&ctx, self->nodes->v[i], find_error);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], find_error);
     }
 
     dbg("error: unsatisfied constraints\n");
@@ -692,7 +692,7 @@ static size_t ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized s
     apply_substitutions_ctx ctx = {.ti = self, .substitutions = &substitutions, .count = 0};
 
     for (size_t i = 0; i < nodes.size; ++i) {
-        ast_node_dfs(&ctx, nodes.v[i], dfs_apply_substitutions);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes.v[i], dfs_apply_substitutions);
     }
 
     return ctx.count;
@@ -992,7 +992,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
 void ti_assign_type_variables(ti_inferer *self) {
     for (size_t i = 0; i < self->nodes->size; ++i) {
-        ast_node_dfs(self, self->nodes->v[i], assign_type_variables);
+        ast_node_dfs_safe_for_recur(self->transient, self, self->nodes->v[i], assign_type_variables);
     }
 }
 
@@ -1439,7 +1439,7 @@ void ti_collect_constraints(ti_inferer *self) {
     collect_constraints_ctx ctx = {.ti = self, .symbols = map_create(self->type_arena, sizeof(tl_type *))};
 
     for (size_t i = 0; i < self->nodes->size; ++i)
-        ast_node_dfs(&ctx, self->nodes->v[i], collect_constraints);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], collect_constraints);
 
     map_destroy(&ctx.symbols);
 }
@@ -1495,7 +1495,7 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     assign_type_variables(ctx->ti, special);
 
     // assign new typevars to params and to body nodes that are not monotyped
-    ast_node_dfs(ctx->ti, special, reassign_typevars);
+    ast_node_dfs_safe_for_recur(ctx->ti->transient, ctx->ti, special, reassign_typevars);
 
     // rename variables in the specialized function, since at this
     // point every variable name must have 1-1 map to its type
@@ -1573,7 +1573,8 @@ static void ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes)
     ctx.specials = (ast_node_array){.alloc = self->type_arena};
     array_reserve(ctx.specials, 128);
 
-    for (size_t i = 0; i < self->nodes->size; ++i) ast_node_dfs(&ctx, self->nodes->v[i], specialize_node);
+    for (size_t i = 0; i < self->nodes->size; ++i)
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], specialize_node);
 
     if (ctx.specials.size) array_shrink(ctx.specials);
     if (!ctx.specials.v) fatal("ti_specialize_functions: realloc failed.");
@@ -1819,7 +1820,7 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
     };
 
     for (u32 i = 0; i < self->nodes->size; ++i)
-        ast_node_dfs(&ctx, self->nodes->v[i], generate_tuple_function_glue);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], generate_tuple_function_glue);
 
     // add nodes to program
     for (u32 i = 0; i < added.size; ++i) {
