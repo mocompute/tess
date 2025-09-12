@@ -665,6 +665,25 @@ static int expand_value(transpiler *self, ast_node const *node) {
     return 0;
 }
 
+static int tl_unary_op(transpiler *self, ast_node const *node, void *op) {
+    struct ast_named_application *v    = ast_node_named((ast_node *)node);
+    char const                   *name = ast_node_name_string(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+
+    // function call result
+    char *var = next_variable(self);
+    out_put_start(self, "");
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
+
+    // eval the args
+    a_eval(self, v->arguments[0]);
+    char const *arg = pop_result(self);
+
+    out_put_start_fmt(self, "%s = %s(%s);\n", var, (char const *)op, arg);
+    return 0;
+}
+
 static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
     char const                   *name = ast_node_name_string(v->name);
@@ -733,6 +752,8 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
       {"_tl_band_", tl_binary_op, "&"},
       {"_tl_bor_", tl_binary_op, "|"},
       {"_tl_bxor_", tl_binary_op, "^"},
+
+      {"_tl_bcomp_", tl_unary_op, "~"},
 
       {"", null, null},
     };
