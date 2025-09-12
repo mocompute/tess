@@ -31,7 +31,7 @@ let _tl_bsr_     : (a, int) -> a
 let c_malloc     : int -> *any
 let c_free       : *any -> ()
 
-// -- tl lib function implementations --
+// -- tl lib short-named function implementations --
 
 let add lhs rhs  : (a, a) -> a = _tl_add_ lhs rhs
 let sub lhs rhs  : (a, a) -> a = _tl_sub_ lhs rhs

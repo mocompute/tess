@@ -34,6 +34,10 @@
 //
 // - Anything that is surrounded by a single underscore, e.g. `_special_`
 // - Anything that starts with `std_`
+// - `std.tl` defines a number of arithmetic functions without the
+//   `std_` prefix because they are judged to be universally useful.
+//   The behaviour of a program which defines a function with the same
+//   name as a function in `std.tl` is not defined.
 //
 // In addition, the symbol prefix `c_` is recognized as an invocation
 // of a C function. For example, `c_malloc` can be used to access the
