@@ -23,6 +23,9 @@ let _tl_bor_     : (a, a) -> a
 let _tl_bxor_    : (a, a) -> a
 let _tl_bcomp_   : a -> a
 
+let _tl_bsl_     : (a, int) -> a
+let _tl_bsr_     : (a, int) -> a
+
 // -- c stdlib function types --
 
 let c_malloc     : int -> *any
@@ -36,16 +39,19 @@ let mod lhs rhs  : (a, a) -> a = _tl_mod_ lhs rhs
 let mul lhs rhs  : (a, a) -> a = _tl_mul_ lhs rhs
 let div lhs rhs  : (a, a) -> a = _tl_div_ lhs rhs
 
-let band lhs rhs : (a, a) -> a = _tl_band_ lhs rhs
-let bor  lhs rhs : (a, a) -> a = _tl_bor_  lhs rhs
-let bxor lhs rhs : (a, a) -> a = _tl_bxor_ lhs rhs
-let bcomp arg    : a -> a      = _tl_bcomp_ arg
-
 let lt  lhs rhs  : (a, a) -> bool = _tl_lt_  lhs rhs
 let lte lhs rhs  : (a, a) -> bool = _tl_lte_ lhs rhs
 let eq  lhs rhs  : (a, a) -> bool = _tl_eq_  lhs rhs
 let gte lhs rhs  : (a, a) -> bool = _tl_gte_ lhs rhs
 let gt  lhs rhs  : (a, a) -> bool = _tl_gt_  lhs rhs
+
+let band lhs rhs : (a, a) -> a = _tl_band_ lhs rhs
+let bor  lhs rhs : (a, a) -> a = _tl_bor_  lhs rhs
+let bxor lhs rhs : (a, a) -> a = _tl_bxor_ lhs rhs
+let bcomp arg    : a -> a      = _tl_bcomp_ arg
+
+let bsl  arg n   : (a, int) -> a = _tl_bsl_ arg n
+let bsr  arg n   : (a, int) -> a = _tl_bsr_ arg n
 
 let decr x       : a -> a = sub x 1
 let incr x       : a -> a = add x 1

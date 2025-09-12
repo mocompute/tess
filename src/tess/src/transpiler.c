@@ -753,6 +753,9 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
       {"_tl_bor_", tl_binary_op, "|"},
       {"_tl_bxor_", tl_binary_op, "^"},
 
+      {"_tl_bsl_", tl_binary_op, "<<"},
+      {"_tl_bsr_", tl_binary_op, ">>"},
+
       {"_tl_bcomp_", tl_unary_op, "~"},
 
       {"", null, null},
