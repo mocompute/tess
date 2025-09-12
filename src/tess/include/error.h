@@ -57,7 +57,6 @@
     X(tl_err_expected_end_of_expression, "expected_end_of_expression")                                     \
     X(tl_err_expected_open_round, "expected_open_round")                                                   \
     X(tl_err_expected_close_round, "expected_close_round")                                                 \
-    X(tl_err_expected_infix_operand, "expected_infix_operand")                                             \
     X(tl_err_expected_newline, "expected_newline")                                                         \
     X(tl_err_expected_star, "expected_star")                                                               \
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \

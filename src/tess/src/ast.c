@@ -106,13 +106,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation_type = vorig->annotation_type;
     } break;
 
-    case ast_infix: {
-        struct ast_infix *vclone = ast_node_infix(clone), *vorig = ast_node_infix((ast_node *)orig);
-        vclone->left  = ast_node_clone(alloc, vorig->left);
-        vclone->right = ast_node_clone(alloc, vorig->right);
-        vclone->op    = vorig->op;
-    } break;
-
     case ast_let_in: {
         struct ast_let_in *vclone = ast_node_let_in(clone), *vorig = ast_node_let_in((ast_node *)orig);
         vclone->name  = ast_node_clone(alloc, vorig->name);
@@ -314,10 +307,6 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_assignment:
         return quad(alloc, recur(node->assignment.name), sym("="), recur(node->assignment.value), type);
 
-    case ast_infix:
-        return penta(alloc, sym("infix"), sym(ast_operator_to_string(node->infix.op)),
-                     recur(node->infix.left), recur(node->infix.right), type);
-
     case ast_labelled_tuple: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
         return triple(alloc, sym("labelled-tuple"), list, type);
@@ -511,11 +500,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->dereference.target);
         break;
 
-    case ast_infix:
-        fun(ctx, node->infix.left);
-        fun(ctx, node->infix.right);
-        break;
-
     case ast_let_in:
         fun(ctx, node->let_in.name);
         fun(ctx, node->let_in.value);
@@ -605,7 +589,6 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
-    case ast_infix:
     case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
@@ -683,25 +666,11 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_nil",
-      "ast_address_of",
-      "ast_arrow",
-      "ast_assignment",
-      "ast_bool",
-      "ast_dereference",
-      "ast_eof",
-      "ast_f64",
-      "ast_i64",
-      "ast_if_then_else",
-      "ast_infix",
-      "ast_let_in",
-      "ast_let_match_in",
-      "ast_string",
-      "ast_symbol",
-      "ast_u64",
-      "ast_user_type_definition",
-      "ast_user_type_get",
-      "ast_user_type_set",
+      "ast_nil",           "ast_address_of",    "ast_arrow",  "ast_assignment",
+      "ast_bool",          "ast_dereference",   "ast_eof",    "ast_f64",
+      "ast_i64",           "ast_if_then_else",  "ast_let_in", "ast_let_match_in",
+      "ast_string",        "ast_symbol",        "ast_u64",    "ast_user_type_definition",
+      "ast_user_type_get", "ast_user_type_set",
     };
 
     static char const *const strings2[] = {
@@ -822,11 +791,6 @@ struct ast_f64 *ast_node_f64(ast_node *node) {
 struct ast_array *ast_node_arr(ast_node *node) {
     if (!TL_AST_HAS_ARRAY(node->tag)) fatal("ast_node_arr called on non-array variant");
     return &node->array;
-}
-
-struct ast_infix *ast_node_infix(ast_node *node) {
-    assert(node->tag == ast_infix);
-    return &node->infix;
 }
 
 struct ast_lambda_function *ast_node_lf(ast_node *node) {

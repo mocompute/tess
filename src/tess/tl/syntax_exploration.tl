@@ -105,7 +105,7 @@ struct point =
        y : int
 end
 
-// recall we want to keep everything prefix or infix, not postfix
+// recall we want to keep everything prefix, not postfix
 
 let pp : * point = c_malloc 16
 

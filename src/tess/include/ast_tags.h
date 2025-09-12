@@ -25,7 +25,6 @@ typedef enum ast_tag : u16 {
     ast_f64,
     ast_i64,
     ast_if_then_else,
-    ast_infix,
     ast_let_in,
     ast_let_match_in,
     ast_string,

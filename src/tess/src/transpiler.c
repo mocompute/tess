@@ -47,7 +47,6 @@ static int         a_eval(transpiler *, ast_node const *);
 static int         a_field_access(transpiler *, ast_node const *);
 static int         a_intrinsic_apply(transpiler *, ast_node const *);
 static int         a_fun_apply(transpiler *, ast_node const *);
-static int         a_infix(transpiler *, ast_node const *);
 static int         a_let(transpiler *, ast_node const *);
 static int         a_let_prototypes(transpiler *, ast_node const *);
 static int         a_let_in(transpiler *, ast_node const *);
@@ -337,43 +336,6 @@ static int a_toplevel(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-static int a_infix(transpiler *self, ast_node const *node) {
-
-    tl_type const *type = node->type;
-
-    // Eval left and right, resulting in two result variables on the
-    // stack. Eval in reverse order so we can pop them in correct
-    // order.
-    if (a_eval(self, node->infix.right)) return 1;
-    if (a_eval(self, node->infix.left)) return 1;
-    char const *left  = pop_result(self);
-    char const *right = pop_result(self);
-
-    char       *var   = next_variable(self);
-
-    out_put_start(self, "");
-    if (a_declaration(self, type, var)) return 1;
-    out_put_fmt(self, " = %s ", left);
-
-    switch (node->infix.op) {
-    case ast_op_addition:           out_put(self, " + "); break;
-    case ast_op_subtraction:        out_put(self, " - "); break;
-    case ast_op_multiplication:     out_put(self, " * "); break;
-    case ast_op_division:           out_put(self, " / "); break;
-    case ast_op_less_than:          out_put(self, " < "); break;
-    case ast_op_less_than_equal:    out_put(self, " <= "); break;
-    case ast_op_equal:              out_put(self, " == "); break;
-    case ast_op_not_equal:          out_put(self, " != "); break;
-    case ast_op_greater_than_equal: out_put(self, " >= "); break;
-    case ast_op_greater_than:       out_put(self, " > "); break;
-    case ast_op_sentinel:           out_put(self, " FIXME "); break;
-    }
-
-    out_put_fmt(self, "%s;\n", right);
-
-    return 0;
-}
-
 static int a_let_in(transpiler *self, ast_node const *node) {
 
     // let a = 1 in a + 2 end => resN = 3
@@ -571,11 +533,6 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
         break;
 
-    case ast_infix:
-        if (a_infix(self, node)) return 1;
-        pop_and_assign(self, var);
-        break;
-
     case ast_labelled_tuple:
     case ast_tuple:
         if (a_tuple_cons(self, node)) return 1;
@@ -640,7 +597,6 @@ static int expand_value(transpiler *self, ast_node const *node) {
     case ast_f64:
     case ast_i64:
     case ast_if_then_else:
-    case ast_infix:
     case ast_let_in:
     case ast_let_match_in:
     case ast_string:

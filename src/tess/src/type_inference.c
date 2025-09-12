@@ -373,12 +373,6 @@ static void rename_variables(rename_variables_ctx *self, ast_node *node) {
         rename_variables(self, v->value);
     } break;
 
-    case ast_infix: {
-        struct ast_infix *v = ast_node_infix(node);
-        rename_variables(self, v->left);
-        rename_variables(self, v->right);
-    } break;
-
     case ast_labelled_tuple:
     case ast_tuple:          {
         // for labelled tuples, the names do not need to be renamed
@@ -673,7 +667,6 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
-    case ast_infix:
     case ast_labelled_tuple:
     case ast_tuple:
     case ast_let_in:
@@ -977,7 +970,6 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
-    case ast_infix:
     case ast_let_in:
     case ast_let_match_in:
     case ast_if_then_else:
@@ -1301,16 +1293,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
     case ast_function_declaration:
     case ast_lambda_declaration:
         /* function_declaration and lambda_declaration only appear during compilation */
-        break;
-
-    case ast_infix:
-        // operands must be same type
-        push(node->infix.left->type, node->infix.right->type);
-
-        // result must be same type as both
-        push(node->type, node->infix.right->type);
-        push(node->type, node->infix.left->type);
-
         break;
 
     case ast_let_in:

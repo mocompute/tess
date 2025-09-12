@@ -131,12 +131,6 @@ typedef struct ast_node {
             struct ast_node *no;
         } if_then_else;
 
-        struct ast_infix {
-            ast_operator     op;
-            struct ast_node *left;
-            struct ast_node *right;
-        } infix;
-
         struct ast_let_in {
             struct ast_node *name;
             struct ast_node *value;
@@ -218,7 +212,6 @@ struct ast_i64                  *ast_node_i64(ast_node *);
 struct ast_u64                  *ast_node_u64(ast_node *);
 struct ast_f64                  *ast_node_f64(ast_node *);
 struct ast_array                *ast_node_arr(ast_node *);
-struct ast_infix                *ast_node_infix(ast_node *);
 struct ast_lambda_function      *ast_node_lf(ast_node *);
 struct ast_let_in               *ast_node_let_in(ast_node *);
 struct ast_let_match_in         *ast_node_let_match_in(ast_node *);
