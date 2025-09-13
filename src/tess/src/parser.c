@@ -27,16 +27,14 @@ struct parser {
     allocator             *ast_arena;    // for ast nodes and related
     allocator             *transient;    // reset after each call to parser_next
 
+    tokenizer             *tokenizer;
+
     c_string_csized        files;
     u16                    files_index;
     char_csized            current_file_data;
 
-    tokenizer             *tokenizer;
-
     ast_node              *result;
-
     hashmap               *forwards;
-
     token_array            tokens;
 
     struct parser_error    error;
@@ -44,7 +42,6 @@ struct parser {
     struct token           token;
 
     u32                    next_nil_name;
-
     int                    verbose;
     int                    indent_level;
     int                    in_function_application; // enable greedy parsing
@@ -145,10 +142,10 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
 
     alloc_zero(self);
     self->parent_alloc            = alloc;
-    self->file_arena              = arena_create(self->parent_alloc, 64 * 1024);
-    self->tokens_arena            = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->ast_arena               = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
-    self->transient               = arena_create(self->parent_alloc, PARSER_ARENA_SIZE);
+    self->file_arena              = arena_create(alloc, 64 * 1024);
+    self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->files                   = files;
     self->files_index             = 0;
     self->current_file_data.v     = null;
@@ -157,7 +154,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->indent_level            = 0;
     self->in_function_application = 0;
 
-    self->forwards                = map_create(self->parent_alloc, sizeof(ast_node *));
+    self->forwards                = map_create(alloc, sizeof(ast_node *));
 
     self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
@@ -183,11 +180,12 @@ void parser_destroy(parser **self) {
     if ((*self)->tokenizer) tokenizer_destroy(&(*self)->tokenizer);
 
     // arena
-    arena_destroy((*self)->parent_alloc, &(*self)->transient);
-    arena_destroy((*self)->parent_alloc, &(*self)->ast_arena);
-    arena_destroy((*self)->parent_alloc, &(*self)->tokens_arena);
-    arena_destroy((*self)->parent_alloc, &(*self)->file_arena);
-    alloc_free((*self)->parent_alloc, *self);
+    allocator *alloc = (*self)->parent_alloc;
+    arena_destroy(alloc, &(*self)->transient);
+    arena_destroy(alloc, &(*self)->ast_arena);
+    arena_destroy(alloc, &(*self)->tokens_arena);
+    arena_destroy(alloc, &(*self)->file_arena);
+    alloc_free(alloc, *self);
     *self = null;
 }
 
