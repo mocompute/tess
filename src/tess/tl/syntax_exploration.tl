@@ -135,7 +135,7 @@ let x1 = val in
   x1 |> step1 |> step2 |> step3
 end
 // or with keyword "it"
-pipe x1 = val
+pipe x1 = initval
   in  step1 it
   and step2 it extra
   and step3 flipped it more
@@ -143,6 +143,29 @@ pipe x1 = val
 end
 // again, prefer prefix notation for everything
 
+let x1 = initval
+    then step1 it
+    then step2 it extra
+    then step3 flip it
+    then it x y z
+    
+
+let res =
+    with initval
+    do step1 it
+    do step2 it extra
+    do step3 flip it
+    do it ()
+    end
+    
+
+// equivalent to   
+let res = initval in
+let res = step1 res in
+let res = step2 extra in
+let res = step3 flip res in
+let res = res ()
+in  res 
 
 
 
