@@ -14,10 +14,11 @@ let ex3 () =
     ptr.*.b
 
 let ex4 () =
-    let val = 1  in
+    let val = 1 in
     let ptr = &val in
-    let () = begin ptr.* := 0 end in
-    val
+    let () =
+        begin ptr.* := 0 end
+    in val
 
 
 
