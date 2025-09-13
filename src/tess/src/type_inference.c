@@ -275,8 +275,6 @@ static void find_error(void *ctx_, ast_node *node) {
     ctx->error_count++;
     fprintf(stderr, "%s:%u: cannot infer type of %s\n", node->file, node->line,
             ast_node_to_string_for_error(self->transient, node));
-
-    arena_reset(self->transient);
 }
 
 void ti_inferer_report_errors(ti_inferer *self) {
