@@ -908,6 +908,7 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
       {"_tl_lt_", tl_binary_op, "<"},
       {"_tl_lte_", tl_binary_op, "<="},
       {"_tl_eq_", tl_binary_op, "=="},
+      {"_tl_neq_", tl_binary_op, "!="},
       {"_tl_gte_", tl_binary_op, ">="},
       {"_tl_gt_", tl_binary_op, ">"},
 

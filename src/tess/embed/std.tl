@@ -15,6 +15,7 @@ let _tl_bxor_    : (a, a) -> a
 let _tl_lt_      : (a, a) -> bool
 let _tl_lte_     : (a, a) -> bool
 let _tl_eq_      : (a, a) -> bool
+let _tl_neq_      : (a, a) -> bool
 let _tl_gte_     : (a, a) -> bool
 let _tl_gt_      : (a, a) -> bool
 
@@ -42,6 +43,7 @@ let div lhs rhs  : (a, a) -> a = _tl_div_ lhs rhs
 let lt  lhs rhs  : (a, a) -> bool = _tl_lt_  lhs rhs
 let lte lhs rhs  : (a, a) -> bool = _tl_lte_ lhs rhs
 let eq  lhs rhs  : (a, a) -> bool = _tl_eq_  lhs rhs
+let neq lhs rhs  : (a, a) -> bool = _tl_neq_ lhs rhs
 let gte lhs rhs  : (a, a) -> bool = _tl_gte_ lhs rhs
 let gt  lhs rhs  : (a, a) -> bool = _tl_gt_  lhs rhs
 
