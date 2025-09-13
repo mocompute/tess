@@ -1,6 +1,6 @@
-// -*- mode: fsharp -*-
-
 // Basics
+
+//
 
 // Comments: line comments only, no block comments
 
@@ -26,7 +26,7 @@
 //
 // Any symbol not in this list is a valid identifier.
 //
-// begin, else, end, false, fun, if, in, let, then, true
+// begin, else, end, false, fun, if, in, let, struct, then, true
 //
 
 //
@@ -84,6 +84,25 @@ end
 
 // Matching let expression
 
+let p = Point 1 2 in
+let (left = x, top = y) = p in ...
+
+// The ellipsis...
+
+struct Big =
+  a : int
+  b : int
+  c : int
+  d : string
+  // etc
+end
+
+let b = Big // ...
+let (val = a, rest = ...) = b in
+  // val =>  takes value of field a
+  // rest => a labelled tuple of the remaining fields not including a
+
+
 // Block expression
 
 // Multiple expressions separated by `;`. Expression value is the
@@ -101,12 +120,48 @@ end
 
 // Labelled tuples
 
+//
+// Match expression
+//
+// A expression with any number of conditional arms. The first one
+// that matches correctly is evaluated and becomes the result of the
+// expression.
+//
+// Note that the pattern matching is left-to-right, the same as when
+// used in a let-match expression. That is, the label being set, or
+// the value being tested is on the left of the equal sign, and the
+// pattern being matched is on the right hand side. This differs from
+// some other lanugages with similar syntax, but was chosen for its
+// consistency: the right hand side always refers to the structure of
+// the object whose values are being extracted.
+//
 
 
-struct point =
-       x : int ;
-       y : int
-end
+let p = Point 1 2 in
+let result =
+  match p in
+  | (0 = x) -> "zero"
+  | (1 = x) -> "one"
+  end
+
+// Matching on simple values
+let result =
+  match val in
+  | 0 -> "zero"
+  | 1 -> "one"
+  | else -> "something else"
+  end
+
+// Binding symbols to match
+let p = Point 1 2 in
+  let result =
+    match p in
+    | (top = y) -> mul top 3
+    end
+// => result = 6
+
+
+
 
 // recall we want to keep everything prefix, not postfix
 
@@ -166,62 +221,3 @@ let res = step2 extra in
 let res = step3 flip res in
 let res = res ()
 in  res
-
-
-
-
-let p = point 1 2 in ...
-
-let tup : (int, int) = (1, 2)
-let ptup : *(int, int) = &tup
-
-
-let main ()  =
-    let (p : ptr point) = c_malloc 16 in
-    let obj = deref p in
-    begin
-        p x := 1 ;
-        p.x := 1 ;
-
-        p..x := 1;
-        .p.x := 1;
-
-
-        .p.x := 1;              // no good because of chaining .p.x.y.z what is going on?
-        .p.x = 1 ;
-
-
-        !p.x := 1;
-        p!.x := 1;
-
-        (deref p) . x := 1 ;
-
-
-        p:x := 1;
-        p:x <- 1;
-
-        a : int <- 1;           // oof
-
-        * ptr . x := 1
-        // chaining?
-        * ptr . * pp ...
-        // or
-        ptr . * . pp . * . x ?
-        ptr.*.pp.*.x
-        ptr.*.y := 2
-        (assign (dot (deref ptr) x) 2)
-
-
-        obj.x := 1 ;
-        obj.y := 2 ;
-        0 ;
-    end
-
-
-let map f xs =
-     for
-
-// compiler intrinsics
-
-let x = _tl_sizeof_ foo
-    => (intrinsic-application _tl_sizeof_ (symbol foo))
