@@ -47,9 +47,10 @@ typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 static int         a_declaration(transpiler *, tl_type const *, char const *);
 static int         a_eval(transpiler *, ast_node const *);
 static int         a_if_then_else(transpiler *, ast_node const *);
+static int         a_field_setter(transpiler *, ast_node const *);
 static int         a_field_access(transpiler *, ast_node const *);
-static int         a_intrinsic_apply(transpiler *, ast_node const *);
-static int         a_fun_apply(transpiler *, ast_node const *);
+static int         a_intrinsic_apply(transpiler *, ast_node const *, compile_fun_t);
+static int         a_fun_apply(transpiler *, ast_node const *, compile_fun_t);
 static int         a_let(transpiler *, ast_node const *);
 static int         a_let_prototypes(transpiler *, ast_node const *);
 static int         a_let_in(transpiler *, ast_node const *);
@@ -540,7 +541,160 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
 static int a_thunk(transpiler *self, ast_node const *node) {
     // a function which evaluates itself and returns its value, used
     // to defer evaluation such as with short-circuit conditionals.
-    return a_eval(self, node);
+    //
+    // code here is a customised copy of a_eval which rewrites symbol
+    // access to use the thunk context pointer.
+    if (!node || !node->type) fatal("a_thunk: node or type is null");
+
+    char *var = next_variable(self);
+
+    // declare result
+    out_put(self, "\n");
+    out_put_start_fmt(self, "/* thunk: %s */\n", ast_node_to_string(self->strings, node));
+    out_put_start(self, "");
+    a_declaration(self, node->type, var);
+    out_put(self, ";\n");
+
+    switch (node->tag) {
+    case ast_assignment:
+    case ast_arrow:
+    case ast_eof:
+    case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
+    case ast_symbol:
+        // if symbol is a function name, we have to mangle it
+        if (type_arrow == node->type->tag) {
+            out_put_start_fmt(self, "%s = %s;\n", var,
+                              make_function_name(self->strings, ast_node_name_string(node)));
+        } else {
+            // access symbol through context variable and dereference it
+            // FIXME this is the patch point where we differ from a_eval
+            out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
+        }
+        break;
+
+    case ast_string: out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
+    case ast_i64:    out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
+    case ast_u64:    out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
+    case ast_f64:    out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
+    case ast_bool:
+        if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
+        else out_put_start_fmt(self, "%s = 0;\n", var);
+        break;
+
+    case ast_address_of: {
+        if (ast_symbol == node->address_of.target->tag) {
+            log(self, "taking address of '%s'", ast_node_to_string(self->strings, node->address_of.target));
+            out_put_start_fmt(self, "%s = &(%s);\n", var, ast_node_name_string(node->address_of.target));
+        } else {
+            if (a_thunk(self, node->address_of.target)) return 1;
+            char const *res = pop_result(self);
+            out_put_start_fmt(self, "%s = &(%s);\n", var, res);
+        }
+    } break;
+
+    case ast_dereference: {
+        if (a_thunk(self, node->dereference.target)) return 1;
+        char const *ptr = pop_result(self);
+        out_put_start_fmt(self, "%s = *(%s);\n", var, ptr);
+    } break;
+
+    case ast_dereference_assign: {
+        if (a_thunk(self, node->dereference_assign.target)) return 1;
+        char const *ptr = pop_result(self);
+        if (a_thunk(self, node->dereference_assign.value)) return 1;
+        char const *value = pop_result(self);
+
+        out_put_start_fmt(self, "*(%s) = %s;\n", ptr, value);
+        out_put_start_fmt(self, "%s = %s;\n", var, value);
+    } break;
+
+    case ast_begin_end: {
+        struct ast_begin_end const *v = ast_node_begin_end((ast_node *)node);
+        if (v->n_expressions == 0) break;
+        for (u32 i = 0; i < v->n_expressions - 1; ++i) {
+            out_put_start(self, "");
+            if (a_thunk(self, v->expressions[i])) return 1;
+            out_put(self, "\n");
+            (void)pop_result(self); // ignore results of all but last expression
+        }
+        if (a_thunk(self, v->expressions[v->n_expressions - 1])) return 1;
+        pop_and_assign(self, var);
+    } break;
+
+    case ast_user_type: {
+        // eval each field in the user_type and assign to its matching struct field
+        struct ast_user_type const *v = ast_node_ut((ast_node *)node);
+
+        tl_type **type = type_registry_find_name(self->type_registry, ast_node_name_string(v->name));
+        if (!type) fatal("a_thunk: type '%s' not found in registry", ast_node_name_string(v->name));
+
+        struct tlt_user const           *usertype = tl_type_user(*type);
+        struct tlt_labelled_tuple const *lt       = tl_type_lt(usertype->labelled_tuple);
+
+        for (u16 i = 0; i < v->n_fields; ++i) {
+            if (a_thunk(self, v->fields[i])) return 1;
+            char const *res = pop_result(self);
+            out_put(self, "\n");
+            out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
+        }
+    } break;
+
+    case ast_user_type_get:
+        // emit object field access
+        if (a_field_access(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+
+    case ast_user_type_set:
+        // emit object field setter
+        if (a_field_setter(self, node)) return 1;
+        pop_and_assign(self, var);
+
+        break;
+
+    case ast_labelled_tuple:
+    case ast_tuple:
+        if (a_tuple_cons(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+
+    case ast_let_in:
+        if (a_let_in(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+
+    case ast_let_match_in:
+        if (a_let_match_in(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+
+    case ast_let:
+        if (a_let(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+
+    case ast_if_then_else:
+        if (a_if_then_else(self, node)) return 1;
+        pop_and_assign(self, var);
+        break;
+    case ast_lambda_function:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application: break;
+
+    case ast_named_function_application:  {
+        if (TEST_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
+            if (a_intrinsic_apply(self, node, a_thunk)) return 1;
+        } else {
+            if (a_fun_apply(self, node, a_thunk)) return 1;
+        }
+        pop_and_assign(self, var);
+    } break;
+
+    case ast_user_type_definition: break;
+    }
+
+    return 0;
 }
 
 static int a_if_then_else(transpiler *self, ast_node const *node) {
@@ -760,9 +914,9 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     case ast_named_function_application:  {
         if (TEST_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
-            if (a_intrinsic_apply(self, node)) return 1;
+            if (a_intrinsic_apply(self, node, a_eval)) return 1;
         } else {
-            if (a_fun_apply(self, node)) return 1;
+            if (a_fun_apply(self, node, a_eval)) return 1;
         }
         pop_and_assign(self, var);
     } break;
@@ -878,7 +1032,9 @@ static int tl_sizeof(transpiler *self, ast_node const *node, void *extra) {
     return 0;
 }
 
-static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
+static int a_intrinsic_apply(transpiler *self, ast_node const *node, compile_fun_t eval_fun) {
+    (void)eval_fun;
+
     assert(ast_named_function_application == node->tag);
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
     char const                   *name = ast_node_name_string(v->name);
@@ -925,7 +1081,7 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
     return 1;
 }
 
-static int a_fun_apply(transpiler *self, ast_node const *node) {
+static int a_fun_apply(transpiler *self, ast_node const *node, compile_fun_t eval_fun) {
     assert(ast_named_function_application == node->tag);
 
     struct ast_named_application const *v    = ast_node_named((ast_node *)node);
@@ -951,7 +1107,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     i32 const n_args = v->n_arguments;
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
-            if (a_eval(self, v->arguments[i])) return 1;
+            if (eval_fun(self, v->arguments[i])) return 1;
 
     // function call result
     out_put_start(self, "");
