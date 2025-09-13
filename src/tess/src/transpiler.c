@@ -8,6 +8,7 @@
 #include "dbg.h"
 #include "string_t.h"
 #include "type.h"
+#include "type_inference.h"
 #include "type_registry.h"
 #include "util.h"
 
@@ -1018,9 +1019,19 @@ static int a_main(transpiler *self, ast_node const *node) {
 
     if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
 
+        // figure out the free variables in use in this function
+        ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
         self->indent_level++;
+
+        // print free variables for debug reasons
+        out_put_start(self, "/*\n\nfree variables: \n\n");
+        for (u32 i = 0; i < free_variables.size; ++i) {
+            out_put_start_fmt(self, "%s\n", ast_node_to_string(self->strings, free_variables.v[i]));
+        }
+        out_put_start(self, "\n*/\n");
 
         int res = 0;
         if ((res = a_eval(self, v->body))) return res;
@@ -1242,6 +1253,9 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     log(self, "processing '%s'...", name);
 
+    // figure out the free variables in use in this function
+    ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+
     // mangle the name
     name = make_function_name(self->strings, name);
 
@@ -1263,6 +1277,13 @@ static int a_let(transpiler *self, ast_node const *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
+
+    // print free variables for debug reasons
+    out_put_start(self, "/*\n\nfree variables: \n\n");
+    for (u32 i = 0; i < free_variables.size; ++i) {
+        out_put_start_fmt(self, "%s\n", ast_node_to_string(self->strings, free_variables.v[i]));
+    }
+    out_put_start(self, "\n*/\n");
 
     if (a_eval(self, v->body)) return 1;
 

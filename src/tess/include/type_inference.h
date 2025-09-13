@@ -23,6 +23,8 @@ void          ti_inferer_dbg_constraints(ti_inferer const *);
 void          ti_inferer_dbg_substitutions(ti_inferer const *);
 
 typedef void (*ti_traverse_lexical_fun)(void *, ast_node *, hashmap **);
-void ti_traverse_lexical(ti_inferer *, void *, ast_node *, ti_traverse_lexical_fun);
+void           ti_traverse_lexical(allocator *, void *, ast_node *, ti_traverse_lexical_fun);
+
+ast_node_sized ti_free_variables_in(allocator *, ast_node const *);
 
 #endif

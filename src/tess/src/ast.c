@@ -1118,3 +1118,5 @@ u64 ast_node_hash(ast_node const *self) {
 
     return hash;
 }
+
+//

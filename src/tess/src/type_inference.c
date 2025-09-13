@@ -314,51 +314,65 @@ static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, st
 
 typedef void (*ti_traverse_lexical_fun)(void *ctx, ast_node *, hashmap **lexical_map);
 
-void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun, hashmap **map) {
+typedef struct {
+    void    *user_ctx;
+    hashmap *lexical_map;
+    hashmap *visited;
+} traverse_lexical_ctx;
+
+void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun) {
+    traverse_lexical_ctx *ctx = ctx_;
+
     if (!node) return;
+
+    if (ctx->visited) {
+        int one = 1;
+        if (map_get(ctx->visited, &node, sizeof(ast_node *))) return;
+        map_set(&ctx->visited, &node, sizeof(ast_node *), &one);
+    }
 
     switch (node->tag) {
 
     case ast_symbol:
         // symbol nodes are affected by the lexical context
-        fun(ctx, node, map);
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
         break;
 
     case ast_address_of:
         // not affected by lexical context
-        do_traverse_lexical(ctx, node->address_of.target, fun, map);
+        do_traverse_lexical(ctx, node->address_of.target, fun);
         break;
 
     case ast_arrow:
         // not affected by lexical context
-        do_traverse_lexical(ctx, node->arrow.left, fun, map);
-        do_traverse_lexical(ctx, node->arrow.right, fun, map);
+        do_traverse_lexical(ctx, node->arrow.left, fun);
+        do_traverse_lexical(ctx, node->arrow.right, fun);
         break;
 
     case ast_dereference:
         // not affected by lexical context
-        do_traverse_lexical(ctx, node->dereference.target, fun, map);
+        do_traverse_lexical(ctx, node->dereference.target, fun);
         break;
 
     case ast_dereference_assign:
         // not affected by lexical context
-        do_traverse_lexical(ctx, node->dereference_assign.target, fun, map);
-        do_traverse_lexical(ctx, node->dereference_assign.value, fun, map);
+        do_traverse_lexical(ctx, node->dereference_assign.target, fun);
+        do_traverse_lexical(ctx, node->dereference_assign.value, fun);
         break;
 
     case ast_assignment: {
         // a utility node, does nothing on its own. It is part of
         // let_match_in, or labelled_tuple.
         struct ast_assignment *v = ast_node_assignment(node);
-        do_traverse_lexical(ctx, v->name, fun, map);
-        do_traverse_lexical(ctx, v->value, fun, map);
+        do_traverse_lexical(ctx, v->name, fun);
+        do_traverse_lexical(ctx, v->value, fun);
     } break;
 
     case ast_labelled_tuple:
     case ast_tuple:          {
         // not affected by lexical context
         struct ast_array *v = ast_node_arr(node);
-        for (size_t i = 0; i < v->n; ++i) do_traverse_lexical(ctx, v->nodes[i], fun, map);
+        for (size_t i = 0; i < v->n; ++i) do_traverse_lexical(ctx, v->nodes[i], fun);
     } break;
 
     case ast_let_in: {
@@ -369,16 +383,30 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
         // body, which exist in the created context.
         struct ast_let_in *v    = ast_node_let_in(node);
 
-        hashmap           *save = map_copy(*map);
+        hashmap           *save = map_copy(ctx->lexical_map);
 
-        do_traverse_lexical(ctx, v->value, fun, map);
-        fun(ctx, node, map);
-        do_traverse_lexical(ctx, v->name, fun, map);
-        do_traverse_lexical(ctx, v->body, fun, map);
-        fun(ctx, node, map);
+        do_traverse_lexical(ctx, v->value, fun);
 
-        map_destroy(map);
-        *map = save;
+        {
+            // add an entry in the lexical map for each variable being
+            // created in the lexical scope. Clients like
+            // rename_variables will reset the value to something
+            // particular, but other clients may just need to
+            // determine existence of the symbol.
+            ast_node   *name     = node->let_in.name;
+            char const *name_str = ast_node_name_string(name);
+            string_t    empty    = string_t_init_empty();
+            map_set(&ctx->lexical_map, name_str, strlen(name_str), &empty);
+        }
+
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
+
+        do_traverse_lexical(ctx, v->name, fun);
+        do_traverse_lexical(ctx, v->body, fun);
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
+
+        map_destroy(&ctx->lexical_map);
+        ctx->lexical_map = save;
 
     } break;
 
@@ -387,20 +415,33 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
         struct ast_let_match_in   *v    = ast_node_let_match_in(node);
         struct ast_labelled_tuple *lt   = ast_node_lt(v->lt);
 
-        hashmap                   *save = map_copy(*map);
+        hashmap                   *save = map_copy(ctx->lexical_map);
 
-        do_traverse_lexical(ctx, v->value, fun, map);
+        do_traverse_lexical(ctx, v->value, fun);
 
-        fun(ctx, node, map);
+        {
+            // see note in ast_let above
+            string_t empty = string_t_init_empty();
+            for (u32 i = 0; i < lt->n_assignments; ++i) {
 
-        for (u32 i = 0; i < lt->n_assignments; ++i) {
-            do_traverse_lexical(ctx, lt->assignments[i], fun, map);
+                ast_node const *name = lt->assignments[i]->assignment.name;
+                assert(ast_symbol == name->tag);
+
+                char const *name_str = ast_node_name_string(name);
+                map_set(&ctx->lexical_map, name_str, strlen(name_str), &empty);
+            }
         }
 
-        do_traverse_lexical(ctx, v->body, fun, map);
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
 
-        map_destroy(map);
-        *map = save;
+        for (u32 i = 0; i < lt->n_assignments; ++i) {
+            do_traverse_lexical(ctx, lt->assignments[i], fun);
+        }
+
+        do_traverse_lexical(ctx, v->body, fun);
+
+        map_destroy(&ctx->lexical_map);
+        ctx->lexical_map = save;
 
     } break;
 
@@ -409,27 +450,41 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
         struct ast_let   *v    = ast_node_let(node);
         struct ast_array *arr  = ast_node_arr(node);
 
-        hashmap          *save = map_copy(*map);
+        hashmap          *save = map_copy(ctx->lexical_map);
 
-        fun(ctx, node, map);
+        {
+            // see note in ast_let above
+            string_t empty = string_t_init_empty();
 
-        for (size_t i = 0; i < arr->n; ++i) {
-            do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+            for (size_t i = 0; i < arr->n; ++i) {
+                ast_node const *name = arr->nodes[i];
+                // parameter may be a symbol or nil
+                if (ast_symbol != name->tag) break; // nil can only be sole param
+
+                char const *name_str = ast_node_name_string(name);
+                map_set(&ctx->lexical_map, name_str, strlen(name_str), &empty);
+            }
         }
 
-        do_traverse_lexical(ctx, v->body, fun, map);
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
 
-        map_destroy(map);
-        *map = save;
+        for (size_t i = 0; i < arr->n; ++i) {
+            do_traverse_lexical(ctx, arr->nodes[i], fun);
+        }
+
+        do_traverse_lexical(ctx, v->body, fun);
+
+        map_destroy(&ctx->lexical_map);
+        ctx->lexical_map = save;
 
     } break;
 
     case ast_if_then_else: {
         // not affected by lexical context
         struct ast_if_then_else *v = ast_node_ifthen(node);
-        do_traverse_lexical(ctx, v->condition, fun, map);
-        do_traverse_lexical(ctx, v->yes, fun, map);
-        do_traverse_lexical(ctx, v->no, fun, map);
+        do_traverse_lexical(ctx, v->condition, fun);
+        do_traverse_lexical(ctx, v->yes, fun);
+        do_traverse_lexical(ctx, v->no, fun);
     } break;
 
     case ast_lambda_function: {
@@ -437,53 +492,65 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
         struct ast_lambda_function *v    = ast_node_lf(node);
         struct ast_array           *arr  = ast_node_arr(node);
 
-        hashmap                    *save = map_copy(*map);
+        hashmap                    *save = map_copy(ctx->lexical_map);
 
-        fun(ctx, node, map);
+        {
+            // see note in ast_let above
+            string_t empty = string_t_init_empty();
+            for (u32 i = 0; i < arr->n; ++i) {
+
+                ast_node const *name = arr->nodes[i];
+                assert(ast_symbol == name->tag);
+
+                char const *name_str = ast_node_name_string(name);
+                map_set(&ctx->lexical_map, name_str, strlen(name_str), &empty);
+            }
+        }
+        fun(ctx->user_ctx, node, &ctx->lexical_map);
 
         for (size_t i = 0; i < arr->n; ++i) {
-            do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+            do_traverse_lexical(ctx, arr->nodes[i], fun);
         }
-        do_traverse_lexical(ctx, v->body, fun, map);
+        do_traverse_lexical(ctx, v->body, fun);
 
-        map_destroy(map);
-        *map = save;
+        map_destroy(&ctx->lexical_map);
+        ctx->lexical_map = save;
 
     } break;
 
     case ast_lambda_function_application: {
         // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
-        do_traverse_lexical(ctx, node->lambda_application.lambda, fun, map);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun);
+        do_traverse_lexical(ctx, node->lambda_application.lambda, fun);
     } break;
 
     case ast_named_function_application: {
         // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
-        do_traverse_lexical(ctx, node->named_application.name, fun, map);
-        do_traverse_lexical(ctx, node->named_application.specialized, fun, map);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun);
+        do_traverse_lexical(ctx, node->named_application.name, fun);
+        do_traverse_lexical(ctx, node->named_application.specialized, fun);
     } break;
 
     case ast_begin_end: {
         // not affected by lexical context
         struct ast_array *arr = ast_node_arr(node);
-        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun, map);
+        for (size_t i = 0; i < arr->n; ++i) do_traverse_lexical(ctx, arr->nodes[i], fun);
 
     } break;
 
     case ast_user_type_get: {
         // not affected by lexical context
         struct ast_user_type_get *v = ast_node_utg(node);
-        do_traverse_lexical(ctx, v->struct_name, fun, map);
+        do_traverse_lexical(ctx, v->struct_name, fun);
     } break;
 
     case ast_user_type_set: {
         // not affected by lexical context
         struct ast_user_type_set *v = ast_node_uts(node);
-        do_traverse_lexical(ctx, v->struct_name, fun, map);
-        do_traverse_lexical(ctx, v->value, fun, map);
+        do_traverse_lexical(ctx, v->struct_name, fun);
+        do_traverse_lexical(ctx, v->value, fun);
     } break;
 
     case ast_eof:
@@ -500,12 +567,15 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
     }
 }
 
-void ti_traverse_lexical(ti_inferer *self, void *ctx, ast_node *node, ti_traverse_lexical_fun fun) {
-    hashmap *lexical_map = map_create(self->type_arena, sizeof(string_t));
+void ti_traverse_lexical(allocator *alloc, void *user_ctx, ast_node *node, ti_traverse_lexical_fun fun) {
+    traverse_lexical_ctx ctx = {.user_ctx    = user_ctx,
+                                .lexical_map = map_create(alloc, sizeof(string_t)),
+                                .visited     = map_create(alloc, sizeof(int))};
 
-    do_traverse_lexical(ctx, node, fun, &lexical_map);
+    do_traverse_lexical(&ctx, node, fun);
 
-    map_destroy(&lexical_map);
+    map_destroy(&ctx.visited);
+    map_destroy(&ctx.lexical_map);
 }
 
 void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
@@ -646,7 +716,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
 
 static void ti_rename_variables(ti_inferer *self) {
     for (u32 i = 0; i < self->nodes->size; ++i) {
-        ti_traverse_lexical(self, self, self->nodes->v[i], rename_one_variables);
+        ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], rename_one_variables);
     }
 }
 
@@ -1618,7 +1688,7 @@ static ast_node *make_specialized(specialize_functions_ctx *ctx, ast_node *src, 
     // rename variables in the specialized function, since at this
     // point every variable name must have 1-1 map to its type
     // rename variables in specialised copies
-    ti_traverse_lexical(ctx->ti, ctx->ti, special, rename_one_variables);
+    ti_traverse_lexical(alloc, ctx->ti, special, rename_one_variables);
 
     return special;
 }
@@ -1945,6 +2015,35 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
 
 //
 
+void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
+
+    if (ast_symbol != node->tag) return;
+
+    ast_node_array *array = ctx;
+
+    // If symbol is not in the lexical map, it is a free variable.
+    char const *name_str = ast_node_name_string(node);
+
+    if (!map_get(*lex, name_str, strlen(name_str))) array_push(*array, &node);
+}
+
+ast_node_sized ti_free_variables_in(allocator *alloc, ast_node const *node) {
+
+    // return array of free variable symbols found in node and its
+    // children. free variables are symbols not defined by a visible
+    // lexical scope parent. Algorithm: do a lexical traverse, keeping
+    // track of lexical variables, and build an array of free
+    // variables.
+
+    ast_node_array array = {.alloc = alloc};
+
+    ti_traverse_lexical(alloc, &array, (ast_node *)node, find_free_variables);
+
+    return (ast_node_sized)sized_all(array);
+}
+
+//
+
 void log(ti_inferer *self, char const *restrict fmt, ...) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
@@ -1982,3 +2081,5 @@ static int is_special_name_s(string_t const *string) {
     char const *str = string_t_str(string);
     return is_special_name(str);
 }
+
+//
