@@ -2102,8 +2102,6 @@ static int has_error(parser *self) {
 }
 
 void log(struct parser *self, char const *restrict fmt, ...) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -2118,5 +2116,4 @@ void log(struct parser *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
-#pragma clang diagnostic pop
 }

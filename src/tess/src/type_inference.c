@@ -2053,8 +2053,6 @@ ast_node_sized ti_free_variables_in(allocator *alloc, ast_node const *node) {
 //
 
 void log(ti_inferer *self, char const *restrict fmt, ...) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -2069,8 +2067,6 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
-
-#pragma clang diagnostic push
 }
 
 constraint make_constraint(tl_type *l, tl_type *r) {
