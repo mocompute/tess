@@ -184,6 +184,9 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     int one = 1;
     map_set(&ctx->map, &hash, sizeof hash, &one);
 
+    // figure out the free variables in use in this function
+    ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+
     // function declaration
     char *name = make_thunk_name(self->strings, hash);
 
@@ -198,6 +201,13 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
+
+    // print free variables for debug reasons
+    out_put_start(self, "/*\n\nfree variables: \n\n");
+    for (u32 i = 0; i < free_variables.size; ++i) {
+        out_put_start_fmt(self, "%s\n", ast_node_to_string(self->strings, free_variables.v[i]));
+    }
+    out_put_start(self, "\n*/\n");
 
     a_thunk(self, node);
 

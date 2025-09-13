@@ -125,6 +125,7 @@ static constraint make_constraint(tl_type *, tl_type *);
 static int        is_special_name(char const *);
 static int        is_special_name_s(string_t const *);
 static int        is_type_compatible(tl_type const *, tl_type const *, int);
+static int        is_generated_variable_name(char const *);
 
 static void       dbg_ast_nodes(ti_inferer *);
 static void       dbg_constraint(constraint const *);
@@ -296,6 +297,10 @@ void ti_inferer_report_errors(ti_inferer *self) {
 }
 
 // -- rename variables --
+
+static int is_generated_variable_name(char const *str) {
+    return 0 == strncmp("_v", str, 2);
+}
 
 static void next_variable_name(ti_inferer *self, string_t *out) {
     char buf[64];
@@ -2021,8 +2026,11 @@ void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
 
     ast_node_array *array = ctx;
 
-    // If symbol is not in the lexical map, it is a free variable.
+    // If symbol is not in the lexical map, it is a free variable. But
+    // only if it's an actual generated variable name, so this
+    // excludes function names.
     char const *name_str = ast_node_name_string(node);
+    if (!is_generated_variable_name(name_str)) return;
 
     if (!map_get(*lex, name_str, strlen(name_str))) array_push(*array, &node);
 }
