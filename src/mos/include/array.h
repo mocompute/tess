@@ -184,6 +184,8 @@ typedef struct {
         (src)->v    = 0;                                                                                   \
     } while (0)
 
+#define forall(idx, arr) for (u32 idx = 0; idx < (arr).size; ++idx)
+
 char_cslice char_cslice_from(char const *, u32);
 
 // -- implementation --

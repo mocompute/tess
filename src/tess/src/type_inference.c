@@ -284,7 +284,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     // Exclude polymorphic functions.
 
     ti_report_errors_ctx ctx = {.self = self};
-    for (u32 i = 0; i < self->nodes->size; ++i) {
+    forall(i, *self->nodes) {
         ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], find_error);
     }
 
@@ -720,7 +720,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
 }
 
 static void ti_rename_variables(ti_inferer *self) {
-    for (u32 i = 0; i < self->nodes->size; ++i) {
+    forall(i, *self->nodes) {
         ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], rename_one_variables);
     }
 }
@@ -857,7 +857,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_named_function_application:  break;
     }
 
-    for (u32 i = 0; i < subs->size; ++i) {
+    forall(i, *subs) {
         ctx->count += apply_one_substitution(&node->type, subs->v[i].left, subs->v[i].right);
 
         for (u32 j = 0; j < buf_size; ++j)
@@ -976,14 +976,14 @@ static void ti_run_solver(ti_inferer *self) {
 
         int did_substitute = 0;
 
-        for (u32 i = 0; i < self->constraints.size;) {
+        for (u32 i = 0; i < self->constraints.size;) { // no end-of-loop increment
 
             constraint *item = &self->constraints.v[i];
 
             // erase constraints that are self-satisfied
             if (tl_type_satisfies(item->left, item->right)) {
-                array_erase(self->constraints, i);
-                continue;
+                array_erase(self->constraints, i); // because of in-loop erase
+                continue;                          // continues to next element
             }
 
             else {
@@ -999,8 +999,7 @@ static void ti_run_solver(ti_inferer *self) {
         }
 
         // apply each substitution in sequence to constraints
-        for (u32 i = 0; i < self->substitutions.size; ++i) {
-
+        forall(i, self->substitutions) {
             if (substitute_constraints(self->constraints.v, &self->constraints.v[self->constraints.size],
                                        self->substitutions.v[i]))
                 did_substitute = 1;
@@ -1242,8 +1241,9 @@ static int is_type_compatible(tl_type const *a, tl_type const *b, int strict) {
         struct tlt_array const *va = tl_type_arr((tl_type *)a), *vb = tl_type_arr((tl_type *)b);
         if (va->elements.size != vb->elements.size) return 0;
 
-        for (u32 i = 0; i < va->elements.size; ++i)
+        forall(i, va->elements) {
             if (!is_type_compatible(va->elements.v[i], vb->elements.v[i], strict)) return 0;
+        }
 
         return 1;
     }
@@ -1447,7 +1447,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
             // node type is the field type, find the matching name in the lt
             char const *field_name = ast_node_name_string(v->field_name);
-            for (u32 i = 0; i < lt->names.size; ++i) {
+            forall(i, lt->names) {
                 if (0 == strcmp(lt->names.v[i], field_name)) push(node->type, lt->fields.v[i]);
             }
 
@@ -1638,12 +1638,12 @@ void ti_collect_constraints(ti_inferer *self) {
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
-    for (u32 i = 0; i < self->constraints.size; ++i) dbg_constraint(&self->constraints.v[i]);
+    forall(i, self->constraints) dbg_constraint(&self->constraints.v[i]);
 }
 
 void ti_inferer_dbg_substitutions(ti_inferer const *self) {
     dbg("substitutions count = %u\n", self->substitutions.size);
-    for (u32 i = 0; i < self->substitutions.size; ++i) dbg_constraint(&self->substitutions.v[i]);
+    forall(i, self->substitutions) dbg_constraint(&self->substitutions.v[i]);
 }
 
 // -- specialize function applications --
@@ -1830,7 +1830,7 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
     ast_node_array added = {.alloc = self->type_arena};
 
-    for (u32 i = 0; i < self->nodes->size; ++i) {
+    forall(i, *self->nodes) {
         ast_node const *node = self->nodes->v[i];
         if (ast_user_type_definition != node->tag) continue;
 
@@ -1848,7 +1848,7 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
     }
 
     // add nodes to program
-    for (u32 i = 0; i < added.size; ++i) {
+    forall(i, added) {
         log(self, "generate_user_type_functions: adding %s",
             ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
@@ -2006,11 +2006,11 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
         .map   = map_create(self->transient, sizeof(int)),
     };
 
-    for (u32 i = 0; i < self->nodes->size; ++i)
-        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], generate_tuple_function_glue);
+    forall(i, *self->nodes)
+      ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], generate_tuple_function_glue);
 
     // add nodes to program
-    for (u32 i = 0; i < added.size; ++i) {
+    forall(i, added) {
         log(self, "generate_tuple_functions: adding %s", ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
