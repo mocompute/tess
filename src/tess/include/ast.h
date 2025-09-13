@@ -125,6 +125,11 @@ typedef struct ast_node {
             struct ast_node *target;
         } dereference;
 
+        struct ast_dereference_assign {
+            struct ast_node *target;
+            struct ast_node *value;
+        } dereference_assign;
+
         struct ast_if_then_else {
             struct ast_node *condition;
             struct ast_node *yes;
@@ -208,6 +213,7 @@ struct ast_arrow                *ast_node_arrow(ast_node *);
 struct ast_assignment           *ast_node_assignment(ast_node *);
 struct ast_bool                 *ast_node_bool(ast_node *);
 struct ast_dereference          *ast_node_deref(ast_node *);
+struct ast_dereference_assign   *ast_node_deref_assign(ast_node *);
 struct ast_i64                  *ast_node_i64(ast_node *);
 struct ast_u64                  *ast_node_u64(ast_node *);
 struct ast_f64                  *ast_node_f64(ast_node *);

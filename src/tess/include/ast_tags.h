@@ -21,6 +21,7 @@ typedef enum ast_tag : u16 {
     ast_assignment,
     ast_bool,
     ast_dereference,
+    ast_dereference_assign,
     ast_eof,
     ast_f64,
     ast_i64,

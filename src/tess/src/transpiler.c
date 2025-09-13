@@ -571,15 +571,30 @@ static int a_eval(transpiler *self, ast_node const *node) {
         break;
 
     case ast_address_of: {
-        if (a_eval(self, node->address_of.target)) return 1;
-        char const *res = pop_result(self);
-        out_put_start_fmt(self, "%s = &(%s);\n", var, res);
+        if (ast_symbol == node->address_of.target->tag) {
+            log(self, "taking address of '%s'", ast_node_to_string(self->strings, node->address_of.target));
+            out_put_start_fmt(self, "%s = &(%s);\n", var, ast_node_name_string(node->address_of.target));
+        } else {
+            if (a_eval(self, node->address_of.target)) return 1;
+            char const *res = pop_result(self);
+            out_put_start_fmt(self, "%s = &(%s);\n", var, res);
+        }
     } break;
 
     case ast_dereference: {
         if (a_eval(self, node->dereference.target)) return 1;
-        char const *res = pop_result(self);
-        out_put_start_fmt(self, "%s = *(%s);\n", var, res);
+        char const *ptr = pop_result(self);
+        out_put_start_fmt(self, "%s = *(%s);\n", var, ptr);
+    } break;
+
+    case ast_dereference_assign: {
+        if (a_eval(self, node->dereference_assign.target)) return 1;
+        char const *ptr = pop_result(self);
+        if (a_eval(self, node->dereference_assign.value)) return 1;
+        char const *value = pop_result(self);
+
+        out_put_start_fmt(self, "*(%s) = %s;\n", ptr, value);
+        out_put_start_fmt(self, "%s = %s;\n", var, value);
     } break;
 
     case ast_begin_end: {
@@ -689,6 +704,7 @@ static int expand_value(transpiler *self, ast_node const *node) {
         expand_value(self, node->dereference.target);
         break;
 
+    case ast_dereference_assign:
     case ast_eof:
     case ast_f64:
     case ast_i64:

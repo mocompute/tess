@@ -342,6 +342,12 @@ void do_traverse_lexical(void *ctx, ast_node *node, ti_traverse_lexical_fun fun,
         do_traverse_lexical(ctx, node->dereference.target, fun, map);
         break;
 
+    case ast_dereference_assign:
+        // not affected by lexical context
+        do_traverse_lexical(ctx, node->dereference_assign.target, fun, map);
+        do_traverse_lexical(ctx, node->dereference_assign.value, fun, map);
+        break;
+
     case ast_assignment: {
         // a utility node, does nothing on its own. It is part of
         // let_match_in, or labelled_tuple.
@@ -617,6 +623,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
     case ast_address_of:
     case ast_arrow:
     case ast_dereference:
+    case ast_dereference_assign:
     case ast_assignment:
     case ast_labelled_tuple:
     case ast_tuple:
@@ -757,6 +764,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_begin_end:
     case ast_user_type:
     case ast_dereference:
+    case ast_dereference_assign:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -1056,6 +1064,14 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
     } break;
 
+    case ast_dereference_assign: {
+        struct ast_dereference_assign *v = ast_node_deref_assign(node);
+        v->target->type                  = tl_type_create(self->type_arena, type_pointer);
+        v->target->type->pointer.target  = make_typevar(self);
+        node->type                       = make_typevar(self);
+
+    } break;
+
     case ast_symbol:                      handle_symbol_annotation(self, node); break;
 
     case ast_arrow:
@@ -1291,6 +1307,13 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         assert(type_pointer == node->dereference.target->type->tag);
         push(node->type, node->dereference.target->type->pointer.target);
+
+    } break;
+
+    case ast_dereference_assign: {
+
+        assert(type_pointer == node->dereference_assign.target->type->tag);
+        push(node->type, node->dereference_assign.value->type);
 
     } break;
 

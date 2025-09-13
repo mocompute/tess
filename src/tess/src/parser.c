@@ -545,6 +545,45 @@ static int a_dereference(parser *self) {
     return result_ast_node(self, node);
 }
 
+static int a_dereference_assign(parser *self) {
+    // FIXME for now only address of an identifier
+
+    if (a_try(self, a_identifier)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    ast_node *target = self->result;
+
+    if (a_try(self, a_dot)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    if (a_try(self, a_star)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    if (a_try(self, a_colon_equal)) {
+        self->error.tag = tl_err_ok;
+        return 1;
+    }
+
+    log(self, "begin dereference assign");
+
+    if (a_try(self, expression)) {
+        self->error.tag = tl_err_expected_value;
+        return 1;
+    }
+    ast_node *value                 = self->result;
+
+    ast_node *node                  = ast_node_create(self->ast_arena, ast_dereference_assign);
+    node->dereference_assign.target = target;
+    node->dereference_assign.value  = value;
+    return result_ast_node(self, node);
+}
+
 static int a_identifier(parser *p) {
     if (next_token(p)) return 1;
 
@@ -837,7 +876,8 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
     if (0 == a_try(self, a_field_pointer_access)) return 0;
     if (0 == a_try(self, a_field_access)) return 0;
-    if (0 == a_try(self, a_dereference)) return 0; // before identifier
+    if (0 == a_try(self, a_dereference_assign)) return 0; // before dereference
+    if (0 == a_try(self, a_dereference)) return 0;        // before identifier
     if (0 == a_try(self, a_identifier)) return 0;
     if (0 == a_try(self, a_address_of)) return 0;
     if (0 == a_try(self, a_number)) return 0;
