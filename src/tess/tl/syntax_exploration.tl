@@ -64,7 +64,7 @@
 // Used to define a function:
 
 let fact x =
-    if   eq x 0
+    if   lte x 1
     then 1
     else mul x (fact (decr x))
 
@@ -148,7 +148,7 @@ let x1 = initval
     then step2 it extra
     then step3 flip it
     then it x y z
-    
+
 
 let res =
     with initval
@@ -157,15 +157,15 @@ let res =
     do step3 flip it
     do it ()
     end
-    
 
-// equivalent to   
+
+// equivalent to
 let res = initval in
 let res = step1 res in
 let res = step2 extra in
 let res = step3 flip res in
 let res = res ()
-in  res 
+in  res
 
 
 
