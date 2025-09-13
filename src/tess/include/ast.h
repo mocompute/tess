@@ -247,6 +247,7 @@ nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
 void        ast_node_move(ast_node *dst, ast_node *src);
 
 char const *ast_node_name_string(ast_node const *);
+char const *ast_node_name_original(ast_node const *);
 int         ast_node_name_strcmp(ast_node const *, char const *);
 
 tl_type    *ast_node_annotation(ast_node const *);

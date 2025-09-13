@@ -514,7 +514,7 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
         // do a field access for the named field of the node's value
         struct ast_assignment *ass        = ast_node_assignment(lt->assignments[i]);
         char const            *var_name   = ast_node_name_string(ass->name);
-        char const            *field_name = ast_node_name_string(ass->value);
+        char const            *field_name = ast_node_name_original(ass->value);
 
         out_put_start(self, "");
         a_declaration(self, ass->value->type, var_name);

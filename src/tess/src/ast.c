@@ -208,10 +208,14 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 }
 
 char const *ast_node_name_string(ast_node const *node) {
-    if (ast_symbol != node->tag && ast_string != node->tag)
-        fatal("ast_node_name_string: expected symbol or string");
-
+    if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
     return string_t_str(&node->symbol.name);
+}
+
+char const *ast_node_name_original(ast_node const *node) {
+    if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
+    if (string_t_empty(&node->symbol.original)) return string_t_str(&node->symbol.name);
+    else return string_t_str(&node->symbol.original);
 }
 
 int ast_node_name_strcmp(ast_node const *node, char const *target) {

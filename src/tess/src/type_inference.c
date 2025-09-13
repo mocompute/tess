@@ -1440,7 +1440,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         if (type_user == name_type->tag) {
             tl_type *field_type =
-              tl_type_find_user_field_type(name_type, ast_node_name_string(v->field_name));
+              tl_type_find_user_field_type(name_type, ast_node_name_original(v->field_name));
             push(node->type, field_type);
         } else if (type_labelled_tuple == name_type->tag) {
             struct tlt_labelled_tuple *lt = tl_type_lt(name_type);
@@ -1503,7 +1503,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
         for (u32 i = 0; i < lt->n_assignments; ++i) {
             if (type_user == v->value->type->tag) {
                 tl_type *field_type = tl_type_find_user_field_type(
-                  v->value->type, ast_node_name_string(lt->assignments[i]->assignment.value));
+                  v->value->type, ast_node_name_original(lt->assignments[i]->assignment.value));
 
                 push(lt->assignments[i]->assignment.name->type, field_type);
 

@@ -114,6 +114,7 @@ tesslang_create_test(forwards)
 tesslang_create_test(fun_annotation)
 tesslang_create_test(function_pointer_argument)
 tesslang_create_test(intrinsic_sizeof)
+tesslang_create_test(labelled_tuple)
 tesslang_create_test(let_basic)
 tesslang_create_test(let_in_basic)
 tesslang_create_test(let_in_nil)
@@ -123,7 +124,7 @@ tesslang_create_test(struct_get)
 tesslang_create_test(struct_set)
 tesslang_create_test(tuple)
 tesslang_create_test(tuple_match)
-tesslang_create_test(labelled_tuple)
+tesslang_create_test(user_type_deconstruct)
 
 # -- doxygen --
 
