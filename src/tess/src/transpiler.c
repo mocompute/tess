@@ -176,6 +176,63 @@ typedef struct {
     hashmap    *map; // u64 -> int
 } generate_thunks_ctx;
 
+static void emit_thunk_struct_init(transpiler *self, char const *struct_name, char const *var_name,
+                                   ast_node_sized variables) {
+
+    out_put_start_fmt(self, "struct %s %s = {\n", struct_name, var_name);
+    self->indent_level++;
+    {
+        ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
+        ptr->address_of.target    = null;
+        ptr->type                 = tl_type_create(self->transient, type_pointer);
+        ptr->type->pointer.target = null;
+
+        hashmap *seen             = map_create(self->transient, sizeof(int));
+        for (u32 i = 0; i < variables.size; ++i) {
+            int         one      = 1;
+            char const *name_str = ast_node_name_string(variables.v[i]);
+            if (map_get(seen, name_str, strlen(name_str))) continue;
+            map_set(&seen, name_str, strlen(name_str), &one);
+
+            ptr->address_of.target    = variables.v[i];
+            ptr->type->pointer.target = variables.v[i]->type;
+
+            out_put_start_fmt(self, ".%s = &(%s),\n", name_str, name_str);
+        }
+    }
+    self->indent_level--;
+    out_put_start(self, "};\n\n");
+}
+
+static void emit_thunk_struct(transpiler *self, char const *name, ast_node_sized variables) {
+
+    out_put_start_fmt(self, "struct %s {\n", name);
+    self->indent_level++;
+    {
+        ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
+        ptr->address_of.target    = null;
+        ptr->type                 = tl_type_create(self->transient, type_pointer);
+        ptr->type->pointer.target = null;
+
+        hashmap *seen             = map_create(self->transient, sizeof(int));
+        for (u32 i = 0; i < variables.size; ++i) {
+            int         one      = 1;
+            char const *name_str = ast_node_name_string(variables.v[i]);
+            if (map_get(seen, name_str, strlen(name_str))) continue;
+            map_set(&seen, name_str, strlen(name_str), &one);
+
+            ptr->address_of.target    = variables.v[i];
+            ptr->type->pointer.target = variables.v[i]->type;
+
+            out_put_start(self, "");
+            a_declaration(self, ptr->type, name_str);
+            out_put(self, ";\n");
+        }
+    }
+    self->indent_level--;
+    out_put_start(self, "};\n\n");
+}
+
 static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     transpiler *self = ctx->self;
 
@@ -190,32 +247,7 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
 
     // declare struct for thunk context
     char *struct_name = make_thunk_struct_name(self->strings, hash);
-
-    out_put_start_fmt(self, "struct %s {\n", struct_name);
-    self->indent_level++;
-    {
-        ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
-        ptr->address_of.target    = null;
-        ptr->type                 = tl_type_create(self->transient, type_pointer);
-        ptr->type->pointer.target = null;
-
-        hashmap *seen             = map_create(self->transient, sizeof(int));
-        for (u32 i = 0; i < free_variables.size; ++i) {
-            int         one      = 1;
-            char const *name_str = ast_node_name_string(free_variables.v[i]);
-            if (map_get(seen, name_str, strlen(name_str))) continue;
-            map_set(&seen, name_str, strlen(name_str), &one);
-
-            ptr->address_of.target    = free_variables.v[i];
-            ptr->type->pointer.target = free_variables.v[i]->type;
-
-            out_put_start(self, "");
-            a_declaration(self, ptr->type, name_str);
-            out_put(self, ";\n");
-        }
-    }
-    self->indent_level--;
-    out_put_start(self, "};\n\n");
+    emit_thunk_struct(self, struct_name, free_variables);
 
     // function declaration
     char *name = make_thunk_name(self->strings, hash);
@@ -523,14 +555,13 @@ static int a_if_then_else(transpiler *self, ast_node const *node) {
     char *no       = make_thunk_name(self->strings, no_hash);
     char *no_ctx   = make_thunk_struct_name(self->strings, no_hash);
 
-    // make the context structs
-    out_put_start_fmt(self, "struct %s _ctx_yes_ = {", yes_ctx);
-    out_put(self, "0"); // FIXME
-    out_put(self, "};\n");
+    // get the free variables in each arm
+    ast_node_sized yes_free = ti_free_variables_in(self->transient, v->yes);
+    ast_node_sized no_free  = ti_free_variables_in(self->transient, v->no);
 
-    out_put_start_fmt(self, "struct %s _ctx_no_ = {", no_ctx);
-    out_put(self, "0"); // FIXME
-    out_put(self, "};\n");
+    // make the context structs
+    emit_thunk_struct_init(self, yes_ctx, "_ctx_yes_", yes_free);
+    emit_thunk_struct_init(self, no_ctx, "_ctx_no_", no_free);
 
     // eval the condition
     if (a_eval(self, v->condition)) return 1;
