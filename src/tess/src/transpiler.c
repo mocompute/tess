@@ -128,6 +128,15 @@ int transpiler_compile(transpiler *self, ast_node **nodes, u32 n) {
     out_put(self, embed_std_c);
     out_put(self, "\n\n");
 
+    out_put_start(self, "\n// -- begin user types -- \n\n");
+
+    for (size_t i = 0; i < n; ++i) {
+        ast_node *node = nodes[i];
+        if (ast_user_type_definition == node->tag) a_user_type_definition(self, node);
+    }
+
+    out_put_start(self, "\n// -- end user types -- \n\n");
+
     // output generated structs
     out_put_start(self, "\n// -- begin structs -- \n\n");
 
@@ -474,7 +483,6 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 
 static int a_toplevel(transpiler *self, ast_node const *node) {
     if (ast_let == node->tag) return a_let(self, node);
-    if (ast_user_type_definition == node->tag) return a_user_type_definition(self, node);
     return 0;
 }
 

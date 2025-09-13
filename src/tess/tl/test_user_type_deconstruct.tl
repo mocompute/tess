@@ -3,7 +3,13 @@ struct Point =
   y : int
 end
 
+struct Rect =
+  topleft  : Point ;
+  botright : Point
+end
+
 let main () =
-  let p = Point 1 2 in
-  let (x = x, y = y) = p in
-  decr x
+  let r = Rect (Point 1 2) (Point 3 4) in
+  let (tl = topleft) = r in
+  let (ret = x) = tl in
+  decr ret
