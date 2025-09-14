@@ -250,7 +250,7 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
     map->n_cells            = n_buckets;
     map->n_occupied         = 0;
     map->value_size         = value_size;
-    map->aligned_value_size = (u16)alloc_align_to_word_size(value_size);
+    map->aligned_value_size = (u16)aligned_value_size;
 
     assert(map->aligned_value_size <= HASHMAP_MAX_ELEMENT_SIZE);
     if (map->aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) {
@@ -375,4 +375,12 @@ void map_erase(hashmap *map, void const *key, u16 key_len) {
     cell->key = null;
 
     map->n_occupied--;
+}
+
+void map_reset(hashmap *map) {
+    if (map->n_occupied) {
+        size_t aligned_value_size = alloc_align_to_word_size(map->value_size);
+        memset(map->entries, 0, map->n_cells * aligned_value_size);
+        map->n_occupied = 0;
+    }
 }

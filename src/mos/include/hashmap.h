@@ -44,6 +44,7 @@ void  map_set_v(hashmap **, void const *key, u16 key_len, void const *data); // 
 int   map_contains(hashmap *, void const *key, u16 key_len);
 void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
+void  map_reset(hashmap *);
 
 // pass zero-init iterator to start
 int map_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
