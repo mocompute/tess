@@ -466,6 +466,7 @@ static int a_end_of_expression(parser *p) {
         goto next_expression;
 
     case tok_symbol:
+        if (0 == strcmp("end", p->token.s)) goto next_expression;
         if (is_start_of_expression(p->token.s)) goto next_expression;
         if (is_arithmetic_operator(p->token.s)) goto next_expression;
         if (is_relational_operator(p->token.s)) goto next_expression;
@@ -571,7 +572,7 @@ static int a_dereference_assign(parser *self) {
     log(self, "begin dereference assign");
 
     if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_value;
+        self->error.tag = tl_err_expected_dereference_assign_value;
         return 1;
     }
     ast_node *value                 = self->result;
@@ -1840,7 +1841,7 @@ static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
     log(self, "begin let-in declaration line %i", self->token.line);
 
     if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_value;
+        // self->error.tag = tl_err_expected_let_in_value;
         goto error;
     }
     ast_node *defn = self->result;

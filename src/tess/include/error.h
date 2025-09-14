@@ -22,6 +22,7 @@
     X(tl_err_expected_assignment_value, "expected_assignment_value")                                       \
     X(tl_err_expected_body, "expected_body")                                                               \
     X(tl_err_expected_declaration, "expected_declaration")                                                 \
+    X(tl_err_expected_dereference_assign_value, "expected_dereference_assign_value")                       \
     X(tl_err_expected_expression, "expected_expression")                                                   \
     X(tl_err_expected_keyword_then, "expected_keyword_then")                                               \
     X(tl_err_expected_keyword_else, "expected_keyword_else")                                               \
@@ -33,6 +34,7 @@
     X(tl_err_expected_lambda, "expected_lambda")                                                           \
     X(tl_err_expected_lambda_function_application_argument,                                                \
       "expected_lambda_function_application_argument")                                                     \
+    X(tl_err_expected_let_in_value, "expected_let_in_value")                                               \
     X(tl_err_expected_function_application_argument, "expected_function_application_argument")             \
     X(tl_err_expected_nil, "expected_nil")                                                                 \
     X(tl_err_expected_semicolon, "expected_semicolon")                                                     \
