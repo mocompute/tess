@@ -38,7 +38,6 @@ struct transpiler {
     int             is_eval_in_thunk;
     c_string_carray thunk_free_variables;
     hashmap        *lambdas; // char const* -> ast_node const*
-    ast_node_sized  toplevel_let_free_variables;
 };
 
 // -- embed externs --
@@ -96,24 +95,23 @@ static void log(transpiler *, char const *restrict fmt, ...) __attribute__((form
 
 transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
 
-    transpiler *self                  = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc                       = alloc;
-    self->strings                     = arena_create(alloc, 2048);
-    self->transient                   = arena_create(alloc, 2048);
-    self->bytes                       = bytes;
-    self->type_registry               = tr;
-    self->processed_structs           = map_create(alloc, sizeof(char *));
+    transpiler *self           = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc                = alloc;
+    self->strings              = arena_create(alloc, 2048);
+    self->transient            = arena_create(alloc, 2048);
+    self->bytes                = bytes;
+    self->type_registry        = tr;
+    self->processed_structs    = map_create(alloc, sizeof(char *));
 
-    self->thunk_free_variables        = (c_string_carray){.alloc = self->transient};
-    self->lambdas                     = map_create(alloc, sizeof(ast_node *));
-    self->toplevel_let_free_variables = (ast_node_sized){0};
+    self->thunk_free_variables = (c_string_carray){.alloc = self->transient};
+    self->lambdas              = map_create(alloc, sizeof(ast_node *));
 
-    self->results                     = (c_string_array){.alloc = self->strings};
+    self->results              = (c_string_array){.alloc = self->strings};
 
-    self->next_variable               = 1;
-    self->indent_level                = 0;
-    self->is_eval_in_thunk            = 0;
-    self->verbose                     = 0;
+    self->next_variable        = 1;
+    self->indent_level         = 0;
+    self->is_eval_in_thunk     = 0;
+    self->verbose              = 0;
 
     return self;
 }
@@ -305,20 +303,22 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
 }
 
 static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
-    transpiler *self = ctx->self;
+    transpiler                 *self = ctx->self;
+    struct ast_lambda_function *v    = ast_node_lf(node);
+    u64                         hash = ast_node_hash(node);
 
-    u64         hash = ast_node_hash(node);
-    if (map_get(ctx->map, &hash, sizeof hash)) return;
+    {
+        if (map_get(ctx->map, &hash, sizeof hash)) return;
+        int one = 1;
+        map_set(&ctx->map, &hash, sizeof hash, &one);
+    }
 
-    int one = 1;
-    map_set(&ctx->map, &hash, sizeof hash, &one);
-
-    // figure out the free variables in use in this function
-    ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+    // save the free variables in use in this function to the ast node
+    v->free_variables = ti_free_variables_in(self->transient, node);
 
     // declare struct for thunk context
     char *struct_name = make_thunk_struct_name(self->strings, hash);
-    emit_thunk_struct(self, struct_name, free_variables);
+    emit_thunk_struct(self, struct_name, v->free_variables);
 
     // function declaration
     char *name = make_thunk_name(self->strings, hash);
@@ -330,7 +330,6 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, " ");
 
     // params
-    struct ast_lambda_function *v = ast_node_lf(node);
     out_put_fmt(self, "(struct %s * _ctx_", struct_name);
     for (u32 i = 0; i < v->n_parameters; ++i) {
         out_put(self, ", ");
@@ -1077,12 +1076,9 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     // function call
 
-    tl_type *fun_type = node->named_application.name->type;
+    tl_type   *fun_type = node->named_application.name->type;
 
-    // FIXME need to include the thunk context if it's a thunk, but I
-    // don't have the thunk here, just the symbol.
-
-    ast_node **found = map_get(self->lambdas, name, strlen(name));
+    ast_node **found    = map_get(self->lambdas, name, strlen(name));
     if (found) {
         ast_node *lambda = *found;
         assert(ast_lambda_function == lambda->tag);
@@ -1093,7 +1089,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         out_put_start(self, "{\n");
         self->indent_level++;
 
-        emit_thunk_struct_init(self, struct_name, "_apply_ctx_", self->toplevel_let_free_variables);
+        emit_thunk_struct_init(self, struct_name, "_apply_ctx_", lambda->lambda_function.free_variables);
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
         else out_put_start_fmt(self, "%s = ", var);
@@ -1498,8 +1494,6 @@ static int a_let(transpiler *self, ast_node const *node) {
     }
 
     log(self, "processing '%s'...", name);
-
-    self->toplevel_let_free_variables = ti_free_variables_in(self->transient, node);
 
     // mangle the name
     name = make_function_name(self->strings, name);

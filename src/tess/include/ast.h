@@ -9,6 +9,21 @@
 #include "string_t.h"
 #include "type.h"
 
+typedef struct {
+    array_header;
+    struct ast_node **v;
+} ast_node_array;
+
+typedef struct {
+    array_slice;
+    struct ast_node **v;
+} ast_node_slice;
+
+typedef struct {
+    array_sized;
+    struct ast_node **v;
+} ast_node_sized;
+
 typedef struct ast_node {
     union {
         struct ast_symbol {
@@ -60,6 +75,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             struct ast_node  *body;
+            ast_node_sized    free_variables; // only used at transpiler phase
         } lambda_function;
 
         struct ast_function_declaration {
@@ -176,21 +192,6 @@ typedef struct ast_node {
     ast_tag           tag;
     enum tl_error_tag error;
 } ast_node;
-
-typedef struct {
-    array_header;
-    ast_node **v;
-} ast_node_array;
-
-typedef struct {
-    array_slice;
-    ast_node **v;
-} ast_node_slice;
-
-typedef struct {
-    array_sized;
-    ast_node **v;
-} ast_node_sized;
 
 #define AST_LET_FLAG_SPECIALIZED BIT(0)
 #define AST_LET_FLAG_TUPLE_CONS  BIT(1)
