@@ -118,6 +118,9 @@ typedef struct {
         (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x));    \
     } while (0)
 
+#define array_contains(p, x)                                                                               \
+    array_contains_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x))
+
 #define array_push_val(p, x)                                                                               \
     do {                                                                                                   \
         const typeof((p).v[0]) tmp = (x);                                                                  \
@@ -197,6 +200,8 @@ nodiscard void *array_copy_impl(array_header_t *h, void *restrict, u32, u16, voi
 nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32);
 nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
                                   void *restrict, u32);
+
+int             array_contains_impl(array_header_t *, void *restrict, u32, u16, void const *restrict);
 nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
 
 void            array_erase_impl(array_header_t *h, void *ptr, u32 index, u32, u16);

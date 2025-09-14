@@ -46,6 +46,18 @@ void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 alig
     return ptr;
 }
 
+int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                        void const *restrict data) {
+
+    if (0 == h->size) return 0;
+    u32 actual_align = alloc_align(width, align);
+
+    for (u32 i = 0; i < h->size; ++i) {
+        if (0 == memcmp(&ptr[i * actual_align], data, width)) return 1;
+    }
+    return 0;
+}
+
 void *array_copy_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
                       void const *restrict data, u32 num) {
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
