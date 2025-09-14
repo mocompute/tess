@@ -97,6 +97,7 @@ static void       ti_generate_user_type_functions(ti_inferer *);
 static void       ti_rename_variables(ti_inferer *);
 static void       ti_run_solver(ti_inferer *);
 static int        ti_specialize_functions(ti_inferer *, ast_node_array *);
+static u32        ti_count_unspecialized_applications(ti_inferer *);
 
 static tl_type   *make_args_type(allocator *, ast_node *[], u16);
 static tl_type   *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
@@ -218,6 +219,9 @@ int ti_inferer_run(ti_inferer *self) {
     ast_node_array specialized = {.alloc = self->type_arena};
     ti_specialize_functions(self, &specialized);
 
+    log(self, "Specialize phase 1: %u unspecialized applications remain.",
+        ti_count_unspecialized_applications(self));
+
     // add specialised nodes to program
     array_copy(*self->nodes, specialized.v, specialized.size);
 
@@ -251,10 +255,15 @@ int ti_inferer_run(ti_inferer *self) {
 
     // FIXME: one more round of specialisation: need this for
     // functions with function pointer arguments.
+    int phase = 2;
     while (1) {
         specialized.size = 0;
         int found        = ti_specialize_functions(self, &specialized);
         array_copy(*self->nodes, specialized.v, specialized.size);
+
+        log(self, "Specialize phase %i: %u unspecialized applications remain.", phase++,
+            ti_count_unspecialized_applications(self));
+
         if (0 == found) break;
     }
 
@@ -1740,7 +1749,7 @@ static void specialize_node(void *ctx_, ast_node *node) {
     let =
       find_let_node(name, vargs_ty->elements, (ast_node_sized)sized_all(*self->nodes), 0, &ctx->specials);
 
-    // TODO compiler error
+    // wait for a later phase, hopefully... TODO
     if (null == let) return;
 
     // specialize it and inject into callsite
@@ -1763,6 +1772,26 @@ static int ti_specialize_functions(ti_inferer *self, ast_node_array *out_nodes) 
     if (!ctx.specials.v) fatal("ti_specialize_functions: realloc failed.");
     *out_nodes = ctx.specials;
     return ctx.found_count;
+}
+
+typedef struct {
+    u32 count;
+} count_unspecialized_applications_ctx;
+
+static void count_unspecialized_application(void *ctx_, ast_node *node) {
+    count_unspecialized_applications_ctx *ctx = ctx_;
+    if (ast_named_function_application != node->tag) return;
+    if (!node->named_application.specialized) ctx->count++;
+}
+
+static u32 ti_count_unspecialized_applications(ti_inferer *self) {
+    count_unspecialized_applications_ctx ctx = {0};
+
+    for (size_t i = 0; i < self->nodes->size; ++i)
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i],
+                                    count_unspecialized_application);
+
+    return ctx.count;
 }
 
 //
