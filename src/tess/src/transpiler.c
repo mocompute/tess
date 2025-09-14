@@ -104,7 +104,7 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->processed_structs    = map_create(alloc, sizeof(char *));
 
     self->thunk_free_variables = (c_string_carray){.alloc = self->transient};
-    self->lambdas              = map_create(alloc, sizeof(ast_node *));
+    self->lambdas              = map_create(self->transient, sizeof(ast_node *));
 
     self->results              = (c_string_array){.alloc = self->strings};
 
