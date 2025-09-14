@@ -1561,9 +1561,6 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // body type must be same as right hand of arrow
         push(v->right, node->lambda_function.body->type);
-
-        // result must be same as right hand of arrow
-        push(node->type, v->right);
         break;
 
     } break;
