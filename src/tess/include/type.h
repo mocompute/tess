@@ -4,6 +4,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "types.h"
+#include "util.h"
 
 #ifndef MOS_TAG_NAME
 #define MOS_TAG_NAME(name, str) name,
@@ -47,6 +48,7 @@ typedef struct tl_type {
         struct tlt_arrow {
             struct tl_type *left;
             struct tl_type *right;
+            u8              flags;
         } arrow;
 
         struct tlt_user {
@@ -70,6 +72,8 @@ typedef struct {
     struct tl_type **v;
 } tl_type_array;
 
+#define TL_TYPE_ARROW_LAMBDA BIT(0)
+
 // -- variant access --
 
 struct tlt_array          *tl_type_arr(tl_type *);
@@ -86,7 +90,7 @@ nodiscard tl_type *tl_type_create(allocator *, tl_type_tag) mallocfun;
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;
 nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_csized) mallocfun;
-nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *) mallocfun;
+nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *, int) mallocfun;
 nodiscard tl_type *tl_type_create_user_type(allocator *, char const *name,
                                             tl_type *labelled_tuple) mallocfun;
 

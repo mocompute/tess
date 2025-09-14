@@ -1061,7 +1061,7 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
             left                   = tl_type_create_tuple(self->type_arena, elements);
         }
 
-        return tl_type_create_arrow(self->type_arena, left, right);
+        return tl_type_create_arrow(self->type_arena, left, right, 0);
     }
 
     if (ast_address_of == ann->tag) {
@@ -1099,7 +1099,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_let: {
         tl_type *left  = make_typevar(self);
         tl_type *right = make_typevar(self);
-        tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right);
+        tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right, 0);
 
         assert(node->let.name->type);
         node->let.arrow = arrow;
@@ -1109,7 +1109,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_lambda_function: {
         tl_type *left  = make_typevar(self);
         tl_type *right = make_typevar(self);
-        tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right);
+        tl_type *arrow = tl_type_create_arrow(self->type_arena, left, right, 1);
         node->type     = arrow;
     } break;
 
@@ -1212,7 +1212,7 @@ static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const
     if (names) left = make_labelled_args_type(alloc, args, names, n);
     else left = make_args_type(alloc, args, n);
 
-    return tl_type_create_arrow(alloc, left, right);
+    return tl_type_create_arrow(alloc, left, right, 0);
 }
 
 static int is_type_compatible(tl_type const *a, tl_type const *b, int strict) {

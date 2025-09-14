@@ -36,11 +36,13 @@ tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, c
     return self;
 }
 
-tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
+tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right, int is_lambda) {
     tl_type *self     = alloc_struct(alloc, self);
     self->tag         = type_arrow;
     self->arrow.left  = left;
     self->arrow.right = right;
+    self->arrow.flags = 0;
+    if (is_lambda) SET_BIT(self->arrow.flags, TL_TYPE_ARROW_LAMBDA);
 
     return self;
 }
