@@ -32,10 +32,11 @@ struct transpiler {
 
     size_t next_variable;
     int    indent_level;
-
-    int    is_eval_in_thunk;
-
     int    verbose;
+
+    // state which affects operation of a_eval
+    int             is_eval_in_thunk;
+    c_string_carray thunk_free_variables;
 };
 
 // -- embed externs --
@@ -91,25 +92,28 @@ static void log(transpiler *, char const *restrict fmt, ...) __attribute__((form
 
 transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
 
-    transpiler *self        = alloc_calloc(alloc, 1, sizeof *self);
-    self->alloc             = alloc;
-    self->strings           = arena_create(alloc, 2048);
-    self->transient         = arena_create(alloc, 2048);
-    self->bytes             = bytes;
-    self->type_registry     = tr;
-    self->processed_structs = map_create(alloc, sizeof(char *));
+    transpiler *self           = alloc_calloc(alloc, 1, sizeof *self);
+    self->alloc                = alloc;
+    self->strings              = arena_create(alloc, 2048);
+    self->transient            = arena_create(alloc, 2048);
+    self->bytes                = bytes;
+    self->type_registry        = tr;
+    self->processed_structs    = map_create(alloc, sizeof(char *));
 
-    self->results           = (c_string_array){.alloc = self->strings};
+    self->thunk_free_variables = (c_string_carray){.alloc = self->transient};
 
-    self->next_variable     = 1;
-    self->indent_level      = 0;
-    self->is_eval_in_thunk  = 0;
-    self->verbose           = 0;
+    self->results              = (c_string_array){.alloc = self->strings};
+
+    self->next_variable        = 1;
+    self->indent_level         = 0;
+    self->is_eval_in_thunk     = 0;
+    self->verbose              = 0;
 
     return self;
 }
 
 void transpiler_destroy(transpiler **self) {
+    array_free((*self)->thunk_free_variables);
     map_destroy(&(*self)->processed_structs);
     arena_destroy((*self)->alloc, &(*self)->transient);
     arena_destroy((*self)->alloc, &(*self)->strings);
@@ -277,9 +281,68 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, " {\n");
     self->indent_level++;
 
+    // add my free variables to the stack
+    u32 save = self->thunk_free_variables.size;
+    forall(i, free_variables) {
+        array_push_val(self->thunk_free_variables, ast_node_name_string(free_variables.v[i]));
+    }
     a_thunk(self, node);
+    self->thunk_free_variables.size = save;
 
-    char const *body = pop_result(self);
+    char const *body                = pop_result(self);
+    out_put_start_fmt(self, "return %s;", body);
+
+    self->indent_level--;
+    out_put(self, "\n}\n\n");
+}
+
+static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
+    transpiler *self = ctx->self;
+
+    u64         hash = ast_node_hash(node);
+    if (map_get(ctx->map, &hash, sizeof hash)) return;
+
+    int one = 1;
+    map_set(&ctx->map, &hash, sizeof hash, &one);
+
+    // figure out the free variables in use in this function
+    ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+
+    // declare struct for thunk context
+    char *struct_name = make_thunk_struct_name(self->strings, hash);
+    emit_thunk_struct(self, struct_name, free_variables);
+
+    // function declaration
+    char *name = make_thunk_name(self->strings, hash);
+
+    // return type and name
+    assert(type_arrow == node->type->tag);
+    out_put_start(self, "static ");
+    a_declaration(self, node->type->arrow.right, name);
+    out_put(self, " ");
+
+    // params
+    struct ast_lambda_function *v = ast_node_lf(node);
+    out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+    for (u32 i = 0; i < v->n_parameters; ++i) {
+        out_put(self, ", ");
+        a_declaration(self, v->parameters[i]->type, ast_node_name_string(v->parameters[i]));
+    }
+    out_put(self, ")");
+
+    // body
+    out_put(self, " {\n");
+    self->indent_level++;
+
+    // add my free variables to the stack
+    u32 save = self->thunk_free_variables.size;
+    forall(i, free_variables) {
+        array_push_val(self->thunk_free_variables, ast_node_name_string(free_variables.v[i]));
+    }
+    a_thunk(self, node->lambda_function.body);
+    self->thunk_free_variables.size = save;
+
+    char const *body                = pop_result(self);
     out_put_start_fmt(self, "return %s;", body);
 
     self->indent_level--;
@@ -290,13 +353,14 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
     generate_thunks_ctx *ctx  = ctx_;
     transpiler          *self = ctx->self;
 
-    // FIXME: add support for lambda functions
-    if (ast_if_then_else != node->tag) return;
-
-    log(self, "if-then-else: %s", ast_node_to_string(self->strings, node));
-
-    make_one_thunk(ctx, node->if_then_else.yes);
-    make_one_thunk(ctx, node->if_then_else.no);
+    if (ast_if_then_else == node->tag) {
+        log(self, "thunk: if-then-else: %s", ast_node_to_string(self->strings, node));
+        make_one_thunk(ctx, node->if_then_else.yes);
+        make_one_thunk(ctx, node->if_then_else.no);
+    } else if (ast_lambda_function == node->tag) {
+        log(self, "thunk: lambda-function: %s", ast_node_to_string(self->strings, node));
+        make_lambda_thunk(ctx, node);
+    }
 }
 
 static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
@@ -401,6 +465,8 @@ static int a_declaration(transpiler *self, tl_type const *type, char const *var)
 
         a_declaration(self, type->arrow.right, "");
         out_put_fmt(self, " (*%s) (", var);
+
+        // FIXME for a thunk, need to add the context struct pointer here
 
         for (u32 i = 0; i < left->array.elements.size; ++i) {
             a_declaration(self, left->array.elements.v[i], "");
@@ -632,7 +698,31 @@ static int a_eval(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
     out_put_start(self, "");
-    a_declaration(self, node->type, var);
+    if (ast_lambda_function == node->tag) {
+        // If declaring variable for a lambda, the result type
+        // must include a pointer to the correct struct context
+        u64   hash        = ast_node_hash(node);
+        char *struct_name = make_thunk_struct_name(self->strings, hash);
+
+        // make a function pointer type
+        tl_type *left = node->type->arrow.left;
+
+        a_declaration(self, node->type->arrow.right, "");
+        out_put_fmt(self, " (*%s) (", var);
+
+        // for a thunk, need to add the context struct pointer here
+        out_put_fmt(self, "struct %s * _ctx_", struct_name);
+
+        for (u32 i = 0; i < left->array.elements.size; ++i) {
+            out_put(self, ", ");
+            a_declaration(self, left->array.elements.v[i], "");
+        }
+
+        out_put(self, ") ");
+
+    } else {
+        a_declaration(self, node->type, var);
+    }
     out_put(self, ";\n");
 
     switch (node->tag) {
@@ -647,8 +737,15 @@ static int a_eval(transpiler *self, ast_node const *node) {
                               make_function_name(self->strings, ast_node_name_string(node)));
         } else {
             if (self->is_eval_in_thunk) {
-                // access symbol through context variable and dereference it
-                out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
+                // if symbol is a free variable, access it through context and dereference it.
+
+                char const *sym_name = ast_node_name_string(node);
+                if (array_contains(self->thunk_free_variables, &sym_name)) {
+                    out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
+                } else {
+                    out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
+                }
+
             } else {
                 out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
             }
