@@ -10,8 +10,8 @@
 #endif
 
 #define TL_AST_BIT_ARRAY     15
-#define TL_AST_HAS_ARRAY(x)  TEST_BIT((x), TL_AST_BIT_ARRAY)
-#define TL_AST_CLEAR_BITS(x) GET_FIELD((x), 0, TL_AST_BIT_ARRAY - 1)
+#define TL_AST_HAS_ARRAY(x)  BIT_TEST((x), TL_AST_BIT_ARRAY)
+#define TL_AST_CLEAR_BITS(x) FIELD_GET((x), 0, TL_AST_BIT_ARRAY - 1)
 
 typedef enum ast_tag : u16 {
     ast_nil,

@@ -43,7 +43,7 @@ tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right, i
     self->arrow.left  = left;
     self->arrow.right = right;
     self->arrow.flags = 0;
-    if (is_lambda) SET_BIT(self->arrow.flags, TL_TYPE_ARROW_LAMBDA);
+    if (is_lambda) BIT_SET(self->arrow.flags, TL_TYPE_ARROW_LAMBDA);
 
     return self;
 }

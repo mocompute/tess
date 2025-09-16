@@ -445,7 +445,7 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
     // set flag that this name is a LET name, so it doesn't
     // get constrained to equal types in every occurence of
     // its generic name
-    SET_BIT(name->symbol.flags, AST_SYMBOL_FLAG_LET);
+    BIT_SET(name->symbol.flags, AST_SYMBOL_FLAG_LET);
 
     // assign the arrow type to the name node
     name->type             = type;
@@ -525,7 +525,7 @@ void assign_callsite_types(void *ctx, ast_node *node) {
 
         // First, ensure symbol name is properly flagged
         assert(ast_symbol == v->name->tag);
-        SET_BIT(v->name->symbol.flags, AST_SYMBOL_FLAG_LET);
+        BIT_SET(v->name->symbol.flags, AST_SYMBOL_FLAG_LET);
 
         // FIXME std_dbg is special because we don't know how to type varargs yet
         if (0 == strcmp("std_dbg", name_str)) {
@@ -777,7 +777,7 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         node->let_in.value      = rec->node;
         node->let_in.name->type = rec->type;
         assert(type_arrow == node->let_in.name->type->tag);
-        SET_BIT(node->let_in.name->type->arrow.flags, TL_TYPE_ARROW_LAMBDA);
+        BIT_SET(node->let_in.name->type->arrow.flags, TL_TYPE_ARROW_LAMBDA);
     }
 
     else if (ast_named_function_application == node->tag) {
@@ -1924,7 +1924,7 @@ void collect_constraints(void *ctx_, ast_node *node) {
             }
         }
 
-        if (!TEST_BIT(node->symbol.flags, AST_SYMBOL_FLAG_LET)) {
+        if (!BIT_TEST(node->symbol.flags, AST_SYMBOL_FLAG_LET)) {
             // FIXME: I don't know why this is not for let symbols
             // ensure symbol type matches its annotated type, if any
             tl_type *annotation = ast_node_annotation(node);
@@ -2338,7 +2338,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         struct ast_labelled_tuple *v                = ast_node_lt(out->let.body);
         v->n_assignments                            = out->let.n_parameters;
         v->assignments = alloc_malloc(a, v->n_assignments * sizeof v->assignments[0]);
-        SET_BIT(v->flags, AST_TUPLE_FLAG_INIT);
+        BIT_SET(v->flags, AST_TUPLE_FLAG_INIT);
         for (u16 i = 0; i < v->n_assignments; ++i) {
             v->assignments[i]                  = ast_node_create(a, ast_assignment);
             v->assignments[i]->assignment.name = ast_node_clone(a, lt->assignments[i]->assignment.name);
@@ -2384,7 +2384,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         struct ast_tuple *v             = ast_node_tuple(out->let.body);
         v->n_elements                   = out->let.n_parameters;
         v->elements                     = alloc_malloc(a, v->n_elements * sizeof v->elements[0]);
-        SET_BIT(v->flags, AST_TUPLE_FLAG_INIT); // tell transpiler to emit initialisation code
+        BIT_SET(v->flags, AST_TUPLE_FLAG_INIT); // tell transpiler to emit initialisation code
 
         for (u16 i = 0; i < v->n_elements; ++i) {
             v->elements[i]       = out->let.parameters[i];

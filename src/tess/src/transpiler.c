@@ -481,7 +481,7 @@ static int a_declaration(transpiler *self, tl_type const *type, ast_node const *
         a_declaration(self, type->arrow.right, null, "");
         out_put_fmt(self, " (*%s) (", var);
 
-        if (node && TEST_BIT(type->arrow.flags, TL_TYPE_ARROW_LAMBDA)) {
+        if (node && BIT_TEST(type->arrow.flags, TL_TYPE_ARROW_LAMBDA)) {
             // for a thunk, need to add the context struct pointer here
             assert(ast_lambda_function == node->tag);
             u64   hash        = ast_node_hash(node);
@@ -881,7 +881,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_lambda_function_application: break;
 
     case ast_named_function_application:  {
-        if (TEST_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
+        if (BIT_TEST(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
             if (a_intrinsic_apply(self, node)) return 1;
         } else {
             if (a_fun_apply(self, node)) return 1;
@@ -1205,10 +1205,10 @@ static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
 static int a_tuple_cons(transpiler *self, ast_node const *node) {
     // intercept tuple init to construct tuple in place rather than
     // invoke constructor function
-    if (ast_tuple == node->tag && TEST_BIT(node->tuple.flags, AST_TUPLE_FLAG_INIT)) {
+    if (ast_tuple == node->tag && BIT_TEST(node->tuple.flags, AST_TUPLE_FLAG_INIT)) {
         return a_tuple_init(self, node);
     }
-    if (ast_labelled_tuple == node->tag && TEST_BIT(node->labelled_tuple.flags, AST_TUPLE_FLAG_INIT)) {
+    if (ast_labelled_tuple == node->tag && BIT_TEST(node->labelled_tuple.flags, AST_TUPLE_FLAG_INIT)) {
         return a_labelled_tuple_init(self, node);
     }
 
@@ -1450,7 +1450,7 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
     // are not used by the program.
     if (is_generic_function(self, node)) return 0;
 
-    if (TEST_BIT(node->let.flags, AST_LET_FLAG_INTRINSIC)) return 0;
+    if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) return 0;
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
     char const           *name = string_t_str(&v->name->symbol.name);
@@ -1490,7 +1490,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     map_reset(self->lambdas);
 
-    if (TEST_BIT(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
+    if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
         log(self, "skipping '%s' because it is an intrinsic function",
             ast_node_name_string(node->let.name));
         return 0;

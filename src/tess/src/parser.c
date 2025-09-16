@@ -955,7 +955,7 @@ static int a_assignment(parser *self) {
     ast_node *node        = ast_node_create(self->ast_arena, ast_assignment);
     node->assignment.name = name;
     assert(ast_symbol == node->assignment.name->tag);
-    SET_BIT(node->assignment.name->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
+    BIT_SET(node->assignment.name->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
     node->assignment.value = value;
     return result_ast_node(self, node);
 }
@@ -1362,7 +1362,7 @@ static int function_application(parser *self) {
             node->named_application.flags         = 0;
             node->named_application.function_type = null;
             node->named_application.name          = name;
-            if (is_intrinsic) SET_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
+            if (is_intrinsic) BIT_SET(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);
             repair_single_nil_argument(&arguments);
@@ -1615,7 +1615,7 @@ static int simple_declaration(parser *p) {
         int res = result_ast_str(p, ast_symbol, make_nil_name(p));
         if (0 == res) {
             assert(ast_symbol == p->result->tag);
-            SET_BIT(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
+            BIT_SET(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
         }
         return res;
     }
@@ -1628,7 +1628,7 @@ static int simple_declaration(parser *p) {
     int res = result_ast_node(p, sym);
     if (0 == res) {
         assert(ast_symbol == p->result->tag);
-        SET_BIT(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
+        BIT_SET(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
     }
     return res;
 }
@@ -1932,7 +1932,7 @@ static int toplevel_let(parser *self) {
         // string_t_copy(self->ast_arena, &node->let.name,
         // &decl->function_declaration.name->symbol.name);
         node->let.name = decl->function_declaration.name;
-        SET_BIT(node->let.name->symbol.flags, AST_SYMBOL_FLAG_LET);
+        BIT_SET(node->let.name->symbol.flags, AST_SYMBOL_FLAG_LET);
         node->let.body = defn;
 
         // move the vector from the function_declaration node to the new ast node

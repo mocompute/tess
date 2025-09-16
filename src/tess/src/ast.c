@@ -935,21 +935,21 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 //
 
 int ast_node_is_specialized(ast_node const *node) {
-    return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_SPECIALIZED));
+    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_SPECIALIZED));
 }
 
 int ast_node_is_tuple_constructor(ast_node const *node) {
-    return (ast_let == node->tag && TEST_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS));
+    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_TUPLE_CONS));
 }
 
 void ast_node_set_is_specialized(ast_node *node) {
     assert(ast_let == node->tag);
-    SET_BIT(node->let.flags, AST_LET_FLAG_SPECIALIZED);
+    BIT_SET(node->let.flags, AST_LET_FLAG_SPECIALIZED);
 }
 
 void ast_node_set_is_tuple_constructor(ast_node *node) {
     assert(ast_let == node->tag);
-    SET_BIT(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
+    BIT_SET(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
 }
 
 tl_type *ast_node_annotation(ast_node const *node) {
