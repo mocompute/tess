@@ -517,7 +517,7 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
         // are never satisfied
         return 0;
 
-    case type_any: assert(0); // logic error
+    case type_any: fatal("logic error");
     }
 }
 

@@ -837,7 +837,7 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         return out;
     }
 
-    assert(0);
+    fatal("logic error");
 }
 
 static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
