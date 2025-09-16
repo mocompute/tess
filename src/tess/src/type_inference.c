@@ -18,9 +18,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define TYPE_ARENA_SIZE    16 * 1024
-#define STRINGS_ARENA_SIZE 4 * 1024
-#define CONSTRAINTS_SIZE   1024
+#define TYPE_ARENA_SIZE      32 * 1024
+#define TRANSIENT_ARENA_SIZE 16 * 1024
 
 typedef struct constraint {
     tl_type *left;
@@ -66,10 +65,10 @@ struct ti_inferer {
     u32              next_var;         // for rename_variables
     u32              next_type_var;    // for assign_type_variables
     u32              next_specialized; // for specialized function names
-    int              indent_level;     // for log output
 
     // flags which do not affect operation
     int verbose;
+    int indent_level;
 };
 
 // -- ti_inferer --
@@ -136,22 +135,19 @@ static tl_type       *make_typevar(ti_inferer *);
 static u32            make_typevar_val(void *);
 static constraint     make_constraint(tl_type *, tl_type *);
 
-// static int        is_special_name(char const *);
-// static int        is_special_name_s(string_t const *);
-// static int        is_type_compatible(tl_type const *, tl_type const *, int);
-static int  is_generated_variable_name(char const *);
+static int            is_generated_variable_name(char const *);
 
-static void dbg_ast_nodes(ti_inferer *);
-static void dbg_constraint(constraint const *);
-static void log_function_records(ti_inferer *);
-static void log(ti_inferer *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static void           dbg_ast_nodes(ti_inferer *);
+static void           dbg_constraint(constraint const *);
+static void           log_function_records(ti_inferer *);
+static void           log(ti_inferer *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
 
 ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_registry *type_registry) {
     ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
     self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
-    self->transient        = arena_create(alloc, STRINGS_ARENA_SIZE);
+    self->transient        = arena_create(alloc, TRANSIENT_ARENA_SIZE);
 
     self->nodes            = nodes;
     self->type_registry    = type_registry;
@@ -166,9 +162,9 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->next_var         = 1; // 0 is not valid
     self->next_type_var    = 1;
     self->next_specialized = 1;
-    self->indent_level     = 0;
 
     self->verbose          = 0;
+    self->indent_level     = 0;
 
     return self;
 }
@@ -300,6 +296,7 @@ int ti_inferer_run(ti_inferer *self) {
     self->out_program.v    = specials.v;
 
     map_destroy(&requirements);
+    arena_reset(self->transient);
     return 0;
 }
 
@@ -364,6 +361,7 @@ void ti_inferer_report_errors(ti_inferer *self) {
     dbg("\ninfo: program nodes follow --\n\n");
     dbg_ast_nodes(self);
     dbg("\n-- program nodes end\n\n");
+    arena_reset(self->transient);
 }
 
 // -- check callsites --
@@ -666,6 +664,7 @@ static int ti_check_callsites(ti_inferer *self) {
 
     if (self->errors.size) return 1;
 
+    arena_reset(self->transient);
     return 0;
 }
 
@@ -712,6 +711,7 @@ static hashmap *ti_collect_specialization_requirements(ti_inferer *self) {
                                     one_specialization_requirement);
     }
 
+    arena_reset(self->transient);
     return map;
 }
 
@@ -819,6 +819,7 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
         }
     }
 
+    arena_reset(self->transient);
     return nodes_to_add;
 }
 
@@ -913,6 +914,8 @@ static void ti_patch_special_applications(ti_inferer *self, hashmap *map, ast_no
     forall(i, *specials) {
         ast_node_dfs_safe_for_recur(self->transient, &ctx, specials->v[i], patch_one_special);
     }
+
+    arena_reset(self->transient);
 }
 
 // -- fixup generic applications --
@@ -966,6 +969,7 @@ static void ti_fixup_generic_applications(ti_inferer *self, ast_node_array *spec
     if (!main) fatal("no main function found");
 
     ti_traverse_lexical(self->transient, &ctx, main->node, one_fixup_generic_application);
+    arena_reset(self->transient);
 }
 
 // -- collect functions to emit --
@@ -1038,6 +1042,7 @@ static void ti_collect_functions_to_emit(ti_inferer *self, ast_node_array *speci
     }
 
     map_destroy(&ctx.seen);
+    arena_reset(self->transient);
 }
 
 // -- rename variables --
@@ -1628,6 +1633,7 @@ static size_t ti_apply_substitutions_to_ast(ti_inferer *self, constraint_sized s
         ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes.v[i], dfs_apply_substitutions);
     }
 
+    arena_reset(self->transient);
     return ctx.count;
 }
 
@@ -1926,57 +1932,10 @@ void ti_assign_type_variables(ti_inferer *self) {
     for (size_t i = 0; i < self->nodes->size; ++i) {
         ast_node_dfs_safe_for_recur(self->transient, self, self->nodes->v[i], assign_type_variables);
     }
+    arena_reset(self->transient);
 }
 
 // -- collect_constraints --
-
-// static int is_compatible_arguments(ast_node *let, tl_type_sized args, int strict) {
-
-//     assert(let->let.arrow && type_arrow == let->let.arrow->tag);
-//     if (type_tuple == let->let.arrow->arrow.left->tag) {
-//         struct tlt_array *params = tl_type_arr(let->let.arrow->arrow.left);
-//         if (args.size != params->elements.size) return 0;
-
-//         for (u32 j = 0; j < args.size; ++j) {
-//             tl_type *el    = args.v[j];
-//             tl_type *param = params->elements.v[j];
-//             // If the callsite is looking for a typevar in this slot, skip it
-//             if (type_type_var == el->tag) continue;
-//             if (!is_type_compatible(el, param, strict)) return 0;
-//         }
-//     } else {
-//         return 0;
-//     }
-//     return 1;
-// }
-
-// static ast_node *find_let_node(char const *name, tl_type_sized elements, ast_node_sized nodes, int
-// strict,
-//                                ast_node_array *specials) {
-//     // strict => do not accept typevars for compatibility. This is
-//     // used when looking for a specialised function, which should
-//     // exclude any generic functions.
-
-//     // TODO profile linear search versus hashmap
-
-//     if (!name) fatal("find_let_node: null search string");
-
-//     for (i32 i = (i32)specials->size - 1; i >= 0; --i) {
-//         ast_node *candidate = specials->v[i];
-//         if (0 != string_t_cmp_c(&candidate->let.name->symbol.name, name)) continue;
-//         if (is_compatible_arguments(candidate, elements, strict)) return candidate;
-//     }
-
-//     // reverse search so we find previously specialised nodes first, if any
-//     for (i32 i = (i32)nodes.size - 1; i >= 0; --i) {
-//         ast_node *candidate = nodes.v[i];
-//         if (ast_let != candidate->tag) continue;
-//         if (0 != string_t_cmp_c(&candidate->let.name->symbol.name, name)) continue;
-//         if (is_compatible_arguments(candidate, elements, strict)) return candidate;
-//     }
-
-//     return null;
-// }
 
 static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
     tl_type **type = type_registry_find_name(self->type_registry, tl_type_tag_to_string(tag));
@@ -2286,6 +2245,7 @@ void ti_collect_constraints(ti_inferer *self, ast_node_sized *specials) {
     }
 
     map_destroy(&ctx.symbols);
+    arena_reset(self->transient);
 }
 
 void ti_inferer_dbg_constraints(ti_inferer const *self) {
@@ -2566,6 +2526,7 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
     }
 
     map_destroy(&ctx.map);
+    arena_reset(self->transient);
 }
 
 //
