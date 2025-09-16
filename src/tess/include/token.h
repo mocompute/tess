@@ -18,6 +18,7 @@
     X(tok_ampersand, "ampersand")                                                                          \
     X(tok_star, "star")                                                                                    \
     X(tok_arrow, "arrow")                                                                                  \
+    X(tok_ellipsis, "ellipsis")                                                                            \
     X(tok_open_round, "open_round")                                                                        \
     X(tok_close_round, "close_round")                                                                      \
     X(tok_equal_sign, "equal_sign")                                                                        \

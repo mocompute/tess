@@ -106,6 +106,7 @@ static int           a_colon_equal(parser *);
 static int           a_comma(parser *);
 static int           a_dereference(parser *);
 static int           a_dot(parser *);
+static int           a_ellipsis(parser *);
 static int           a_end_of_block(parser *);
 static int           a_end_of_expression(parser *);
 static int           a_equal_sign(parser *);
@@ -411,26 +412,28 @@ nodiscard static int a_try_special_ext(parser *p, parse_fun fun) {
 
 static int a_comma(parser *p) {
     if (next_token(p)) return 1;
-
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
-
     p->error.tag = tl_err_expected_comma;
     return 1;
 }
 
 static int a_dot(parser *p) {
     if (next_token(p)) return 1;
-
     if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
-
     p->error.tag = tl_err_expected_dot;
+    return 1;
+}
+
+static int a_ellipsis(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_ellipsis == p->token.tag) return result_ast_str(p, ast_symbol, "...");
+    p->error.tag = tl_err_expected_ellipsis;
     return 1;
 }
 
 static int a_open_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_open_round == p->token.tag) return result_ast_str(p, ast_symbol, "(");
-
     p->error.tag = tl_err_expected_open_round;
     return 1;
 }
@@ -438,7 +441,6 @@ static int a_open_round(parser *p) {
 static int a_close_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_close_round == p->token.tag) return result_ast_str(p, ast_symbol, ")");
-
     p->error.tag = tl_err_expected_close_round;
     return 1;
 }
@@ -479,6 +481,7 @@ static int a_end_of_expression(parser *p) {
     case tok_ampersand:
     case tok_star:
     case tok_arrow:
+    case tok_ellipsis:
     case tok_open_round:
     case tok_equal_sign:
     case tok_invalid:
@@ -629,7 +632,8 @@ static int a_type_identifier(parser *self) {
 
     // TODO so much duplication in this function...
 
-    if (0 == a_try(self, a_identifier)) {
+    if (0 == a_try(self, a_identifier) || 0 == a_try(self, a_ellipsis)) {
+        // FIXME for now we treat ellipsis as a textual identifier
         ast_node *left  = self->result;
         ast_node *right = null;
 

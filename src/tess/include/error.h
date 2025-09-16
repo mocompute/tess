@@ -53,6 +53,7 @@
     X(tl_err_expected_arrow, "expected_arrow")                                                             \
     X(tl_err_expected_comma, "expected_comma")                                                             \
     X(tl_err_expected_dot, "expected_dot")                                                                 \
+    X(tl_err_expected_ellipsis, "expected_ellipsis")                                                       \
     X(tl_err_expected_colon, "expected_colon")                                                             \
     X(tl_err_expected_colon_equal, "expected_colon_equal")                                                 \
     X(tl_err_expected_end_of_block, "expected_end_of_block")                                               \

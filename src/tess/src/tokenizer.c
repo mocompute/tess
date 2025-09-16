@@ -92,10 +92,10 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         start,
 
         in_minus,
-
         in_equal,
-
         in_colon,
+        in_dot,
+        in_dot_2,
 
         forward_slash,
 
@@ -157,13 +157,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '\n': self->line++; continue;
 
             case '/':  state = forward_slash; continue;
-
-            case '.':
-                replace_token(self->strings, &res, tok_dot);
-                state = stop;
-                break;
-
-            case ':': state = in_colon; continue;
+            case '.':  state = in_dot; continue;
+            case ':':  state = in_colon; continue;
 
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
@@ -230,6 +225,43 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:
                 self->pos -= 1;
                 replace_token(self->strings, &res, tok_colon);
+                state = stop;
+                break;
+            }
+        } break;
+
+        case in_dot: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_dot);
+                state = stop;
+                goto finish;
+            }
+            char const c = self->input.v[self->pos++];
+            switch (c) {
+            case '.': state = in_dot_2; break;
+            default:
+                self->pos -= 1;
+                replace_token(self->strings, &res, tok_dot);
+                state = stop;
+                break;
+            }
+        } break;
+
+        case in_dot_2: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_dot);
+                state = stop;
+                goto finish;
+            }
+            char const c = self->input.v[self->pos++];
+            switch (c) {
+            case '.':
+                replace_token(self->strings, &res, tok_ellipsis);
+                state = stop;
+                break;
+            default:
+                self->pos -= 1;
+                replace_token(self->strings, &res, tok_dot);
                 state = stop;
                 break;
             }
