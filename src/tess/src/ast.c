@@ -35,6 +35,7 @@ ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
     self->symbol.original        = string_t_init_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
+    self->symbol.flags           = 0;
     return self;
 }
 
@@ -113,6 +114,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         string_t_copy(alloc, &vclone->original, &vorig->original);
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = vorig->annotation_type;
+        vclone->flags           = vorig->flags;
     } break;
 
     case ast_let_in: {
@@ -135,8 +137,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->flags = vorig->flags;
         vclone->name  = ast_node_clone(alloc, vorig->name);
         vclone->body  = ast_node_clone(alloc, vorig->body);
-        vclone->arrow = vorig->arrow;
-        string_t_copy(alloc, &vclone->specialized_name, &vorig->specialized_name);
     } break;
 
     case ast_if_then_else: {
@@ -168,7 +168,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
-        vclone->specialized                  = ast_node_clone(alloc, vorig->specialized);
+        vclone->function_type                = vorig->function_type;
     } break;
 
     case ast_user_type: {
@@ -346,11 +346,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_let: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        if (string_t_empty(&node->let.specialized_name))
-            return penta(alloc, sym("let"), recur(node->let.name), list, recur(node->let.body), type);
-        else
-            return penta(alloc, sym("let"), sym(string_t_str(&node->let.specialized_name)), list,
-                         recur(node->let.body), type);
+        return penta(alloc, sym("let"), recur(node->let.name), list, recur(node->let.body), type);
 
     } break;
 
@@ -382,11 +378,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     case ast_named_function_application: {
         sexp list = elements_to_sexp(alloc, node->array.nodes, node->array.n, symbol_fun);
-        if (node->named_application.specialized)
-            return quad(alloc, sym("named-application"),
-                        sym(string_t_str(&node->named_application.specialized->let.specialized_name)), list,
-                        type);
-        else return quad(alloc, sym("named-application"), recur(node->named_application.name), list, type);
+        return quad(alloc, sym("named-application"), recur(node->named_application.name), list, type);
     }
 
     case ast_begin_end: {
@@ -563,7 +555,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_named_function_application:
         //
         fun(ctx, node->named_application.name);
-        fun(ctx, node->named_application.specialized);
         break;
 
     case ast_user_type:
@@ -613,14 +604,19 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_string:
     case ast_labelled_tuple:
     case ast_tuple:
+    case ast_let:
     case ast_let_in:
     case ast_let_match_in:
     case ast_if_then_else:
     case ast_lambda_function:
     case ast_function_declaration:
     case ast_lambda_declaration:
-    case ast_lambda_function_application:
+    case ast_lambda_function_application: break;
+
     case ast_named_function_application:
+        if (node->named_application.function_type) fun(ctx, node->named_application.function_type);
+        break;
+
     case ast_begin_end:
     case ast_user_type:
     case ast_user_type_get:
@@ -633,9 +629,6 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
         if (node->symbol.annotation_type) fun(ctx, node->symbol.annotation_type);
         break;
 
-    case ast_let:
-        //
-        fun(ctx, node->let.arrow);
         break;
 
     case ast_user_type_definition: {
@@ -1092,7 +1085,9 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_lambda_declaration: break;
 
     case ast_lambda_function:
+        // for lambdas and let functions, its type is part of the hash
         hash = hash64_combine(hash, (byte *)&self->lambda_function.body, sizeof(ast_node *));
+        hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
         break;
 
     case ast_lambda_function_application:
@@ -1100,14 +1095,16 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_let:
+        // for lambdas and let functions, its type is part of the hash
         hash = hash64_combine(hash, (byte *)&self->let.name, sizeof(ast_node *));
         hash = hash64_combine(hash, (byte *)&self->let.body, sizeof(ast_node *));
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
+        hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
         break;
 
     case ast_named_function_application:
         hash = hash64_combine(hash, (byte *)&self->named_application.name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->named_application.specialized, sizeof(ast_node *));
+        hash = hash64_combine(hash, (byte *)&self->named_application.function_type, sizeof(tl_type *));
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
         break;
 

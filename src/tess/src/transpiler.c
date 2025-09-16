@@ -25,6 +25,7 @@ struct transpiler {
     char_array    *bytes;
 
     type_registry *type_registry;
+    ti_inferer    *type_inferer;
     hashmap       *processed_structs;
 
     c_string_array results;
@@ -89,11 +90,11 @@ static void        out_put_start_fmt(transpiler *, char const *restrict, ...)
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 static void vout_put_fmt(transpiler *, char const *restrict, va_list);
 
-static int  is_generic_function(ast_node const *node);
+static int  is_generic_function(transpiler *, ast_node const *node);
 
 static void log(transpiler *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
-transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr) {
+transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry *tr, ti_inferer *ti) {
 
     transpiler *self           = alloc_calloc(alloc, 1, sizeof *self);
     self->alloc                = alloc;
@@ -101,6 +102,7 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->transient            = arena_create(alloc, 2048);
     self->bytes                = bytes;
     self->type_registry        = tr;
+    self->type_inferer         = ti;
     self->processed_structs    = map_create(alloc, sizeof(char *));
 
     self->thunk_free_variables = (c_string_carray){.alloc = self->transient};
@@ -364,9 +366,6 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
         log(self, "thunk: if-then-else: %s", ast_node_to_string(self->strings, node));
         make_one_thunk(ctx, node->if_then_else.yes);
         make_one_thunk(ctx, node->if_then_else.no);
-    } else if (ast_lambda_function == node->tag) {
-        log(self, "thunk: lambda-function: %s", ast_node_to_string(self->strings, node));
-        make_lambda_thunk(ctx, node);
     }
 }
 
@@ -374,8 +373,16 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     generate_thunks_ctx ctx;
     ctx.self = self;
     ctx.map  = map_create(self->transient, sizeof(int));
-    for (u32 i = 0; i < n; i++)
-        ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes[i], look_for_thunks);
+    for (u32 i = 0; i < n; i++) {
+        ast_node *node = nodes[i];
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, node, look_for_thunks);
+
+        // lambdas are all promoted to toplevel nodes by ti_inferer
+        if (ast_lambda_function == node->tag) {
+            log(self, "thunk: lambda-function: %s", ast_node_to_string(self->strings, node));
+            make_lambda_thunk(&ctx, node);
+        }
+    }
     map_destroy(&ctx.map);
 }
 
@@ -461,11 +468,12 @@ static int is_nil_result(tl_type const *type) {
 static int a_declaration(transpiler *self, tl_type const *type, ast_node const *node, char const *var) {
 
     if (type->tag != type_arrow) {
-        // don't emit a declaration if the return type is nil
-        if (is_nil_result(type)) return 0;
-
-        a_result_type_of(self, type);
-        out_put_fmt(self, " %s", var);
+        if (is_nil_result(type)) {
+            out_put_fmt(self, "/* void */ int %s", var);
+        } else {
+            a_result_type_of(self, type);
+            out_put_fmt(self, " %s", var);
+        }
     } else {
         // make a function pointer type
         tl_type *left = type->arrow.left;
@@ -522,7 +530,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
         alloc_free(self->alloc, name);
     } break;
 
-    case type_any:   out_put(self, "int"); break;
+    case type_any:   out_put(self, "void"); break;
 
     case type_arrow: fatal("logic error"); break;
 
@@ -678,7 +686,7 @@ static int a_field_access(transpiler *self, ast_node const *node) {
 
     out_put_start(self, "");
     a_declaration(self, node->type, node, var);
-    if (TEST_BIT(v->flags, AST_UT_FLAG_POINTER))
+    if (type_pointer == v->struct_name->type->tag)
         out_put_start_fmt(self, " = %s->%s;\n", ast_node_name_string(v->struct_name),
                           ast_node_name_string(v->field_name));
     else
@@ -705,7 +713,7 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, " = %s;\n", value);
 
     // assign to struct field
-    if (TEST_BIT(v->flags, AST_UT_FLAG_POINTER))
+    if (type_pointer == v->struct_name->type->tag)
         out_put_start_fmt(self, "%s->%s = %s;\n", struct_name, field_name, var);
     else out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
 
@@ -1046,18 +1054,16 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     struct ast_named_application const *v    = ast_node_named((ast_node *)node);
 
-    char const                         *name = null;
-    if (v->specialized) {
-        name = string_t_str(&v->specialized->let.specialized_name);
-        // mangle the name
-        name = make_function_name(self->strings, name);
-    } else {
-        // c_ and std_ , or variables
-        name = ast_node_name_string(v->name);
+    char const                         *name = ast_node_name_string(v->name);
 
-        if (0 == strncmp("c_", name, 2)) {
-            name += 2; // strip off c_ prefix
-        }
+    if (0 == strncmp("c_", name, 2)) {
+        name += 2;
+    } else if (0 == strncmp("_", name, 1)) {
+        ;
+    } else if (0 == strncmp("std_", name, 4)) {
+        ;
+    } else {
+        name = make_function_name(self->strings, name);
     }
 
     char *var = next_variable(self);
@@ -1352,12 +1358,14 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
-    char const           *name = string_t_str(&v->specialized_name);
-    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+    char const           *name = string_t_str(&v->name->symbol.name);
+    // if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
 
-    log(self, "processing struct let '%s'...", string_t_str(&v->specialized_name));
+    log(self, "processing struct let '%s'...", name);
 
-    tl_type *tuple          = v->arrow->arrow.left;
+    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    if (!rec) fatal("function record not found: '%s'", name);
+    tl_type *tuple          = rec->type->arrow.left;
     u64      hash           = tl_type_hash(tuple);
     char    *generated_name = make_struct_name(self->alloc, hash);
 
@@ -1401,12 +1409,12 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     // function declaration
     // TODO copied from a_let
-    name = string_t_str(&v->specialized_name);
+    name = string_t_str(&v->name->symbol.name);
     if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, v->arrow->arrow.right, node, name);
+    a_declaration(self, rec->type->arrow.right, node, name);
     out_put(self, " ");
 
     // params
@@ -1440,16 +1448,22 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
 
     // don't emit generic prototypes: they are generic because they
     // are not used by the program.
-    if (is_generic_function(node)) return 0;
+    if (is_generic_function(self, node)) return 0;
+
+    if (TEST_BIT(node->let.flags, AST_LET_FLAG_INTRINSIC)) return 0;
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
-    char const           *name = string_t_str(&v->specialized_name);
-    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+    char const           *name = string_t_str(&v->name->symbol.name);
+    // if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+    assert(strlen(name));
 
     if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
         // skip here, let a_main process it.
         return 0;
     }
+
+    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    if (!rec) fatal("function record not found: '%s'", name);
 
     // mangle the name
     name = make_function_name(self->strings, name);
@@ -1458,7 +1472,7 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, v->arrow->arrow.right, node, name);
+    a_declaration(self, rec->type->arrow.right, node, name);
     out_put(self, " ");
 
     // params
@@ -1476,15 +1490,15 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     map_reset(self->lambdas);
 
-    struct ast_let const *v    = ast_node_let((ast_node *)node);
-    char const           *name = string_t_str(&v->specialized_name);
-    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
-
-    if (is_generic_function(node)) {
-        log(self, "skipping '%s' ('%s') because it is a generic function",
-            string_t_str(&v->name->symbol.name), string_t_str(&v->specialized_name));
+    if (TEST_BIT(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
+        log(self, "skipping '%s' because it is an intrinsic function",
+            ast_node_name_string(node->let.name));
         return 0;
     }
+
+    struct ast_let const *v    = ast_node_let((ast_node *)node);
+    char const           *name = string_t_str(&v->name->symbol.name);
+    // if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
 
     if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
 
@@ -1493,7 +1507,14 @@ static int a_let(transpiler *self, ast_node const *node) {
         return 0;
     }
 
+    if (is_generic_function(self, node)) {
+        fatal("cannot process generic function '%s' ", string_t_str(&v->name->symbol.name));
+    }
+
     log(self, "processing '%s'...", name);
+
+    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    if (!rec) fatal("function record not found: '%s'", name);
 
     // mangle the name
     name = make_function_name(self->strings, name);
@@ -1502,7 +1523,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, v->arrow->arrow.right, node, name);
+    a_declaration(self, rec->type->arrow.right, node, name);
     out_put(self, " ");
 
     // params
@@ -1537,12 +1558,16 @@ static char *next_variable(transpiler *self) {
     return out;
 }
 
-static int is_generic_function(ast_node const *node) {
+static int is_generic_function(transpiler *self, ast_node const *node) {
     if (ast_let != node->tag) return 0;
 
-    tl_type *arrow = node->let.arrow;
+    ti_function_record *rec = ti_lookup_function(self->type_inferer, ast_node_name_string(node->let.name));
+    if (!rec) fatal("function record not found: '%s'", ast_node_name_string(node->let.name));
+
+    tl_type *arrow = rec->type;
     if (arrow->arrow.right->tag == type_type_var) return 1;
 
+    // FIXME it seems left could be something other than an array
     struct tlt_array const *v = tl_type_arr(arrow->arrow.left);
     for (u32 i = 0; i < v->elements.size; ++i)
         if (type_type_var == v->elements.v[i]->tag) return 1;

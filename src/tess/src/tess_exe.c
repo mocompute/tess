@@ -173,12 +173,14 @@ int compile(state *self) {
         goto cleanup_ti;
     }
 
-    allocator  *transpile_alloc   = arena_create(default_allocator(), 64 * 1024);
-    char_array  transpiler_output = {.alloc = transpile_alloc};
+    ast_node_sized program           = ti_inferer_get_program(ti);
 
-    transpiler *transpiler        = transpiler_create(default_allocator(), &transpiler_output, tr);
+    allocator     *transpile_alloc   = arena_create(default_allocator(), 64 * 1024);
+    char_array     transpiler_output = {.alloc = transpile_alloc};
+
+    transpiler    *transpiler        = transpiler_create(default_allocator(), &transpiler_output, tr, ti);
     transpiler_set_verbose(transpiler, self->verbose);
-    if (transpiler_compile(transpiler, nodes.v, nodes.size)) fatal("error while transpiling");
+    if (transpiler_compile(transpiler, program.v, program.size)) fatal("error while transpiling");
 
     if (self->out_path) {
         FILE *f = fopen(self->out_path, "wb");

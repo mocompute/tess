@@ -950,10 +950,12 @@ static int a_assignment(parser *self) {
         self->error.tag = tl_err_expected_assignment_value;
         return 1;
     }
-    ast_node *value        = self->result;
+    ast_node *value       = self->result;
 
-    ast_node *node         = ast_node_create(self->ast_arena, ast_assignment);
-    node->assignment.name  = name;
+    ast_node *node        = ast_node_create(self->ast_arena, ast_assignment);
+    node->assignment.name = name;
+    assert(ast_symbol == node->assignment.name->tag);
+    SET_BIT(node->assignment.name->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
     node->assignment.value = value;
     return result_ast_node(self, node);
 }
@@ -1019,7 +1021,6 @@ static int a_field_pointer_access(parser *self) {
     v->struct_name                  = variable;
     v->field_name                   = field;
     v->flags                        = 0;
-    SET_BIT(v->flags, AST_UT_FLAG_POINTER);
     return result_ast_node(self, node);
 }
 
@@ -1063,7 +1064,6 @@ static int a_field_pointer_setter(parser *self) {
     v->field_name                   = vget->field_name;
     v->value                        = value;
     v->flags                        = 0;
-    SET_BIT(v->flags, AST_UT_FLAG_POINTER);
     return result_ast_node(self, node);
 }
 
@@ -1357,11 +1357,11 @@ static int function_application(parser *self) {
             int         is_intrinsic = (0 == strncmp("_tl_", name_str, 4));
 
             ast_node   *node         = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments   = null;
-            node->named_application.n_arguments = 0;
-            node->named_application.flags       = 0;
-            node->named_application.specialized = null;
-            node->named_application.name        = name;
+            node->named_application.arguments     = null;
+            node->named_application.n_arguments   = 0;
+            node->named_application.flags         = 0;
+            node->named_application.function_type = null;
+            node->named_application.name          = name;
             if (is_intrinsic) SET_BIT(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);
@@ -1612,7 +1612,12 @@ static int simple_declaration(parser *p) {
         // need to match the equal sign too
         if (a_try(p, a_equal_sign)) return 1;
 
-        return result_ast_str(p, ast_symbol, make_nil_name(p));
+        int res = result_ast_str(p, ast_symbol, make_nil_name(p));
+        if (0 == res) {
+            assert(ast_symbol == p->result->tag);
+            SET_BIT(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
+        }
+        return res;
     }
 
     if (a_try(p, a_identifier_typed)) return 1;
@@ -1620,7 +1625,12 @@ static int simple_declaration(parser *p) {
 
     if (a_try(p, a_equal_sign)) return 1;
 
-    return result_ast_node(p, sym);
+    int res = result_ast_node(p, sym);
+    if (0 == res) {
+        assert(ast_symbol == p->result->tag);
+        SET_BIT(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
+    }
+    return res;
 }
 
 // -- public read-only portion of struct --
@@ -1910,20 +1920,19 @@ static int toplevel_let(parser *self) {
             if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
             goto error;
         }
-        ast_node *defn             = self->result;
-        ast_node *node             = ast_node_create(self->ast_arena, ast_let);
-        node->let.parameters       = null;
-        node->let.n_parameters     = 0;
-        node->let.flags            = 0;
-        node->let.name             = null;
-        node->let.body             = null;
-        node->let.arrow            = null;
-        node->let.specialized_name = string_t_init_empty();
+        ast_node *defn         = self->result;
+        ast_node *node         = ast_node_create(self->ast_arena, ast_let);
+        node->let.parameters   = null;
+        node->let.n_parameters = 0;
+        node->let.flags        = 0;
+        node->let.name         = null;
+        node->let.body         = null;
 
         // move declaration into new node
         // string_t_copy(self->ast_arena, &node->let.name,
         // &decl->function_declaration.name->symbol.name);
         node->let.name = decl->function_declaration.name;
+        SET_BIT(node->let.name->symbol.flags, AST_SYMBOL_FLAG_LET);
         node->let.body = defn;
 
         // move the vector from the function_declaration node to the new ast node

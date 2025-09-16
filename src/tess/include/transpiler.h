@@ -4,13 +4,14 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
+#include "type_inference.h"
 #include "type_registry.h"
 
 typedef struct transpiler transpiler;
 
 // -- allocation and deallocation --
 
-nodiscard transpiler *transpiler_create(allocator *, char_array *, type_registry *) mallocfun;
+nodiscard transpiler *transpiler_create(allocator *, char_array *, type_registry *, ti_inferer *) mallocfun;
 void                  transpiler_destroy(transpiler **);
 
 // -- operation --

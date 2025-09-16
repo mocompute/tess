@@ -31,6 +31,7 @@ typedef struct ast_node {
             string_t         original;
             struct ast_node *annotation;
             tl_type         *annotation_type;
+            u8               flags;
         } symbol;
 
         struct ast_bool {
@@ -75,7 +76,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             struct ast_node  *body;
-            ast_node_sized    free_variables; // only used at transpiler phase
+            ast_node_sized    free_variables; // only used at transpiler phase, undefined otherwise
         } lambda_function;
 
         struct ast_function_declaration {
@@ -95,8 +96,6 @@ typedef struct ast_node {
             u8                flags;
             struct ast_node  *name;
             struct ast_node  *body;
-            tl_type          *arrow;            // because the node type itself is nil
-            string_t          specialized_name; // set during function specialisation
         } let;
 
         struct ast_lambda_application {
@@ -110,7 +109,7 @@ typedef struct ast_node {
             u8                n_arguments;
             u8                flags;
             struct ast_node  *name;
-            struct ast_node  *specialized;
+            tl_type          *function_type;
         } named_application;
 
         struct ast_labelled_tuple {
@@ -193,14 +192,17 @@ typedef struct ast_node {
     enum tl_error_tag error;
 } ast_node;
 
-#define AST_LET_FLAG_SPECIALIZED BIT(0)
-#define AST_LET_FLAG_TUPLE_CONS  BIT(1)
+#define AST_SYMBOL_FLAG_LET       BIT(0)
+#define AST_SYMBOL_FLAG_LET_IN    BIT(1)
 
-#define AST_TUPLE_FLAG_INIT      BIT(0)
+#define AST_LET_FLAG_SPECIALIZED  BIT(0)
+#define AST_LET_FLAG_TUPLE_CONS   BIT(1)
+#define AST_LET_FLAG_INTRINSIC    BIT(2)
 
-#define AST_UT_FLAG_POINTER      BIT(0)
+#define AST_TUPLE_FLAG_INIT       BIT(0)
 
-#define AST_NAMED_APP_INTRINSIC  BIT(0)
+#define AST_NAMED_APP_INTRINSIC   BIT(0)
+#define AST_NAMED_APP_SPECIALIZED BIT(1)
 
 // -- iterator functions --
 

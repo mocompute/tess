@@ -16,6 +16,7 @@ nodiscard int                type_registry_add_named(type_registry *, char const
 nodiscard int                type_registry_add_hashed(type_registry *, u64, tl_type *);
 
 tl_type                    **type_registry_find_name(type_registry *, char const *);
+tl_type                    **type_registry_must_find_name(type_registry *, char const *);
 tl_type                    **type_registry_find_hash(type_registry *self, u64);
 
 tl_type                     *type_registry_ast_node_tuple(type_registry *, ast_node const *);

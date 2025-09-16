@@ -8,10 +8,6 @@ let _tl_mod_    : (a, a) -> a
 let _tl_mul_    : (a, a) -> a
 let _tl_div_    : (a, a) -> a
 
-let _tl_band_   : (a, a) -> a
-let _tl_bor_    : (a, a) -> a
-let _tl_bxor_   : (a, a) -> a
-
 let _tl_lt_     : (a, a) -> bool
 let _tl_lte_    : (a, a) -> bool
 let _tl_eq_     : (a, a) -> bool

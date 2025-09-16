@@ -37,11 +37,15 @@ struct hashmap {
 
 static hashmap_entry *map_unchecked_at(hashmap *map, u32 index);
 
-static inline int     is_occupied(u8 status) constfun;
-static inline int     is_tombstone(u8 status) constfun;
-static inline u8      get_probe_distance(u8 status) constfun;
+// pass zero-init iterator to start
+static int        internal_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
+static int        internal_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
 
-static inline int     is_occupied(u8 status) {
+static inline int is_occupied(u8 status) constfun;
+static inline int is_tombstone(u8 status) constfun;
+static inline u8  get_probe_distance(u8 status) constfun;
+
+static inline int is_occupied(u8 status) {
     return status & 1;
 }
 
@@ -272,7 +276,7 @@ void map_destroy(hashmap **map) {
 
     hashmap_iterator     iter = {0};
     hashmap_entry const *entry;
-    while (map_citer(*map, &iter, &entry)) alloc_free((*map)->key_alloc, entry->key);
+    while (internal_citer(*map, &iter, &entry)) alloc_free((*map)->key_alloc, entry->key);
 
     alloc_free((*map)->parent_alloc, *map);
     *map = null;
@@ -285,7 +289,7 @@ hashmap *map_copy(hashmap const *src) {
 
     hashmap_iterator iter = {0};
     hashmap_entry   *entry;
-    while (map_iter(dst, &iter, &entry)) {
+    while (internal_iter(dst, &iter, &entry)) {
         if (!is_occupied(entry->status)) continue;
 
         // copy key storage
@@ -301,7 +305,7 @@ hashmap *map_copy(hashmap const *src) {
     return dst;
 }
 
-int map_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
+int internal_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
 
     if (iter->index == self->n_cells) return 0;
 
@@ -310,8 +314,22 @@ int map_iter(hashmap const *self, hashmap_iterator *iter, hashmap_entry **out) {
     return 1;
 }
 
-int map_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry const **out) {
-    return map_iter(self, iter, (hashmap_entry **)out);
+int map_iter(hashmap const *self, hashmap_iterator *iter) {
+    while (1) {
+        if (iter->index == self->n_cells) return 0;
+
+        hashmap_entry *entry = (hashmap_entry *)&self->entries[hashmap_entry_size(self) * iter->index];
+        iter->index++;
+
+        if (is_occupied(entry->status)) {
+            iter->data = &entry->data;
+            return 1;
+        }
+    }
+}
+
+int internal_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry const **out) {
+    return internal_iter(self, iter, (hashmap_entry **)out);
 }
 
 int map_contains(hashmap *self, void const *key, u16 key_len) {

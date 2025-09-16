@@ -1,6 +1,7 @@
 #include "type.h"
 #include "alloc.h"
 #include "hash.h"
+#include "hashmap.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -54,6 +55,82 @@ tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type *l
     self->user.labelled_tuple = labelled_tuple;
 
     return self;
+}
+
+tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typevar_fun make_typevar,
+                            void *ctx, hashmap **tvmap) {
+
+    tl_type *clone = tl_type_create(alloc, orig->tag);
+
+    switch (clone->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string: break;
+
+    case type_tuple:
+        clone->array.elements.size = orig->array.elements.size;
+        clone->array.elements.v =
+          alloc_malloc(alloc, clone->array.elements.size * sizeof clone->array.elements.v[0]);
+        forall(i, orig->array.elements) clone->array.elements.v[i] =
+          tl_type_clone_impl(alloc, orig->array.elements.v[i], make_typevar, ctx, tvmap);
+        break;
+
+    case type_labelled_tuple:
+        clone->array.elements.size = orig->array.elements.size;
+        clone->array.elements.v =
+          alloc_malloc(alloc, clone->array.elements.size * sizeof clone->array.elements.v[0]);
+        forall(i, orig->array.elements) clone->array.elements.v[i] =
+          tl_type_clone_impl(alloc, orig->array.elements.v[i], make_typevar, ctx, tvmap);
+
+        clone->labelled_tuple.names.size = orig->labelled_tuple.names.size;
+        clone->labelled_tuple.names.v =
+          alloc_malloc(alloc, orig->labelled_tuple.names.size * sizeof clone->labelled_tuple.names.v[0]);
+        forall(i, orig->labelled_tuple.names) clone->labelled_tuple.names.v[i] =
+          alloc_strdup(alloc, orig->labelled_tuple.names.v[i]);
+        break;
+
+    case type_arrow:
+        clone->arrow.left  = tl_type_clone_impl(alloc, orig->arrow.left, make_typevar, ctx, tvmap);
+        clone->arrow.right = tl_type_clone_impl(alloc, orig->arrow.right, make_typevar, ctx, tvmap);
+        break;
+
+    case type_user:
+        clone->user.name = alloc_strdup(alloc, orig->user.name);
+        clone->user.labelled_tuple =
+          tl_type_clone_impl(alloc, orig->user.labelled_tuple, make_typevar, ctx, tvmap);
+        break;
+
+    case type_type_var: {
+
+        // assign the same new typevar for a corresponding original tvar.
+        // eg, the type a -> a needs to be cloned to tv5 -> tv5, not tv5 -> tv6.
+
+        u32 *found = map_get(*tvmap, &orig->type_var.val, sizeof orig->type_var.val);
+        if (found) {
+            clone->type_var.val = *found;
+        } else {
+            clone->type_var.val = make_typevar(ctx);
+            map_set(tvmap, &orig->type_var.val, sizeof orig->type_var.val, &clone->type_var.val);
+        }
+
+    } break;
+
+    case type_pointer:
+        clone->pointer.target = tl_type_clone_impl(alloc, orig->pointer.target, make_typevar, ctx, tvmap);
+        break;
+    case type_any: break;
+    }
+    return clone;
+}
+
+tl_type *tl_type_clone(allocator *alloc, tl_type const *orig, tl_make_typevar_fun make_typevar, void *ctx) {
+
+    hashmap *tvmap = map_create(alloc, sizeof(orig->type_var.val));
+    tl_type *res   = tl_type_clone_impl(alloc, orig, make_typevar, ctx, &tvmap);
+    map_destroy(&tvmap);
+    return res;
 }
 
 int tl_type_is_prim(tl_type const *self) {
@@ -207,10 +284,6 @@ u64 tl_type_hash(tl_type const *self) {
 u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
-    // NOTE: Uses reference equality for subtypes, so it is possible
-    // that structurally-equal subtypes may be assigned different
-    // hashes.
-
     switch (self->tag) {
 
     case type_nil:
@@ -229,8 +302,10 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
 
     case type_tuple: {
         struct tlt_tuple const *v = tl_type_tup((tl_type *)self);
-        for (u32 i = 0; i < v->elements.size; ++i)
-            hash = hash64_combine(hash, (byte *)&v->elements.v[i], sizeof v->elements.v[0]);
+        for (u32 i = 0; i < v->elements.size; ++i) {
+            u64 el_hash = tl_type_hash_ext(v->elements.v[i], ignore_names);
+            hash        = hash64_combine(hash, (byte *)&el_hash, sizeof el_hash);
+        }
 
     } break;
 
@@ -238,19 +313,24 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
     case type_labelled_tuple: {
         struct tlt_labelled_tuple const *v = tl_type_lt((tl_type *)self);
 
-        for (u32 i = 0; i < v->fields.size; ++i)
-            hash = hash64_combine(hash, (byte *)&v->fields.v[i], sizeof v->fields.v[0]);
+        for (u32 i = 0; i < v->fields.size; ++i) {
+            u64 el_hash = tl_type_hash_ext(v->fields.v[i], ignore_names);
+            hash        = hash64_combine(hash, (byte *)&el_hash, sizeof el_hash);
+        }
 
         if (!ignore_names)
-            for (u32 i = 0; i < v->names.size; ++i)
+            for (u32 i = 0; i < v->names.size; ++i) {
                 hash = hash64_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
+            }
 
     } break;
 
     case type_arrow: {
-        struct tlt_arrow const *v = tl_type_arrow((tl_type *)self);
-        hash                      = hash64_combine(hash, (byte *)&v->left, sizeof(tl_type *));
-        hash                      = hash64_combine(hash, (byte *)&v->right, sizeof(tl_type *));
+        struct tlt_arrow const *v          = tl_type_arrow((tl_type *)self);
+        u64                     left_hash  = tl_type_hash_ext(v->left, ignore_names);
+        u64                     right_hash = tl_type_hash_ext(v->right, ignore_names);
+        hash                               = hash64_combine(hash, (byte *)&left_hash, sizeof left_hash);
+        hash                               = hash64_combine(hash, (byte *)&right_hash, sizeof right_hash);
     } break;
 
     case type_user: {
@@ -387,6 +467,8 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
 
     if (requires == candidate) return 1; // self-satisfied
 
+    if (type_any == requires->tag || type_any == candidate->tag) return 1; // any satisfies all
+
     switch (requires->tag) {
     case type_nil:
     case type_bool:
@@ -435,9 +517,7 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
         // are never satisfied
         return 0;
 
-    case type_any:
-        // are always satisfied
-        return 1;
+    case type_any: assert(0); // logic error
     }
 }
 

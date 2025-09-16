@@ -13,7 +13,8 @@
 typedef struct hashmap hashmap;
 
 typedef struct {
-    u32 index;
+    void *data;
+    u32   index;
 } hashmap_iterator;
 
 typedef struct {
@@ -46,10 +47,7 @@ void *map_get(hashmap *, void const *key, u16 key_len);
 void  map_erase(hashmap *, void const *key, u16 key_len);
 void  map_reset(hashmap *);
 
-// pass zero-init iterator to start
-int map_iter(hashmap const *, hashmap_iterator *, hashmap_entry **out);
-int map_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
-
 // -- utilities --
+int map_iter(hashmap const *, hashmap_iterator *);
 
 #endif
