@@ -70,16 +70,6 @@ struct ti_inferer {
 
     // flags which do not affect operation
     int verbose;
-
-    // flags which affect operation
-    int constrain_function_applications;
-    // To implement function specialisation, the first pass of
-    // collect_constraints does not constrain function applications.
-
-    int unify_monotypes;
-    // can be set to false to find type variables that may have
-    // contradictory constraints. This will aid in reporting to the
-    // user which program forms are ill-typed.
 };
 
 // -- ti_inferer --
@@ -159,28 +149,26 @@ static void log(ti_inferer *, char const *restrict, ...) __attribute__((format(p
 // -- allocation and deallocation --
 
 ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_registry *type_registry) {
-    ti_inferer *self                      = alloc_calloc(alloc, 1, sizeof *self);
-    self->type_arena                      = arena_create(alloc, TYPE_ARENA_SIZE);
-    self->transient                       = arena_create(alloc, STRINGS_ARENA_SIZE);
+    ti_inferer *self       = alloc_calloc(alloc, 1, sizeof *self);
+    self->type_arena       = arena_create(alloc, TYPE_ARENA_SIZE);
+    self->transient        = arena_create(alloc, STRINGS_ARENA_SIZE);
 
-    self->nodes                           = nodes;
-    self->type_registry                   = type_registry;
+    self->nodes            = nodes;
+    self->type_registry    = type_registry;
 
-    self->constraints                     = (constraint_array){.alloc = self->type_arena};
-    self->substitutions                   = (constraint_array){.alloc = self->type_arena};
-    self->functions                       = map_create(self->type_arena, sizeof(ti_function_record));
-    self->errors                          = (ti_error_array){.alloc = self->type_arena};
-    self->out_program.v                   = null;
-    self->out_program.size                = 0;
+    self->constraints      = (constraint_array){.alloc = self->type_arena};
+    self->substitutions    = (constraint_array){.alloc = self->type_arena};
+    self->functions        = map_create(self->type_arena, sizeof(ti_function_record));
+    self->errors           = (ti_error_array){.alloc = self->type_arena};
+    self->out_program.v    = null;
+    self->out_program.size = 0;
 
-    self->next_var                        = 1; // 0 is not valid
-    self->next_type_var                   = 1;
-    self->next_specialized                = 1;
-    self->indent_level                    = 0;
+    self->next_var         = 1; // 0 is not valid
+    self->next_type_var    = 1;
+    self->next_specialized = 1;
+    self->indent_level     = 0;
 
-    self->verbose                         = 0;
-    self->constrain_function_applications = 0;
-    self->unify_monotypes                 = 1;
+    self->verbose          = 0;
 
     return self;
 }
@@ -210,11 +198,6 @@ static void ti_collect_and_solve(ti_inferer *self, int loop, ast_node_sized *spe
 
         ti_collect_constraints(self, specials);
 
-        if (self->verbose) {
-            dbg("\ncollected constraints:\n");
-            ti_inferer_dbg_constraints(self);
-        }
-
         ti_run_solver(self);
 
         size_t count = ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
@@ -224,15 +207,6 @@ static void ti_collect_and_solve(ti_inferer *self, int loop, ast_node_sized *spe
             // Apply the constraint solver's substitutions to the specials too
             count = ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions),
                                                   *specials);
-        }
-
-        log(self, "applied %zu substitutions to specials", count);
-        if (self->verbose) {
-            dbg("\nsubstitutions applied:\n");
-            ti_inferer_dbg_substitutions(self);
-
-            dbg("\nnodes after solving:\n");
-            dbg_ast_nodes(self);
         }
 
         if (!loop || !count) break;
@@ -247,7 +221,6 @@ static void ti_collect_and_solve(ti_inferer *self, int loop, ast_node_sized *spe
 }
 
 int ti_inferer_run(ti_inferer *self) {
-    // int specialization_phase = 1;
 
     self->out_program.size = 0;
     self->out_program.v    = null;
@@ -255,16 +228,11 @@ int ti_inferer_run(ti_inferer *self) {
     // Create type constructors.
     ti_generate_user_type_functions(self);
 
-    // Give every lexical variable a unique name.
+    // Give every variable a unique name, respecting lexical scope.
     ti_rename_variables(self);
 
     // Assign type variables to every ast node.
     ti_assign_type_variables(self);
-
-    if (self->verbose) {
-        dbg("\n\nti_inferer_run: input nodes after tv assignment:\n");
-        dbg_ast_nodes(self);
-    }
 
     // Create function records for every function: toplevel let forms,
     // and let-in assigned lambda functions. Analyses each callsite
@@ -278,39 +246,16 @@ int ti_inferer_run(ti_inferer *self) {
     }
 
     // Run constraint solver until it settles.
-    self->constrain_function_applications = 1;
     ti_collect_and_solve(self, 1, null);
-
-    if (self->constraints.size) {
-        dbg("unsolved constraints\n");
-        ti_inferer_dbg_constraints(self);
-    }
 
     // Create tuple constructors
     ti_generate_tuple_functions(self);
 
     // Collect function applications that require specialization of generic functions.
     hashmap *requirements = ti_collect_specialization_requirements(self);
-    if (self->verbose) {
-        log(self, "specialization requirements:");
-        hashmap_iterator iter = {0};
-        while (map_iter(requirements, &iter)) {
-            ti_function_record *rec = iter.data;
-            log(self, "%s : %s", rec->name, tl_type_to_string(self->transient, rec->type));
-        }
-    }
 
     // Create specialized functions
     ast_node_array specials = ti_create_specials(self, requirements);
-    if (self->verbose) {
-        log(self, "created %u specials:", specials.size);
-        forall(i, specials) {
-            log(self, "%s", ast_node_to_string(self->transient, specials.v[i]));
-        }
-    }
-
-    // print function records
-    log_function_records(self);
 
     if (self->errors.size) {
         ti_inferer_report_errors(self);
@@ -324,24 +269,10 @@ int ti_inferer_run(ti_inferer *self) {
     // Rewrite function application sites
     ti_patch_special_applications(self, requirements, &specials);
 
-    if (self->verbose) {
-        dbg("after patching:\n");
-        dbg_ast_nodes(self);
-    }
-
-    dbg("\n\n\n--------------------------- phase 2 ----------------------\n\n\n");
-
-    // Run the constraint solver again now that all specializations are in place.
-    self->constrain_function_applications = 1;
-    ast_node_sized specials_              = sized_all(specials);
+    // Run the constraint solver again now that all specializations
+    // are in place. Be sure to include specialised functions.
+    ast_node_sized specials_ = sized_all(specials);
     ti_collect_and_solve(self, 1, &specials_);
-
-    ti_inferer_dbg_substitutions(self);
-
-    if (self->constraints.size) {
-        dbg("phase 2 unsolved constraints\n");
-        ti_inferer_dbg_constraints(self);
-    }
 
     // Remaining callsites with generic types must map to non-generic
     // function definitions, and these will be added to specials array
@@ -353,16 +284,15 @@ int ti_inferer_run(ti_inferer *self) {
     ti_collect_functions_to_emit(self, &specials);
 
     if (self->verbose) {
-        dbg("final program after patching:\n");
+        log(self, "final program after patching:");
         dbg_ast_nodes(self);
 
-        dbg("\n\nfunctions to be emitted in addition to main:\n");
-
+        log(self, "functions to be emitted:");
         forall(i, specials) {
             log(self, "%s", ast_node_to_string(self->transient, specials.v[i]));
         }
 
-        dbg("\n\nignore the rest of the output\n\n");
+        log(self, "-- type inference completed --");
     }
 
     array_shrink(specials);
@@ -562,14 +492,6 @@ static int is_type_compatible(tl_type const *requires, tl_type const *candidate,
     }
 }
 
-static void log_function_records(ti_inferer *self) {
-    hashmap_iterator iter = {0};
-    while (map_iter(self->functions, &iter)) {
-        ti_function_record *rec = iter.data;
-        log(self, "function record: %s: %s", rec->name, tl_type_to_string(self->transient, rec->type));
-    }
-}
-
 void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name, tl_type *type) {
     // node may be null, if the body of this function is not known
     // e.g. because it's a variable
@@ -603,8 +525,6 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
 
     ti_function_record rec = {.name = name_str, .type = type, .node = node};
     map_set(&self->functions, name_str, name_len, &rec);
-
-    log(self, "created function record '%s': %s", name_str, tl_type_to_string(self->transient, type));
 }
 
 void create_function_record_toplevel(void *ctx, ast_node *node) {
@@ -717,8 +637,6 @@ void assign_callsite_types(void *ctx, ast_node *node) {
             if (!v->function_type)
                 v->function_type = tl_type_clone(self->type_arena, rec->type, make_typevar_val, self);
 
-            log(self, "assigned '%s' function_type %s", name_str,
-                tl_type_to_string(self->transient, v->function_type));
         } else {
             ti_error err = {.tag = tl_err_not_compatible, .node = node};
             array_push(self->errors, &err);
@@ -741,8 +659,6 @@ static int ti_check_callsites(ti_inferer *self) {
     // create function records for variables
     forall(i, *self->nodes) ast_node_dfs_safe_for_recur(self->transient, self, self->nodes->v[i],
                                                         create_function_record_variable);
-
-    log_function_records(self);
 
     // assign callsite types
     forall(i, *self->nodes)
@@ -777,11 +693,11 @@ static void one_specialization_requirement(void *ctx_, ast_node *node) {
     // if type is generic, we skip
     if (tl_type_is_poly(type)) return;
 
-    char const *name = ast_node_name_string(node->named_application.name);
-    u64         hash = hash_name_and_type(name, type);
-    log(self, "hash '%s' %s => %" PRIu64, name, tl_type_to_string(self->transient, type), hash);
-    ti_function_record rec = {.name = name, .type = type, .node = null};
+    char const        *name = ast_node_name_string(node->named_application.name);
+    u64                hash = hash_name_and_type(name, type);
+    ti_function_record rec  = {.name = name, .type = type, .node = null};
     map_set(map, &hash, sizeof hash, &rec);
+    (void)self;
 }
 
 static hashmap *ti_collect_specialization_requirements(ti_inferer *self) {
@@ -848,8 +764,6 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
     hashmap_iterator iter         = {0};
     while (map_iter(map, &iter)) {
         ti_function_record *special = iter.data;
-
-        log(self, "create_specials: %s", special->name);
 
         // FIXME special case std_dbg
         if (0 == strcmp("std_dbg", special->name)) continue;
@@ -930,7 +844,6 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         ti_function_record *rec  = map_get(ctx->map, &hash, sizeof hash);
         if (!rec) fatal("could not find specialized record for lambda '%s'", name);
 
-        log(self, "patching specialised lambda into let-in '%s'", rec->name);
         node->let_in.value      = rec->node;
         node->let_in.name->type = rec->type;
         assert(type_arrow == node->let_in.name->type->tag);
@@ -971,8 +884,7 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // also look at every symbol, which could be referencing a function by name. In this case, we don't
         // have access to the enclosing ast node, so we have to overwrite the symbol's data.
 
-        char const *name = string_t_str(&node->symbol.name);
-        log(self, "patch_one looking at '%s'", name);
+        char const         *name = string_t_str(&node->symbol.name);
 
         tl_type            *type = node->type;
         u64                 hash = hash_name_and_type(name, type);
@@ -1083,7 +995,6 @@ void collect_syms(void *ctx_, ast_node *node) {
     // don't emit symbol nodes
     if (ast_let != rec->node->tag) return;
 
-    log(self, "collect_syms: adding '%s'", name);
     array_push(*ctx->specials, &rec->node);
     map_set(&ctx->seen, name, strlen(name), &one);
 }
@@ -2343,15 +2254,13 @@ void collect_constraints(void *ctx_, ast_node *node) {
     } break;
 
     case ast_named_function_application: {
-        if (!self->constrain_function_applications) return;
         struct ast_named_application *v = ast_node_named(node);
 
         // Our function type has been assigned based on the named
         // function template. We need to constrain our arguments'
         // types to match it.
         assert(v->function_type && type_arrow == v->function_type->tag);
-        log(self, "collect: function_type: '%s' %s", ast_node_name_string(v->name),
-            tl_type_to_string(self->transient, v->function_type));
+
         tl_type *args_type = make_args_type(self->type_arena, v->arguments, v->n_arguments);
         push(v->function_type->arrow.left, args_type);
         push(v->function_type->arrow.right, node->type);
@@ -2384,7 +2293,6 @@ void ti_inferer_dbg_constraints(ti_inferer const *self) {
 }
 
 void ti_inferer_dbg_substitutions(ti_inferer const *self) {
-    dbg("substitutions count = %u\n", self->substitutions.size);
     forall(i, self->substitutions) dbg_constraint(&self->substitutions.v[i]);
 }
 
@@ -2490,8 +2398,6 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
     // add nodes to program
     forall(i, added) {
-        log(self, "generate_user_type_functions: adding %s",
-            ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
 }
@@ -2656,7 +2562,6 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
 
     // add nodes to program
     forall(i, added) {
-        log(self, "generate_tuple_functions: adding %s", ast_node_to_string(self->transient, added.v[i]));
         array_push(*self->nodes, &added.v[i]);
     }
 
@@ -2713,6 +2618,17 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
     vfprintf(stderr, buf, args); // NOLINT
     va_end(args);
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+static void log_function_records(ti_inferer *self) {
+    hashmap_iterator iter = {0};
+    while (map_iter(self->functions, &iter)) {
+        ti_function_record *rec = iter.data;
+        log(self, "function record: %s: %s", rec->name, tl_type_to_string(self->transient, rec->type));
+    }
+}
+#pragma clang diagnostic pop
 
 constraint make_constraint(tl_type *l, tl_type *r) {
     return (constraint){l, r, -1};
