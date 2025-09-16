@@ -419,77 +419,6 @@ static tl_type *make_named_application_arrow(allocator *alloc, ast_node *nfa) {
     return make_arrow(alloc, v->arguments, v->n_arguments, null, nfa->type);
 }
 
-static int is_type_compatible(tl_type const *requires, tl_type const *candidate, int strict) {
-    // strict => do not accept typevars for compatibility. This is
-    // used when looking for a specialised function, which should
-    // exclude any generic functions.
-
-    if (tl_type_satisfies(requires, candidate)) return 1;
-    if (strict) return 0;
-
-    // if not strict, we are additionally satisfied when using type variables
-
-    switch (requires->tag) {
-    case type_nil:
-    case type_bool:
-    case type_int:
-    case type_float:
-    case type_string:
-    case type_pointer:
-        //
-        return candidate->tag == type_type_var;
-
-    case type_tuple: {
-        if (type_type_var == candidate->tag) return 1;
-        else if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return 0;
-
-        struct tlt_array const *va = tl_type_arr((tl_type *) requires),
-                               *vb = tl_type_arr((tl_type *)candidate);
-        if (va->elements.size != vb->elements.size) return 0;
-
-        forall(i, va->elements) {
-            if (!is_type_compatible(va->elements.v[i], vb->elements.v[i], strict)) return 0;
-        }
-
-        return 1;
-    }
-
-    case type_labelled_tuple: {
-        if (type_type_var == candidate->tag) return 1;
-
-        struct tlt_array const *varr        = tl_type_arr((tl_type *) requires),
-                               *vbarr       = tl_type_arr((tl_type *)candidate);
-        struct tlt_labelled_tuple const *va = tl_type_lt((tl_type *) requires),
-                                        *vb = tl_type_lt((tl_type *)candidate);
-        if (varr->elements.size != vbarr->elements.size) return 0;
-
-        // regardless of typevars, names must match
-        for (u32 i = 0; i < varr->elements.size; ++i) {
-            if (0 != strcmp(va->names.v[i], vb->names.v[i])) return 0;
-            if (!is_type_compatible(varr->elements.v[i], vbarr->elements.v[i], strict)) return 0;
-        }
-
-        return 1;
-    }
-
-    case type_arrow:
-        return candidate->tag == type_arrow &&
-               is_type_compatible(requires->arrow.left, candidate->arrow.left, strict) &&
-               is_type_compatible(requires->arrow.right, candidate->arrow.right, strict);
-
-    case type_user:
-        // user types are exclusively identified by reference
-        return
-            requires ==
-        candidate;
-
-    case type_type_var:
-        // type variables match anything if not strict
-
-    case type_any:      return 1;
-    }
-}
-
 void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name, tl_type *type) {
     // node may be null, if the body of this function is not known
     // e.g. because it's a variable
@@ -615,7 +544,7 @@ void assign_callsite_types(void *ctx, ast_node *node) {
         tl_type *application = make_args_type(self->type_arena, node->array.nodes, node->array.n);
         tl_type *result      = node->type;
         tl_type *arrow       = tl_type_create_arrow(self->type_arena, application, result, 0);
-        if (is_type_compatible(rec->type, arrow, 0)) {
+        if (tl_type_is_compatible(rec->type, arrow, 0)) {
 
             // if the 'generic' function is actually specialised, take
             // its type, not my constructed type. This is required for

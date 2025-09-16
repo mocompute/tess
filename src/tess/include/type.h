@@ -104,7 +104,7 @@ int                tl_type_compare(tl_type const *, tl_type const *);
 int                tl_type_satisfies(tl_type const *req, tl_type const *cand);
 int                tl_type_contains(tl_type const *, tl_type const *);
 u64                tl_type_hash(tl_type const *);
-u64                tl_type_hash_ext(tl_type const *self, int ignore_names);
+u64                tl_type_hash_ext(tl_type const *, int ignore_names);
 
 tl_type           *tl_type_find_user_field_type(tl_type const *, char const *);
 tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const *);
@@ -112,5 +112,7 @@ tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const 
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);
 char const        *tl_type_tag_to_string(tl_type_tag);
+
+int                tl_type_is_compatible(tl_type const *req, tl_type const *cand, int strict);
 
 #endif
