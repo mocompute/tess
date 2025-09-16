@@ -120,7 +120,11 @@ tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typev
     case type_pointer:
         clone->pointer.target = tl_type_clone_impl(alloc, orig->pointer.target, make_typevar, ctx, tvmap);
         break;
-    case type_any: break;
+
+    case type_any:
+    case type_ellipsis:
+        //
+        break;
     }
     return clone;
 }
@@ -140,7 +144,8 @@ int tl_type_is_prim(tl_type const *self) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:            return 1;
+    case type_any:
+    case type_ellipsis:       return 1;
 
     case type_user:
     case type_tuple:
@@ -161,9 +166,10 @@ int tl_type_is_poly(tl_type const *self) {
     case type_float:
     case type_string:
     case type_any:
-    case type_user:   return 0;
+    case type_user:
+    case type_ellipsis: return 0;
 
-    case type_tuple:  {
+    case type_tuple:    {
         struct tlt_tuple *v = tl_type_tup((tl_type *)self);
         for (u32 i = 0; i < v->elements.size; ++i)
             if (tl_type_is_poly(v->elements.v[i])) return 1;
@@ -218,11 +224,16 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:     return 0;
+    case type_any:
+    case type_ellipsis:
+        //
+        return 0;
 
-    case type_pointer: return tl_type_compare(left->pointer.target, right->pointer.target);
+    case type_pointer:
+        //
+        return tl_type_compare(left->pointer.target, right->pointer.target);
 
-    case type_tuple:   {
+    case type_tuple: {
         struct tlt_tuple const *vleft  = tl_type_tup((tl_type *)left),
                                *vright = tl_type_tup((tl_type *)right);
 
@@ -292,6 +303,7 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
     case type_float:
     case type_string:
     case type_any:
+    case type_ellipsis:
         //
         break;
 
@@ -360,7 +372,11 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     case type_int:
     case type_float:
     case type_string:
-    case type_any:    len = snprintf(buf, (size_t)sz, "%s", tl_type_tag_to_string(self->tag)); break;
+    case type_any:
+    case type_ellipsis:
+        //
+        len = snprintf(buf, (size_t)sz, "%s", tl_type_tag_to_string(self->tag));
+        break;
 
     case type_pointer:
 
@@ -462,12 +478,38 @@ char *tl_type_to_string(allocator *alloc, tl_type const *type) {
     return out;
 }
 
+static int is_singular(tl_type const *self) {
+    switch (self->tag) {
+    case type_tuple:
+    case type_labelled_tuple: return (self->array.elements.size == 0);
+
+    case type_ellipsis:       return 0;
+
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string:
+    case type_arrow:
+    case type_user:
+    case type_type_var:
+    case type_pointer:
+    case type_any:            return 1; break;
+    }
+}
+
 int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
-    // type variables are not satisfied by any type
+    // type variables are not satisfied by any type. any is satisfied
+    // by any singular type, but not tuples with 1 or more element.
+    // ellipsis is satisfied by anything, including non-singular
+    // elements.
 
     if (requires == candidate) return 1; // self-satisfied
 
-    if (type_any == requires->tag || type_any == candidate->tag) return 1; // any satisfies all
+    if (type_ellipsis == requires->tag || type_ellipsis == candidate->tag) return 1;
+
+    if (type_any == requires->tag && is_singular(candidate)) return 1;
+    if (type_any == candidate->tag && is_singular(requires)) return 1;
 
     switch (requires->tag) {
     case type_nil:
@@ -517,7 +559,11 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
         // are never satisfied
         return 0;
 
-    case type_any: fatal("logic error");
+    case type_any:
+        // counterpart is not singular type
+        return 0;
+
+    case type_ellipsis: fatal("logic error");
     }
 }
 
@@ -589,7 +635,11 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
 
     case type_any:
         //
-        fatal("logic error");
+        return is_singular(candidate);
+
+    case type_ellipsis:
+        //
+        return 1;
     }
 }
 
@@ -629,7 +679,8 @@ int tl_type_contains(tl_type const *haystack, tl_type const *needle) {
     case type_float:
     case type_string:
     case type_type_var:
-    case type_any:            return 0;
+    case type_any:
+    case type_ellipsis:       return 0;
 
     case type_pointer:        return tl_type_contains(haystack->pointer.target, needle);
 

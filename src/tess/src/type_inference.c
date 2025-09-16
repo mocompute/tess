@@ -1449,7 +1449,8 @@ nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, t
     case type_string:
     case type_user:
     case type_type_var:
-    case type_any:            break;
+    case type_any:
+    case type_ellipsis:       break;
 
     case type_pointer:        count += apply_one_substitution(&type->pointer.target, from, to); break;
 

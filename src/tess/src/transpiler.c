@@ -444,11 +444,18 @@ static void out_put_start_fmt(transpiler *self, char const *restrict fmt, ...) {
 
 static int is_nil_result(tl_type const *type) {
     switch (type->tag) {
-    case type_nil:            return 1;
+    case type_nil:
+    case type_ellipsis:       return 1;
+
     case type_bool:
     case type_int:
     case type_float:
-    case type_string:         return 0;
+    case type_string:
+    case type_user:
+    case type_type_var:
+    case type_pointer:
+    case type_any:            return 0;
+
     case type_tuple:
     case type_labelled_tuple: return type->array.elements.size == 0;
 
@@ -458,10 +465,6 @@ static int is_nil_result(tl_type const *type) {
         if (right->tag == type_tuple && right->array.elements.size == 0) return 1;
         return 0;
     }
-    case type_user:
-    case type_type_var:
-    case type_pointer:
-    case type_any:      return 0;
     }
 }
 
@@ -530,11 +533,12 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
         alloc_free(self->alloc, name);
     } break;
 
-    case type_any:   out_put(self, "void"); break;
+    case type_any:
+    case type_ellipsis: out_put(self, "void"); break;
 
-    case type_arrow: fatal("logic error"); break;
+    case type_arrow:    fatal("logic error"); break;
 
-    case type_user:  {
+    case type_user:     {
         char *type_s = tl_type_to_string(self->strings, ty);
         out_put_fmt(self, "/* %s */ struct %s", type_s, ty->user.name);
         alloc_free(self->strings, type_s);

@@ -22,7 +22,9 @@
     X(type_user, "user")                                                                                   \
     X(type_type_var, "type_var")                                                                           \
     X(type_pointer, "pointer")                                                                             \
-    X(type_any, "any")
+    X(type_any, "any")                                                                                     \
+    X(type_ellipsis, "...")
+
 typedef enum { TL_TYPE_TAGS(MOS_TAG_NAME) } tl_type_tag;
 
 typedef struct {
