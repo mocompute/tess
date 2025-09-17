@@ -483,9 +483,9 @@ static int is_singular(tl_type const *self) {
     case type_tuple:
     case type_labelled_tuple: return (self->array.elements.size == 0);
 
+    case type_nil:            // nil is not singular, it is emptiness
     case type_ellipsis:       return 0;
 
-    case type_nil:
     case type_bool:
     case type_int:
     case type_float:

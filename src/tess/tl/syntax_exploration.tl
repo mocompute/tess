@@ -170,6 +170,24 @@ let p = Point 1 2 in
 // => result = 6
 
 
+//
+// Arrays
+//
+
+sizeof (struct Point)
+sizeof int
+sizeof (typeof Point)
+
+typeof (Point)
+
+let Point_array_create n : int -> *Point =
+  let sz = mul n (_tl_sizeoft_ Point) in
+  c_malloc sz
+
+
+//
+// Pipe
+//
 
 let x1 = val in
   x1 |> step1 |> step2 |> step3

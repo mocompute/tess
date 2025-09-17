@@ -547,7 +547,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     case type_any:
     case type_ellipsis: out_put(self, "void"); break;
 
-    case type_arrow:    fatal("logic error"); break;
+    case type_arrow:    a_result_type_of(self, ty->arrow.right); break;
 
     case type_user:     {
         char *type_s = tl_type_to_string(self->strings, ty);
@@ -971,7 +971,7 @@ static int expand_value(transpiler *self, ast_node const *node) {
     case ast_tuple:
     case ast_user_type:
         //
-        out_put(self, "FIXME:expand");
+        out_put_fmt(self, "FIXME:expand /* %s */", ast_node_to_string(self->transient, node));
         break;
     }
     return 0;
@@ -1035,8 +1035,25 @@ static int tl_sizeof(transpiler *self, ast_node const *node, void *extra) {
     return 0;
 }
 
-static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
+static int tl_sizeoft(transpiler *self, ast_node const *node, void *extra) {
+    (void)extra;
+    struct ast_named_application *v    = ast_node_named((ast_node *)node);
+    char const                   *name = ast_node_name_string(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
 
+    char *var = next_variable(self);
+    out_put_start(self, "");
+    a_declaration(self, node->type, node, var);
+    out_put(self, ";\n");
+
+    // Emit the type of the argument
+    out_put_start_fmt(self, "%s = (sizeof (", var);
+    a_result_type_of(self, v->arguments[0]->type);
+    out_put(self, "));\n");
+    return 0;
+}
+
+static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
     char const                   *name = ast_node_name_string(v->name);
@@ -1049,6 +1066,7 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 
     static const struct dispatch table[] = {
       {"_tl_sizeof_", tl_sizeof, null},
+      {"_tl_sizeoft_", tl_sizeoft, null},
 
       {"_tl_add_", tl_binary_op, "+"},
       {"_tl_sub_", tl_binary_op, "-"},
@@ -1170,7 +1188,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 }
 
 static int a_tuple_init(transpiler *self, ast_node const *node) {
-
     char *var = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
@@ -1205,7 +1222,6 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
 }
 
 static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
-
     char *var = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
@@ -1387,7 +1403,6 @@ static char *make_function_name(allocator *alloc, char const *base) {
 }
 
 static int a_let_struct_phase(transpiler *self, ast_node const *node) {
-
     // Only process tuple constructor functions
     if (!ast_node_is_tuple_constructor(node)) return 0;
 
@@ -1522,7 +1537,6 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
 }
 
 static int a_let(transpiler *self, ast_node const *node) {
-
     map_reset(self->lambdas);
 
     if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
