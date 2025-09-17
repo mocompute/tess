@@ -28,7 +28,7 @@ let _tl_bsr_    : (a, int) -> a
 let c_malloc    : int -> *any
 let c_free      : *any -> ()
 
-let std_dbg     : ... -> int
+let std_dbg     : (..., ) -> int
 
 // -- tl lib short-named function implementations --
 

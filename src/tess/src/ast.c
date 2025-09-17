@@ -64,6 +64,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     // clone the rest of the fields
     switch (clone->tag) {
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_begin_end:
@@ -301,6 +302,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     switch (node->tag) {
 
+    case ast_ellipsis:    return pair(alloc, sym("..."), type);
     case ast_eof:         return pair(alloc, sym("eof"), type);
     case ast_nil:         return pair(alloc, sym("nil"), type);
     case ast_bool:        return pair(alloc, node->bool_.val ? sym("true") : sym("false"), type);
@@ -473,6 +475,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     // process node types that have additional or no-array links
     switch (node->tag) {
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -595,6 +598,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_assignment:
     case ast_dereference:
     case ast_dereference_assign:
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -713,6 +717,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_bool",
       "ast_dereference",
       "ast_dereference_assign",
+      "ast_ellipsis",
       "ast_eof",
       "ast_f64",
       "ast_i64",
@@ -976,7 +981,8 @@ u64 ast_node_hash(ast_node const *self) {
 
     switch (self->tag) {
     case ast_nil:
-    case ast_eof: break;
+    case ast_ellipsis:
+    case ast_eof:      break;
 
     case ast_address_of:
         //

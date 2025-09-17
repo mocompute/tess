@@ -742,6 +742,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     switch (node->tag) {
     case ast_assignment:
     case ast_arrow:
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
     case ast_symbol:
@@ -918,6 +919,7 @@ static int expand_value(transpiler *self, ast_node const *node) {
         break;
 
     case ast_dereference_assign:
+    case ast_ellipsis:
     case ast_eof:
     case ast_f64:
     case ast_i64:

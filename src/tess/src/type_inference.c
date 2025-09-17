@@ -1247,6 +1247,7 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
         do_traverse_lexical(ctx, v->value, fun);
     } break;
 
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -1395,6 +1396,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
     case ast_begin_end:
     case ast_user_type_get:
     case ast_user_type_set:
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -1528,6 +1530,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_user_type:
     case ast_dereference:
     case ast_dereference_assign:
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -1831,6 +1834,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
 
     case ast_arrow:
     case ast_assignment:
+    case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_bool:
@@ -1887,9 +1891,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
     } while (0)
 
     switch (node->tag) {
+    case ast_ellipsis:
     case ast_eof:
-    case ast_nil:  push(node->type, get_prim(self, type_nil)); break;
-    case ast_bool: push(node->type, get_prim(self, type_bool)); break;
+    case ast_nil:      push(node->type, get_prim(self, type_nil)); break;
+    case ast_bool:     push(node->type, get_prim(self, type_bool)); break;
 
     case ast_arrow: // only used for annotation
         break;

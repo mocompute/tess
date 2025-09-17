@@ -632,7 +632,7 @@ static int a_type_identifier(parser *self) {
 
     // TODO so much duplication in this function...
 
-    if (0 == a_try(self, a_identifier) || 0 == a_try(self, a_ellipsis)) {
+    if (0 == a_try(self, a_identifier)) {
         // FIXME for now we treat ellipsis as a textual identifier
         ast_node *left  = self->result;
         ast_node *right = null;
@@ -886,6 +886,7 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
+    if (0 == a_try(self, a_ellipsis)) return 0;
 
     self->error.tag = tl_err_expected_value;
     return 1;
