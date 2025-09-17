@@ -1745,9 +1745,14 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
 
         // promote simple arrows like a -> b to tuple form: (a, ) -> b
         if (!is_any_tuple(left)) {
-            tl_type_sized elements = {.v = alloc_malloc(self->type_arena, sizeof elements.v[0]), .size = 1};
-            elements.v[0]          = left;
-            left                   = tl_type_create_tuple(self->type_arena, elements);
+            if (type_nil == left->tag) {
+                left = tl_type_create_tuple(self->type_arena, (tl_type_sized){.size = 0});
+            } else {
+                tl_type_sized elements = {.v    = alloc_malloc(self->type_arena, sizeof elements.v[0]),
+                                          .size = 1};
+                elements.v[0]          = left;
+                left                   = tl_type_create_tuple(self->type_arena, elements);
+            }
         }
 
         return tl_type_create_arrow(self->type_arena, left, right, 0);

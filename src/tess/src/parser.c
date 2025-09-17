@@ -10,6 +10,7 @@
 #include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "type.h"
 #include "util.h"
 
 #include <assert.h>
@@ -620,18 +621,41 @@ error:
 static int a_type_identifier(parser *self) {
     // TODO rename this because it's no longer just an identifier
 
+    // TODO so much duplication in this function...
+
     // * int -> int ==> (*int) -> int, not *(int -> int)
     // * has higher precedence than ->
 
-    if (0 == a_try(self, a_nil)) return 0;
+    if (0 == a_try(self, a_nil)) {
+        ast_node *nil = self->result;
+
+        // followed by arrow?
+        if (0 == a_try(self, a_arrow)) {
+            ast_node *right = null;
+
+            log(self, "begin arrow type");
+            if (a_try(self, a_type_identifier)) {
+                self->error.tag = tl_err_expected_type;
+                return 1;
+            }
+            right             = self->result;
+
+            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
+
+            node->arrow.left  = nil;
+            node->arrow.right = right;
+
+            return result_ast_node(self, node);
+        }
+
+        return 0;
+    }
 
     int is_pointer = 0;
     if (0 == a_try(self, a_star)) {
         is_pointer = 1;
         log(self, "begin pointer type");
     }
-
-    // TODO so much duplication in this function...
 
     if (0 == a_try(self, a_identifier)) {
         // FIXME for now we treat ellipsis as a textual identifier

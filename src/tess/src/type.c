@@ -518,8 +518,16 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     if (type_any == requires->tag && is_singular(candidate)) return 1;
     if (type_any == candidate->tag && is_singular(requires)) return 1;
 
+    // nil and empty tuple are equivalent
+
     switch (requires->tag) {
     case type_nil:
+        if (type_nil == candidate->tag) return 1;
+        if ((type_tuple == candidate->tag || type_labelled_tuple == candidate->tag) &&
+            0 == candidate->array.elements.size)
+            return 1;
+        return 0;
+
     case type_bool:
     case type_int:
     case type_float:
@@ -530,6 +538,8 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
 
     case type_labelled_tuple:
     case type_tuple:          {
+
+        if (0 == requires->array.elements.size && type_nil == candidate->tag) return 1;
 
         // labelled tuples satisfy plain tuples if their types match.
         if (type_tuple != candidate->tag && type_labelled_tuple != candidate->tag) return 0;
@@ -564,10 +574,8 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     }
 
     case type_user: {
-        if (type_arrow != candidate->tag) return 0;
+        if (type_user != candidate->tag) return 0;
 
-        // same-named user types satisfy, though in that case they are expected to be the same identity
-        assert(requires == candidate);
         return 0 == strcmp(requires->user.name, candidate->user.name);
     }
 
@@ -592,6 +600,7 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
     if (strict) return 0;
 
     // if not strict, we are additionally satisfied when using type variables
+    if (type_type_var == requires->tag || type_type_var == candidate->tag) return 1;
 
     switch (requires->tag) {
     case type_nil:
@@ -642,8 +651,8 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
                tl_type_is_compatible(requires->arrow.right, candidate->arrow.right, strict);
 
     case type_user:
-        // user types are exclusively identified by reference
-        return (requires == candidate);
+        //
+        return (requires->tag == candidate->tag);
 
     case type_type_var:
         // type variables match anything if not strict
