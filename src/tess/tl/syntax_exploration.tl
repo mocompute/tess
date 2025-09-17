@@ -184,6 +184,33 @@ let Point_array_create n : int -> *Point =
   let sz = mul n (_tl_sizeoft_ Point) in
   c_malloc sz
 
+// made by compiler when a struct is defined
+let Point_tl_sizeof : () -> int
+let Point_tl_offset : int -> int // convert integer array index to byte offset
+
+// what about allocator-aware interface??
+let Point_anew : int -> *Point   // allocate array of size n?
+let Point_aget : (*Point, int) -> Point
+let Point_aset : (*Point, int, Point) -> ?
+or
+let Point_aget : (*Point, int) -> *Point
+
+  (Point_aget ptr 3).*.x := 1
+  (Point_aget ptr 3).* := (Point new val)
+
+
+
+
+let points = Point_array_create 10 in
+  points.(3) := (Point 1 2)
+  Point_array_set points 3 (Point 1 2)
+  Point_array_get points 3
+  Point_aset points 3 (Point 1 2)
+  Point_aget points 3
+
+
+
+
 
 //
 // Pipe
