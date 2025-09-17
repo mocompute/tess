@@ -1437,8 +1437,8 @@ nodiscard static size_t apply_one_substitution(tl_type **ptype, tl_type *from, t
     case type_float:
     case type_string:
     case type_user:
-    case type_type_var:
     case type_any:
+    case type_type_var:
     case type_ellipsis:       break;
 
     case type_pointer:        count += apply_one_substitution(&type->pointer.target, from, to); break;
@@ -1710,7 +1710,11 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
         char const *ann_str = string_t_str(&ann->symbol.name);
         size_t      len     = strlen(ann_str);
         tl_type   **found   = type_registry_find_name(self->type_registry, ann_str);
-        if (found) return *found;
+        if (found) {
+            // If it's an any type, assign it a new typevar
+            if (type_any == (*found)->tag) return make_typevar(self);
+            return *found;
+        }
 
         // previously seen in the annotation? then assign same type
         found = map_get(*map, ann_str, len);
