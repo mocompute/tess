@@ -10,7 +10,6 @@
 #include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
-#include "type.h"
 #include "util.h"
 
 #include <assert.h>
@@ -729,7 +728,11 @@ static int a_type_identifier(parser *self) {
 static int a_type_annotation(parser *self) {
     if (0 == a_try(self, a_colon)) {
         log(self, "begin type annotation");
-        return a_try(self, a_type_identifier);
+        int res = a_try(self, a_type_identifier);
+        if (0 == res) {
+            log(self, "got type annotation: %s", ast_node_to_string(self->transient, self->result));
+        }
+        return res;
     }
 
     self->error.tag = tl_err_expected_colon;
@@ -738,6 +741,9 @@ static int a_type_annotation(parser *self) {
 
 static int a_identifier_typed(parser *self) {
     // either an identifier or a group: (a : int)
+
+    if (0 == a_try(self, a_nil)) return 0; // nil is never annotated
+
     if (0 == a_try(self, a_identifier)) return 0;
 
     if (a_try(self, a_open_round)) return 1;
@@ -1210,12 +1216,25 @@ error:
     return 1;
 }
 
+static int set_node_parameters(parser *self, ast_node *node, ast_node_array *parameters) {
+    // given parsed parameters for a function or lambda, initialize
+    // the node array properly
+
+    array_shrink(*parameters);
+    node->array.nodes = parameters->v;
+    if (parameters->size > 0xff) return too_many_arguments(self);
+
+    // nil: if we parsed ast_nil as a single parameter, we
+    // understand that to indicate no (zero) parameters.
+    if (parameters->size == 1 && ast_nil == parameters->v[0]->tag) parameters->size = 0;
+    node->array.n = (u8)parameters->size;
+    return 0;
+}
+
 static int function_declaration(parser *self) {
-    // f a b c... = : only symbols allowed, terminated by =.
+    // f a b c... = : only symbols allowed, terminated by = or : for a function type annotation
 
     // annotated: f a b c : (int,int,int) -> int = ...
-
-    // check annotations in self->forwards
 
     if (a_try(self, a_identifier)) return 1;
 
@@ -1224,23 +1243,6 @@ static int function_declaration(parser *self) {
 
     ast_node_array  parameters = {.alloc = self->ast_arena};
     ast_node       *annotation = null;
-
-    // check: f () declares function with no parameters
-    if (0 == a_try(self, a_nil)) {
-
-        // FIXME does not parse an annotation in this case
-
-        // next token must be equal sign
-        if (0 == a_try(self, a_equal_sign)) {
-            ast_node *node                  = ast_node_create(self->ast_arena, ast_function_declaration);
-            node->function_declaration.name = name;
-            node->function_declaration.n_parameters = 0;
-            node->function_declaration.parameters   = null;
-            return result_ast_node(self, node);
-        }
-
-        return 1;
-    }
 
     // must have at least one parameter
     if (a_try(self, a_identifier_typed)) return 1;
@@ -1279,10 +1281,7 @@ static int function_declaration(parser *self) {
             node->function_declaration.n_parameters = 0;
             node->function_declaration.parameters   = null;
 
-            array_shrink(parameters);
-            node->array.nodes = parameters.v;
-            if (parameters.size > 0xff) return too_many_arguments(self);
-            node->array.n = (u8)parameters.size;
+            if (set_node_parameters(self, node, &parameters)) return 1;
 
             // attach annotation to function name
             assert(ast_symbol == name->tag);
@@ -1318,15 +1317,7 @@ static int lambda_declaration(parser *self) {
             node->lambda_declaration.n_parameters = 0;
             node->lambda_declaration.parameters   = null;
 
-            array_shrink(parameters);
-            node->array.n     = (u8)parameters.size;
-            node->array.nodes = parameters.v;
-
-            if (parameters.size > 0xff) {
-                too_many_arguments(self);
-                array_free(parameters);
-                return 1;
-            }
+            if (set_node_parameters(self, node, &parameters)) return 1;
 
             return result_ast_node(self, node);
         }
@@ -1959,8 +1950,6 @@ static int toplevel_let(parser *self) {
         node->let.body         = null;
 
         // move declaration into new node
-        // string_t_copy(self->ast_arena, &node->let.name,
-        // &decl->function_declaration.name->symbol.name);
         node->let.name = decl->function_declaration.name;
         BIT_SET(node->let.name->symbol.flags, AST_SYMBOL_FLAG_LET);
         node->let.body = defn;

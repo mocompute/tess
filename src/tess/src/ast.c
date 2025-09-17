@@ -316,7 +316,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_string:      return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
 
     case ast_address_of:  return triple(alloc, sym("&"), recur(node->address_of.target), type);
-    case ast_arrow:       return triple(alloc, recur(node->arrow.left), recur(node->arrow.right), type);
+    case ast_arrow:       return quad(alloc, recur(node->arrow.left), sym("->"), recur(node->arrow.right), type);
     case ast_dereference: return triple(alloc, sym("*"), recur(node->dereference.target), type);
     case ast_dereference_assign:
         return quad(alloc, recur(node->dereference_assign.target), sym(".* :="),

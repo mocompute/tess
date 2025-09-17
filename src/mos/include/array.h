@@ -174,7 +174,7 @@ typedef struct {
 #define array_shrink(p)                                                                                    \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof(p.v[0]));         \
+        (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]));       \
     } while (0)
 
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
