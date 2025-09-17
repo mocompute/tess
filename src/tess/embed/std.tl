@@ -32,6 +32,8 @@ let std_dbg     : (..., ) -> int
 
 // -- tl lib short-named function implementations --
 
+let sizeof x   : any -> int = _tl_sizeof_ x
+
 let add l r    : (a, a) -> a = _tl_add_ l r
 let sub l r    : (a, a) -> a = _tl_sub_ l r
 let mod l r    : (a, a) -> a = _tl_mod_ l r
