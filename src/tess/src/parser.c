@@ -426,7 +426,8 @@ static int a_dot(parser *p) {
 
 static int a_ellipsis(parser *p) {
     if (next_token(p)) return 1;
-    if (tok_ellipsis == p->token.tag) return result_ast_str(p, ast_symbol, "...");
+    if (tok_ellipsis == p->token.tag)
+        return result_ast_node(p, ast_node_create(p->ast_arena, ast_ellipsis));
     p->error.tag = tl_err_expected_ellipsis;
     return 1;
 }

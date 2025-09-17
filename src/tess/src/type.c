@@ -498,15 +498,22 @@ static int is_singular(tl_type const *self) {
     }
 }
 
+static int find_ellipsis(tl_type const *self) {
+    if (type_tuple != self->tag && type_labelled_tuple != self->tag) return -1;
+    forall(i, self->array.elements) {
+        if (type_ellipsis == self->array.elements.v[i]->tag) return (int)i;
+    }
+    return -1;
+}
+
 int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     // type variables are not satisfied by any type. any is satisfied
     // by any singular type, but not tuples with 1 or more element.
-    // ellipsis is satisfied by anything, including non-singular
-    // elements.
+    // ellipsis can be used as the final element of a tuple, and is
+    // satisfied by any number including zero candidate elements, of
+    // any type.
 
     if (requires == candidate) return 1; // self-satisfied
-
-    if (type_ellipsis == requires->tag || type_ellipsis == candidate->tag) return 1;
 
     if (type_any == requires->tag && is_singular(candidate)) return 1;
     if (type_any == candidate->tag && is_singular(requires)) return 1;
@@ -530,10 +537,19 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
         struct tlt_array const *vreq  = tl_type_arr((tl_type *) requires),
                                *vcand = tl_type_arr((tl_type *)candidate);
 
-        if (vreq->elements.size != vcand->elements.size) return 0;
+        int req_ell = find_ellipsis(requires), cand_ell = find_ellipsis(candidate);
 
-        for (u32 i = 0; i < vreq->elements.size; ++i)
-            if (!tl_type_satisfies(vreq->elements.v[i], vcand->elements.v[i])) return 0;
+        // common case is no ellipsis => rule out tuples of different size
+        if (req_ell == -1 && cand_ell == -1 && vreq->elements.size != vcand->elements.size) return 0;
+        if (req_ell < 0) req_ell = (int)vreq->elements.size;    // TODO integer overflow
+        if (cand_ell < 0) cand_ell = (int)vcand->elements.size; // TODO integer overflow
+
+        // anything after requires' ellipsis automatically satisfies,
+        // so we don't loop past it.
+        for (int i = 0; i < req_ell; ++i)
+            // anything after candidate's ellipsis automatically
+            // satisfies, so we don't test it
+            if (i < cand_ell && !tl_type_satisfies(vreq->elements.v[i], vcand->elements.v[i])) return 0;
 
         return 1;
     }

@@ -23,7 +23,7 @@
     X(type_type_var, "type_var")                                                                           \
     X(type_pointer, "pointer")                                                                             \
     X(type_any, "any")                                                                                     \
-    X(type_ellipsis, "...")
+    X(type_ellipsis, "ellipsis")
 
 typedef enum { TL_TYPE_TAGS(MOS_TAG_NAME) } tl_type_tag;
 

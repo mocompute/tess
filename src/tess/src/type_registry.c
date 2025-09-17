@@ -68,14 +68,15 @@ tl_type **type_registry_find_hash(type_registry *self, u64 hash) {
 
 static void register_basic_types(type_registry *self) {
 
-    int            error       = 0;
+    int            error         = 0;
 
-    static tl_type nil_type    = {.tag = type_nil};
-    static tl_type bool_type   = {.tag = type_bool};
-    static tl_type int_type    = {.tag = type_int};
-    static tl_type float_type  = {.tag = type_float};
-    static tl_type string_type = {.tag = type_string};
-    static tl_type any_type    = {.tag = type_any};
+    static tl_type nil_type      = {.tag = type_nil};
+    static tl_type bool_type     = {.tag = type_bool};
+    static tl_type int_type      = {.tag = type_int};
+    static tl_type float_type    = {.tag = type_float};
+    static tl_type string_type   = {.tag = type_string};
+    static tl_type any_type      = {.tag = type_any};
+    static tl_type ellipsis_type = {.tag = type_ellipsis};
 
     error += type_registry_add_named(self, tl_type_tag_to_string(type_nil), &nil_type);
     error += type_registry_add_named(self, tl_type_tag_to_string(type_bool), &bool_type);
@@ -83,6 +84,7 @@ static void register_basic_types(type_registry *self) {
     error += type_registry_add_named(self, tl_type_tag_to_string(type_float), &float_type);
     error += type_registry_add_named(self, tl_type_tag_to_string(type_string), &string_type);
     error += type_registry_add_named(self, tl_type_tag_to_string(type_any), &any_type);
+    error += type_registry_add_named(self, tl_type_tag_to_string(type_ellipsis), &ellipsis_type);
 
     if (error) fatal("register_basic_types: failed to add types to registry.");
 }

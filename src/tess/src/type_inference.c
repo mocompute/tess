@@ -433,7 +433,7 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
         // there was a previous declaration of this name -- could be
         // an annotation, so let's use its type instead of the
         // caller's argument, and its node if the caller didn't give
-        // us one.
+        // us one because it was a bare annotated symbol.
 
         ti_function_record *rec = map_get(self->functions, name_str, name_len);
         assert(rec);
@@ -527,15 +527,6 @@ void assign_callsite_types(void *ctx, ast_node *node) {
         assert(ast_symbol == v->name->tag);
         BIT_SET(v->name->symbol.flags, AST_SYMBOL_FLAG_LET);
 
-        // FIXME std_dbg is special because we don't know how to type varargs yet
-        if (0 == strcmp("std_dbg", name_str)) {
-            tl_type **any    = type_registry_must_find_name(self->type_registry, "any");
-            tl_type **int_   = type_registry_must_find_name(self->type_registry, "int");
-
-            v->function_type = tl_type_create_arrow(self->type_arena, *any, *int_, 0);
-            return;
-        }
-
         ti_function_record *rec = map_get(self->functions, name_str, strlen(name_str));
         if (!rec) fatal("function record not found: '%s'", name_str);
 
@@ -586,6 +577,8 @@ static int ti_check_callsites(ti_inferer *self) {
     // create function records for variables
     forall(i, *self->nodes) ast_node_dfs_safe_for_recur(self->transient, self, self->nodes->v[i],
                                                         create_function_record_variable);
+
+    log_function_records(self);
 
     // assign callsite types
     forall(i, *self->nodes)
@@ -694,10 +687,7 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
     while (map_iter(map, &iter)) {
         ti_function_record *special = iter.data;
 
-        // FIXME special case std_dbg
-        if (0 == strcmp("std_dbg", special->name)) continue;
-
-        ti_function_record *rec = ti_lookup_function(self, special->name);
+        ti_function_record *rec     = ti_lookup_function(self, special->name);
         if (!rec) fatal("could not find function '%s'", special->name);
 
         //
@@ -864,9 +854,6 @@ static void one_fixup_generic_application(void *ctx_, ast_node *node, hashmap **
 
     char const                    *name = ast_node_name_string(node->named_application.name);
     ti_function_record            *rec  = ti_lookup_function(self, name);
-
-    // FIXME special case std_dbg
-    if (0 == strcmp("std_dbg", name)) return;
 
     if (!rec) fatal("function record not found: '%s'", name);
 
@@ -1712,6 +1699,12 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
         fatal("nil type not found");
     }
 
+    if (ast_ellipsis == ann->tag) {
+        tl_type **found = type_registry_find_name(self->type_registry, "ellipsis");
+        if (found) return *found;
+        fatal("ellipsis type not found");
+    }
+
     if (ast_symbol == ann->tag) {
         // either a prim or user type, or a generic/typevar
         char const *ann_str = string_t_str(&ann->symbol.name);
@@ -1770,18 +1763,21 @@ static void handle_symbol_annotation(ti_inferer *self, ast_node *node) {
 
     assert(ast_symbol == node->tag);
 
-    // this map ensures that user-defined type variables (e.g. a, b, c
-    // etc) are assigned the same typevars, rather than unique tvars.
-    // This is necessary in particular for intrinsic functions which
-    // have no bodies that the type solver can analyze to discover
-    // constraints.
-    hashmap  *map = map_create_n(self->transient, sizeof(tl_type *), 8);
-
     ast_node *ann = node->symbol.annotation;
-    if (ann) node->symbol.annotation_type = make_type_annotation(self, ann, &map);
-    node->type = make_typevar(self);
+    if (ann) {
 
-    map_destroy(&map);
+        // this map ensures that user-defined type variables (e.g. a, b, c
+        // etc) are assigned the same typevars, rather than unique tvars.
+        // This is necessary in particular for intrinsic functions which
+        // have no bodies that the type solver can analyze to discover
+        // constraints.
+        hashmap *map                 = map_create_n(self->transient, sizeof(tl_type *), 8);
+
+        node->symbol.annotation_type = make_type_annotation(self, ann, &map);
+        map_destroy(&map);
+    }
+
+    node->type = make_typevar(self);
 }
 
 void assign_type_variables(void *ctx, ast_node *node) {
@@ -2518,6 +2514,7 @@ void log(ti_inferer *self, char const *restrict fmt, ...) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
 static void log_function_records(ti_inferer *self) {
+    if (!self->verbose) return;
     hashmap_iterator iter = {0};
     while (map_iter(self->functions, &iter)) {
         ti_function_record *rec = iter.data;
