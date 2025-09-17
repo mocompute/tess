@@ -50,6 +50,7 @@ extern char const *embed_std_c;
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
 static int         a_declaration(transpiler *, tl_type const *, ast_node const *, char const *);
+static int         a_declaration_void_ok(transpiler *, tl_type const *, ast_node const *, char const *);
 static int         a_eval(transpiler *, ast_node const *);
 static int         a_if_then_else(transpiler *, ast_node const *);
 static int         a_field_setter(transpiler *, ast_node const *);
@@ -282,7 +283,7 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, node->type, node, name);
+    a_declaration_void_ok(self, node->type, node, name);
     out_put(self, " ");
 
     // params
@@ -328,7 +329,7 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     // return type and name
     assert(type_arrow == node->type->tag);
     out_put_start(self, "static ");
-    a_declaration(self, node->type->arrow.right, null, name);
+    a_declaration_void_ok(self, node->type->arrow.right, null, name);
     out_put(self, " ");
 
     // params
@@ -468,11 +469,12 @@ static int is_nil_result(tl_type const *type) {
     }
 }
 
-static int a_declaration(transpiler *self, tl_type const *type, ast_node const *node, char const *var) {
+static int a_declaration_impl(transpiler *self, tl_type const *type, ast_node const *node, char const *var,
+                              char const *void_decl) {
 
     if (type->tag != type_arrow) {
         if (is_nil_result(type)) {
-            out_put_fmt(self, "/* void */ int %s", var);
+            out_put_fmt(self, "%s %s", void_decl, var);
         } else {
             a_result_type_of(self, type);
             out_put_fmt(self, " %s", var);
@@ -481,7 +483,7 @@ static int a_declaration(transpiler *self, tl_type const *type, ast_node const *
         // make a function pointer type
         tl_type *left = type->arrow.left;
 
-        a_declaration(self, type->arrow.right, null, "");
+        a_declaration_void_ok(self, type->arrow.right, null, "");
         out_put_fmt(self, " (*%s) (", var);
 
         if (node && BIT_TEST(type->arrow.flags, TL_TYPE_ARROW_LAMBDA)) {
@@ -507,6 +509,15 @@ static int a_declaration(transpiler *self, tl_type const *type, ast_node const *
         out_put(self, ") ");
     }
     return 0;
+}
+
+static int a_declaration(transpiler *self, tl_type const *type, ast_node const *node, char const *var) {
+    return a_declaration_impl(self, type, node, var, "/* void */ int");
+}
+
+static int a_declaration_void_ok(transpiler *self, tl_type const *type, ast_node const *node,
+                                 char const *var) {
+    return a_declaration_impl(self, type, node, var, "void");
 }
 
 static int a_result_type_of(transpiler *self, tl_type const *ty) {
@@ -736,61 +747,78 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     out_put_start(self, "");
     a_declaration(self, node->type, node, var);
-
     out_put(self, ";\n");
+
+    if (is_nil_result(node->type)) var = null; // abandon the result var after we declare it
 
     switch (node->tag) {
     case ast_assignment:
     case ast_arrow:
     case ast_ellipsis:
     case ast_eof:
-    case ast_nil:        out_put_start_fmt(self, "%s = NULL;\n", var); break;
+    case ast_nil:
+        if (var) out_put_start_fmt(self, "%s = NULL;\n", var);
+        break;
     case ast_symbol:
         // if symbol is a function name, we have to mangle it
-        if (type_arrow == node->type->tag) {
-            out_put_start_fmt(self, "%s = %s;\n", var,
-                              make_function_name(self->strings, ast_node_name_string(node)));
-        } else {
-            if (self->is_eval_in_thunk) {
-                // if symbol is a free variable, access it through context and dereference it.
+        if (var) {
+            if (type_arrow == node->type->tag) {
+                out_put_start_fmt(self, "%s = %s;\n", var,
+                                  make_function_name(self->strings, ast_node_name_string(node)));
+            } else {
+                if (self->is_eval_in_thunk) {
+                    // if symbol is a free variable, access it through context and dereference it.
 
-                char const *sym_name = ast_node_name_string(node);
-                if (array_contains(self->thunk_free_variables, &sym_name)) {
-                    out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
+                    char const *sym_name = ast_node_name_string(node);
+                    if (array_contains(self->thunk_free_variables, &sym_name)) {
+                        out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
+                    } else {
+                        out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
+                    }
+
                 } else {
                     out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
                 }
-
-            } else {
-                out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
             }
         }
         break;
 
-    case ast_string: out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node)); break;
-    case ast_i64:    out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val); break;
-    case ast_u64:    out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val); break;
-    case ast_f64:    out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val); break;
+    case ast_string:
+        if (var) out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
+        break;
+    case ast_i64:
+        if (var) out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
+        break;
+    case ast_u64:
+        if (var) out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val);
+        break;
+    case ast_f64:
+        if (var) out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val);
+        break;
     case ast_bool:
-        if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
-        else out_put_start_fmt(self, "%s = 0;\n", var);
+        if (var) {
+            if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
+            else out_put_start_fmt(self, "%s = 0;\n", var);
+        }
         break;
 
     case ast_address_of: {
         if (ast_symbol == node->address_of.target->tag) {
             log(self, "taking address of '%s'", ast_node_to_string(self->strings, node->address_of.target));
-            out_put_start_fmt(self, "%s = &(%s);\n", var, ast_node_name_string(node->address_of.target));
+            if (var)
+                out_put_start_fmt(self, "%s = &(%s);\n", var,
+                                  ast_node_name_string(node->address_of.target));
         } else {
             if (a_eval(self, node->address_of.target)) return 1;
             char const *res = pop_result(self);
-            out_put_start_fmt(self, "%s = &(%s);\n", var, res);
+            if (var) out_put_start_fmt(self, "%s = &(%s);\n", var, res);
         }
     } break;
 
     case ast_dereference: {
         if (a_eval(self, node->dereference.target)) return 1;
         char const *ptr = pop_result(self);
-        out_put_start_fmt(self, "%s = *(%s);\n", var, ptr);
+        if (var) out_put_start_fmt(self, "%s = *(%s);\n", var, ptr);
     } break;
 
     case ast_dereference_assign: {
@@ -800,7 +828,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         char const *value = pop_result(self);
 
         out_put_start_fmt(self, "*(%s) = %s;\n", ptr, value);
-        out_put_start_fmt(self, "%s = %s;\n", var, value);
+        if (var) out_put_start_fmt(self, "%s = %s;\n", var, value);
     } break;
 
     case ast_begin_end: {
@@ -814,6 +842,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         }
         if (a_eval(self, v->expressions[v->n_expressions - 1])) return 1;
         pop_and_assign(self, var);
+
     } break;
 
     case ast_user_type: {
@@ -830,7 +859,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
             if (a_eval(self, v->fields[i])) return 1;
             char const *res = pop_result(self);
             out_put(self, "\n");
-            out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
+            if (var) out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
         }
     } break;
 
@@ -877,7 +906,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
         u64   hash = ast_node_hash(node);
         char *name = make_thunk_name(self->strings, hash);
-        out_put_start_fmt(self, "%s = %s;\n", var, name);
+        if (var) out_put_start_fmt(self, "%s = %s;\n", var, name);
 
     } break;
 
@@ -1478,7 +1507,7 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, rec->type->arrow.right, node, name);
+    a_declaration_void_ok(self, rec->type->arrow.right, node, name);
     out_put(self, " ");
 
     // params
@@ -1529,7 +1558,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    a_declaration(self, rec->type->arrow.right, node, name);
+    a_declaration_void_ok(self, rec->type->arrow.right, node, name);
     out_put(self, " ");
 
     // params
@@ -1547,7 +1576,9 @@ static int a_let(transpiler *self, ast_node const *node) {
     if (a_eval(self, v->body)) return 1;
 
     char const *body = pop_result(self);
-    out_put_start_fmt(self, "return %s;", body);
+    if (!is_nil_result(rec->type->arrow.right)) {
+        out_put_start_fmt(self, "return %s;", body);
+    }
 
     self->indent_level--;
     out_put(self, "\n}\n\n");
@@ -1610,7 +1641,7 @@ static void push_result(transpiler *self, char const *var) {
 static void pop_and_assign(transpiler *self, char const *var) {
     char const *res = pop_result(self);
     out_put(self, "\n");
-    out_put_start_fmt(self, "%s = %s;\n", var, res);
+    if (var) out_put_start_fmt(self, "%s = %s;\n", var, res);
 }
 
 static u32 push_free_variables(transpiler *self, ast_node const *node, u32 *count) {
