@@ -243,6 +243,8 @@ int ti_inferer_run(ti_inferer *self) {
 
     // Run constraint solver until it settles.
     ti_collect_and_solve(self, 1, null);
+    
+    // FIXME: how does this collect pass handle generic function applications? It should not generate constraints because they will be contradictory, as in add int vs. add float.
 
     // Create tuple constructors
     ti_generate_tuple_functions(self);
@@ -260,6 +262,7 @@ int ti_inferer_run(ti_inferer *self) {
     if (self->constraints.size) {
         dbg("remaining constraints:\n");
         ti_inferer_dbg_constraints(self);
+        // FIXME exit with error
     }
 
     // Rewrite function application sites
@@ -772,7 +775,7 @@ static void patch_one_special(void *ctx_, ast_node *node) {
 
     else if (ast_named_function_application == node->tag) {
 
-        // FIXME need to look at arguments, which could be function names
+        // FIXME need to mark the node as having been specialised, so that the next round of collect_constraints can constrain the name symbol.
 
         char const *name = ast_node_name_string(node->named_application.name);
         tl_type    *type = node->named_application.function_type;
@@ -794,6 +797,7 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // and type combination, because those are intrinsics or c_ etc.
         if (!rec->node) return;
 
+        // FIXME: why only let nodes? What about symbol nodes, which are annotated symbols? Ah because those are not specialised. 
         if (ast_let == rec->node->tag) {
             // just copy the specialized name to the application site.
             node->named_application.name = rec->node->let.name;
@@ -2166,6 +2170,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
         // our symbol's type must match the arrow type
         push(v->name->type, v->function_type);
+        // FIXME: this is probably wrong, as it will constrain the generic name prior to specialisation
+        
 
     } break;
     }
