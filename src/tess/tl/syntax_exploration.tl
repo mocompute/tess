@@ -24,9 +24,18 @@
 //
 // Keywords
 //
-// Any symbol not in this list is a valid identifier.
-//
 // begin, else, end, false, fun, if, in, let, struct, then, true
+//
+
+//
+// Builtin types
+//
+// bool, int, float, nil, string
+//
+// The nil type corresponds to void, not null. That is, it indicates
+// the lack of a value, rather than indicating a zero or empty value.
+// For instance, a function which "returns" nil actually returns no
+// value. nil is written `()` in TL programs.
 //
 
 //
@@ -71,7 +80,7 @@ let fact x =
 // Top level: struct
 
 struct Point =
-    x : int ;
+    x : int,
     y : int
 end
 
@@ -90,10 +99,10 @@ let (left = x, top = y) = p in ...
 // The ellipsis...
 
 struct Big =
-  a : int
-  b : int
-  c : int
-  d : string
+  a : int,
+  b : int,
+  c : int,
+  d : string,
   // etc
 end
 
@@ -161,30 +170,6 @@ let p = Point 1 2 in
 // => result = 6
 
 
-
-
-// recall we want to keep everything prefix, not postfix
-
-let pp : * point = c_malloc 16
-
-// what about
-
-let pp : *.point = c_malloc (_tl_sizeof_ point) // this sizeof doesn't work yet
-
-*.(int, int) or *(int, int)
-*(a -> b) vs ( *a -> b )
-
-// chaining blocks, only in some cases
-let x1 = val
-// in begin are implied
-step1; step2; result end
-
-let x1 = val in
-let x2 = step1 x1 in
-let x3 = step2 x2 in
-let x4 = step3 x3 in
-  x4
-end
 
 let x1 = val in
   x1 |> step1 |> step2 |> step3

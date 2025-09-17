@@ -1,6 +1,6 @@
 struct foo =
-    x : int ;
-    y : int
+    x : int,
+    y : int,
 end
 
 let main () =

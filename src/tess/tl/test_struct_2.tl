@@ -3,8 +3,8 @@ struct base =
 end
 
 struct derived =
-    base : base
-       y : int
+    base : base,
+       y : int,
 end
 
 let main () =
