@@ -1182,9 +1182,9 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    struct ast_named_application const *v    = ast_node_named((ast_node *)node);
-
-    char const                         *name = ast_node_name_string(v->name);
+    struct ast_named_application const *v              = ast_node_named((ast_node *)node);
+    char const                         *name           = ast_node_name_string(v->name);
+    ast_node_sized                      free_variables = v->free_variables;
 
     if (0 == strncmp("c_", name, 2)) {
         name += 2;
@@ -1211,7 +1211,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put(self, ";\n");
 
     // function call
-
     tl_type   *fun_type = node->named_application.name->type;
 
     ast_node **found    = map_get(self->lambdas, name, strlen(name));
@@ -1245,6 +1244,13 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         out_put_start(self, "}\n");
 
     } else {
+
+        // free variables
+        out_put_start(self, "/* free variables: ");
+        forall(i, free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+        }
+        out_put(self, " */\n");
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
         else out_put_start_fmt(self, "%s = ", var);
