@@ -128,7 +128,7 @@ static void           generate_tuple_function(ti_inferer *, ast_node *, ast_node
 static int            substitute_constraints(constraint *, constraint *, constraint const);
 static u32            unify_one(ti_inferer *, constraint);
 
-static tl_type       *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *);
+static tl_type       *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *, int);
 static ast_node      *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
 static ast_node      *make_type_constructor_function(ti_inferer *, char const *, tl_type *);
 static tl_type       *make_typevar(ti_inferer *);
@@ -391,33 +391,34 @@ static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[],
     return tuple;
 }
 
-static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const *names[], tl_type *right) {
+static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const *names[], tl_type *right,
+                           int is_lambda) {
     tl_type *left = null;
     if (names) left = make_labelled_args_type(alloc, args, names, n);
     else left = make_args_type(alloc, args, n);
 
-    return tl_type_create_arrow(alloc, left, right, 0);
+    return tl_type_create_arrow(alloc, left, right, is_lambda);
 }
 
 static tl_type *make_lambda_arrow(allocator *alloc, ast_node *lambda_function) {
     assert(ast_lambda_function == lambda_function->tag);
 
     struct ast_lambda_function *v = ast_node_lf(lambda_function);
-    return make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type);
+    return make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type, 1);
 }
 
 static tl_type *make_let_arrow(allocator *alloc, ast_node *let) {
     assert(ast_let == let->tag);
 
     struct ast_let *v = ast_node_let(let);
-    return make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type);
+    return make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type, 0);
 }
 
 static tl_type *make_named_application_arrow(allocator *alloc, ast_node *nfa) {
     assert(ast_named_function_application == nfa->tag);
     struct ast_named_application *v = ast_node_named(nfa);
 
-    return make_arrow(alloc, v->arguments, v->n_arguments, null, nfa->type);
+    return make_arrow(alloc, v->arguments, v->n_arguments, null, nfa->type, 0);
 }
 
 void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name, tl_type *type) {
@@ -494,15 +495,6 @@ void create_function_record_dfs(void *ctx, ast_node *node) {
             do_create_function_record(self, value, name, type);
         }
     }
-
-    // FIXME: remove this?
-    else if (ast_lambda_function_application == node->tag) {
-        // anonymous lambda application: cannot create a record for it
-        // because it has no name, but we can give it a good arrow
-        // type
-        tl_type *type = make_lambda_arrow(self->type_arena, node->lambda_application.lambda);
-        node->lambda_application.lambda->type = type;
-    }
 }
 
 void create_function_record_variable(void *ctx, ast_node *node) {
@@ -543,14 +535,9 @@ void assign_callsite_types(void *ctx, ast_node *node) {
             // the constraint solver to work. If it's an annotated
             // symbol, do likewise.
 
-            // FIXME: function record nodes can be let, symbol, or
-            // lambda function. How do we detect if the lambda
-            // function is generic or specialised?
-
             v->function_type = null;
             if (rec->node) {
                 if (ast_node_is_specialized(rec->node)) v->function_type = rec->type;
-                else if (ast_symbol == rec->node->tag) v->function_type = rec->type;
             }
 
             if (!v->function_type)
@@ -626,9 +613,9 @@ static void one_specialization_requirement(void *ctx_, ast_node *node) {
 
 static hashmap *ti_collect_specialization_requirements(ti_inferer *self) {
     // for every named application, create a record of the name and the required type.
-    hashmap *map; // hash => function_record
-    map                                  = map_create(self->type_arena, sizeof(ti_function_record));
 
+    // map: name+type hash -> function_record
+    hashmap                         *map = map_create(self->type_arena, sizeof(ti_function_record));
     collect_special_requirements_ctx ctx = {.self = self, .map = &map};
 
     forall(i, *self->nodes) {
@@ -675,6 +662,7 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         ast_node *out = ast_node_clone(self->type_arena, src);
         if (!out) fatal("clone failed");
 
+        ast_node_set_is_specialized(out);
         return out;
     }
 
@@ -718,10 +706,15 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
 
             // set its name symbol's type to help transpiler
             assert(ast_let == created->tag);
-            created->let.name->type = rec->type;
+            created->let.name->type = special->type;
 
             // add to function records
-            ti_function_record created_rec = {.name = special_name, .type = rec->type, .node = created};
+            ti_function_record created_rec = {.name = special_name, .type = special->type, .node = created};
+
+            log(self, "create_specials: adding let record for '%s' %s ==> %s", special_name,
+                tl_type_to_string(self->transient, rec->type),
+                tl_type_to_string(self->transient, special->type));
+
             map_set(&self->functions, special_name, strlen(special_name), &created_rec);
 
         } else if (ast_lambda_function == rec->node->tag) {
@@ -731,10 +724,16 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
             special->node     = created;
             array_push(nodes_to_add, &created);
 
+            assert(ast_lambda_function == created->tag);
+            created->type = special->type;
+
             // add to function records
-            ti_function_record created_rec = {.name = special_name, .type = rec->type, .node = created};
-            log(self, "adding lambda record for '%s' %s", special_name,
-                tl_type_to_string(self->transient, rec->type));
+            ti_function_record created_rec = {.name = special_name, .type = special->type, .node = created};
+
+            log(self, "create_specials: adding lambda record for '%s' %s ==> %s", special_name,
+                tl_type_to_string(self->transient, rec->type),
+                tl_type_to_string(self->transient, special->type));
+
             map_set(&self->functions, special_name, strlen(special_name), &created_rec);
 
         } else {
@@ -762,12 +761,21 @@ static void patch_one_special(void *ctx_, ast_node *node) {
     if (ast_let_in == node->tag) {
         if (ast_lambda_function != node->let_in.value->tag) return;
 
-        char const         *name = ast_node_name_string(node->let_in.name);
-        tl_type            *type = node->let_in.value->type;
+        char const *name = ast_node_name_string(node->let_in.name);
+        tl_type    *type = node->let_in.value->type;
+
+        if (tl_type_is_poly(type)) {
+            log(self, "patch_special: skipped callsite for '%s' due to generic type %s", name,
+                tl_type_to_string(self->transient, type));
+            return;
+        }
+
         u64                 hash = hash_name_and_type(name, type);
 
         ti_function_record *rec  = map_get(ctx->map, &hash, sizeof hash);
-        if (!rec) fatal("could not find specialized record for lambda '%s'", name);
+        if (!rec)
+            fatal("could not find specialized record for lambda '%s' %s", name,
+                  tl_type_to_string(self->transient, type));
 
         node->let_in.value      = rec->node;
         node->let_in.name->type = rec->type;
@@ -805,7 +813,16 @@ static void patch_one_special(void *ctx_, ast_node *node) {
             // mark node as having been specialised, so its new name
             // can be constrained to the implied type of the callsite.
             BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
+
+        } else if (ast_lambda_function == rec->node->tag) {
+
+            // FIXME lambda specialisation
+
+            // mark node as having been specialised, so its new name
+            // can be constrained to the implied type of the callsite.
+            BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
         }
+
     }
 
     else if (ast_symbol == node->tag) {
@@ -836,6 +853,10 @@ static void ti_patch_special_applications(ti_inferer *self, hashmap *map, ast_no
     forall(i, *self->nodes) {
         ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], patch_one_special);
     }
+
+    // log(self, "before patching");
+    // log_function_records(self);
+    // dbg_ast_nodes(self);
 
     // and the specials
     forall(i, *specials) {
@@ -2404,7 +2425,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
 
         // make an arrow type for the generated function
         tl_type *arrow =
-          make_arrow(a, out->let.parameters, out->let.n_parameters, (char const **)names.v, node->type);
+          make_arrow(a, out->let.parameters, out->let.n_parameters, (char const **)names.v, node->type, 0);
 
         // register the function record
         do_create_function_record(self, out, out->let.name, arrow);
@@ -2440,7 +2461,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         }
 
         // make an arrow type for the generated function
-        tl_type *arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, null, node->type);
+        tl_type *arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, null, node->type, 0);
 
         // register the function record
         do_create_function_record(self, out, out->let.name, arrow);

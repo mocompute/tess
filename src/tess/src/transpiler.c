@@ -328,6 +328,7 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
 
     // return type and name
     assert(type_arrow == node->type->tag);
+    out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
     out_put_start(self, "static ");
     a_declaration_void_ok(self, node->type->arrow.right, null, name);
     out_put(self, " ");
