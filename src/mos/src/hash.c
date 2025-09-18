@@ -2,6 +2,8 @@
 
 #include "assert.h"
 
+#include <string.h>
+
 u64 hash64(byte const *data, size_t len) {
 
     // https://datatracker.ietf.org/doc/draft-eastlake-fnv/35/
@@ -51,5 +53,13 @@ u32 hash32_combine(u32 seed, byte const *data, size_t len) {
         hash *= 0x01000193;
     }
 
+    return hash;
+}
+
+u64 hash64_strings(char const **strings, size_t len) {
+    u64 hash = 0;
+    for (size_t i = 0; i < len; ++i) {
+        hash = hash64_combine(hash, (void *)strings[i], strlen(strings[i]));
+    }
     return hash;
 }
