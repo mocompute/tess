@@ -333,7 +333,7 @@ static int next_token(parser *p) {
         if (tok_comment == p->token.tag) continue;
 
         char *str = token_to_string(p->transient, &p->token);
-        log(p, "next_token: %s", str);
+        // log(p, "next_token: %s", str);
         alloc_free(p->transient, str);
 
         tokens_push_back(p, &p->token);

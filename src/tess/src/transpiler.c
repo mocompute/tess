@@ -75,6 +75,7 @@ static char       *make_struct_constructor_name(allocator *, u64);
 static char       *make_thunk_name(allocator *, u64);
 static char       *make_thunk_struct_name(allocator *, u64);
 static char       *make_function_name(allocator *, char const *);
+static char       *emit_symbol(transpiler *, ast_node const *);
 
 static void        generate_thunks(transpiler *, ast_node **, u32);
 static u32         push_free_variables(transpiler *, ast_node const *, u32 *);
@@ -271,7 +272,7 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     int one = 1;
     map_set(&ctx->map, &hash, sizeof hash, &one);
 
-    // figure out the free variables in use in this function
+    // figure out the free variables in use in this node
     ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
 
     // declare struct for thunk context
@@ -292,6 +293,13 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
+
+    // debug
+    out_put_start(self, "/* free variables: ");
+    forall(i, free_variables) {
+        out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+    }
+    out_put(self, " */\n");
 
     // add my free variables to the stack
     u32 save = push_free_variables(self, node, null);
@@ -346,6 +354,13 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, " {\n");
     self->indent_level++;
 
+    // debug
+    out_put_start(self, "/* free variables: ");
+    forall(i, v->free_variables) {
+        out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
+    }
+    out_put(self, " */\n");
+
     // add my free variables to the stack
     u32 save = push_free_variables(self, node, null);
     a_thunk(self, node->lambda_function.body);
@@ -362,7 +377,7 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
     generate_thunks_ctx *ctx  = ctx_;
     transpiler          *self = ctx->self;
 
-    map_reset(self->lambdas);
+    map_reset(self->lambdas); // FIXME needed?
 
     if (ast_if_then_else == node->tag) {
         log(self, "thunk: if-then-else: %s", ast_node_to_string(self->strings, node));
@@ -703,10 +718,10 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     out_put_start(self, "");
     a_declaration(self, node->type, node, var);
     if (type_pointer == v->struct_name->type->tag)
-        out_put_start_fmt(self, " = %s->%s;\n", ast_node_name_string(v->struct_name),
+        out_put_start_fmt(self, " = %s->%s;\n", emit_symbol(self, v->struct_name),
                           ast_node_name_string(v->field_name));
     else
-        out_put_start_fmt(self, " = %s.%s;\n", ast_node_name_string(v->struct_name),
+        out_put_start_fmt(self, " = %s.%s;\n", emit_symbol(self, v->struct_name),
                           ast_node_name_string(v->field_name));
 
     return 0;
@@ -714,10 +729,9 @@ static int a_field_access(transpiler *self, ast_node const *node) {
 
 static int a_field_setter(transpiler *self, ast_node const *node) {
 
-    struct ast_user_type_set const *v           = ast_node_uts((ast_node *)node);
-    char const                     *struct_name = ast_node_name_string(v->struct_name);
-    char const                     *field_name  = ast_node_name_string(v->field_name);
-    char                           *var         = next_variable(self);
+    struct ast_user_type_set const *v          = ast_node_uts((ast_node *)node);
+    char const                     *field_name = ast_node_name_string(v->field_name);
+    char                           *var        = next_variable(self);
 
     // eval the value
     if (a_eval(self, v->value)) return 1;
@@ -730,10 +744,28 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
 
     // assign to struct field
     if (type_pointer == v->struct_name->type->tag)
-        out_put_start_fmt(self, "%s->%s = %s;\n", struct_name, field_name, var);
-    else out_put_start_fmt(self, "%s.%s = %s;\n", struct_name, field_name, var);
+        out_put_start_fmt(self, "%s->%s = %s;\n", emit_symbol(self, v->struct_name), field_name, var);
+    else out_put_start_fmt(self, "%s.%s = %s;\n", emit_symbol(self, v->struct_name), field_name, var);
 
     return 0;
+}
+
+static char *emit_symbol(transpiler *self, ast_node const *node) {
+    // emit the symbol name, respecting thunk context and function name mangling
+    char const *name = ast_node_name_string(node);
+
+    if (type_arrow == node->type->tag) {
+        return make_function_name(self->strings, name);
+    } else {
+        if (!self->is_eval_in_thunk || !array_contains(self->thunk_free_variables, &name))
+            return alloc_strdup(self->transient, name);
+        else {
+            int   len = snprintf(null, 0, "(*(_ctx_->%s))", name) + 1;
+            char *out = alloc_malloc(self->transient, len);
+            snprintf(out, len, "(*(_ctx_->%s))", name);
+            return out;
+        }
+    }
 }
 
 static int a_eval(transpiler *self, ast_node const *node) {
@@ -761,27 +793,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (var) out_put_start_fmt(self, "%s = NULL;\n", var);
         break;
     case ast_symbol:
-        // if symbol is a function name, we have to mangle it
-        if (var) {
-            if (type_arrow == node->type->tag) {
-                out_put_start_fmt(self, "%s = %s;\n", var,
-                                  make_function_name(self->strings, ast_node_name_string(node)));
-            } else {
-                if (self->is_eval_in_thunk) {
-                    // if symbol is a free variable, access it through context and dereference it.
-
-                    char const *sym_name = ast_node_name_string(node);
-                    if (array_contains(self->thunk_free_variables, &sym_name)) {
-                        out_put_start_fmt(self, "%s = *(_ctx_->%s);\n", var, ast_node_name_string(node));
-                    } else {
-                        out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
-                    }
-
-                } else {
-                    out_put_start_fmt(self, "%s = %s;\n", var, ast_node_name_string(node));
-                }
-            }
-        }
+        if (var) out_put_start_fmt(self, "%s = %s;\n", var, emit_symbol(self, node));
         break;
 
     case ast_string:
@@ -807,8 +819,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         if (ast_symbol == node->address_of.target->tag) {
             log(self, "taking address of '%s'", ast_node_to_string(self->strings, node->address_of.target));
             if (var)
-                out_put_start_fmt(self, "%s = &(%s);\n", var,
-                                  ast_node_name_string(node->address_of.target));
+                out_put_start_fmt(self, "%s = &(%s);\n", var, emit_symbol(self, node->address_of.target));
         } else {
             if (a_eval(self, node->address_of.target)) return 1;
             char const *res = pop_result(self);
