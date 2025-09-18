@@ -16,6 +16,9 @@ let _tl_neq_     : (a, a) -> bool
 let _tl_gte_     : (a, a) -> bool
 let _tl_gt_      : (a, a) -> bool
 
+let _tl_and_     : (..., ) -> bool
+let _tl_or_      : (..., ) -> bool
+
 let _tl_band_    : (a, a) -> a
 let _tl_bor_     : (a, a) -> a
 let _tl_bxor_    : (a, a) -> a

@@ -201,6 +201,7 @@ typedef struct ast_node {
 #define AST_LET_FLAG_INTRINSIC      BIT(2)
 
 #define AST_LAMBDA_FLAG_SPECIALIZED BIT(0)
+#define AST_LAMBDA_FLAG_NAMED       BIT(1)
 
 #define AST_TUPLE_FLAG_INIT         BIT(0)
 

@@ -1054,6 +1054,68 @@ static int tl_sizeoft(transpiler *self, ast_node const *node, void *extra) {
     return 0;
 }
 
+static int tl_and(transpiler *self, ast_node const *node, void *extra) {
+    (void)extra;
+    struct ast_named_application *v = ast_node_named((ast_node *)node);
+
+    //
+    char *result = next_variable(self);
+    char  done_label[64];
+    snprintf(done_label, sizeof done_label, "%s_done", result);
+    out_put_start_fmt(self, "int %s = 0;\n", result);
+    out_put_start(self, "{\n");
+    self->indent_level++;
+
+    for (u32 i = 0; i < v->n_arguments; ++i) {
+        // if ! arg goto done
+        a_eval(self, v->arguments[i]);
+        char const *arg = pop_result(self);
+        out_put_start_fmt(self, "if (!(%s)) goto %s;\n", arg, done_label);
+    }
+
+    // all args are true
+    out_put(self, "\n");
+    out_put_start_fmt(self, "%s = 1;\n", result);
+
+    self->indent_level--;
+    out_put(self, "\n");
+    out_put_start_fmt(self, "%s:;", done_label);
+    out_put(self, "\n");
+    out_put_start(self, "}\n");
+    return 0;
+}
+
+static int tl_or(transpiler *self, ast_node const *node, void *extra) {
+    (void)extra;
+    struct ast_named_application *v = ast_node_named((ast_node *)node);
+
+    //
+    char *result = next_variable(self);
+    char  done_label[64];
+    snprintf(done_label, sizeof done_label, "%s_done", result);
+    out_put_start_fmt(self, "int %s = 1;\n", result);
+    out_put_start(self, "{\n");
+    self->indent_level++;
+
+    for (u32 i = 0; i < v->n_arguments; ++i) {
+        // if arg goto done
+        a_eval(self, v->arguments[i]);
+        char const *arg = pop_result(self);
+        out_put_start_fmt(self, "if (%s) goto %s;\n", arg, done_label);
+    }
+
+    // none of the args are true
+    out_put(self, "\n");
+    out_put_start_fmt(self, "%s = 0;\n", result);
+
+    self->indent_level--;
+    out_put(self, "\n");
+    out_put_start_fmt(self, "%s:;", done_label);
+    out_put(self, "\n");
+    out_put_start(self, "}\n");
+    return 0;
+}
+
 static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
@@ -1081,6 +1143,9 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
       {"_tl_neq_", tl_binary_op, "!="},
       {"_tl_gte_", tl_binary_op, ">="},
       {"_tl_gt_", tl_binary_op, ">"},
+
+      {"_tl_and_", tl_and, null},
+      {"_tl_or_", tl_or, null},
 
       {"_tl_band_", tl_binary_op, "&"},
       {"_tl_bor_", tl_binary_op, "|"},

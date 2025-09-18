@@ -493,6 +493,10 @@ void create_function_record_dfs(void *ctx, ast_node *node) {
         if (ast_lambda_function == value->tag) {
             tl_type *type = make_lambda_arrow(self->type_arena, value);
             do_create_function_record(self, value, name, type);
+
+            // This flag helps us find anonymous (unnamed) lambda
+            // functions later.
+            BIT_SET(value->lambda_function.flags, AST_LAMBDA_FLAG_NAMED);
         }
     }
 }
@@ -925,7 +929,7 @@ typedef struct {
     hashmap        *seen; // char const* => int
 } collect_syms_ctx;
 
-void collect_syms(void *ctx_, ast_node *node) {
+static void collect_syms(void *ctx_, ast_node *node) {
     collect_syms_ctx *ctx  = ctx_;
     ti_inferer       *self = ctx->self;
     int const         one  = 1;
@@ -948,6 +952,17 @@ void collect_syms(void *ctx_, ast_node *node) {
     map_set(&ctx->seen, name, strlen(name), &one);
 }
 
+static void collect_anon_lambdas(void *ctx_, ast_node *node) {
+    collect_syms_ctx *ctx = ctx_;
+    // ti_inferer       *self = ctx->self;
+
+    if (ast_lambda_function != node->tag) return;
+    if (BIT_TEST(node->lambda_function.flags, AST_LAMBDA_FLAG_NAMED)) return;
+
+    // An anonymous lambda function
+    array_push(*ctx->specials, &node);
+}
+
 static void ti_collect_functions_to_emit(ti_inferer *self, ast_node_array *specials) {
 
     // check all non-variable symbol references, and if they are
@@ -967,6 +982,8 @@ static void ti_collect_functions_to_emit(ti_inferer *self, ast_node_array *speci
     ti_function_record *main = ti_lookup_function(self, "main");
     if (!main) fatal("no main function found");
     ast_node_dfs_safe_for_recur(self->transient, &ctx, main->node, collect_syms);
+
+    ast_node_dfs_safe_for_recur(self->transient, &ctx, main->node, collect_anon_lambdas);
 
     forall(i, *self->nodes) {
         ast_node *node = self->nodes->v[i];
