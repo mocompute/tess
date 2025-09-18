@@ -1550,8 +1550,7 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
         // TODO this work is duplicative, because the let-in case will
         // have already done this for named lambdas. But we still need
         // it for anonymous lambdas.
-        ast_node_sized free_variables = ti_free_variables_in(self->type_arena, node);
-        log(self, "discovered %u free vars in lambda", free_variables.size);
+        ast_node_sized free_variables        = ti_free_variables_in(self->type_arena, node);
         node->lambda_function.free_variables = free_variables;
     } break;
 
@@ -1569,18 +1568,14 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
             ast_node *arg = v->arguments[i];
 
             if (ast_symbol == arg->tag && arg->symbol.free_variables.size) {
-                log(self, "merging '%s'", ast_node_name_string(arg));
                 merge_ast_node_array(&free_variables, arg->symbol.free_variables, &seen);
             }
 
             else if (ast_lambda_function == arg->tag && arg->lambda_function.free_variables.size) {
-                log(self, "merging lambda");
                 merge_ast_node_array(&free_variables, arg->lambda_function.free_variables, &seen);
             }
         }
 
-        log(self, "free_variables: assigned %u to '%s'", free_variables.size,
-            ast_node_name_string(v->name));
         v->free_variables = (ast_node_sized)sized_all(free_variables);
 
         map_destroy(&seen);
@@ -1616,11 +1611,14 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
 }
 
 static void ti_discover_free_variables(ti_inferer *self) {
-    forall(i, *self->nodes) {
-        ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
-    }
-    forall(i, *self->nodes) {
-        ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
+    // TODO we need one pass for each level of nesting that exists in
+    // the program. We should implement something which repeats as
+    // long as necessary.
+    int loop_count = 10;
+    while (--loop_count) {
+        forall(i, *self->nodes) {
+            ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
+        }
     }
 }
 
@@ -2354,11 +2352,9 @@ void collect_constraints(void *ctx_, ast_node *node) {
 
     case ast_lambda_function: {
         // argument tuple must be same type as parameter tuple
-        struct tlt_arrow *v = tl_type_arrow(node->type);
+        struct tlt_arrow *v   = tl_type_arrow(node->type);
 
-        log(self, "examining lambda_function of type %s", tl_type_to_string(self->transient, node->type));
-
-        tl_type *tup = make_args_type(self->type_arena, node->array.nodes, node->array.n);
+        tl_type          *tup = make_args_type(self->type_arena, node->array.nodes, node->array.n);
         push(v->left, tup);
 
         // body type must be same as right hand of arrow
