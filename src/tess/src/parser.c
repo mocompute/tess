@@ -1524,10 +1524,13 @@ static int lambda_function(parser *self) {
         goto error;
     }
 
-    ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
-    node->lambda_function.parameters   = null;
-    node->lambda_function.n_parameters = 0;
-    node->lambda_function.body         = defn;
+    ast_node *node                            = ast_node_create(self->ast_arena, ast_lambda_function);
+    node->lambda_function.parameters          = null;
+    node->lambda_function.n_parameters        = 0;
+    node->lambda_function.flags               = 0;
+    node->lambda_function.free_variables.size = 0;
+    node->lambda_function.free_variables.v    = null;
+    node->lambda_function.body                = defn;
 
     // move the vector from the function_declaration node to the new ast node
     node->array.nodes = decl->array.nodes;

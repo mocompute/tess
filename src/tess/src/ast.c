@@ -150,7 +150,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_lambda_function: {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
-        vclone->body = ast_node_clone(alloc, vorig->body);
+        vclone->flags               = vorig->flags;
+        vclone->free_variables.size = 0;
+        vclone->free_variables.v    = null;
+        vclone->body                = ast_node_clone(alloc, vorig->body);
     } break;
 
     case ast_function_declaration: {
@@ -940,7 +943,9 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 //
 
 int ast_node_is_specialized(ast_node const *node) {
-    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_SPECIALIZED));
+    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_SPECIALIZED)) ||
+           (ast_lambda_function == node->tag &&
+            BIT_TEST(node->lambda_function.flags, AST_LAMBDA_FLAG_SPECIALIZED));
 }
 
 int ast_node_is_tuple_constructor(ast_node const *node) {
@@ -948,8 +953,9 @@ int ast_node_is_tuple_constructor(ast_node const *node) {
 }
 
 void ast_node_set_is_specialized(ast_node *node) {
-    assert(ast_let == node->tag);
-    BIT_SET(node->let.flags, AST_LET_FLAG_SPECIALIZED);
+    if (ast_let == node->tag) BIT_SET(node->let.flags, AST_LET_FLAG_SPECIALIZED);
+    else if (ast_lambda_function == node->tag)
+        BIT_SET(node->lambda_function.flags, AST_LAMBDA_FLAG_SPECIALIZED);
 }
 
 void ast_node_set_is_tuple_constructor(ast_node *node) {
@@ -975,9 +981,14 @@ ast_node **ast_node_assignment_names(allocator *alloc, ast_node const *node) {
 u64 ast_node_hash(ast_node const *self) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
+#define combine_node(node)                                                                                 \
+    do {                                                                                                   \
+        u64 h = ast_node_hash(node);                                                                       \
+        hash  = hash64_combine(hash, (void *)&h, sizeof h);                                                \
+    } while (0)
+
     if (TL_AST_HAS_ARRAY(self->tag))
-        for (u32 i = 0; i < self->array.n; ++i)
-            hash = hash64_combine(hash, (byte *)&self->array.nodes[i], sizeof(ast_node *));
+        for (u32 i = 0; i < self->array.n; ++i) combine_node(self->array.nodes[i]);
 
     switch (self->tag) {
     case ast_nil:
@@ -986,19 +997,19 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_address_of:
         //
-        hash = hash64_combine(hash, (byte *)&self->address_of.target, sizeof(ast_node *));
+        combine_node(self->address_of.target);
         break;
 
     case ast_arrow:
         //
-        hash = hash64_combine(hash, (byte *)&self->arrow.left, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->arrow.right, sizeof(ast_node *));
+        combine_node(self->arrow.left);
+        combine_node(self->arrow.right);
         break;
 
     case ast_assignment:
         //
-        hash = hash64_combine(hash, (byte *)&self->assignment.name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->assignment.value, sizeof(ast_node *));
+        combine_node(self->assignment.name);
+        combine_node(self->assignment.value);
         break;
 
     case ast_bool:
@@ -1008,12 +1019,12 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_dereference:
         //
-        hash = hash64_combine(hash, (byte *)&self->dereference.target, sizeof(ast_node *));
+        combine_node(self->dereference.target);
         break;
 
     case ast_dereference_assign:
-        hash = hash64_combine(hash, (byte *)&self->dereference_assign.target, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->dereference_assign.value, sizeof(ast_node *));
+        combine_node(self->dereference_assign.target);
+        combine_node(self->dereference_assign.value);
         break;
 
     case ast_f64:
@@ -1027,21 +1038,21 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_if_then_else:
-        hash = hash64_combine(hash, (byte *)&self->if_then_else.condition, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->if_then_else.yes, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->if_then_else.no, sizeof(ast_node *));
+        combine_node(self->if_then_else.condition);
+        combine_node(self->if_then_else.yes);
+        combine_node(self->if_then_else.no);
         break;
 
     case ast_let_in:
-        hash = hash64_combine(hash, (byte *)&self->let_in.name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->let_in.value, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->let_in.body, sizeof(ast_node *));
+        combine_node(self->let_in.name);
+        combine_node(self->let_in.value);
+        combine_node(self->let_in.body);
         break;
 
     case ast_let_match_in:
-        hash = hash64_combine(hash, (byte *)&self->let_match_in.lt, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->let_match_in.value, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->let_match_in.body, sizeof(ast_node *));
+        combine_node(self->let_match_in.lt);
+        combine_node(self->let_match_in.value);
+        combine_node(self->let_match_in.body);
         break;
 
     case ast_string:
@@ -1057,21 +1068,21 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_user_type_definition:
         //
-        hash = hash64_combine(hash, (byte *)&self->user_type_def.name, sizeof(ast_node *));
+        combine_node(self->user_type_def.name);
         break;
 
     case ast_user_type_get:
         //
-        hash = hash64_combine(hash, (byte *)&self->user_type_get.struct_name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->user_type_get.field_name, sizeof(ast_node *));
+        combine_node(self->user_type_get.struct_name);
+        combine_node(self->user_type_get.field_name);
         hash = hash64_combine(hash, (byte *)&self->user_type_get.flags, sizeof(self->user_type_get.flags));
         break;
 
     case ast_user_type_set:
         //
-        hash = hash64_combine(hash, (byte *)&self->user_type_set.struct_name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->user_type_set.field_name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->user_type_set.value, sizeof(ast_node *));
+        combine_node(self->user_type_set.struct_name);
+        combine_node(self->user_type_set.field_name);
+        combine_node(self->user_type_set.value);
         hash = hash64_combine(hash, (byte *)&self->user_type_get.flags, sizeof(self->user_type_get.flags));
         break;
 
@@ -1081,7 +1092,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_function_declaration:
         //
-        hash = hash64_combine(hash, (byte *)&self->function_declaration.name, sizeof(ast_node *));
+        combine_node(self->function_declaration.name);
         break;
 
     case ast_labelled_tuple:
@@ -1092,24 +1103,24 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_lambda_function:
         // for lambdas and let functions, its type is part of the hash
-        hash = hash64_combine(hash, (byte *)&self->lambda_function.body, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
+        combine_node(self->lambda_function.body);
+        // hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
+        // FIXME
         break;
 
-    case ast_lambda_function_application:
-        hash = hash64_combine(hash, (byte *)&self->lambda_application.lambda, sizeof(ast_node *));
-        break;
+    case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
 
     case ast_let:
         // for lambdas and let functions, its type is part of the hash
-        hash = hash64_combine(hash, (byte *)&self->let.name, sizeof(ast_node *));
-        hash = hash64_combine(hash, (byte *)&self->let.body, sizeof(ast_node *));
+        combine_node(self->let.name);
+        combine_node(self->let.body);
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
-        hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
+        // hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
+        // FIXME
         break;
 
     case ast_named_function_application:
-        hash = hash64_combine(hash, (byte *)&self->named_application.name, sizeof(ast_node *));
+        combine_node(self->named_application.name);
         hash = hash64_combine(hash, (byte *)&self->named_application.function_type, sizeof(tl_type *));
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
         break;
@@ -1118,9 +1129,7 @@ u64 ast_node_hash(ast_node const *self) {
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
         break;
 
-    case ast_user_type:
-        hash = hash64_combine(hash, (byte *)&self->user_type.name, sizeof(ast_node *));
-        break;
+    case ast_user_type: combine_node(self->user_type.name); break;
     }
 
     return hash;

@@ -75,6 +75,7 @@ typedef struct ast_node {
         struct ast_lambda_function {
             struct ast_node **parameters;
             u8                n_parameters;
+            u8                flags;
             struct ast_node  *body;
             ast_node_sized    free_variables; // only used at transpiler phase, undefined otherwise
         } lambda_function;
@@ -192,17 +193,19 @@ typedef struct ast_node {
     enum tl_error_tag error;
 } ast_node;
 
-#define AST_SYMBOL_FLAG_LET       BIT(0)
-#define AST_SYMBOL_FLAG_LET_IN    BIT(1)
+#define AST_SYMBOL_FLAG_LET         BIT(0)
+#define AST_SYMBOL_FLAG_LET_IN      BIT(1)
 
-#define AST_LET_FLAG_SPECIALIZED  BIT(0)
-#define AST_LET_FLAG_TUPLE_CONS   BIT(1)
-#define AST_LET_FLAG_INTRINSIC    BIT(2)
+#define AST_LET_FLAG_SPECIALIZED    BIT(0)
+#define AST_LET_FLAG_TUPLE_CONS     BIT(1)
+#define AST_LET_FLAG_INTRINSIC      BIT(2)
 
-#define AST_TUPLE_FLAG_INIT       BIT(0)
+#define AST_LAMBDA_FLAG_SPECIALIZED BIT(0)
 
-#define AST_NAMED_APP_INTRINSIC   BIT(0)
-#define AST_NAMED_APP_SPECIALIZED BIT(1)
+#define AST_TUPLE_FLAG_INIT         BIT(0)
+
+#define AST_NAMED_APP_INTRINSIC     BIT(0)
+#define AST_NAMED_APP_SPECIALIZED   BIT(1)
 
 // -- iterator functions --
 
