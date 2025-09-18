@@ -566,9 +566,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     case type_arrow:    a_result_type_of(self, ty->arrow.right); break;
 
     case type_user:     {
-        char *type_s = tl_type_to_string(self->strings, ty);
-        out_put_fmt(self, "/* %s */ struct %s", type_s, ty->user.name);
-        alloc_free(self->strings, type_s);
+        out_put_fmt(self, "struct %s", ty->user.name);
 
     } break;
 
@@ -1224,6 +1222,19 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         out_put_start(self, "{\n");
         self->indent_level++;
 
+        // free variables
+        out_put_start(self, "/* parent free variables: ");
+        forall(i, free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+        }
+        out_put(self, " */\n");
+
+        out_put_start(self, "/* lambda free variables: ");
+        forall(i, lambda->lambda_function.free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(lambda->lambda_function.free_variables.v[i]));
+        }
+        out_put(self, " */\n");
+
         emit_thunk_struct_init(self, struct_name, "_apply_ctx_", lambda->lambda_function.free_variables);
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
@@ -1246,7 +1257,14 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     } else {
 
         // free variables
-        out_put_start(self, "/* free variables: ");
+        out_put_start(self, "/* parent free variables: ");
+        forall(i, free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+        }
+        out_put(self, " */\n");
+
+        out_put_start(self, "/* name free variables: ");
+        free_variables = v->name->symbol.free_variables;
         forall(i, free_variables) {
             out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
         }
