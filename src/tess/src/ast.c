@@ -30,12 +30,14 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
-    ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = string_t_init(alloc, str);
-    self->symbol.original        = string_t_init_empty();
-    self->symbol.annotation      = null;
-    self->symbol.annotation_type = null;
-    self->symbol.flags           = 0;
+    ast_node *self                   = ast_node_create(alloc, ast_symbol);
+    self->symbol.name                = string_t_init(alloc, str);
+    self->symbol.original            = string_t_init_empty();
+    self->symbol.annotation          = null;
+    self->symbol.annotation_type     = null;
+    self->symbol.flags               = 0;
+    self->symbol.free_variables.size = 0;
+    self->symbol.free_variables.v    = null;
     return self;
 }
 
@@ -116,6 +118,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = vorig->annotation_type;
         vclone->flags           = vorig->flags;
+        vclone->free_variables  = vorig->free_variables; // shallow copy
     } break;
 
     case ast_let_in: {
@@ -154,6 +157,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->free_variables.size = 0;
         vclone->free_variables.v    = null;
         vclone->body                = ast_node_clone(alloc, vorig->body);
+        vclone->free_variables      = vorig->free_variables; // shallow copy
     } break;
 
     case ast_function_declaration: {
@@ -173,6 +177,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
         vclone->function_type                = vorig->function_type;
+        vclone->free_variables               = vorig->free_variables; // shallow copy
     } break;
 
     case ast_user_type: {

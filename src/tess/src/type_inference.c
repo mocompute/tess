@@ -100,6 +100,7 @@ typedef struct {
 
 static size_t         ti_apply_substitutions_to_ast(ti_inferer *, constraint_sized, ast_node_sized);
 static void           ti_assign_type_variables(ti_inferer *);
+static void           ti_discover_free_variables(ti_inferer *);
 
 static int            ti_check_callsites(ti_inferer *);
 static hashmap       *ti_collect_specialization_requirements(ti_inferer *);
@@ -114,6 +115,8 @@ static void           ti_generate_tuple_functions(ti_inferer *);
 static void           ti_generate_user_type_functions(ti_inferer *);
 static void           ti_rename_variables(ti_inferer *);
 static void           ti_run_solver(ti_inferer *);
+
+ast_node_sized        ti_free_variables_in_continue(allocator *, ast_node const *, hashmap **);
 
 static tl_type       *make_args_type(allocator *, ast_node *[], u16);
 static tl_type       *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
@@ -226,6 +229,9 @@ int ti_inferer_run(ti_inferer *self) {
 
     // Give every variable a unique name, respecting lexical scope.
     ti_rename_variables(self);
+
+    // Gather free variables information.
+    ti_discover_free_variables(self);
 
     // Assign type variables to every ast node.
     ti_assign_type_variables(self);
@@ -1306,6 +1312,18 @@ void ti_traverse_lexical(allocator *alloc, void *user_ctx, ast_node *node, ti_tr
     map_destroy(&ctx.lexical_map);
 }
 
+void ti_traverse_lexical_continue(allocator *alloc, void *user_ctx, ast_node *node,
+                                  ti_traverse_lexical_fun fun, hashmap **lexical_map) {
+    traverse_lexical_ctx ctx = {
+      .user_ctx = user_ctx, .lexical_map = *lexical_map, .visited = map_create(alloc, sizeof(int))};
+
+    do_traverse_lexical(&ctx, node, fun);
+
+    map_destroy(&ctx.visited);
+
+    *lexical_map = ctx.lexical_map;
+}
+
 void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
     if (!node) return;
     ti_inferer *self = ctx;
@@ -1447,6 +1465,162 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
 static void ti_rename_variables(ti_inferer *self) {
     forall(i, *self->nodes) {
         ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], rename_one_variables);
+    }
+}
+
+// -- discover free variables --
+
+static void merge_ast_node_array(ast_node_array *dst, ast_node_sized src, hashmap **seen) {
+    int one = 1;
+    forall(i, src) {
+        ast_node *fv = src.v[i];
+        if (!map_contains(*seen, &fv, sizeof(ast_node *))) {
+            map_set(seen, &fv, sizeof(ast_node *), &one);
+            array_push(*dst, &fv);
+        }
+    }
+}
+
+static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
+    (void)lexical_map;
+    if (!node) return;
+    ti_inferer *self = ctx;
+
+    // Lambda functions may capture free variables for stack-based
+    // closures. In this function we examine every callsite, the
+    // named-function-application node, to determine if free variables
+    // will be needed during the function application.
+    //
+    // There are a few places where free variables may exist
+    // - inside an anonymous lambda passed as an argument to the application
+    // - inside a named lambda referred to by its variable name
+    //
+    // To capture named lambda free variables, we do the following:
+    // Attach a free variable list to every symbol by looking at the
+    // let-in nodes. A let-in node may:
+    // - define a lambda-function
+    // - copy a symbol that was defined from a lambda function
+    //
+    // We examine each argument of the application. If it's an
+    // anonymous lambda, we calculate its free variables and add them
+    // to our list. If it's a symbol, we merge its free variables
+    // (previously obtained) into our list.
+
+    switch (node->tag) {
+
+    case ast_let_in: {
+        struct ast_let_in *v = ast_node_let_in(node);
+
+        if (ast_lambda_function == v->value->tag) {
+            ast_node_sized free_variables            = ti_free_variables_in(self->type_arena, v->value);
+
+            v->value->lambda_function.free_variables = free_variables;
+            assert(ast_symbol == v->name->tag);
+            v->name->symbol.free_variables = free_variables;
+        } else if (ast_symbol == v->value->tag) {
+            assert(ast_symbol == v->name->tag);
+            v->name->symbol.free_variables = v->value->symbol.free_variables;
+        }
+
+    } break;
+
+    case ast_let_match_in: {
+        // similar to let_in, only with multiple bindings
+        struct ast_let_match_in   *v  = ast_node_let_match_in(node);
+        struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
+
+        for (u32 i = 0; i < lt->n_assignments; ++i) {
+            ast_node *name  = lt->assignments[i]->assignment.name;
+            ast_node *value = lt->assignments[i]->assignment.value;
+            assert(ast_symbol == name->tag);
+
+            if (ast_lambda_function == value->tag) {
+                ast_node_sized free_variables         = ti_free_variables_in(self->type_arena, value);
+
+                value->lambda_function.free_variables = free_variables;
+                name->symbol.free_variables           = free_variables;
+            } else if (ast_symbol == value->tag) {
+                name->symbol.free_variables = v->value->symbol.free_variables;
+            }
+        }
+
+    } break;
+
+    case ast_lambda_function: {
+        // TODO this work is duplicative, because the let-in case will
+        // have already done this for named lambdas. But we still need
+        // it for anonymous lambdas.
+        ast_node_sized free_variables = ti_free_variables_in(self->type_arena, node);
+        log(self, "discovered %u free vars in lambda", free_variables.size);
+        node->lambda_function.free_variables = free_variables;
+    } break;
+
+    case ast_named_function_application: {
+        struct ast_named_application *v              = ast_node_named(node);
+        ast_node_array                free_variables = {.alloc = self->type_arena};
+        hashmap                      *seen           = map_create(self->transient, sizeof(int));
+
+        assert(ast_symbol == v->name->tag);
+        if (v->name->symbol.free_variables.size)
+            array_copy(free_variables, v->name->symbol.free_variables.v,
+                       v->name->symbol.free_variables.size);
+
+        for (u32 i = 0; i < v->n_arguments; ++i) {
+            ast_node *arg = v->arguments[i];
+
+            if (ast_symbol == arg->tag && arg->symbol.free_variables.size) {
+                log(self, "merging '%s'", ast_node_name_string(arg));
+                merge_ast_node_array(&free_variables, arg->symbol.free_variables, &seen);
+            }
+
+            else if (ast_lambda_function == arg->tag && arg->lambda_function.free_variables.size) {
+                log(self, "merging lambda");
+                merge_ast_node_array(&free_variables, arg->lambda_function.free_variables, &seen);
+            }
+        }
+
+        log(self, "free_variables: assigned %u to '%s'", free_variables.size,
+            ast_node_name_string(v->name));
+        v->free_variables = (ast_node_sized)sized_all(free_variables);
+
+        map_destroy(&seen);
+    } break;
+
+    case ast_symbol:
+    case ast_let:
+    case ast_if_then_else:
+    case ast_address_of:
+    case ast_arrow:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_assignment:
+    case ast_labelled_tuple:
+    case ast_tuple:
+    case ast_lambda_function_application:
+    case ast_begin_end:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_user_type:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_user_type_definition:        break;
+    }
+}
+
+static void ti_discover_free_variables(ti_inferer *self) {
+    forall(i, *self->nodes) {
+        ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
+    }
+    forall(i, *self->nodes) {
+        ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
     }
 }
 
@@ -2222,8 +2396,8 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(v->function_type->arrow.left, args_type);
         push(v->function_type->arrow.right, node->type);
 
-        // After specialisation, our symbol's type must match the arrow type and our node type must match
-        // the result type.
+        // After specialisation, our symbol's type must match the arrow type and our node type must
+        // match the result type.
         if (BIT_TEST(v->flags, AST_NAMED_APP_SPECIALIZED)) {
             push(v->name->type, v->function_type);
             push(node->type, v->function_type->arrow.right);
@@ -2548,17 +2722,64 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
 
 void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
 
-    if (ast_symbol != node->tag) return;
-
     ast_node_array *array = ctx;
 
     // If symbol is not in the lexical map, it is a free variable. But
     // only if it's an actual generated variable name, so this
     // excludes function names.
-    char const *name_str = ast_node_name_string(node);
-    if (!is_generated_variable_name(name_str)) return;
 
-    if (!map_get(*lex, name_str, strlen(name_str))) array_push(*array, &node);
+    switch (node->tag) {
+
+    case ast_symbol: {
+        char const *name = ast_node_name_string(node);
+
+        if (!is_generated_variable_name(name)) return;
+        if (!map_get(*lex, name, strlen(name))) array_push(*array, &node);
+
+    } break;
+
+    case ast_address_of:  find_free_variables(ctx, node->address_of.target, lex); break;
+    case ast_dereference: find_free_variables(ctx, node->dereference.target, lex); break;
+    case ast_dereference_assign:
+        find_free_variables(ctx, node->dereference_assign.target, lex);
+        find_free_variables(ctx, node->dereference_assign.value, lex);
+        break;
+
+    case ast_user_type_get:
+        //
+        find_free_variables(ctx, node->user_type_get.struct_name, lex);
+        break;
+
+    case ast_user_type_set:
+        find_free_variables(ctx, node->user_type_set.struct_name, lex);
+        find_free_variables(ctx, node->user_type_set.value, lex);
+        break;
+
+    case ast_nil:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_tuple:
+    case ast_user_type:                   break;
+    }
 }
 
 ast_node_sized ti_free_variables_in(allocator *alloc, ast_node const *node) {
@@ -2572,6 +2793,22 @@ ast_node_sized ti_free_variables_in(allocator *alloc, ast_node const *node) {
     ast_node_array array = {.alloc = alloc};
 
     ti_traverse_lexical(alloc, &array, (ast_node *)node, find_free_variables);
+
+    return (ast_node_sized)sized_all(array);
+}
+
+ast_node_sized ti_free_variables_in_continue(allocator *alloc, ast_node const *node,
+                                             hashmap **lexical_map) {
+
+    // return array of free variable symbols found in node and its
+    // children. free variables are symbols not defined by a visible
+    // lexical scope parent. Algorithm: do a lexical traverse, keeping
+    // track of lexical variables, and build an array of free
+    // variables.
+
+    ast_node_array array = {.alloc = alloc};
+
+    ti_traverse_lexical_continue(alloc, &array, (ast_node *)node, find_free_variables, lexical_map);
 
     return (ast_node_sized)sized_all(array);
 }

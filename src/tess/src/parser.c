@@ -226,13 +226,8 @@ static int result_ast_bool(parser *p, int val) {
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    p->result                         = ast_node_create(p->ast_arena, tag);
-    p->result->symbol.name            = string_t_init(p->ast_arena, s);
-    p->result->symbol.original        = string_t_init_empty();
-    p->result->symbol.annotation      = null;
-    p->result->symbol.annotation_type = null;
-
-    // syms and strs use same union
+    p->result      = ast_node_create_sym(p->ast_arena, s);
+    p->result->tag = tag;
 
     return 0;
 }
@@ -1381,11 +1376,13 @@ static int function_application(parser *self) {
             int         is_intrinsic = (0 == strncmp("_tl_", name_str, 4));
 
             ast_node   *node         = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments     = null;
-            node->named_application.n_arguments   = 0;
-            node->named_application.flags         = 0;
-            node->named_application.function_type = null;
-            node->named_application.name          = name;
+            node->named_application.arguments           = null;
+            node->named_application.n_arguments         = 0;
+            node->named_application.flags               = 0;
+            node->named_application.function_type       = null;
+            node->named_application.name                = name;
+            node->named_application.free_variables.size = 0;
+            node->named_application.free_variables.v    = null;
             if (is_intrinsic) BIT_SET(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);

@@ -32,6 +32,7 @@ typedef struct ast_node {
             struct ast_node *annotation;
             tl_type         *annotation_type;
             u8               flags;
+            ast_node_sized   free_variables; // only used at transpiler phase, undefined otherwise
         } symbol;
 
         struct ast_bool {
@@ -111,6 +112,7 @@ typedef struct ast_node {
             u8                flags;
             struct ast_node  *name;
             tl_type          *function_type;
+            ast_node_sized    free_variables;
         } named_application;
 
         struct ast_labelled_tuple {
