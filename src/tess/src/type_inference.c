@@ -243,8 +243,6 @@ int ti_inferer_run(ti_inferer *self) {
 
     // Run constraint solver until it settles.
     ti_collect_and_solve(self, 1, null);
-    
-    // FIXME: how does this collect pass handle generic function applications? It should not generate constraints because they will be contradictory, as in add int vs. add float.
 
     // Create tuple constructors
     ti_generate_tuple_functions(self);
@@ -262,7 +260,7 @@ int ti_inferer_run(ti_inferer *self) {
     if (self->constraints.size) {
         dbg("remaining constraints:\n");
         ti_inferer_dbg_constraints(self);
-        // FIXME exit with error
+        return 1;
     }
 
     // Rewrite function application sites
@@ -613,11 +611,13 @@ static void one_specialization_requirement(void *ctx_, ast_node *node) {
     hashmap                         **map  = ctx->map;
 
     tl_type                          *type = node->named_application.function_type;
+    char const                       *name = ast_node_name_string(node->named_application.name);
+
+    log(self, "one_specialization_requirement: '%s' %s", name, tl_type_to_string(self->transient, type));
 
     // if type is generic, we skip
     if (tl_type_is_poly(type)) return;
 
-    char const        *name = ast_node_name_string(node->named_application.name);
     u64                hash = hash_name_and_type(name, type);
     ti_function_record rec  = {.name = name, .type = type, .node = null};
     map_set(map, &hash, sizeof hash, &rec);
@@ -733,6 +733,8 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
 
             // add to function records
             ti_function_record created_rec = {.name = special_name, .type = rec->type, .node = created};
+            log(self, "adding lambda record for '%s' %s", special_name,
+                tl_type_to_string(self->transient, rec->type));
             map_set(&self->functions, special_name, strlen(special_name), &created_rec);
 
         } else {
@@ -775,19 +777,16 @@ static void patch_one_special(void *ctx_, ast_node *node) {
 
     else if (ast_named_function_application == node->tag) {
 
-        // FIXME need to mark the node as having been specialised, so that the next round of collect_constraints can constrain the name symbol.
-
         char const *name = ast_node_name_string(node->named_application.name);
         tl_type    *type = node->named_application.function_type;
 
         if (tl_type_is_poly(type)) {
-            log(self, "skipped callsite for '%s' due to generic type %s", name,
+            log(self, "patch_special: skipped callsite for '%s' due to generic type %s", name,
                 tl_type_to_string(self->transient, type));
             return;
         }
 
         u64                 hash = hash_name_and_type(name, type);
-
         ti_function_record *rec  = map_get(ctx->map, &hash, sizeof hash);
         if (!rec)
             fatal("could not find specialization record for '%s' of type %s", name,
@@ -797,10 +796,15 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // and type combination, because those are intrinsics or c_ etc.
         if (!rec->node) return;
 
-        // FIXME: why only let nodes? What about symbol nodes, which are annotated symbols? Ah because those are not specialised. 
+        // FIXME: why only let nodes? What about symbol nodes, which are annotated symbols? Ah because those
+        // are not specialised.
         if (ast_let == rec->node->tag) {
             // just copy the specialized name to the application site.
             node->named_application.name = rec->node->let.name;
+
+            // mark node as having been specialised, so its new name
+            // can be constrained to the implied type of the callsite.
+            BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
         }
     }
 
@@ -2114,6 +2118,12 @@ void collect_constraints(void *ctx_, ast_node *node) {
             push(arrow->arrow.right, node->let.body->type);
         }
 
+        // If the function is 'main', we constrain the body type to be
+        // the required int return type for main().
+        if (0 == strcmp("main", ast_node_name_string(node->let.name))) {
+            push(type_registry_must_find_name(self->type_registry, "int"), node->let.body->type);
+        }
+
         // result is nil
         push(node->type, get_prim(self, type_nil));
 
@@ -2123,19 +2133,25 @@ void collect_constraints(void *ctx_, ast_node *node) {
         // yes and no arms same type
         push(node->if_then_else.yes->type, node->if_then_else.no->type);
 
+        // condition must be bool
+        push(node->if_then_else.condition->type, type_registry_must_find_name(self->type_registry, "bool"));
+
         // result is same type as arms
         push(node->type, node->if_then_else.yes->type);
         break;
 
     case ast_lambda_function: {
         // argument tuple must be same type as parameter tuple
-        struct tlt_arrow *v   = tl_type_arrow(node->type);
+        struct tlt_arrow *v = tl_type_arrow(node->type);
 
-        tl_type          *tup = make_args_type(self->type_arena, node->array.nodes, node->array.n);
+        log(self, "examining lambda_function of type %s", tl_type_to_string(self->transient, node->type));
+
+        tl_type *tup = make_args_type(self->type_arena, node->array.nodes, node->array.n);
         push(v->left, tup);
 
         // body type must be same as right hand of arrow
         push(v->right, node->lambda_function.body->type);
+
         break;
 
     } break;
@@ -2168,11 +2184,26 @@ void collect_constraints(void *ctx_, ast_node *node) {
         push(v->function_type->arrow.left, args_type);
         push(v->function_type->arrow.right, node->type);
 
-        // our symbol's type must match the arrow type
-        push(v->name->type, v->function_type);
-        // FIXME: this is probably wrong, as it will constrain the generic name prior to specialisation
-        
+        // After specialisation, our symbol's type must match the arrow type and our node type must match
+        // the result type.
+        if (BIT_TEST(v->flags, AST_NAMED_APP_SPECIALIZED)) {
+            push(v->name->type, v->function_type);
+            push(node->type, v->function_type->arrow.right);
+        } else {
+            // Before specialization, if the name type is not generic, we
+            // should also constrain. This propagates constraints in the
+            // other direction.
+            if (!tl_type_is_poly(v->name->type)) {
 
+                // Set the function type to match the name type, since it's not generic.
+                v->function_type = v->name->type;
+                push(node->type, v->function_type->arrow.right);
+
+                // Set the specialized flag since no further
+                // specialization of this node is required.
+                BIT_SET(v->flags, AST_NAMED_APP_SPECIALIZED);
+            }
+        }
     } break;
     }
 

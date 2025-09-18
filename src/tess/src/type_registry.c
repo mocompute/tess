@@ -54,10 +54,10 @@ tl_type **type_registry_find_name(type_registry *self, char const *name) {
     return map_get(self->named_types, name, (u16)strlen(name));
 }
 
-tl_type **type_registry_must_find_name(type_registry *self, char const *name) {
+tl_type *type_registry_must_find_name(type_registry *self, char const *name) {
     tl_type **out = map_get(self->named_types, name, (u16)strlen(name));
     if (!out) fatal("failed to find type '%s'", name);
-    return out;
+    return *out;
 }
 
 tl_type **type_registry_find_hash(type_registry *self, u64 hash) {
