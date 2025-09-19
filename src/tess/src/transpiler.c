@@ -314,11 +314,13 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put_start(self, "(void)tl_ctx;\n");
 
     // debug
-    out_put_start(self, "/* free variables: ");
-    forall(i, free_variables) {
-        out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+    if (self->verbose) {
+        out_put_start(self, "/* free variables: ");
+        forall(i, free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+        }
+        out_put(self, " */\n");
     }
-    out_put(self, " */\n");
 
     // add my free variables to the stack
     u32 save = push_free_variables(self, node, null);
@@ -350,7 +352,7 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
 
     // return type and name
     assert(type_arrow == node->type->tag);
-    out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
+    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
     out_put_start(self, "static ");
     a_declaration_void_ok(self, node->type->arrow.right, null, name);
     out_put(self, " ");
@@ -370,11 +372,13 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put_start(self, "(void)tl_ctx;\n");
 
     // debug
-    out_put_start(self, "/* free variables: ");
-    forall(i, v->free_variables) {
-        out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
+    if (self->verbose) {
+        out_put_start(self, "/* free variables: ");
+        forall(i, v->free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
+        }
+        out_put(self, " */\n");
     }
-    out_put(self, " */\n");
 
     // add my free variables to the stack
     u32 save = push_free_variables(self, node, null);
@@ -912,7 +916,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     out_put(self, "\n");
 
-    out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
+    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
     out_put_start(self, "");
     a_declaration(self, node->type, node, var);
@@ -1361,17 +1365,20 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         self->indent_level++;
 
         // free variables
-        out_put_start(self, "/* parent free variables: ");
-        forall(i, free_variables) {
-            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
-        }
-        out_put(self, " */\n");
+        if (self->verbose) {
+            out_put_start(self, "/* parent free variables: ");
+            forall(i, free_variables) {
+                out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+            }
+            out_put(self, " */\n");
 
-        out_put_start(self, "/* lambda free variables: ");
-        forall(i, lambda->lambda_function.free_variables) {
-            out_put_fmt(self, "%s, ", ast_node_name_string(lambda->lambda_function.free_variables.v[i]));
+            out_put_start(self, "/* lambda free variables: ");
+            forall(i, lambda->lambda_function.free_variables) {
+                out_put_fmt(self, "%s, ",
+                            ast_node_name_string(lambda->lambda_function.free_variables.v[i]));
+            }
+            out_put(self, " */\n");
         }
-        out_put(self, " */\n");
 
         emit_thunk_struct_init(self, struct_name, "tl_apply_ctx_", lambda->lambda_function.free_variables);
 
@@ -1404,17 +1411,19 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         self->indent_level++;
 
         // free variables
-        out_put_start(self, "/* parent free variables: ");
-        forall(i, free_variables) {
-            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
-        }
-        out_put(self, " */\n");
+        if (self->verbose) {
+            out_put_start(self, "/* parent free variables: ");
+            forall(i, free_variables) {
+                out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+            }
+            out_put(self, " */\n");
 
-        out_put_start(self, "/* lambda free variables: ");
-        forall(i, v->free_variables) {
-            out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
+            out_put_start(self, "/* lambda free variables: ");
+            forall(i, v->free_variables) {
+                out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
+            }
+            out_put(self, " */\n");
         }
-        out_put(self, " */\n");
 
         emit_thunk_struct_init(self, struct_name, "tl_apply_ctx_", v->free_variables);
 
@@ -1693,7 +1702,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     if (map_get(self->processed_structs, generated_name, strlen(generated_name))) return 0;
     map_set(&self->processed_structs, generated_name, strlen(generated_name), generated_name);
 
-    out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
+    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
     out_put_start_fmt(self, "struct %s {\n", generated_name);
     self->indent_level++;
