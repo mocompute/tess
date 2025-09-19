@@ -410,7 +410,9 @@ static tl_type *make_lambda_arrow(allocator *alloc, ast_node *lambda_function) {
     assert(ast_lambda_function == lambda_function->tag);
 
     struct ast_lambda_function *v = ast_node_lf(lambda_function);
-    return make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type, 1);
+    tl_type *out = make_arrow(alloc, v->parameters, v->n_parameters, null, v->body->type, 1);
+    BIT_SET(out->arrow.flags, TL_TYPE_ARROW_LAMBDA);
+    return out;
 }
 
 static tl_type *make_let_arrow(allocator *alloc, ast_node *let) {
@@ -737,6 +739,7 @@ static ast_node_array ti_create_specials(ti_inferer *self, hashmap *map) {
 
             assert(ast_lambda_function == created->tag);
             created->type = special->type;
+            BIT_SET(created->type->arrow.flags, TL_TYPE_ARROW_LAMBDA);
 
             // add to function records
             ti_function_record created_rec = {.name = special_name, .type = special->type, .node = created};
