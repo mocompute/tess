@@ -8,10 +8,12 @@ let main () =
   let ctx = Ctx 0 in
   let x1 = 1 in
   let x2 = 2 in
-  to_int
+  let res = to_int
   (_tl_and_
   (expect_true (fun () -> _tl_or_ 0 0 x1 ( ctx.sentinel := 1 ) end))
   (expect_true (fun () -> eq ctx.sentinel 0 end))
   (expect_false (fun () -> _tl_or_ 0 0 0 0 end))
   (expect_true (fun () -> _tl_and_ 1 2 3 0 ( ctx.sentinel := 1) end))
-  (expect_true (fun () -> eq ctx.sentinel 99 end)))
+  (expect_true (fun () -> eq ctx.sentinel 23 end)))
+  let _ = std_dbg "result = %i" res in
+  res

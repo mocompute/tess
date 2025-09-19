@@ -247,6 +247,8 @@ static void emit_thunk_struct_init(transpiler *self, char const *struct_name, ch
 
             out_put_start_fmt(self, ".%s = &(%s),\n", name_str, emit_symbol(self, variables.v[i]));
         }
+
+        if (!variables.size) out_put_start(self, ".empty = '\\0',");
     }
     self->indent_level--;
     out_put_start(self, "};\n\n");
@@ -276,6 +278,7 @@ static void emit_thunk_struct(transpiler *self, char const *name, ast_node_sized
             a_declaration(self, ptr->type, null, name_str);
             out_put(self, ";\n");
         }
+        if (!variables.size) out_put_start(self, "char empty;\n");
     }
     self->indent_level--;
     out_put_start(self, "};\n\n");
@@ -662,6 +665,7 @@ static int a_declaration_impl(transpiler *self, tl_type const *type, ast_node co
                 a_declaration(self, left->array.elements.v[i], null, "");
                 if (i < left->array.elements.size - 1) out_put(self, ", ");
             }
+            if (!left->array.elements.size) out_put(self, "void");
         }
 
         out_put(self, ") ");
@@ -1751,6 +1755,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
         a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
+    if (!v->n_parameters) out_put(self, "void");
     out_put(self, ")");
 
     // body
@@ -1809,6 +1814,7 @@ static int a_let_prototypes(transpiler *self, ast_node const *node) {
         a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
+    if (!v->n_parameters) out_put(self, "void");
     out_put(self, ");\n");
 
     return 0;
@@ -1859,6 +1865,7 @@ static int a_let(transpiler *self, ast_node const *node) {
         a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
+    if (!v->n_parameters) out_put(self, "void");
     out_put(self, ")");
 
     // body
