@@ -388,6 +388,16 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, "\n}\n\n");
 }
 
+static void out_put_params_with_context(transpiler *self, char const *struct_name, ast_node const *node) {
+    struct ast_array const *v = ast_node_arr((ast_node *)node);
+    out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
+    for (u32 i = 0; i < v->n; ++i) {
+        out_put(self, ", ");
+        a_declaration(self, v->nodes[i]->type, null, ast_node_name_string(v->nodes[i]));
+    }
+    out_put(self, ")");
+}
+
 static void forward_declare_thunks(void *ctx_, ast_node *node) {
     generate_thunks_ctx *ctx  = ctx_;
     transpiler          *self = ctx->self;
@@ -418,23 +428,17 @@ static void forward_declare_thunks(void *ctx_, ast_node *node) {
             out_put(self, " ");
 
             // params
-            out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
-            for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
-                out_put(self, ", ");
-                a_declaration(self, let_node->let.parameters[i]->type, null,
-                              ast_node_name_string(let_node->let.parameters[i]));
-            }
-            out_put(self, ")");
+            out_put_params_with_context(self, struct_name, let_node);
 
             out_put(self, ";\n");
         }
     }
 
     else if (ast_lambda_function == node->tag) {
-        struct ast_lambda_function *v           = ast_node_lf(node);
-        u64                         hash        = ast_node_hash(node);
-        char const                 *struct_name = make_thunk_struct_name(self->transient, hash);
-        char const                 *thunk_name  = make_thunk_name(self->transient, hash);
+
+        u64         hash        = ast_node_hash(node);
+        char const *struct_name = make_thunk_struct_name(self->transient, hash);
+        char const *thunk_name  = make_thunk_name(self->transient, hash);
 
         // We use this map for lambdas only here, to avoid duplicate
         // declarations. The caller erases the map after the pass is
@@ -449,12 +453,7 @@ static void forward_declare_thunks(void *ctx_, ast_node *node) {
         out_put(self, " ");
 
         // params
-        out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
-        for (u32 i = 0; i < v->n_parameters; ++i) {
-            out_put(self, ", ");
-            a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
-        }
-        out_put(self, ")");
+        out_put_params_with_context(self, struct_name, node);
         out_put(self, ";\n");
     }
 }
@@ -495,14 +494,7 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
             out_put(self, " ");
 
             // params
-            out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
-
-            for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
-                out_put(self, ", ");
-                a_declaration(self, let_node->let.parameters[i]->type, null,
-                              ast_node_name_string(let_node->let.parameters[i]));
-            }
-            out_put(self, ")");
+            out_put_params_with_context(self, struct_name, let_node);
 
             // body
             out_put(self, " {\n");
