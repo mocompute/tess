@@ -1001,7 +1001,7 @@ static void ti_collect_functions_to_emit(ti_inferer *self, ast_node_array *speci
         // constructor functions.
         if (ast_let == node->tag) {
             char const *name = ast_node_name_string(node->let.name);
-            if (0 == strncmp("_gen_", name, 5)) array_push(*specials, &node);
+            if (0 == strncmp("tl_gen_", name, 5)) array_push(*specials, &node);
         }
 
         // And same for user type definitions
@@ -2470,7 +2470,7 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
     {
-#define fmt "_gen_make_%s_"
+#define fmt "tl_gen_make_%s_"
         int len = snprintf(null, 0, fmt, name) + 1;
         if (len < 0) fatal("make_type_constructor_function: generate name failed.");
         generated_name = alloc_malloc(self->type_arena, (u32)len);
@@ -2550,7 +2550,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
     {
-#define fmt "_gen_make_tup_%" PRIu64 "_"
+#define fmt "tl_gen_make_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         generated_name = alloc_malloc(self->type_arena, (u32)len);

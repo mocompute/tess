@@ -306,11 +306,12 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, " ");
 
     // params
-    out_put_fmt(self, "(struct %s * _ctx_)", struct_name);
+    out_put_fmt(self, "(struct %s * tl_ctx)", struct_name);
 
     // body
     out_put(self, " {\n");
     self->indent_level++;
+    out_put_start(self, "(void)tl_ctx;\n");
 
     // debug
     out_put_start(self, "/* free variables: ");
@@ -359,7 +360,7 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, " ");
 
     // params
-    out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+    out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
     for (u32 i = 0; i < v->n_parameters; ++i) {
         out_put(self, ", ");
         a_declaration(self, v->parameters[i]->type, v->parameters[i],
@@ -370,6 +371,7 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     // body
     out_put(self, " {\n");
     self->indent_level++;
+    out_put_start(self, "(void)tl_ctx;\n");
 
     // debug
     out_put_start(self, "/* free variables: ");
@@ -420,7 +422,7 @@ static void forward_declare_thunks(void *ctx_, ast_node *node) {
             out_put(self, " ");
 
             // params
-            out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+            out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
             for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
                 out_put(self, ", ");
                 a_declaration(self, let_node->let.parameters[i]->type, null,
@@ -451,7 +453,7 @@ static void forward_declare_thunks(void *ctx_, ast_node *node) {
         out_put(self, " ");
 
         // params
-        out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+        out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
         for (u32 i = 0; i < v->n_parameters; ++i) {
             out_put(self, ", ");
             a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
@@ -497,7 +499,7 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
             out_put(self, " ");
 
             // params
-            out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+            out_put_fmt(self, "(struct %s * tl_ctx", struct_name);
 
             for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
                 out_put(self, ", ");
@@ -532,6 +534,8 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     for (u32 i = 0; i < n; i++) {
         ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes[i], forward_declare_thunks);
     }
+
+    out_put(self, "\n\n");
 
     map_destroy(&self->apply_contexts);
     self->apply_contexts = map_create(self->transient, sizeof(u64));
@@ -654,7 +658,7 @@ static int a_declaration_impl(transpiler *self, tl_type const *type, ast_node co
             u64   hash        = ast_node_hash(node);
             char *struct_name = make_thunk_struct_name(self->strings, hash);
 
-            out_put_fmt(self, "struct %s * _ctx_", struct_name);
+            out_put_fmt(self, "struct %s * tl_ctx", struct_name);
 
             for (u32 i = 0; i < left->array.elements.size; ++i) {
                 out_put(self, ", ");
@@ -836,8 +840,8 @@ static int a_if_then_else(transpiler *self, ast_node const *node) {
     ast_node_sized no_free  = ti_free_variables_in(self->transient, v->no);
 
     // make the context structs
-    emit_thunk_struct_init(self, yes_ctx, "_ctx_yes_", yes_free);
-    emit_thunk_struct_init(self, no_ctx, "_ctx_no_", no_free);
+    emit_thunk_struct_init(self, yes_ctx, "tl_ctx_yes_", yes_free);
+    emit_thunk_struct_init(self, no_ctx, "tl_ctx_no_", no_free);
 
     // eval the condition
     if (a_eval(self, v->condition)) return 1;
@@ -848,7 +852,7 @@ static int a_if_then_else(transpiler *self, ast_node const *node) {
     out_put_start(self, "");
     a_declaration(self, node->type, node, var);
     out_put(self, ";\n");
-    out_put_start_fmt(self, "if (%s) %s = %s(&_ctx_yes_); else %s = %s(&(_ctx_no_));\n", condition, var,
+    out_put_start_fmt(self, "if (%s) %s = %s(&tl_ctx_yes_); else %s = %s(&(tl_ctx_no_));\n", condition, var,
                       yes, var, no);
     return 0;
 }
@@ -904,9 +908,9 @@ static char *emit_symbol(transpiler *self, ast_node const *node) {
         if (!self->is_eval_in_thunk || !array_contains(self->thunk_free_variables, &name))
             return alloc_strdup(self->transient, name);
         else {
-            int   len = snprintf(null, 0, "(*(_ctx_->%s))", name) + 1;
+            int   len = snprintf(null, 0, "(*(tl_ctx->%s))", name) + 1;
             char *out = alloc_malloc(self->transient, len);
-            snprintf(out, len, "(*(_ctx_->%s))", name);
+            snprintf(out, len, "(*(tl_ctx->%s))", name);
             return out;
         }
     }
@@ -1381,12 +1385,12 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         }
         out_put(self, " */\n");
 
-        emit_thunk_struct_init(self, struct_name, "_apply_ctx_", lambda->lambda_function.free_variables);
+        emit_thunk_struct_init(self, struct_name, "tl_apply_ctx_", lambda->lambda_function.free_variables);
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
         else out_put_start_fmt(self, "%s = ", var);
 
-        out_put_fmt(self, "%s(&_apply_ctx_, ", name);
+        out_put_fmt(self, "%s(&tl_apply_ctx_, ", name);
 
         for (i32 i = 0; i < n_args; ++i) {
             char const *arg = pop_result(self);
@@ -1424,12 +1428,12 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         }
         out_put(self, " */\n");
 
-        emit_thunk_struct_init(self, struct_name, "_apply_ctx_", v->free_variables);
+        emit_thunk_struct_init(self, struct_name, "tl_apply_ctx_", v->free_variables);
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
         else out_put_start_fmt(self, "%s = ", var);
 
-        out_put_fmt(self, "%s(&_apply_ctx_, ", thunk_name);
+        out_put_fmt(self, "%s(&tl_apply_ctx_, ", thunk_name);
 
         for (i32 i = 0; i < n_args; ++i) {
             char const *arg = pop_result(self);
@@ -1612,7 +1616,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 static char *make_struct_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_struct_tup_%" PRIu64 "_"
+#define fmt "tl_gen_struct_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
@@ -1626,7 +1630,7 @@ static char *make_struct_name(allocator *alloc, u64 hash) {
 static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_make_tup_%" PRIu64 "_"
+#define fmt "tl_gen_make_tup_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
@@ -1640,7 +1644,7 @@ static char *make_struct_constructor_name(allocator *alloc, u64 hash) {
 static char *make_thunk_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_thunk_%" PRIu64 "_"
+#define fmt "tl_gen_thunk_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
@@ -1654,7 +1658,7 @@ static char *make_thunk_name(allocator *alloc, u64 hash) {
 static char *make_thunk_struct_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
-#define fmt "_gen_thunk_struct_%" PRIu64 "_"
+#define fmt "tl_gen_thunk_struct_%" PRIu64 "_"
         int len = snprintf(null, 0, fmt, hash) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
