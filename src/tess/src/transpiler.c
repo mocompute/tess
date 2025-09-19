@@ -341,10 +341,6 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     int one = 1;
     map_set(&ctx->map, &hash, sizeof hash, &one);
 
-    // save the free variables in use in this function to the ast node
-    // FIXME: needed?
-    v->free_variables = ti_free_variables_in(self->transient, node);
-
     // declare struct for thunk context
     char *struct_name = make_thunk_struct_name(self->strings, hash);
     emit_thunk_struct(self, struct_name, v->free_variables);
@@ -1899,7 +1895,6 @@ static int is_generic_function(transpiler *self, ast_node const *node) {
     tl_type *arrow = rec->type;
     if (arrow->arrow.right->tag == type_type_var) return 1;
 
-    // FIXME it seems left could be something other than an array
     struct tlt_array const *v = tl_type_arr(arrow->arrow.left);
     for (u32 i = 0; i < v->elements.size; ++i)
         if (type_type_var == v->elements.v[i]->tag) return 1;

@@ -815,8 +815,6 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // and type combination, because those are intrinsics or c_ etc.
         if (!rec->node) return;
 
-        // FIXME: why only let nodes? What about symbol nodes, which are annotated symbols? Ah because those
-        // are not specialised.
         if (ast_let == rec->node->tag) {
             // just copy the specialized name to the application site.
             node->named_application.name = rec->node->let.name;
@@ -826,8 +824,6 @@ static void patch_one_special(void *ctx_, ast_node *node) {
             BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
 
         } else if (ast_lambda_function == rec->node->tag) {
-
-            // FIXME lambda specialisation
 
             // mark node as having been specialised, so its new name
             // can be constrained to the implied type of the callsite.
@@ -2146,13 +2142,10 @@ void collect_constraints(void *ctx_, ast_node *node) {
             }
         }
 
-        if (!BIT_TEST(node->symbol.flags, AST_SYMBOL_FLAG_LET)) {
-            // FIXME: I don't know why this is not for let symbols
-            // ensure symbol type matches its annotated type, if any
-            tl_type *annotation = ast_node_annotation(node);
-            if (annotation) {
-                push(node->type, annotation);
-            }
+        // ensure symbol type matches its annotated type, if any
+        tl_type *annotation = ast_node_annotation(node);
+        if (annotation) {
+            push(node->type, annotation);
         }
 
     } break;
