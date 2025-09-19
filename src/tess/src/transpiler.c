@@ -6,6 +6,7 @@
 
 #include "ast_tags.h"
 #include "dbg.h"
+#include "hash.h"
 #include "string_t.h"
 #include "type.h"
 #include "type_inference.h"
@@ -38,7 +39,9 @@ struct transpiler {
     // state which affects operation of a_eval
     int             is_eval_in_thunk;
     c_string_carray thunk_free_variables;
-    hashmap        *lambdas; // char const* -> ast_node const*
+    hashmap        *functions;      // char const* -> ast_node const* (let)
+    hashmap        *lambdas;        // char const* -> ast_node const*
+    hashmap        *apply_contexts; // u64 -> u64
 };
 
 // -- embed externs --
@@ -76,9 +79,11 @@ static char       *make_thunk_name(allocator *, u64);
 static char       *make_thunk_struct_name(allocator *, u64);
 static char       *make_function_name(allocator *, char const *);
 static char       *emit_symbol(transpiler *, ast_node const *);
+static u64         hash_name_and_vars(ast_node const *);
 
 static void        generate_thunks(transpiler *, ast_node **, u32);
 static u32         push_free_variables(transpiler *, ast_node const *, u32 *);
+static u32         push_free_variables_ext(transpiler *, ast_node_sized, u32 *);
 static void        pop_free_variables(transpiler *, u32);
 
 static char const *pop_result(transpiler *);
@@ -108,7 +113,9 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->processed_structs    = map_create(alloc, sizeof(char *));
 
     self->thunk_free_variables = (c_string_carray){.alloc = self->transient};
+    self->functions            = map_create(self->transient, sizeof(ast_node *));
     self->lambdas              = map_create(self->transient, sizeof(ast_node *));
+    self->apply_contexts       = map_create(self->transient, sizeof(u64));
 
     self->results              = (c_string_array){.alloc = self->strings};
 
@@ -121,7 +128,9 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 }
 
 void transpiler_destroy(transpiler **self) {
+    map_destroy(&(*self)->apply_contexts);
     map_destroy(&(*self)->lambdas);
+    map_destroy(&(*self)->functions);
     array_free((*self)->thunk_free_variables);
     array_free((*self)->results);
     map_destroy(&(*self)->processed_structs);
@@ -139,6 +148,15 @@ void transpiler_set_verbose(transpiler *self, int verbose) {
 
 int transpiler_compile(transpiler *self, ast_node **nodes, u32 n) {
     (void)self;
+
+    // build functions map
+    for (u32 i = 0; i < n; ++i) {
+        ast_node *node = nodes[i];
+        if (ast_let == node->tag) {
+            char const *name = ast_node_name_string(node->let.name);
+            map_set(&self->functions, name, strlen(name), &node);
+        }
+    }
 
     // output std header
     out_put(self, embed_std_c);
@@ -208,7 +226,7 @@ typedef struct {
 static void emit_thunk_struct_init(transpiler *self, char const *struct_name, char const *var_name,
                                    ast_node_sized variables) {
 
-    out_put_start_fmt(self, "struct %s %s = {", struct_name, var_name);
+    out_put_start_fmt(self, "struct %s %s = {\n", struct_name, var_name);
     self->indent_level++;
     {
         ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
@@ -227,11 +245,11 @@ static void emit_thunk_struct_init(transpiler *self, char const *struct_name, ch
             ptr->address_of.target    = variables.v[i];
             ptr->type->pointer.target = variables.v[i]->type;
 
-            out_put_start_fmt(self, ".%s = &(%s),\n", name_str, name_str);
+            out_put_start_fmt(self, ".%s = &(%s),\n", name_str, emit_symbol(self, variables.v[i]));
         }
     }
     self->indent_level--;
-    out_put(self, "};\n\n");
+    out_put_start(self, "};\n\n");
 }
 
 static void emit_thunk_struct(transpiler *self, char const *name, ast_node_sized variables) {
@@ -318,13 +336,12 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     struct ast_lambda_function *v    = ast_node_lf(node);
     u64                         hash = ast_node_hash(node);
 
-    {
-        if (map_get(ctx->map, &hash, sizeof hash)) return;
-        int one = 1;
-        map_set(&ctx->map, &hash, sizeof hash, &one);
-    }
+    if (map_get(ctx->map, &hash, sizeof hash)) return;
+    int one = 1;
+    map_set(&ctx->map, &hash, sizeof hash, &one);
 
     // save the free variables in use in this function to the ast node
+    // FIXME: needed?
     v->free_variables = ti_free_variables_in(self->transient, node);
 
     // declare struct for thunk context
@@ -373,16 +390,137 @@ static void make_lambda_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     out_put(self, "\n}\n\n");
 }
 
+static void forward_declare_thunks(void *ctx_, ast_node *node) {
+    generate_thunks_ctx *ctx  = ctx_;
+    transpiler          *self = ctx->self;
+    if (ast_named_function_application == node->tag) {
+        struct ast_named_application const *v = ast_node_named(node);
+
+        if (v->free_variables.size) {
+            log(self, "thunk: named-application requires free %u variables: '%s'", v->free_variables.size,
+                ast_node_to_string(self->strings, node->named_application.name));
+
+            u64 hash = hash_name_and_vars(node);
+            if (map_contains(self->apply_contexts, &hash, sizeof hash)) return;
+            map_set(&self->apply_contexts, &hash, sizeof hash, &hash);
+
+            char const      *function_name = ast_node_name_string(v->name);
+            char const      *struct_name   = make_thunk_struct_name(self->transient, hash);
+            char const      *thunk_name    = make_thunk_name(self->transient, hash);
+
+            ast_node const **found_let_node =
+              map_get(self->functions, function_name, strlen(function_name));
+            if (!found_let_node) fatal("function not found: '%s'", function_name);
+            ast_node const *let_node = *found_let_node;
+            assert(ast_let == let_node->tag);
+
+            out_put_start_fmt(self, "struct %s;\n", struct_name);
+            out_put_start(self, "static ");
+            a_declaration_void_ok(self, node->type, node, thunk_name);
+            out_put(self, " ");
+
+            // params
+            out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+            for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
+                out_put(self, ", ");
+                a_declaration(self, let_node->let.parameters[i]->type, null,
+                              ast_node_name_string(let_node->let.parameters[i]));
+            }
+            out_put(self, ")");
+
+            out_put(self, ";\n");
+        }
+    }
+
+    else if (ast_lambda_function == node->tag) {
+        struct ast_lambda_function *v           = ast_node_lf(node);
+        u64                         hash        = ast_node_hash(node);
+        char const                 *struct_name = make_thunk_struct_name(self->transient, hash);
+        char const                 *thunk_name  = make_thunk_name(self->transient, hash);
+
+        // We use this map for lambdas only here, to avoid duplicate
+        // declarations. The caller erases the map after the pass is
+        // finished.
+        if (map_contains(self->apply_contexts, &hash, sizeof hash)) return;
+        map_set(&self->apply_contexts, &hash, sizeof hash, &hash);
+
+        out_put_start_fmt(self, "struct %s;\n", struct_name);
+        out_put_start(self, "static ");
+        assert(type_arrow == node->type->tag);
+        a_declaration_void_ok(self, node->type->arrow.right, node, thunk_name);
+        out_put(self, " ");
+
+        // params
+        out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+        for (u32 i = 0; i < v->n_parameters; ++i) {
+            out_put(self, ", ");
+            a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
+        }
+        out_put(self, ")");
+        out_put(self, ";\n");
+    }
+}
+
 static void look_for_thunks(void *ctx_, ast_node *node) {
     generate_thunks_ctx *ctx  = ctx_;
     transpiler          *self = ctx->self;
-
-    map_reset(self->lambdas); // FIXME needed?
 
     if (ast_if_then_else == node->tag) {
         log(self, "thunk: if-then-else: %s", ast_node_to_string(self->strings, node));
         make_one_thunk(ctx, node->if_then_else.yes);
         make_one_thunk(ctx, node->if_then_else.no);
+    } else if (ast_named_function_application == node->tag) {
+        struct ast_named_application const *v = ast_node_named(node);
+
+        if (v->free_variables.size) {
+            log(self, "thunk: named-application requires free %u variables: '%s'", v->free_variables.size,
+                ast_node_to_string(self->strings, node->named_application.name));
+
+            u64 hash = hash_name_and_vars(node);
+            if (map_contains(self->apply_contexts, &hash, sizeof hash)) return;
+            map_set(&self->apply_contexts, &hash, sizeof hash, &hash);
+
+            char const      *function_name = ast_node_name_string(v->name);
+            char const      *struct_name   = make_thunk_struct_name(self->transient, hash);
+            char const      *thunk_name    = make_thunk_name(self->transient, hash);
+            ast_node const **found_let_node =
+              map_get(self->functions, function_name, strlen(function_name));
+            if (!found_let_node) fatal("function not found: '%s'", function_name);
+            ast_node const *let_node = *found_let_node;
+            assert(ast_let == let_node->tag);
+
+            emit_thunk_struct(self, struct_name, v->free_variables);
+
+            // return type and name
+            out_put_start(self, "static ");
+            a_declaration_void_ok(self, node->type, node, thunk_name);
+            out_put(self, " ");
+
+            // params
+            out_put_fmt(self, "(struct %s * _ctx_", struct_name);
+
+            for (u32 i = 0; i < let_node->let.n_parameters; ++i) {
+                out_put(self, ", ");
+                a_declaration(self, let_node->let.parameters[i]->type, null,
+                              ast_node_name_string(let_node->let.parameters[i]));
+            }
+            out_put(self, ")");
+
+            // body
+            out_put(self, " {\n");
+            self->indent_level++;
+
+            // add my free variables to the stack
+            u32 save = push_free_variables_ext(self, v->free_variables, null);
+            a_thunk(self, let_node->let.body);
+            pop_free_variables(self, save);
+
+            char const *body = pop_result(self);
+            out_put_start_fmt(self, "return %s;", body);
+
+            self->indent_level--;
+            out_put(self, "\n}\n\n");
+        }
     }
 }
 
@@ -390,6 +528,14 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     generate_thunks_ctx ctx;
     ctx.self = self;
     ctx.map  = map_create(self->transient, sizeof(int));
+
+    for (u32 i = 0; i < n; i++) {
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes[i], forward_declare_thunks);
+    }
+
+    map_destroy(&self->apply_contexts);
+    self->apply_contexts = map_create(self->transient, sizeof(u64));
+
     for (u32 i = 0; i < n; i++) {
         ast_node *node = nodes[i];
         ast_node_dfs_safe_for_recur(self->transient, &ctx, node, look_for_thunks);
@@ -1253,8 +1399,17 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
         self->indent_level--;
         out_put_start(self, "}\n");
+        return 0;
+    }
 
-    } else {
+    // apply with context
+    u64 hash = hash_name_and_vars(node);
+    if (map_contains(self->apply_contexts, &hash, sizeof hash)) {
+        char const *struct_name = make_thunk_struct_name(self->transient, hash);
+        char const *thunk_name  = make_thunk_name(self->transient, hash);
+
+        out_put_start(self, "{\n");
+        self->indent_level++;
 
         // free variables
         out_put_start(self, "/* parent free variables: ");
@@ -1263,12 +1418,33 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         }
         out_put(self, " */\n");
 
-        out_put_start(self, "/* name free variables: ");
-        free_variables = v->name->symbol.free_variables;
-        forall(i, free_variables) {
-            out_put_fmt(self, "%s, ", ast_node_name_string(free_variables.v[i]));
+        out_put_start(self, "/* lambda free variables: ");
+        forall(i, v->free_variables) {
+            out_put_fmt(self, "%s, ", ast_node_name_string(v->free_variables.v[i]));
         }
         out_put(self, " */\n");
+
+        emit_thunk_struct_init(self, struct_name, "_apply_ctx_", v->free_variables);
+
+        if (is_nil_result(fun_type)) out_put_start(self, "");
+        else out_put_start_fmt(self, "%s = ", var);
+
+        out_put_fmt(self, "%s(&_apply_ctx_, ", thunk_name);
+
+        for (i32 i = 0; i < n_args; ++i) {
+            char const *arg = pop_result(self);
+            out_put(self, arg);
+            if (i < n_args - 1) out_put(self, ", ");
+        }
+        out_put(self, ");\n");
+
+        if (is_nil_result(fun_type)) out_put_start_fmt(self, "%s = 0;/* void */\n", var);
+
+        self->indent_level--;
+        out_put_start(self, "}\n");
+        return 0;
+
+    } else {
 
         if (is_nil_result(fun_type)) out_put_start(self, "");
         else out_put_start_fmt(self, "%s = ", var);
@@ -1759,10 +1935,8 @@ static void pop_and_assign(transpiler *self, char const *var) {
     if (var) out_put_start_fmt(self, "%s = %s;\n", var, res);
 }
 
-static u32 push_free_variables(transpiler *self, ast_node const *node, u32 *count) {
-    u32            save           = self->thunk_free_variables.size;
-
-    ast_node_sized free_variables = ti_free_variables_in(self->transient, node);
+static u32 push_free_variables_ext(transpiler *self, ast_node_sized free_variables, u32 *count) {
+    u32 save = self->thunk_free_variables.size;
 
     forall(i, free_variables) {
         array_push_val(self->thunk_free_variables, ast_node_name_string(free_variables.v[i]));
@@ -1772,6 +1946,26 @@ static u32 push_free_variables(transpiler *self, ast_node const *node, u32 *coun
     return save;
 }
 
+static u32 push_free_variables(transpiler *self, ast_node const *node, u32 *count) {
+    return push_free_variables_ext(self, ti_free_variables_in(self->transient, node), count);
+}
+
 static void pop_free_variables(transpiler *self, u32 save) {
     self->thunk_free_variables.size = save;
+}
+
+static u64 hash_name_and_vars(ast_node const *node) {
+    assert(ast_named_function_application == node->tag);
+    struct ast_named_application const *v    = ast_node_named((ast_node *)node);
+    char const                         *name = ast_node_name_string(v->name);
+    u64                                 hash = hash64((void *)name, strlen(name));
+
+    forall(i, v->free_variables) {
+        ast_node const *arg = v->free_variables.v[i];
+        assert(ast_symbol == arg->tag);
+        char const *str = ast_node_name_string(arg);
+        hash            = hash64_combine(hash, (void *)str, strlen(str));
+    }
+
+    return hash;
 }

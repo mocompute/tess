@@ -230,9 +230,6 @@ int ti_inferer_run(ti_inferer *self) {
     // Give every variable a unique name, respecting lexical scope.
     ti_rename_variables(self);
 
-    // Gather free variables information.
-    ti_discover_free_variables(self);
-
     // Assign type variables to every ast node.
     ti_assign_type_variables(self);
 
@@ -297,6 +294,9 @@ int ti_inferer_run(ti_inferer *self) {
 
         log(self, "-- type inference completed --");
     }
+
+    // Gather free variables information.
+    ti_discover_free_variables(self);
 
     array_shrink(specials);
     self->out_program.size = specials.size;
@@ -661,7 +661,8 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         if (!out) fatal("clone failed");
 
         ast_node_set_is_specialized(out);
-        out->let.name = ast_node_create_sym(self->type_arena, name);
+        out->let.name                        = ast_node_create_sym(self->type_arena, name);
+        out->let.name->symbol.free_variables = src->let.name->symbol.free_variables;
         // name will be assigned a type by caller
 
         return out;
@@ -1481,8 +1482,7 @@ static void merge_ast_node_array(ast_node_array *dst, ast_node_sized src, hashma
     }
 }
 
-static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
-    (void)lexical_map;
+static void discover_one_free_variables(void *ctx, ast_node *node) {
     if (!node) return;
     ti_inferer *self = ctx;
 
@@ -1510,15 +1510,11 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
 
     case ast_let_in: {
         struct ast_let_in *v = ast_node_let_in(node);
+        assert(ast_symbol == v->name->tag);
 
         if (ast_lambda_function == v->value->tag) {
-            ast_node_sized free_variables            = ti_free_variables_in(self->type_arena, v->value);
-
-            v->value->lambda_function.free_variables = free_variables;
-            assert(ast_symbol == v->name->tag);
-            v->name->symbol.free_variables = free_variables;
+            v->name->symbol.free_variables = v->value->lambda_function.free_variables;
         } else if (ast_symbol == v->value->tag) {
-            assert(ast_symbol == v->name->tag);
             v->name->symbol.free_variables = v->value->symbol.free_variables;
         }
 
@@ -1535,10 +1531,7 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
             assert(ast_symbol == name->tag);
 
             if (ast_lambda_function == value->tag) {
-                ast_node_sized free_variables         = ti_free_variables_in(self->type_arena, value);
-
-                value->lambda_function.free_variables = free_variables;
-                name->symbol.free_variables           = free_variables;
+                name->symbol.free_variables = value->lambda_function.free_variables;
             } else if (ast_symbol == value->tag) {
                 name->symbol.free_variables = v->value->symbol.free_variables;
             }
@@ -1547,9 +1540,6 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
     } break;
 
     case ast_lambda_function: {
-        // TODO this work is duplicative, because the let-in case will
-        // have already done this for named lambdas. But we still need
-        // it for anonymous lambdas.
         ast_node_sized free_variables        = ti_free_variables_in(self->type_arena, node);
         node->lambda_function.free_variables = free_variables;
     } break;
@@ -1561,8 +1551,7 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
 
         assert(ast_symbol == v->name->tag);
         if (v->name->symbol.free_variables.size)
-            array_copy(free_variables, v->name->symbol.free_variables.v,
-                       v->name->symbol.free_variables.size);
+            merge_ast_node_array(&free_variables, v->name->symbol.free_variables, &seen);
 
         for (u32 i = 0; i < v->n_arguments; ++i) {
             ast_node *arg = v->arguments[i];
@@ -1576,6 +1565,7 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
             }
         }
 
+        log(self, "'%s' got %u free variables", ast_node_name_string(v->name), free_variables.size);
         v->free_variables = (ast_node_sized)sized_all(free_variables);
 
         map_destroy(&seen);
@@ -1611,14 +1601,17 @@ static void discover_one_free_variables(void *ctx, ast_node *node, hashmap **lex
 }
 
 static void ti_discover_free_variables(ti_inferer *self) {
-    // TODO we need one pass for each level of nesting that exists in
-    // the program. We should implement something which repeats as
-    // long as necessary.
-    int loop_count = 10;
-    while (--loop_count) {
-        forall(i, *self->nodes) {
-            ti_traverse_lexical(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
-        }
+    // Since we scan depth first, we need two passes. The first pass
+    // will not be aware of any let-in bindings of lambda functions to
+    // a name. The second pass will know this, which is required for
+    // the named-application analysis to determine free variables
+    // needed by named lambdas referred to by name as an argument.
+    forall(i, *self->nodes) {
+        ast_node_dfs_safe_for_recur(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
+    }
+
+    forall(i, *self->nodes) {
+        ast_node_dfs_safe_for_recur(self->type_arena, self, self->nodes->v[i], discover_one_free_variables);
     }
 }
 
