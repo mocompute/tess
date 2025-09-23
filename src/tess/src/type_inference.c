@@ -2247,8 +2247,6 @@ static void assign_one_arrow(void *ctx, ast_node *node, hashmap **lex) {
         node->type = make_lambda_arrow(self, node);
     } else if (ast_named_function_application == node->tag) {
         node->named_application.function_type = make_named_application_arrow(self, node, lex);
-        log(self, "assign_one_arrow: %s: %s", ast_node_name_string(node->named_application.name),
-            tl_type_to_string(self->transient, node->named_application.function_type));
     }
 }
 
