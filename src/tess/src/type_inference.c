@@ -59,7 +59,7 @@ struct ti_inferer {
 
     hashmap         *functions;    // char const* -> function_record (node: symbol, let, lambda)
     hashmap         *requirements; // u64 hash -> function_record (node: null or lambda_function)
-    ast_node_array   specials;
+    ast_node_array   specials;     // specialised nodes that will become the final program
     ti_error_array   errors;
 
     ast_node_sized   out_program; // only defined after successful run
@@ -69,8 +69,10 @@ struct ti_inferer {
     u32              next_specialized; // for specialized function names
 
     // flags which do not affect operation
-    int verbose;
-    int indent_level;
+    int            verbose;
+    int            indent_level;
+
+    c_string_array symbols_trace; // symbols to provide trace debug output
 };
 
 // -- ti_inferer --
@@ -143,6 +145,11 @@ static void            log_specialization_records(ti_inferer *);
 static void            log_specials(ti_inferer *self);
 static void log(ti_inferer const *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
+static int  is_trace_symbol(ti_inferer *, char const *);
+static int  is_trace_symbol_node(ti_inferer *, ast_node const *);
+static void trace_symbol_impl(ti_inferer *, ast_node const *, char const *, int);
+#define trace_symbol(ti, n) trace_symbol_impl((ti), (n), __FILE__, __LINE__)
+
 // -- allocation and deallocation --
 
 ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_registry *type_registry) {
@@ -165,6 +172,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->next_var         = 1; // 0 is not valid
     self->next_type_var    = 1;
     self->next_specialized = 1;
+    self->symbols_trace    = (c_string_array){.alloc = self->type_arena};
 
     self->verbose          = 0;
     self->indent_level     = 0;
@@ -198,16 +206,7 @@ static void ti_collect_and_solve(ti_inferer *self, int loop) {
 
         ti_collect_constraints(self);
 
-        // if (self->verbose) {
-        //     ti_inferer_dbg_constraints(self);
-        //     ti_inferer_dbg_substitutions(self);
-        // }
-
         ti_run_solver(self);
-
-        // if (self->verbose) {
-        //     ti_inferer_dbg_substitutions(self);
-        // }
 
         size_t count =
           ti_apply_substitutions_to_ast(self, (constraint_sized)sized_all(self->substitutions));
@@ -271,6 +270,7 @@ int ti_inferer_run(ti_inferer *self) {
     ti_create_specials(self);
 
     if (self->verbose) {
+        log(self, "specials:");
         log_specials(self);
     }
 
@@ -308,10 +308,7 @@ int ti_inferer_run(ti_inferer *self) {
 
     if (self->verbose) {
         log(self, "functions to be emitted:");
-        forall(i, self->specials) {
-            log(self, "%s", ast_node_to_string(self->transient, self->specials.v[i]));
-        }
-
+        log_specials(self);
         log(self, "-- type inference completed --");
     }
 
@@ -521,8 +518,11 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
 
     ti_function_record rec = {.name = name_str, .type = type, .node = node};
     map_set(&self->functions, name_str, name_len, &rec);
-    log(self, "create_function_record: '%s' (%s) %s, node = %p", name_str,
-        string_t_str(&name->symbol.original), tl_type_to_string(self->transient, type), node);
+    if (is_trace_symbol(self, name_str)) {
+        trace_symbol(self, name);
+        log(self, "create_function_record: '%s' (%s) %s, node = %p", name_str,
+            string_t_str(&name->symbol.original), tl_type_to_string(self->transient, type), node);
+    }
 }
 
 void create_function_record_toplevel(void *ctx, ast_node *node) {
@@ -545,6 +545,11 @@ void create_function_record_toplevel(void *ctx, ast_node *node) {
         // toplevel symbols are likely annotated symbols with arrow types
         struct ast_symbol *name = ast_node_sym(node);
         if (name->annotation_type && type_arrow == name->annotation_type->tag) {
+            if (is_trace_symbol_node(self, node)) {
+                trace_symbol(self, node);
+                log(self, "creating annotation %s",
+                    tl_type_to_string(self->transient, name->annotation_type));
+            }
             do_create_function_record(self, node, node, name->annotation_type);
         }
     }
@@ -559,6 +564,11 @@ void create_function_record_dfs(void *ctx, ast_node *node) {
         // named lambda definition
         ast_node *name  = node->let_in.name;
         ast_node *value = node->let_in.value;
+        if (is_trace_symbol_node(self, name)) {
+            trace_symbol(self, name);
+            log(self, "checking let-in");
+        }
+
         if (ast_lambda_function == value->tag) {
             assert(value->type && type_arrow == value->type->tag);
             do_create_function_record(self, value, name, value->type);
@@ -579,7 +589,10 @@ void create_function_record_variable(void *ctx, ast_node *node) {
         char const *name_str = ast_node_name_string(name);
         if (!ti_is_generated_variable_name(name_str)) return;
 
-        log(self, "create_function_record_variable: %s", name_str);
+        if (is_trace_symbol(self, name_str)) {
+            trace_symbol(self, name);
+            log(self, "create_function_record_variable: %s", name_str);
+        }
 
         do_create_function_record(self, null, name, node->named_application.function_type);
     }
@@ -2096,9 +2109,14 @@ static void handle_symbol_annotation(ti_inferer *self, ast_node *node) {
         // have no bodies that the type solver can analyze to discover
         // constraints.
         hashmap *map                 = map_create_n(self->transient, sizeof(tl_type *), 8);
-
         node->symbol.annotation_type = make_type_annotation(self, ann, &map);
         map_destroy(&map);
+
+        if (is_trace_symbol_node(self, node)) {
+            trace_symbol(self, node);
+            log(self, "added annotation type: %s",
+                tl_type_to_string(self->transient, node->symbol.annotation_type));
+        }
     }
 
     node->type = make_typevar(self);
@@ -3007,7 +3025,6 @@ static void log_specialization_records(ti_inferer *self) {
 }
 
 static void log_specials(ti_inferer *self) {
-    dbg("\nspecials: \n");
     forall(i, self->specials) {
         char *str = ast_node_to_string(self->transient, self->specials.v[i]);
         dbg("%p: %s\n", self->specials.v[i], str);
@@ -3035,3 +3052,35 @@ ti_function_record *ti_lookup_function(ti_inferer *self, char const *name) {
 }
 
 //
+
+void ti_trace_symbol_add(ti_inferer *self, char const *name) {
+    array_push(self->symbols_trace, &name);
+}
+
+void ti_trace_symbol_remove(ti_inferer *self, char const *name) {
+    for (u32 i = 0; i < self->symbols_trace.size;) {
+        if (name == self->symbols_trace.v[i]) array_erase(self->symbols_trace, i);
+        else ++i;
+    }
+}
+
+static int is_trace_symbol(ti_inferer *self, char const *name) {
+    forall(i, self->symbols_trace) if (0 == strcmp(name, self->symbols_trace.v[i])) return 1;
+    return 0;
+}
+
+static int is_trace_symbol_node(ti_inferer *self, ast_node const *name) {
+    char const *str = ast_node_name_string(name);
+    forall(i, self->symbols_trace) if (0 == strcmp(str, self->symbols_trace.v[i])) return 1;
+    return 0;
+}
+
+static void trace_symbol_impl(ti_inferer *self, ast_node const *node, char const *file, int line) {
+    if (ast_symbol != node->tag) return;
+
+    char const *name = ast_node_name_string(node);
+    char const *orig = string_t_str(&node->symbol.original);
+    char       *type = tl_type_to_string(self->transient, node->type);
+    dbg("%s:%i: trace: %s orig: %s type: %s\n", file, line, name, orig, type);
+    alloc_free_i(self->transient, type, file, line);
+}

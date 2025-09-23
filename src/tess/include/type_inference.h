@@ -39,4 +39,7 @@ ti_function_record    *ti_lookup_function(ti_inferer *, char const *);
 
 int                    ti_is_generated_variable_name(char const *);
 
+void                   ti_trace_symbol_add(ti_inferer *, char const *);
+void                   ti_trace_symbol_remove(ti_inferer *, char const *);
+
 #endif
