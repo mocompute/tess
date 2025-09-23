@@ -1126,6 +1126,8 @@ static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
     char const                   *name = ast_node_name_string(v->name);
     if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
 
+    // FIXME: look at generated code, it's returning an uninitialised value.
+    //
     // function call result
     char *var = next_variable(self);
     out_put_start(self, "");
@@ -1139,6 +1141,7 @@ static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
     char const *rhs = pop_result(self);
 
     out_put_start_fmt(self, "%s = %s %s %s;\n", var, lhs, (char const *)op, rhs);
+
     return 0;
 }
 
