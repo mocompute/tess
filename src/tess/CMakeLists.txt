@@ -101,12 +101,12 @@ function(tesslang_create_test NAME)
 endfunction()
 
 # FIXME: previously working tests
-# tesslang_create_test(alloc)
-# tesslang_create_test(array)
 # tesslang_create_test(enclosing_context)
 # tesslang_create_test(factorial)
 # tesslang_create_test(function_pointer_argument)
 
+tesslang_create_test(alloc)
+tesslang_create_test(array)
 tesslang_create_test(address_of)
 tesslang_create_test(basic)
 tesslang_create_test(begin_end)
