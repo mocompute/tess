@@ -117,6 +117,7 @@ static void            ti_generate_user_type_functions(ti_inferer *);
 static void            ti_rename_variables(ti_inferer *);
 static void            ti_run_solver(ti_inferer *);
 tl_free_variable_sized ti_free_variables_in_continue(allocator *, ast_node const *, hashmap **);
+ti_function_record    *ti_lookup_function(ti_inferer *, char const *);
 
 void                   rename_one_variables(void *, ast_node *, hashmap **);
 static tl_type        *make_args_type(allocator *, ast_node *[], u16);
@@ -913,14 +914,14 @@ static void ti_create_specials(ti_inferer *self) {
 
             // FIXME: why add to self->functions from this point? We are actually building
             // self->specials. add to function records
-            ti_function_record created_rec = {
-              .name = special_name, .type = callsite->type, .node = created};
+            // ti_function_record created_rec = {
+            //   .name = special_name, .type = callsite->type, .node = created};
 
-            log(self, "create_specials: adding let record for '%s' %s ==> %s", special_name,
-                tl_type_to_string(self->transient, function->type),
-                tl_type_to_string(self->transient, callsite->type));
+            // log(self, "create_specials: adding let record for '%s' %s ==> %s", special_name,
+            //     tl_type_to_string(self->transient, function->type),
+            //     tl_type_to_string(self->transient, callsite->type));
 
-            map_set(&self->functions, special_name, strlen(special_name), &created_rec);
+            // map_set(&self->functions, special_name, strlen(special_name), &created_rec);
         }
 
         else if (ast_lambda_function == function->node->tag) {

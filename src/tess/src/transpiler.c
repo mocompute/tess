@@ -109,14 +109,16 @@ static u32         push_free_variables(transpiler *, ast_node const *, char cons
 static u32         push_free_variables_ext(transpiler *, tl_free_variable_sized, char const *, u32 *);
 static void        pop_free_variables(transpiler *, u32);
 static u64         transpiler_type_hash(tl_type const *);
+static ti_function_record *lookup_function(transpiler *, char const *);
+static void                collect_function_records(transpiler *, ast_node **, u32);
 
-static char const *pop_result(transpiler *);
-static void        push_result(transpiler *, char const *);
-static void        pop_and_assign(transpiler *, char const *);
+static char const         *pop_result(transpiler *);
+static void                push_result(transpiler *, char const *);
+static void                pop_and_assign(transpiler *, char const *);
 
-static void        out_put_start(transpiler *, char const *);
-static void        out_put(transpiler *, char const *);
-static void        out_put_start_fmt(transpiler *, char const *restrict, ...)
+static void                out_put_start(transpiler *, char const *);
+static void                out_put(transpiler *, char const *);
+static void                out_put_start_fmt(transpiler *, char const *restrict, ...)
   __attribute__((format(printf, 2, 3)));
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 static void vout_put_fmt(transpiler *, char const *restrict, va_list);
@@ -137,7 +139,7 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->processed_structs    = map_create(alloc, sizeof(char *));
 
     self->thunk_free_variables = (free_variable_context_name_array){.alloc = self->transient};
-    self->functions            = map_create(self->transient, sizeof(ast_node *));
+    self->functions            = map_create(self->transient, sizeof(ti_function_record));
     self->lambdas              = map_create(self->transient, sizeof(ast_node *));
     self->apply_contexts       = map_create(self->transient, sizeof(u64));
 
@@ -176,14 +178,7 @@ int transpiler_compile(transpiler *self, ast_node **nodes, u32 n) {
     // build functions map
     log(self, "-- transpiler start -- program nodes follow --");
     log(self, "");
-    for (u32 i = 0; i < n; ++i) {
-        ast_node *node = nodes[i];
-        if (ast_let == node->tag) {
-            char const *name = ast_node_name_string(node->let.name);
-            map_set(&self->functions, name, strlen(name), &node);
-            log(self, "%s", ast_node_to_string(self->transient, node));
-        }
-    }
+    collect_function_records(self, nodes, n);
     log(self, "");
 
     // output std header
@@ -1644,7 +1639,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     log(self, "processing struct let '%s'...", name);
 
-    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    ti_function_record *rec = lookup_function(self, name);
     if (!rec) fatal("function record not found: '%s'", name);
     tl_type *tuple          = rec->type->arrow.left;
     u64      hash           = transpiler_type_hash(tuple);
@@ -1736,7 +1731,7 @@ static void generate_one_toplevel_context(void *ctx, ast_node *node) {
 
     struct ast_let const *v    = ast_node_let(node);
     char const           *name = string_t_str(&v->name->symbol.name);
-    ti_function_record   *rec  = ti_lookup_function(self->type_inferer, name);
+    ti_function_record   *rec  = lookup_function(self, name);
     if (!rec) fatal("function record not found: '%s'", name);
 
     // determine if a free variable context is required. If so, output
@@ -1842,7 +1837,7 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
         return 0;
     }
 
-    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    ti_function_record *rec = lookup_function(self, name);
     if (!rec) fatal("function record not found: '%s'", name);
 
     // mangle the name
@@ -1918,7 +1913,7 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     log(self, "processing '%s'...", name);
 
-    ti_function_record *rec = ti_lookup_function(self->type_inferer, name);
+    ti_function_record *rec = lookup_function(self, name);
     if (!rec) fatal("function record not found: '%s'", name);
 
     // mangle the name
@@ -1973,7 +1968,7 @@ static char *next_variable(transpiler *self) {
 static int is_generic_function(transpiler *self, ast_node const *node) {
     if (ast_let != node->tag) return 0;
 
-    ti_function_record *rec = ti_lookup_function(self->type_inferer, ast_node_name_string(node->let.name));
+    ti_function_record *rec = lookup_function(self, ast_node_name_string(node->let.name));
     if (!rec) fatal("function record not found: '%s'", ast_node_name_string(node->let.name));
 
     tl_type *arrow = rec->type;
@@ -2047,4 +2042,20 @@ static void pop_free_variables(transpiler *self, u32 save) {
 
 static u64 transpiler_type_hash(tl_type const *type) {
     return tl_type_hash_ext(type, 0, 0);
+}
+
+static ti_function_record *lookup_function(transpiler *self, char const *name) {
+    return map_get(self->functions, name, strlen(name));
+}
+
+static void collect_function_records(transpiler *self, ast_node **nodes, u32 n) {
+    for (u32 i = 0; i < n; ++i) {
+        ast_node *node = nodes[i];
+        if (ast_let == node->tag) {
+            ti_function_record rec = {
+              .name = ast_node_name_string(node->let.name), .node = node, .type = node->let.name->type};
+            map_set(&self->functions, rec.name, strlen(rec.name), &rec);
+            log(self, "%s", ast_node_to_string(self->transient, node));
+        }
+    }
 }
