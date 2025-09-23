@@ -15,8 +15,8 @@
 #define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
 
 typedef struct hashmap_key {
-    u16  size;
-    byte data[];
+    size_t size;
+    alignas(sizeof(void *)) byte data[];
 } hashmap_key;
 
 struct hashmap {
