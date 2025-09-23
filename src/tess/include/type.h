@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "string_t.h"
 #include "types.h"
 #include "util.h"
 
@@ -32,6 +33,21 @@ typedef struct {
     struct tl_type **v;
 } tl_type_sized;
 
+typedef struct {
+    string_t        name;
+    struct tl_type *type;
+} tl_free_variable;
+
+typedef struct {
+    array_header;
+    tl_free_variable *v;
+} tl_free_variable_array;
+
+typedef struct {
+    array_sized;
+    tl_free_variable *v;
+} tl_free_variable_sized;
+
 typedef struct tl_type {
     union {
         struct tlt_array {
@@ -44,13 +60,14 @@ typedef struct tl_type {
 
         struct tlt_labelled_tuple {
             tl_type_sized   fields;
-            c_string_csized names;
+            c_string_csized names; // TODO change to string_t for small strings optim
         } labelled_tuple;
 
         struct tlt_arrow {
-            struct tl_type *left;
-            struct tl_type *right;
-            u8              flags;
+            struct tl_type        *left;
+            struct tl_type        *right;
+            tl_free_variable_sized free_variables;
+            u8                     flags;
         } arrow;
 
         struct tlt_user {
@@ -76,8 +93,6 @@ typedef struct {
 
 typedef u32 (*tl_make_typevar_fun)(void *);
 
-#define TL_TYPE_ARROW_LAMBDA BIT(0)
-
 // -- variant access --
 
 struct tlt_array          *tl_type_arr(tl_type *);
@@ -95,7 +110,7 @@ nodiscard tl_type *tl_type_clone(allocator *, tl_type const *, tl_make_typevar_f
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;
 nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_csized) mallocfun;
-nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *, int) mallocfun;
+nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *) mallocfun;
 nodiscard tl_type *tl_type_create_user_type(allocator *, char const *name,
                                             tl_type *labelled_tuple) mallocfun;
 
@@ -106,15 +121,24 @@ int                tl_type_compare(tl_type const *, tl_type const *);
 int                tl_type_satisfies(tl_type const *req, tl_type const *cand);
 int                tl_type_contains(tl_type const *, tl_type const *);
 u64                tl_type_hash(tl_type const *);
-u64                tl_type_hash_ext(tl_type const *, int ignore_names);
+u64                tl_type_hash_ext(tl_type const *, int ignore_names, int ignore_fv_types);
 
 tl_type           *tl_type_find_user_field_type(tl_type const *, char const *);
 tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const *);
+tl_type           *tl_type_get_arrow(tl_type *);
 
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);
 char const        *tl_type_tag_to_string(tl_type_tag);
 
 int                tl_type_is_compatible(tl_type const *req, tl_type const *cand, int strict);
+
+int                tl_free_variable_cmp(tl_free_variable const *, tl_free_variable const *);
+int                tl_free_variable_cmpv(void const *, void const *);
+int                tl_free_variable_array_cmp(tl_free_variable_sized, tl_free_variable_sized);
+u64                tl_free_variable_array_hash64(tl_free_variable_sized, int);
+int                tl_free_variable_array_contains(tl_free_variable_sized hay, tl_free_variable_sized need);
+int                tl_free_variable_array_contains_one(tl_free_variable_sized hay, tl_free_variable need);
+void               tl_free_variable_array_merge(tl_free_variable_array *dst, tl_free_variable_sized src);
 
 #endif

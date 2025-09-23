@@ -754,7 +754,7 @@ static int a_identifier_typed(parser *self) {
 
     if (a_try(self, a_close_round)) return 1;
 
-    ast_node *node        = ast_node_create(self->ast_arena, ast_symbol);
+    ast_node *node        = ast_node_create_sym(self->ast_arena, "");
     node->symbol.name     = name->symbol.name;
     node->symbol.original = string_t_init_empty();
     if (annotation) node->symbol.annotation = annotation;
@@ -989,7 +989,6 @@ static int a_assignment(parser *self) {
     ast_node *node        = ast_node_create(self->ast_arena, ast_assignment);
     node->assignment.name = name;
     assert(ast_symbol == node->assignment.name->tag);
-    BIT_SET(node->assignment.name->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
     node->assignment.value = value;
     return result_ast_node(self, node);
 }
@@ -1376,13 +1375,11 @@ static int function_application(parser *self) {
             int         is_intrinsic = (0 == strncmp("_tl_", name_str, 4));
 
             ast_node   *node         = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments           = null;
-            node->named_application.n_arguments         = 0;
-            node->named_application.flags               = 0;
-            node->named_application.function_type       = null;
-            node->named_application.name                = name;
-            node->named_application.free_variables.size = 0;
-            node->named_application.free_variables.v    = null;
+            node->named_application.arguments     = null;
+            node->named_application.n_arguments   = 0;
+            node->named_application.flags         = 0;
+            node->named_application.function_type = null;
+            node->named_application.name          = name;
             if (is_intrinsic) BIT_SET(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);
@@ -1521,13 +1518,11 @@ static int lambda_function(parser *self) {
         goto error;
     }
 
-    ast_node *node                            = ast_node_create(self->ast_arena, ast_lambda_function);
-    node->lambda_function.parameters          = null;
-    node->lambda_function.n_parameters        = 0;
-    node->lambda_function.flags               = 0;
-    node->lambda_function.free_variables.size = 0;
-    node->lambda_function.free_variables.v    = null;
-    node->lambda_function.body                = defn;
+    ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
+    node->lambda_function.parameters   = null;
+    node->lambda_function.n_parameters = 0;
+    node->lambda_function.flags        = 0;
+    node->lambda_function.body         = defn;
 
     // move the vector from the function_declaration node to the new ast node
     node->array.nodes = decl->array.nodes;
@@ -1637,10 +1632,6 @@ static int simple_declaration(parser *p) {
         if (a_try(p, a_equal_sign)) return 1;
 
         int res = result_ast_str(p, ast_symbol, make_nil_name(p));
-        if (0 == res) {
-            assert(ast_symbol == p->result->tag);
-            BIT_SET(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
-        }
         return res;
     }
 
@@ -1650,10 +1641,6 @@ static int simple_declaration(parser *p) {
     if (a_try(p, a_equal_sign)) return 1;
 
     int res = result_ast_node(p, sym);
-    if (0 == res) {
-        assert(ast_symbol == p->result->tag);
-        BIT_SET(p->result->symbol.flags, AST_SYMBOL_FLAG_LET_IN);
-    }
     return res;
 }
 
@@ -1954,7 +1941,6 @@ static int toplevel_let(parser *self) {
 
         // move declaration into new node
         node->let.name = decl->function_declaration.name;
-        BIT_SET(node->let.name->symbol.flags, AST_SYMBOL_FLAG_LET);
         node->let.body = defn;
 
         // move the vector from the function_declaration node to the new ast node

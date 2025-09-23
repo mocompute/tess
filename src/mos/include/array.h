@@ -149,6 +149,7 @@ typedef struct {
           array_copy_impl((array_header_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), (u32)(n)); \
     } while (0)
 
+// TODO: this doesn't do what you think it does
 #define array_move(p, xs, n)                                                                               \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
@@ -163,6 +164,14 @@ typedef struct {
         static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
         (p).v = array_insert_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]),   \
                                   (xs), (n));                                                              \
+    } while (0)
+
+#define array_insert_sorted(p, x, cmp)                                                                     \
+    do {                                                                                                   \
+        static_assert(sizeof((x)[0]) == sizeof((p).v[0]), "size mismatch");                                \
+        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
+        (p).v = array_insert_sorted_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), \
+                                         (x), (cmp));                                                      \
     } while (0)
 
 #define array_erase(p, i)                                                                                  \
@@ -187,6 +196,14 @@ typedef struct {
         (src)->v    = 0;                                                                                   \
     } while (0)
 
+#define array_init_from_slice(dst, src)                                                                    \
+    do {                                                                                                   \
+        assert((dst)->alloc);                                                                              \
+        (dst)->size     = (src)->size;                                                                     \
+        (dst)->capacity = (dst)->size;                                                                     \
+        (dst)->v        = (src)->v;                                                                        \
+    } while (0)
+
 #define forall(idx, arr) for (u32 idx = 0; idx < (arr).size; ++idx)
 
 char_cslice char_cslice_from(char const *, u32);
@@ -199,12 +216,18 @@ nodiscard void *array_push_impl(array_header_t *h, void *restrict, u32, u16, voi
 nodiscard void *array_copy_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict, u32);
 nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32);
 nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
-                                  void *restrict, u32);
+                                  void const *restrict, u32);
+
+typedef int (*array_cmp_fun)(void const *lhs, void const *rhs);
+nodiscard void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32, u16,
+                                         void const *restrict, array_cmp_fun);
 
 int             array_contains_impl(array_header_t *, void *restrict, u32, u16, void const *restrict);
 nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
 
 void            array_erase_impl(array_header_t *h, void *ptr, u32 index, u32, u16);
 void            array_free_impl(array_header_t *, void *);
+
+// -- utilities --
 
 #endif

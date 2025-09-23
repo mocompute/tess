@@ -12,7 +12,7 @@
 #define DEFAULT_LOAD_FACTOR      0.75f
 #define DEFAULT_N_BUCKETS        64
 #define MAX_PROBE_LEN            (1 << 6) - 1
-#define HASHMAP_MAX_ELEMENT_SIZE 24
+#define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
 
 typedef struct hashmap_key {
     u16  size;
@@ -322,7 +322,9 @@ int map_iter(hashmap const *self, hashmap_iterator *iter) {
         iter->index++;
 
         if (is_occupied(entry->status)) {
-            iter->data = &entry->data;
+            iter->key_ptr  = &entry->key->data;
+            iter->key_size = entry->key->size;
+            iter->data     = &entry->data;
             return 1;
         }
     }
@@ -332,8 +334,8 @@ int internal_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry co
     return internal_iter(self, iter, (hashmap_entry **)out);
 }
 
-int map_contains(hashmap *self, void const *key, u16 key_len) {
-    hashmap_entry *cell = map_find(self, key, key_len);
+int map_contains(hashmap const *self, void const *key, u16 key_len) {
+    hashmap_entry *cell = map_find((hashmap *)self, key, key_len);
     return cell != null;
 }
 
@@ -397,8 +399,63 @@ void map_erase(hashmap *map, void const *key, u16 key_len) {
 
 void map_reset(hashmap *map) {
     if (map->n_occupied) {
-        size_t aligned_value_size = alloc_align_to_word_size(map->value_size);
-        memset(map->entries, 0, map->n_cells * aligned_value_size);
+        memset(map->entries, 0, map->n_cells * hashmap_entry_size(map));
         map->n_occupied = 0;
     }
+}
+
+// -- hash set --
+
+//
+
+hashmap *hset_create(allocator *alloc) {
+    return map_create(alloc, sizeof(int));
+}
+
+void hset_destroy(hashmap **self) {
+    map_destroy(self);
+}
+
+void hset_insert(hashmap **self, void const *key, u16 len) {
+    int one = 1;
+    map_set(self, key, len, &one);
+}
+
+int hset_contains(hashmap const *self, void const *key, u16 len) {
+    return map_contains(self, key, len);
+}
+
+int hset_is_subset(hashmap const *super, hashmap const *sub) {
+    hashmap_iterator iter = {0};
+    while (map_iter(sub, &iter)) {
+        if (!hset_contains(super, iter.key_ptr, iter.key_size)) return 0;
+    }
+    return 1;
+}
+
+void hset_remove(hashmap *self, void const *key, u16 len) {
+    map_erase(self, key, len);
+}
+
+void hset_reset(hashmap *self) {
+    map_reset(self);
+}
+
+size_t hset_size(hashmap const *self) {
+    return map_size(self);
+}
+
+hashmap *hset_of_string(allocator *alloc, string_sized in) {
+    hashmap *out = hset_create(alloc);
+    forall(i, in) {
+        char const *str = string_t_str(&in.v[i]);
+        hset_insert(&out, str, strlen(str));
+    }
+    return out;
+}
+
+int hset_iter(hashmap const *self, hashmap_iterator *iter) {
+    int res    = map_iter(self, iter);
+    iter->data = null;
+    return res;
 }

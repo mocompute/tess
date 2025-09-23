@@ -32,7 +32,6 @@ typedef struct ast_node {
             struct ast_node *annotation;
             tl_type         *annotation_type;
             u8               flags;
-            ast_node_sized   free_variables; // only used at transpiler phase, undefined otherwise
         } symbol;
 
         struct ast_bool {
@@ -78,7 +77,6 @@ typedef struct ast_node {
             u8                n_parameters;
             u8                flags;
             struct ast_node  *body;
-            ast_node_sized    free_variables; // only used at transpiler phase, undefined otherwise
         } lambda_function;
 
         struct ast_function_declaration {
@@ -112,7 +110,6 @@ typedef struct ast_node {
             u8                flags;
             struct ast_node  *name;
             tl_type          *function_type;
-            ast_node_sized    free_variables;
         } named_application;
 
         struct ast_labelled_tuple {
@@ -195,9 +192,6 @@ typedef struct ast_node {
     enum tl_error_tag error;
 } ast_node;
 
-#define AST_SYMBOL_FLAG_LET         BIT(0)
-#define AST_SYMBOL_FLAG_LET_IN      BIT(1)
-
 #define AST_LET_FLAG_SPECIALIZED    BIT(0)
 #define AST_LET_FLAG_TUPLE_CONS     BIT(1)
 #define AST_LET_FLAG_INTRINSIC      BIT(2)
@@ -213,6 +207,7 @@ typedef struct ast_node {
 // -- iterator functions --
 
 typedef void (*ast_op_fun)(void *, ast_node *);
+typedef ast_node *(*ast_op_map_fun)(void *, ast_node *);
 typedef void (*ast_op_cfun)(void *, ast_node const *);
 
 // -- variant accessors --
@@ -264,9 +259,11 @@ tl_type    *ast_node_annotation(ast_node const *);
 // -- traversal --
 
 typedef void (*ast_node_each_node_fun)(void *ctx, ast_node *);
+typedef ast_node *(*ast_node_map_node_fun)(void *ctx, ast_node *);
 typedef void (*ast_node_each_type_fun)(void *ctx, tl_type *);
 
 void ast_node_each_node(void *, ast_node_each_node_fun, ast_node *);
+void ast_node_map_node(void *, ast_node_map_node_fun, ast_node *);
 void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 
 // -- utilities --
@@ -282,6 +279,7 @@ c_string_csized ast_nodes_get_names(allocator *, ast_node_slice);
 void            ast_node_dfs(void *, ast_node *, ast_op_fun);
 void            ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
 void            ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
+ast_node       *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
 
 int             ast_node_is_specialized(ast_node const *);
 int             ast_node_is_tuple_constructor(ast_node const *);

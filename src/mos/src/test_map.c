@@ -57,6 +57,13 @@ static int test_map(void) {
     if (map_get(map, &key0, sizeof key0)) error += 123 == *(int *)map_get(map, &key0, sizeof key0) ? 0 : 1;
     else error++;
 
+    hashmap_iterator iter = {0};
+    map_iter(map, &iter);
+    error += *(int *)iter.key_ptr == 0 ? 0 : 1;
+    error += sizeof(int) == iter.key_size ? 0 : 1;
+    error += *(int *)iter.data == 123 ? 0 : 1;
+    error += 0 == map_iter(map, &iter) ? 0 : 1;
+
     int key1 = 1;
     error += 0 == map_get(map, &key1, sizeof key1) ? 0 : 1;
     data = 456;

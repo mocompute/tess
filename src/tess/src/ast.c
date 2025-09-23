@@ -30,14 +30,12 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
-    ast_node *self                   = ast_node_create(alloc, ast_symbol);
-    self->symbol.name                = string_t_init(alloc, str);
-    self->symbol.original            = string_t_init_empty();
-    self->symbol.annotation          = null;
-    self->symbol.annotation_type     = null;
-    self->symbol.flags               = 0;
-    self->symbol.free_variables.size = 0;
-    self->symbol.free_variables.v    = null;
+    ast_node *self               = ast_node_create(alloc, ast_symbol);
+    self->symbol.name            = string_t_init(alloc, str);
+    self->symbol.original        = string_t_init_empty();
+    self->symbol.annotation      = null;
+    self->symbol.annotation_type = null;
+    self->symbol.flags           = 0;
     return self;
 }
 
@@ -118,7 +116,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = vorig->annotation_type;
         vclone->flags           = vorig->flags;
-        vclone->free_variables  = vorig->free_variables; // shallow copy
     } break;
 
     case ast_let_in: {
@@ -153,11 +150,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_lambda_function: {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
-        vclone->flags               = vorig->flags;
-        vclone->free_variables.size = 0;
-        vclone->free_variables.v    = null;
-        vclone->body                = ast_node_clone(alloc, vorig->body);
-        vclone->free_variables      = vorig->free_variables; // shallow copy
+        vclone->flags = vorig->flags;
+        vclone->body  = ast_node_clone(alloc, vorig->body);
     } break;
 
     case ast_function_declaration: {
@@ -177,7 +171,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
         vclone->function_type                = vorig->function_type;
-        vclone->free_variables               = vorig->free_variables; // shallow copy
     } break;
 
     case ast_user_type: {
@@ -597,7 +590,136 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     }
 }
 
+void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
+    if (!node) return;
+
+    // process node types that have a common ast_array
+    if (TL_AST_HAS_ARRAY(node->tag)) {
+        struct ast_array *v = ast_node_arr(node);
+        for (u32 i = 0; i < v->n; ++i) {
+            v->nodes[i] = fun(ctx, v->nodes[i]);
+        }
+    }
+
+    // process node types that have additional or no-array links
+    switch (node->tag) {
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_nil:
+    case ast_bool:
+    case ast_symbol:
+    case ast_i64:
+    case ast_u64:
+    case ast_f64:
+    case ast_string:
+    case ast_tuple:
+    case ast_lambda_declaration:
+    case ast_begin_end:
+    case ast_labelled_tuple:
+        //
+        return;
+
+    case ast_address_of:
+        //
+        node->address_of.target = fun(ctx, node->address_of.target);
+        break;
+
+    case ast_arrow:
+        node->arrow.left  = fun(ctx, node->arrow.left);
+        node->arrow.right = fun(ctx, node->arrow.right);
+        break;
+
+    case ast_assignment:
+        node->assignment.name  = fun(ctx, node->assignment.name);
+        node->assignment.value = fun(ctx, node->assignment.value);
+        break;
+
+    case ast_dereference:
+        //
+        node->dereference.target = fun(ctx, node->dereference.target);
+        break;
+
+    case ast_dereference_assign:
+        node->dereference_assign.target = fun(ctx, node->dereference_assign.target);
+        node->dereference_assign.value  = fun(ctx, node->dereference_assign.value);
+        break;
+
+    case ast_let_in:
+        node->let_in.name  = fun(ctx, node->let_in.name);
+        node->let_in.value = fun(ctx, node->let_in.value);
+        node->let_in.body  = fun(ctx, node->let_in.body);
+        break;
+
+    case ast_let_match_in:
+        node->let_match_in.lt    = fun(ctx, node->let_match_in.lt);
+        node->let_match_in.value = fun(ctx, node->let_match_in.value);
+        node->let_match_in.body  = fun(ctx, node->let_match_in.body);
+        break;
+
+    case ast_let:
+        //
+        node->let.name = fun(ctx, node->let.name);
+        node->let.body = fun(ctx, node->let.body);
+        break;
+
+    case ast_if_then_else:
+        node->if_then_else.condition = fun(ctx, node->if_then_else.condition);
+        node->if_then_else.yes       = fun(ctx, node->if_then_else.yes);
+        node->if_then_else.no        = fun(ctx, node->if_then_else.no);
+        break;
+
+    case ast_lambda_function:
+        //
+        node->lambda_function.body = fun(ctx, node->lambda_function.body);
+        break;
+
+    case ast_function_declaration:
+        //
+        node->function_declaration.name = fun(ctx, node->function_declaration.name);
+        break;
+
+    case ast_lambda_function_application:
+        //
+        node->lambda_application.lambda = fun(ctx, node->lambda_application.lambda);
+        break;
+
+    case ast_named_function_application:
+        //
+        node->named_application.name = fun(ctx, node->named_application.name);
+        break;
+
+    case ast_user_type:
+        //
+        node->user_type.name = fun(ctx, node->user_type.name);
+        break;
+
+    case ast_user_type_get:
+        node->user_type_get.struct_name = fun(ctx, node->user_type_get.struct_name);
+        node->user_type_get.field_name  = fun(ctx, node->user_type_get.field_name);
+        break;
+
+    case ast_user_type_set:
+        node->user_type_set.struct_name = fun(ctx, node->user_type_set.struct_name);
+        node->user_type_set.field_name  = fun(ctx, node->user_type_set.field_name);
+        node->user_type_set.value       = fun(ctx, node->user_type_set.value);
+        break;
+    case ast_user_type_definition: {
+        struct ast_user_type_def *v = ast_node_utd(node);
+
+        node->user_type_def.name    = fun(ctx, node->user_type_def.name);
+
+        for (u32 i = 0; i < v->n_fields; ++i) {
+            v->field_annotations[i] = fun(ctx, v->field_annotations[i]);
+            v->field_names[i]       = fun(ctx, v->field_names[i]);
+        }
+
+    } break;
+    }
+}
+
 void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
+    // FIXME: unused function
+
     if (!node) return;
 
     switch (node->tag) {
@@ -656,6 +778,12 @@ struct dfs_ctx {
     hashmap   *visited;
 };
 
+struct dfs_map_ctx {
+    void          *caller_ctx;
+    ast_op_map_fun fun;
+    hashmap       *visited;
+};
+
 void        ast_node_dfs(void *caller_ctx, ast_node *node, ast_op_fun fun);
 
 static void dfs_one(void *ctx_, ast_node *node) {
@@ -667,13 +795,29 @@ static void dfs_one(void *ctx_, ast_node *node) {
     if (ast_user_type_definition == node->tag) return;
 
     if (ctx->visited) {
-        int one = 1;
-        if (map_get(ctx->visited, &node, sizeof(ast_node *))) return;
-        map_set(&ctx->visited, &node, sizeof(ast_node *), &one);
+        if (hset_contains(ctx->visited, &node, sizeof(ast_node *))) return;
+        hset_insert(&ctx->visited, &node, sizeof(ast_node *));
     }
 
     ast_node_each_node(ctx, dfs_one, node);
     ctx->fun(ctx->caller_ctx, node);
+}
+
+static ast_node *dfs_map_one(void *ctx_, ast_node *node) {
+    struct dfs_map_ctx *ctx = ctx_;
+
+    if (!node) return node;
+
+    // exclude user type defs from dfs
+    if (ast_user_type_definition == node->tag) return node;
+
+    if (ctx->visited) {
+        if (hset_contains(ctx->visited, &node, sizeof(ast_node *))) return node;
+        hset_insert(&ctx->visited, &node, sizeof(ast_node *));
+    }
+
+    ast_node_map_node(ctx, dfs_map_one, node);
+    return ctx->fun(ctx->caller_ctx, node);
 }
 
 void ast_node_dfs(void *caller_ctx, ast_node *node, ast_op_fun fun) {
@@ -696,13 +840,33 @@ void ast_node_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *n
     struct dfs_ctx ctx = {
       .caller_ctx = caller_ctx,
       .fun        = fun,
-      .visited    = map_create(alloc, sizeof(int)),
+      .visited    = hset_create(alloc),
     };
 
     ast_node_each_node(&ctx, dfs_one, node);
     fun(caller_ctx, node);
 
-    map_destroy(&ctx.visited);
+    hset_destroy(&ctx.visited);
+}
+
+ast_node *ast_node_map_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *node,
+                                          ast_op_map_fun fun) {
+
+    // Note: const dfs also uses this function.
+
+    if (!node) return node;
+
+    struct dfs_map_ctx ctx = {
+      .caller_ctx = caller_ctx,
+      .fun        = fun,
+      .visited    = hset_create(alloc),
+    };
+
+    ast_node_map_node(&ctx, dfs_map_one, node);
+    ast_node *out = fun(caller_ctx, node);
+
+    hset_destroy(&ctx.visited);
+    return out;
 }
 
 void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {

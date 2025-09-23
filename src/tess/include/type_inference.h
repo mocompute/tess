@@ -11,7 +11,8 @@ typedef struct ti_inferer ti_inferer;
 typedef struct {
     char const *name;
     tl_type    *type;
-    ast_node   *node; // let, symbol, lambda_function
+    ast_node   *node;   // let, symbol, lambda_function
+    ast_node   *source; // the node from which we derived this specialisation requirement
 } ti_function_record;
 
 // -- allocation and deallocation --
@@ -30,10 +31,12 @@ void           ti_inferer_dbg_constraints(ti_inferer const *);
 void           ti_inferer_dbg_substitutions(ti_inferer const *);
 
 typedef void (*ti_traverse_lexical_fun)(void *, ast_node *, hashmap **);
-void                ti_traverse_lexical(allocator *, void *, ast_node *, ti_traverse_lexical_fun);
+void                   ti_traverse_lexical(allocator *, void *, ast_node *, ti_traverse_lexical_fun);
 
-ast_node_sized      ti_free_variables_in(allocator *, ast_node const *);
+tl_free_variable_sized ti_free_variables_in(allocator *, ast_node const *);
 
-ti_function_record *ti_lookup_function(ti_inferer *, char const *);
+ti_function_record    *ti_lookup_function(ti_inferer *, char const *);
+
+int                    ti_is_generated_variable_name(char const *);
 
 #endif

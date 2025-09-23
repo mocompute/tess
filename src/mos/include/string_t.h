@@ -2,12 +2,12 @@
 #define MOS_STRING_H
 
 #include "alloc.h"
+#include "array.h"
 #include "types.h"
 
 #define MOS_STRING_MAX_SMALL_LEN 14
 #define MOS_STRING_MAX_LEN       UINT32_MAX
 
-// TODO: get rid of this typedef
 typedef struct {
     union {
         struct {
@@ -21,6 +21,16 @@ typedef struct {
         } small;
     };
 } string_t;
+
+typedef struct {
+    array_header;
+    string_t *v;
+} string_array;
+
+typedef struct {
+    array_sized;
+    string_t *v;
+} string_sized;
 
 // -- allocation and deallocation --
 
@@ -41,7 +51,12 @@ u32         string_t_hash(string_t const *);
 
 // -- utilities --
 
+int string_t_cmp(string_t const *, string_t const *);
 int string_t_cmp_c(string_t const *, char const *);
+int string_t_array_cmp(string_sized, string_sized);
+int string_t_array_contains(string_sized haystack, string_sized needle);
+u64 string_t_hash64(string_t const *);
+u64 string_t_array_hash64(string_sized);
 int string_t_parse_number(char const *, i64 *, u64 *, f64 *);
 // Returns: 0, 1, 2, 3
 

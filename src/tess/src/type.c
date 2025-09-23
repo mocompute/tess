@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "hash.h"
 #include "hashmap.h"
+#include "string_t.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -37,13 +38,13 @@ tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, c
     return self;
 }
 
-tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right, int is_lambda) {
-    tl_type *self     = alloc_struct(alloc, self);
-    self->tag         = type_arrow;
-    self->arrow.left  = left;
-    self->arrow.right = right;
-    self->arrow.flags = 0;
-    if (is_lambda) BIT_SET(self->arrow.flags, TL_TYPE_ARROW_LAMBDA);
+tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
+    tl_type *self              = alloc_struct(alloc, self);
+    self->tag                  = type_arrow;
+    self->arrow.left           = left;
+    self->arrow.right          = right;
+    self->arrow.free_variables = (tl_free_variable_sized){0};
+    self->arrow.flags          = 0;
 
     return self;
 }
@@ -94,6 +95,8 @@ tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typev
     case type_arrow:
         clone->arrow.left  = tl_type_clone_impl(alloc, orig->arrow.left, make_typevar, ctx, tvmap);
         clone->arrow.right = tl_type_clone_impl(alloc, orig->arrow.right, make_typevar, ctx, tvmap);
+        clone->arrow.flags = orig->arrow.flags;
+        clone->arrow.free_variables = orig->arrow.free_variables; // shallow copy
         break;
 
     case type_user:
@@ -265,8 +268,9 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
         struct tlt_arrow const *vleft  = tl_type_arrow((tl_type *)left),
                                *vright = tl_type_arrow((tl_type *)right);
         int res;
-        if ((res = tl_type_compare(vleft->left, vright->left)) != 0) return res;
-        if ((res = tl_type_compare(vleft->right, vright->right)) != 0) return res;
+        if ((res = tl_type_compare(vleft->left, vright->left))) return res;
+        if ((res = tl_type_compare(vleft->right, vright->right))) return res;
+        if ((res = tl_free_variable_array_cmp(vleft->free_variables, vright->free_variables))) return res;
         return 0;
     }
 
@@ -289,10 +293,10 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
 }
 
 u64 tl_type_hash(tl_type const *self) {
-    return tl_type_hash_ext(self, 0);
+    return tl_type_hash_ext(self, 0, 0);
 }
 
-u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
+u64 tl_type_hash_ext(tl_type const *self, int ignore_names, int ignore_free_variable_types) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
     switch (self->tag) {
@@ -308,14 +312,14 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
         break;
 
     case type_pointer: {
-        u64 target_hash = tl_type_hash_ext(self->pointer.target, ignore_names);
+        u64 target_hash = tl_type_hash_ext(self->pointer.target, ignore_names, ignore_free_variable_types);
         hash            = hash64_combine(hash, (byte *)&target_hash, sizeof target_hash);
     } break;
 
     case type_tuple: {
         struct tlt_tuple const *v = tl_type_tup((tl_type *)self);
         for (u32 i = 0; i < v->elements.size; ++i) {
-            u64 el_hash = tl_type_hash_ext(v->elements.v[i], ignore_names);
+            u64 el_hash = tl_type_hash_ext(v->elements.v[i], ignore_names, ignore_free_variable_types);
             hash        = hash64_combine(hash, (byte *)&el_hash, sizeof el_hash);
         }
 
@@ -326,7 +330,7 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
         struct tlt_labelled_tuple const *v = tl_type_lt((tl_type *)self);
 
         for (u32 i = 0; i < v->fields.size; ++i) {
-            u64 el_hash = tl_type_hash_ext(v->fields.v[i], ignore_names);
+            u64 el_hash = tl_type_hash_ext(v->fields.v[i], ignore_names, ignore_free_variable_types);
             hash        = hash64_combine(hash, (byte *)&el_hash, sizeof el_hash);
         }
 
@@ -338,11 +342,16 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
     } break;
 
     case type_arrow: {
-        struct tlt_arrow const *v          = tl_type_arrow((tl_type *)self);
-        u64                     left_hash  = tl_type_hash_ext(v->left, ignore_names);
-        u64                     right_hash = tl_type_hash_ext(v->right, ignore_names);
-        hash                               = hash64_combine(hash, (byte *)&left_hash, sizeof left_hash);
-        hash                               = hash64_combine(hash, (byte *)&right_hash, sizeof right_hash);
+        struct tlt_arrow const *v = tl_type_arrow((tl_type *)self);
+        u64 left_hash             = tl_type_hash_ext(v->left, ignore_names, ignore_free_variable_types);
+        u64 right_hash            = tl_type_hash_ext(v->right, ignore_names, ignore_names);
+        u64 free_variable_hash =
+          tl_free_variable_array_hash64(v->free_variables, ignore_free_variable_types);
+        hash = hash64_combine(hash, (byte *)&left_hash, sizeof left_hash);
+        hash = hash64_combine(hash, (byte *)&right_hash, sizeof right_hash);
+        if (!ignore_free_variable_types)
+            hash = hash64_combine(hash, (byte *)&free_variable_hash, sizeof free_variable_hash);
+
     } break;
 
     case type_user: {
@@ -363,6 +372,7 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names) {
 
 int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     int len = -1;
+    int est = sz ? 1 : 0; // to avoid duplication with snprintf
 
     if (null == self) return snprintf(buf, (size_t)sz, "[null]");
 
@@ -381,8 +391,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     case type_pointer:
 
         len = snprintf(buf, sz, "*");
-        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, self->pointer.target);
-        else len += tl_type_snprint(null, 0, self->pointer.target);
+        len += tl_type_snprint(buf + len * est, sz - len * est, self->pointer.target);
 
         break;
 
@@ -391,12 +400,9 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
 
         len                      = 0;
         len += snprintf(buf, (size_t)sz, "(%s ", v->name);
+        len += tl_type_snprint(buf + len * est, sz - len * est, v->labelled_tuple);
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), ")");
 
-        if (buf && sz) len += tl_type_snprint(buf + len, sz - len, v->labelled_tuple);
-        else len += tl_type_snprint(null, 0, v->labelled_tuple);
-
-        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
-        else len += snprintf(null, 0, ")");
     } break;
 
     case type_tuple: {
@@ -407,18 +413,11 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len += snprintf(buf, (size_t)sz, "(");
 
         for (size_t i = 0; i < v->elements.size; ++i) {
-
-            if (buf && sz) {
-                len += tl_type_snprint(buf + len, sz - len, v->elements.v[i]);
-                len += snprintf(buf + len, (size_t)(sz - len), ", ");
-            } else {
-                len += tl_type_snprint(null, 0, v->elements.v[i]);
-                len += snprintf(null, 0, ", ");
-            }
+            len += tl_type_snprint(buf + len * est, sz - len * est, v->elements.v[i]);
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), ", ");
         }
 
-        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
-        else len += snprintf(null, 0, ")");
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), ")");
 
     } break;
 
@@ -429,20 +428,12 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len += snprintf(buf, (size_t)sz, "(");
 
         for (size_t i = 0; i < v->fields.size; ++i) {
-
-            if (buf && sz) {
-                len += snprintf(buf + len, (size_t)(sz - len), "%s : ", v->names.v[i]);
-                len += tl_type_snprint(buf + len, sz - len, v->fields.v[i]);
-                len += snprintf(buf + len, (size_t)(sz - len), ", ");
-            } else {
-                len += snprintf(null, 0, "%s : ", v->names.v[i]);
-                len += tl_type_snprint(null, 0, v->fields.v[i]);
-                len += snprintf(null, 0, ", ");
-            }
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%s : ", v->names.v[i]);
+            len += tl_type_snprint(buf + len * est, sz - len * est, v->fields.v[i]);
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), ", ");
         }
 
-        if (buf && sz) len += snprintf(buf + len, (size_t)(sz - len), ")");
-        else len += snprintf(null, 0, ")");
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), ")");
 
     } break;
 
@@ -450,15 +441,22 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         struct tlt_arrow const *v = tl_type_arrow((tl_type *)self);
 
         len                       = 0;
-        if (buf && sz) {
-            len += tl_type_snprint(buf, sz, v->left);
-            len += snprintf(buf + len, (size_t)(sz - len), " -> ");
-            len += tl_type_snprint(buf + len, sz - len, v->right);
-        } else {
-            len += tl_type_snprint(null, 0, v->left);
-            len += snprintf(null, 0, " -> ");
-            len += tl_type_snprint(null, 0, v->right);
+
+        len += tl_type_snprint(buf, sz, v->left);
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), " -> ");
+        len += tl_type_snprint(buf + len * est, sz - len * est, v->right);
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), " [fv: %u ", v->free_variables.size);
+        forall(i, v->free_variables) {
+            char type_str[128];
+            tl_type_snprint(type_str, sizeof type_str, v->free_variables.v[i].type);
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%s (%s)",
+                            string_t_str(&v->free_variables.v[i].name), type_str
+
+            );
+            if (i < v->free_variables.size - 1)
+                len += snprintf(buf + len * est, (size_t)(sz - len * est), ", ");
         }
+        len += snprintf(buf + len * est, (size_t)(sz - len * est), "]");
 
     } break;
 
@@ -569,8 +567,11 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
 
         struct tlt_arrow const *vreq  = tl_type_arrow((tl_type *) requires),
                                *vcand = tl_type_arrow((tl_type *)candidate);
-        return candidate->tag == type_arrow && tl_type_satisfies(vreq->left, vcand->left) &&
-               tl_type_satisfies(vreq->right, vcand->right);
+        int arrows_ok =
+          tl_type_satisfies(vreq->left, vcand->left) && tl_type_satisfies(vreq->right, vcand->right);
+
+        // ignore free_variables
+        return arrows_ok;
     }
 
     case type_user: {
@@ -645,11 +646,14 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
         return 1;
     }
 
-    case type_arrow:
-        return candidate->tag == type_arrow &&
-               tl_type_is_compatible(requires->arrow.left, candidate->arrow.left, strict) &&
-               tl_type_is_compatible(requires->arrow.right, candidate->arrow.right, strict);
+    case type_arrow: {
+        int arrows_ok = candidate->tag == type_arrow &&
+                        tl_type_is_compatible(requires->arrow.left, candidate->arrow.left, strict) &&
+                        tl_type_is_compatible(requires->arrow.right, candidate->arrow.right, strict);
 
+        // ignore free variables when compatibility testing
+        return arrows_ok;
+    }
     case type_user:
         //
         return (requires->tag == candidate->tag);
@@ -693,6 +697,12 @@ tl_type *tl_type_find_labelled_field_type(tl_type const *lt_type, char const *fi
     return field_type;
 }
 
+tl_type *tl_type_get_arrow(tl_type *self) {
+    if (type_arrow == self->tag) return self;
+    if (type_pointer == self->tag && type_arrow == self->pointer.target->tag) return self;
+    return null;
+}
+
 int tl_type_contains(tl_type const *haystack, tl_type const *needle) {
 
     if (haystack == needle || tl_type_equal(haystack, needle)) return 1;
@@ -720,7 +730,9 @@ int tl_type_contains(tl_type const *haystack, tl_type const *needle) {
 
     case type_arrow: {
         struct tlt_arrow *v = tl_type_arrow((tl_type *)haystack);
-        return tl_type_contains(v->left, needle) || tl_type_contains(v->right, needle);
+        if (tl_type_contains(v->left, needle) || tl_type_contains(v->right, needle)) return 1;
+        forall(i, v->free_variables) if (tl_type_contains(v->free_variables.v[i].type, needle)) return 1;
+        return 0;
     }
 
     case type_user: {
@@ -769,4 +781,63 @@ struct tlt_tv *tl_type_tv(tl_type *t) {
 char const *tl_type_tag_to_string(tl_type_tag tag) {
     static char const *const strings[] = {TL_TYPE_TAGS(MOS_TAG_STRING)};
     return strings[tag];
+}
+
+int tl_free_variable_array_cmp(tl_free_variable_sized lhs, tl_free_variable_sized rhs) {
+
+    if (lhs.size != rhs.size) return lhs.size < rhs.size ? -1 : 1;
+
+    forall(i, lhs) {
+        int res;
+        if ((res = string_t_cmp(&lhs.v[i].name, &rhs.v[i].name))) return res;
+        if ((res = tl_type_compare(lhs.v[i].type, rhs.v[i].type))) return res;
+    }
+    return 0;
+}
+
+u64 tl_free_variable_array_hash64(tl_free_variable_sized arr, int ignore_types) {
+
+    u64 hash = 0;
+    forall(i, arr) {
+        u64 str = string_t_hash64(&arr.v[i].name);
+        u64 ty  = tl_type_hash(arr.v[i].type);
+        hash    = hash64_combine(hash, (void *)&str, sizeof str);
+        if (!ignore_types) hash = hash64_combine(hash, (void *)&ty, sizeof ty);
+    }
+    return hash;
+}
+
+int tl_free_variable_array_contains(tl_free_variable_sized haystack, tl_free_variable_sized needle) {
+    forall(i, needle) {
+        forall(j, haystack) if (0 == tl_free_variable_cmp(&needle.v[i], &haystack.v[j])) goto found;
+        goto not_found; // finished inner loop without finding
+
+    found:;
+    }
+
+    return 1; // finished outer loop without error
+
+not_found:
+    return 0;
+}
+
+int tl_free_variable_array_contains_one(tl_free_variable_sized haystack, tl_free_variable needle) {
+    return tl_free_variable_array_contains(haystack, (tl_free_variable_sized){.v = &needle, .size = 1});
+}
+
+int tl_free_variable_cmp(tl_free_variable const *lhs, tl_free_variable const *rhs) {
+    int res;
+    if ((res = string_t_cmp(&lhs->name, &rhs->name))) return res;
+    return tl_type_compare(lhs->type, rhs->type);
+}
+
+int tl_free_variable_cmpv(void const *lhs, void const *rhs) {
+    return tl_free_variable_cmp((tl_free_variable const *)lhs, (tl_free_variable const *)rhs);
+}
+
+void tl_free_variable_array_merge(tl_free_variable_array *dst, tl_free_variable_sized src) {
+    forall(i, src) {
+        if (!tl_free_variable_array_contains_one((tl_free_variable_sized)sized_all(*dst), src.v[i]))
+            array_push(*dst, &src.v[i]);
+    }
 }

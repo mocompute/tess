@@ -76,7 +76,7 @@ void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *
 }
 
 void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32 width, u16 align,
-                        void *restrict data, u32 num) {
+                        void const *restrict data, u32 num) {
     assert(index < h->size);
 
     ptr            = array_reserve_impl(h, ptr, h->size + num, width, align);
@@ -111,4 +111,29 @@ void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
 
 char_cslice char_cslice_from(char const *str, u32 len) {
     return (char_cslice){.v = str, .end = len};
+}
+
+void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                               void const *restrict data, array_cmp_fun cmp) {
+
+    size_t aligned = alloc_align(width, align);
+
+    assert(h->alloc);
+    if (h->size == h->capacity) {
+        u32 new_cap = h->capacity ? h->capacity * 2 : 8;
+        ptr         = array_reserve_impl(h, ptr, new_cap, width, align);
+        h->capacity = new_cap;
+    }
+
+    u32 index = 0;
+    for (; index < h->size; ++index)
+        if (cmp(data, &ptr[index * aligned]) >= 0) break;
+
+    if (index < h->size)
+        memmove(&ptr[(index + 1) * aligned], &ptr[index * aligned], (h->size - index) * aligned);
+
+    memcpy(&ptr[index * aligned], data, width);
+    h->size++;
+
+    return ptr;
 }

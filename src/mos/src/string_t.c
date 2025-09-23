@@ -77,8 +77,52 @@ char const *string_t_str(string_t const *s) {
     return &s->small.data[0];
 }
 
+int string_t_cmp(string_t const *lhs, string_t const *rhs) {
+    return strcmp(string_t_str(lhs), string_t_str(rhs));
+}
+
 int string_t_cmp_c(string_t const *s, char const *cs) {
     return strcmp(string_t_str(s), cs);
+}
+
+int string_t_array_cmp(string_sized lhs, string_sized rhs) {
+    if (lhs.size != rhs.size) return lhs.size < rhs.size ? -1 : 1;
+
+    forall(i, lhs) {
+        int res = 0;
+        if ((res = string_t_cmp(&lhs.v[i], &rhs.v[i]))) return res;
+    }
+    return 0;
+}
+
+int string_t_array_contains(string_sized haystack, string_sized needle) {
+    forall(i, needle) {
+        forall(j, haystack) {
+            if (0 == string_t_cmp(&needle.v[i], &haystack.v[j])) goto found;
+        }
+        goto not_found; // finished inner loop without finding
+
+    found:;
+    }
+
+    return 1; // finished outer loop without error
+
+not_found:
+    return 0;
+}
+
+u64 string_t_hash64(string_t const *self) {
+    char const *str = string_t_str(self);
+    return hash64((void *)str, strlen(str));
+}
+
+u64 string_t_array_hash64(string_sized arr) {
+    u64 hash = 0;
+    forall(i, arr) {
+        char const *str = string_t_str(&arr.v[i]);
+        hash            = hash64_combine(hash, (void *)str, strlen(str));
+    }
+    return hash;
 }
 
 u32 string_t_hash(string_t const *s) {
