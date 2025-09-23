@@ -1,10 +1,6 @@
-let ex2 f = f ()
-
-let ex1 () =
-  let val = true in
-  let ex1_lambda = fun () -> val end in
-  ex1_lambda ()
+let apply f = f ()
 
 let main () =
-  let foo = ex2 ex1 in
+  let afun = fun () -> true end in
+  let foo = apply afun in
   0
