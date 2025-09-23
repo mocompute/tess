@@ -828,6 +828,9 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
     v->body             = null;
     out->type           = get_prim(self, type_nil);
 
+    // This tells the transpiler to suppress generating an empty function for this node.
+    BIT_SET(out->let.flags, AST_LET_FLAG_INTRINSIC);
+
     // create parameters from the supplied name_type
     assert(type_arrow == name_type->tag);
     tl_type *left = name_type->arrow.left;
