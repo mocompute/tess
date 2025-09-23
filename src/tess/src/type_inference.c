@@ -798,7 +798,7 @@ static ast_node *create_specialized_lambda(ti_inferer *self, char const *name, a
     v->flags            = 0;
     v->name             = null;
     v->body             = null;
-    out->type           = type_registry_must_find_name(self->type_registry, "nil");
+    out->type           = get_prim(self, type_nil);
 
     ast_node *clone     = ast_node_clone(self->type_arena, lambda);
     if (!out) fatal("clone failed");
@@ -809,6 +809,42 @@ static ast_node *create_specialized_lambda(ti_inferer *self, char const *name, a
     v->body                            = vclone->body;
     v->name                            = ast_node_create_sym(self->type_arena, name);
     v->name->type                      = name_type;
+    ast_node_set_is_specialized(out);
+
+    process_new_special(self, out);
+    return out;
+}
+
+static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_type *name_type) {
+    // Note that the name will not be specialised, because the
+    // transpiler will not be generating functions for externs.
+
+    ast_node       *out = ast_node_create(self->type_arena, ast_let);
+    struct ast_let *v   = ast_node_let(out);
+    v->n_parameters     = 0;
+    v->parameters       = null;
+    v->flags            = 0;
+    v->name             = null;
+    v->body             = null;
+    out->type           = get_prim(self, type_nil);
+
+    // create parameters from the supplied name_type
+    assert(type_arrow == name_type->tag);
+    tl_type *left = name_type->arrow.left;
+    assert(type_tuple == left->tag);
+
+    v->n_parameters = left->tuple.elements.size;
+    v->parameters   = alloc_malloc(self->type_arena, v->n_parameters * sizeof(ast_node *));
+    forall(i, left->tuple.elements) {
+        v->parameters[i] = ast_node_create_sym(self->type_arena, "");
+        next_variable_name(self, &v->parameters[i]->symbol.name);
+        v->parameters[i]->type = make_typevar(self);
+    }
+
+    v->body       = ast_node_create(self->type_arena, ast_nil);
+    v->body->type = get_prim(self, type_nil);
+    v->name       = ast_node_clone(self->type_arena, src);
+    v->name->type = name_type;
     ast_node_set_is_specialized(out);
 
     process_new_special(self, out);
@@ -839,11 +875,22 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
 
     }
 
-    else if (ast_let_in == src->tag && ast_lambda_function == src->let_in.value->tag) {
+    else if (ast_node_is_let_in_lambda(src)) {
         // create specialised function for the lambda function
 
         ast_node *out          = create_specialized_lambda(self, name, src->let_in.value, name_type);
         out->let_in.name->type = name_type;
+        process_new_special(self, out);
+        return out;
+    }
+
+    else if (ast_symbol == src->tag) {
+        // Create specialised function for external (std_ and c_)
+        // functions without code: We just create a nil let node so it
+        // can be used for typing, and the transpiler will do its
+        // thing.
+
+        ast_node *out = create_specialized_extern(self, src, name_type);
         process_new_special(self, out);
         return out;
     }
@@ -880,18 +927,17 @@ static void ti_create_specials(ti_inferer *self) {
             // This is an annotated symbol, typically only for compiler intrinsics. We don't need to
             // specialise those.
 
-            // FIXME: need to specialise things like c_malloc so they return the correct C type -- or
-            // else, we need to convert *any to *void in the transpiler?
-            ;
-        } else if (ast_let == function->node->tag) {
+            log(self, "create_specials: symbol %s", callsite->name);
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
             array_push(nodes_to_add, &created);
 
-            // set its name symbol's type to help transpiler
-            assert(ast_let == created->tag);
-            created->let.name->type = callsite->type;
+        } else if (ast_let == function->node->tag) {
+
+            ast_node *created = create_special(self, special_name, function->node, callsite->type);
+            callsite->node    = created;
+            array_push(nodes_to_add, &created);
 
             // set each parameter type of the specialised function to be the same type as the source
             // arguments, so that free variable context information is carried over.
@@ -2223,10 +2269,7 @@ void ti_assign_arrow_types(ti_inferer *self) {
 // -- collect_constraints --
 
 static tl_type *get_prim(ti_inferer *self, tl_type_tag tag) {
-    tl_type **type = type_registry_find_name(self->type_registry, tl_type_tag_to_string(tag));
-    if (!type) fatal("get_prim: failed to find '%s'", tl_type_tag_to_string(tag));
-
-    return *type;
+    return type_registry_must_find_name(self->type_registry, tl_type_tag_to_string(tag));
 }
 
 void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
