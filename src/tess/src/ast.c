@@ -67,6 +67,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_begin_end:
     case ast_lambda_declaration:
     case ast_labelled_tuple:
@@ -306,6 +307,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_ellipsis:    return pair(alloc, sym("..."), type);
     case ast_eof:         return pair(alloc, sym("eof"), type);
     case ast_nil:         return pair(alloc, sym("nil"), type);
+    case ast_any:         return pair(alloc, sym("any"), type);
     case ast_bool:        return pair(alloc, node->bool_.val ? sym("true") : sym("false"), type);
 
     case ast_symbol:      return symbol_fun(alloc, node);
@@ -479,6 +481,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_symbol:
     case ast_i64:
@@ -606,6 +609,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_symbol:
     case ast_i64:
@@ -731,6 +735,7 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_i64:
     case ast_u64:
@@ -1161,6 +1166,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     switch (self->tag) {
     case ast_nil:
+    case ast_any:
     case ast_ellipsis:
     case ast_eof:      break;
 

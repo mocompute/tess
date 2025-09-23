@@ -884,8 +884,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     if (!node || !node->type) fatal("a_eval: node or type is null");
 
+    // Push a result variable onto the stack. Caller must pop it.
     char *var = next_variable(self);
-
     out_put(self, "\n");
 
     if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
@@ -904,6 +904,9 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_nil:
         if (var) out_put_start_fmt(self, "%s = NULL;\n", var);
         break;
+
+    case ast_any: fatal("attempt to evaluate 'any'"); break;
+
     case ast_symbol:
         if (var) out_put_start_fmt(self, "%s = %s;\n", var, emit_symbol_use(self, node));
         break;
@@ -1067,6 +1070,8 @@ static int expand_value(transpiler *self, ast_node const *node) {
     case ast_assignment:
     case ast_bool:       break;
 
+    case ast_any:        fatal("attempt to expand 'any'"); break;
+
     case ast_dereference:
         out_put(self, "* ");
         expand_value(self, node->dereference.target);
@@ -1126,8 +1131,6 @@ static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
     char const                   *name = ast_node_name_string(v->name);
     if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
 
-    // FIXME: look at generated code, it's returning an uninitialised value.
-    //
     // function call result
     char *var = next_variable(self);
     out_put_start(self, "");

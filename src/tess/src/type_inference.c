@@ -837,8 +837,8 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
         v->parameters[i]->type = make_typevar(self);
     }
 
-    v->body       = ast_node_create(self->type_arena, ast_nil);
-    v->body->type = get_prim(self, type_nil);
+    v->body       = ast_node_create(self->type_arena, ast_any);
+    v->body->type = make_typevar(self);
     v->name       = ast_node_clone(self->type_arena, src);
     v->name->type = name_type;
     ast_node_set_is_specialized(out);
@@ -1081,8 +1081,9 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // ignore cases where there is no specialised node for this name
         // and type combination, because those are intrinsics or c_ etc.
         if (!rec) {
-            log(self, "could not find requirements record for %" PRIu64 " '%s' of type %s", hash, name,
-                tl_type_to_string(self->transient, type));
+            log(self, "could not find requirements record for %" PRIu64 " '%s' of type %s from callsite %s",
+                hash, name, tl_type_to_string(self->transient, type),
+                ast_node_to_string(self->transient, node));
             return;
         }
         if (!rec->node) return;
@@ -1574,6 +1575,7 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_i64:
     case ast_u64:
@@ -1736,6 +1738,7 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_i64:
     case ast_u64:
@@ -1873,6 +1876,7 @@ void dfs_apply_substitutions(void *ctx_, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_i64:
     case ast_u64:
@@ -2199,6 +2203,7 @@ void assign_type_variables(void *ctx, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_any:
     case ast_bool:
     case ast_i64:
     case ast_u64:
@@ -2283,6 +2288,10 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
     case ast_eof:
     case ast_nil:      push(node->type, get_prim(self, type_nil)); break;
     case ast_bool:     push(node->type, get_prim(self, type_bool)); break;
+
+    case ast_any:
+        //
+        break;
 
     case ast_arrow: // only used for annotation
         break;
@@ -2927,6 +2936,7 @@ void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
         break;
 
     case ast_nil:
+    case ast_any:
     case ast_arrow:
     case ast_assignment:
     case ast_bool:

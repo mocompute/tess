@@ -59,5 +59,5 @@ let bcomp x      : a -> a      = _tl_bcomp_ x
 let bsl arg n    : (a, int) -> a = _tl_bsl_ arg n
 let bsr arg n    : (a, int) -> a = _tl_bsr_ arg n
 
-let decr x       : a -> a = sub x 1
-let incr x       : a -> a = add x 1
+let decr x       : int -> int = sub x 1
+let incr x       : int -> int = add x 1
