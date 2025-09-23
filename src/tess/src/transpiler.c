@@ -1304,12 +1304,14 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     char const                         *fun_name = ast_node_name_string(v->name);
     // ast_node_sized                      free_variables = v->free_variables;
 
-    if (0 == strncmp("c_", fun_name, 2)) {
+    int is_special_name = 0;
+    if (ti_is_c_function_name(fun_name)) {
         fun_name += 2;
+        is_special_name = 1;
     } else if (ti_is_generated_variable_name(fun_name)) {
         ;
-    } else if (0 == strncmp("std_", fun_name, 4)) {
-        ;
+    } else if (ti_is_std_function_name(fun_name)) {
+        is_special_name = 1;
     } else {
         fun_name = make_function_name(self->strings, fun_name);
     }
@@ -1329,12 +1331,17 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     out_put(self, ";\n");
 
     // function call
-    tl_type *fun_type = node->named_application.name->type;
+    tl_type               *fun_type       = node->named_application.name->type;
+    tl_free_variable_sized free_variables = {0};
 
-    assert(type_arrow == fun_type->tag);
-    tl_free_variable_sized free_variables = fun_type->arrow.free_variables;
+    // FIXME I don't really want to do this: it's only because the ti
+    // is not giving us mono types for c_malloc and c_free at the moment.
+    if (!is_special_name) {
+        assert(type_arrow == fun_type->tag);
+        free_variables = fun_type->arrow.free_variables;
+    }
 
-    char const            *struct_name    = null;
+    char const *struct_name = null;
     if (free_variables.size) struct_name = make_context_struct_name(self->transient, v->name->type);
 
     // prepare the function call context, if any

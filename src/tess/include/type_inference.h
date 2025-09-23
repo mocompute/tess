@@ -38,6 +38,8 @@ tl_free_variable_sized ti_free_variables_in(allocator *, ast_node const *);
 ti_function_record    *ti_lookup_function(ti_inferer *, char const *);
 
 int                    ti_is_generated_variable_name(char const *);
+int                    ti_is_c_function_name(char const *);
+int                    ti_is_std_function_name(char const *);
 
 void                   ti_trace_symbol_add(ti_inferer *, char const *);
 void                   ti_trace_symbol_remove(ti_inferer *, char const *);

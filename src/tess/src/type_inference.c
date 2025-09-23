@@ -536,7 +536,9 @@ void create_function_record_toplevel(void *ctx, ast_node *node) {
 
         // if node type is not an arrow, which is likely if there is no annotation, we must make an
         // arrow type for its function record entry.
-        if (type_arrow != type->tag) type = make_let_arrow(self->type_arena, node);
+        if (type_arrow != type->tag) {
+            type = make_let_arrow(self->type_arena, node);
+        }
 
         do_create_function_record(self, node, v->name, type);
     }
@@ -630,7 +632,6 @@ void assign_callsite_types(void *ctx, ast_node *node) {
                         name_str, arrow->arrow.free_variables.size);
                 }
             } else {
-                log(self, "assign_callsite_types: rejected record for '%s'", name_str);
             }
         }
 
@@ -639,8 +640,6 @@ void assign_callsite_types(void *ctx, ast_node *node) {
             // requirement to it.
             function_type = tl_type_clone(self->type_arena, rec->type, make_typevar_val, self);
             function_type->arrow.free_variables = arrow->arrow.free_variables;
-
-            log(self, "assign_callsite_types: cloned type for '%s'", name_str);
 
             if (arrow->arrow.free_variables.size)
                 log(self, "assign_callsite_types: '%s' requires %u free variables", name_str,
@@ -1270,6 +1269,14 @@ static void ti_collect_functions_to_emit(ti_inferer *self) {
 
 int ti_is_generated_variable_name(char const *str) {
     return 0 == strncmp("_v", str, 2);
+}
+
+int ti_is_c_function_name(char const *str) {
+    return 0 == strncmp("c_", str, 2);
+}
+
+int ti_is_std_function_name(char const *str) {
+    return 0 == strncmp("std_", str, 4);
 }
 
 static void next_variable_name(ti_inferer *self, string_t *out) {
@@ -2207,7 +2214,9 @@ void ti_assign_type_variables(ti_inferer *self) {
 
 static void assign_one_arrow(void *ctx, ast_node *node, hashmap **lex) {
 
-    // Assigns arrow types to lambda functions and named_function_application, including free variables
+    // Assigns arrow types to lambda functions and
+    // named_function_application, including free variables. Symbols
+    // are not yet annotated.
 
     ti_inferer *self = ctx;
 
@@ -2215,6 +2224,8 @@ static void assign_one_arrow(void *ctx, ast_node *node, hashmap **lex) {
         node->type = make_lambda_arrow(self, node);
     } else if (ast_named_function_application == node->tag) {
         node->named_application.function_type = make_named_application_arrow(self, node, lex);
+        log(self, "assign_one_arrow: %s: %s", ast_node_name_string(node->named_application.name),
+            tl_type_to_string(self->transient, node->named_application.function_type));
     }
 }
 
