@@ -1305,3 +1305,11 @@ u64 ast_node_hash(ast_node const *self) {
 }
 
 //
+
+int ast_node_is_let_in_lambda(ast_node const *self) {
+    return (ast_let_in == self->tag && ast_lambda_function == self->let_in.value->tag);
+}
+
+int ast_node_is_named_application(ast_node const *self) {
+    return (ast_named_function_application == self->tag);
+}

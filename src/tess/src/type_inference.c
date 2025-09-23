@@ -247,10 +247,11 @@ int ti_inferer_run(ti_inferer *self) {
         return 1;
     }
 
-    // Run constraint solver until it settles.
+    // Run constraint solver until it settles. This monomorphises as
+    // much as possible without specialising generic functions.
     ti_collect_and_solve(self, 1);
 
-    // Create tuple constructors
+    // Create tuple constructors.
     ti_generate_tuple_functions(self);
 
     // Collect function applications that require specialization of generic functions. Fills the
@@ -709,12 +710,12 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
     collect_special_requirements_ctx *ctx  = ctx_;
     ti_inferer                       *self = ctx->self;
 
-    if (ast_named_function_application == node->tag) {
+    if (ast_node_is_named_application(node)) {
 
         tl_type    *type = node->named_application.function_type;
         char const *name = ast_node_name_string(node->named_application.name);
 
-        // if type is generic, we skip
+        // if type is generic, we skip it because we can't specialise it (yet)
         if (tl_type_is_poly(type)) return;
 
         u64                hash = hash_name_and_type(name, type);
@@ -727,7 +728,7 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
             tl_type_to_string(self->transient, type), ast_node_to_string(self->transient, node));
     }
 
-    else if (ast_let_in == node->tag && ast_lambda_function == node->let_in.value->tag) {
+    else if (ast_node_is_let_in_lambda(node)) {
 
         // Because we are moving function definitions from the functions table to the specials table, we
         // need to include lambda functions here, to ensure an entry is made in the requirements table,

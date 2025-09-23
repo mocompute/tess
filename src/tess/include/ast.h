@@ -290,4 +290,7 @@ ast_node      **ast_node_assignment_names(allocator *, ast_node const *);
 
 u64             ast_node_hash(ast_node const *);
 
+int             ast_node_is_let_in_lambda(ast_node const *);
+int             ast_node_is_named_application(ast_node const *);
+
 #endif
