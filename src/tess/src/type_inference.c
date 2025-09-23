@@ -713,12 +713,8 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
 
     if (ast_node_is_named_application(node)) {
 
-        tl_type    *type = node->named_application.function_type;
-        char const *name = ast_node_name_string(node->named_application.name);
-
-        // if type is generic, we skip it because we can't specialise it (yet)
-        if (tl_type_is_poly(type)) return;
-
+        tl_type           *type = node->named_application.function_type;
+        char const        *name = ast_node_name_string(node->named_application.name);
         u64                hash = hash_name_and_type(name, type);
         ti_function_record rec  = {.name = name, .type = type, .node = null, .source = node};
 
@@ -736,11 +732,8 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         // which triggers an entry being made in the specials table.
         // TODO: document this better.
 
-        tl_type    *type = node->let_in.value->type;
-        char const *name = ast_node_name_string(node->let_in.name);
-
-        // if type is generic, we skip
-        if (tl_type_is_poly(type)) return;
+        tl_type           *type = node->let_in.value->type;
+        char const        *name = ast_node_name_string(node->let_in.name);
 
         u64                hash = hash_name_and_type(name, type);
         ti_function_record rec  = {.name = name, .type = type, .node = node->let_in.value, .source = node};
