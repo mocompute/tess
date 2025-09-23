@@ -911,17 +911,6 @@ static void ti_create_specials(ti_inferer *self) {
                     param->type        = argument->type;
                 }
             }
-
-            // FIXME: why add to self->functions from this point? We are actually building
-            // self->specials. add to function records
-            // ti_function_record created_rec = {
-            //   .name = special_name, .type = callsite->type, .node = created};
-
-            // log(self, "create_specials: adding let record for '%s' %s ==> %s", special_name,
-            //     tl_type_to_string(self->transient, function->type),
-            //     tl_type_to_string(self->transient, callsite->type));
-
-            // map_set(&self->functions, special_name, strlen(special_name), &created_rec);
         }
 
         else if (ast_lambda_function == function->node->tag) {
@@ -931,16 +920,6 @@ static void ti_create_specials(ti_inferer *self) {
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
             array_push(nodes_to_add, &created);
-
-            // add to function records
-            ti_function_record created_rec = {
-              .name = special_name, .type = callsite->type, .node = created};
-
-            log(self, "create_specials: adding lambda record for '%s' %s ==> %s", special_name,
-                tl_type_to_string(self->transient, function->type),
-                tl_type_to_string(self->transient, callsite->type));
-
-            map_set(&self->functions, special_name, strlen(special_name), &created_rec);
         }
 
         else {
