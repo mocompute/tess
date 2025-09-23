@@ -1314,7 +1314,11 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
         fun_name = make_function_name(self->strings, fun_name);
     }
 
+    // function call result
     char *var = next_variable(self);
+    out_put_start(self, "");
+    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put(self, ";\n");
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -1322,11 +1326,6 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
             if (a_eval(self, v->arguments[i])) return 1;
-
-    // function call result
-    out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
-    out_put(self, ";\n");
 
     // function call
     tl_type               *fun_type       = node->named_application.name->type;
