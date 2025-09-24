@@ -107,7 +107,7 @@ static int             ti_check_callsites(ti_inferer *);
 static void            ti_collect_specialization_requirements(ti_inferer *);
 static void            ti_create_specials(ti_inferer *);
 static void            ti_patch_special_applications(ti_inferer *);
-static void            ti_collect_functions_to_emit(ti_inferer *);
+static int             ti_collect_functions_to_emit(ti_inferer *);
 static void            ti_fixup_free_variables(ti_inferer *self);
 
 static void            ti_collect_and_solve(ti_inferer *, int);
@@ -276,10 +276,6 @@ int ti_inferer_run(ti_inferer *self) {
         log_specials(self);
     }
 
-    if (self->errors.size) {
-        ti_inferer_report_errors(self);
-        return 1;
-    }
     if (self->constraints.size) {
         dbg("remaining constraints:\n");
         ti_inferer_dbg_constraints(self);
@@ -306,7 +302,7 @@ int ti_inferer_run(ti_inferer *self) {
 
     // Collect the rest of the functions to be emitted (the tuple
     // constructors, user types and main) into the specials array
-    ti_collect_functions_to_emit(self);
+    if (ti_collect_functions_to_emit(self)) goto error;
 
     if (self->verbose) {
         log(self, "functions to be emitted:");
@@ -320,6 +316,9 @@ int ti_inferer_run(ti_inferer *self) {
 
     arena_reset(self->transient);
     return 0;
+
+error:
+    return 1;
 }
 
 ast_node_sized ti_inferer_get_program(ti_inferer *self) {
@@ -348,8 +347,8 @@ static void find_error(void *ctx_, ast_node *node) {
     if (!tl_type_is_poly(node->type)) return;
 
     ctx->error_count++;
-    fprintf(stderr, "%s:%u: cannot infer type of %s\n", node->file, node->line,
-            ast_node_to_string_for_error(self->transient, node));
+    // fprintf(stderr, "%s:%u: cannot infer type of %s\n", node->file, node->line,
+    //         ast_node_to_string_for_error(self->transient, node));
 }
 
 void ti_inferer_report_errors(ti_inferer *self) {
@@ -360,8 +359,10 @@ void ti_inferer_report_errors(ti_inferer *self) {
             ti_error       *err  = &self->errors.v[i];
             ast_node const *node = err->node;
 
-            fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line, tl_error_tag_to_string(err->tag),
-                    ast_node_to_string_for_error(self->transient, node));
+            if (node)
+                fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line, tl_error_tag_to_string(err->tag),
+                        ast_node_to_string_for_error(self->transient, node));
+            else fprintf(stderr, "error: %s\n", tl_error_tag_to_string(err->tag));
         }
     }
 
@@ -380,9 +381,6 @@ void ti_inferer_report_errors(ti_inferer *self) {
         ti_inferer_dbg_constraints(self);
     }
 
-    dbg("\ninfo: program nodes follow --\n\n");
-    dbg_ast_nodes(self);
-    dbg("\n-- program nodes end\n\n");
     arena_reset(self->transient);
 }
 
@@ -1247,7 +1245,7 @@ static void collect_anon_lambdas(void *ctx_, ast_node *node) {
     array_push(self->specials, &node);
 }
 
-static void ti_collect_functions_to_emit(ti_inferer *self) {
+static int ti_collect_functions_to_emit(ti_inferer *self) {
 
     // check all non-variable symbol references, and if they are
     // function templates which are not generic, include them.
@@ -1262,7 +1260,10 @@ static void ti_collect_functions_to_emit(ti_inferer *self) {
     }
 
     ti_function_record *main = ti_lookup_function(self, "main");
-    if (!main) fatal("no main function found");
+    if (!main) {
+        array_push(self->errors, &(ti_error){.tag = tl_err_no_main_function});
+        return 1;
+    }
     ast_node_dfs_safe_for_recur(self->transient, &ctx, main->node, collect_syms);
 
     ast_node_dfs_safe_for_recur(self->transient, &ctx, main->node, collect_anon_lambdas);
@@ -1293,6 +1294,8 @@ static void ti_collect_functions_to_emit(ti_inferer *self) {
 
     hset_destroy(&ctx.seen);
     arena_reset(self->transient);
+
+    return 0;
 }
 
 // -- rename variables --
@@ -1936,8 +1939,10 @@ static void dbg_constraint(constraint const *c) {
 
 static void dbg_ast_nodes(ti_inferer *self) {
     for (size_t i = 0; i < self->nodes->size; ++i) {
-        char *str = ast_node_to_string(self->transient, self->nodes->v[i]);
-        dbg("%p: %s\n", self->nodes->v[i], str);
+        ast_node *node = self->nodes->v[i];
+        if (node->file && 0 == strcmp("std_preamble", node->file)) continue;
+        char *str = ast_node_to_string(self->transient, node);
+        dbg("%s:%i: %s\n", node->file, node->line, str);
         alloc_free(self->transient, str);
     }
 }
