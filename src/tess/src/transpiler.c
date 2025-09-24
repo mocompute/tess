@@ -93,7 +93,7 @@ static char *make_thunk_struct_name(allocator *, u64);
 static char       *make_lambda_struct_name(allocator *, u64);
 static char       *make_lambda_function_name(allocator *, u64);
 static char       *make_function_name(allocator *, char const *);
-static char       *emit_symbol_use(transpiler *, ast_node const *);
+static char const *emit_symbol_use(transpiler *, ast_node const *);
 static char const *emit_symbol_declaration(transpiler *, ast_node const *, char const *, int);
 static char const *emit_type(transpiler *, tl_type *, char const *);
 static char const *emit_type_arrow_ok(transpiler *, tl_type *, char const *, char const *);
@@ -720,23 +720,49 @@ static char const *find_free_variable_context(transpiler *self, char const *name
     return null;
 }
 
-static char *emit_symbol_use(transpiler *self, ast_node const *node) {
+static char const *emit_symbol_use(transpiler *self, ast_node const *node) {
     // emit the symbol name, respecting thunk context and function name mangling
     char const *name = ast_node_name_string(node);
+    char const *res  = null;
 
     if (tl_type_get_arrow(node->type)) {
-        return make_function_name(self->strings, name);
-    } else {
+        if (ti_is_c_function_name(name)) {
+            res = name += 2;
+        }
+
+        else if (ti_is_generated_variable_name(name)) {
+            // if variable is a toplevel function, mangle the name. If
+            // not, it is an argument's name and must not be mangled.
+            if (lookup_function(self, name)) res = make_function_name(self->strings, name);
+            else res = name;
+        }
+
+        else if (ti_is_std_function_name(name)) {
+            res = name;
+        }
+
+        else {
+            res = make_function_name(self->strings, name);
+        }
+    }
+
+    else {
+
         if (self->is_eval_in_thunk) {
             char const *struct_name = find_free_variable_context(self, name);
+
             if (struct_name) {
                 int   len = snprintf(null, 0, "(*(%s->%s))", struct_name, name) + 1;
                 char *out = alloc_malloc(self->transient, len);
                 snprintf(out, len, "(*(%s->%s))", struct_name, name);
-                return out;
-            } else return alloc_strdup(self->transient, name);
-        } else return alloc_strdup(self->transient, name);
+                res = out;
+            }
+        }
+
+        if (!res) res = alloc_strdup(self->transient, name);
     }
+
+    return res;
 }
 
 static char const *emit_type_arrow_ok(transpiler *self, tl_type *type, char const *void_decl,
@@ -1301,26 +1327,8 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    struct ast_named_application const *v               = ast_node_named((ast_node *)node);
-    char const                         *fun_name        = ast_node_name_string(v->name);
-
-    int                                 is_special_name = 0;
-    if (ti_is_c_function_name(fun_name)) {
-        fun_name += 2;
-        is_special_name = 1;
-    }
-
-    else if (ti_is_generated_variable_name(fun_name)) {
-        // if variable is a toplevel function, mangle the name. If
-        // not, it is an argument's name and must not be mangled.
-        if (lookup_function(self, fun_name)) fun_name = make_function_name(self->strings, fun_name);
-    }
-
-    else if (ti_is_std_function_name(fun_name)) {
-        is_special_name = 1;
-    } else {
-        fun_name = make_function_name(self->strings, fun_name);
-    }
+    struct ast_named_application const *v        = ast_node_named((ast_node *)node);
+    char const                         *fun_name = emit_symbol_use(self, v->name);
 
     // function call result
     char *var = next_variable(self);
@@ -1339,12 +1347,8 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     tl_type               *fun_type       = node->named_application.name->type;
     tl_free_variable_sized free_variables = {0};
 
-    // FIXME I don't really want to do this: it's only because the ti
-    // is not giving us mono types for c_malloc and c_free at the moment.
-    if (!is_special_name) {
-        assert(type_arrow == fun_type->tag);
-        free_variables = fun_type->arrow.free_variables;
-    }
+    assert(type_arrow == fun_type->tag);
+    free_variables          = fun_type->arrow.free_variables;
 
     char const *struct_name = null;
     if (free_variables.size) struct_name = make_context_struct_name(self->transient, v->name->type);
