@@ -50,12 +50,6 @@ struct transpiler {
     free_variable_context_name_array thunk_free_variables;
     hashmap                         *functions; // char const* -> ast_node const* (let)
     // the let nodes in the program
-
-    hashmap *lambdas; // char const* -> ast_node const*
-    // named lambda hash of its ast_lamba_function is used as key for its thunk
-
-    hashmap *apply_contexts; // u64 -> u64 (hash apply name + freevars)
-    // named_function_applications which require context, hash is the name + the freevars
 };
 
 // -- embed externs --
@@ -140,8 +134,6 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 
     self->thunk_free_variables = (free_variable_context_name_array){.alloc = self->transient};
     self->functions            = map_create(self->transient, sizeof(ti_function_record));
-    self->lambdas              = map_create(self->transient, sizeof(ast_node *));
-    self->apply_contexts       = map_create(self->transient, sizeof(u64));
 
     self->results              = (c_string_array){.alloc = self->strings};
 
@@ -154,8 +146,6 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
 }
 
 void transpiler_destroy(transpiler **self) {
-    map_destroy(&(*self)->apply_contexts);
-    map_destroy(&(*self)->lambdas);
     map_destroy(&(*self)->functions);
     array_free((*self)->thunk_free_variables);
     array_free((*self)->results);
@@ -391,9 +381,6 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     ctx.self = self;
     ctx.seen = hset_create(self->transient);
 
-    map_destroy(&self->apply_contexts);
-    self->apply_contexts = map_create(self->transient, sizeof(u64));
-
     for (u32 i = 0; i < n; i++) {
         ast_node *node = nodes[i];
         ast_node_dfs_safe_for_recur(self->transient, &ctx, node, look_for_thunks);
@@ -577,12 +564,6 @@ static int a_let_in(transpiler *self, ast_node const *node) {
     } else {
         if (a_eval(self, node->let_in.value)) return 1;
         char const *value = pop_result(self);
-
-        // if value is a lambda function, add it to the current context
-        // FIXME what is this so called lambda context anymore??
-        if (ast_lambda_function == node->let_in.value->tag) {
-            map_set(&self->lambdas, name, strlen(name), &node->let_in.value);
-        }
 
         out_put_start(self, "");
         out_put(self, emit_symbol_declaration(self, node->let_in.name, name, 0));
@@ -1901,7 +1882,6 @@ static int generate_toplevel_prototypes(transpiler *self, ast_node_sized nodes) 
 }
 
 static int a_let(transpiler *self, ast_node const *node) {
-    map_reset(self->lambdas);
 
     if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
         log(self, "skipping '%s' because it is an intrinsic function",
