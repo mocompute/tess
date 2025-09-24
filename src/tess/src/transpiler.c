@@ -60,31 +60,29 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-static int   a_eval(transpiler *, ast_node const *);
-static int   a_if_then_else(transpiler *, ast_node const *);
-static int   a_field_setter(transpiler *, ast_node const *);
-static int   a_field_access(transpiler *, ast_node const *);
-static int   a_intrinsic_apply(transpiler *, ast_node const *);
-static int   a_fun_apply(transpiler *, ast_node const *);
-static int   a_let(transpiler *, ast_node const *);
-static int   a_let_in(transpiler *, ast_node const *);
-static int   a_let_match_in(transpiler *, ast_node const *);
-static int   a_let_struct_phase(transpiler *, ast_node const *);
-static int   a_main(transpiler *, ast_node const *);
-static int   a_result_type_of(transpiler *, tl_type const *);
-static int   a_toplevel(transpiler *, ast_node const *);
-static int   a_thunk(transpiler *, ast_node const *);
-static int   a_tuple_cons(transpiler *, ast_node const *);
-static int   a_user_type_definition(transpiler *, ast_node const *);
+static int         a_eval(transpiler *, ast_node const *);
+static int         a_if_then_else(transpiler *, ast_node const *);
+static int         a_field_setter(transpiler *, ast_node const *);
+static int         a_field_access(transpiler *, ast_node const *);
+static int         a_intrinsic_apply(transpiler *, ast_node const *);
+static int         a_fun_apply(transpiler *, ast_node const *);
+static int         a_let(transpiler *, ast_node const *);
+static int         a_let_in(transpiler *, ast_node const *);
+static int         a_let_match_in(transpiler *, ast_node const *);
+static int         a_let_struct_phase(transpiler *, ast_node const *);
+static int         a_main(transpiler *, ast_node const *);
+static int         a_result_type_of(transpiler *, tl_type const *);
+static int         a_toplevel(transpiler *, ast_node const *);
+static int         a_thunk(transpiler *, ast_node const *);
+static int         a_tuple_cons(transpiler *, ast_node const *);
+static int         a_user_type_definition(transpiler *, ast_node const *);
 
-static char *next_variable(transpiler *);
-static char *make_context_struct_name(allocator *alloc, tl_type *type);
-static char *make_tuple_struct_name(allocator *, u64);
-static char *make_tuple_struct_constructor_name(allocator *, u64);
-static char *make_thunk_name(allocator *, u64);
-static char *make_thunk_struct_name(allocator *, u64);
-// static char       *make_let_struct_name(allocator *, ast_node const *);
-static char       *make_lambda_struct_name(allocator *, u64);
+static char       *next_variable(transpiler *);
+static char       *make_context_struct_name(allocator *alloc, tl_type *type);
+static char       *make_tuple_struct_name(allocator *, u64);
+static char       *make_tuple_struct_constructor_name(allocator *, u64);
+static char       *make_thunk_name(allocator *, u64);
+static char       *make_thunk_struct_name(allocator *, u64);
 static char       *make_lambda_function_name(allocator *, u64);
 static char       *make_function_name(allocator *, char const *);
 static char const *emit_symbol_use(transpiler *, ast_node const *);
@@ -1040,7 +1038,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
     case ast_lambda_function: {
 
         u64   hash = ast_node_hash(node);
-        char *name = make_thunk_name(self->strings, hash);
+        char *name = make_lambda_function_name(self->strings, hash);
         if (var) out_put_start_fmt(self, "%s = %s;\n", var, name);
 
     } break;
@@ -1581,20 +1579,6 @@ static char *make_thunk_struct_name(allocator *alloc, u64 hash) {
     return name;
 }
 
-static char *make_lambda_struct_name(allocator *alloc, u64 hash) {
-    char *name = null;
-    {
-#define fmt "tl_gen_lambda_struct_%" PRIu64 "_"
-        int len = snprintf(null, 0, fmt, hash) + 1;
-        if (len < 0) fatal("generate name failed.");
-        name = alloc_malloc(alloc, (u32)len);
-        snprintf(name, (u32)len, fmt, hash);
-#undef fmt
-    }
-
-    return name;
-}
-
 static char *make_lambda_function_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
@@ -1722,27 +1706,39 @@ typedef struct {
 } generate_toplevel_contexts_ctx;
 
 static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
-    if (ast_let != node->tag) return;
-    generate_toplevel_contexts_ctx *ctx  = ctx_;
-    transpiler                     *self = ctx->self;
+    generate_toplevel_contexts_ctx *ctx            = ctx_;
+    transpiler                     *self           = ctx->self;
+    tl_free_variable_sized          free_variables = {0};
+    char const                     *struct_name    = null;
 
-    // FIXME: we're going to also handle tuple constructors here,
-    // basically every let node should be the same. Not sure about
-    // this, we could leave tuples in a separate stage.
+    if (ast_let == node->tag) {
 
-    struct ast_let const *v    = ast_node_let(node);
-    char const           *name = string_t_str(&v->name->symbol.name);
-    ti_function_record   *rec  = lookup_function(self, name);
-    if (!rec) fatal("function record not found: '%s'", name);
+        // FIXME: we're going to also handle tuple constructors here,
+        // basically every let node should be the same. Not sure about
+        // this, we could leave tuples in a separate stage.
 
-    // determine if a free variable context is required. If so, output
-    // the context struct definition.
-    assert(type_arrow == v->name->type->tag);
-    tl_free_variable_sized free_variables = v->name->type->arrow.free_variables;
+        struct ast_let const *v = ast_node_let(node);
+
+        assert(type_arrow == v->name->type->tag);
+        free_variables = v->name->type->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, v->name->type);
+    }
+
+    else if (ast_node_is_let_in_lambda(node)) {
+        struct ast_let_in const *v = ast_node_let_in(node);
+        assert(type_arrow == v->name->type->tag);
+        free_variables = v->name->type->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, v->name->type);
+    }
+
+    else if (ast_lambda_function == node->tag) {
+
+        assert(type_arrow == node->type->tag);
+        free_variables = node->type->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, node->type);
+    }
 
     if (free_variables.size) {
-        char const *struct_name = make_context_struct_name(self->strings, v->name->type);
-
         if (hset_contains(ctx->seen, struct_name, strlen(struct_name))) return;
         hset_insert(&ctx->seen, struct_name, strlen(struct_name));
         out_put(self, "\n");
@@ -1755,7 +1751,7 @@ static int generate_toplevel_contexts(transpiler *self, ast_node_sized nodes) {
     generate_toplevel_contexts_ctx ctx = {.self = self, .seen = hset_create(self->transient)};
 
     forall(i, nodes) {
-        generate_one_toplevel_context(&ctx, nodes.v[i]);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes.v[i], generate_one_toplevel_context);
     }
 
     return 0;
@@ -1775,9 +1771,7 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
 
     char const            *struct_name    = null;
     if (free_variables.size) {
-        struct_name = make_lambda_struct_name(self->strings, hash);
-        out_put(self, "\n");
-        emit_thunk_struct(self, struct_name, free_variables);
+        struct_name = make_context_struct_name(self->strings, node->type);
     }
 
     // return type and name
