@@ -294,4 +294,6 @@ u64             ast_node_hash(ast_node const *);
 int             ast_node_is_let_in_lambda(ast_node const *);
 int             ast_node_is_named_application(ast_node const *);
 
+tl_type        *ast_node_get_arrow(ast_node const *);
+
 #endif

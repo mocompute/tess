@@ -1322,3 +1322,24 @@ int ast_node_is_let_in_lambda(ast_node const *self) {
 int ast_node_is_named_application(ast_node const *self) {
     return (ast_named_function_application == self->tag);
 }
+
+tl_type *ast_node_get_arrow(ast_node const *self) {
+
+    if (ast_named_function_application == self->tag) {
+        return tl_type_get_arrow(self->named_application.name->type);
+    }
+
+    else if (ast_lambda_function_application == self->tag) {
+        return tl_type_get_arrow(self->lambda_application.lambda->type);
+    }
+
+    else if (ast_address_of == self->tag) {
+        return tl_type_get_arrow(self->address_of.target->type);
+    }
+
+    else {
+        return tl_type_get_arrow(self->type);
+    }
+
+    return null;
+}
