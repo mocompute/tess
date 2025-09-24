@@ -109,7 +109,7 @@ end
 let b = Big // ...
 let (val = a, rest = ...) = b in
   // val =>  takes value of field a
-  // rest => a labelled tuple of the remaining fields not including a
+  // rest => a labelled tuple of the remaining fields, e.g. (b = 1, c = 2, d = "hello")
 
 
 // Block expression
