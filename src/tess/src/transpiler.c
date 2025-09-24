@@ -1036,7 +1036,6 @@ static int a_eval(transpiler *self, ast_node const *node) {
         break;
 
     case ast_lambda_function: {
-
         u64   hash = ast_node_hash(node);
         char *name = make_lambda_function_name(self->strings, hash);
         if (var) out_put_start_fmt(self, "%s = %s;\n", var, name);
@@ -1044,9 +1043,9 @@ static int a_eval(transpiler *self, ast_node const *node) {
     } break;
 
     case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application: break;
+    case ast_lambda_declaration:          break;
 
+    case ast_lambda_function_application:
     case ast_named_function_application:  {
         if (BIT_TEST(node->named_application.flags, AST_NAMED_APP_INTRINSIC)) {
             if (a_intrinsic_apply(self, node)) return 1;
@@ -1304,10 +1303,15 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 }
 
 static int a_fun_apply(transpiler *self, ast_node const *node) {
-    assert(ast_named_function_application == node->tag);
+    if (ast_named_function_application != node->tag && ast_lambda_function_application != node->tag)
+        fatal("logic error");
 
-    struct ast_named_application const *v        = ast_node_named((ast_node *)node);
-    char const                         *fun_name = emit_symbol_use(self, v->name);
+    int         is_nfa      = ast_named_function_application == node->tag;
+
+    ast_node   *type_holder = is_nfa ? node->named_application.name : node->lambda_application.lambda;
+    char const *fun_name =
+      is_nfa ? emit_symbol_use(self, type_holder)
+             : make_lambda_function_name(self->transient, ast_node_hash(node->lambda_application.lambda));
 
     // function call result
     char *var = next_variable(self);
@@ -1317,20 +1321,20 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
-    i32 const n_args = v->n_arguments;
+    i32 const n_args = node->array.n;
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
-            if (a_eval(self, v->arguments[i])) return 1;
+            if (a_eval(self, node->array.nodes[i])) return 1;
 
     // function call
-    tl_type               *fun_type       = node->named_application.name->type;
+    tl_type               *fun_type       = type_holder->type;
     tl_free_variable_sized free_variables = {0};
 
     assert(type_arrow == fun_type->tag);
     free_variables          = fun_type->arrow.free_variables;
 
     char const *struct_name = null;
-    if (free_variables.size) struct_name = make_context_struct_name(self->transient, v->name->type);
+    if (free_variables.size) struct_name = make_context_struct_name(self->transient, type_holder->type);
 
     // prepare the function call context, if any
     out_put_start(self, "{\n");
@@ -1344,7 +1348,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     // function call
     out_put_fmt(self, "%s(", fun_name);
     if (free_variables.size) out_put_fmt(self, "&tl_apply_ctx_");
-    for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+    for (u32 i = 0; i < node->array.n; ++i) {
         if (i || free_variables.size) out_put(self, ", ");
         char const *arg = pop_result(self); // pop previously evaluated argument
         out_put(self, arg);

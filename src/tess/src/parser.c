@@ -64,6 +64,7 @@ static int           grouped_expression(parser *);
 static int           if_then_else(parser *);
 static int           lambda_declaration(parser *);
 static int           lambda_function(parser *);
+static int           lambda_function_application(parser *);
 static int           match_declaration(parser *);
 static int           simple_declaration(parser *);
 static int           struct_declaration(parser *);
@@ -328,7 +329,7 @@ static int next_token(parser *p) {
         if (tok_comment == p->token.tag) continue;
 
         char *str = token_to_string(p->transient, &p->token);
-        // log(p, "next_token: %s", str);
+        log(p, "next_token: %s", str);
         alloc_free(p->transient, str);
 
         tokens_push_back(p, &p->token);
@@ -903,7 +904,9 @@ error:
 static int a_value(parser *self) {
     if (0 == a_try(self, a_nil)) return 0;
     if (is_eof(self)) return 1;
+    if (0 == a_try(self, lambda_function_application)) return 0;
     if (!self->in_function_application && 0 == a_try(self, function_application)) return 0;
+    if (0 == a_try(self, lambda_function)) return 0;
     if (0 == a_try(self, a_field_pointer_setter)) return 0; // before field_access
     if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
     if (0 == a_try(self, a_field_pointer_access)) return 0;
@@ -915,6 +918,7 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
+    if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_ellipsis)) return 0;
 
     self->error.tag = tl_err_expected_value;
@@ -1008,6 +1012,25 @@ static int a_end_of_block(parser *self) {
         log(self, "end_of_block: other error");
         return 1;
     }
+    if (tok_symbol == self->token.tag) {
+        if (0 == strcmp("end", self->token.s)) return result_ast_str(self, ast_symbol, "end");
+        if (is_start_of_expression(self->token.s)) return 2;
+    }
+
+    self->error.tag = tl_err_expected_end_of_block;
+    return 1;
+}
+
+static int a_end_of_block_or_close_round(parser *self) {
+
+    if (next_token(self)) {
+        if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
+        log(self, "end_of_block: other error");
+        return 1;
+    }
+
+    if (tok_close_round == self->token.tag) return 2;
+
     if (tok_symbol == self->token.tag) {
         if (0 == strcmp("end", self->token.s)) return result_ast_str(self, ast_symbol, "end");
         if (is_start_of_expression(self->token.s)) return 2;
@@ -1491,6 +1514,8 @@ error:
 static int lambda_function(parser *self) {
     // fun a b c... -> rhs
 
+    (void)a_try(self, a_open_round); // optional
+
     if (a_try_s(self, the_symbol, "fun")) {
         self->error.tag = tl_err_ok;
         return 1;
@@ -1511,12 +1536,11 @@ static int lambda_function(parser *self) {
     }
     ast_node *defn = self->result;
 
-    // require end keyword to end parse of lambda function definition: do not use try_special, as we really
-    // want the actual 'end' keyword
-    if (a_try(self, a_end_of_block)) {
+    if (a_try_special(self, a_end_of_block_or_close_round)) {
         self->error.tag = tl_err_expected_end_of_block;
         goto error;
     }
+    (void)a_try(self, a_close_round); // optional
 
     ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
     node->lambda_function.parameters   = null;
@@ -1555,7 +1579,8 @@ static int lambda_function_application(parser *self) {
 
     self->in_function_application = 1;
     if (a_try(self, function_argument)) {
-        self->error.tag = tl_err_ok;
+        self->error.tag               = tl_err_ok;
+        self->in_function_application = 0;
         return 1;
     }
 
@@ -1578,6 +1603,7 @@ static int lambda_function_application(parser *self) {
             node->lambda_application.lambda      = lambda;
 
             array_shrink(arguments);
+            repair_single_nil_argument(&arguments);
             node->array.n     = (u8)arguments.size;
             node->array.nodes = arguments.v;
             if (arguments.size > 0xff) {
@@ -1596,9 +1622,11 @@ static int lambda_function_application(parser *self) {
 
 success:
     self->indent_level--;
+    self->in_function_application = 0;
     return 0;
 error:
     self->indent_level--;
+    self->in_function_application = 0;
     return 1;
 }
 
@@ -1787,15 +1815,13 @@ static int grouped_expression(parser *self) {
         return 1;
     }
 
-    log(self, "try grouped expression");
+    log(self, "begin grouped expression");
 
     if (a_try(self, expression)) {
         self->error.tag = tl_err_ok;
         return 1;
     }
     ast_node *const out = self->result;
-
-    log(self, "begin grouped expression");
 
     if (a_try(self, a_close_round)) {
         self->error.tag = tl_err_expected_close_round;
@@ -1811,6 +1837,11 @@ static int expression(parser *self) {
 
     self->indent_level++;
 
+    // this must appear before grouped_expression, since we wish to accept the syntax:
+    // `(fun a b -> add a b end) 1 2` as a lambda function application
+    if (0 == a_try(self, lambda_function_application)) goto success;
+    if (has_error(self)) goto error;
+
     if (0 == a_try(self, grouped_expression)) goto success;
     // ignore grouped_expression failure because it could be a tuple
 
@@ -1824,12 +1855,6 @@ static int expression(parser *self) {
     if (has_error(self)) goto error;
 
     if (0 == a_try(self, if_then_else)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, lambda_function_application)) goto success; // before lambda_function
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, lambda_function)) goto success;
     if (has_error(self)) goto error;
 
     if (0 == a_try(self, function_application)) goto success;

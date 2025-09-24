@@ -1145,6 +1145,24 @@ static void apply_type(void *ctx, ast_node *node) {
     if (found) node->type = *found;
 }
 
+static tl_free_variable_sized merge_argument_free_variables(ti_inferer *self, ast_node *node) {
+    tl_type               *name_arrow = ast_node_get_arrow(node);
+    tl_free_variable_array merged     = {.alloc = self->type_arena};
+    array_init_from_slice(&merged, &name_arrow->arrow.free_variables);
+
+    for (u32 i = 0; i < node->array.n; ++i) {
+        ast_node *arg   = node->array.nodes[i];
+        tl_type  *arrow = ast_node_get_arrow(arg);
+        if (arrow) {
+            tl_free_variable_array_merge(&merged, arrow->arrow.free_variables);
+        }
+    }
+
+    // replace nfa's name type
+    array_shrink(merged);
+    return (tl_free_variable_sized)sized_all(merged);
+}
+
 static void one_fixup_free_variables(void *ctx_, ast_node *node) {
     fixup_free_variables_ctx *ctx  = ctx_;
     ti_inferer               *self = ctx->self;
@@ -1163,47 +1181,13 @@ static void one_fixup_free_variables(void *ctx_, ast_node *node) {
     }
 
     else if (ast_named_function_application == node->tag) {
-
-        // merge in all argument free variables to the symbol being applied.
-
-        tl_type *name_arrow = ast_node_get_arrow(node);
-        if (!name_arrow) fatal("expected arrow");
-
-        tl_free_variable_array merged = {.alloc = self->type_arena};
-        array_init_from_slice(&merged, &name_arrow->arrow.free_variables);
-
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            ast_node *arg   = node->named_application.arguments[i];
-            tl_type  *arrow = ast_node_get_arrow(arg);
-            if (arrow) {
-                tl_free_variable_array_merge(&merged, arrow->arrow.free_variables);
-            }
-        }
-
-        // replace nfa's name type
-        array_shrink(merged);
-        node->named_application.name->type->arrow.free_variables =
-          (tl_free_variable_sized)sized_all(merged);
+        tl_free_variable_sized merged = merge_argument_free_variables(self, node);
+        node->named_application.name->type->arrow.free_variables = merged;
     }
 
     else if (ast_lambda_function_application == node->tag) {
-        tl_type *arrow = ast_node_get_arrow(node);
-        if (!arrow) fatal("expected arrow");
-        tl_free_variable_array merged = {.alloc = self->type_arena};
-        array_init_from_slice(&merged, &arrow->arrow.free_variables);
-
-        for (u32 i = 0; i < node->lambda_application.n_arguments; ++i) {
-            ast_node *arg   = node->lambda_application.arguments[i];
-            tl_type  *arrow = ast_node_get_arrow(arg);
-            if (arrow) {
-                tl_free_variable_array_merge(&merged, arrow->arrow.free_variables);
-            }
-        }
-
-        // replace lambda's type
-        array_shrink(merged);
-        node->lambda_application.lambda->type->arrow.free_variables =
-          (tl_free_variable_sized)sized_all(merged);
+        tl_free_variable_sized merged = merge_argument_free_variables(self, node);
+        node->lambda_application.lambda->type->arrow.free_variables = merged;
     }
 }
 
