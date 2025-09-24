@@ -789,14 +789,14 @@ int tl_free_variable_array_cmp(tl_free_variable_sized lhs, tl_free_variable_size
 
     forall(i, lhs) {
         int res;
-        if ((res = string_t_cmp(&lhs.v[i].name, &rhs.v[i].name))) return res;
-        if ((res = tl_type_compare(lhs.v[i].type, rhs.v[i].type))) return res;
+        if ((res = tl_free_variable_cmp(&lhs.v[i], &rhs.v[i]))) return res;
     }
     return 0;
 }
 
 u64 tl_free_variable_array_hash64(tl_free_variable_sized arr, int ignore_types) {
 
+    // NOTE: ignores special_hash
     u64 hash = 0;
     forall(i, arr) {
         u64 str = string_t_hash64(&arr.v[i].name);
@@ -826,6 +826,11 @@ int tl_free_variable_array_contains_one(tl_free_variable_sized haystack, tl_free
 }
 
 int tl_free_variable_cmp(tl_free_variable const *lhs, tl_free_variable const *rhs) {
+    // if either special_hash is zero, don't use it for comparison
+    if (lhs->special_hash && rhs->special_hash) {
+        if (lhs->special_hash != rhs->special_hash) return lhs->special_hash < rhs->special_hash ? -1 : 1;
+    }
+
     int res;
     if ((res = string_t_cmp(&lhs->name, &rhs->name))) return res;
     return tl_type_compare(lhs->type, rhs->type);

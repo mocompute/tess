@@ -720,6 +720,7 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         ti_function_record rec  = {.name = name, .type = type, .node = null, .source = node};
 
         map_set(&self->requirements, &hash, sizeof hash, &rec);
+
         node->named_application.name->symbol.special_hash = hash;
         map_set(&ctx->symbol_to_hash, name, strlen(name), &hash);
 
@@ -757,7 +758,9 @@ static void copy_hashes(void *ctx_, ast_node *node) {
     collect_special_requirements_ctx *ctx  = ctx_;
     char const                       *name = ast_node_name_string(node);
     u64                              *hash = map_get(ctx->symbol_to_hash, name, strlen(name));
-    if (hash) node->symbol.special_hash = *hash;
+
+    // don't overwrite existing hash - same symbol may be polymorphic
+    if (hash && !node->symbol.special_hash) node->symbol.special_hash = *hash;
 }
 
 static void ti_collect_specialization_requirements(ti_inferer *self) {
