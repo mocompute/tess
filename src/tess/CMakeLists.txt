@@ -106,6 +106,7 @@ endfunction()
 # tesslang_create_test(function_pointer_argument)
 
 tesslang_create_test(alloc)
+tesslang_create_test(apply_lambda)
 tesslang_create_test(array)
 tesslang_create_test(address_of)
 tesslang_create_test(basic)
