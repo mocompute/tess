@@ -1716,9 +1716,15 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-static void generate_one_toplevel_context(void *ctx, ast_node *node) {
+typedef struct {
+    transpiler *self;
+    hashmap    *seen;
+} generate_toplevel_contexts_ctx;
+
+static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
     if (ast_let != node->tag) return;
-    transpiler *self = ctx;
+    generate_toplevel_contexts_ctx *ctx  = ctx_;
+    transpiler                     *self = ctx->self;
 
     // FIXME: we're going to also handle tuple constructors here,
     // basically every let node should be the same. Not sure about
@@ -1736,6 +1742,9 @@ static void generate_one_toplevel_context(void *ctx, ast_node *node) {
 
     if (free_variables.size) {
         char const *struct_name = make_context_struct_name(self->strings, v->name->type);
+
+        if (hset_contains(ctx->seen, struct_name, strlen(struct_name))) return;
+        hset_insert(&ctx->seen, struct_name, strlen(struct_name));
         out_put(self, "\n");
         emit_thunk_struct(self, struct_name, free_variables);
     }
@@ -1743,8 +1752,10 @@ static void generate_one_toplevel_context(void *ctx, ast_node *node) {
 
 static int generate_toplevel_contexts(transpiler *self, ast_node_sized nodes) {
 
+    generate_toplevel_contexts_ctx ctx = {.self = self, .seen = hset_create(self->transient)};
+
     forall(i, nodes) {
-        generate_one_toplevel_context(self, nodes.v[i]);
+        generate_one_toplevel_context(&ctx, nodes.v[i]);
     }
 
     return 0;
