@@ -978,22 +978,23 @@ typedef struct {
     ti_inferer *self;
 } patch_special_ctx;
 
-static void patch_one_symbol(patch_special_ctx *ctx, ast_node *node) {
+static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *type) {
     // also look at every symbol, which could be referencing a function by name. In this case, we don't
     // have access to the enclosing ast node, so we have to overwrite the symbol's data.
+
+    if (tl_type_is_poly(type)) return 1;
 
     ti_inferer         *self = ctx->self;
 
     char const         *name = string_t_str(&node->symbol.name);
 
-    tl_type            *type = node->type;
     u64                 hash = hash_name_and_type(name, type);
     ti_function_record *rec  = map_get(self->requirements, &hash, sizeof hash);
 
     log(self, "patch_one_symbol: %-16s %-32" PRIu64 " type: %s rec: %p", name, hash,
         tl_type_to_string(self->transient, type), rec);
 
-    if (!rec) return;
+    if (!rec || !rec->node) return 1;
 
     log(self, "patch_one_symbol: %-16s %-32" PRIu64 " replaced with %s", name, hash, rec->name);
 
@@ -1019,6 +1020,7 @@ static void patch_one_symbol(patch_special_ctx *ctx, ast_node *node) {
             free_variables.v[i].type = rec->type;
         }
     }
+    return 0;
 }
 
 static void patch_one_special(void *ctx_, ast_node *node) {
@@ -1027,7 +1029,8 @@ static void patch_one_special(void *ctx_, ast_node *node) {
     ti_inferer        *self = ctx->self;
 
     if (ast_let_in == node->tag) {
-        if (ast_symbol == node->let_in.value->tag) patch_one_symbol(ctx, node->let_in.value);
+        if (ast_symbol == node->let_in.value->tag)
+            patch_one_symbol(ctx, node->let_in.value, node->let_in.value->type);
         else if (ast_lambda_function != node->let_in.value->tag) return;
 
         char const *name = ast_node_name_string(node->let_in.name);
@@ -1069,46 +1072,11 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         // patch the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
             ast_node *arg = node->named_application.arguments[i];
-            if (ast_symbol == arg->tag) patch_one_symbol(ctx, arg);
+            if (ast_symbol == arg->tag) patch_one_symbol(ctx, arg, arg->type);
         }
 
-        // TODO: this block is similar to patch_one_symbol except it uses function_type instead of
-        // node->type, and it needs to set the AST_NAMED_APP_SPECIALIZED flag.
-
-        char const *name = ast_node_name_string(node->named_application.name);
-        tl_type    *type = node->named_application.function_type;
-
-        if (tl_type_is_poly(type)) {
-            return;
-        }
-
-        u64                 hash = hash_name_and_type(name, type);
-        ti_function_record *rec  = map_get(self->requirements, &hash, sizeof hash);
-
-        // If our type is already monomorphic, we might not find a matching name and type in the
-        // requirements map. That's because we've already been specialised, so no further patching is
-        // needed.
-        if (!rec && !tl_type_is_poly(node->named_application.name->type)) return;
-
-        // ignore cases where there is no specialised node for this name
-        // and type combination, because those are intrinsics or c_ etc.
-        if (!rec) {
-            log(self, "could not find requirements record for %" PRIu64 " '%s' of type %s from callsite %s",
-                hash, name, tl_type_to_string(self->transient, type),
-                ast_node_to_string(self->transient, node));
-            return;
-        }
-        if (!rec->node) return;
-
-        if (ast_let == rec->node->tag) {
-            // just copy the specialized name to the application site.
-            node->named_application.name = rec->node->let.name;
-
-            // mark node as having been specialised, so its new name
-            // can be constrained to the implied type of the callsite.
-            BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
-
-        } else if (ast_lambda_function == rec->node->tag) {
+        if (0 ==
+            patch_one_symbol(ctx, node->named_application.name, node->named_application.function_type)) {
             BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
         }
     }
