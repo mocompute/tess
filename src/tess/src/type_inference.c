@@ -3129,4 +3129,6 @@ static void trace_symbol_impl(ti_inferer *self, ast_node const *node, char const
     char       *type = tl_type_to_string(self->transient, node->type);
     dbg("%s:%i: trace: %s orig: %s type: %s\n", file, line, name, orig, type);
     alloc_free_i(self->transient, type, file, line);
+    (void)name;
+    (void)orig;
 }
