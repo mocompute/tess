@@ -161,7 +161,7 @@ static int test_parser_node_to_string(void) {
 
         char *str = ast_node_to_string(alloc, node);
         dbg("str 2 = %s\n", str);
-        error += 0 == strcmp("(tuple ((symbol a [null]) (symbol b [null])) [null])", str) ? 0 : 1;
+        error += 0 == strcmp("(tuple ((symbol a 0 [null]) (symbol b 0 [null])) [null])", str) ? 0 : 1;
         alloc_free(alloc, str);
         parser_destroy(&p);
     }

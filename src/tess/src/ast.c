@@ -35,6 +35,7 @@ ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
     self->symbol.original        = string_t_init_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
+    self->symbol.special_hash    = 0;
     self->symbol.flags           = 0;
     return self;
 }
@@ -116,6 +117,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         string_t_copy(alloc, &vclone->original, &vorig->original);
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = vorig->annotation_type;
+        vclone->special_hash    = vorig->special_hash;
         vclone->flags           = vorig->flags;
     } break;
 
@@ -257,8 +259,9 @@ sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
         type = sexp_init_sym(alloc, buf);
         alloc_free(alloc, buf);
     }
-    return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                 sexp_init_sym(alloc, ast_node_name_string(node)), type);
+    return sexp_init_list_quad(alloc, sexp_init_sym(alloc, "symbol"),
+                               sexp_init_sym(alloc, ast_node_name_string(node)),
+                               sexp_init_u64(alloc, node->symbol.special_hash), type);
 }
 
 sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {

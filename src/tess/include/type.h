@@ -36,6 +36,7 @@ typedef struct {
 typedef struct {
     string_t        name;
     struct tl_type *type;
+    u64             special_hash; // used during specialisation
 } tl_free_variable;
 
 typedef struct {

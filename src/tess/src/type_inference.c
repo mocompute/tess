@@ -249,7 +249,7 @@ int ti_inferer_run(ti_inferer *self) {
     }
 
     // Run constraint solver until it settles. This monomorphises as
-    // much as possible without specialising generic functions.
+    // much as possible.
     ti_collect_and_solve(self, 1);
 
     // Create tuple constructors.
@@ -696,6 +696,7 @@ static int ti_check_callsites(ti_inferer *self) {
 
 typedef struct {
     ti_inferer *self;
+    hashmap    *symbol_to_hash; // char const* -> u64
 } collect_special_requirements_ctx;
 
 static u64 hash_name_and_type(char const *name, tl_type *type) {
@@ -719,6 +720,8 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         ti_function_record rec  = {.name = name, .type = type, .node = null, .source = node};
 
         map_set(&self->requirements, &hash, sizeof hash, &rec);
+        node->named_application.name->symbol.special_hash = hash;
+        map_set(&ctx->symbol_to_hash, name, strlen(name), &hash);
 
         log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash, name,
             string_t_str(&node->named_application.name->symbol.original),
@@ -739,6 +742,8 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         ti_function_record rec  = {.name = name, .type = type, .node = node->let_in.value, .source = node};
 
         map_set(&self->requirements, &hash, sizeof hash, &rec);
+        node->let_in.name->symbol.special_hash = hash;
+        map_set(&ctx->symbol_to_hash, name, strlen(name), &hash);
 
         log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash, name,
             string_t_str(&node->let_in.name->symbol.original), tl_type_to_string(self->transient, type),
@@ -746,15 +751,31 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
     }
 }
 
+static void copy_hashes(void *ctx_, ast_node *node) {
+    if (ast_symbol != node->tag) return;
+
+    collect_special_requirements_ctx *ctx  = ctx_;
+    char const                       *name = ast_node_name_string(node);
+    u64                              *hash = map_get(ctx->symbol_to_hash, name, strlen(name));
+    if (hash) node->symbol.special_hash = *hash;
+}
+
 static void ti_collect_specialization_requirements(ti_inferer *self) {
     // for every named application and named lambda function, create a record of the name and the
     // required type.
 
     // map: name+type hash -> function_record
-    collect_special_requirements_ctx ctx = {.self = self};
+    collect_special_requirements_ctx ctx = {
+      .self           = self,
+      .symbol_to_hash = map_create(self->transient, sizeof(u64)),
+    };
 
     forall(i, *self->nodes) {
         ti_traverse_lexical(self->transient, &ctx, self->nodes->v[i], one_specialization_requirement);
+    }
+
+    forall(i, *self->nodes) {
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->nodes->v[i], copy_hashes);
     }
 
     arena_reset(self->transient);
@@ -984,12 +1005,15 @@ static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *typ
 
     if (tl_type_is_poly(type)) return 1;
 
-    ti_inferer         *self = ctx->self;
+    ti_inferer *self = ctx->self;
 
-    char const         *name = string_t_str(&node->symbol.name);
+    char const *name = string_t_str(&node->symbol.name);
 
-    u64                 hash = hash_name_and_type(name, type);
-    ti_function_record *rec  = map_get(self->requirements, &hash, sizeof hash);
+    // u64                 hash = hash_name_and_type(name, type);
+    u64 hash = node->symbol.special_hash;
+    if (!hash) return 1;
+
+    ti_function_record *rec = map_get(self->requirements, &hash, sizeof hash);
 
     log(self, "patch_one_symbol: %-16s %-32" PRIu64 " type: %s rec: %p", name, hash,
         tl_type_to_string(self->transient, type), rec);
@@ -1010,10 +1034,13 @@ static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *typ
         tl_free_variable_sized free_variables = arrow->arrow.free_variables;
 
         forall(i, free_variables) {
-            char const         *name = string_t_str(&free_variables.v[i].name);
-            tl_type            *type = free_variables.v[i].type;
-            u64                 hash = hash_name_and_type(name, type);
-            ti_function_record *rec  = map_get(self->requirements, &hash, sizeof hash);
+            // char const *name = string_t_str(&free_variables.v[i].name);
+            // tl_type    *type = free_variables.v[i].type;
+            // u64                 hash = hash_name_and_type(name, type);
+            u64 hash = free_variables.v[i].special_hash;
+            if (!hash) continue;
+
+            ti_function_record *rec = map_get(self->requirements, &hash, sizeof hash);
             if (!rec) continue;
 
             free_variables.v[i].name = string_t_init(self->type_arena, rec->name);
@@ -2923,7 +2950,9 @@ static tl_free_variable_sized ast_node_array_to_free_variables(allocator *alloc,
     array_reserve(fva, array.size);
     forall(i, array) {
         assert(ast_symbol == array.v[i]->tag);
-        tl_free_variable fv = {.name = array.v[i]->symbol.name, .type = array.v[i]->type};
+        tl_free_variable fv = {.name         = array.v[i]->symbol.name,
+                               .type         = array.v[i]->type,
+                               .special_hash = array.v[i]->symbol.special_hash};
         array_insert_sorted(fva, &fv, tl_free_variable_cmpv);
     }
     array_shrink(fva);
@@ -3012,7 +3041,7 @@ static void log_specialization_records(ti_inferer *self) {
     while (map_iter(self->requirements, &iter)) {
         ti_function_record *rec = iter.data;
         assert(iter.key_size == sizeof(u64));
-        log(self, "specialization requirement: %" PRIu64 " -> %s %s source: %s", *(u64 *)iter.key_ptr,
+        log(self, "specialization requirement: %-24" PRIu64 " -> %s %s source: %s", *(u64 *)iter.key_ptr,
             rec->name, tl_type_to_string(self->transient, rec->type),
             ast_node_to_string(self->transient, rec->source));
     }
