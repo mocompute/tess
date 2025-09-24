@@ -893,6 +893,9 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
 
     fatal("logic error");
 }
+static void maybe_specialize_name(char const **name, char const *replace) {
+    if (!ti_is_dont_mangle_name(*name)) *name = replace;
+}
 
 static void ti_create_specials(ti_inferer *self) {
 
@@ -920,19 +923,20 @@ static void ti_create_specials(ti_inferer *self) {
         }
 
         if (ast_symbol == function->node->tag) {
-            // This is an annotated symbol, typically only for compiler intrinsics. We don't need to
-            // specialise those.
+            // This is an annotated symbol, typically only for compiler intrinsics.
 
             log(self, "create_specials: symbol %s", callsite->name);
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
+            maybe_specialize_name(&callsite->name, special_name);
             array_push(nodes_to_add, &created);
 
         } else if (ast_let == function->node->tag) {
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
+            maybe_specialize_name(&callsite->name, special_name);
             array_push(nodes_to_add, &created);
 
             // set each parameter type of the specialised function to be the same type as the source
@@ -961,6 +965,7 @@ static void ti_create_specials(ti_inferer *self) {
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
+            maybe_specialize_name(&callsite->name, special_name);
             array_push(nodes_to_add, &created);
         }
 
@@ -1110,8 +1115,9 @@ static void patch_one_special(void *ctx_, ast_node *node) {
                 u64                 hash     = hash_name_and_type(arg_name, arg->type);
                 ti_function_record *rec      = map_get(self->requirements, &hash, sizeof hash);
                 if (!rec) {
-                    fatal("could not find specialization record for lambda '%s' of type %s", arg_name,
-                          tl_type_to_string(self->transient, arg->type));
+                    log(self, "could not find specialization record for lambda '%s' of type %s", arg_name,
+                        tl_type_to_string(self->transient, arg->type));
+                    return;
                 }
 
                 assert(ast_let == rec->node->tag); // everything is a let now
@@ -1299,8 +1305,16 @@ int ti_is_c_function_name(char const *str) {
     return 0 == strncmp("c_", str, 2);
 }
 
+int ti_is_intrinsic_name(char const *str) {
+    return 0 == strncmp("_tl_", str, 4);
+}
+
 int ti_is_std_function_name(char const *str) {
     return 0 == strncmp("std_", str, 4);
+}
+
+int ti_is_dont_mangle_name(char const *str) {
+    return ti_is_c_function_name(str) || ti_is_intrinsic_name(str) || ti_is_std_function_name(str);
 }
 
 static void next_variable_name(ti_inferer *self, string_t *out) {
@@ -1341,31 +1355,27 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
     switch (node->tag) {
 
     case ast_symbol:
-        // symbol nodes are affected by the lexical context
+        //
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         break;
 
     case ast_address_of:
-        // not affected by lexical context
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         do_traverse_lexical(ctx, node->address_of.target, fun);
         break;
 
     case ast_arrow:
-        // not affected by lexical context
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         do_traverse_lexical(ctx, node->arrow.left, fun);
         do_traverse_lexical(ctx, node->arrow.right, fun);
         break;
 
     case ast_dereference:
-        // not affected by lexical context
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         do_traverse_lexical(ctx, node->dereference.target, fun);
         break;
 
     case ast_dereference_assign:
-        // not affected by lexical context
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         do_traverse_lexical(ctx, node->dereference_assign.target, fun);
         do_traverse_lexical(ctx, node->dereference_assign.value, fun);
@@ -1382,7 +1392,6 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
 
     case ast_labelled_tuple:
     case ast_tuple:          {
-        // not affected by lexical context
         fun(ctx->user_ctx, node, &ctx->lexical_map);
         struct ast_array *v = ast_node_arr(node);
         for (size_t i = 0; i < v->n; ++i) do_traverse_lexical(ctx, v->nodes[i], fun);
@@ -1392,8 +1401,9 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
         // This node type creates a lexical context. So we traverse is
         // a specific order: first the value, because it operates in
         // the pre-existing lexical context. Next the let_in node
-        // itself, allowing fun() to update map. Then the name and
-        // body, which exist in the created context.
+        // itself, allowing fun() to update map if needed for its
+        // purposes. Then the name and body, which exist in the
+        // created context.
         struct ast_let_in *v    = ast_node_let_in(node);
 
         hashmap           *save = map_copy(ctx->lexical_map);
@@ -1416,7 +1426,6 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
 
         do_traverse_lexical(ctx, v->name, fun);
         do_traverse_lexical(ctx, v->body, fun);
-        fun(ctx->user_ctx, node, &ctx->lexical_map);
 
         map_destroy(&ctx->lexical_map);
         ctx->lexical_map = save;
