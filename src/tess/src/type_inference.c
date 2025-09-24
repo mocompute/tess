@@ -808,6 +808,10 @@ char *make_specialized_name(ti_inferer *self, char const *name) {
 
 static void process_new_special(ti_inferer *self, ast_node *node) {
     log(self, "process_new_special: %s", ast_node_to_string(self->transient, node));
+
+    // FIXME: need to recursively re-specialise any callsites inside this node:
+    // 2 versions of add, int and float, both end up pointing to the int version of _tl_add_
+
     assert(ast_let == node->tag);
 }
 
@@ -978,12 +982,11 @@ static void ti_create_specials(ti_inferer *self) {
             // Some specialisations (for builtins) don't have source.
 
             ast_node **arguments = null;
-            if (ast_named_function_application == callsite->source->tag) {
+            if (ast_node_is_named_application(callsite->source))
                 arguments = callsite->source->named_application.arguments;
-            } else if (ast_let_in == callsite->source->tag &&
-                       ast_lambda_function == callsite->source->let_in.value->tag) {
+            if (ast_node_is_let_in_lambda(callsite->source))
                 arguments = callsite->source->let_in.value->lambda_function.parameters;
-            }
+
             if (arguments) {
                 for (u32 i = 0; i < created->let.n_parameters; ++i) {
                     ast_node *param    = created->let.parameters[i];
