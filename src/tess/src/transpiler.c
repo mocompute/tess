@@ -1934,6 +1934,7 @@ static int a_let(transpiler *self, ast_node const *node) {
     name = make_function_name(self->strings, name);
 
     // function declaration
+    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
 
     // return type and name
     out_put_start(self, "static ");

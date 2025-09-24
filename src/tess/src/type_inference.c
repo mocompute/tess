@@ -1145,33 +1145,48 @@ static void apply_type(void *ctx, ast_node *node) {
     if (found) node->type = *found;
 }
 
-static void one_fixup_free_variables(void *ctx_, ast_node *node, hashmap **lexical) {
+static void one_fixup_free_variables(void *ctx_, ast_node *node) {
     fixup_free_variables_ctx *ctx  = ctx_;
     ti_inferer               *self = ctx->self;
-    (void)lexical;
-    if (ast_let != node->tag) return;
 
-    hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *));
-    for (u32 i = 0; i < node->let.n_parameters; ++i) {
-        ast_node   *param = node->let.parameters[i];
-        char const *name  = ast_node_name_string(param);
-        map_set(&parameter_types, name, strlen(name), &param->type);
+    if (ast_let == node->tag) {
+        hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *));
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node   *param = node->let.parameters[i];
+            char const *name  = ast_node_name_string(param);
+            map_set(&parameter_types, name, strlen(name), &param->type);
+        }
+
+        ast_node_dfs_safe_for_recur(self->transient, parameter_types, node, apply_type);
+
+        map_destroy(&parameter_types);
     }
 
-    ast_node_dfs_safe_for_recur(self->transient, parameter_types, node, apply_type);
+    else if (ast_named_function_application == node->tag) {
 
-    map_destroy(&parameter_types);
+        // merge in all argument free variables to the symbol being applied.
+        tl_type *name_type = node->named_application.name->type;
+        assert(type_arrow == name_type->tag);
+
+        tl_free_variable_array merged = {.alloc = self->type_arena};
+        array_init_from_slice(&merged, &name_type->arrow.free_variables);
+
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            ast_node *arg = node->named_application.arguments[i];
+            if (type_arrow != arg->type->tag) continue;
+            tl_free_variable_array_merge(&merged, arg->type->arrow.free_variables);
+        }
+
+        array_shrink(merged);
+        name_type->arrow.free_variables = (tl_free_variable_sized)sized_all(merged);
+    }
 }
 
 static void ti_fixup_free_variables(ti_inferer *self) {
-    fixup_free_variables_ctx ctx  = {.self = self};
+    fixup_free_variables_ctx ctx = {.self = self};
 
-    ti_function_record      *main = ti_lookup_function(self, "main");
-    if (!main) fatal("no main function found");
-
-    ti_traverse_lexical(self->transient, &ctx, main->node, one_fixup_free_variables);
     forall(i, self->specials) {
-        ti_traverse_lexical(self->transient, &ctx, self->specials.v[i], one_fixup_free_variables);
+        ast_node_dfs_safe_for_recur(self->transient, &ctx, self->specials.v[i], one_fixup_free_variables);
     }
 
     arena_reset(self->transient);
