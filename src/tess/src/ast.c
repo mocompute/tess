@@ -19,8 +19,8 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // init the node like other _create functions do.
     ast_node *self = alloc_calloc(alloc, 1, sizeof *self);
 
-    self->file     = null;
-    self->line     = 0;
+    self->file     = "";
+    self->line     = -1;
     self->type     = null;
     self->error    = tl_err_ok;
 
@@ -50,6 +50,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     if (null == orig) return null;
 
     ast_node *clone = ast_node_create(alloc, orig->tag);
+
+    clone->file     = orig->file;
+    clone->line     = orig->line;
 
     // types are copied by reference, not cloned
     clone->type = orig->type;

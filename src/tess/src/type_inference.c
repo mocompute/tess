@@ -22,9 +22,10 @@
 #define TRANSIENT_ARENA_SIZE 16 * 1024
 
 typedef struct constraint {
-    tl_type *left;
-    tl_type *right;
-    int      line;
+    tl_type    *left;
+    tl_type    *right;
+    char const *file;
+    int         line;
 } constraint;
 
 typedef struct {
@@ -134,21 +135,21 @@ static u32             unify_one(ti_inferer *, constraint);
 
 static tl_type        *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *);
 static ast_node       *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
-static ast_node       *make_type_constructor_function(ti_inferer *, char const *, tl_type *);
-static tl_type        *make_typevar(ti_inferer *);
-static u32             make_typevar_val(void *);
-static constraint      make_constraint(tl_type *, tl_type *);
+static ast_node  *make_type_constructor_function(ti_inferer *, char const *, tl_type *, ast_node const *);
+static tl_type   *make_typevar(ti_inferer *);
+static u32        make_typevar_val(void *);
+static constraint make_constraint(tl_type *, tl_type *, constraint *);
 
-static void            dbg_ast_nodes(ti_inferer *);
-static void            dbg_constraint(constraint const *);
-static void            log_function_records(ti_inferer *);
-static void            log_specialization_records(ti_inferer *);
-static void            log_specials(ti_inferer *self);
-static void log(ti_inferer const *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static void       dbg_ast_nodes(ti_inferer *);
+static void       dbg_constraint(constraint const *);
+static void       log_function_records(ti_inferer *);
+static void       log_specialization_records(ti_inferer *);
+static void       log_specials(ti_inferer *self);
+static void       log(ti_inferer const *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
-static int  is_trace_symbol(ti_inferer *, char const *);
-static int  is_trace_symbol_node(ti_inferer *, ast_node const *);
-static void trace_symbol_impl(ti_inferer *, ast_node const *, char const *, int);
+static int        is_trace_symbol(ti_inferer *, char const *);
+static int        is_trace_symbol_node(ti_inferer *, ast_node const *);
+static void       trace_symbol_impl(ti_inferer *, ast_node const *, char const *, int);
 #define trace_symbol(ti, n) trace_symbol_impl((ti), (n), __FILE__, __LINE__)
 
 // -- allocation and deallocation --
@@ -288,9 +289,7 @@ int ti_inferer_run(ti_inferer *self) {
     }
 
     if (self->constraints.size) {
-        dbg("remaining constraints:\n");
-        ti_inferer_dbg_constraints(self);
-        return 1;
+        goto error;
     }
 
     // Rewrite function application sites. Using the self->requirements hashmap, examine every symbol in
@@ -662,9 +661,6 @@ void assign_callsite_types(void *ctx, ast_node *node) {
     } else {
         ti_error err = {.tag = tl_err_not_compatible, .node = node};
         array_push(self->errors, &err);
-
-        log(self, "callsite type at '%s' '%s' not compatible with '%s': ", name_str,
-            tl_type_to_string(self->transient, arrow), tl_type_to_string(self->transient, rec->type));
     }
 }
 
@@ -825,6 +821,8 @@ static ast_node *create_specialized_lambda(ti_inferer *self, char const *name, a
     v->name             = null;
     v->body             = null;
     out->type           = get_prim(self, type_nil);
+    out->file           = lambda->file;
+    out->line           = lambda->line;
 
     ast_node *clone     = ast_node_clone(self->type_arena, lambda);
     if (!out) fatal("clone failed");
@@ -835,6 +833,8 @@ static ast_node *create_specialized_lambda(ti_inferer *self, char const *name, a
     v->body                            = vclone->body;
     v->name                            = ast_node_create_sym(self->type_arena, name);
     v->name->type                      = name_type;
+    v->name->file                      = lambda->file;
+    v->name->line                      = lambda->line;
     ast_node_set_is_specialized(out);
 
     process_new_special(self, out);
@@ -853,6 +853,8 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
     v->name             = null;
     v->body             = null;
     out->type           = get_prim(self, type_nil);
+    out->file           = src->file;
+    out->line           = src->line;
 
     // This tells the transpiler to suppress generating an empty function for this node.
     BIT_SET(out->let.flags, AST_LET_FLAG_INTRINSIC);
@@ -868,12 +870,16 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
         v->parameters[i] = ast_node_create_sym(self->type_arena, "");
         next_variable_name(self, &v->parameters[i]->symbol.name);
         v->parameters[i]->type = make_typevar(self);
+        v->parameters[i]->file = src->file;
+        v->parameters[i]->line = src->line;
     }
 
     v->body       = ast_node_create(self->type_arena, ast_any);
     v->body->type = make_typevar(self);
     v->name       = ast_node_clone(self->type_arena, src);
     v->name->type = name_type;
+    v->body->file = src->file;
+    v->body->line = src->line;
     ast_node_set_is_specialized(out);
 
     process_new_special(self, out);
@@ -889,6 +895,8 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         ast_node_set_is_specialized(out);
         out->let.name       = ast_node_create_sym(self->type_arena, name);
         out->let.name->type = name_type;
+        out->let.name->file = src->file;
+        out->let.name->line = src->line;
 
         log(self, "create_special: %s with type %s", name, tl_type_to_string(self->transient, name_type));
 
@@ -1945,7 +1953,7 @@ static void dbg_constraint(constraint const *c) {
     char buf_left[256], buf_right[256];
     tl_type_snprint(buf_left, sizeof buf_left, c->left);
     tl_type_snprint(buf_right, sizeof buf_right, c->right);
-    dbg("constraint %s = %s, line %i\n", buf_left, buf_right, c->line);
+    dbg("%s:%i: %s = %s\n", c->file, c->line, buf_left, buf_right);
 }
 
 static void dbg_ast_nodes(ti_inferer *self) {
@@ -1990,7 +1998,7 @@ static u32 unify_one(ti_inferer *self, constraint c) {
         tl_type   *orig      = type_type_var == c.left->tag ? c.left : c.right;
         tl_type   *other     = type_type_var == c.left->tag ? c.right : c.left;
 
-        constraint candidate = {orig, other, c.line};
+        constraint candidate = {orig, other, c.file, c.line};
 
         // check conditions to rule out the candidate: original must
         // not appear anywhere in the type replacing it.
@@ -2009,8 +2017,8 @@ static u32 unify_one(ti_inferer *self, constraint c) {
 
         u32 count = 0;
         for (size_t i = 0; i < c.left->array.elements.size; ++i) {
-            count +=
-              unify_one(self, make_constraint(c.left->array.elements.v[i], c.right->array.elements.v[i]));
+            count += unify_one(
+              self, make_constraint(c.left->array.elements.v[i], c.right->array.elements.v[i], &c));
         }
 
         return count;
@@ -2020,8 +2028,8 @@ static u32 unify_one(ti_inferer *self, constraint c) {
     // arrow types: unify matching arms and free variables' types, if they are the same symbol
     else if (type_arrow == c.left->tag && type_arrow == c.right->tag) {
         u32 count = 0;
-        count += unify_one(self, make_constraint(c.left->arrow.left, c.right->arrow.left));
-        count += unify_one(self, make_constraint(c.left->arrow.right, c.right->arrow.right));
+        count += unify_one(self, make_constraint(c.left->arrow.left, c.right->arrow.left, &c));
+        count += unify_one(self, make_constraint(c.left->arrow.right, c.right->arrow.right, &c));
 
         // NOTE: unification does not consider free variable type information, because it's duplicative
 
@@ -2030,7 +2038,7 @@ static u32 unify_one(ti_inferer *self, constraint c) {
 
     // pointer types
     else if (type_pointer == c.left->tag && type_pointer == c.right->tag) {
-        return unify_one(self, make_constraint(c.left->pointer.target, c.right->pointer.target));
+        return unify_one(self, make_constraint(c.left->pointer.target, c.right->pointer.target, &c));
     }
 
     return 0;
@@ -2303,8 +2311,8 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
 
 #define push(L, R)                                                                                         \
     do {                                                                                                   \
-        assert((L) && (R));                                                                                \
-        c = (constraint){(L), (R), __LINE__};                                                              \
+        assert((L) && (R) && node && node->file);                                                          \
+        c = (constraint){(L), (R), node->file, node->line};                                                \
         if ((L) != (R)) array_push(self->constraints, &c);                                                 \
     } while (0)
 
@@ -2675,7 +2683,8 @@ char *make_tuple_name(allocator *alloc, tl_type *type) {
 
 //
 
-static ast_node *make_type_constructor_function(ti_inferer *self, char const *name, tl_type *user_type) {
+static ast_node *make_type_constructor_function(ti_inferer *self, char const *name, tl_type *user_type,
+                                                ast_node const *src) {
     // create a let_node with parameters matching the user_type fields, and a body with a single node, a
     // user_type literal
 
@@ -2700,6 +2709,10 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     out->let.flags        = 0;
     out->let.body         = null;
     out->let.name         = ast_node_create_sym(self->type_arena, name);
+    out->let.name->file   = src->file;
+    out->let.name->line   = src->line;
+    out->file             = src->file;
+    out->line             = src->line;
     ast_node_set_is_specialized(out);
 
     // make params array from user_type's labelled_tuple
@@ -2708,11 +2721,16 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
 
     out->let.n_parameters = (u8)lt->fields.size;
     out->let.parameters   = alloc_malloc(self->type_arena, lt->fields.size * sizeof out->let.parameters[0]);
-    for (u16 i = 0; i < out->let.n_parameters; ++i)
-        out->let.parameters[i] = ast_node_create_sym(self->type_arena, lt->names.v[i]);
+    for (u16 i = 0; i < out->let.n_parameters; ++i) {
+        out->let.parameters[i]       = ast_node_create_sym(self->type_arena, lt->names.v[i]);
+        out->let.parameters[i]->file = src->file;
+        out->let.parameters[i]->line = src->line;
+    }
 
     // the body is a single node with the type literal
     out->let.body                     = ast_node_create(self->type_arena, ast_user_type);
+    out->let.body->file               = src->file;
+    out->let.body->line               = src->line;
     out->let.body->user_type.fields   = null;
     out->let.body->user_type.n_fields = 0;
     out->let.body->user_type.name     = null;
@@ -2720,10 +2738,12 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     // with each parameter mapped directly to a field. We can share
     // references to the same symbol nodes here because their types
     // will be identical.
-    ast_node *body           = out->let.body;
-    body->user_type.n_fields = out->let.n_parameters;
-    body->user_type.fields   = out->let.parameters;
-    body->user_type.name     = ast_node_create_sym(self->type_arena, name);
+    ast_node *body             = out->let.body;
+    body->user_type.n_fields   = out->let.n_parameters;
+    body->user_type.fields     = out->let.parameters;
+    body->user_type.name       = ast_node_create_sym(self->type_arena, name);
+    body->user_type.name->file = src->file;
+    body->user_type.name->line = src->line;
 
     return out;
 }
@@ -2746,7 +2766,7 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
 
         // make constructor
 
-        ast_node *constructor = make_type_constructor_function(self, type_name, *ty);
+        ast_node *constructor = make_type_constructor_function(self, type_name, *ty, node);
         array_push(added, &constructor);
     }
 
@@ -2781,9 +2801,14 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     out->let.flags        = 0;
     out->let.body         = null;
     out->type             = *type_registry_find_name(self->type_registry, "nil");
+    out->file             = node->file;
+    out->line             = node->line;
+
     out->let.name         = ast_node_create_sym(a, generated_name);
     ast_node_set_is_specialized(out);
     ast_node_set_is_tuple_constructor(out);
+    out->let.name->file = node->file;
+    out->let.name->line = node->line;
 
     if (ast_labelled_tuple == node->tag) {
         // make params array from labelled_tuple
@@ -2799,6 +2824,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         out->let.body->labelled_tuple.flags         = 0;
 
         out->let.body->type                         = node->type;
+        out->let.body->file                         = node->file;
+        out->let.body->line                         = node->line;
 
         struct ast_labelled_tuple *v                = ast_node_lt(out->let.body);
         v->n_assignments                            = out->let.n_parameters;
@@ -2811,6 +2838,9 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
             // init value from parameter
             v->assignments[i]->assignment.value = out->let.parameters[i];
             v->assignments[i]->type             = lt->assignments[i]->type;
+
+            v->assignments[i]->file             = node->file;
+            v->assignments[i]->line             = node->line;
         }
 
         c_string_array names = {.alloc = self->type_arena};
@@ -2835,7 +2865,9 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         for (u16 i = 0; i < out->let.n_parameters; ++i) {
             char buf[32];
             snprintf(buf, sizeof buf - 1, "x%u", i);
-            out->let.parameters[i] = ast_node_create_sym(a, buf);
+            out->let.parameters[i]       = ast_node_create_sym(a, buf);
+            out->let.parameters[i]->file = node->file;
+            out->let.parameters[i]->line = node->line;
         }
 
         // the body is a single node with the tuple literal
@@ -2845,6 +2877,8 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         out->let.body->tuple.flags      = 0;
 
         out->let.body->type             = node->type;
+        out->let.body->file             = node->file;
+        out->let.body->line             = node->line;
 
         struct ast_tuple *v             = ast_node_tuple(out->let.body);
         v->n_elements                   = out->let.n_parameters;
@@ -3095,8 +3129,8 @@ static void log_specials(ti_inferer *self) {
     dbg("\n");
 }
 
-constraint make_constraint(tl_type *l, tl_type *r) {
-    return (constraint){l, r, -1};
+constraint make_constraint(tl_type *l, tl_type *r, constraint *src) {
+    return (constraint){l, r, src->file, src->line};
 }
 
 u32 make_typevar_val(void *ctx) {

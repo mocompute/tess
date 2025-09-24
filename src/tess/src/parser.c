@@ -197,47 +197,55 @@ void parser_destroy(parser **self) {
 // The parser then no longer has a valid copy of the actual ast_node,
 // it being replaced by a handle to an entry in the pool.
 
+static void set_result_file(parser *p) {
+    p->result->file = p->token.file;
+    p->result->line = p->token.line;
+}
+
 static int result_ast(parser *p, ast_tag tag) {
     p->result = ast_node_create(p->ast_arena, tag);
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_i64(parser *p, i64 val) {
     p->result          = ast_node_create(p->ast_arena, ast_i64);
     p->result->i64.val = val;
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_u64(parser *p, u64 val) {
     p->result          = ast_node_create(p->ast_arena, ast_u64);
     p->result->u64.val = val;
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_f64(parser *p, f64 val) {
     p->result          = ast_node_create(p->ast_arena, ast_f64);
     p->result->f64.val = val;
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_bool(parser *p, int val) {
     p->result            = ast_node_create(p->ast_arena, ast_bool);
     p->result->bool_.val = val;
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     p->result      = ast_node_create_sym(p->ast_arena, s);
     p->result->tag = tag;
-
+    set_result_file(p);
     return 0;
 }
 
 static int result_ast_node(parser *p, ast_node *node) {
-    p->result  = node;
-    node->file = p->error.file;
-    node->line = p->error.line;
-
+    p->result = node;
+    set_result_file(p);
     log(p, "result: %s", ast_node_to_string(p->transient, node));
     return 0;
 }
