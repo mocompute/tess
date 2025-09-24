@@ -101,7 +101,6 @@ function(tesslang_create_test NAME)
 endfunction()
 
 # FIXME: previously working tests
-# tesslang_create_test(factorial)
 
 tesslang_create_test(alloc)
 tesslang_create_test(apply_lambda)
@@ -113,6 +112,7 @@ tesslang_create_test(chained)
 tesslang_create_test(closure_polymorphism)
 tesslang_create_test(dereference)
 tesslang_create_test(enclosing_context)
+tesslang_create_test(factorial)
 tesslang_create_test(generic_apply)
 tesslang_create_test(generic_lambda)
 tesslang_create_test(if_then_else)

@@ -3010,10 +3010,6 @@ tl_free_variable_sized ti_free_variables_in(allocator *alloc, ast_node const *no
     // track of lexical variables, and build an array of free
     // variables.
 
-    // It is an error to start this scan from a named_application node.
-    // TODO remove this once all bugs have been squashed.
-    if (ast_named_function_application == node->tag) fatal("logic error");
-
     ast_node_array array = {.alloc = alloc};
 
     ti_traverse_lexical(alloc, &array, (ast_node *)node, find_free_variables);
