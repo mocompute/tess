@@ -1843,7 +1843,7 @@ static int expression(parser *self) {
     self->in_function_application = 0;
     if (0 == a_try(self, a_value)) goto success;
 
-    self->error.tag = tl_err_expected_expression;
+    if (!is_eof(self)) self->error.tag = tl_err_expected_expression;
 
     goto error;
 

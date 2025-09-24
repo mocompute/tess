@@ -455,8 +455,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_comment;
                 continue;
             }
-            i8 const c = self->input.v[self->pos++];
-            if (c < 0x20) { // c is signed so this catches c > 0x7f
+            char const c = self->input.v[self->pos++];
+            if (c == '\n') {
                 --self->pos;
                 state = stop_comment;
             }
