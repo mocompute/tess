@@ -223,10 +223,26 @@ static void ti_collect_and_solve(ti_inferer *self, int loop) {
     log(self, "ti_collect_and_solve: loop count = %zu", loop_size - loop_count);
 }
 
+static int ti_validate_top_level_nodes(ti_inferer *self) {
+    int error = 0;
+    forall(i, *self->nodes) {
+        ast_node *node = self->nodes->v[i];
+        if (ast_let != node->tag && ast_symbol != node->tag && ast_let_in != node->tag &&
+            ast_user_type_definition != node->tag) {
+            array_push(self->errors, (&(ti_error){.node = node, .tag = tl_err_invalid_toplevel}));
+            ++error;
+        }
+    }
+    return error;
+}
+
 int ti_inferer_run(ti_inferer *self) {
 
     self->out_program.size = 0;
     self->out_program.v    = null;
+
+    // Validate top level nodes
+    if (ti_validate_top_level_nodes(self)) goto error;
 
     // Create type constructors.
     ti_generate_user_type_functions(self);
@@ -241,12 +257,7 @@ int ti_inferer_run(ti_inferer *self) {
     // and let-in assigned lambda functions. Analyses each callsite
     // for conformance with generic template, and assigns compatible
     // function type to the node.
-    ti_check_callsites(self);
-
-    if (self->errors.size) {
-        ti_inferer_report_errors(self);
-        return 1;
-    }
+    if (ti_check_callsites(self)) goto error;
 
     // Run constraint solver until it settles. This monomorphises as
     // much as possible.

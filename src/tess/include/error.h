@@ -71,7 +71,8 @@
     X(tl_err_too_many_arguments, "too_many_arguments")                                                     \
     X(tl_err_function_exists, "function_exists")                                                           \
     X(tl_err_not_compatible, "not_compatible")                                                             \
-    X(tl_err_no_main_function, "no_main_function")
+    X(tl_err_no_main_function, "no_main_function")                                                         \
+    X(tl_err_invalid_toplevel, "invalid_toplevel_node_type")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 
