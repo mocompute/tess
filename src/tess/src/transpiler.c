@@ -1301,17 +1301,22 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 static int a_fun_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
 
-    struct ast_named_application const *v        = ast_node_named((ast_node *)node);
-    char const                         *fun_name = ast_node_name_string(v->name);
-    // ast_node_sized                      free_variables = v->free_variables;
+    struct ast_named_application const *v               = ast_node_named((ast_node *)node);
+    char const                         *fun_name        = ast_node_name_string(v->name);
 
-    int is_special_name = 0;
+    int                                 is_special_name = 0;
     if (ti_is_c_function_name(fun_name)) {
         fun_name += 2;
         is_special_name = 1;
-    } else if (ti_is_generated_variable_name(fun_name)) {
-        ;
-    } else if (ti_is_std_function_name(fun_name)) {
+    }
+
+    else if (ti_is_generated_variable_name(fun_name)) {
+        // if variable is a toplevel function, mangle the name. If
+        // not, it is an argument's name and must not be mangled.
+        if (lookup_function(self, fun_name)) fun_name = make_function_name(self->strings, fun_name);
+    }
+
+    else if (ti_is_std_function_name(fun_name)) {
         is_special_name = 1;
     } else {
         fun_name = make_function_name(self->strings, fun_name);
