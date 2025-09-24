@@ -1,2 +1,7 @@
+let incrf x  = add x 0.5
+
 let main () =
-    incr 1.5
+beg
+    incrf 1.0 ,
+    0
+end

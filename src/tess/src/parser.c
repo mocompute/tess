@@ -252,7 +252,7 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "begin", "else", "end", "false", "fun", "if", "in", "let", "then", "struct", "true", null,
+      "beg", "begin", "else", "end", "false", "fun", "if", "in", "let", "then", "struct", "true", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -265,7 +265,7 @@ static int is_start_of_expression(char const *s) {
     // these keywords always begina new expression
 
     static char const *strings[] = {
-      "begin", "else", "fun", "if", "in", "let", "then", "struct", null,
+      "beg", "begin", "else", "fun", "if", "in", "let", "then", "struct", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1754,8 +1754,10 @@ cleanup:
 
 static int begin_end_expression(parser *self) {
     if (a_try_s(self, the_symbol, "begin")) {
-        self->error.tag = tl_err_ok;
-        return 1;
+        if (a_try_s(self, the_symbol, "beg")) {
+            self->error.tag = tl_err_ok;
+            return 1;
+        }
     }
 
     log(self, "begin begin...end expression");
