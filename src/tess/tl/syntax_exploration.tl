@@ -174,6 +174,16 @@ let p = Point 1 2 in
 // Arrays
 //
 
+// array indexing
+
+
+let xs = [0, 1, 2] in
+  xs.(0) := 1
+  xs.[0] := 1
+  xs[1] := 1
+
+
+
 sizeof (struct Point)
 sizeof int
 sizeof (typeof Point)
