@@ -866,7 +866,6 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
     else if (ast_lambda_function == src->tag) {
 
         ast_node *out = create_specialized_lambda(self, name, src, name_type);
-        process_new_special(self, out);
         return out;
 
     }
@@ -876,7 +875,6 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
 
         ast_node *out          = create_specialized_lambda(self, name, src->let_in.value, name_type);
         out->let_in.name->type = name_type;
-        process_new_special(self, out);
         return out;
     }
 
@@ -887,7 +885,6 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         // thing.
 
         ast_node *out = create_specialized_extern(self, src, name_type);
-        process_new_special(self, out);
         return out;
     }
 
@@ -911,8 +908,6 @@ static void ti_create_specials(ti_inferer *self) {
         ti_function_record *function = ti_lookup_function(self, callsite->name);
         if (!function) fatal("could not find function '%s'", callsite->name);
 
-        log(self, "create_specials: considering '%s'", callsite->name);
-
         //
         char *special_name = make_specialized_name(self, callsite->name);
 
@@ -924,8 +919,6 @@ static void ti_create_specials(ti_inferer *self) {
 
         if (ast_symbol == function->node->tag) {
             // This is an annotated symbol, typically only for compiler intrinsics.
-
-            log(self, "create_specials: symbol %s", callsite->name);
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
@@ -997,7 +990,12 @@ static void patch_one_symbol(patch_special_ctx *ctx, ast_node *node) {
     u64                 hash = hash_name_and_type(name, type);
     ti_function_record *rec  = map_get(self->requirements, &hash, sizeof hash);
 
+    log(self, "patch_one_symbol: %-16s %-32" PRIu64 " type: %s rec: %p", name, hash,
+        tl_type_to_string(self->transient, type), rec);
+
     if (!rec) return;
+
+    log(self, "patch_one_symbol: %-16s %-32" PRIu64 " replaced with %s", name, hash, rec->name);
 
     string_t name_string = string_t_init(self->type_arena, rec->name);
     node->symbol.name    = name_string;
@@ -1029,7 +1027,8 @@ static void patch_one_special(void *ctx_, ast_node *node) {
     ti_inferer        *self = ctx->self;
 
     if (ast_let_in == node->tag) {
-        if (ast_lambda_function != node->let_in.value->tag) return;
+        if (ast_symbol == node->let_in.value->tag) patch_one_symbol(ctx, node->let_in.value);
+        else if (ast_lambda_function != node->let_in.value->tag) return;
 
         char const *name = ast_node_name_string(node->let_in.name);
         tl_type    *type = node->let_in.value->type;
@@ -1067,8 +1066,16 @@ static void patch_one_special(void *ctx_, ast_node *node) {
 
     else if (ast_named_function_application == node->tag) {
 
-        char const *name = ast_node_name_string(node->named_application.name);
+        // patch the arguments
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            ast_node *arg = node->named_application.arguments[i];
+            if (ast_symbol == arg->tag) patch_one_symbol(ctx, arg);
+        }
 
+        // TODO: this block is similar to patch_one_symbol except it uses function_type instead of
+        // node->type, and it needs to set the AST_NAMED_APP_SPECIALIZED flag.
+
+        char const *name = ast_node_name_string(node->named_application.name);
         tl_type    *type = node->named_application.function_type;
 
         if (tl_type_is_poly(type)) {
@@ -1104,33 +1111,6 @@ static void patch_one_special(void *ctx_, ast_node *node) {
         } else if (ast_lambda_function == rec->node->tag) {
             BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
         }
-
-        // patch the arguments
-
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            ast_node *arg = node->named_application.arguments[i];
-            if (ast_symbol == arg->tag && type_arrow == arg->type->tag) {
-
-                char const         *arg_name = ast_node_name_string(arg);
-                u64                 hash     = hash_name_and_type(arg_name, arg->type);
-                ti_function_record *rec      = map_get(self->requirements, &hash, sizeof hash);
-                if (!rec) {
-                    log(self, "could not find specialization record for lambda '%s' of type %s", arg_name,
-                        tl_type_to_string(self->transient, arg->type));
-                    return;
-                }
-
-                assert(ast_let == rec->node->tag); // everything is a let now
-
-                // patch the new name in place
-                node->named_application.arguments[i] = rec->node->let.name;
-            }
-        }
-
-    }
-
-    else if (ast_symbol == node->tag) {
-        patch_one_symbol(ctx, node);
     }
 }
 
@@ -1172,8 +1152,6 @@ static void one_fixup_free_variables(void *ctx_, ast_node *node, hashmap **lexic
     ti_inferer               *self = ctx->self;
     (void)lexical;
     if (ast_let != node->tag) return;
-
-    log(self, "fixup: checking %s", ast_node_name_string(node->let.name));
 
     hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *));
     for (u32 i = 0; i < node->let.n_parameters; ++i) {
