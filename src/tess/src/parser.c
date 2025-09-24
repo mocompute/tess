@@ -481,6 +481,10 @@ static int a_end_of_expression(parser *p) {
 
     case tok_comma:
         // accept , to separate expressions (fields) inside struct definitions
+        if (p->in_function_application) {
+            p->in_function_application = 0;
+            return 2;
+        }
         return 0;
 
     case tok_dot:
