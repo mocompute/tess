@@ -140,6 +140,69 @@ tl_type *tl_type_clone(allocator *alloc, tl_type const *orig, tl_make_typevar_fu
     return res;
 }
 
+tl_type *tl_type_clone_shallow(allocator *alloc, tl_type const *orig) {
+    // TODO: duplicated with clone_impl
+    if (!orig) return null;
+
+    tl_type *clone = tl_type_create(alloc, orig->tag);
+
+    switch (clone->tag) {
+    case type_nil:
+    case type_bool:
+    case type_int:
+    case type_float:
+    case type_string: break;
+
+    case type_tuple:
+        clone->array.elements.size = orig->array.elements.size;
+        clone->array.elements.v =
+          alloc_malloc(alloc, clone->array.elements.size * sizeof clone->array.elements.v[0]);
+        forall(i, orig->array.elements) clone->array.elements.v[i] =
+          tl_type_clone_shallow(alloc, orig->array.elements.v[i]);
+        break;
+
+    case type_labelled_tuple:
+        clone->array.elements.size = orig->array.elements.size;
+        clone->array.elements.v =
+          alloc_malloc(alloc, clone->array.elements.size * sizeof clone->array.elements.v[0]);
+        forall(i, orig->array.elements) clone->array.elements.v[i] =
+          tl_type_clone_shallow(alloc, orig->array.elements.v[i]);
+
+        clone->labelled_tuple.names.size = orig->labelled_tuple.names.size;
+        clone->labelled_tuple.names.v =
+          alloc_malloc(alloc, orig->labelled_tuple.names.size * sizeof clone->labelled_tuple.names.v[0]);
+        forall(i, orig->labelled_tuple.names) clone->labelled_tuple.names.v[i] =
+          alloc_strdup(alloc, orig->labelled_tuple.names.v[i]);
+        break;
+
+    case type_arrow:
+        clone->arrow.left           = tl_type_clone_shallow(alloc, orig->arrow.left);
+        clone->arrow.right          = tl_type_clone_shallow(alloc, orig->arrow.right);
+        clone->arrow.flags          = orig->arrow.flags;
+        clone->arrow.free_variables = orig->arrow.free_variables; // shallow copy
+        break;
+
+    case type_user:
+        clone->user.name           = alloc_strdup(alloc, orig->user.name);
+        clone->user.labelled_tuple = tl_type_clone_shallow(alloc, orig->user.labelled_tuple);
+        break;
+
+    case type_type_var: {
+
+        clone->type_var.val = orig->type_var.val;
+
+    } break;
+
+    case type_pointer: clone->pointer.target = tl_type_clone_shallow(alloc, orig->pointer.target); break;
+
+    case type_any:
+    case type_ellipsis:
+        //
+        break;
+    }
+    return clone;
+}
+
 int tl_type_is_prim(tl_type const *self) {
     switch (self->tag) {
     case type_nil:

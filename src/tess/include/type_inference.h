@@ -13,6 +13,7 @@ typedef struct {
     tl_type    *type;
     ast_node   *node;   // let, symbol, lambda_function
     ast_node   *source; // the node from which we derived this specialisation requirement
+    int         is_processed;
 } ti_function_record;
 
 // -- allocation and deallocation --

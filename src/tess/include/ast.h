@@ -193,17 +193,19 @@ typedef struct ast_node {
     enum tl_error_tag error;
 } ast_node;
 
-#define AST_LET_FLAG_SPECIALIZED    BIT(0)
-#define AST_LET_FLAG_TUPLE_CONS     BIT(1)
-#define AST_LET_FLAG_INTRINSIC      BIT(2)
+#define AST_SYMBOL_FLAG_PATCHED     0
 
-#define AST_LAMBDA_FLAG_SPECIALIZED BIT(0)
-#define AST_LAMBDA_FLAG_NAMED       BIT(1)
+#define AST_LET_FLAG_SPECIALIZED    0
+#define AST_LET_FLAG_TUPLE_CONS     1
+#define AST_LET_FLAG_INTRINSIC      2
 
-#define AST_TUPLE_FLAG_INIT         BIT(0)
+#define AST_LAMBDA_FLAG_SPECIALIZED 0
+#define AST_LAMBDA_FLAG_NAMED       1
 
-#define AST_NAMED_APP_INTRINSIC     BIT(0)
-#define AST_NAMED_APP_SPECIALIZED   BIT(1)
+#define AST_TUPLE_FLAG_INIT         0
+
+#define AST_NAMED_APP_INTRINSIC     0
+#define AST_NAMED_APP_SPECIALIZED   1
 
 // -- iterator functions --
 

@@ -54,8 +54,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     clone->file     = orig->file;
     clone->line     = orig->line;
 
-    // types are copied by reference, not cloned
-    clone->type = orig->type;
+    clone->type     = orig->type ? tl_type_clone_shallow(alloc, orig->type) : null;
 
     // clone common array for some tags
     if (TL_AST_HAS_ARRAY(clone->tag)) {
@@ -119,7 +118,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         string_t_copy(alloc, &vclone->name, &vorig->name);
         string_t_copy(alloc, &vclone->original, &vorig->original);
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
-        vclone->annotation_type = vorig->annotation_type;
+        vclone->annotation_type = tl_type_clone_shallow(alloc, vorig->annotation_type);
         vclone->special_hash    = vorig->special_hash;
         vclone->flags           = vorig->flags;
     } break;
@@ -176,7 +175,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
-        vclone->function_type                = vorig->function_type;
+        vclone->function_type                = tl_type_clone_shallow(alloc, vorig->function_type);
     } break;
 
     case ast_user_type: {
@@ -204,6 +203,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
         vclone->n_fields    = vorig->n_fields;
         vclone->field_types = vorig->field_types; // always in arena, never clone types
+        // FIXME: need to shallow clone types?
 
         for (u32 i = 0; i < vclone->n_fields; ++i) {
             vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
@@ -1136,6 +1136,8 @@ void ast_node_set_is_specialized(ast_node *node) {
     if (ast_let == node->tag) BIT_SET(node->let.flags, AST_LET_FLAG_SPECIALIZED);
     else if (ast_lambda_function == node->tag)
         BIT_SET(node->lambda_function.flags, AST_LAMBDA_FLAG_SPECIALIZED);
+    else if (ast_named_function_application == node->tag)
+        BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
 }
 
 void ast_node_set_is_tuple_constructor(ast_node *node) {
