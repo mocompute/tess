@@ -10,37 +10,33 @@
 // -- tl_type allocation and deallocation --
 
 tl_type *tl_type_create(allocator *alloc, tl_type_tag tag) {
-    tl_type *self = alloc_struct(alloc, self);
+    tl_type *self = new (alloc, tl_type);
     self->tag     = tag;
     return self;
 }
 
 tl_type *tl_type_create_type_var(allocator *alloc, u32 val) {
-    tl_type *self      = alloc_struct(alloc, self);
-    self->tag          = type_type_var;
+    tl_type *self      = tl_type_create(alloc, type_type_var);
     self->type_var.val = val;
 
     return self;
 }
 
 tl_type *tl_type_create_tuple(allocator *alloc, tl_type_sized elements) {
-    tl_type *self        = alloc_struct(alloc, self);
-    self->tag            = type_tuple;
+    tl_type *self        = tl_type_create(alloc, type_tuple);
     self->tuple.elements = elements;
     return self;
 }
 
 tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, c_string_csized names) {
-    tl_type *self               = alloc_struct(alloc, self);
-    self->tag                   = type_labelled_tuple;
+    tl_type *self               = tl_type_create(alloc, type_labelled_tuple);
     self->labelled_tuple.fields = fields;
     self->labelled_tuple.names  = names;
     return self;
 }
 
 tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
-    tl_type *self              = alloc_struct(alloc, self);
-    self->tag                  = type_arrow;
+    tl_type *self              = tl_type_create(alloc, type_arrow);
     self->arrow.left           = left;
     self->arrow.right          = right;
     self->arrow.free_variables = (tl_free_variable_sized){0};
@@ -50,8 +46,7 @@ tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
 }
 
 tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type *labelled_tuple) {
-    tl_type *self             = alloc_struct(alloc, self);
-    self->tag                 = type_user;
+    tl_type *self             = tl_type_create(alloc, type_user);
     self->user.name           = name;
     self->user.labelled_tuple = labelled_tuple;
 

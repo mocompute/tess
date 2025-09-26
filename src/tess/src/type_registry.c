@@ -19,7 +19,7 @@ struct type_registry {
 static void    register_basic_types(type_registry *);
 
 type_registry *type_registry_create(allocator *alloc) {
-    type_registry *self = alloc_struct(alloc, self);
+    type_registry *self = new (alloc, type_registry);
     self->alloc         = alloc;
     self->named_types   = map_create(alloc, sizeof(tl_type *));
     self->hashed_types  = map_create(alloc, sizeof(tl_type *));
