@@ -11,19 +11,15 @@
 
 // -- hash map --
 
+#define HASHMAP_MAX_KEY_LEN 255
+
 typedef struct hashmap hashmap;
 
 typedef struct {
-    struct hashmap_key *key;
-    u8                  status;
-    alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
-} hashmap_entry;
-
-typedef struct {
-    void *key_ptr;
-    void *data;
-    u32   index;
-    u16   key_size;
+    void const *key_ptr;
+    void       *data;
+    u32         index;
+    u8          key_size;
 } hashmap_iterator;
 
 // -- allocation and deallocation --
@@ -48,17 +44,17 @@ f32    map_load_factor(hashmap const *);
 
 // -- insertion and removal --
 
-void   map_set(hashmap **, void const *key, u16 key_len, void const *data);
-void   map_set_v(hashmap **, void const *key, u16 key_len, void const *data); // value fits in void*
-int    map_contains(hashmap const *, void const *key, u16 key_len);
-void  *map_get(hashmap *, void const *key, u16 key_len);
-void   map_erase(hashmap *, void const *key, u16 key_len);
+void   map_set(hashmap **, void const *key, u8 key_len, void const *data);
+void   map_set_v(hashmap **, void const *key, u8 key_len, void const *data); // value fits in void*
+int    map_contains(hashmap const *, void const *key, u8 key_len);
+void  *map_get(hashmap *, void const *key, u8 key_len);
+void   map_erase(hashmap *, void const *key, u8 key_len);
 void   map_reset(hashmap *);
 
-void   hset_insert(hashmap **, void const *, u16);
-int    hset_contains(hashmap const *, void const *, u16);
+void   hset_insert(hashmap **, void const *, u8);
+int    hset_contains(hashmap const *, void const *, u8);
 int    hset_is_subset(hashmap const *super, hashmap const *sub);
-void   hset_remove(hashmap *, void const *, u16);
+void   hset_remove(hashmap *, void const *, u8);
 void   hset_reset(hashmap *);
 size_t hset_size(hashmap const *);
 

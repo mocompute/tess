@@ -5,6 +5,7 @@
 #include "hash.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +16,17 @@
 #define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
 
 typedef struct hashmap_key {
-    size_t size;
-    alignas(sizeof(void *)) byte data[];
+    u8   size;
+    byte data[];
 } hashmap_key;
+
+typedef struct {
+    struct hashmap_key *key;
+    u8                  status;
+    alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
+} hashmap_entry;
+
+static_assert(16 == sizeof(hashmap_entry), "");
 
 struct hashmap {
 
@@ -30,7 +39,7 @@ struct hashmap {
     u16        value_size;
     u16        aligned_value_size;
 
-    alignas(hashmap_entry) byte entries[];
+    alignas(alignof(hashmap_entry)) byte entries[];
 };
 
 // -- statics --
@@ -71,7 +80,7 @@ static inline size_t hashmap_entry_size(hashmap const *map) {
     return map->aligned_value_size + sizeof(hashmap_entry);
 }
 
-static inline u32 key_to_bucket(hashmap const *map, byte const *key, u16 key_len) {
+static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len) {
     assert(map);
     u32 const h = hash32(key, key_len);
     return h % map->n_cells;
@@ -83,7 +92,7 @@ static inline u32 incr_index(hashmap const *map, u32 index) {
 
 // Returns: if key exists, pointer to header. Sets out_index to found
 // bucket index.
-static hashmap_entry *map_find(hashmap *map, byte const *key, u16 key_len) {
+static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
     assert(map);
 
     u32 index          = key_to_bucket(map, key, key_len);
@@ -334,12 +343,12 @@ int internal_citer(hashmap const *self, hashmap_iterator *iter, hashmap_entry co
     return internal_iter(self, iter, (hashmap_entry **)out);
 }
 
-int map_contains(hashmap const *self, void const *key, u16 key_len) {
+int map_contains(hashmap const *self, void const *key, u8 key_len) {
     hashmap_entry *cell = map_find((hashmap *)self, key, key_len);
     return cell != null;
 }
 
-void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
+void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
 
     // Must check for existing key. Replace if present.
     hashmap_entry *existing = map_find(*self, key, key_len);
@@ -373,19 +382,19 @@ void map_set(hashmap **self, void const *key, u16 key_len, void const *data) {
     }
 }
 
-void map_set_v(hashmap **self, void const *key, u16 key_len, void const *data) {
+void map_set_v(hashmap **self, void const *key, u8 key_len, void const *data) {
     assert((*self)->value_size <= sizeof(void *));
     map_set(self, key, key_len, &data);
 }
 
-void *map_get(hashmap *map, void const *key, u16 key_len) {
+void *map_get(hashmap *map, void const *key, u8 key_len) {
     // returns pointer to value or null
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;
 }
 
-void map_erase(hashmap *map, void const *key, u16 key_len) {
+void map_erase(hashmap *map, void const *key, u8 key_len) {
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return;
 
@@ -416,12 +425,12 @@ void hset_destroy(hashmap **self) {
     map_destroy(self);
 }
 
-void hset_insert(hashmap **self, void const *key, u16 len) {
+void hset_insert(hashmap **self, void const *key, u8 len) {
     int one = 1;
     map_set(self, key, len, &one);
 }
 
-int hset_contains(hashmap const *self, void const *key, u16 len) {
+int hset_contains(hashmap const *self, void const *key, u8 len) {
     return map_contains(self, key, len);
 }
 
@@ -433,7 +442,7 @@ int hset_is_subset(hashmap const *super, hashmap const *sub) {
     return 1;
 }
 
-void hset_remove(hashmap *self, void const *key, u16 len) {
+void hset_remove(hashmap *self, void const *key, u8 len) {
     map_erase(self, key, len);
 }
 

@@ -59,8 +59,12 @@ static int test_map(void) {
 
     hashmap_iterator iter = {0};
     map_iter(map, &iter);
-    error += *(int *)iter.key_ptr == 0 ? 0 : 1;
+
+    int iterkey;
+    memcpy(&iterkey, iter.key_ptr, iter.key_size); // iter.key_ptr is not aligned
+    error += iterkey == 0 ? 0 : 1;
     error += sizeof(int) == iter.key_size ? 0 : 1;
+
     error += *(int *)iter.data == 123 ? 0 : 1;
     error += 0 == map_iter(map, &iter) ? 0 : 1;
 
