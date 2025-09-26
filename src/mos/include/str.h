@@ -41,6 +41,7 @@ str  str_empty();
 str  str_move(str *);
 
 int  str_init_small(str *, char const *); // return nonzero if input too large
+str  str_init_static(char const *);       // from static c strings: do not deinit!
 str  str_init(allocator *, char const *);
 str  str_init_n(allocator *, char const *, size_t);
 str  str_copy(allocator *, str);
@@ -71,6 +72,7 @@ int    str_array_contains(str_sized hay, str_sized need);
 
 // -- utilities --
 
-int str_parse_num(str, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
+int str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
+int str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
 
 #endif

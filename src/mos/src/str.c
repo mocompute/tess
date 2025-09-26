@@ -37,6 +37,11 @@ int str_init_small(str *out, char const *in) {
     return 0;
 }
 
+str str_init_static(char const *in) {
+    // danger zone: do not deinit or modify this
+    return (str){.big = {.buf = (char *)in, .len = strlen(in)}};
+}
+
 str str_init(allocator *alloc, char const *in) {
     return str_init_n(alloc, in, strlen(in));
 }
@@ -200,21 +205,12 @@ int str_array_contains(str_sized hay, str_sized need) {
     return 1; // finished outer loop without error
 }
 
-int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
+int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0: error, 1: i64, 2: u64, 3: f64.
     // Unlike C functions, input string must not have garbage after valid number.
 
-    char   buf[64];
-    char  *end = null;
-    size_t len = 0;
-    {
-        span s = str_span(&self);
-        if (s.len > 63) s.len = 63;
-        len = s.len;
-        memcpy(&buf[0], &s.buf[0], len);
-        buf[s.len] = '\0';
-        end        = &buf[s.len];
-    }
+    size_t      len     = strlen(buf);
+    char const *end     = &buf[len];
 
     errno               = 0;
 
@@ -246,4 +242,17 @@ int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     }
 
     return 0;
+}
+
+int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
+    // Returns: 0: error, 1: i64, 2: u64, 3: f64.
+    // Unlike C functions, input string must not have garbage after valid number.
+
+    char buf[64];
+    span s = str_span(&self);
+    if (s.len > 63) s.len = 63;
+    memcpy(&buf[0], &s.buf[0], s.len);
+    buf[s.len] = '\0';
+
+    return str_parse_cnum(buf, out_i64, out_u64, out_f64);
 }

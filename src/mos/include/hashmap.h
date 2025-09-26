@@ -44,16 +44,21 @@ f32    map_load_factor(hashmap const *);
 // -- insertion and removal --
 
 void   map_set(hashmap **, void const *key, u8 key_len, void const *data);
+void   str_map_set(hashmap **, str key, void const *data);
 void   map_set_v(hashmap **, void const *key, u8 key_len, void const *data); // value fits in void*
 int    map_contains(hashmap const *, void const *key, u8 key_len);
 void  *map_get(hashmap *, void const *key, u8 key_len);
+void  *str_map_get(hashmap *, str key);
 void   map_erase(hashmap *, void const *key, u8 key_len);
 void   map_reset(hashmap *);
 
 void   hset_insert(hashmap **, void const *, u8);
+void   str_hset_insert(hashmap **, str);
 int    hset_contains(hashmap const *, void const *, u8);
+int    str_hset_contains(hashmap const *, str);
 int    hset_is_subset(hashmap const *super, hashmap const *sub);
 void   hset_remove(hashmap *, void const *, u8);
+void   str_hset_remove(hashmap *, str);
 void   hset_reset(hashmap *);
 size_t hset_size(hashmap const *);
 

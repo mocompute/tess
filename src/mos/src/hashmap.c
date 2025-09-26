@@ -384,11 +384,23 @@ void map_set_v(hashmap **self, void const *key, u8 key_len, void const *data) {
     map_set(self, key, key_len, &data);
 }
 
+void str_map_set(hashmap **self, str key, void const *data) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    map_set(self, s.buf, s.len, data);
+}
+
 void *map_get(hashmap *map, void const *key, u8 key_len) {
     // returns pointer to value or null
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;
+}
+
+void *str_map_get(hashmap *self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    return map_get(self, s.buf, s.len);
 }
 
 void map_erase(hashmap *map, void const *key, u8 key_len) {
@@ -427,8 +439,20 @@ void hset_insert(hashmap **self, void const *key, u8 len) {
     map_set(self, key, len, &one);
 }
 
+void str_hset_insert(hashmap **self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    return hset_insert(self, s.buf, s.len);
+}
+
 int hset_contains(hashmap const *self, void const *key, u8 len) {
     return map_contains(self, key, len);
+}
+
+int str_hset_contains(hashmap const *self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    return map_contains(self, s.buf, s.len);
 }
 
 int hset_is_subset(hashmap const *super, hashmap const *sub) {
@@ -441,6 +465,12 @@ int hset_is_subset(hashmap const *super, hashmap const *sub) {
 
 void hset_remove(hashmap *self, void const *key, u8 len) {
     map_erase(self, key, len);
+}
+
+void str_hset_remove(hashmap *self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    map_erase(self, s.buf, s.len);
 }
 
 void hset_reset(hashmap *self) {
