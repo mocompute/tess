@@ -11,6 +11,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/str.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/string_t.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
 )
@@ -24,6 +25,7 @@ set(SOURCES
   src/hashmap.c
   src/sexp.c
   src/sexp_parser.c
+  src/str.c
   src/string_t.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
@@ -59,7 +61,7 @@ mos_create_test(alloc)
 mos_create_test(array)
 mos_create_test(map)
 mos_create_test(sexp)
-mos_create_test(string)
+mos_create_test(str)
 mos_create_test(types)
 
 mos_create_exe(hash)
