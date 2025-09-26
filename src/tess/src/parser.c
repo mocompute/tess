@@ -19,6 +19,7 @@
 #include <string.h>
 
 #define PARSER_ARENA_SIZE 1024
+#define FORWARDS_MAP_SIZE 1024
 
 struct parser {
     allocator             *parent_alloc;
@@ -156,7 +157,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->indent_level            = 0;
     self->in_function_application = 0;
 
-    self->forwards                = map_create(alloc, sizeof(ast_node *));
+    self->forwards                = map_create(alloc, sizeof(ast_node *), FORWARDS_MAP_SIZE);
 
     self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};

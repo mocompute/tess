@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#define MAP_SIZE 2048
+
 struct type_registry {
     allocator *alloc;
     hashmap   *named_types;
@@ -21,8 +23,8 @@ static void    register_basic_types(type_registry *);
 type_registry *type_registry_create(allocator *alloc) {
     type_registry *self = new (alloc, type_registry);
     self->alloc         = alloc;
-    self->named_types   = map_create(alloc, sizeof(tl_type *));
-    self->hashed_types  = map_create(alloc, sizeof(tl_type *));
+    self->named_types   = map_create(alloc, sizeof(tl_type *), MAP_SIZE);
+    self->hashed_types  = map_create(alloc, sizeof(tl_type *), MAP_SIZE);
 
     register_basic_types(self);
 

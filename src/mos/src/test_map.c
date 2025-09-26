@@ -45,7 +45,7 @@ static int test_map(void) {
 
     allocator *alloc = leak_detector_create();
 
-    hashmap   *map   = map_create(alloc, sizeof(int));
+    hashmap   *map   = map_create(alloc, sizeof(int), 16);
 
     int        key0  = 0;
     error += null == map_get(map, &key0, sizeof key0) ? 0 : 1;
@@ -105,7 +105,7 @@ static int test_big_map(void) {
     pair_array vec   = {.alloc = alloc};
     array_reserve(vec, N);
 
-    hashmap *map = map_create(alloc, sizeof(int));
+    hashmap *map = map_create(alloc, sizeof(int), 1024);
 
     for (size_t i = 0; i < N; ++i) {
         // find unique key

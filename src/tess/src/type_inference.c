@@ -165,8 +165,8 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
 
     self->constraints      = (constraint_array){.alloc = self->type_arena};
     self->substitutions    = (constraint_array){.alloc = self->type_arena};
-    self->functions        = map_create(self->type_arena, sizeof(ti_function_record));
-    self->requirements     = map_create(self->type_arena, sizeof(ti_function_record));
+    self->functions        = map_create(self->type_arena, sizeof(ti_function_record), 1024);
+    self->requirements     = map_create(self->type_arena, sizeof(ti_function_record), 1024);
     self->specials         = (ast_node_array){.alloc = self->type_arena};
     self->errors           = (ti_error_array){.alloc = self->type_arena};
     self->out_program.v    = null;
@@ -1070,7 +1070,7 @@ static int ti_create_specials(ti_inferer *self) {
         }
     }
 
-    hashmap *existing = hset_create(self->transient);
+    hashmap *existing = hset_create(self->transient, 256);
     forall(i, self->specials) {
         ast_node *node = self->specials.v[i];
         assert(ast_let == node->tag);
@@ -1269,7 +1269,7 @@ static void one_fixup_free_variables(void *ctx_, ast_node *node) {
     ti_inferer               *self = ctx->self;
 
     if (ast_let == node->tag) {
-        hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *));
+        hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *), 256);
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node   *param = node->let.parameters[i];
             char const *name  = ast_node_name_string(param);
@@ -1353,7 +1353,7 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
     // check all non-variable symbol references, and if they are
     // function templates which are not generic, include them.
 
-    collect_syms_ctx ctx = {.self = self, .seen = hset_create(self->transient)};
+    collect_syms_ctx ctx = {.self = self, .seen = hset_create(self->transient, 256)};
 
     forall(i, self->specials) {
         ast_node *node = self->specials.v[i];
@@ -1705,8 +1705,8 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
 
 void ti_traverse_lexical(allocator *alloc, void *user_ctx, ast_node *node, ti_traverse_lexical_fun fun) {
     traverse_lexical_ctx ctx = {.user_ctx    = user_ctx,
-                                .lexical_map = map_create(alloc, sizeof(lexical_info)),
-                                .visited     = hset_create(alloc)};
+                                .lexical_map = map_create(alloc, sizeof(lexical_info), 256),
+                                .visited     = hset_create(alloc, 256)};
 
     do_traverse_lexical(&ctx, node, fun);
 
@@ -1717,7 +1717,7 @@ void ti_traverse_lexical(allocator *alloc, void *user_ctx, ast_node *node, ti_tr
 void ti_traverse_lexical_continue(allocator *alloc, void *user_ctx, ast_node *node,
                                   ti_traverse_lexical_fun fun, hashmap **lexical_map) {
     traverse_lexical_ctx ctx = {
-      .user_ctx = user_ctx, .lexical_map = *lexical_map, .visited = hset_create(alloc)};
+      .user_ctx = user_ctx, .lexical_map = *lexical_map, .visited = hset_create(alloc, 256)};
 
     do_traverse_lexical(&ctx, node, fun);
 
@@ -2259,7 +2259,7 @@ static void handle_symbol_annotation(ti_inferer *self, ast_node *node) {
         // This is necessary in particular for intrinsic functions which
         // have no bodies that the type solver can analyze to discover
         // constraints.
-        hashmap *map                 = map_create_n(self->transient, sizeof(tl_type *), 8);
+        hashmap *map                 = map_create(self->transient, sizeof(tl_type *), 8);
         node->symbol.annotation_type = make_type_annotation(self, ann, &map);
         map_destroy(&map);
 
@@ -3019,7 +3019,7 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
     generate_tuple_function_ctx ctx   = {
         .self  = self,
         .added = &added,
-        .seen  = hset_create(self->transient),
+        .seen  = hset_create(self->transient, 256),
     };
 
     forall(i, *self->nodes)

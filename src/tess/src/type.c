@@ -129,7 +129,7 @@ tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typev
 
 tl_type *tl_type_clone(allocator *alloc, tl_type const *orig, tl_make_typevar_fun make_typevar, void *ctx) {
 
-    hashmap *tvmap = map_create(alloc, sizeof(orig->type_var.val));
+    hashmap *tvmap = map_create(alloc, sizeof(orig->type_var.val), 16);
     tl_type *res   = tl_type_clone_impl(alloc, orig, make_typevar, ctx, &tvmap);
     map_destroy(&tvmap);
     return res;

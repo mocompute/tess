@@ -851,7 +851,7 @@ void ast_node_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *n
     struct dfs_ctx ctx = {
       .caller_ctx = caller_ctx,
       .fun        = fun,
-      .visited    = hset_create(alloc),
+      .visited    = hset_create(alloc, 128),
     };
 
     ast_node_each_node(&ctx, dfs_one, node);
@@ -870,7 +870,7 @@ ast_node *ast_node_map_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, as
     struct dfs_map_ctx ctx = {
       .caller_ctx = caller_ctx,
       .fun        = fun,
-      .visited    = hset_create(alloc),
+      .visited    = hset_create(alloc, 128),
     };
 
     ast_node_map_node(&ctx, dfs_map_one, node);

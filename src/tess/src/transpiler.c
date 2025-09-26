@@ -18,6 +18,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define PROCESSED_STRUCTS_SIZE 1024
+#define FUNCTIONS_MAP_SIZE     1024
+
 typedef struct {
     char const *free_variable;
     char const *struct_name;
@@ -128,10 +131,10 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->bytes                = bytes;
     self->type_registry        = tr;
     self->type_inferer         = ti;
-    self->processed_structs    = map_create(alloc, sizeof(char *));
+    self->processed_structs    = map_create(alloc, sizeof(char *), PROCESSED_STRUCTS_SIZE);
 
     self->thunk_free_variables = (free_variable_context_name_array){.alloc = self->transient};
-    self->functions            = map_create(self->transient, sizeof(ti_function_record));
+    self->functions            = map_create(alloc, sizeof(ti_function_record), FUNCTIONS_MAP_SIZE);
 
     self->results              = (c_string_array){.alloc = self->strings};
 
@@ -254,7 +257,7 @@ static void emit_thunk_struct_init(transpiler *self, char const *struct_name, ch
         ptr->type                 = tl_type_create(self->transient, type_pointer);
         ptr->type->pointer.target = null;
 
-        hashmap *seen             = hset_create(self->transient);
+        hashmap *seen             = hset_create(self->transient, 256);
 
         for (u32 i = 0; i < variables.size; ++i) {
             char const *name_str = string_t_str(&variables.v[i].name);
@@ -290,7 +293,7 @@ static void emit_thunk_struct(transpiler *self, char const *name, tl_free_variab
         ptr->type                 = tl_type_create(self->transient, type_pointer);
         ptr->type->pointer.target = null;
 
-        hashmap *seen             = hset_create(self->transient);
+        hashmap *seen             = hset_create(self->transient, 256);
         for (u32 i = 0; i < variables.size; ++i) {
             char const *name_str = string_t_str(&variables.v[i].name);
             if (hset_contains(seen, name_str, strlen(name_str))) continue;
@@ -377,7 +380,7 @@ static void look_for_thunks(void *ctx_, ast_node *node) {
 static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
     generate_thunks_ctx ctx;
     ctx.self = self;
-    ctx.seen = hset_create(self->transient);
+    ctx.seen = hset_create(self->transient, 256);
 
     for (u32 i = 0; i < n; i++) {
         ast_node *node = nodes[i];
@@ -1752,7 +1755,7 @@ static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
 
 static int generate_toplevel_contexts(transpiler *self, ast_node_sized nodes) {
 
-    generate_toplevel_contexts_ctx ctx = {.self = self, .seen = hset_create(self->transient)};
+    generate_toplevel_contexts_ctx ctx = {.self = self, .seen = hset_create(self->transient, 256)};
 
     forall(i, nodes) {
         ast_node_dfs_safe_for_recur(self->transient, &ctx, nodes.v[i], generate_one_toplevel_context);

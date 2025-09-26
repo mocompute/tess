@@ -19,7 +19,7 @@
 void test_hash32(int n, int word_size) {
 
     allocator *alloc = arena_create(default_allocator(), 4096);
-    hashmap   *map   = map_create(alloc, sizeof(char *));
+    hashmap   *map   = map_create(alloc, sizeof(char *), 512);
     char      *buf   = alloc_malloc(alloc, (size_t)(n * (word_size + 1)));
 
     char      *ptr   = buf;

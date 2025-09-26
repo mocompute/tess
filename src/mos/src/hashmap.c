@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR      0.75f
+#define DEFAULT_LOAD_FACTOR      0.75
 #define DEFAULT_N_BUCKETS        64
 #define MAX_PROBE_LEN            (1 << 6) - 1
 #define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
@@ -209,7 +209,7 @@ static int grow_buckets(hashmap **map) {
         return 1;
     }
 
-    hashmap *new_map = map_create_n((*map)->parent_alloc, (*map)->value_size, (u32)new_buckets);
+    hashmap *new_map = map_create((*map)->parent_alloc, (*map)->value_size, (u32)new_buckets);
 
     for (u32 i = 0; i < (*map)->n_cells; ++i) {
         hashmap_entry *cell = map_unchecked_at(*map, i);
@@ -248,7 +248,8 @@ hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
 
 //
 
-hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
+hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
+    if (n_buckets < 8) n_buckets = 8;
 
     size_t aligned_value_size = alloc_align_to_word_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
@@ -274,10 +275,6 @@ hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) {
     memset(map->entries, 0, n_buckets * bucket_size);
 
     return map;
-}
-
-hashmap *map_create(allocator *alloc, u16 value_size) {
-    return map_create_n(alloc, value_size, DEFAULT_N_BUCKETS);
 }
 
 void map_destroy(hashmap **map) {
@@ -417,8 +414,8 @@ void map_reset(hashmap *map) {
 
 //
 
-hashmap *hset_create(allocator *alloc) {
-    return map_create(alloc, sizeof(int));
+hashmap *hset_create(allocator *alloc, u32 n) {
+    return map_create(alloc, sizeof(int), n);
 }
 
 void hset_destroy(hashmap **self) {
@@ -455,7 +452,7 @@ size_t hset_size(hashmap const *self) {
 }
 
 hashmap *hset_of_string(allocator *alloc, string_sized in) {
-    hashmap *out = hset_create(alloc);
+    hashmap *out = hset_create(alloc, (u32)(in.size * DEFAULT_LOAD_FACTOR));
     forall(i, in) {
         char const *str = string_t_str(&in.v[i]);
         hset_insert(&out, str, strlen(str));

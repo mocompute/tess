@@ -24,12 +24,11 @@ typedef struct {
 
 // -- allocation and deallocation --
 
-nodiscard hashmap *map_create(allocator *, u16 value_size) mallocfun;
-nodiscard hashmap *map_create_n(allocator *alloc, u16 value_size, u32 n_buckets) mallocfun;
+nodiscard hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) mallocfun;
 void               map_destroy(hashmap **);
 nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 
-nodiscard hashmap *hset_create(allocator *) mallocfun;
+nodiscard hashmap *hset_create(allocator *, u32 n) mallocfun;
 void               hset_destroy(hashmap **);
 
 nodiscard hashmap *hset_of_string(allocator *, string_sized) mallocfun;
