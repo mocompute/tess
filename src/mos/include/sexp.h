@@ -4,7 +4,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "nodiscard.h"
-#include "string_t.h"
+#include "str.h"
 
 #include <stdint.h>
 
@@ -56,10 +56,10 @@ typedef struct sexp_box {
             f64 val;
         } f64;
         struct {
-            string_t name;
+            str name;
         } symbol;
         struct {
-            string_t name;
+            str name;
         } string;
         struct {
             sexp_sized list;
@@ -86,7 +86,7 @@ sexp sexp_init_list_penta(allocator *, sexp, sexp, sexp, sexp, sexp);
 void sexp_deinit(allocator *, sexp *);
 
 void sexp_box_init_empty(sexp_box *);
-void sexp_box_init_move_string(sexp_box *, sexp_box_tag, string_t *);
+void sexp_box_init_move_string(sexp_box *, sexp_box_tag, str *);
 void sexp_box_init_move_list(sexp_box *, sexp_sized *);
 void sexp_box_deinit(allocator *, sexp_box *);
 

@@ -42,6 +42,7 @@ str  str_move(str *);
 
 int  str_init_small(str *, char const *); // return nonzero if input too large
 str  str_init(allocator *, char const *);
+str  str_init_n(allocator *, char const *, size_t);
 str  str_copy(allocator *, str);
 void str_deinit(allocator *, str *);
 
@@ -62,6 +63,8 @@ u32    str_hash32(str);
 u64    str_hash64(str);
 
 span   str_span(str *);
+char  *str_buf(str *);
+int    str_ilen(str *); // for use with C lib; exits program on int overflow
 
 int    str_array_cmp(str_sized, str_sized);
 int    str_array_contains(str_sized hay, str_sized need);

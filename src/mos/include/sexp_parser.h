@@ -3,7 +3,7 @@
 
 #include "alloc.h"
 #include "sexp.h"
-#include "string_t.h"
+#include "str.h"
 
 #include <stddef.h>
 
@@ -34,7 +34,7 @@ typedef enum { MOS_SEXP_TOKEN_TAGS(MOS_TAG_NAME) } sexp_token_tag;
 typedef enum { MOS_SEXP_ERR_TAGS(MOS_TAG_NAME) } sexp_err_tag;
 
 typedef struct {
-    string_t       s;
+    str            s;
     sexp_token_tag tag;
 } sexp_token;
 

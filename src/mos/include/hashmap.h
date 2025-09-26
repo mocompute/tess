@@ -3,7 +3,7 @@
 
 #include "alloc.h"
 #include "nodiscard.h"
-#include "string_t.h"
+#include "str.h"
 #include "types.h"
 
 #include <assert.h>
@@ -31,7 +31,7 @@ nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 nodiscard hashmap *hset_create(allocator *, u32 n) mallocfun;
 void               hset_destroy(hashmap **);
 
-nodiscard hashmap *hset_of_string(allocator *, string_sized) mallocfun;
+nodiscard hashmap *hset_of_str(allocator *, str_sized) mallocfun;
 
 // -- read-only access --
 

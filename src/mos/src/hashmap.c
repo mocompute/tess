@@ -451,11 +451,11 @@ size_t hset_size(hashmap const *self) {
     return map_size(self);
 }
 
-hashmap *hset_of_string(allocator *alloc, string_sized in) {
+hashmap *hset_of_str(allocator *alloc, str_sized in) {
     hashmap *out = hset_create(alloc, (u32)(in.size * DEFAULT_LOAD_FACTOR));
     forall(i, in) {
-        char const *str = string_t_str(&in.v[i]);
-        hset_insert(&out, str, strlen(str));
+        span s = str_span(&in.v[i]);
+        hset_insert(&out, s.buf, s.len);
     }
     return out;
 }

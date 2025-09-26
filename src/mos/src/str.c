@@ -38,7 +38,10 @@ int str_init_small(str *out, char const *in) {
 }
 
 str str_init(allocator *alloc, char const *in) {
-    size_t len = strlen(in);
+    return str_init_n(alloc, in, strlen(in));
+}
+
+str str_init_n(allocator *alloc, char const *in, size_t len) {
     if (len <= MOS_STR_MAX_SMALL) {
         str out;
         init_small(&out, in, len);
@@ -160,6 +163,19 @@ u64 str_hash64(str self) {
 span str_span(str *self) {
     if (is_small(*self)) return (span){.len = self->small.len, .buf = self->small.buf};
     else return (span){.len = self->big.len, .buf = self->big.buf};
+}
+
+char *str_buf(str *self) {
+    if (is_small(*self)) return self->small.buf;
+    else return self->big.buf;
+}
+
+int str_ilen(str *self) {
+    size_t len;
+    if (is_small(*self)) len = self->small.len;
+    else len = self->big.len;
+    if (len > INT_MAX) fatal("overflow");
+    return (int)len;
 }
 
 int str_array_cmp(str_sized lhs, str_sized rhs) {
