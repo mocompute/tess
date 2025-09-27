@@ -1,7 +1,6 @@
 #ifndef TESS_AST_TAGS_H
 #define TESS_AST_TAGS_H
 
-#include "ast.h"
 #include "types.h"
 #include "util.h"
 

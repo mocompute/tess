@@ -238,7 +238,7 @@ static int result_ast_bool(parser *p, int val) {
 }
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
-    p->result      = ast_node_create_sym(p->ast_arena, s);
+    p->result      = ast_node_create_sym_c(p->ast_arena, s);
     p->result->tag = tag;
     set_result_file(p);
     return 0;
@@ -768,9 +768,9 @@ static int a_identifier_typed(parser *self) {
 
     if (a_try(self, a_close_round)) return 1;
 
-    ast_node *node        = ast_node_create_sym(self->ast_arena, "");
+    ast_node *node        = ast_node_create_sym_c(self->ast_arena, "");
     node->symbol.name     = name->symbol.name;
-    node->symbol.original = string_t_init_empty();
+    node->symbol.original = str_empty();
     if (annotation) node->symbol.annotation = annotation;
     else node->symbol.annotation = null;
     node->symbol.annotation_type = null;
@@ -786,7 +786,7 @@ static int forward_declaration(parser *self) {
     if (a_try(self, a_type_annotation)) return 1;
     ast_node *ann               = self->result;
 
-    sym->symbol.original        = string_t_init_empty();
+    sym->symbol.original        = str_empty();
     sym->symbol.annotation      = ann;
     sym->symbol.annotation_type = null;
     return result_ast_node(self, sym);
@@ -825,7 +825,7 @@ static int string_to_number(parser *parser, char const *const in) {
     i64 i;
     u64 u;
     f64 d;
-    switch (string_t_parse_number(in, &i, &u, &d)) {
+    switch (str_parse_cnum(in, &i, &u, &d)) {
     case 1:  return result_ast_i64(parser, i);
     case 2:  return result_ast_u64(parser, u);
     case 3:  return result_ast_f64(parser, d);
@@ -1272,7 +1272,7 @@ static int function_declaration(parser *self) {
     if (a_try(self, a_identifier)) return 1;
 
     ast_node *const name       = self->result; // function name
-    char const     *name_str   = ast_node_name_string(name);
+    str             name_str   = ast_node_str(name);
 
     ast_node_array  parameters = {.alloc = self->ast_arena};
     ast_node       *annotation = null;
@@ -1282,7 +1282,7 @@ static int function_declaration(parser *self) {
     array_push(parameters, &self->result);
 
     // check forward declarations.
-    ast_node **forward = map_get(self->forwards, name_str, strlen(name_str));
+    ast_node **forward = str_map_get(self->forwards, name_str);
     if (forward) {
         assert(ast_symbol == (*forward)->tag);
         annotation = (*forward)->symbol.annotation;
@@ -1407,10 +1407,10 @@ static int function_application(parser *self) {
         if (0 == a_try_special(self, a_end_of_expression)) {
 
             // catch intrinsic names here
-            char const *name_str     = ast_node_name_string(name);
-            int         is_intrinsic = (0 == strncmp("_tl_", name_str, 4));
+            str       name_str     = ast_node_str(name);
+            int       is_intrinsic = (0 == str_cmp_nc(name_str, "_tl_", 4));
 
-            ast_node   *node         = ast_node_create(self->ast_arena, ast_named_function_application);
+            ast_node *node         = ast_node_create(self->ast_arena, ast_named_function_application);
             node->named_application.arguments     = null;
             node->named_application.n_arguments   = 0;
             node->named_application.flags         = 0;
@@ -2001,7 +2001,7 @@ static int toplevel_let(parser *self) {
     if (0 == a_try(self, forward_declaration)) {
         ast_node *sym = self->result;
         assert(ast_symbol == sym->tag);
-        map_set_v(&self->forwards, string_t_str(&sym->symbol.name), string_t_size(&sym->symbol.name), sym);
+        str_map_set_v(&self->forwards, sym->symbol.name, sym);
 
         // TODO error on duplicate declaration
 

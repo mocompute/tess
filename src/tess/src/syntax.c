@@ -7,7 +7,6 @@
 #include "dbg.h"
 #include "error.h"
 #include "hashmap.h"
-#include "string_t.h"
 #include "type.h"
 #include "type_registry.h"
 
@@ -15,7 +14,7 @@
 
 // -- forwards --
 
-static void syntax_error(struct syntax_checker *, ast_node *, enum tl_error_tag, char const *message);
+static void          syntax_error(struct syntax_checker *, ast_node *, enum tl_error_tag, str message);
 
 nodiscard static int syntax_check_type_annotations(struct syntax_checker *);
 nodiscard static int syntax_register_user_types(struct syntax_checker *);
@@ -23,8 +22,8 @@ nodiscard static int syntax_register_user_types(struct syntax_checker *);
 // -- syntax_checker --
 
 struct syntax_error {
-    ast_node   *node;
-    char const *message; // optional
+    ast_node *node;
+    str       message; // optional
     // error code is in ast_node
 };
 
@@ -88,9 +87,9 @@ void syntax_checker_report_errors(syntax_checker *self) {
 
         char *str = ast_node_to_string_for_error(self->arena, self->errors.v[i].node);
 
-        if (self->errors.v[i].message)
-            fprintf(stderr, "error: %s: %s: %s\n", tl_error_tag_to_string(self->errors.v[i].node->error),
-                    self->errors.v[i].message, str);
+        if (!str_is_empty(self->errors.v[i].message))
+            fprintf(stderr, "error: %s: %.*s: %s\n", tl_error_tag_to_string(self->errors.v[i].node->error),
+                    str_ilen(self->errors.v[i].message), str_buf(&self->errors.v[i].message), str);
 
         else fprintf(stderr, "error: %s: %s\n", tl_error_tag_to_string(self->errors.v[i].node->error), str);
 
@@ -108,15 +107,15 @@ static void register_user_type(void *ctx, ast_node *node) {
     if (node->user_type_def.field_types) return;
     struct ast_user_type_def *v         = ast_node_utd(node);
 
-    char const               *type_name = ast_node_name_string(v->name);
+    str                       type_name = ast_node_str(v->name);
 
     if (type_registry_find_name(self->type_registry, type_name)) {
-        syntax_error(self, node, tl_err_type_exists, alloc_strdup(self->arena, type_name));
+        syntax_error(self, node, tl_err_type_exists, str_copy(self->arena, type_name));
         return;
     }
 
-    u16 const       n_fields    = v->n_fields;
-    c_string_csized field_names = {0};
+    u16 const n_fields    = v->n_fields;
+    str_sized field_names = {0};
 
     if (n_fields) {
 
@@ -128,10 +127,11 @@ static void register_user_type(void *ctx, ast_node *node) {
         ast_node **annotations          = v->field_annotations;
 
         for (u32 i = 0; i < n_fields; ++i) {
-            char const *str  = ast_node_name_string(annotations[i]);
-            tl_type   **type = type_registry_find_name(self->type_registry, str);
+            str       str  = ast_node_str(annotations[i]);
+            tl_type **type = type_registry_find_name(self->type_registry, str);
 
-            if (!type) fatal("register_user_types: couldn't find type '%s'", str);
+            if (!type)
+                fatal("register_user_types: couldn't find type '%.*s'", str_ilen(str), str_buf(&str));
 
             field_types[i] = *type;
         }
@@ -143,7 +143,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     // make the user type and register it
     tl_type *lt =
       tl_type_create_labelled_tuple(self->arena, (tl_type_sized){.v = v->field_types, .size = v->n_fields},
-                                    (c_string_csized)sized_all(field_names));
+                                    (str_sized)sized_all(field_names));
 
     tl_type *user_type = tl_type_create_user_type(self->arena, type_name, lt);
 
@@ -191,8 +191,7 @@ static int syntax_check_type_annotations(struct syntax_checker *self) {
     return 0;
 }
 
-static void syntax_error(struct syntax_checker *self, ast_node *node, enum tl_error_tag tag,
-                         char const *message) {
+static void syntax_error(struct syntax_checker *self, ast_node *node, enum tl_error_tag tag, str message) {
 
     node->error = tag;
     array_push_val(self->errors, ((struct syntax_error){node, message}));

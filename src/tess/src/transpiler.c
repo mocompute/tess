@@ -1,12 +1,10 @@
 #include "transpiler.h"
+
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
 #include "hashmap.h"
-
-#include "ast_tags.h"
-#include "dbg.h"
-#include "string_t.h"
+#include "str.h"
 #include "type.h"
 #include "type_inference.h"
 #include "type_registry.h"
@@ -22,8 +20,8 @@
 #define FUNCTIONS_MAP_SIZE     1024
 
 typedef struct {
-    char const *free_variable;
-    char const *struct_name;
+    str free_variable;
+    str struct_name;
 } free_variable_context_name;
 
 typedef struct {
@@ -41,7 +39,7 @@ struct transpiler {
     ti_inferer    *type_inferer;
     hashmap       *processed_structs;
 
-    c_string_array results;
+    str_array      results;
     // a stack of result variable names, see also next_variable
 
     size_t next_variable;
@@ -51,7 +49,7 @@ struct transpiler {
     // state which affects operation of a_eval
     int                              is_eval_in_thunk;
     free_variable_context_name_array thunk_free_variables;
-    hashmap                         *functions; // char const* -> ast_node const* (let)
+    hashmap                         *functions; // str -> ast_node const* (let)
     // the let nodes in the program
 };
 
@@ -63,56 +61,56 @@ extern char const *embed_std_c;
 
 typedef int (*compile_fun_t)(transpiler *, ast_node const *);
 
-static int         a_eval(transpiler *, ast_node const *);
-static int         a_if_then_else(transpiler *, ast_node const *);
-static int         a_field_setter(transpiler *, ast_node const *);
-static int         a_field_access(transpiler *, ast_node const *);
-static int         a_intrinsic_apply(transpiler *, ast_node const *);
-static int         a_fun_apply(transpiler *, ast_node const *);
-static int         a_let(transpiler *, ast_node const *);
-static int         a_let_in(transpiler *, ast_node const *);
-static int         a_let_match_in(transpiler *, ast_node const *);
-static int         a_let_struct_phase(transpiler *, ast_node const *);
-static int         a_main(transpiler *, ast_node const *);
-static int         a_result_type_of(transpiler *, tl_type const *);
-static int         a_toplevel(transpiler *, ast_node const *);
-static int         a_thunk(transpiler *, ast_node const *);
-static int         a_tuple_cons(transpiler *, ast_node const *);
-static int         a_user_type_definition(transpiler *, ast_node const *);
+static int                 a_eval(transpiler *, ast_node const *);
+static int                 a_if_then_else(transpiler *, ast_node const *);
+static int                 a_field_setter(transpiler *, ast_node const *);
+static int                 a_field_access(transpiler *, ast_node const *);
+static int                 a_intrinsic_apply(transpiler *, ast_node const *);
+static int                 a_fun_apply(transpiler *, ast_node const *);
+static int                 a_let(transpiler *, ast_node const *);
+static int                 a_let_in(transpiler *, ast_node const *);
+static int                 a_let_match_in(transpiler *, ast_node const *);
+static int                 a_let_struct_phase(transpiler *, ast_node const *);
+static int                 a_main(transpiler *, ast_node const *);
+static int                 a_result_type_of(transpiler *, tl_type const *);
+static int                 a_toplevel(transpiler *, ast_node const *);
+static int                 a_thunk(transpiler *, ast_node const *);
+static int                 a_tuple_cons(transpiler *, ast_node const *);
+static int                 a_user_type_definition(transpiler *, ast_node const *);
 
-static char       *next_variable(transpiler *);
-static char       *make_context_struct_name(allocator *alloc, tl_type *type);
-static char       *make_tuple_struct_name(allocator *, u64);
-static char       *make_tuple_struct_constructor_name(allocator *, u64);
-static char       *make_thunk_name(allocator *, u64);
-static char       *make_thunk_struct_name(allocator *, u64);
-static char       *make_lambda_function_name(allocator *, u64);
-static char       *make_function_name(allocator *, char const *);
-static char const *emit_symbol_use(transpiler *, ast_node const *);
-static char const *emit_symbol_declaration(transpiler *, ast_node const *, char const *, int);
-static char const *emit_type(transpiler *, tl_type *, char const *);
-static char const *emit_type_arrow_ok(transpiler *, tl_type *, char const *, char const *);
-static char const *emit_type_declaration(transpiler *, tl_type *, char const *, int);
-static void        emit_thunk_struct(transpiler *, char const *, tl_free_variable_sized);
-static void        emit_thunk_struct_init(transpiler *, char const *, char const *, tl_free_variable_sized);
+static str                 next_variable(transpiler *);
+static str                 make_context_struct_name(allocator *alloc, tl_type *type);
+static str                 make_tuple_struct_name(allocator *, u64);
+static str                 make_tuple_struct_constructor_name(allocator *, u64);
+static str                 make_thunk_name(allocator *, u64);
+static str                 make_thunk_struct_name(allocator *, u64);
+static str                 make_lambda_function_name(allocator *, u64);
+static str                 make_function_name(allocator *, str);
+static str                 emit_symbol_use(transpiler *, ast_node const *);
+static str                 emit_symbol_declaration(transpiler *, ast_node const *, str, int);
+static str                 emit_type(transpiler *, tl_type *, str);
+static str                 emit_type_arrow_ok(transpiler *, tl_type *, str, str);
+static str                 emit_type_declaration(transpiler *, tl_type *, str, int);
+static void                emit_thunk_struct(transpiler *, str, tl_free_variable_sized);
+static void                emit_thunk_struct_init(transpiler *, str, str, tl_free_variable_sized);
 
-static int         generate_toplevel_contexts(transpiler *, ast_node_sized);
-static int         generate_toplevel_lambdas(transpiler *, ast_node_sized);
-static int         generate_toplevel_prototypes(transpiler *, ast_node_sized);
-static void        generate_thunks(transpiler *, ast_node **, u32);
-static u32         push_free_variables(transpiler *, ast_node const *, char const *, u32 *);
-static u32         push_free_variables_ext(transpiler *, tl_free_variable_sized, char const *, u32 *);
-static void        pop_free_variables(transpiler *, u32);
-static u64         transpiler_type_hash(tl_type const *);
-static ti_function_record *lookup_function(transpiler *, char const *);
+static int                 generate_toplevel_contexts(transpiler *, ast_node_sized);
+static int                 generate_toplevel_lambdas(transpiler *, ast_node_sized);
+static int                 generate_toplevel_prototypes(transpiler *, ast_node_sized);
+static void                generate_thunks(transpiler *, ast_node **, u32);
+static u32                 push_free_variables(transpiler *, ast_node const *, str, u32 *);
+static u32                 push_free_variables_ext(transpiler *, tl_free_variable_sized, str, u32 *);
+static void                pop_free_variables(transpiler *, u32);
+static u64                 transpiler_type_hash(tl_type const *);
+static ti_function_record *lookup_function(transpiler *, str);
 static void                collect_function_records(transpiler *, ast_node **, u32);
 
-static char const         *pop_result(transpiler *);
-static void                push_result(transpiler *, char const *);
-static void                pop_and_assign(transpiler *, char const *);
+static str                 pop_result(transpiler *);
+static void                push_result(transpiler *, str);
 
 static void                out_put_start(transpiler *, char const *);
 static void                out_put(transpiler *, char const *);
+static void                out_put_str(transpiler *, str);
 static void                out_put_start_fmt(transpiler *, char const *restrict, ...)
   __attribute__((format(printf, 2, 3)));
 static void out_put_fmt(transpiler *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
@@ -131,12 +129,12 @@ transpiler *transpiler_create(allocator *alloc, char_array *bytes, type_registry
     self->bytes                = bytes;
     self->type_registry        = tr;
     self->type_inferer         = ti;
-    self->processed_structs    = map_create(alloc, sizeof(char *), PROCESSED_STRUCTS_SIZE);
+    self->processed_structs    = map_create(alloc, sizeof(str), PROCESSED_STRUCTS_SIZE);
 
     self->thunk_free_variables = (free_variable_context_name_array){.alloc = self->transient};
     self->functions            = map_create(alloc, sizeof(ti_function_record), FUNCTIONS_MAP_SIZE);
 
-    self->results              = (c_string_array){.alloc = self->strings};
+    self->results              = (str_array){.alloc = self->strings};
 
     self->next_variable        = 1;
     self->indent_level         = 0;
@@ -244,12 +242,13 @@ typedef struct {
     hashmap    *seen; // u64
 } generate_thunks_ctx;
 
-static void emit_thunk_struct_init(transpiler *self, char const *struct_name, char const *var_name,
+static void emit_thunk_struct_init(transpiler *self, str struct_name, str var_name,
                                    tl_free_variable_sized variables) {
 
     if (!variables.size) return;
+    ispan s_struct = str_ispan(&struct_name), s_var = str_ispan(&var_name);
 
-    out_put_start_fmt(self, "struct %s %s = {\n", struct_name, var_name);
+    out_put_start_fmt(self, "struct %.*s %.*s = {\n", s_struct.len, s_struct.buf, s_var.len, s_var.buf);
     self->indent_level++;
     {
         ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
@@ -260,18 +259,19 @@ static void emit_thunk_struct_init(transpiler *self, char const *struct_name, ch
         hashmap *seen             = hset_create(self->transient, 256);
 
         for (u32 i = 0; i < variables.size; ++i) {
-            char const *name_str = string_t_str(&variables.v[i].name);
-            if (hset_contains(seen, name_str, strlen(name_str))) continue;
-            hset_insert(&seen, name_str, strlen(name_str));
+            str name_str = variables.v[i].name;
+            if (str_hset_contains(seen, name_str)) continue;
+            str_hset_insert(&seen, name_str);
 
-            ptr->address_of.target =
-              ast_node_create_sym(self->transient, string_t_str(&variables.v[i].name));
+            ptr->address_of.target       = ast_node_create_sym(self->transient, variables.v[i].name);
 
             ptr->address_of.target->type = variables.v[i].type;
             ptr->type->pointer.target    = variables.v[i].type;
 
-            out_put_start_fmt(self, ".%s = &(%s),\n", name_str,
-                              emit_symbol_use(self, ptr->address_of.target));
+            str   target_str             = emit_symbol_use(self, ptr->address_of.target);
+            ispan s_target               = str_ispan(&target_str);
+            out_put_start_fmt(self, ".%.*s = &(%.*s),\n", str_ilen(name_str), str_buf(&name_str),
+                              s_target.len, s_target.buf);
         }
 
         if (!variables.size) out_put_start(self, ".empty = '\\0',");
@@ -280,12 +280,12 @@ static void emit_thunk_struct_init(transpiler *self, char const *struct_name, ch
     out_put_start(self, "};\n\n");
 }
 
-static void emit_thunk_struct(transpiler *self, char const *name, tl_free_variable_sized variables) {
+static void emit_thunk_struct(transpiler *self, str name, tl_free_variable_sized variables) {
     // used for both thunks (if-then-else) and function contexts
 
     if (!variables.size) return;
 
-    out_put_start_fmt(self, "struct %s {\n", name);
+    out_put_start_fmt(self, "struct %.*s {\n", str_ilen(name), str_buf(&name));
     self->indent_level++;
     {
         ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
@@ -295,18 +295,17 @@ static void emit_thunk_struct(transpiler *self, char const *name, tl_free_variab
 
         hashmap *seen             = hset_create(self->transient, 256);
         for (u32 i = 0; i < variables.size; ++i) {
-            char const *name_str = string_t_str(&variables.v[i].name);
-            if (hset_contains(seen, name_str, strlen(name_str))) continue;
-            hset_insert(&seen, name_str, strlen(name_str));
+            str name_str = variables.v[i].name;
+            if (str_hset_contains(seen, name_str)) continue;
+            str_hset_insert(&seen, name_str);
 
-            ptr->address_of.target =
-              ast_node_create_sym(self->transient, string_t_str(&variables.v[i].name));
+            ptr->address_of.target       = ast_node_create_sym(self->transient, variables.v[i].name);
 
             ptr->address_of.target->type = variables.v[i].type;
             ptr->type->pointer.target    = variables.v[i].type;
 
             out_put_start(self, "");
-            out_put(self, emit_type_declaration(self, ptr->type, name_str, 0));
+            out_put_str(self, emit_type_declaration(self, ptr->type, name_str, 0));
             out_put(self, ";\n");
         }
         if (!variables.size) out_put_start(self, "char empty;\n");
@@ -329,24 +328,26 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     tl_free_variable_sized free_variables = ti_free_variables_in(self->transient, node);
 
     // declare struct for thunk context
-    char *struct_name = null;
+    str struct_name = str_empty();
     if (free_variables.size) {
         struct_name = make_thunk_struct_name(self->strings, hash);
         emit_thunk_struct(self, struct_name, free_variables);
     }
 
     // function declaration
-    char *name = make_thunk_name(self->strings, hash);
+    str name = make_thunk_name(self->strings, hash);
 
     // return type and name
     out_put_start(self, "static ");
 
-    out_put(self, emit_symbol_declaration(self, node, name, 1));
+    out_put_str(self, emit_symbol_declaration(self, node, name, 1));
     out_put(self, " ");
 
     // params
+    ispan s_struct = str_ispan(&struct_name);
     out_put(self, "(");
-    if (free_variables.size) out_put_fmt(self, "struct %s * %s", struct_name, struct_name);
+    if (free_variables.size)
+        out_put_fmt(self, "struct %.*s * %.*s", s_struct.len, s_struct.buf, s_struct.len, s_struct.buf);
     else out_put(self, "void");
     out_put(self, ")");
 
@@ -359,8 +360,8 @@ static void make_one_thunk(generate_thunks_ctx *ctx, ast_node *node) {
     a_thunk(self, node);
     pop_free_variables(self, save);
 
-    char const *body = pop_result(self);
-    out_put_start_fmt(self, "return %s;", body);
+    str body = pop_result(self);
+    out_put_start_fmt(self, "return %.*s;", str_ilen(body), str_buf(&body));
 
     self->indent_level--;
     out_put(self, "\n}\n\n");
@@ -391,6 +392,11 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
 
 static void out_put(transpiler *self, char const *str) {
     array_copy(*self->bytes, str, strlen(str));
+}
+
+static void out_put_str(transpiler *self, str str) {
+    span s = str_span(&str);
+    array_copy(*self->bytes, s.buf, s.len);
 }
 
 static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
@@ -491,10 +497,10 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
             return 0;
         };
 
-        u64   hash = transpiler_type_hash(ty);
-        char *name = make_tuple_struct_name(self->alloc, hash);
-        out_put_fmt(self, "struct %s", name);
-        alloc_free(self->alloc, name);
+        u64 hash = transpiler_type_hash(ty);
+        str name = make_tuple_struct_name(self->alloc, hash);
+        out_put_fmt(self, "struct %.*s", str_ilen(name), str_buf(&name));
+        str_deinit(self->alloc, &name);
     } break;
 
     case type_any:
@@ -503,7 +509,7 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
     case type_arrow:    a_result_type_of(self, ty->arrow.right); break;
 
     case type_user:     {
-        out_put_fmt(self, "struct %s", ty->user.name);
+        out_put_fmt(self, "struct %.*s", str_ilen(ty->user.name), str_buf(&ty->user.name));
 
     } break;
 
@@ -519,19 +525,19 @@ static int a_result_type_of(transpiler *self, tl_type const *ty) {
 }
 
 static int a_user_type_definition(transpiler *self, ast_node const *node) {
-    char const *name     = ast_node_name_string(node->user_type_def.name);
+    str       name     = ast_node_str(node->user_type_def.name);
 
-    u32 const   n_fields = node->user_type_def.n_fields;
+    u32 const n_fields = node->user_type_def.n_fields;
 
-    out_put_start_fmt(self, "struct %s {\n", name);
+    out_put_start_fmt(self, "struct %.*s {\n", str_ilen(name), str_buf(&name));
 
     self->indent_level++;
     for (u32 i = 0; i < n_fields; ++i) {
-        tl_type    *ty         = node->user_type_def.field_types[i];
-        char const *field_name = ast_node_name_string(node->user_type_def.field_names[i]);
+        tl_type *ty         = node->user_type_def.field_types[i];
+        str      field_name = ast_node_str(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
-        out_put(self, emit_type_declaration(self, ty, field_name, 0));
+        out_put_str(self, emit_type_declaration(self, ty, field_name, 0));
         out_put(self, ";\n");
     }
     self->indent_level--;
@@ -550,25 +556,27 @@ static int a_let_in(transpiler *self, ast_node const *node) {
 
     // let a = 1 in a + 2 end => resN = 3
 
-    char const *name = ast_node_name_string(node->let_in.name);
+    str name = ast_node_str(node->let_in.name);
 
     // FIXME special case the lambda
     if (ast_lambda_function == node->let_in.value->tag) {
 
         out_put_start(self, "");
-        out_put(self, emit_symbol_declaration(self, node->let_in.name, name, 0));
-        out_put_fmt(self, " = %s;\n", make_function_name(self->strings, name));
+        out_put_str(self, emit_symbol_declaration(self, node->let_in.name, name, 0));
+
+        str fun_name = make_function_name(self->strings, name);
+        out_put_fmt(self, " = %.*s;\n", str_ilen(fun_name), str_buf(&fun_name));
 
         // eval the body and leave it on the stack
         if (a_eval(self, node->let_in.body)) return 1;
 
     } else {
         if (a_eval(self, node->let_in.value)) return 1;
-        char const *value = pop_result(self);
+        str value = pop_result(self);
 
         out_put_start(self, "");
-        out_put(self, emit_symbol_declaration(self, node->let_in.name, name, 0));
-        out_put_fmt(self, " = %s;\n", value);
+        out_put_str(self, emit_symbol_declaration(self, node->let_in.name, name, 0));
+        out_put_fmt(self, " = %.*s;\n", str_ilen(value), str_buf(&value));
 
         // eval the body and leave it on the stack
         if (a_eval(self, node->let_in.body)) return 1;
@@ -586,18 +594,19 @@ static int a_let_match_in(transpiler *self, ast_node const *node) {
 
     // eval the value so we can access it
     if (a_eval(self, v->value)) return 1;
-    char const *value = pop_result(self);
+    str value = pop_result(self);
 
     // declare variables for each assignment
     for (u32 i = 0; i < lt->n_assignments; ++i) {
         // do a field access for the named field of the node's value
         struct ast_assignment *ass        = ast_node_assignment(lt->assignments[i]);
-        char const            *var_name   = ast_node_name_string(ass->name);
-        char const            *field_name = ast_node_name_original(ass->value);
+        str                    var_name   = ast_node_str(ass->name);
+        str                    field_name = ast_node_name_original(ass->value);
 
         out_put_start(self, "");
-        out_put(self, emit_symbol_declaration(self, ass->value, var_name, 0));
-        out_put_start_fmt(self, " = %s.%s;\n", value, field_name);
+        out_put_str(self, emit_symbol_declaration(self, ass->value, var_name, 0));
+        out_put_start_fmt(self, " = %.*s.%.*s;\n", str_ilen(value), str_buf(&value), str_ilen(field_name),
+                          str_buf(&field_name));
     }
 
     // eval the body and leave it on the stack
@@ -621,95 +630,108 @@ static int a_if_then_else(transpiler *self, ast_node const *node) {
     struct ast_if_then_else *v = ast_node_ifthen((ast_node *)node);
 
     // get the thunk names for each arm
-    u64   yes_hash = ast_node_hash(v->yes);
-    u64   no_hash  = ast_node_hash(v->no);
-    char *yes      = make_thunk_name(self->strings, yes_hash);
-    char *yes_ctx  = make_thunk_struct_name(self->strings, yes_hash);
-    char *no       = make_thunk_name(self->strings, no_hash);
-    char *no_ctx   = make_thunk_struct_name(self->strings, no_hash);
+    u64 yes_hash = ast_node_hash(v->yes);
+    u64 no_hash  = ast_node_hash(v->no);
+    str yes      = make_thunk_name(self->strings, yes_hash);
+    str yes_ctx  = make_thunk_struct_name(self->strings, yes_hash);
+    str no       = make_thunk_name(self->strings, no_hash);
+    str no_ctx   = make_thunk_struct_name(self->strings, no_hash);
 
     // get the free variables in each arm
     tl_free_variable_sized yes_free = ti_free_variables_in(self->transient, v->yes);
     tl_free_variable_sized no_free  = ti_free_variables_in(self->transient, v->no);
+    str                    yes_fv   = yes_free.size ? S("&tl_ctx_yes_") : str_empty();
+    str                    no_fv    = no_free.size ? S("&tl_ctx_no_") : str_empty();
 
     // make the context structs
-    emit_thunk_struct_init(self, yes_ctx, "tl_ctx_yes_", yes_free);
-    emit_thunk_struct_init(self, no_ctx, "tl_ctx_no_", no_free);
+    emit_thunk_struct_init(self, yes_ctx, S("tl_ctx_yes_"), yes_free);
+    emit_thunk_struct_init(self, no_ctx, S("tl_ctx_no_"), no_free);
 
     // eval the condition
     if (a_eval(self, v->condition)) return 1;
-    char const *condition = pop_result(self);
+    str condition = pop_result(self);
 
     // dispatch to thunks
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
-    out_put_start_fmt(self, "if (%s) %s = %s(", condition, var, yes);
-    if (yes_free.size) out_put(self, "&tl_ctx_yes_");
-    out_put_fmt(self, "); else %s = %s(", var, no);
-    if (no_free.size) out_put(self, "&tl_ctx_no_");
-    out_put(self, ");\n");
+
+    str build1[] = {
+      S("if ("),     condition, S(") "),  var, S(" = "), yes,   S("("),    yes_fv,
+      S("); else "), var,       S(" = "), no,  S("("),   no_fv, S(");\n"),
+    };
+    str build =
+      str_cat_array(self->strings, (str_sized){.v = build1, .size = sizeof(build1) / sizeof(build1[0])});
+
+    out_put_str(self, build);
     return 0;
 }
 
 static int a_field_access(transpiler *self, ast_node const *node) {
 
     struct ast_user_type_get const *v   = ast_node_utg((ast_node *)node);
-
-    char                           *var = next_variable(self);
+    str                             var = next_variable(self);
 
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
+
+    str struct_name = emit_symbol_use(self, v->struct_name);
+    str field_name  = ast_node_str(v->field_name);
+
     if (type_pointer == v->struct_name->type->tag)
-        out_put_start_fmt(self, " = %s->%s;\n", emit_symbol_use(self, v->struct_name),
-                          ast_node_name_string(v->field_name));
+        out_put_start_fmt(self, " = %.*s->%.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
+                          str_ilen(field_name), str_buf(&field_name));
     else
-        out_put_start_fmt(self, " = %s.%s;\n", emit_symbol_use(self, v->struct_name),
-                          ast_node_name_string(v->field_name));
+        out_put_start_fmt(self, " = %.*s.%.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
+                          str_ilen(field_name), str_buf(&field_name));
 
     return 0;
 }
 
 static int a_field_setter(transpiler *self, ast_node const *node) {
 
-    struct ast_user_type_set const *v          = ast_node_uts((ast_node *)node);
-    char const                     *field_name = ast_node_name_string(v->field_name);
-    char                           *var        = next_variable(self);
+    struct ast_user_type_set const *v           = ast_node_uts((ast_node *)node);
+    str                             struct_name = emit_symbol_use(self, v->struct_name);
+    str                             field_name  = ast_node_str(v->field_name);
+    str                             var         = next_variable(self);
 
     // eval the value
     if (a_eval(self, v->value)) return 1;
-    char const *value = pop_result(self);
+    str value = pop_result(self);
 
     // output value is field set value
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
-    out_put_start_fmt(self, " = %s;\n", value);
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_start_fmt(self, " = %.*s;\n", str_ilen(value), str_buf(&value));
 
     // assign to struct field
     if (type_pointer == v->struct_name->type->tag)
-        out_put_start_fmt(self, "%s->%s = %s;\n", emit_symbol_use(self, v->struct_name), field_name, var);
-    else out_put_start_fmt(self, "%s.%s = %s;\n", emit_symbol_use(self, v->struct_name), field_name, var);
+        out_put_start_fmt(self, "%.*s->%.*s = %.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
+                          str_ilen(field_name), str_buf(&field_name), str_ilen(var), str_buf(&var));
+    else
+        out_put_start_fmt(self, "%.*s.%.*s = %.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
+                          str_ilen(field_name), str_buf(&field_name), str_ilen(var), str_buf(&var));
 
     return 0;
 }
 
-static char const *find_free_variable_context(transpiler *self, char const *name) {
+static str find_free_variable_context(transpiler *self, str name) {
     forall(i, self->thunk_free_variables) {
-        if (0 == strcmp(self->thunk_free_variables.v[i].free_variable, name))
+        if (str_eq(self->thunk_free_variables.v[i].free_variable, name))
             return self->thunk_free_variables.v[i].struct_name;
     }
-    return null;
+    return str_empty();
 }
 
-static char const *emit_symbol_use(transpiler *self, ast_node const *node) {
+static str emit_symbol_use(transpiler *self, ast_node const *node) {
     // emit the symbol name, respecting thunk context and function name mangling
-    char const *name = ast_node_name_string(node);
-    char const *res  = null;
+    str name = ast_node_str(node);
+    str res  = str_empty();
 
     if (tl_type_get_arrow(node->type)) {
         if (ti_is_c_function_name(name)) {
-            res = name += 2;
+            res = str_copy_span(self->strings, str_slice_left(&name, 2));
         }
 
         else if (ti_is_generated_variable_name(name)) {
@@ -731,67 +753,71 @@ static char const *emit_symbol_use(transpiler *self, ast_node const *node) {
     else {
 
         if (self->is_eval_in_thunk) {
-            char const *struct_name = find_free_variable_context(self, name);
+            str struct_name = find_free_variable_context(self, name);
 
-            if (struct_name) {
-                int   len = snprintf(null, 0, "(*(%s->%s))", struct_name, name) + 1;
+            if (!str_is_empty(struct_name)) {
+                int len = snprintf(null, 0, "(*(%.*s->%.*s))", str_ilen(struct_name), str_buf(&struct_name),
+                                   str_ilen(name), str_buf(&name)) +
+                          1;
                 char *out = alloc_malloc(self->transient, len);
-                snprintf(out, len, "(*(%s->%s))", struct_name, name);
-                res = out;
+                snprintf(out, len, "(*(%.*s->%.*s))", str_ilen(struct_name), str_buf(&struct_name),
+                         str_ilen(name), str_buf(&name));
+                res = str_init_allocated(out);
             }
         }
 
-        if (!res) res = alloc_strdup(self->transient, name);
+        if (str_is_empty(res)) res = str_copy(self->transient, name);
     }
 
     return res;
 }
 
-static char const *emit_type_arrow_ok(transpiler *self, tl_type *type, char const *void_decl,
-                                      char const *var_name_for_arrow) {
-    char const *decl_type = null;
-    char        buf[128];
+static str emit_type_arrow_ok(transpiler *self, tl_type *type, str void_decl, str var_name_for_arrow) {
+    str  decl_type = str_empty();
+    char buf[128];
     switch (type->tag) {
     case type_nil:    decl_type = void_decl; break;
-    case type_bool:   decl_type = "int"; break;
-    case type_int:    decl_type = "int64_t"; break;
-    case type_float:  decl_type = "double"; break;
-    case type_string: decl_type = "char *"; break; // TODO const?
+    case type_bool:   decl_type = S("int"); break;
+    case type_int:    decl_type = S("int64_t"); break;
+    case type_float:  decl_type = S("double"); break;
+    case type_string: decl_type = S("char *"); break; // TODO const?
 
     case type_tuple:
     case type_labelled_tuple:
         if (!type->array.elements.size) {
             decl_type = void_decl;
         } else {
-            u64 hash = transpiler_type_hash(type);
-            int len = snprintf(buf, sizeof buf, "struct %s", make_tuple_struct_name(self->transient, hash));
+            u64 hash        = transpiler_type_hash(type);
+            str struct_name = make_tuple_struct_name(self->transient, hash);
+            int len =
+              snprintf(buf, sizeof buf, "struct %.*s", str_ilen(struct_name), str_buf(&struct_name));
             buf[len]  = '\0';
-            decl_type = alloc_strdup(self->transient, buf);
+            decl_type = str_init(self->transient, buf);
         }
         break;
 
     case type_user: {
-        int len   = snprintf(buf, sizeof buf, "struct %s", type->user.name);
+        int len =
+          snprintf(buf, sizeof buf, "struct %.*s", str_ilen(type->user.name), str_buf(&type->user.name));
         buf[len]  = '\0';
-        decl_type = alloc_strdup(self->transient, buf);
+        decl_type = str_init(self->transient, buf);
     } break;
 
     case type_type_var: {
         int len   = snprintf(buf, sizeof buf, "/* tv%u */ int", type->type_var.val);
         buf[len]  = '\0';
-        decl_type = alloc_strdup(self->transient, buf);
+        decl_type = str_init(self->transient, buf);
     } break;
 
     case type_pointer:
         if (type_arrow == type->pointer.target->tag) {
-            if (!var_name_for_arrow) fatal("logic error");
+            if (str_is_empty(var_name_for_arrow)) fatal("logic error");
             decl_type = emit_type_arrow_ok(self, type->pointer.target, void_decl, var_name_for_arrow);
         } else {
-            int len =
-              snprintf(buf, sizeof buf, "%s *",
-                       emit_type_arrow_ok(self, type->pointer.target, void_decl, var_name_for_arrow));
-            buf[len]  = '\0';
-            decl_type = alloc_strdup(self->transient, buf);
+            str type_str = emit_type_arrow_ok(self, type->pointer.target, void_decl, var_name_for_arrow);
+            int len      = snprintf(buf, sizeof buf, "%.*s *", str_ilen(type_str), str_buf(&type_str));
+            buf[len]     = '\0';
+            decl_type    = str_init(self->transient, buf);
         }
         break;
 
@@ -803,11 +829,11 @@ static char const *emit_type_arrow_ok(transpiler *self, tl_type *type, char cons
 
     case type_arrow: {
 
-        if (!var_name_for_arrow) fatal("logic error");
+        if (str_is_empty(var_name_for_arrow)) fatal("logic error");
 
-        char const            *result_type    = emit_type(self, type->arrow.right, void_decl);
+        str                    result_type    = emit_type(self, type->arrow.right, void_decl);
         tl_type_sized          parameters     = type->arrow.left->array.elements;
-        char const            *struct_name    = null;
+        str                    struct_name    = str_empty();
         tl_free_variable_sized free_variables = type->arrow.free_variables;
         char                   buf[512];
 
@@ -816,27 +842,39 @@ static char const *emit_type_arrow_ok(transpiler *self, tl_type *type, char cons
         }
         int len = snprintf(buf, sizeof buf, "(");
 
-        if (struct_name) len += snprintf(buf + len, sizeof buf - len, "struct %s *", struct_name);
+        if (!str_is_empty(struct_name))
+            len += snprintf(buf + len, sizeof buf - len, "struct %.*s *", str_ilen(struct_name),
+                            str_buf(&struct_name));
         for (u32 i = 0; i < parameters.size; ++i) {
-            if (struct_name || i) len += snprintf(buf + len, sizeof buf - len, ", ");
-            len += snprintf(buf + len, sizeof buf - len, "%s",
-                            emit_type_arrow_ok(self, parameters.v[i], void_decl, ""));
+            if (i || !str_is_empty(struct_name)) len += snprintf(buf + len, sizeof buf - len, ", ");
+            str type_str = emit_type_arrow_ok(self, parameters.v[i], void_decl, str_empty());
+            len += snprintf(buf + len, sizeof buf - len, "%.*s", str_ilen(type_str), str_buf(&type_str));
         }
-        if (!parameters.size && !struct_name) len += snprintf(buf + len, sizeof buf - len, "void");
+        if (!parameters.size && str_is_empty(struct_name))
+            len += snprintf(buf + len, sizeof buf - len, "void");
         len += snprintf(buf + len, sizeof buf - len, ")");
-        buf[len]  = '\0';
+        buf[len] = '\0';
 
-        len       = snprintf(null, 0, "%s (*%s)%s", result_type, var_name_for_arrow, buf) + 1;
-        decl_type = alloc_malloc(self->transient, len);
-        snprintf((char *)decl_type, len, "%s (*%s)%s", result_type, var_name_for_arrow, buf);
+        len      = snprintf(null, 0, "%.*s (*%.*s)%s", str_ilen(result_type), str_buf(&result_type),
+                            str_ilen(var_name_for_arrow), str_buf(&var_name_for_arrow), buf) +
+              1;
+
+        // decl_type = alloc_malloc(self->transient, len);
+        // snprintf((char *)decl_type, len, "%s (*%s)%s", result_type, var_name_for_arrow, buf);
+
+        str build1[] = {
+          result_type, S(" (*"), var_name_for_arrow, S(")"), str_init(self->strings, buf),
+        };
+        decl_type =
+          str_cat_array(self->strings, (str_sized){.v = build1, .size = sizeof build1 / sizeof build1[0]});
     } break;
     }
 
     return decl_type;
 }
 
-static char const *emit_type(transpiler *self, tl_type *type, char const *void_decl) {
-    return emit_type_arrow_ok(self, type, void_decl, null);
+static str emit_type(transpiler *self, tl_type *type, str void_decl) {
+    return emit_type_arrow_ok(self, type, void_decl, str_empty());
 }
 
 // FIXME use tl_type_get_arrow instead
@@ -845,46 +883,38 @@ static int is_arrow_or_pointer_to_arrow(tl_type *type) {
             (type_pointer == type->tag && type_arrow == type->pointer.target->tag));
 }
 
-static char const *emit_type_declaration(transpiler *self, tl_type *type, char const *var, int is_void_ok) {
-    char const *void_decl = is_void_ok ? "void" : "/* void */ int";
-    int         len       = 0;
-    if (is_arrow_or_pointer_to_arrow(type)) {
-        len = snprintf(null, 0, "%s", emit_type_arrow_ok(self, type, void_decl, var)) + 1;
-    } else {
-        len = snprintf(null, 0, "%s %s", emit_type(self, type, void_decl), var) + 1;
-    }
-    char *out = alloc_malloc(self->transient, len);
+static str emit_type_declaration(transpiler *self, tl_type *type, str var, int is_void_ok) {
+    str void_decl = is_void_ok ? S("void") : S("/* void */ int");
+
+    str out       = str_empty();
 
     if (is_arrow_or_pointer_to_arrow(type)) {
-        len = snprintf(out, len, "%s", emit_type_arrow_ok(self, type, void_decl, var)) + 1;
+        str_dcat(self->transient, &out, emit_type_arrow_ok(self, type, void_decl, var));
     } else {
-        len = snprintf(out, len, "%s %s", emit_type(self, type, void_decl), var) + 1;
+        str_dcat(self->transient, &out, emit_type(self, type, void_decl));
+        str_dcat_c(self->transient, &out, " ");
+        str_dcat(self->transient, &out, var);
     }
 
     return out;
 }
 
-static char const *emit_symbol_declaration(transpiler *self, ast_node const *node, char const *var,
-                                           int is_void_ok) {
+static str emit_symbol_declaration(transpiler *self, ast_node const *node, str var, int is_void_ok) {
     // emit a declaration for variable var using the type of node
-    tl_type    *type      = node->type;
-    char const *void_decl = is_void_ok ? "void" : "/* void */ int";
+    tl_type *type      = node->type;
+    str      void_decl = is_void_ok ? S("void") : S("/* void */ int");
 
     if (is_arrow_or_pointer_to_arrow(type)) {
 
         return emit_type_arrow_ok(self, type, void_decl, var);
 
     } else if (is_nil_result(type)) {
-        int   len = snprintf(null, 0, "%s %s", void_decl, var) + 1;
-        char *out = alloc_malloc(self->transient, len);
-        snprintf(out, len, "%s %s", void_decl, var);
-        return out;
+        str b[] = {void_decl, S(" "), var};
+        return str_cat_array(self->transient, (str_sized){.v = b, .size = sizeof b / sizeof b[0]});
     } else {
-        char const *result_type = emit_type(self, type, void_decl);
-        int         len         = snprintf(null, 0, "%s %s", result_type, var) + 1;
-        char       *out         = alloc_malloc(self->transient, len);
-        snprintf(out, len, "%s %s", result_type, var);
-        return out;
+        str result_type = emit_type(self, type, void_decl);
+        str b[]         = {result_type, S(" "), var};
+        return str_cat_array(self->transient, (str_sized){.v = b, .size = sizeof b / sizeof b[0]});
     }
 }
 
@@ -892,79 +922,53 @@ static int a_eval(transpiler *self, ast_node const *node) {
 
     if (!node || !node->type) fatal("a_eval: node or type is null");
 
-    // Push a result variable onto the stack. Caller must pop it.
-    char *var = next_variable(self);
-    out_put(self, "\n");
-
-    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
-
-    out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
-    out_put(self, ";\n");
-
-    if (is_nil_result(node->type)) var = null; // abandon the result var after we declare it
+    // eval node and grab its result variable name into `result`. `pre_result` may be used for additional
+    // output prior to assigning value to result. Note: the case for user_type is handled separately because
+    // it requires a named result variable.
+    str pre_result = str_empty();
+    str result     = str_empty();
 
     switch (node->tag) {
     case ast_assignment:
     case ast_arrow:
     case ast_ellipsis:
     case ast_eof:
-    case ast_nil:
-        if (var) out_put_start_fmt(self, "%s = NULL;\n", var);
-        break;
+    case ast_nil:        result = S("NULL"); break;
+    case ast_any:        fatal("attempt to evaluate 'any'"); break;
+    case ast_symbol:     result = emit_symbol_use(self, node); break;
+    case ast_string:     result = str_cat_3(self->strings, S("\""), ast_node_str(node), S("\"")); break;
 
-    case ast_any: fatal("attempt to evaluate 'any'"); break;
-
-    case ast_symbol:
-        if (var) out_put_start_fmt(self, "%s = %s;\n", var, emit_symbol_use(self, node));
-        break;
-
-    case ast_string:
-        if (var) out_put_start_fmt(self, "%s = \"%s\";\n", var, ast_node_name_string(node));
-        break;
-    case ast_i64:
-        if (var) out_put_start_fmt(self, "%s = %" PRIi64 ";\n", var, node->i64.val);
-        break;
-    case ast_u64:
-        if (var) out_put_start_fmt(self, "%s = %" PRIu64 ";\n", var, node->u64.val);
-        break;
-    case ast_f64:
-        if (var) out_put_start_fmt(self, "%s = %f;\n", var, node->f64.val);
-        break;
-    case ast_bool:
-        if (var) {
-            if (node->bool_.val) out_put_start_fmt(self, "%s = 1;\n", var);
-            else out_put_start_fmt(self, "%s = 0;\n", var);
-        }
-        break;
+    case ast_i64:        result = str_fmt(self->strings, "%" PRIi64, node->i64.val); break;
+    case ast_u64:        result = str_fmt(self->strings, "%" PRIu64, node->u64.val); break;
+    case ast_f64:        result = str_fmt(self->strings, "%f", node->f64.val); break;
+    case ast_bool:       result = node->bool_.val ? S("1") : S("0"); break;
 
     case ast_address_of: {
         if (ast_symbol == node->address_of.target->tag) {
             log(self, "taking address of '%s'", ast_node_to_string(self->strings, node->address_of.target));
-            if (var)
-                out_put_start_fmt(self, "%s = &(%s);\n", var,
-                                  emit_symbol_use(self, node->address_of.target));
+            result =
+              str_cat_3(self->strings, S("&("), emit_symbol_use(self, node->address_of.target), S(")"));
+
         } else {
             if (a_eval(self, node->address_of.target)) return 1;
-            char const *res = pop_result(self);
-            if (var) out_put_start_fmt(self, "%s = &(%s);\n", var, res);
+            str res = pop_result(self);
+            result  = str_cat_3(self->strings, S("&("), res, S(")"));
         }
     } break;
 
     case ast_dereference: {
         if (a_eval(self, node->dereference.target)) return 1;
-        char const *ptr = pop_result(self);
-        if (var) out_put_start_fmt(self, "%s = *(%s);\n", var, ptr);
+        str ptr = pop_result(self);
+        result  = str_cat_3(self->strings, S("*("), ptr, S(")"));
     } break;
 
     case ast_dereference_assign: {
         if (a_eval(self, node->dereference_assign.target)) return 1;
-        char const *ptr = pop_result(self);
+        str ptr = pop_result(self);
         if (a_eval(self, node->dereference_assign.value)) return 1;
-        char const *value = pop_result(self);
-
-        out_put_start_fmt(self, "*(%s) = %s;\n", ptr, value);
-        if (var) out_put_start_fmt(self, "%s = %s;\n", var, value);
+        str value  = pop_result(self);
+        pre_result = str_cat_5(self->strings, S("*("), ptr, S(") = "), value, S(";\n"));
+        result     = value;
     } break;
 
     case ast_begin_end: {
@@ -977,71 +981,55 @@ static int a_eval(transpiler *self, ast_node const *node) {
             (void)pop_result(self); // ignore results of all but last expression
         }
         if (a_eval(self, v->expressions[v->n_expressions - 1])) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
 
     } break;
 
     case ast_user_type: {
-        // eval each field in the user_type and assign to its matching struct field
-        struct ast_user_type const *v = ast_node_ut((ast_node *)node);
-
-        tl_type **type = type_registry_find_name(self->type_registry, ast_node_name_string(v->name));
-        if (!type) fatal("a_eval: type '%s' not found in registry", ast_node_name_string(v->name));
-
-        struct tlt_user const           *usertype = tl_type_user(*type);
-        struct tlt_labelled_tuple const *lt       = tl_type_lt(usertype->labelled_tuple);
-
-        for (u16 i = 0; i < v->n_fields; ++i) {
-            if (a_eval(self, v->fields[i])) return 1;
-            char const *res = pop_result(self);
-            out_put(self, "\n");
-            if (var) out_put_start_fmt(self, "%s.%s = %s;\n", var, lt->names.v[i], res);
-        }
+        // handled after switch
     } break;
 
     case ast_user_type_get:
         // emit object field access
         if (a_field_access(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_user_type_set:
         // emit object field setter
         if (a_field_setter(self, node)) return 1;
-        pop_and_assign(self, var);
-
+        result = pop_result(self);
         break;
 
     case ast_labelled_tuple:
     case ast_tuple:
         if (a_tuple_cons(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_let_in:
         if (a_let_in(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_let_match_in:
         if (a_let_match_in(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_let:
         if (a_let(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_if_then_else:
         if (a_if_then_else(self, node)) return 1;
-        pop_and_assign(self, var);
+        result = pop_result(self);
         break;
 
     case ast_lambda_function: {
-        u64   hash = ast_node_hash(node);
-        char *name = make_lambda_function_name(self->strings, hash);
-        if (var) out_put_start_fmt(self, "%s = %s;\n", var, name);
+        u64 hash = ast_node_hash(node);
+        result   = make_lambda_function_name(self->strings, hash);
 
     } break;
 
@@ -1055,11 +1043,59 @@ static int a_eval(transpiler *self, ast_node const *node) {
         } else {
             if (a_fun_apply(self, node)) return 1;
         }
-        pop_and_assign(self, var);
+        result = pop_result(self);
     } break;
 
     case ast_user_type_definition: break;
     }
+
+    // Push a result variable onto the stack. Caller must pop it.
+    str var = next_variable(self);
+    out_put(self, "\n");
+    if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
+
+    if (ast_user_type == node->tag) {
+        // eval each field in the user_type and assign to its matching struct field
+        struct ast_user_type const *v    = ast_node_ut((ast_node *)node);
+        str                         name = ast_node_str(v->name);
+
+        tl_type                   **type = type_registry_find_name(self->type_registry, name);
+        if (!type) fatal("a_eval: type '%.*s' not found in registry", str_ilen(name), str_buf(&name));
+
+        struct tlt_user const           *usertype = tl_type_user(*type);
+        struct tlt_labelled_tuple const *lt       = tl_type_lt(usertype->labelled_tuple);
+
+        out_put_start(self, "");
+        out_put_str(self, emit_symbol_declaration(self, node, var, 0));
+        out_put(self, ";\n");
+
+        str_array b = {.alloc = self->strings};
+        for (u16 i = 0; i < v->n_fields; ++i) {
+            if (a_eval(self, v->fields[i])) return 1;
+            str res = pop_result(self);
+            str tmp = str_cat_5(self->strings, var, S("."), lt->names.v[i], S(" = "), res);
+            array_push(b, &tmp);
+            array_push(b, &S(";\n"));
+        }
+
+        out_put_str(self, *str_dcat_array(self->strings, &result, (str_sized)sized_all(b)));
+
+    } else {
+
+        if (!str_is_empty(pre_result)) {
+            out_put_start(self, "");
+            out_put_str(self, pre_result);
+        }
+
+        out_put_start(self, "");
+        out_put_str(self, emit_symbol_declaration(self, node, var, 0));
+        out_put(self, ";\n");
+
+        if (!is_nil_result(node->type)) {
+            out_put_str(self, str_cat_4(self->strings, var, S(" = "), result, S(";\n")));
+        }
+    }
+
     return 0;
 }
 
@@ -1068,7 +1104,7 @@ static int expand_value(transpiler *self, ast_node const *node) {
 
     case ast_symbol:
         //
-        out_put(self, ast_node_name_string(node));
+        out_put_str(self, ast_node_str(node));
         break;
 
     case ast_nil:
@@ -1116,41 +1152,43 @@ static int expand_value(transpiler *self, ast_node const *node) {
 
 static int tl_unary_op(transpiler *self, ast_node const *node, void *op) {
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-    char const                   *name = ast_node_name_string(v->name);
-    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+    str                           name = ast_node_str(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%.*s'", str_ilen(name), str_buf(&name));
 
     // function call result
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     // eval the args
     a_eval(self, v->arguments[0]);
-    char const *arg = pop_result(self);
+    str arg = pop_result(self);
 
-    out_put_start_fmt(self, "%s = %s(%s);\n", var, (char const *)op, arg);
+    out_put_start(self, "");
+    out_put_str(self, str_cat_5(self->transient, var, S(" = "), str_init_static(op), arg, S(";\n")));
     return 0;
 }
 
 static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-    char const                   *name = ast_node_name_string(v->name);
-    if (v->n_arguments != 2) fatal("wrong number of arguments: '%s'", name);
+    str                           name = ast_node_str(v->name);
+    if (v->n_arguments != 2) fatal("wrong number of arguments: '%.*s'", str_ilen(name), str_buf(&name));
 
     // function call result
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     // eval the args
     a_eval(self, v->arguments[1]);
     a_eval(self, v->arguments[0]);
-    char const *lhs = pop_result(self);
-    char const *rhs = pop_result(self);
+    str lhs = pop_result(self);
+    str rhs = pop_result(self);
 
-    out_put_start_fmt(self, "%s = %s %s %s;\n", var, lhs, (char const *)op, rhs);
+    out_put_start(self, "");
+    out_put_str(self, str_cat_6(self->transient, var, S(" = "), lhs, str_init_static(op), rhs, S(";\n")));
 
     return 0;
 }
@@ -1158,16 +1196,17 @@ static int tl_binary_op(transpiler *self, ast_node const *node, void *op) {
 static int tl_sizeof(transpiler *self, ast_node const *node, void *extra) {
     (void)extra;
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-    char const                   *name = ast_node_name_string(v->name);
-    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+    str                           name = ast_node_str(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%.*s'", str_ilen(name), str_buf(&name));
 
     // function call result
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
-    out_put_start_fmt(self, "%s = (sizeof (", var);
+    out_put_start(self, "");
+    out_put_str(self, str_cat(self->transient, var, S(" = (sizeof (")));
     expand_value(self, v->arguments[0]);
     out_put(self, "));\n");
     return 0;
@@ -1176,16 +1215,17 @@ static int tl_sizeof(transpiler *self, ast_node const *node, void *extra) {
 static int tl_sizeoft(transpiler *self, ast_node const *node, void *extra) {
     (void)extra;
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-    char const                   *name = ast_node_name_string(v->name);
-    if (v->n_arguments != 1) fatal("wrong number of arguments: '%s'", name);
+    str                           name = ast_node_str(v->name);
+    if (v->n_arguments != 1) fatal("wrong number of arguments: '%.*s'", str_ilen(name), str_buf(&name));
 
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     // Emit the type of the argument
-    out_put_start_fmt(self, "%s = (sizeof (", var);
+    out_put_start(self, "");
+    out_put_str(self, str_cat(self->transient, var, S(" = (sizeof (")));
     a_result_type_of(self, v->arguments[0]->type);
     out_put(self, "));\n");
     return 0;
@@ -1196,23 +1236,23 @@ static int tl_and(transpiler *self, ast_node const *node, void *extra) {
     struct ast_named_application *v = ast_node_named((ast_node *)node);
 
     //
-    char *result = next_variable(self);
-    char  done_label[64];
-    snprintf(done_label, sizeof done_label, "%s_done", result);
-    out_put_start_fmt(self, "int %s = 0;\n", result);
+    str  result = next_variable(self);
+    char done_label[64];
+    snprintf(done_label, sizeof done_label, "%.*s_done", str_ilen(result), str_buf(&result));
+    out_put_start_fmt(self, "int %.*s = 0;\n", str_ilen(result), str_buf(&result));
     out_put_start(self, "{\n");
     self->indent_level++;
 
     for (u32 i = 0; i < v->n_arguments; ++i) {
         // if ! arg goto done
         a_eval(self, v->arguments[i]);
-        char const *arg = pop_result(self);
-        out_put_start_fmt(self, "if (!(%s)) goto %s;\n", arg, done_label);
+        str arg = pop_result(self);
+        out_put_start_fmt(self, "if (!(%.*s)) goto %s;\n", str_ilen(arg), str_buf(&arg), done_label);
     }
 
     // all args are true
     out_put(self, "\n");
-    out_put_start_fmt(self, "%s = 1;\n", result);
+    out_put_start_fmt(self, "%.*s = 1;\n", str_ilen(result), str_buf(&result));
 
     self->indent_level--;
     out_put(self, "\n");
@@ -1227,23 +1267,23 @@ static int tl_or(transpiler *self, ast_node const *node, void *extra) {
     struct ast_named_application *v = ast_node_named((ast_node *)node);
 
     //
-    char *result = next_variable(self);
-    char  done_label[64];
-    snprintf(done_label, sizeof done_label, "%s_done", result);
-    out_put_start_fmt(self, "int %s = 1;\n", result);
+    str  result = next_variable(self);
+    char done_label[64];
+    snprintf(done_label, sizeof done_label, "%.*s_done", str_ilen(result), str_buf(&result));
+    out_put_start_fmt(self, "int %.*s = 1;\n", str_ilen(result), str_buf(&result));
     out_put_start(self, "{\n");
     self->indent_level++;
 
     for (u32 i = 0; i < v->n_arguments; ++i) {
         // if arg goto done
         a_eval(self, v->arguments[i]);
-        char const *arg = pop_result(self);
-        out_put_start_fmt(self, "if (%s) goto %s;\n", arg, done_label);
+        str arg = pop_result(self);
+        out_put_start_fmt(self, "if (%.*s) goto %s;\n", str_ilen(arg), str_buf(&arg), done_label);
     }
 
     // none of the args are true
     out_put(self, "\n");
-    out_put_start_fmt(self, "%s = 0;\n", result);
+    out_put_start_fmt(self, "%.*s = 0;\n", str_ilen(result), str_buf(&result));
 
     self->indent_level--;
     out_put(self, "\n");
@@ -1256,7 +1296,7 @@ static int tl_or(transpiler *self, ast_node const *node, void *extra) {
 static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
     assert(ast_named_function_application == node->tag);
     struct ast_named_application *v    = ast_node_named((ast_node *)node);
-    char const                   *name = ast_node_name_string(v->name);
+    str                           name = ast_node_str(v->name);
 
     struct dispatch {
         char const *name;
@@ -1298,9 +1338,9 @@ static int a_intrinsic_apply(transpiler *self, ast_node const *node) {
 
     struct dispatch const *p = table;
     for (; p && p->name[0]; ++p)
-        if (0 == strcmp(p->name, name)) return p->fun(self, node, p->extra);
+        if (0 == str_cmp_c(name, p->name)) return p->fun(self, node, p->extra);
 
-    fatal("unknown intrinsic: '%s'", name);
+    fatal("unknown intrinsic: '%.*s'", str_ilen(name), str_buf(&name));
 
     return 1;
 }
@@ -1309,17 +1349,17 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     if (ast_named_function_application != node->tag && ast_lambda_function_application != node->tag)
         fatal("logic error");
 
-    int         is_nfa      = ast_named_function_application == node->tag;
+    int       is_nfa      = ast_named_function_application == node->tag;
 
-    ast_node   *type_holder = is_nfa ? node->named_application.name : node->lambda_application.lambda;
-    char const *fun_name =
+    ast_node *type_holder = is_nfa ? node->named_application.name : node->lambda_application.lambda;
+    str       fun_name =
       is_nfa ? emit_symbol_use(self, type_holder)
-             : make_lambda_function_name(self->transient, ast_node_hash(node->lambda_application.lambda));
+                   : make_lambda_function_name(self->transient, ast_node_hash(node->lambda_application.lambda));
 
     // function call result
-    char *var = next_variable(self);
+    str var = next_variable(self);
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     // eval arguments in reverse order, then generate function call,
@@ -1334,31 +1374,32 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
     tl_free_variable_sized free_variables = {0};
 
     assert(type_arrow == fun_type->tag);
-    free_variables          = fun_type->arrow.free_variables;
+    free_variables  = fun_type->arrow.free_variables;
 
-    char const *struct_name = null;
+    str struct_name = str_empty();
     if (free_variables.size) struct_name = make_context_struct_name(self->transient, type_holder->type);
 
     // prepare the function call context, if any
     out_put_start(self, "{\n");
     self->indent_level++;
 
-    if (free_variables.size) emit_thunk_struct_init(self, struct_name, "tl_apply_ctx_", free_variables);
+    if (free_variables.size) emit_thunk_struct_init(self, struct_name, S("tl_apply_ctx_"), free_variables);
 
     if (is_nil_result(fun_type)) out_put_start(self, "");
-    else out_put_start_fmt(self, "%s = ", var);
+    else out_put_start_fmt(self, "%.*s = ", str_ilen(var), str_buf(&var));
 
     // function call
-    out_put_fmt(self, "%s(", fun_name);
+    out_put_fmt(self, "%.*s(", str_ilen(fun_name), str_buf(&fun_name));
     if (free_variables.size) out_put_fmt(self, "&tl_apply_ctx_");
     for (u32 i = 0; i < node->array.n; ++i) {
         if (i || free_variables.size) out_put(self, ", ");
-        char const *arg = pop_result(self); // pop previously evaluated argument
-        out_put(self, arg);
+        str arg = pop_result(self); // pop previously evaluated argument
+        out_put_str(self, arg);
     }
     out_put(self, ");\n");
 
-    if (is_nil_result(fun_type)) out_put_start_fmt(self, "%s = 0;/* void */\n", var);
+    if (is_nil_result(fun_type))
+        out_put_start_fmt(self, "%.*s = 0;/* void */\n", str_ilen(var), str_buf(&var));
 
     self->indent_level--;
     out_put_start(self, "}\n");
@@ -1368,7 +1409,7 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
 }
 
 static int a_tuple_init(transpiler *self, ast_node const *node) {
-    char *var = next_variable(self);
+    str var = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -1376,7 +1417,7 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
     i32 const               n_args = v->n_elements;
 
     u64                     hash   = transpiler_type_hash(node->type);
-    char                   *name   = make_tuple_struct_name(self->alloc, hash);
+    str                     name   = make_tuple_struct_name(self->alloc, hash);
 
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
@@ -1384,32 +1425,33 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
 
     // init result
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     for (u32 i = 0; i < (u32)n_args; ++i) {
         char buf[32];
         snprintf(buf, sizeof buf - 1, "x%u", i);
 
-        char const *arg = pop_result(self);
+        str arg = pop_result(self);
 
-        out_put_start_fmt(self, "%s.%s = %s;\n", var, buf, arg);
+        out_put_start_fmt(self, "%.*s.%s = %.*s;\n", str_ilen(var), str_buf(&var), buf, str_ilen(arg),
+                          str_buf(&arg));
     }
 
-    alloc_free(self->alloc, name);
+    str_deinit(self->alloc, &name);
 
     return 0;
 }
 
 static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
-    char *var = next_variable(self);
+    str var = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
     struct ast_labelled_tuple const *v      = ast_node_lt((ast_node *)node);
     i32 const                        n_args = v->n_assignments;
     u64                              hash   = transpiler_type_hash(node->type);
-    char                            *name   = make_tuple_struct_name(self->alloc, hash);
+    str                              name   = make_tuple_struct_name(self->alloc, hash);
 
     if (n_args)
         for (i32 i = n_args - 1; i >= 0; --i)
@@ -1417,18 +1459,19 @@ static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
 
     // init result
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     for (u32 i = 0; i < (u32)n_args; ++i) {
 
-        char const *arg = pop_result(self);
+        str arg      = pop_result(self);
+        str ass_name = ast_node_str(v->assignments[i]->assignment.name);
 
-        out_put_start_fmt(self, "%s.%s = %s;\n", var,
-                          ast_node_name_string(v->assignments[i]->assignment.name), arg);
+        out_put_start_fmt(self, "%.*s.%.*s = %.*s;\n", str_ilen(var), str_buf(&var), str_ilen(ass_name),
+                          str_buf(&ass_name), str_ilen(arg), str_buf(&arg));
     }
 
-    alloc_free(self->alloc, name);
+    str_deinit(self->alloc, &name);
 
     return 0;
 }
@@ -1443,9 +1486,8 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
         return a_labelled_tuple_init(self, node);
     }
 
-    char *name = make_tuple_struct_constructor_name(self->alloc, transpiler_type_hash(node->type));
-
-    char *var  = next_variable(self);
+    str name = make_tuple_struct_constructor_name(self->alloc, transpiler_type_hash(node->type));
+    str var  = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
     // assigning to the result variable
@@ -1467,20 +1509,20 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
 
     // function call result
     out_put_start(self, "");
-    out_put(self, emit_symbol_declaration(self, node, var, 0));
+    out_put_str(self, emit_symbol_declaration(self, node, var, 0));
     out_put(self, ";\n");
 
     // function call
-    out_put_start_fmt(self, "%s = %s(", var, name);
+    out_put_start_fmt(self, "%.*s = %.*s(", str_ilen(var), str_buf(&var), str_ilen(name), str_buf(&name));
 
     for (i32 i = 0; i < n_args; ++i) {
-        char const *arg = pop_result(self);
-        out_put(self, arg);
+        str arg = pop_result(self);
+        out_put_str(self, arg);
         if (i < n_args - 1) out_put(self, ", ");
     }
     out_put(self, ");\n");
 
-    alloc_free(self->alloc, name);
+    str_deinit(self->alloc, &name);
 
     return 0;
 }
@@ -1490,7 +1532,7 @@ static int a_main(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v = ast_node_let((ast_node *)node);
 
-    if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
+    if (0 == str_cmp_c(v->name->symbol.name, "main")) {
 
         out_put(self, "int main(int argc, char* argv[]) {\n    (void)argc; (void)argv;\n\n");
 
@@ -1499,10 +1541,10 @@ static int a_main(transpiler *self, ast_node const *node) {
         int res = 0;
         if ((res = a_eval(self, v->body))) return res;
 
-        char const *var = pop_result(self);
+        str var = pop_result(self);
 
         out_put(self, "\n");
-        out_put_start_fmt(self, "return (int) %s;", var);
+        out_put_start_fmt(self, "return (int) %.*s;", str_ilen(var), str_buf(&var));
 
         self->indent_level--;
 
@@ -1512,7 +1554,7 @@ static int a_main(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-static char *make_context_struct_name(allocator *alloc, tl_type *type) {
+static str make_context_struct_name(allocator *alloc, tl_type *type) {
     // type is the full arrow type
     char *name = null;
     u64   hash = transpiler_type_hash(type);
@@ -1525,10 +1567,10 @@ static char *make_context_struct_name(allocator *alloc, tl_type *type) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_tuple_struct_name(allocator *alloc, u64 hash) {
+static str make_tuple_struct_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
 #define fmt "tl_gen_struct_tup_%" PRIu64 "_"
@@ -1539,10 +1581,10 @@ static char *make_tuple_struct_name(allocator *alloc, u64 hash) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_tuple_struct_constructor_name(allocator *alloc, u64 hash) {
+static str make_tuple_struct_constructor_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
 #define fmt "tl_gen_make_tup_%" PRIu64 "_"
@@ -1553,10 +1595,10 @@ static char *make_tuple_struct_constructor_name(allocator *alloc, u64 hash) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_thunk_name(allocator *alloc, u64 hash) {
+static str make_thunk_name(allocator *alloc, u64 hash) {
     // use these only for thunks generated from if-then-else arms
     char *name = null;
     {
@@ -1568,10 +1610,10 @@ static char *make_thunk_name(allocator *alloc, u64 hash) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_thunk_struct_name(allocator *alloc, u64 hash) {
+static str make_thunk_struct_name(allocator *alloc, u64 hash) {
     // use these only for thunks generated from if-then-else arms
     char *name = null;
     {
@@ -1583,10 +1625,10 @@ static char *make_thunk_struct_name(allocator *alloc, u64 hash) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_lambda_function_name(allocator *alloc, u64 hash) {
+static str make_lambda_function_name(allocator *alloc, u64 hash) {
     char *name = null;
     {
 #define fmt "tl_gen_lambda_%" PRIu64 "_"
@@ -1597,21 +1639,21 @@ static char *make_lambda_function_name(allocator *alloc, u64 hash) {
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
-static char *make_function_name(allocator *alloc, char const *base) {
+static str make_function_name(allocator *alloc, str base) {
     char *name = null;
     {
-#define fmt "tl_fun_%s"
-        int len = snprintf(null, 0, fmt, base) + 1;
+#define fmt "tl_fun_%.*s"
+        int len = snprintf(null, 0, fmt, str_ilen(base), str_buf(&base)) + 1;
         if (len < 0) fatal("generate name failed.");
         name = alloc_malloc(alloc, (u32)len);
-        snprintf(name, (u32)len, fmt, base);
+        snprintf(name, (u32)len, fmt, str_ilen(base), str_buf(&base));
 #undef fmt
     }
 
-    return name;
+    return str_init_allocated(name);
 }
 
 static int a_let_struct_phase(transpiler *self, ast_node const *node) {
@@ -1620,25 +1662,22 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
 
-    char const           *name = string_t_str(&v->name->symbol.name);
-    // if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+    str                   name = v->name->symbol.name;
 
-    log(self, "processing struct let '%s'...", name);
-
-    ti_function_record *rec = lookup_function(self, name);
-    if (!rec) fatal("function record not found: '%s'", name);
+    ti_function_record   *rec  = lookup_function(self, name);
+    if (!rec) fatal("function record not found: '%.*s'", str_ilen(name), str_buf(&name));
     tl_type *tuple          = rec->type->arrow.left;
     u64      hash           = transpiler_type_hash(tuple);
-    char    *generated_name = make_tuple_struct_name(self->alloc, hash);
+    str      generated_name = make_tuple_struct_name(self->alloc, hash);
 
     // TODO since tuple types are not named, the program doesn't know
     // it already has a tuple matching a particular type signature.
-    if (map_get(self->processed_structs, generated_name, strlen(generated_name))) return 0;
-    map_set(&self->processed_structs, generated_name, strlen(generated_name), generated_name);
+    if (str_map_get(self->processed_structs, generated_name)) return 0;
+    str_map_set(&self->processed_structs, generated_name, &generated_name);
 
     if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->strings, node));
 
-    out_put_start_fmt(self, "struct %s {\n", generated_name);
+    out_put_start_fmt(self, "struct %.*s {\n", str_ilen(generated_name), str_buf(&generated_name));
     self->indent_level++;
 
     if (type_tuple == tuple->tag) {
@@ -1649,7 +1688,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
             snprintf(buf, sizeof buf - 1, "x%u", i);
 
             out_put_start(self, "");
-            out_put(self, emit_type_declaration(self, tup->elements.v[i], buf, 0));
+            out_put_str(self, emit_type_declaration(self, tup->elements.v[i], str_init_static(buf), 0));
             out_put(self, ";\n");
         }
     } else if (type_labelled_tuple == tuple->tag) {
@@ -1658,7 +1697,7 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
         for (u32 i = 0; i < lt->fields.size; ++i) {
 
             out_put_start(self, "");
-            out_put(self, emit_type_declaration(self, lt->fields.v[i], lt->names.v[i], 0));
+            out_put_str(self, emit_type_declaration(self, lt->fields.v[i], lt->names.v[i], 0));
             out_put(self, ";\n");
         }
 
@@ -1671,19 +1710,18 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     // function declaration
     // TODO copied from a_let
-    name = string_t_str(&v->name->symbol.name);
-    if (0 == strlen(name)) name = string_t_str(&v->name->symbol.name);
+    name = v->name->symbol.name;
 
     // return type and name
     out_put_start(self, "static ");
-    out_put(self, emit_type_declaration(self, rec->type->arrow.right, name, 0));
+    out_put_str(self, emit_type_declaration(self, rec->type->arrow.right, name, 0));
     out_put(self, " ");
 
     // params
     out_put(self, "(");
     for (u32 i = 0; i < v->n_parameters; ++i) {
-        out_put(self,
-                emit_symbol_declaration(self, v->parameters[i], ast_node_name_string(v->parameters[i]), 0));
+        out_put_str(self,
+                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
         // a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
@@ -1696,13 +1734,13 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
 
     if (a_eval(self, v->body)) return 1;
 
-    char const *body = pop_result(self);
-    out_put_start_fmt(self, "return %s;", body);
+    str body = pop_result(self);
+    out_put_start_fmt(self, "return %.*s;", str_ilen(body), str_buf(&body));
 
     self->indent_level--;
     out_put(self, "\n}\n\n");
 
-    alloc_free(self->alloc, generated_name);
+    str_deinit(self->alloc, &generated_name);
 
     return 0;
 }
@@ -1716,7 +1754,7 @@ static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
     generate_toplevel_contexts_ctx *ctx            = ctx_;
     transpiler                     *self           = ctx->self;
     tl_free_variable_sized          free_variables = {0};
-    char const                     *struct_name    = null;
+    str                             struct_name    = str_empty();
 
     if (ast_let == node->tag) {
 
@@ -1746,8 +1784,8 @@ static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
     }
 
     if (free_variables.size) {
-        if (hset_contains(ctx->seen, struct_name, strlen(struct_name))) return;
-        hset_insert(&ctx->seen, struct_name, strlen(struct_name));
+        if (str_hset_contains(ctx->seen, struct_name)) return;
+        str_hset_insert(&ctx->seen, struct_name);
         out_put(self, "\n");
         emit_thunk_struct(self, struct_name, free_variables);
     }
@@ -1769,14 +1807,14 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
     transpiler                       *self     = ctx;
     struct ast_lambda_function const *v        = ast_node_lf(node);
     u64                               hash     = ast_node_hash(node);
-    char const                       *fun_name = make_lambda_function_name(self->transient, hash);
+    str                               fun_name = make_lambda_function_name(self->transient, hash);
 
     // determine if a free variable context is required. If so, output
     // the context struct definition.
     assert(type_arrow == node->type->tag);
     tl_free_variable_sized free_variables = node->type->arrow.free_variables;
 
-    char const            *struct_name    = null;
+    str                    struct_name    = str_empty();
     if (free_variables.size) {
         struct_name = make_context_struct_name(self->strings, node->type);
     }
@@ -1785,16 +1823,20 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
     if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
     out_put_start(self, "static ");
 
-    out_put(self, emit_type_declaration(self, node->type->arrow.right, fun_name, 1));
+    out_put_str(self, emit_type_declaration(self, node->type->arrow.right, fun_name, 1));
     out_put(self, " ");
 
     // params
     out_put(self, "(");
-    if (free_variables.size) out_put_fmt(self, "struct %s * %s", struct_name, struct_name);
+    if (free_variables.size) {
+        ispan s = str_ispan(&struct_name);
+        out_put_fmt(self, "struct %.*s * %.*s", s.len, s.buf, s.len, s.buf);
+    }
+
     for (u32 i = 0; i < v->n_parameters; ++i) {
         if (i || free_variables.size) out_put(self, ", ");
-        out_put(self,
-                emit_symbol_declaration(self, v->parameters[i], ast_node_name_string(v->parameters[i]), 0));
+        out_put_str(self,
+                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ")");
@@ -1808,8 +1850,8 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
     a_thunk(self, v->body);
     pop_free_variables(self, save);
 
-    char const *body = pop_result(self);
-    out_put_start_fmt(self, "return %s;", body);
+    str body = pop_result(self);
+    out_put_start_fmt(self, "return %.*s;", str_ilen(body), str_buf(&body));
 
     self->indent_level--;
     out_put(self, "\n}\n\n");
@@ -1835,17 +1877,17 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
     if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) return 0;
 
     struct ast_let const *v    = ast_node_let((ast_node *)node);
-    char const           *name = string_t_str(&v->name->symbol.name);
+    str                   name = v->name->symbol.name;
 
-    assert(strlen(name));
+    assert(!str_is_empty(name));
 
-    if (0 == string_t_cmp_c(&v->name->symbol.name, "main")) {
+    if (0 == str_cmp_c(v->name->symbol.name, "main")) {
         // skip here, let a_main process it.
         return 0;
     }
 
     ti_function_record *rec = lookup_function(self, name);
-    if (!rec) fatal("function record not found: '%s'", name);
+    if (!rec) fatal("function record not found: '%.*s'", str_ilen(name), str_buf(&name));
 
     // mangle the name
     name = make_function_name(self->strings, name);
@@ -1855,11 +1897,9 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
     assert(type_arrow == v->name->type->tag);
     tl_free_variable_sized free_variables = v->name->type->arrow.free_variables;
     assert(free_variables.size == v->name->type->arrow.free_variables.size);
-    char *struct_name = null;
+    str struct_name = str_empty();
     if (free_variables.size) {
         struct_name = make_context_struct_name(self->strings, v->name->type);
-        // out_put(self, "\n");
-        // emit_thunk_struct(self, struct_name, free_variables);
     }
 
     // function declaration
@@ -1867,16 +1907,17 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
     // return type and name
     if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
     out_put_start(self, "static ");
-    out_put(self, emit_type_declaration(self, rec->type->arrow.right, name, 1));
+    out_put_str(self, emit_type_declaration(self, rec->type->arrow.right, name, 1));
     out_put(self, " ");
 
     // params
     out_put(self, "(");
-    if (free_variables.size) out_put_fmt(self, "struct %s *", struct_name);
+    if (free_variables.size)
+        out_put_fmt(self, "struct %.*s *", str_ilen(struct_name), str_buf(&struct_name));
     for (u32 i = 0; i < v->n_parameters; ++i) {
-        if (i || struct_name) out_put(self, ", ");
-        out_put(self,
-                emit_symbol_declaration(self, v->parameters[i], ast_node_name_string(v->parameters[i]), 0));
+        if (i || !str_is_empty(struct_name)) out_put(self, ", ");
+        out_put_str(self,
+                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ");\n");
@@ -1896,31 +1937,29 @@ static int generate_toplevel_prototypes(transpiler *self, ast_node_sized nodes) 
 static int a_let(transpiler *self, ast_node const *node) {
 
     if (BIT_TEST(node->let.flags, AST_LET_FLAG_INTRINSIC)) {
-        log(self, "skipping '%s' because it is an intrinsic function",
-            ast_node_name_string(node->let.name));
+        str tmp = ast_node_str(node->let.name);
+        log(self, "skipping '%.*s' because it is an intrinsic function", str_ilen(tmp), str_buf(&tmp));
         return 0;
     }
 
-    if (ast_node_is_tuple_constructor(node)) return 0; // handled by a_let_struct_phase
-    if (0 == string_t_cmp_c(&node->let.name->symbol.name, "main"))
-        return 0; // skip here, let a_main process it.
+    if (ast_node_is_tuple_constructor(node)) return 0;                 // handled by a_let_struct_phase
+    if (0 == str_cmp_c(node->let.name->symbol.name, "main")) return 0; // skip here, let a_main process it.
 
     struct ast_let const *v        = ast_node_let((ast_node *)node);
-    char const           *name     = string_t_str(&v->name->symbol.name);
+    str                   name     = v->name->symbol.name;
     tl_type              *fun_type = v->name->type;
     assert(type_arrow == fun_type->tag);
 
     tl_free_variable_sized free_variables = fun_type->arrow.free_variables;
-    char                  *struct_name    = null;
+    str                    struct_name    = str_empty();
     if (free_variables.size) struct_name = make_context_struct_name(self->strings, v->name->type);
 
     if (is_generic_function(self, node))
-        fatal("cannot process generic function '%s' ", string_t_str(&v->name->symbol.name));
-
-    log(self, "processing '%s'...", name);
+        fatal("cannot process generic function '%.*s' ", str_ilen(v->name->symbol.name),
+              str_buf(&v->name->symbol.name));
 
     ti_function_record *rec = lookup_function(self, name);
-    if (!rec) fatal("function record not found: '%s'", name);
+    if (!rec) fatal("function record not found: '%.*s'", str_ilen(name), str_buf(&name));
 
     // mangle the name
     name = make_function_name(self->strings, name);
@@ -1930,16 +1969,19 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     // return type and name
     out_put_start(self, "static ");
-    out_put(self, emit_type_declaration(self, rec->type->arrow.right, name, 1));
+    out_put_str(self, emit_type_declaration(self, rec->type->arrow.right, name, 1));
     out_put(self, " ");
 
     // params
     out_put(self, "(");
-    if (free_variables.size) out_put_fmt(self, "struct %s * %s", struct_name, struct_name);
+    if (free_variables.size) {
+        ispan s = str_ispan(&struct_name);
+        out_put_fmt(self, "struct %.*s * %.*s", s.len, s.buf, s.len, s.buf);
+    }
     for (u32 i = 0; i < v->n_parameters; ++i) {
-        if (i || struct_name) out_put(self, ", ");
-        out_put(self,
-                emit_symbol_declaration(self, v->parameters[i], ast_node_name_string(v->parameters[i]), 0));
+        if (i || !str_is_empty(struct_name)) out_put(self, ", ");
+        out_put_str(self,
+                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ")");
@@ -1952,9 +1994,9 @@ static int a_let(transpiler *self, ast_node const *node) {
     a_thunk(self, v->body);
     pop_free_variables(self, save);
 
-    char const *body = pop_result(self);
+    str body = pop_result(self);
     if (!is_nil_result(rec->type->arrow.right)) {
-        out_put_start_fmt(self, "return %s;", body);
+        out_put_start_fmt(self, "return %.*s;", str_ilen(body), str_buf(&body));
     }
 
     self->indent_level--;
@@ -1963,20 +2005,24 @@ static int a_let(transpiler *self, ast_node const *node) {
     return 0;
 }
 
-static char *next_variable(transpiler *self) {
+static str next_variable(transpiler *self) {
     int   len = snprintf(null, 0, "_res%zu_", self->next_variable) + 1;
 
     char *out = alloc_malloc(self->strings, (u32)len);
     snprintf(out, (u32)len, "_res%zu_", self->next_variable++);
-    push_result(self, out);
-    return out;
+
+    str out_str = str_init_allocated(out);
+    push_result(self, out_str);
+    return out_str;
 }
 
 static int is_generic_function(transpiler *self, ast_node const *node) {
     if (ast_let != node->tag) return 0;
 
-    ti_function_record *rec = lookup_function(self, ast_node_name_string(node->let.name));
-    if (!rec) fatal("function record not found: '%s'", ast_node_name_string(node->let.name));
+    str                 name = ast_node_str(node->let.name);
+
+    ti_function_record *rec  = lookup_function(self, name);
+    if (!rec) fatal("function record not found: '%.*s'", str_ilen(name), str_buf(&name));
 
     tl_type *arrow = rec->type;
     if (arrow->arrow.right->tag == type_type_var) return 1;
@@ -2005,31 +2051,25 @@ static void log(transpiler *self, char const *restrict fmt, ...) {
     va_end(args);
 }
 
-static char const *pop_result(transpiler *self) {
+static str pop_result(transpiler *self) {
     if (!self->results.size) {
         log(self, "logic error: empty result stack"); // FIXME
-        return "empty_result";
+        return S("empty_result");
     }
     assert(self->results.size);
     return self->results.v[--self->results.size];
 }
 
-static void push_result(transpiler *self, char const *var) {
+static void push_result(transpiler *self, str var) {
     array_push(self->results, &var);
 }
 
-static void pop_and_assign(transpiler *self, char const *var) {
-    char const *res = pop_result(self);
-    out_put(self, "\n");
-    if (var) out_put_start_fmt(self, "%s = %s;\n", var, res);
-}
-
-static u32 push_free_variables_ext(transpiler *self, tl_free_variable_sized free_variables,
-                                   char const *struct_name, u32 *count) {
+static u32 push_free_variables_ext(transpiler *self, tl_free_variable_sized free_variables, str struct_name,
+                                   u32 *count) {
     u32 save = self->thunk_free_variables.size;
 
     forall(i, free_variables) {
-        free_variable_context_name val = {.free_variable = string_t_str(&free_variables.v[i].name),
+        free_variable_context_name val = {.free_variable = free_variables.v[i].name,
                                           .struct_name   = struct_name};
         array_push(self->thunk_free_variables, &val);
     }
@@ -2038,8 +2078,7 @@ static u32 push_free_variables_ext(transpiler *self, tl_free_variable_sized free
     return save;
 }
 
-static u32 push_free_variables(transpiler *self, ast_node const *node, char const *struct_name,
-                               u32 *count) {
+static u32 push_free_variables(transpiler *self, ast_node const *node, str struct_name, u32 *count) {
     return push_free_variables_ext(self, ti_free_variables_in(self->transient, node), struct_name, count);
 }
 
@@ -2051,8 +2090,8 @@ static u64 transpiler_type_hash(tl_type const *type) {
     return tl_type_hash_ext(type, 0, 0);
 }
 
-static ti_function_record *lookup_function(transpiler *self, char const *name) {
-    return map_get(self->functions, name, strlen(name));
+static ti_function_record *lookup_function(transpiler *self, str name) {
+    return str_map_get(self->functions, name);
 }
 
 static void collect_function_records(transpiler *self, ast_node **nodes, u32 n) {
@@ -2060,8 +2099,8 @@ static void collect_function_records(transpiler *self, ast_node **nodes, u32 n) 
         ast_node *node = nodes[i];
         if (ast_let == node->tag) {
             ti_function_record rec = {
-              .name = ast_node_name_string(node->let.name), .node = node, .type = node->let.name->type};
-            map_set(&self->functions, rec.name, strlen(rec.name), &rec);
+              .name = ast_node_str(node->let.name), .node = node, .type = node->let.name->type};
+            str_map_set(&self->functions, rec.name, &rec);
             log(self, "%s", ast_node_to_string(self->transient, node));
         }
     }

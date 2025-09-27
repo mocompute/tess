@@ -6,7 +6,7 @@
 #include "ast_tags.h"
 #include "error.h"
 #include "nodiscard.h"
-#include "string_t.h"
+#include "str.h"
 #include "type.h"
 
 typedef struct {
@@ -27,8 +27,8 @@ typedef struct {
 typedef struct ast_node {
     union {
         struct ast_symbol {
-            string_t         name;
-            string_t         original;
+            str              name;
+            str              original;
             struct ast_node *annotation;
             tl_type         *annotation_type;
             u64              special_hash; // for use during specialisation
@@ -246,18 +246,15 @@ struct ast_user_type_def        *ast_node_utd(ast_node *);
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
-nodiscard ast_node *ast_node_create_sym(allocator *, char const *);
+nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
+nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
-// void                ast_node_init(allocator *, ast_node *, ast_tag);
-// void                ast_node_deinit(allocator *, ast_node *);
-// void        ast_node_replace(allocator *, ast_node *, ast_tag);
-void        ast_node_move(ast_node *dst, ast_node *src);
+void                ast_node_move(ast_node *dst, ast_node *src);
 
-char const *ast_node_name_string(ast_node const *);
-char const *ast_node_name_original(ast_node const *);
-int         ast_node_name_strcmp(ast_node const *, char const *);
+str                 ast_node_str(ast_node const *);
+str                 ast_node_name_original(ast_node const *);
 
-tl_type    *ast_node_annotation(ast_node const *);
+tl_type            *ast_node_annotation(ast_node const *);
 
 // -- traversal --
 
@@ -271,31 +268,31 @@ void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 
 // -- utilities --
 
-char           *ast_node_to_string(allocator *alloc, ast_node const *node);
-char           *ast_node_to_string_for_error(allocator *, ast_node const *);
+char       *ast_node_to_string(allocator *alloc, ast_node const *node);
+char       *ast_node_to_string_for_error(allocator *, ast_node const *);
 
-char const     *ast_tag_to_string(ast_tag);
-int             string_to_ast_operator(char const *, ast_operator *);
+char const *ast_tag_to_string(ast_tag);
+int         string_to_ast_operator(char const *, ast_operator *);
 
-c_string_csized ast_nodes_get_names(allocator *, ast_node_slice);
+str_sized   ast_nodes_get_names(allocator *, ast_node_slice);
 
-void            ast_node_dfs(void *, ast_node *, ast_op_fun);
-void            ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
-void            ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
-ast_node       *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
+void        ast_node_dfs(void *, ast_node *, ast_op_fun);
+void        ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
+void        ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
+ast_node   *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
 
-int             ast_node_is_specialized(ast_node const *);
-int             ast_node_is_tuple_constructor(ast_node const *);
-void            ast_node_set_is_specialized(ast_node *);
-void            ast_node_set_is_tuple_constructor(ast_node *);
+int         ast_node_is_specialized(ast_node const *);
+int         ast_node_is_tuple_constructor(ast_node const *);
+void        ast_node_set_is_specialized(ast_node *);
+void        ast_node_set_is_tuple_constructor(ast_node *);
 
-ast_node      **ast_node_assignment_names(allocator *, ast_node const *);
+ast_node  **ast_node_assignment_names(allocator *, ast_node const *);
 
-u64             ast_node_hash(ast_node const *);
+u64         ast_node_hash(ast_node const *);
 
-int             ast_node_is_let_in_lambda(ast_node const *);
-int             ast_node_is_named_application(ast_node const *);
+int         ast_node_is_let_in_lambda(ast_node const *);
+int         ast_node_is_named_application(ast_node const *);
 
-tl_type        *ast_node_get_arrow(ast_node const *);
+tl_type    *ast_node_get_arrow(ast_node const *);
 
 #endif

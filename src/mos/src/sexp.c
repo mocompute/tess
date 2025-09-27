@@ -89,11 +89,19 @@ sexp sexp_init_f64(allocator *alloc, f64 val) {
     return out;
 }
 
-sexp sexp_init_sym(allocator *alloc, char const *str) {
+sexp sexp_init_sym_c(allocator *alloc, char const *str) {
     sexp      out    = sexp_init_boxed(alloc);
     sexp_box *box    = sexp_box_get(out);
     box->tag         = sexp_box_symbol;
     box->symbol.name = str_init(alloc, str);
+    return out;
+}
+
+sexp sexp_init_sym(allocator *alloc, str str) {
+    sexp      out    = sexp_init_boxed(alloc);
+    sexp_box *box    = sexp_box_get(out);
+    box->tag         = sexp_box_symbol;
+    box->symbol.name = str_copy(alloc, str);
     return out;
 }
 
@@ -193,9 +201,9 @@ static int print_node(sexp const *node, char *restrict buf, int const sz_, char 
     case sexp_box_u64: return snprintf(buf, sz, "%" PRIu64, box->u64.val);
     case sexp_box_f64: return snprintf(buf, sz, "%f", box->f64.val);
     case sexp_box_symbol:
-        return snprintf(buf, sz, "%.*s", str_ilen(&box->symbol.name), str_buf(&box->symbol.name));
+        return snprintf(buf, sz, "%.*s", str_ilen(box->symbol.name), str_buf(&box->symbol.name));
     case sexp_box_string:
-        return snprintf(buf, sz, "\"%.*s\"", str_ilen(&box->symbol.name), str_buf(&box->symbol.name));
+        return snprintf(buf, sz, "\"%.*s\"", str_ilen(box->symbol.name), str_buf(&box->symbol.name));
 
     case sexp_box_list: {
         do_print_init();

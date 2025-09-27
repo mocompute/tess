@@ -1,6 +1,5 @@
 #include "ast.h"
 #include "alloc.h"
-#include "array.h"
 #include "ast_tags.h"
 #include "dbg.h"
 #include "hash.h"
@@ -29,10 +28,21 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     return self;
 }
 
-ast_node *ast_node_create_sym(allocator *alloc, char const *str) {
+ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = string_t_init(alloc, str);
-    self->symbol.original        = string_t_init_empty();
+    self->symbol.name            = str_init(alloc, str);
+    self->symbol.original        = str_empty();
+    self->symbol.annotation      = null;
+    self->symbol.annotation_type = null;
+    self->symbol.special_hash    = 0;
+    self->symbol.flags           = 0;
+    return self;
+}
+
+ast_node *ast_node_create_sym(allocator *alloc, str str) {
+    ast_node *self               = ast_node_create(alloc, ast_symbol);
+    self->symbol.name            = str_copy(alloc, str);
+    self->symbol.original        = str_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
     self->symbol.special_hash    = 0;
@@ -115,8 +125,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_symbol:
     case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
-        string_t_copy(alloc, &vclone->name, &vorig->name);
-        string_t_copy(alloc, &vclone->original, &vorig->original);
+        vclone->name            = str_copy(alloc, vorig->name);
+        vclone->original        = str_copy(alloc, vorig->original);
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = tl_type_clone_shallow(alloc, vorig->annotation_type);
         vclone->special_hash    = vorig->special_hash;
@@ -215,21 +225,15 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     return clone;
 }
 
-char const *ast_node_name_string(ast_node const *node) {
+str ast_node_str(ast_node const *node) {
     if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
-    return string_t_str(&node->symbol.name);
+    return node->symbol.name;
 }
 
-char const *ast_node_name_original(ast_node const *node) {
+str ast_node_name_original(ast_node const *node) {
     if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
-    if (string_t_empty(&node->symbol.original)) return string_t_str(&node->symbol.name);
-    else return string_t_str(&node->symbol.original);
-}
-
-int ast_node_name_strcmp(ast_node const *node, char const *target) {
-    char const *name = ast_node_name_string(node);
-    if (!name) return 0;
-    return strcmp(name, target);
+    if (str_is_empty(node->symbol.original)) return node->symbol.name;
+    else return node->symbol.original;
 }
 
 char const *ast_operator_to_string(ast_operator);
@@ -259,11 +263,11 @@ sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
         int   len = tl_type_snprint(null, 0, node->type) + 1;
         char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
-        type = sexp_init_sym(alloc, buf);
+        type = sexp_init_sym_c(alloc, buf);
         alloc_free(alloc, buf);
     }
-    return sexp_init_list_quad(alloc, sexp_init_sym(alloc, "symbol"),
-                               sexp_init_sym(alloc, ast_node_name_string(node)),
+    return sexp_init_list_quad(alloc, sexp_init_sym_c(alloc, "symbol"),
+                               sexp_init_sym(alloc, ast_node_str(node)),
                                sexp_init_u64(alloc, node->symbol.special_hash), type);
 }
 
@@ -274,16 +278,16 @@ sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
         int   len = tl_type_snprint(null, 0, node->type) + 1;
         char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
-        type = sexp_init_sym(alloc, buf);
+        type = sexp_init_sym_c(alloc, buf);
         alloc_free(alloc, buf);
     }
 
-    if (!string_t_empty(&node->symbol.original))
-        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                     sexp_init_sym(alloc, string_t_str(&node->symbol.original)), type);
+    if (!str_is_empty(node->symbol.original))
+        return sexp_init_list_triple(alloc, sexp_init_sym_c(alloc, "symbol"),
+                                     sexp_init_sym(alloc, node->symbol.original), type);
     else
-        return sexp_init_list_triple(alloc, sexp_init_sym(alloc, "symbol"),
-                                     sexp_init_sym(alloc, string_t_str(&node->symbol.name)), type);
+        return sexp_init_list_triple(alloc, sexp_init_sym_c(alloc, "symbol"),
+                                     sexp_init_sym(alloc, node->symbol.name), type);
 }
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
@@ -294,7 +298,8 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 #define quad(...)   sexp_init_list_quad(__VA_ARGS__)
 #define penta(...)  sexp_init_list_penta(__VA_ARGS__)
 #define recur(NODE) do_ast_node_to_sexp(alloc, (NODE), symbol_fun)
-#define sym(STR)    sexp_init_sym(alloc, (STR))
+#define sym(STR)    sexp_init_sym_c(alloc, (STR))
+#define symstr(STR) sexp_init_sym(alloc, (STR))
 
     if (null == node) return sexp_init_boxed(alloc);
 
@@ -304,7 +309,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         int   len = tl_type_snprint(null, 0, node->type) + 1;
         char *buf = alloc_malloc(alloc, len);
         tl_type_snprint(buf, len, node->type);
-        type = sexp_init_sym(alloc, buf);
+        type = sexp_init_sym_c(alloc, buf);
         alloc_free(alloc, buf);
     }
 
@@ -322,7 +327,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_u64:         return triple(alloc, sym("u64"), sexp_init_u64(alloc, node->u64.val), type);
     case ast_f64:         return triple(alloc, sym("f64"), sexp_init_f64(alloc, node->f64.val), type);
 
-    case ast_string:      return triple(alloc, sym("string"), sym(ast_node_name_string(node)), type);
+    case ast_string:      return triple(alloc, sym("string"), symstr(ast_node_str(node)), type);
 
     case ast_address_of:  return triple(alloc, sym("&"), recur(node->address_of.target), type);
     case ast_arrow:       return quad(alloc, recur(node->arrow.left), sym("->"), recur(node->arrow.right), type);
@@ -443,6 +448,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 #undef penta
 #undef recur
 #undef sym
+#undef symstr
 }
 
 sexp ast_node_to_sexp(allocator *alloc, ast_node const *node) {
@@ -465,7 +471,7 @@ sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
     char *buf  = alloc_malloc(alloc, len);
     tl_type_snprint(buf, len, node->type);
 
-    sexp list = sexp_init_list_pair(alloc, expr, sexp_init_sym(alloc, buf));
+    sexp list = sexp_init_list_pair(alloc, expr, sexp_init_sym_c(alloc, buf));
     alloc_free(alloc, buf);
 
     return list;
@@ -972,13 +978,12 @@ char *ast_node_to_string_for_error(allocator *alloc, ast_node const *node) {
     return out;
 }
 
-c_string_csized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
+str_sized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
 
-    c_string_csized strings = {.v    = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0]),
-                               .size = nodes.end - nodes.begin};
+    str_sized strings = {.v    = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0]),
+                         .size = nodes.end - nodes.begin};
 
-    for (u32 i = nodes.begin; i < nodes.end; ++i)
-        strings.v[i - nodes.begin] = ast_node_name_string(nodes.v[i]);
+    for (u32 i = nodes.begin; i < nodes.end; ++i) strings.v[i - nodes.begin] = ast_node_str(nodes.v[i]);
 
     return strings;
 }
@@ -1240,8 +1245,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_string:
     case ast_symbol: {
-        char const *name = string_t_str(&self->symbol.name);
-        hash             = hash64_combine(hash, (byte *)name, strlen(name));
+        hash = str_hash64_combine(hash, self->symbol.name);
     } break;
 
     case ast_u64:

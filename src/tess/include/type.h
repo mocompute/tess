@@ -3,7 +3,7 @@
 
 #include "alloc.h"
 #include "array.h"
-#include "string_t.h"
+#include "str.h"
 #include "types.h"
 #include "util.h"
 
@@ -34,7 +34,7 @@ typedef struct {
 } tl_type_sized;
 
 typedef struct {
-    string_t        name;
+    str             name;
     struct tl_type *type;
     u64             special_hash; // used during specialisation
 } tl_free_variable;
@@ -60,8 +60,8 @@ typedef struct tl_type {
         } tuple;
 
         struct tlt_labelled_tuple {
-            tl_type_sized   fields;
-            c_string_csized names; // TODO change to string_t for small strings optim
+            tl_type_sized fields;
+            str_sized     names;
         } labelled_tuple;
 
         struct tlt_arrow {
@@ -72,7 +72,7 @@ typedef struct tl_type {
         } arrow;
 
         struct tlt_user {
-            char const     *name;
+            str             name;
             struct tl_type *labelled_tuple;
         } user;
 
@@ -111,10 +111,9 @@ nodiscard tl_type *tl_type_clone(allocator *, tl_type const *, tl_make_typevar_f
 nodiscard tl_type *tl_type_clone_shallow(allocator *, tl_type const *);
 nodiscard tl_type *tl_type_create_type_var(allocator *, u32) mallocfun;
 nodiscard tl_type *tl_type_create_tuple(allocator *, tl_type_sized) mallocfun;
-nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, c_string_csized) mallocfun;
+nodiscard tl_type *tl_type_create_labelled_tuple(allocator *, tl_type_sized, str_sized) mallocfun;
 nodiscard tl_type *tl_type_create_arrow(allocator *, tl_type *, tl_type *) mallocfun;
-nodiscard tl_type *tl_type_create_user_type(allocator *, char const *name,
-                                            tl_type *labelled_tuple) mallocfun;
+nodiscard tl_type *tl_type_create_user_type(allocator *, str name, tl_type *labelled_tuple) mallocfun;
 
 int                tl_type_is_prim(tl_type const *);
 int                tl_type_is_poly(tl_type const *);
@@ -125,13 +124,13 @@ int                tl_type_contains(tl_type const *, tl_type const *);
 u64                tl_type_hash(tl_type const *);
 u64                tl_type_hash_ext(tl_type const *, int ignore_names, int ignore_fv_types);
 
-tl_type           *tl_type_find_user_field_type(tl_type const *, char const *);
-tl_type           *tl_type_find_labelled_field_type(tl_type const *, char const *);
+tl_type           *tl_type_find_user_field_type(tl_type const *, str);
+tl_type           *tl_type_find_labelled_field_type(tl_type const *, str);
 tl_type           *tl_type_get_arrow(tl_type *);
 
 int                tl_type_snprint(char *, int, tl_type const *);
 char              *tl_type_to_string(allocator *, tl_type const *);
-char const        *tl_type_tag_to_string(tl_type_tag);
+str                tl_type_tag_to_string(tl_type_tag);
 
 int                tl_type_is_compatible(tl_type const *req, tl_type const *cand, int strict);
 

@@ -12,7 +12,6 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/sexp.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/str.h
-  ${PROJECT_SOURCE_DIR}/src/mos/include/string_t.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
 )
 
@@ -26,7 +25,6 @@ set(SOURCES
   src/sexp.c
   src/sexp_parser.c
   src/str.c
-  src/string_t.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(mos BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})

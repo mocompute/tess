@@ -8,7 +8,7 @@
 #include "error.h"
 #include "hash.h"
 #include "hashmap.h"
-#include "string_t.h"
+#include "str.h"
 #include "type.h"
 #include "type_registry.h"
 #include "util.h"
@@ -58,7 +58,7 @@ struct ti_inferer {
     constraint_array constraints;
     constraint_array substitutions;
 
-    hashmap         *functions;    // char const* -> function_record (node: symbol, let, lambda)
+    hashmap         *functions;    // str -> function_record (node: symbol, let, lambda)
     hashmap         *requirements; // u64 hash -> function_record (node: null or lambda_function)
     ast_node_array   specials;     // specialised nodes that will become the final program
     ti_error_array   errors;
@@ -70,10 +70,10 @@ struct ti_inferer {
     u32              next_specialized; // for specialized function names
 
     // flags which do not affect operation
-    int            verbose;
-    int            indent_level;
+    int       verbose;
+    int       indent_level;
 
-    c_string_array symbols_trace; // symbols to provide trace debug output
+    str_array symbols_trace; // symbols to provide trace debug output
 };
 
 // -- ti_inferer --
@@ -95,7 +95,7 @@ typedef struct {
 } generate_tuple_function_ctx;
 
 typedef struct {
-    string_t name; // or replacement, with rename_variables
+    str      name; // or replacement, with rename_variables
     tl_type *type;
 } lexical_info;
 
@@ -118,14 +118,14 @@ static void            ti_generate_user_type_functions(ti_inferer *);
 static void            ti_rename_variables(ti_inferer *);
 static void            ti_run_solver(ti_inferer *);
 tl_free_variable_sized ti_free_variables_in_continue(allocator *, ast_node const *, hashmap **);
-ti_function_record    *ti_lookup_function(ti_inferer *, char const *);
+ti_function_record    *ti_lookup_function(ti_inferer *, str);
 
 void                   rename_one_variables(void *, ast_node *, hashmap **);
 static tl_type        *make_args_type(allocator *, ast_node *[], u16);
-static tl_type        *make_labelled_args_type(allocator *, ast_node *[], char const *[], u16);
+static tl_type        *make_labelled_args_type(allocator *, ast_node *[], str_sized);
 static tl_type        *get_prim(ti_inferer *, tl_type_tag);
-static void            next_variable_name(ti_inferer *, string_t *);
-static void            rename_if_match(allocator *, string_t *, hashmap *, string_t *);
+static str             next_variable_name(ti_inferer *);
+static void            rename_if_match(allocator *, str *, hashmap *, str *);
 static void            assign_one_arrow(void *, ast_node *, hashmap **lex);
 
 static size_t          apply_one_substitution(tl_type **, tl_type *, tl_type *);
@@ -134,23 +134,23 @@ static void            generate_tuple_function(ti_inferer *, ast_node *, ast_nod
 static int             substitute_constraints(constraint *, constraint *, constraint const);
 static u32             unify_one(ti_inferer *, constraint);
 
-static tl_type        *make_arrow(allocator *, ast_node *[], u16, char const *[], tl_type *);
+static tl_type        *make_arrow(allocator *, ast_node *[], u16, str[], tl_type *);
 static ast_node       *make_tuple_constructor_function(ti_inferer *, u64, ast_node *);
-static ast_node  *make_type_constructor_function(ti_inferer *, char const *, tl_type *, ast_node const *);
-static tl_type   *make_typevar(ti_inferer *);
-static u32        make_typevar_val(void *);
-static constraint make_constraint(tl_type *, tl_type *, constraint *);
+static ast_node       *make_type_constructor_function(ti_inferer *, str, tl_type *, ast_node const *);
+static tl_type        *make_typevar(ti_inferer *);
+static u32             make_typevar_val(void *);
+static constraint      make_constraint(tl_type *, tl_type *, constraint *);
 
-static void       dbg_ast_nodes(ti_inferer *);
-static void       dbg_constraint(constraint const *);
-static void       log_function_records(ti_inferer *);
-static void       log_specialization_records(ti_inferer *);
-static void       log_specials(ti_inferer *self);
-static void       log(ti_inferer const *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
+static void            dbg_ast_nodes(ti_inferer *);
+static void            dbg_constraint(constraint const *);
+static void            log_function_records(ti_inferer *);
+static void            log_specialization_records(ti_inferer *);
+static void            log_specials(ti_inferer *self);
+static void log(ti_inferer const *, char const *restrict, ...) __attribute__((format(printf, 2, 3)));
 
-static int        is_trace_symbol(ti_inferer *, char const *);
-static int        is_trace_symbol_node(ti_inferer *, ast_node const *);
-static void       trace_symbol_impl(ti_inferer *, ast_node const *, char const *, int);
+static int  is_trace_symbol(ti_inferer *, str);
+static int  is_trace_symbol_node(ti_inferer *, ast_node const *);
+static void trace_symbol_impl(ti_inferer *, ast_node const *, char const *, int);
 #define trace_symbol(ti, n) trace_symbol_impl((ti), (n), __FILE__, __LINE__)
 
 // -- allocation and deallocation --
@@ -175,7 +175,7 @@ ti_inferer *ti_inferer_create(allocator *alloc, ast_node_array *nodes, type_regi
     self->next_var         = 1; // 0 is not valid
     self->next_type_var    = 1;
     self->next_specialized = 1;
-    self->symbols_trace    = (c_string_array){.alloc = self->type_arena};
+    self->symbols_trace    = (str_array){.alloc = self->type_arena};
 
     self->verbose          = 0;
     self->indent_level     = 0;
@@ -421,22 +421,20 @@ static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
     return tuple;
 }
 
-static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[], char const *names[],
-                                        u16 n) {
+static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[], str_sized names) {
 
     tl_type_array types = {.alloc = alloc};
-    array_reserve(types, n);
-    for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
+    array_reserve(types, names.size);
+    for (u32 i = 0; i < names.size; ++i) array_push(types, &arguments[i]->type);
 
-    tl_type *tuple = tl_type_create_labelled_tuple(alloc, (tl_type_sized)sized_all(types),
-                                                   (c_string_csized){.v = names, .size = n});
+    tl_type *tuple = tl_type_create_labelled_tuple(alloc, (tl_type_sized)sized_all(types), names);
 
     return tuple;
 }
 
-static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, char const *names[], tl_type *right) {
+static tl_type *make_arrow(allocator *alloc, ast_node *args[], u16 n, str names[], tl_type *right) {
     tl_type *left = null;
-    if (names) left = make_labelled_args_type(alloc, args, names, n);
+    if (names) left = make_labelled_args_type(alloc, args, (str_sized){.v = names, .size = n});
     else left = make_args_type(alloc, args, n);
 
     return tl_type_create_arrow(alloc, left, right);
@@ -489,7 +487,7 @@ static tl_type *make_named_application_arrow(ti_inferer *self, ast_node *nfa, ha
         else if (ast_symbol == arg->tag) {
             // try to look up function record to get its type, because symbol nodes may not have correct
             // type information at all times. (TODO)
-            char const         *arg_name = ast_node_name_string(arg);
+            str                 arg_name = ast_node_str(arg);
             ti_function_record *rec      = ti_lookup_function(self, arg_name);
 
             if (rec && rec->type && type_arrow == rec->type->tag) {
@@ -504,7 +502,7 @@ static tl_type *make_named_application_arrow(ti_inferer *self, ast_node *nfa, ha
 
     // ensure the node name itself does not appear in its own free variables
     for (u32 i = 0; i < merged.size;) {
-        if (0 == string_t_cmp(&node_name->symbol.name, &merged.v[i].name)) array_erase(merged, i);
+        if (0 == str_cmp(node_name->symbol.name, merged.v[i].name)) array_erase(merged, i);
         else ++i;
     }
 
@@ -521,16 +519,15 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
     assert(name && ast_symbol == name->tag);
     assert(type_arrow == type->tag);
 
-    char const *name_str = string_t_str(&name->symbol.name);
-    u16         name_len = strlen(name_str);
+    str name_str = name->symbol.name;
 
-    if (map_contains(self->functions, name_str, name_len)) {
+    if (str_map_contains(self->functions, name_str)) {
         // there was a previous declaration of this name -- could be
         // an annotation, so let's use its type instead of the
         // caller's argument, and its node if the caller didn't give
         // us one because it was a bare annotated symbol.
 
-        ti_function_record *rec = map_get(self->functions, name_str, name_len);
+        ti_function_record *rec = str_map_get(self->functions, name_str);
         assert(rec);
         type = rec->type;
 
@@ -541,11 +538,12 @@ void do_create_function_record(ti_inferer *self, ast_node *node, ast_node *name,
     name->type             = type;
 
     ti_function_record rec = {.name = name_str, .type = type, .node = node};
-    map_set(&self->functions, name_str, name_len, &rec);
+    str_map_set(&self->functions, name_str, &rec);
     if (is_trace_symbol(self, name_str)) {
         trace_symbol(self, name);
-        log(self, "create_function_record: '%s' (%s) %s, node = %p", name_str,
-            string_t_str(&name->symbol.original), tl_type_to_string(self->transient, type), node);
+        log(self, "create_function_record: '%.*s' (%.*s) %s, node = %p", str_ilen(name_str),
+            str_buf(&name_str), str_ilen(name->symbol.original), str_buf(&name->symbol.original),
+            tl_type_to_string(self->transient, type), node);
     }
 }
 
@@ -611,13 +609,12 @@ void create_function_record_variable(void *ctx, ast_node *node) {
     ti_inferer *self = ctx;
 
     if (ast_named_function_application == node->tag) {
-        ast_node   *name     = node->named_application.name;
-        char const *name_str = ast_node_name_string(name);
+        ast_node *name     = node->named_application.name;
+        str       name_str = ast_node_str(name);
         if (!ti_is_generated_variable_name(name_str)) return;
 
         if (is_trace_symbol(self, name_str)) {
             trace_symbol(self, name);
-            log(self, "create_function_record_variable: %s", name_str);
         }
 
         do_create_function_record(self, null, name, node->named_application.function_type);
@@ -632,9 +629,9 @@ void assign_callsite_types(void *ctx, ast_node *node) {
 
     if (ast_named_function_application == node->tag) is_nfa = 1;
 
-    char const *name_str = ast_node_name_string(is_nfa ? node->named_application.name : node->let_in.name);
-    ti_function_record *rec = map_get(self->functions, name_str, strlen(name_str));
-    if (!rec) fatal("function record not found: '%s'", name_str);
+    str                 name_str = ast_node_str(is_nfa ? node->named_application.name : node->let_in.name);
+    ti_function_record *rec      = str_map_get(self->functions, name_str);
+    if (!rec) fatal("function record not found: '%.*s'", str_ilen(name_str), str_buf(&name_str));
 
     tl_type *arrow = is_nfa ? node->named_application.function_type : node->let_in.value->type;
     assert(type_arrow == arrow->tag);
@@ -657,10 +654,10 @@ void assign_callsite_types(void *ctx, ast_node *node) {
                     // function: why should we take its type??
 
                     function_type = rec->type;
-                    if (arrow->arrow.free_variables.size) {
-                        log(self, "assign_callsite_types: '%s' requires %u free variables and satisfied",
-                            name_str, arrow->arrow.free_variables.size);
-                    }
+                    // if (arrow->arrow.free_variables.size) {
+                    //     log(self, "assign_callsite_types: '%s' requires %u free variables and satisfied",
+                    //         name_str, arrow->arrow.free_variables.size);
+                    // }
                 } else {
                 }
             }
@@ -672,9 +669,9 @@ void assign_callsite_types(void *ctx, ast_node *node) {
             function_type = tl_type_clone(self->type_arena, rec->type, make_typevar_val, self);
             function_type->arrow.free_variables = arrow->arrow.free_variables;
 
-            if (arrow->arrow.free_variables.size)
-                log(self, "assign_callsite_types: '%s' requires %u free variables", name_str,
-                    arrow->arrow.free_variables.size);
+            // if (arrow->arrow.free_variables.size)
+            //     log(self, "assign_callsite_types: '%s' requires %u free variables", name_str,
+            //         arrow->arrow.free_variables.size);
         }
 
         if (is_nfa) node->named_application.function_type = function_type;
@@ -725,11 +722,11 @@ typedef struct {
     ti_inferer *self;
 } collect_special_requirements_ctx;
 
-static u64 hash_name_and_type(char const *name, tl_type *type) {
+static u64 hash_name_and_type(str name, tl_type *type) {
     u64 hash = tl_type_hash(type);
     // NOTE: if the type has changed since the function record was created, this hash may fail to find
     // the record when called from patch_one_special
-    hash = hash64_combine(hash, (void *)name, strlen(name));
+    hash = str_hash64_combine(hash, name);
     return hash;
 }
 
@@ -748,7 +745,7 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         // NOTE: specialise even if the type is generic, because that will ensure it participates in the
         // next round of constraint solving.
 
-        char const        *name = ast_node_name_string(node->named_application.name);
+        str                name = ast_node_str(node->named_application.name);
         u64                hash = hash_name_and_type(name, type);
         ti_function_record rec  = {.name = name, .type = type, .node = null, .source = node};
 
@@ -757,9 +754,10 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
 
         node->named_application.name->symbol.special_hash = hash;
 
-        log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash, name,
-            string_t_str(&node->named_application.name->symbol.original),
-            tl_type_to_string(self->transient, type), ast_node_to_string(self->transient, node));
+        // log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash,
+        // name,
+        //     string_t_str(&node->named_application.name->symbol.original),
+        //     tl_type_to_string(self->transient, type), ast_node_to_string(self->transient, node));
     }
 
     else if (ast_node_is_let_in_lambda(node)) {
@@ -774,7 +772,7 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
         if (BIT_TEST(node->let_in.name->symbol.flags, AST_SYMBOL_FLAG_PATCHED)) return;
 
         tl_type           *type = node->let_in.value->type;
-        char const        *name = ast_node_name_string(node->let_in.name);
+        str                name = ast_node_str(node->let_in.name);
         u64                hash = hash_name_and_type(name, type);
         ti_function_record rec  = {.name = name, .type = type, .node = node->let_in.value, .source = node};
 
@@ -783,9 +781,10 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
 
         node->let_in.name->symbol.special_hash = hash;
 
-        log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash, name,
-            string_t_str(&node->let_in.name->symbol.original), tl_type_to_string(self->transient, type),
-            ast_node_to_string(self->transient, node));
+        // log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash,
+        // name,
+        //     string_t_str(&node->let_in.name->symbol.original), tl_type_to_string(self->transient, type),
+        //     ast_node_to_string(self->transient, node));
     }
 }
 
@@ -808,18 +807,20 @@ static void ti_collect_specialization_requirements(ti_inferer *self) {
 
 // -- create specialized functions --
 
-char *make_specialized_name(ti_inferer *self, char const *name) {
+str make_specialized_name(ti_inferer *self, str name) {
     // These names will be further mangled by the transpiler.
 
-#define fmt "%s_%u"
+#define fmt "%.*s_%u"
 
-    int len = snprintf(null, 0, fmt, name, self->next_specialized) + 1;
+    ispan s   = str_ispan(&name);
+
+    int   len = snprintf(null, 0, fmt, s.len, s.buf, self->next_specialized) + 1;
     if (len < 0) fatal("make_specialized_name: failed");
 
     char *out = alloc_malloc(self->type_arena, (u32)len);
-    snprintf(out, (u32)len, fmt, name, self->next_specialized++);
+    snprintf(out, (u32)len, fmt, s.len, s.buf, self->next_specialized++);
 
-    return out;
+    return str_init_allocated(out);
 #undef fmt
 }
 
@@ -868,7 +869,7 @@ static void assign_new_typevars(void *ctx, ast_node *node) {
 
 static void process_new_special(ti_inferer *self, ast_node *node) {
     assert(ast_let == node->tag);
-    if (ti_is_intrinsic_name(ast_node_name_string(node->let.name))) return;
+    if (ti_is_intrinsic_name(ast_node_str(node->let.name))) return;
 
     // if (tl_type_is_poly(node->let.name->type))
     //     node->let.name->type =
@@ -878,7 +879,7 @@ static void process_new_special(ti_inferer *self, ast_node *node) {
     log(self, "process_new_special: %s", ast_node_to_string(self->transient, node));
 }
 
-static ast_node *create_specialized_lambda(ti_inferer *self, char const *name, ast_node *lambda,
+static ast_node *create_specialized_lambda(ti_inferer *self, str name, ast_node *lambda,
                                            tl_type *name_type) {
 
     ast_node       *out = ast_node_create(self->type_arena, ast_let);
@@ -935,11 +936,11 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
     v->n_parameters = left->tuple.elements.size;
     v->parameters   = alloc_malloc(self->type_arena, v->n_parameters * sizeof(ast_node *));
     forall(i, left->tuple.elements) {
-        v->parameters[i] = ast_node_create_sym(self->type_arena, "");
-        next_variable_name(self, &v->parameters[i]->symbol.name);
-        v->parameters[i]->type = make_typevar(self);
-        v->parameters[i]->file = src->file;
-        v->parameters[i]->line = src->line;
+        v->parameters[i]              = ast_node_create_sym_c(self->type_arena, "");
+        v->parameters[i]->symbol.name = next_variable_name(self);
+        v->parameters[i]->type        = make_typevar(self);
+        v->parameters[i]->file        = src->file;
+        v->parameters[i]->line        = src->line;
     }
 
     v->body       = ast_node_create(self->type_arena, ast_any);
@@ -954,7 +955,7 @@ static ast_node *create_specialized_extern(ti_inferer *self, ast_node *src, tl_t
     return out;
 }
 
-static ast_node *create_special(ti_inferer *self, char const *name, ast_node *src, tl_type *name_type) {
+static ast_node *create_special(ti_inferer *self, str name, ast_node *src, tl_type *name_type) {
 
     if (ast_let == src->tag) {
         ast_node *out = ast_node_clone(self->type_arena, src);
@@ -966,7 +967,8 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
         out->let.name->file = src->file;
         out->let.name->line = src->line;
 
-        log(self, "create_special: %s with type %s", name, tl_type_to_string(self->transient, name_type));
+        // log(self, "create_special: %s with type %s", name, tl_type_to_string(self->transient,
+        // name_type));
 
         process_new_special(self, out);
         return out;
@@ -991,7 +993,7 @@ static ast_node *create_special(ti_inferer *self, char const *name, ast_node *sr
 
     fatal("logic error");
 }
-static void maybe_specialize_name(char const **name, char const *replace) {
+static void maybe_specialize_name(str *name, str replace) {
     if (!ti_is_dont_mangle_name(*name)) *name = replace;
 }
 
@@ -1008,15 +1010,17 @@ static int ti_create_specials(ti_inferer *self) {
         if (callsite->is_processed) continue;
 
         ti_function_record *function = ti_lookup_function(self, callsite->name);
-        if (!function) fatal("could not find function '%s'", callsite->name);
+        if (!function)
+            fatal("could not find function '%.*s'", str_ilen(callsite->name), str_buf(&callsite->name));
         callsite->is_processed = 1;
 
         //
-        char *special_name = make_specialized_name(self, callsite->name);
+        str special_name = make_specialized_name(self, callsite->name);
 
         // There may be no node in the case of a function variable
         if (!function->node) {
-            log(self, "create_specials: skip %s due to empty node", callsite->name);
+            log(self, "create_specials: skip %.*s due to empty node", str_ilen(callsite->name),
+                str_buf(&callsite->name));
             continue;
         }
 
@@ -1074,14 +1078,14 @@ static int ti_create_specials(ti_inferer *self) {
     forall(i, self->specials) {
         ast_node *node = self->specials.v[i];
         assert(ast_let == node->tag);
-        char const *name = ast_node_name_string(node->let.name);
-        hset_insert(&existing, name, strlen(name));
+        str name = ast_node_str(node->let.name);
+        str_hset_insert(&existing, name);
     }
     forall(i, nodes_to_add) {
         ast_node *node = nodes_to_add.v[i];
         assert(ast_let == node->tag);
-        char const *name = ast_node_name_string(node->let.name);
-        if (hset_contains(existing, name, strlen(name))) continue;
+        str name = ast_node_str(node->let.name);
+        if (str_hset_contains(existing, name)) continue;
         array_push(self->specials, &node);
     }
 
@@ -1101,7 +1105,7 @@ static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *typ
     // have access to the enclosing ast node, so we have to overwrite the symbol's data.
 
     ti_inferer *self     = ctx->self;
-    char const *name     = string_t_str(&node->symbol.name);
+    str         name     = node->symbol.name;
     u64         hash     = node->symbol.special_hash;
     int         set_hash = 0;
 
@@ -1118,17 +1122,17 @@ static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *typ
 
     ti_function_record *rec = map_get(self->requirements, &hash, sizeof hash);
 
-    log(self, "patch_one_symbol: %-16s %-32" PRIu64 " type: %s rec: %p", name, hash,
-        tl_type_to_string(self->transient, type), rec);
+    // log(self, "patch_one_symbol: %-16s %-32" PRIu64 " type: %s rec: %p", name, hash,
+    //     tl_type_to_string(self->transient, type), rec);
 
     if (!rec || !rec->node) return 1;
     if (set_hash) node->symbol.special_hash = hash;
 
-    log(self, "patch_one_symbol: %-16s %-32" PRIu64 " replaced with %s", name, hash, rec->name);
+    // log(self, "patch_one_symbol: %-16s %-32" PRIu64 " replaced with %s", name, hash, rec->name);
 
-    string_t name_string = string_t_init(self->type_arena, rec->name);
-    node->symbol.name    = name_string;
-    node->type           = rec->type;
+    str name_string   = str_copy(self->type_arena, rec->name);
+    node->symbol.name = name_string;
+    node->type        = rec->type;
     BIT_SET(node->symbol.flags, AST_SYMBOL_FLAG_PATCHED);
 
     // patch all arrow types attached to symbols to ensure their free_variables symbols have been
@@ -1148,7 +1152,7 @@ static int patch_one_symbol(patch_special_ctx *ctx, ast_node *node, tl_type *typ
             ti_function_record *rec = map_get(self->requirements, &hash, sizeof hash);
             if (!rec) continue;
 
-            free_variables.v[i].name = string_t_init(self->type_arena, rec->name);
+            free_variables.v[i].name = str_copy(self->type_arena, rec->name);
             free_variables.v[i].type = rec->type;
         }
     }
@@ -1165,8 +1169,8 @@ static void patch_one_special(void *ctx_, ast_node *node) {
             patch_one_symbol(ctx, node->let_in.value, node->let_in.value->type);
         else if (ast_lambda_function != node->let_in.value->tag) return;
 
-        char const *name = ast_node_name_string(node->let_in.name);
-        tl_type    *type = node->let_in.value->type;
+        str      name = ast_node_str(node->let_in.name);
+        tl_type *type = node->let_in.value->type;
 
         if (tl_type_is_poly(type)) {
             return;
@@ -1182,14 +1186,12 @@ static void patch_one_special(void *ctx_, ast_node *node) {
 
         if (!rec) {
             log_specialization_records(self);
-            fatal("could not find requirements record for lambda '%s' (%s) %s", name,
-                  string_t_str(&node->let_in.name->symbol.original),
+            fatal("could not find requirements record for lambda '%.*s' %s", str_ilen(name), str_buf(&name),
                   tl_type_to_string(self->transient, type));
         }
         if (!rec->node) {
-            fatal("found requirements record for lambda but it has no specialisation '%s' (%s) %s", name,
-                  string_t_str(&node->let_in.name->symbol.original),
-                  tl_type_to_string(self->transient, type));
+            fatal("found requirements record for lambda but it has no specialisation '%.*s' %s",
+                  str_ilen(name), str_buf(&name), tl_type_to_string(self->transient, type));
         }
 
         // take the name of the specialised lambda function
@@ -1240,9 +1242,9 @@ typedef struct {
 
 static void apply_type(void *ctx, ast_node *node) {
     if (ast_symbol != node->tag) return;
-    hashmap    *parameter_types = ctx;
-    char const *name            = ast_node_name_string(node);
-    tl_type   **found           = map_get(parameter_types, name, strlen(name));
+    hashmap  *parameter_types = ctx;
+    str       name            = ast_node_str(node);
+    tl_type **found           = str_map_get(parameter_types, name);
     if (found) node->type = *found;
 }
 
@@ -1271,9 +1273,9 @@ static void one_fixup_free_variables(void *ctx_, ast_node *node) {
     if (ast_let == node->tag) {
         hashmap *parameter_types = map_create(self->transient, sizeof(tl_type *), 256);
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node   *param = node->let.parameters[i];
-            char const *name  = ast_node_name_string(param);
-            map_set(&parameter_types, name, strlen(name), &param->type);
+            ast_node *param = node->let.parameters[i];
+            str       name  = ast_node_str(param);
+            str_map_set(&parameter_types, name, &param->type);
         }
 
         ast_node_dfs_safe_for_recur(self->transient, parameter_types, node, apply_type);
@@ -1315,10 +1317,10 @@ static void collect_syms(void *ctx_, ast_node *node) {
 
     if (ast_symbol != node->tag) return;
 
-    char const *name = ast_node_name_string(node);
+    str name = ast_node_str(node);
 
-    if (0 == strncmp("_v", name, 2)) return;
-    if (hset_contains(ctx->seen, name, strlen(name))) return;
+    if (0 == str_cmp_nc(name, "_v", 2)) return;
+    if (str_hset_contains(ctx->seen, name)) return;
 
     ti_function_record *rec = ti_lookup_function(self, name);
     if (!rec || !rec->node) return;
@@ -1329,7 +1331,7 @@ static void collect_syms(void *ctx_, ast_node *node) {
 
     log(self, "collect_syms: %s", ast_node_to_string(self->transient, rec->node));
     array_push(self->specials, &rec->node);
-    hset_insert(&ctx->seen, name, strlen(name));
+    str_hset_insert(&ctx->seen, name);
 }
 
 static void collect_anon_lambdas(void *ctx_, ast_node *node) {
@@ -1358,11 +1360,11 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
     forall(i, self->specials) {
         ast_node *node = self->specials.v[i];
         if (ast_let != node->tag) continue;
-        char const *name = ast_node_name_string(node->let.name);
-        hset_insert(&ctx.seen, name, strlen(name));
+        str name = ast_node_str(node->let.name);
+        str_hset_insert(&ctx.seen, name);
     }
 
-    ti_function_record *main = ti_lookup_function(self, "main");
+    ti_function_record *main = ti_lookup_function(self, S("main"));
     if (!main) {
         array_push(self->errors, &(ti_error){.tag = tl_err_no_main_function});
         return 1;
@@ -1379,8 +1381,8 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
         // ast, so collect_syms won't find them. For example, tuple
         // constructor functions.
         if (ast_let == node->tag) {
-            char const *name = ast_node_name_string(node->let.name);
-            if (0 == strncmp("tl_gen_", name, 5)) {
+            str name = ast_node_str(node->let.name);
+            if (0 == str_cmp_nc(name, "tl_gen_", 5)) {
                 log(self, "collect_function_to_emit generated: %s",
                     ast_node_to_string(self->transient, node));
                 array_push(self->specials, &node);
@@ -1403,38 +1405,38 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
 
 // -- rename variables --
 
-int ti_is_generated_variable_name(char const *str) {
-    return 0 == strncmp("_v", str, 2);
+int ti_is_generated_variable_name(str str) {
+    return 0 == str_cmp_nc(str, "_v", 2);
 }
 
-int ti_is_c_function_name(char const *str) {
-    return 0 == strncmp("c_", str, 2);
+int ti_is_c_function_name(str str) {
+    return 0 == str_cmp_nc(str, "c_", 2);
 }
 
-int ti_is_intrinsic_name(char const *str) {
-    return 0 == strncmp("_tl_", str, 4);
+int ti_is_intrinsic_name(str str) {
+    return 0 == str_cmp_nc(str, "_tl_", 4);
 }
 
-int ti_is_std_function_name(char const *str) {
-    return 0 == strncmp("std_", str, 4);
+int ti_is_std_function_name(str str) {
+    return 0 == str_cmp_nc(str, "std_", 4);
 }
 
-int ti_is_dont_mangle_name(char const *str) {
+int ti_is_dont_mangle_name(str str) {
     return ti_is_c_function_name(str) || ti_is_intrinsic_name(str) || ti_is_std_function_name(str);
 }
 
-static void next_variable_name(ti_inferer *self, string_t *out) {
+static str next_variable_name(ti_inferer *self) {
     char buf[64];
     snprintf(buf, sizeof buf, "_v%u_", self->next_var++);
-    *out = string_t_init(self->type_arena, buf);
+    return str_init(self->type_arena, buf);
 }
 
-static void rename_if_match(allocator *alloc, string_t *string, hashmap *map, string_t *copy_to) {
-    string_t const *found = map_get(map, string_t_str(string), (u16)string_t_size(string));
+static void rename_if_match(allocator *alloc, str *string, hashmap *map, str *copy_to) {
+    str const *found = str_map_get(map, *string);
 
     if (found) {
-        string_t_copy(alloc, copy_to, string); // preserve original name for errors
-        string_t_copy(alloc, string, found);
+        *copy_to = str_copy(alloc, *string); // preserve original name for errors
+        *string  = str_copy(alloc, *found);
     }
 }
 
@@ -1456,7 +1458,7 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
         hset_insert(&ctx->visited, &node, sizeof(ast_node *));
     }
 
-    lexical_info li = {.name = string_t_init_empty()};
+    lexical_info li = {.name = str_empty()};
 
     switch (node->tag) {
 
@@ -1522,10 +1524,10 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
             // rename_variables will reset the value to something
             // particular, but other clients may just need to
             // determine existence of the symbol.
-            ast_node   *name     = node->let_in.name;
-            char const *name_str = ast_node_name_string(name);
-            li.type              = node->let_in.name->type;
-            map_set(&ctx->lexical_map, name_str, strlen(name_str), &li);
+            ast_node *name     = node->let_in.name;
+            str       name_str = ast_node_str(name);
+            li.type            = node->let_in.name->type;
+            str_map_set(&ctx->lexical_map, name_str, &li);
         }
 
         fun(ctx->user_ctx, node, &ctx->lexical_map);
@@ -1555,8 +1557,8 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
                 li.type              = lt->assignments[i]->assignment.name->type;
                 assert(ast_symbol == name->tag);
 
-                char const *name_str = ast_node_name_string(name);
-                map_set(&ctx->lexical_map, name_str, strlen(name_str), &li);
+                str name_str = ast_node_str(name);
+                str_map_set(&ctx->lexical_map, name_str, &li);
             }
         }
 
@@ -1590,8 +1592,8 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
                 if (ast_nil == name->tag) break; // nil can only be sole param
                 assert(ast_symbol == name->tag);
 
-                char const *name_str = ast_node_name_string(name);
-                map_set(&ctx->lexical_map, name_str, strlen(name_str), &li);
+                str name_str = ast_node_str(name);
+                str_map_set(&ctx->lexical_map, name_str, &li);
             }
         }
 
@@ -1632,8 +1634,8 @@ void do_traverse_lexical(void *ctx_, ast_node *node, ti_traverse_lexical_fun fun
                 li.type              = arr->nodes[i]->type;
                 assert(ast_symbol == name->tag);
 
-                char const *name_str = ast_node_name_string(name);
-                map_set(&ctx->lexical_map, name_str, strlen(name_str), &li);
+                str name_str = ast_node_str(name);
+                str_map_set(&ctx->lexical_map, name_str, &li);
             }
         }
         fun(ctx->user_ctx, node, &ctx->lexical_map);
@@ -1756,16 +1758,15 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
 
         // first apply rename to the value portion of the expression, since it is not allowed to refer
         // to the symbol being defined. But it may refer to an outer let-in binding of the same name.
-        struct ast_let_in *v = ast_node_let_in(node);
+        struct ast_let_in *v        = ast_node_let_in(node);
 
-        string_t           var_name;
-        next_variable_name(self, &var_name);
+        str                var_name = next_variable_name(self);
 
-        ast_node const *name     = v->name;
-        char const     *name_str = ast_node_name_string(name);
+        ast_node const    *name     = v->name;
+        str                name_str = ast_node_str(name);
         assert(ast_symbol == name->tag);
 
-        lexical_info *li = map_get(*lexical_map, name_str, strlen(name_str));
+        lexical_info *li = str_map_get(*lexical_map, name_str);
         if (li) li->name = var_name;
 
     } break;
@@ -1776,14 +1777,13 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
         struct ast_labelled_tuple *lt = ast_node_lt(v->lt);
 
         for (u32 i = 0; i < lt->n_assignments; ++i) {
-            string_t var_name;
-            next_variable_name(self, &var_name);
+            str             var_name = next_variable_name(self);
 
             ast_node const *name     = lt->assignments[i]->assignment.name;
-            char const     *name_str = ast_node_name_string(name);
+            str             name_str = ast_node_str(name);
             assert(ast_symbol == name->tag);
 
-            lexical_info *li = map_get(*lexical_map, name_str, strlen(name_str));
+            lexical_info *li = str_map_get(*lexical_map, name_str);
             if (li) li->name = var_name;
         }
 
@@ -1802,14 +1802,13 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
         struct ast_array *arr = ast_node_arr(node);
         for (size_t i = 0; i < arr->n; ++i) {
             ast_node const *name     = arr->nodes[i];
-            char const     *name_str = ast_node_name_string(name);
+            str             name_str = ast_node_str(name);
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
 
-            string_t var_name;
-            next_variable_name(self, &var_name);
+            str           var_name = next_variable_name(self);
 
-            lexical_info *li = map_get(*lexical_map, name_str, strlen(name_str));
+            lexical_info *li       = str_map_get(*lexical_map, name_str);
             if (li) li->name = var_name;
 
             // rename the actual parameter symbol
@@ -1822,14 +1821,13 @@ void rename_one_variables(void *ctx, ast_node *node, hashmap **lexical_map) {
         struct ast_array *arr = ast_node_arr(node);
         for (size_t i = 0; i < arr->n; ++i) {
             ast_node const *name     = arr->nodes[i];
-            char const     *name_str = ast_node_name_string(name);
+            str             name_str = ast_node_str(name);
             // parameter may be a symbol or nil
             if (ast_symbol != name->tag) break; // nil can only be sole param
 
-            string_t var_name;
-            next_variable_name(self, &var_name);
+            str           var_name = next_variable_name(self);
 
-            lexical_info *li = map_get(*lexical_map, name_str, strlen(name_str));
+            lexical_info *li       = str_map_get(*lexical_map, name_str);
             if (li) li->name = var_name;
 
             // rename the actual parameter symbol
@@ -2173,22 +2171,21 @@ static void ti_run_solver(ti_inferer *self) {
 
 static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
-        tl_type **found = type_registry_find_name(self->type_registry, "nil");
+        tl_type **found = type_registry_find_name(self->type_registry, S("nil"));
         if (found) return *found;
         fatal("nil type not found");
     }
 
     if (ast_ellipsis == ann->tag) {
-        tl_type **found = type_registry_find_name(self->type_registry, "ellipsis");
+        tl_type **found = type_registry_find_name(self->type_registry, S("ellipsis"));
         if (found) return *found;
         fatal("ellipsis type not found");
     }
 
     if (ast_symbol == ann->tag) {
         // either a prim or user type, or a generic/typevar
-        char const *ann_str = string_t_str(&ann->symbol.name);
-        size_t      len     = strlen(ann_str);
-        tl_type   **found   = type_registry_find_name(self->type_registry, ann_str);
+        str       ann_str = ann->symbol.name;
+        tl_type **found   = type_registry_find_name(self->type_registry, ann_str);
         if (found) {
             // If it's an any type, assign it a new typevar
             if (type_any == (*found)->tag) return make_typevar(self);
@@ -2196,12 +2193,12 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
         }
 
         // previously seen in the annotation? then assign same type
-        found = map_get(*map, ann_str, len);
+        found = str_map_get(*map, ann_str);
         if (found) return *found;
 
         // unknown symbol, consider it as a typevar
         tl_type *out = make_typevar(self);
-        map_set(map, ann_str, len, &out);
+        str_map_set(map, ann_str, &out);
         return out;
     }
 
@@ -2420,14 +2417,13 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
 
     case ast_symbol: {
 
-        char const *name_str = ast_node_name_string(node);
-        u16         name_len = (u16)string_t_size(&node->symbol.name);
+        str name_str = ast_node_str(node);
 
         // every occurence of a symbol must be the same type,
         // unless it's the name of a generic function. In that
         // case, it cannot be constrained until it is replaced
         // with a specialised function name.
-        lexical_info *li = map_get(*lex, name_str, name_len);
+        lexical_info *li = str_map_get(*lex, name_str);
         if (li) {
             push(node->type, li->type);
         } else {
@@ -2438,11 +2434,11 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
                 push(node->type, rec->type);
             }
 
-            lexical_info li = {.name = string_t_init(self->type_arena, name_str)};
+            lexical_info li = {.name = str_copy(self->type_arena, name_str)};
             li.type         = node->type;
-            map_set(lex, name_str, name_len, &li);
-            log(self, "collect_constraints: symbol '%s' to %s", name_str,
-                tl_type_to_string(self->transient, li.type));
+            str_map_set(lex, name_str, &li);
+            // log(self, "collect_constraints: symbol '%s' to %s", name_str,
+            //     tl_type_to_string(self->transient, li.type));
         }
 
         // ensure symbol type matches its annotated type, if any
@@ -2496,11 +2492,9 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
 
     case ast_user_type: {
 
-        tl_type **type =
-          type_registry_find_name(self->type_registry, ast_node_name_string(node->user_type.name));
-        if (!type)
-            fatal("collect_constraints: failed to find type '%s'",
-                  ast_node_name_string(node->user_type.name));
+        str       name = ast_node_str(node->user_type.name);
+        tl_type **type = type_registry_find_name(self->type_registry, name);
+        if (!type) fatal("collect_constraints: failed to find type '%.*s'", str_ilen(name), str_buf(&name));
 
         push(node->type, *type);
 
@@ -2531,9 +2525,9 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
             struct tlt_labelled_tuple *lt = tl_type_lt(name_type);
 
             // node type is the field type, find the matching name in the lt
-            char const *field_name = ast_node_name_string(v->field_name);
+            str field_name = ast_node_str(v->field_name);
             forall(i, lt->names) {
-                if (0 == strcmp(lt->names.v[i], field_name)) push(node->type, lt->fields.v[i]);
+                if (str_eq(lt->names.v[i], field_name)) push(node->type, lt->fields.v[i]);
             }
 
         }
@@ -2594,7 +2588,7 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
 
             } else if (type_labelled_tuple == v->value->type->tag) {
                 tl_type *field_type = tl_type_find_labelled_field_type(
-                  v->value->type, ast_node_name_string(lt->assignments[i]->assignment.value));
+                  v->value->type, ast_node_str(lt->assignments[i]->assignment.value));
 
                 push(lt->assignments[i]->assignment.name->type, field_type);
 
@@ -2619,8 +2613,8 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
 
         // If the function is 'main', we constrain the body type to be
         // the required int return type for main().
-        if (0 == strcmp("main", ast_node_name_string(node->let.name))) {
-            push(type_registry_must_find_name(self->type_registry, "int"), node->let.body->type);
+        if (0 == str_cmp(ast_node_str(node->let.name), S("main"))) {
+            push(type_registry_must_find_name(self->type_registry, S("int")), node->let.body->type);
         }
 
         // result is nil
@@ -2633,7 +2627,8 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
         push(node->if_then_else.yes->type, node->if_then_else.no->type);
 
         // condition must be bool
-        push(node->if_then_else.condition->type, type_registry_must_find_name(self->type_registry, "bool"));
+        push(node->if_then_else.condition->type,
+             type_registry_must_find_name(self->type_registry, S("bool")));
 
         // result is same type as arms
         push(node->type, node->if_then_else.yes->type);
@@ -2682,8 +2677,7 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
             // other direction, for example because of annotations.
             if (!tl_type_is_poly(v->name->type)) {
 
-                log(self, "collect_constraints: applying constraints to '%s'",
-                    ast_node_name_string(v->name));
+                // log(self, "collect_constraints: applying constraints to '%s'", ast_node_str(v->name));
 
                 // Set the function type to match the name type, since it's not generic. Do not
                 // overwrite free_variables portion of type. TODO make this safer.
@@ -2760,7 +2754,7 @@ char *make_tuple_name(allocator *alloc, tl_type *type) {
 
 //
 
-static ast_node *make_type_constructor_function(ti_inferer *self, char const *name, tl_type *user_type,
+static ast_node *make_type_constructor_function(ti_inferer *self, str name, tl_type *user_type,
                                                 ast_node const *src) {
     // create a let_node with parameters matching the user_type fields, and a body with a single node, a
     // user_type literal
@@ -2772,11 +2766,12 @@ static ast_node *make_type_constructor_function(ti_inferer *self, char const *na
     // constructor name: _gen_make_{type}_
     char *generated_name = null;
     {
-#define fmt "tl_gen_make_%s_"
-        int len = snprintf(null, 0, fmt, name) + 1;
+        ispan s = str_ispan(&name);
+#define fmt "tl_gen_make_%.*s_"
+        int len = snprintf(null, 0, fmt, s.len, s.buf) + 1;
         if (len < 0) fatal("make_type_constructor_function: generate name failed.");
         generated_name = alloc_malloc(self->type_arena, (u32)len);
-        snprintf(generated_name, (u32)len, fmt, name);
+        snprintf(generated_name, (u32)len, fmt, s.len, s.buf);
 #undef fmt
     }
 
@@ -2837,9 +2832,11 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
         struct ast_user_type_def const *v = ast_node_utd((ast_node *)node);
 
         // type must be registered
-        char const *type_name = ast_node_name_string(v->name);
-        tl_type   **ty        = type_registry_find_name(self->type_registry, type_name);
-        if (!ty) fatal("generate_user_type_functions: could not find type '%s'", type_name);
+        str       type_name = ast_node_str(v->name);
+        tl_type **ty        = type_registry_find_name(self->type_registry, type_name);
+        if (!ty)
+            fatal("generate_user_type_functions: could not find type '%.*s'", str_ilen(type_name),
+                  str_buf(&type_name));
 
         // make constructor
 
@@ -2877,11 +2874,11 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
     out->let.n_parameters = 0;
     out->let.flags        = 0;
     out->let.body         = null;
-    out->type             = *type_registry_find_name(self->type_registry, "nil");
+    out->type             = *type_registry_find_name(self->type_registry, S("nil"));
     out->file             = node->file;
     out->line             = node->line;
 
-    out->let.name         = ast_node_create_sym(a, generated_name);
+    out->let.name         = ast_node_create_sym_c(a, generated_name);
     ast_node_set_is_specialized(out);
     ast_node_set_is_tuple_constructor(out);
     out->let.name->file = node->file;
@@ -2920,15 +2917,14 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
             v->assignments[i]->line             = node->line;
         }
 
-        c_string_array names = {.alloc = self->type_arena};
+        str_array names = {.alloc = self->type_arena};
         for (u16 i = 0; i < v->n_assignments; ++i) {
-            char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
+            str name = ast_node_str(v->assignments[i]->assignment.name);
             array_push(names, &name);
         }
 
         // make an arrow type for the generated function
-        tl_type *arrow =
-          make_arrow(a, out->let.parameters, out->let.n_parameters, (char const **)names.v, node->type);
+        tl_type *arrow = make_arrow(a, out->let.parameters, out->let.n_parameters, names.v, node->type);
 
         // register the function record
         do_create_function_record(self, out, out->let.name, arrow);
@@ -2942,7 +2938,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         for (u16 i = 0; i < out->let.n_parameters; ++i) {
             char buf[32];
             snprintf(buf, sizeof buf - 1, "x%u", i);
-            out->let.parameters[i]       = ast_node_create_sym(a, buf);
+            out->let.parameters[i]       = ast_node_create_sym_c(a, buf);
             out->let.parameters[i]->file = node->file;
             out->let.parameters[i]->line = node->line;
         }
@@ -3047,10 +3043,10 @@ void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
     switch (node->tag) {
 
     case ast_symbol: {
-        char const *name = ast_node_name_string(node);
+        str name = ast_node_str(node);
 
         if (!ti_is_generated_variable_name(name)) return;
-        if (!map_contains(*lex, name, strlen(name))) array_push(*array, &node);
+        if (!str_map_contains(*lex, name)) array_push(*array, &node);
 
     } break;
 
@@ -3174,13 +3170,17 @@ static void log_function_records(ti_inferer *self) {
     while (map_iter(self->functions, &iter)) {
         ti_function_record *rec = iter.data;
         char                buf[128];
+
+        ispan               s = str_ispan(&rec->name);
+
         if (iter.key_size < sizeof buf) {
             memcpy(buf, iter.key_ptr, iter.key_size);
             buf[iter.key_size] = '\0';
-            log(self, "function record: %s -> %s: %s node: %p", buf, rec->name,
+            log(self, "function record: %s -> %.*s: %s node: %p", buf, s.len, s.buf,
                 tl_type_to_string(self->transient, rec->type), rec->node);
         } else {
-            log(self, "function record: %s: %s", rec->name, tl_type_to_string(self->transient, rec->type));
+            log(self, "function record: %.*s: %s", s.len, s.buf,
+                tl_type_to_string(self->transient, rec->type));
         }
     }
 }
@@ -3191,8 +3191,9 @@ static void log_specialization_records(ti_inferer *self) {
     while (map_iter(self->requirements, &iter)) {
         ti_function_record *rec = iter.data;
         assert(iter.key_size == sizeof(u64));
-        log(self, "specialization requirement: %-24" PRIu64 " -> %s %s source: %s", *(u64 *)iter.key_ptr,
-            rec->name, tl_type_to_string(self->transient, rec->type),
+        ispan s = str_ispan(&rec->name);
+        log(self, "specialization requirement: %-24" PRIu64 " -> %.*s %s source: %s", *(u64 *)iter.key_ptr,
+            s.len, s.buf, tl_type_to_string(self->transient, rec->type),
             ast_node_to_string(self->transient, rec->source));
     }
 }
@@ -3220,41 +3221,45 @@ tl_type *make_typevar(ti_inferer *self) {
     return tl_type_create_type_var(self->type_arena, make_typevar_val(self));
 }
 
-ti_function_record *ti_lookup_function(ti_inferer *self, char const *name) {
-    return map_get(self->functions, name, strlen(name));
+ti_function_record *ti_lookup_function(ti_inferer *self, str name) {
+    return str_map_get(self->functions, name);
 }
 
 //
 
-void ti_trace_symbol_add(ti_inferer *self, char const *name) {
+void ti_trace_symbol_add(ti_inferer *self, str name) {
     array_push(self->symbols_trace, &name);
 }
 
-void ti_trace_symbol_remove(ti_inferer *self, char const *name) {
+void ti_trace_symbol_remove(ti_inferer *self, str name) {
     for (u32 i = 0; i < self->symbols_trace.size;) {
-        if (name == self->symbols_trace.v[i]) array_erase(self->symbols_trace, i);
+        if (str_eq(name, self->symbols_trace.v[i])) array_erase(self->symbols_trace, i);
         else ++i;
     }
 }
 
-static int is_trace_symbol(ti_inferer *self, char const *name) {
-    forall(i, self->symbols_trace) if (0 == strcmp(name, self->symbols_trace.v[i])) return 1;
+static int is_trace_symbol(ti_inferer *self, str name) {
+    forall(i, self->symbols_trace) if (str_eq(name, self->symbols_trace.v[i])) return 1;
     return 0;
 }
 
 static int is_trace_symbol_node(ti_inferer *self, ast_node const *name) {
-    char const *str = ast_node_name_string(name);
-    forall(i, self->symbols_trace) if (0 == strcmp(str, self->symbols_trace.v[i])) return 1;
+    str str = ast_node_str(name);
+    forall(i, self->symbols_trace) if (str_eq(str, self->symbols_trace.v[i])) return 1;
     return 0;
 }
 
 static void trace_symbol_impl(ti_inferer *self, ast_node const *node, char const *file, int line) {
     if (ast_symbol != node->tag) return;
 
-    char const *name = ast_node_name_string(node);
-    char const *orig = string_t_str(&node->symbol.original);
-    char       *type = tl_type_to_string(self->transient, node->type);
-    dbg("%s:%i: trace: %s orig: %s type: %s\n", file, line, name, orig, type);
+    str   name   = ast_node_str(node);
+    str   orig   = node->symbol.original;
+    char *type   = tl_type_to_string(self->transient, node->type);
+
+    ispan name_s = str_ispan(&name), orig_s = str_ispan(&orig);
+
+    fprintf(stderr, "%s:%i: trace: %.*s orig: %.*s type: %s\n", file, line, name_s.len, name_s.buf,
+            orig_s.len, orig_s.buf, type);
     alloc_free_i(self->transient, type, file, line);
     (void)name;
     (void)orig;

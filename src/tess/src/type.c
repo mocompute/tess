@@ -2,7 +2,7 @@
 #include "alloc.h"
 #include "hash.h"
 #include "hashmap.h"
-#include "string_t.h"
+#include "str.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -28,7 +28,7 @@ tl_type *tl_type_create_tuple(allocator *alloc, tl_type_sized elements) {
     return self;
 }
 
-tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, c_string_csized names) {
+tl_type *tl_type_create_labelled_tuple(allocator *alloc, tl_type_sized fields, str_sized names) {
     tl_type *self               = tl_type_create(alloc, type_labelled_tuple);
     self->labelled_tuple.fields = fields;
     self->labelled_tuple.names  = names;
@@ -45,7 +45,7 @@ tl_type *tl_type_create_arrow(allocator *alloc, tl_type *left, tl_type *right) {
     return self;
 }
 
-tl_type *tl_type_create_user_type(allocator *alloc, char const *name, tl_type *labelled_tuple) {
+tl_type *tl_type_create_user_type(allocator *alloc, str name, tl_type *labelled_tuple) {
     tl_type *self             = tl_type_create(alloc, type_user);
     self->user.name           = name;
     self->user.labelled_tuple = labelled_tuple;
@@ -84,7 +84,7 @@ tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typev
         clone->labelled_tuple.names.v =
           alloc_malloc(alloc, orig->labelled_tuple.names.size * sizeof clone->labelled_tuple.names.v[0]);
         forall(i, orig->labelled_tuple.names) clone->labelled_tuple.names.v[i] =
-          alloc_strdup(alloc, orig->labelled_tuple.names.v[i]);
+          str_copy(alloc, orig->labelled_tuple.names.v[i]);
         break;
 
     case type_arrow:
@@ -95,7 +95,7 @@ tl_type *tl_type_clone_impl(allocator *alloc, tl_type const *orig, tl_make_typev
         break;
 
     case type_user:
-        clone->user.name = alloc_strdup(alloc, orig->user.name);
+        clone->user.name = str_copy(alloc, orig->user.name);
         clone->user.labelled_tuple =
           tl_type_clone_impl(alloc, orig->user.labelled_tuple, make_typevar, ctx, tvmap);
         break;
@@ -167,7 +167,7 @@ tl_type *tl_type_clone_shallow(allocator *alloc, tl_type const *orig) {
         clone->labelled_tuple.names.v =
           alloc_malloc(alloc, orig->labelled_tuple.names.size * sizeof clone->labelled_tuple.names.v[0]);
         forall(i, orig->labelled_tuple.names) clone->labelled_tuple.names.v[i] =
-          alloc_strdup(alloc, orig->labelled_tuple.names.v[i]);
+          str_copy(alloc, orig->labelled_tuple.names.v[i]);
         break;
 
     case type_arrow:
@@ -178,7 +178,7 @@ tl_type *tl_type_clone_shallow(allocator *alloc, tl_type const *orig) {
         break;
 
     case type_user:
-        clone->user.name           = alloc_strdup(alloc, orig->user.name);
+        clone->user.name           = str_copy(alloc, orig->user.name);
         clone->user.labelled_tuple = tl_type_clone_shallow(alloc, orig->user.labelled_tuple);
         break;
 
@@ -316,7 +316,7 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
 
         for (u32 i = 0; i < vleft->fields.size; i++) {
             int res = 0;
-            if ((res = strcmp(vleft->names.v[i], vright->names.v[i])) != 0) return res;
+            if ((res = str_cmp(vleft->names.v[i], vright->names.v[i])) != 0) return res;
             if ((res = tl_type_compare(vleft->fields.v[i], vright->fields.v[i])) != 0) return res;
         }
     }
@@ -336,7 +336,7 @@ int tl_type_compare(tl_type const *left, tl_type const *right) {
         struct tlt_user const *vleft  = tl_type_user((tl_type *)left),
                               *vright = tl_type_user((tl_type *)right);
         int res                       = 0;
-        if ((res == strcmp(vleft->name, vright->name)) != 0) return res;
+        if ((res == str_cmp(vleft->name, vright->name)) != 0) return res;
 
         return tl_type_compare(vleft->labelled_tuple, vright->labelled_tuple);
     } break;
@@ -394,7 +394,7 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names, int ignore_free_vari
 
         if (!ignore_names)
             for (u32 i = 0; i < v->names.size; ++i) {
-                hash = hash64_combine(hash, (byte *)v->names.v[i], strlen(v->names.v[i]));
+                hash = str_hash64_combine(hash, v->names.v[i]);
             }
 
     } break;
@@ -414,7 +414,7 @@ u64 tl_type_hash_ext(tl_type const *self, int ignore_names, int ignore_free_vari
 
     case type_user: {
         struct tlt_user const *v = tl_type_user((tl_type *)self);
-        hash                     = hash64_combine(hash, (byte *)v->name, strlen(v->name));
+        hash                     = str_hash64_combine(hash, v->name);
 
         u64 lt_hash              = tl_type_hash(v->labelled_tuple);
         hash                     = hash64_combine(hash, (byte *)&lt_hash, sizeof lt_hash);
@@ -441,10 +441,10 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
     case type_float:
     case type_string:
     case type_any:
-    case type_ellipsis:
-        //
-        len = snprintf(buf, (size_t)sz, "%s", tl_type_tag_to_string(self->tag));
-        break;
+    case type_ellipsis: {
+        str tag = tl_type_tag_to_string(self->tag);
+        len     = snprintf(buf, (size_t)sz, "%.*s", str_ilen(tag), str_buf(&tag));
+    } break;
 
     case type_pointer:
 
@@ -457,7 +457,7 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         struct tlt_user const *v = tl_type_user((tl_type *)self);
 
         len                      = 0;
-        len += snprintf(buf, (size_t)sz, "(%s ", v->name);
+        len += snprintf(buf, (size_t)sz, "(%.*s ", str_ilen(v->name), str_buf(&v->name));
         len += tl_type_snprint(buf + len * est, sz - len * est, v->labelled_tuple);
         len += snprintf(buf + len * est, (size_t)(sz - len * est), ")");
 
@@ -486,7 +486,8 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         len += snprintf(buf, (size_t)sz, "(");
 
         for (size_t i = 0; i < v->fields.size; ++i) {
-            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%s : ", v->names.v[i]);
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%.*s : ", str_ilen(v->names.v[i]),
+                            str_buf(&v->names.v[i]));
             len += tl_type_snprint(buf + len * est, sz - len * est, v->fields.v[i]);
             len += snprintf(buf + len * est, (size_t)(sz - len * est), ", ");
         }
@@ -507,8 +508,9 @@ int tl_type_snprint(char *buf, int sz, tl_type const *self) {
         forall(i, v->free_variables) {
             char type_str[128];
             tl_type_snprint(type_str, sizeof type_str, v->free_variables.v[i].type);
-            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%s (%s)",
-                            string_t_str(&v->free_variables.v[i].name), type_str
+            len += snprintf(buf + len * est, (size_t)(sz - len * est), "%.*s (%s)",
+                            str_ilen(v->free_variables.v[i].name), str_buf(&v->free_variables.v[i].name),
+                            type_str
 
             );
             if (i < v->free_variables.size - 1)
@@ -635,7 +637,7 @@ int tl_type_satisfies(tl_type const *requires, tl_type const *candidate) {
     case type_user: {
         if (type_user != candidate->tag) return 0;
 
-        return 0 == strcmp(requires->user.name, candidate->user.name);
+        return str_eq(requires->user.name, candidate->user.name);
     }
 
     case type_type_var:
@@ -697,7 +699,7 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
 
         // regardless of typevars, names must match
         for (u32 i = 0; i < varr->elements.size; ++i) {
-            if (0 != strcmp(va->names.v[i], vb->names.v[i])) return 0;
+            if (!str_eq(va->names.v[i], vb->names.v[i])) return 0;
             if (!tl_type_is_compatible(varr->elements.v[i], vbarr->elements.v[i], strict)) return 0;
         }
 
@@ -730,12 +732,12 @@ int tl_type_is_compatible(tl_type const *requires, tl_type const *candidate, int
     }
 }
 
-tl_type *tl_type_find_user_field_type(tl_type const *user_type, char const *field_name) {
+tl_type *tl_type_find_user_field_type(tl_type const *user_type, str field_name) {
     struct tlt_user           *v          = tl_type_user((tl_type *)user_type);
     struct tlt_labelled_tuple *lt         = tl_type_lt(v->labelled_tuple);
     tl_type                   *field_type = null;
     for (u32 i = 0; i < lt->names.size; ++i) {
-        if (0 == strcmp(lt->names.v[i], field_name)) {
+        if (str_eq(lt->names.v[i], field_name)) {
             field_type = lt->fields.v[i];
             break;
         }
@@ -743,11 +745,11 @@ tl_type *tl_type_find_user_field_type(tl_type const *user_type, char const *fiel
     return field_type;
 }
 
-tl_type *tl_type_find_labelled_field_type(tl_type const *lt_type, char const *field_name) {
+tl_type *tl_type_find_labelled_field_type(tl_type const *lt_type, str field_name) {
     struct tlt_labelled_tuple *lt         = tl_type_lt((tl_type *)lt_type);
     tl_type                   *field_type = null;
     for (u32 i = 0; i < lt->names.size; ++i) {
-        if (0 == strcmp(lt->names.v[i], field_name)) {
+        if (str_eq(lt->names.v[i], field_name)) {
             field_type = lt->fields.v[i];
             break;
         }
@@ -836,9 +838,9 @@ struct tlt_tv *tl_type_tv(tl_type *t) {
 #define MOS_TAG_STRING(name, str) [name] = str,
 #endif
 
-char const *tl_type_tag_to_string(tl_type_tag tag) {
+str tl_type_tag_to_string(tl_type_tag tag) {
     static char const *const strings[] = {TL_TYPE_TAGS(MOS_TAG_STRING)};
-    return strings[tag];
+    return str_init_static(strings[tag]);
 }
 
 int tl_free_variable_array_cmp(tl_free_variable_sized lhs, tl_free_variable_sized rhs) {
@@ -857,7 +859,7 @@ u64 tl_free_variable_array_hash64(tl_free_variable_sized arr, int ignore_types) 
     // NOTE: ignores special_hash
     u64 hash = 0;
     forall(i, arr) {
-        u64 str = string_t_hash64(&arr.v[i].name);
+        u64 str = str_hash64(arr.v[i].name);
         u64 ty  = tl_type_hash(arr.v[i].type);
         hash    = hash64_combine(hash, (void *)&str, sizeof str);
         if (!ignore_types) hash = hash64_combine(hash, (void *)&ty, sizeof ty);
@@ -890,7 +892,7 @@ int tl_free_variable_cmp(tl_free_variable const *lhs, tl_free_variable const *rh
     }
 
     int res;
-    if ((res = string_t_cmp(&lhs->name, &rhs->name))) return res;
+    if ((res = str_cmp(lhs->name, rhs->name))) return res;
     return tl_type_compare(lhs->type, rhs->type);
 }
 

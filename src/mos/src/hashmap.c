@@ -345,6 +345,12 @@ int map_contains(hashmap const *self, void const *key, u8 key_len) {
     return cell != null;
 }
 
+int str_map_contains(hashmap const *self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    return map_contains(self, s.buf, s.len);
+}
+
 void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
 
     // Must check for existing key. Replace if present.
@@ -382,6 +388,13 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
 void map_set_v(hashmap **self, void const *key, u8 key_len, void const *data) {
     assert((*self)->value_size <= sizeof(void *));
     map_set(self, key, key_len, &data);
+}
+
+void str_map_set_v(hashmap **self, str key, void const *data) {
+    assert((*self)->value_size <= sizeof(void *));
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    map_set(self, s.buf, s.len, &data);
 }
 
 void str_map_set(hashmap **self, str key, void const *data) {

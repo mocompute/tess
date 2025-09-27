@@ -40,9 +40,9 @@ void type_registry_destroy(type_registry **self) {
     *self = null;
 }
 
-int type_registry_add_named(type_registry *self, char const *name, tl_type *type) {
+int type_registry_add_named(type_registry *self, str name, tl_type *type) {
     if (type_registry_find_name(self, name)) return 1;
-    map_set(&self->named_types, name, (u16)strlen(name), &type);
+    str_map_set(&self->named_types, name, &type);
     return 0;
 }
 
@@ -52,13 +52,13 @@ int type_registry_add_hashed(type_registry *self, u64 hash, tl_type *type) {
     return 0;
 }
 
-tl_type **type_registry_find_name(type_registry *self, char const *name) {
-    return map_get(self->named_types, name, (u16)strlen(name));
+tl_type **type_registry_find_name(type_registry *self, str name) {
+    return str_map_get(self->named_types, name);
 }
 
-tl_type *type_registry_must_find_name(type_registry *self, char const *name) {
-    tl_type **out = map_get(self->named_types, name, (u16)strlen(name));
-    if (!out) fatal("failed to find type '%s'", name);
+tl_type *type_registry_must_find_name(type_registry *self, str name) {
+    tl_type **out = str_map_get(self->named_types, name);
+    if (!out) fatal("failed to find type '%.*s'", str_ilen(name), str_buf(&name));
     return *out;
 }
 
@@ -120,7 +120,7 @@ tl_type *type_registry_ast_node_tuple(type_registry *self, ast_node const *node)
 tl_type *type_registry_ast_node_labelled_tuple(type_registry *self, ast_node const *node) {
     struct ast_labelled_tuple const *v        = ast_node_lt((ast_node *)node);
     tl_type_array                    elements = {.alloc = self->alloc};
-    c_string_carray                  names    = {.alloc = self->alloc};
+    str_array                        names    = {.alloc = self->alloc};
     array_reserve(elements, v->n_assignments);
     array_reserve(names, v->n_assignments);
 
@@ -128,12 +128,12 @@ tl_type *type_registry_ast_node_labelled_tuple(type_registry *self, ast_node con
         assert(v->assignments[i]->assignment.value->type);
         array_push(elements, &v->assignments[i]->assignment.value->type);
 
-        char const *name = ast_node_name_string(v->assignments[i]->assignment.name);
+        str name = ast_node_str(v->assignments[i]->assignment.name);
         array_push(names, &name);
     }
 
     tl_type  *out      = tl_type_create_labelled_tuple(self->alloc, (tl_type_sized)sized_all(elements),
-                                                       (c_string_csized)sized_all(names));
+                                                       (str_sized)sized_all(names));
     u64       hash     = tl_type_hash(out);
     tl_type **existing = type_registry_find_hash(self, hash);
     if (existing) {

@@ -4,16 +4,17 @@
 #include "alloc.h"
 #include "ast.h"
 #include "hashmap.h"
+#include "str.h"
 #include "type_registry.h"
 
 typedef struct ti_inferer ti_inferer;
 
 typedef struct {
-    char const *name;
-    tl_type    *type;
-    ast_node   *node;   // let, symbol, lambda_function
-    ast_node   *source; // the node from which we derived this specialisation requirement
-    int         is_processed;
+    str       name;
+    tl_type  *type;
+    ast_node *node;   // let, symbol, lambda_function
+    ast_node *source; // the node from which we derived this specialisation requirement
+    int       is_processed;
 } ti_function_record;
 
 // -- allocation and deallocation --
@@ -36,13 +37,13 @@ void                   ti_traverse_lexical(allocator *, void *, ast_node *, ti_t
 
 tl_free_variable_sized ti_free_variables_in(allocator *, ast_node const *);
 
-int                    ti_is_generated_variable_name(char const *);
-int                    ti_is_c_function_name(char const *);
-int                    ti_is_std_function_name(char const *);
-int                    ti_is_intrinsic_name(char const *);
-int                    ti_is_dont_mangle_name(char const *);
+int                    ti_is_generated_variable_name(str);
+int                    ti_is_c_function_name(str);
+int                    ti_is_std_function_name(str);
+int                    ti_is_intrinsic_name(str);
+int                    ti_is_dont_mangle_name(str);
 
-void                   ti_trace_symbol_add(ti_inferer *, char const *);
-void                   ti_trace_symbol_remove(ti_inferer *, char const *);
+void                   ti_trace_symbol_add(ti_inferer *, str);
+void                   ti_trace_symbol_remove(ti_inferer *, str);
 
 #endif
