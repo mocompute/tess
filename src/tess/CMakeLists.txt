@@ -31,6 +31,8 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_inference.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
+
+  ${PROJECT_SOURCE_DIR}/src/tess/include/v2_type.h
 )
 
 set(SOURCES
