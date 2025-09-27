@@ -903,6 +903,6 @@ int tl_free_variable_cmpv(void const *lhs, void const *rhs) {
 void tl_free_variable_array_merge(tl_free_variable_array *dst, tl_free_variable_sized src) {
     forall(i, src) {
         if (!tl_free_variable_array_contains_one((tl_free_variable_sized)sized_all(*dst), src.v[i]))
-            array_push(*dst, &src.v[i]);
+            array_push(*dst, src.v[i]);
     }
 }

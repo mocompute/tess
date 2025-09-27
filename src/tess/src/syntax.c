@@ -194,5 +194,5 @@ static int syntax_check_type_annotations(struct syntax_checker *self) {
 static void syntax_error(struct syntax_checker *self, ast_node *node, enum tl_error_tag tag, str message) {
 
     node->error = tag;
-    array_push_val(self->errors, ((struct syntax_error){node, message}));
+    array_push(self->errors, ((struct syntax_error){node, message}));
 }

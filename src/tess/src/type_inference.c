@@ -233,7 +233,7 @@ static int ti_validate_top_level_nodes(ti_inferer *self) {
         ast_node *node = self->nodes->v[i];
         if (ast_let != node->tag && ast_symbol != node->tag && ast_let_in != node->tag &&
             ast_user_type_definition != node->tag) {
-            array_push(self->errors, (&(ti_error){.node = node, .tag = tl_err_invalid_toplevel}));
+            array_push(self->errors, ((ti_error){.node = node, .tag = tl_err_invalid_toplevel}));
             ++error;
         }
     }
@@ -414,7 +414,7 @@ static tl_type *make_args_type(allocator *alloc, ast_node *arguments[], u16 n) {
 
     tl_type_array types = {.alloc = alloc};
     array_reserve(types, n);
-    for (u32 i = 0; i < n; ++i) array_push(types, &arguments[i]->type);
+    for (u32 i = 0; i < n; ++i) array_push(types, arguments[i]->type);
 
     tl_type *tuple = tl_type_create_tuple(alloc, (tl_type_sized)sized_all(types));
 
@@ -425,7 +425,7 @@ static tl_type *make_labelled_args_type(allocator *alloc, ast_node *arguments[],
 
     tl_type_array types = {.alloc = alloc};
     array_reserve(types, names.size);
-    for (u32 i = 0; i < names.size; ++i) array_push(types, &arguments[i]->type);
+    for (u32 i = 0; i < names.size; ++i) array_push(types, arguments[i]->type);
 
     tl_type *tuple = tl_type_create_labelled_tuple(alloc, (tl_type_sized)sized_all(types), names);
 
@@ -679,7 +679,7 @@ void assign_callsite_types(void *ctx, ast_node *node) {
 
     } else {
         ti_error err = {.tag = tl_err_not_compatible, .node = node};
-        array_push(self->errors, &err);
+        array_push(self->errors, err);
     }
 }
 
@@ -1030,14 +1030,14 @@ static int ti_create_specials(ti_inferer *self) {
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
             maybe_specialize_name(&callsite->name, special_name);
-            array_push(nodes_to_add, &created);
+            array_push(nodes_to_add, created);
 
         } else if (ast_let == function->node->tag) {
 
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
             maybe_specialize_name(&callsite->name, special_name);
-            array_push(nodes_to_add, &created);
+            array_push(nodes_to_add, created);
 
             // set each parameter type of the specialised function to be the same type as the source
             // arguments, so that free variable context information is carried over.
@@ -1065,7 +1065,7 @@ static int ti_create_specials(ti_inferer *self) {
             ast_node *created = create_special(self, special_name, function->node, callsite->type);
             callsite->node    = created;
             maybe_specialize_name(&callsite->name, special_name);
-            array_push(nodes_to_add, &created);
+            array_push(nodes_to_add, created);
         }
 
         else {
@@ -1086,7 +1086,7 @@ static int ti_create_specials(ti_inferer *self) {
         assert(ast_let == node->tag);
         str name = ast_node_str(node->let.name);
         if (str_hset_contains(existing, name)) continue;
-        array_push(self->specials, &node);
+        array_push(self->specials, node);
     }
 
     array_free(nodes_to_add);
@@ -1330,7 +1330,7 @@ static void collect_syms(void *ctx_, ast_node *node) {
     if (ast_let != rec->node->tag) return;
 
     log(self, "collect_syms: %s", ast_node_to_string(self->transient, rec->node));
-    array_push(self->specials, &rec->node);
+    array_push(self->specials, rec->node);
     str_hset_insert(&ctx->seen, name);
 }
 
@@ -1347,7 +1347,7 @@ static void collect_anon_lambdas(void *ctx_, ast_node *node) {
 
     log(self, "collect_anon_lambdas: %s", ast_node_to_string(self->transient, node));
     // An anonymous lambda function
-    array_push(self->specials, &node);
+    array_push(self->specials, node);
 }
 
 static int ti_collect_functions_to_emit(ti_inferer *self) {
@@ -1366,7 +1366,7 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
 
     ti_function_record *main = ti_lookup_function(self, S("main"));
     if (!main) {
-        array_push(self->errors, &(ti_error){.tag = tl_err_no_main_function});
+        array_push(self->errors, (ti_error){.tag = tl_err_no_main_function});
         return 1;
     }
     ast_node_dfs_safe_for_recur(self->transient, &ctx, main->node, collect_syms);
@@ -1385,7 +1385,7 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
             if (0 == str_cmp_nc(name, "tl_gen_", 5)) {
                 log(self, "collect_function_to_emit generated: %s",
                     ast_node_to_string(self->transient, node));
-                array_push(self->specials, &node);
+                array_push(self->specials, node);
             }
         }
 
@@ -1393,7 +1393,7 @@ static int ti_collect_functions_to_emit(ti_inferer *self) {
         if (ast_user_type_definition == node->tag) {
             log(self, "collect_function_to_emit user_type_def: %s",
                 ast_node_to_string(self->transient, node));
-            array_push(self->specials, &node);
+            array_push(self->specials, node);
         }
     }
 
@@ -2088,7 +2088,7 @@ static u32 unify_one(ti_inferer *self, constraint c) {
 
         // push the candidate substitution
         assert(type_type_var == candidate.left->tag);
-        array_push(self->substitutions, &candidate);
+        array_push(self->substitutions, candidate);
 
         return 1;
     }
@@ -2209,7 +2209,7 @@ static tl_type *make_type_annotation(ti_inferer *self, ast_node *ann, hashmap **
 
         for (u32 i = 0; i < v->n_elements; ++i) {
             tl_type *res = make_type_annotation(self, v->elements[i], map);
-            array_push(elements, &res);
+            array_push(elements, res);
         }
 
         return tl_type_create_tuple(self->type_arena, (tl_type_sized)sized_all(elements));
@@ -2394,7 +2394,7 @@ void collect_constraints(void *ctx_, ast_node *node, hashmap **lex) {
     do {                                                                                                   \
         assert((L) && (R) && node && node->file);                                                          \
         c = (constraint){(L), (R), node->file, node->line};                                                \
-        if ((L) != (R)) array_push(self->constraints, &c);                                                 \
+        if ((L) != (R)) array_push(self->constraints, c);                                                  \
     } while (0)
 
     switch (node->tag) {
@@ -2841,12 +2841,12 @@ static void ti_generate_user_type_functions(ti_inferer *self) {
         // make constructor
 
         ast_node *constructor = make_type_constructor_function(self, type_name, *ty, node);
-        array_push(added, &constructor);
+        array_push(added, constructor);
     }
 
     // add nodes to program
     forall(i, added) {
-        array_push(*self->nodes, &added.v[i]);
+        array_push(*self->nodes, added.v[i]);
     }
 }
 
@@ -2920,7 +2920,7 @@ static ast_node *make_tuple_constructor_function(ti_inferer *self, u64 hash, ast
         str_array names = {.alloc = self->type_arena};
         for (u16 i = 0; i < v->n_assignments; ++i) {
             str name = ast_node_str(v->assignments[i]->assignment.name);
-            array_push(names, &name);
+            array_push(names, name);
         }
 
         // make an arrow type for the generated function
@@ -2999,7 +2999,7 @@ static void generate_tuple_function(ti_inferer *self, ast_node *node, ast_node_a
     ast_node *constructor = make_tuple_constructor_function(self, hash, node);
 
     hset_insert(seen, &hash, sizeof hash);
-    array_push(*added, &constructor);
+    array_push(*added, constructor);
 }
 
 static void generate_tuple_function_glue(void *ctx_, ast_node *node) {
@@ -3023,7 +3023,7 @@ static void ti_generate_tuple_functions(ti_inferer *self) {
 
     // add nodes to program
     forall(i, added) {
-        array_push(*self->nodes, &added.v[i]);
+        array_push(*self->nodes, added.v[i]);
     }
 
     hset_destroy(&ctx.seen);
@@ -3046,7 +3046,7 @@ void find_free_variables(void *ctx, ast_node *node, hashmap **lex) {
         str name = ast_node_str(node);
 
         if (!ti_is_generated_variable_name(name)) return;
-        if (!str_map_contains(*lex, name)) array_push(*array, &node);
+        if (!str_map_contains(*lex, name)) array_push(*array, node);
 
     } break;
 
@@ -3228,7 +3228,7 @@ ti_function_record *ti_lookup_function(ti_inferer *self, str name) {
 //
 
 void ti_trace_symbol_add(ti_inferer *self, str name) {
-    array_push(self->symbols_trace, &name);
+    array_push(self->symbols_trace, name);
 }
 
 void ti_trace_symbol_remove(ti_inferer *self, str name) {

@@ -98,7 +98,7 @@ void state_gather_options(state *self, int argc, char *argv[]) {
             }
 
         } else {
-            array_push_val(self->words, argv[i]);
+            array_push(self->words, argv[i]);
         }
     }
 }

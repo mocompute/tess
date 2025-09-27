@@ -443,7 +443,7 @@ int sexp_parser_next(sexp_parser *self, sexp *out, sexp_err_tag *err, size_t *er
 
                     } else {
                         // append to list
-                        array_push(exprs, &sub_expr);
+                        array_push(exprs, sub_expr);
                     }
                 } // while sub_expr
 

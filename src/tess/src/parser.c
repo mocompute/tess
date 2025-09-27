@@ -877,7 +877,7 @@ static int a_labelled_tuple(parser *self) {
 
     log(self, "begin labelled tuple");
 
-    array_push(assignments, &self->result);
+    array_push(assignments, self->result);
 
     while (1) {
 
@@ -904,7 +904,7 @@ static int a_labelled_tuple(parser *self) {
         }
 
         // next assignment expression
-        if (0 == a_try(self, a_assignment)) array_push(assignments, &self->result);
+        if (0 == a_try(self, a_assignment)) array_push(assignments, self->result);
 
         // loop to check for close round
     }
@@ -1191,8 +1191,8 @@ static int struct_declaration(parser *self) {
             ast_node *type = self->result;
             log(self, "struct_declaration: type %s", ast_node_to_string(self->transient, type));
 
-            array_push(field_names, &field_name);
-            array_push(field_types, &type);
+            array_push(field_names, field_name);
+            array_push(field_types, type);
 
             if (a_try_special(self, a_end_of_expression)) {
                 // accept an 'end' instead of final semicolon
@@ -1279,7 +1279,7 @@ static int function_declaration(parser *self) {
 
     // must have at least one parameter
     if (a_try(self, a_identifier_typed)) return 1;
-    array_push(parameters, &self->result);
+    array_push(parameters, self->result);
 
     // check forward declarations.
     ast_node **forward = str_map_get(self->forwards, name_str);
@@ -1293,7 +1293,7 @@ static int function_declaration(parser *self) {
     // accumulate identifiers as parameters until equal sign is seen
     while (1) {
         if (0 == a_try(self, a_identifier_typed)) {
-            array_push(parameters, &self->result);
+            array_push(parameters, self->result);
             continue;
         }
 
@@ -1341,7 +1341,7 @@ static int lambda_declaration(parser *self) {
     // accumulate identifiers as parameters until an arrow is seen
     while (1) {
         if (0 == a_try(self, a_identifier_typed)) {
-            array_push(parameters, &self->result);
+            array_push(parameters, self->result);
             continue;
         }
 
@@ -1395,12 +1395,12 @@ static int function_application(parser *self) {
     log(self, "begin function application");
     self->indent_level++;
 
-    array_push(arguments, &self->result);
+    array_push(arguments, self->result);
 
     while (1) {
         self->in_function_application = 1;
         if (0 == a_try(self, function_argument)) {
-            array_push(arguments, &self->result);
+            array_push(arguments, self->result);
             continue;
         }
 
@@ -1600,12 +1600,12 @@ static int lambda_function_application(parser *self) {
     log(self, "begin lambda function application");
     self->indent_level++;
 
-    array_push(arguments, &self->result);
+    array_push(arguments, self->result);
 
     while (1) {
         self->in_function_application = 1;
         if (0 == a_try(self, function_argument)) {
-            array_push(arguments, &self->result);
+            array_push(arguments, self->result);
             continue;
         }
 
@@ -1712,7 +1712,7 @@ static int tuple_expression(parser *self) {
         return 1;
     }
 
-    array_push(elements, &self->result);
+    array_push(elements, self->result);
 
     if (a_try(self, a_comma)) goto cleanup;
 
@@ -1747,7 +1747,7 @@ static int tuple_expression(parser *self) {
             }
 
         // expression
-        if (0 == a_try(self, expression)) array_push(elements, &self->result);
+        if (0 == a_try(self, expression)) array_push(elements, self->result);
 
         // loop to check for close round
     }
@@ -1787,7 +1787,7 @@ static int begin_end_expression(parser *self) {
             }
         }
 
-        array_push(exprs, &self->result);
+        array_push(exprs, self->result);
 
         // some expressions eat the end_of_expression (e.g. function
         // application), but some don't (e.g. numbers)
@@ -2109,7 +2109,7 @@ int parser_parse_all(parser *p, ast_node_array *out) {
         parser_result(p, &node);
         log(p, "parse_all: parsed node %s", ast_node_to_string(p->transient, node));
 
-        array_push(*out, &node);
+        array_push(*out, node);
     }
 
     if (is_eof(p)) return 0;
@@ -2135,7 +2135,7 @@ void parser_result(parser *p, ast_node **handle) {
 }
 
 static void tokens_push_back(struct parser *p, struct token *tok) {
-    array_push(p->tokens, tok);
+    array_push(p->tokens, *tok);
 }
 
 static void tokens_shrink(struct parser *p, u32 n) {

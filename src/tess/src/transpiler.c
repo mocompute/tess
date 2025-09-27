@@ -1074,8 +1074,8 @@ static int a_eval(transpiler *self, ast_node const *node) {
             if (a_eval(self, v->fields[i])) return 1;
             str res = pop_result(self);
             str tmp = str_cat_5(self->strings, var, S("."), lt->names.v[i], S(" = "), res);
-            array_push(b, &tmp);
-            array_push(b, &S(";\n"));
+            array_push(b, tmp);
+            array_push(b, S(";\n"));
         }
 
         out_put_str(self, *str_dcat_array(self->strings, &result, (str_sized)sized_all(b)));
@@ -2061,7 +2061,7 @@ static str pop_result(transpiler *self) {
 }
 
 static void push_result(transpiler *self, str var) {
-    array_push(self->results, &var);
+    array_push(self->results, var);
 }
 
 static u32 push_free_variables_ext(transpiler *self, tl_free_variable_sized free_variables, str struct_name,
@@ -2071,7 +2071,7 @@ static u32 push_free_variables_ext(transpiler *self, tl_free_variable_sized free
     forall(i, free_variables) {
         free_variable_context_name val = {.free_variable = free_variables.v[i].name,
                                           .struct_name   = struct_name};
-        array_push(self->thunk_free_variables, &val);
+        array_push(self->thunk_free_variables, val);
     }
 
     if (count) *count = self->thunk_free_variables.size - save;

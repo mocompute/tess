@@ -484,7 +484,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
             default:   {
-                array_push(self->buf, &c);
+                array_push(self->buf, c);
             } break;
             }
         } break;
@@ -498,8 +498,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             // keep it literal
             char backslash = '\\';
-            array_push(self->buf, &backslash);
-            array_push(self->buf, &c);
+            array_push(self->buf, backslash);
+            array_push(self->buf, c);
 
             state = in_string;
 
@@ -530,12 +530,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:   break;
             }
             if (actual) {
-                array_push(self->buf, &actual);
+                array_push(self->buf, actual);
             } else {
                 // unrecognised escape sequence, keep it literal
                 char backslash = '\\';
-                array_push(self->buf, &backslash);
-                array_push(self->buf, &c);
+                array_push(self->buf, backslash);
+                array_push(self->buf, c);
             }
             state = in_string;
 
@@ -576,6 +576,6 @@ void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 
     for (size_t i = n_toks; i != 0; --i) {
         // dbg("tokenizer put back: %s\n", token_to_string(self->strings, &toks[i - 1]));
-        array_push(self->backtrack, &toks[i - 1]);
+        array_push(self->backtrack, toks[i - 1]);
     }
 }
