@@ -149,6 +149,40 @@ static int test_array_set_difference(void) {
     return error;
 }
 
+static int test_array_set_union(void) {
+    int       error = 0;
+
+    int_array arr   = {.alloc = default_allocator()};
+
+    int       x     = 0;
+    array_set_insert(arr, x);
+    x = 1;
+    array_set_insert(arr, x);
+    x = 2;
+    array_set_insert(arr, x);
+
+    int_array add = {.alloc = default_allocator()};
+    x             = 3;
+    array_push(add, x);
+    x = 4;
+    array_push(add, x);
+
+    int_array res = {.alloc = default_allocator()};
+    array_set_union(res, arr, add);
+
+    error += res.size == 5 ? 0 : 1;
+    error += res.v[0] == 0 ? 0 : 1;
+    error += res.v[1] == 1 ? 0 : 1;
+    error += res.v[2] == 2 ? 0 : 1;
+    error += res.v[3] == 3 ? 0 : 1;
+    error += res.v[4] == 4 ? 0 : 1;
+
+    array_free(add);
+    array_free(res);
+    array_free(arr);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -164,6 +198,7 @@ int main(void) {
     T(test_array_erase);
     T(test_array_set);
     T(test_array_set_difference);
+    T(test_array_set_union);
 
     return error;
 }

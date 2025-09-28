@@ -46,20 +46,6 @@ void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 alig
     return ptr;
 }
 
-void *array_set_insert_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
-                            void const *restrict data) {
-    assert(h->alloc);
-
-    u32 aligned = alloc_align(width, align);
-
-    for (u32 i = 0; i < h->size; ++i) {
-        u32 offset = i * aligned;
-        if (0 == memcmp(&ptr[offset], data, width)) return ptr;
-    }
-
-    return array_push_impl(h, ptr, width, align, data);
-}
-
 int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
                         void const *restrict data) {
 
@@ -152,6 +138,20 @@ void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32 width,
     return ptr;
 }
 
+void *array_set_insert_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                            void const *restrict data) {
+    assert(h->alloc);
+
+    u32 aligned = alloc_align(width, align);
+
+    for (u32 i = 0; i < h->size; ++i) {
+        u32 offset = i * aligned;
+        if (0 == memcmp(&ptr[offset], data, width)) return ptr;
+    }
+
+    return array_push_impl(h, ptr, width, align, data);
+}
+
 void *array_set_difference_impl(array_header_t *res, void *restrict res_ptr, array_header_t *lhs,
                                 void *restrict lhs_ptr, array_header_t *rhs, void *restrict rhs_ptr,
                                 u32 width, u16 align) {
@@ -160,6 +160,8 @@ void *array_set_difference_impl(array_header_t *res, void *restrict res_ptr, arr
     size_t aligned = alloc_align(width, align);
 
     assert(res->alloc);
+
+    // TODO optimize nested loop
 
     for (u32 i = 0; i < lhs->size; i++) {
         void *candidate = &lhs_ptr[i * aligned];
@@ -171,6 +173,25 @@ void *array_set_difference_impl(array_header_t *res, void *restrict res_ptr, arr
         res_ptr = array_push_impl(res, res_ptr, width, align, candidate);
 
     exists:;
+    }
+
+    return res_ptr;
+}
+
+void *array_set_union_impl(array_header_t *res, void *restrict res_ptr, array_header_t *lhs,
+                           void *restrict lhs_ptr, array_header_t *rhs, void *restrict rhs_ptr, u32 width,
+                           u16 align) {
+
+    // res = left U right, left dominates any conflict
+    size_t aligned = alloc_align(width, align);
+
+    assert(res->alloc);
+    res_ptr = array_reserve_impl(res, res_ptr, lhs->size + rhs->size, width, align);
+    res_ptr = array_copy_impl(res, res_ptr, width, align, lhs_ptr, lhs->size);
+
+    // TODO optimize nested loop
+    for (u32 i = 0; i < rhs->size; ++i) {
+        res_ptr = array_set_insert_impl(res, res_ptr, width, align, &rhs_ptr[i * aligned]);
     }
 
     return res_ptr;

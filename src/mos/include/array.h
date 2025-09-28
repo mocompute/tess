@@ -219,11 +219,22 @@ typedef struct {
 
 #define array_set_difference(res, lhs, rhs)                                                                \
     do {                                                                                                   \
+        static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \
         static_assert(sizeof(lhs) >= sizeof(array_tmpl), "not an array");                                  \
         static_assert(sizeof(rhs) >= sizeof(array_tmpl), "not an array");                                  \
         (res).v = array_set_difference_impl((array_header_t *)&(res), (res).v, (array_header_t *)&(lhs),   \
                                             (lhs).v, (array_header_t *)&(rhs), (rhs).v, sizeof(lhs).v[0],  \
                                             alignof((lhs).v[0]));                                          \
+    } while (0)
+
+#define array_set_union(res, lhs, rhs)                                                                     \
+    do {                                                                                                   \
+        static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \
+        static_assert(sizeof(lhs) >= sizeof(array_tmpl), "not an array");                                  \
+        static_assert(sizeof(rhs) >= sizeof(array_tmpl), "not an array");                                  \
+        (res).v =                                                                                          \
+          array_set_union_impl((array_header_t *)&(res), (res).v, (array_header_t *)&(lhs), (lhs).v,       \
+                               (array_header_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0]));  \
     } while (0)
 
 char_cslice char_cslice_from(char const *, u32);
@@ -254,6 +265,9 @@ nodiscard void *array_set_insert_impl(array_header_t *h, void *restrict, u32, u1
 
 nodiscard void *array_set_difference_impl(array_header_t *res, void *restrict, array_header_t *lhs,
                                           void *restrict, array_header_t *rhs, void *restrict, u32, u16);
+
+nodiscard void *array_set_union_impl(array_header_t *res, void *restrict, array_header_t *lhs,
+                                     void *restrict, array_header_t *rhs, void *restrict, u32, u16);
 
 // -- utilities --
 
