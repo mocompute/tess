@@ -206,6 +206,26 @@ typedef struct {
 
 #define forall(idx, arr) for (u32 idx = 0; idx < (arr).size; ++idx)
 
+// -- set operations --
+//
+// insert x if x is not in p
+#define array_set_insert(p, x)                                                                             \
+    do {                                                                                                   \
+        static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
+        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
+        (p).v =                                                                                            \
+          array_set_insert_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));   \
+    } while (0)
+
+#define array_set_difference(res, lhs, rhs)                                                                \
+    do {                                                                                                   \
+        static_assert(sizeof(lhs) >= sizeof(array_tmpl), "not an array");                                  \
+        static_assert(sizeof(rhs) >= sizeof(array_tmpl), "not an array");                                  \
+        (res).v = array_set_difference_impl((array_header_t *)&(res), (res).v, (array_header_t *)&(lhs),   \
+                                            (lhs).v, (array_header_t *)&(rhs), (rhs).v, sizeof(lhs).v[0],  \
+                                            alignof((lhs).v[0]));                                          \
+    } while (0)
+
 char_cslice char_cslice_from(char const *, u32);
 
 // -- implementation --
@@ -227,6 +247,13 @@ nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
 
 void            array_erase_impl(array_header_t *h, void *ptr, u32 index, u32, u16);
 void            array_free_impl(array_header_t *, void *);
+
+// -- array set operations --
+
+nodiscard void *array_set_insert_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict);
+
+nodiscard void *array_set_difference_impl(array_header_t *res, void *restrict, array_header_t *lhs,
+                                          void *restrict, array_header_t *rhs, void *restrict, u32, u16);
 
 // -- utilities --
 
