@@ -1,8 +1,8 @@
 #ifndef MOS_TYPES_H
 #define MOS_TYPES_H
 
-#include <inttypes.h>
-#include <limits.h>
+#include <inttypes.h> // NOLINT
+#include <limits.h>   // NOLINT
 #include <stdint.h>
 
 typedef unsigned char byte;
