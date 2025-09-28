@@ -47,6 +47,9 @@ set(SOURCES
   src/tokenizer.c
   src/type_inference.c
   src/type_registry.c
+
+  src/v2_type.c
+
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
   )
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})
