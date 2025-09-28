@@ -114,6 +114,7 @@ static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
         tl_type_v2_substitute(self, subs->froms.v[i], subs->tos.v[i]);
     }
 }
+
 tl_type_subs *tl_type_subs_compose(allocator *alloc, tl_type_subs const *base, tl_type_subs const *subs) {
 
     tl_type_subs *out = tl_type_subs_create(alloc);
