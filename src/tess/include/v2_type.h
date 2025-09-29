@@ -5,15 +5,16 @@
 #include "nodiscard.h"
 #include "str.h"
 
-typedef u32 tl_type_variable;
+typedef u32 tl_type_variable;   // t0, t1, etc
+typedef u32 tl_type_quantifier; // forall a. b. etc
 
 // clang-format off
-typedef struct {array_header; tl_type_variable *v;}     tl_type_variable_array;
-typedef struct {array_header; struct tl_monotype *v;}   tl_monotype_array;
-typedef struct {array_header; struct tl_type_v2 *v;}    tl_type_v2_array;
-typedef struct {str name; tl_type_variable_array vars;} tl_type_constructor;
-typedef struct {str name; tl_monotype_array      args;} tl_type_constructor_inst;
-
+typedef struct {array_header; tl_type_variable *v;}                   tl_type_variable_array;
+typedef struct {array_header; tl_type_quantifier *v;}                 tl_type_quantifier_array;
+typedef struct {array_header; struct tl_monotype *v;}                 tl_monotype_array;
+typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
+typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
+typedef struct {str name; tl_monotype_array       args;}              tl_type_constructor_inst;
 typedef struct {struct tl_monotype *left; struct tl_monotype *right;} tl_type_arrow;
 // clang-format on
 
@@ -27,8 +28,8 @@ typedef struct tl_monotype {
 } tl_monotype;
 
 typedef struct {
-    tl_type_variable_array quantifiers;
-    tl_monotype            type;
+    tl_type_quantifier_array quantifiers;
+    tl_monotype              type;
 } tl_type_scheme;
 
 typedef struct tl_type_v2 {
@@ -44,9 +45,13 @@ void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 cons
 
 // -- monotype --
 
-tl_monotype tl_monotype_init_tv(tl_type_variable);
-tl_monotype tl_monotype_init_arrow(tl_type_arrow);
-tl_monotype tl_monotype_init_constructor_inst(tl_type_constructor_inst);
+tl_monotype            tl_monotype_init_tv(tl_type_variable);
+tl_monotype            tl_monotype_init_arrow(tl_type_arrow);
+nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
+void                   tl_monotype_dealloc(allocator *, tl_monotype *);
+tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
+nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
+void                   tl_monotype_destroy(allocator *, tl_monotype **);
 
 // -- type --
 
@@ -89,11 +94,12 @@ str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
 
 typedef struct {
     u32 next_var;
+    u32 next_quant;
 } tl_type_context;
 
-nodiscard tl_type_context *tl_type_context_create(allocator *) mallocfun;
-void                       tl_type_context_destroy(allocator *, tl_type_context **);
-tl_type_variable           tl_type_context_new_variable(tl_type_context *);
+tl_type_context    tl_type_context_empty();
+tl_type_variable   tl_type_context_new_variable(tl_type_context *);
+tl_type_quantifier tl_type_context_new_quantifier(tl_type_context *);
 
 // -- environment --
 

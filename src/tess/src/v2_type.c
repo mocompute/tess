@@ -1,4 +1,5 @@
 #include "v2_type.h"
+#include "alloc.h"
 #include "array.h"
 #include "str.h"
 
@@ -14,8 +15,44 @@ tl_monotype tl_monotype_init_arrow(tl_type_arrow arrow) {
     return (tl_monotype){.tag = tl_arrow, .arrow = arrow};
 }
 
+tl_monotype tl_monotype_alloc_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
+    tl_monotype *pleft  = tl_monotype_create(alloc, left);
+    tl_monotype *pright = tl_monotype_create(alloc, right);
+    tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_arrow){.left = pleft, .right = pright});
+    return arrow;
+}
+
+void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
+    switch (self->tag) {
+    case tl_cons:
+        array_free(self->cons.args);
+        str_deinit(alloc, &self->cons.name);
+        break;
+    case tl_arrow:
+        alloc_free(alloc, self->arrow.left);
+        alloc_free(alloc, self->arrow.right);
+        break;
+
+    case tl_var: break;
+    }
+
+    alloc_invalidate(self);
+}
+
 tl_monotype tl_monotype_init_constructor_inst(tl_type_constructor_inst cons) {
     return (tl_monotype){.tag = tl_cons, .cons = cons};
+}
+
+tl_monotype *tl_monotype_create(allocator *alloc, tl_monotype init) {
+    tl_monotype *self = new (alloc, tl_monotype);
+    *self             = init;
+    return self;
+}
+
+void tl_monotype_destroy(allocator *alloc, tl_monotype **p) {
+    // shallow destroy; use an arena at least for arrow types if not for everything
+    alloc_free(alloc, *p);
+    *p = null;
 }
 
 // -- type --
@@ -223,7 +260,7 @@ str tl_type_arrow_to_string(allocator *alloc, tl_type_arrow const *self) {
     }
     str_build_cat(&b, S(" -> "));
     {
-        str right = tl_monotype_to_string(alloc, self->left);
+        str right = tl_monotype_to_string(alloc, self->right);
         str_build_cat(&b, right);
         str_deinit(alloc, &right);
     }
@@ -295,4 +332,21 @@ void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
     array_free((*p)->types);
     alloc_free(alloc, *p);
     *p = null;
+}
+
+// -- context --
+
+tl_type_context tl_type_context_empty() {
+    return (tl_type_context){
+      .next_var   = 0,
+      .next_quant = 0,
+    };
+}
+
+tl_type_variable tl_type_context_new_variable(tl_type_context *self) {
+    return (tl_type_variable)self->next_var++;
+}
+
+tl_type_quantifier tl_type_context_new_quantifier(tl_type_context *self) {
+    return (tl_type_quantifier)self->next_quant++;
 }

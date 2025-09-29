@@ -1,4 +1,6 @@
 #include "alloc.h"
+#include "dbg.h"
+#include "str.h"
 #include "v2_type.h"
 
 #include <stdio.h>
@@ -13,14 +15,17 @@ static int test_type_variable_to_string(void) {
     return error;
 }
 
-static int test_foo(void) {
-    int          error = 0;
+static int test_arrow_to_string(void) {
+    int         error = 0;
 
-    allocator   *alloc = leak_detector_create();
+    allocator  *alloc = leak_detector_create();
+    tl_monotype arrow = tl_monotype_alloc_arrow(alloc, tl_monotype_init_tv(123), tl_monotype_init_tv(456));
 
-    tl_type_env *env   = tl_type_env_create(alloc);
+    str         res   = tl_type_arrow_to_string(alloc, &arrow.arrow);
+    error += 0 == str_cmp_c(res, "t123 -> t456") ? 0 : 1;
 
-    tl_type_env_destroy(alloc, &env);
+    str_deinit(alloc, &res);
+    tl_monotype_dealloc(alloc, &arrow);
     leak_detector_destroy(&alloc);
     return error;
 }
@@ -47,7 +52,7 @@ int main(void) {
     int this_error = 0;
 
     T(test_type_variable_to_string);
-    T(test_foo);
+    T(test_arrow_to_string);
 
     return error;
 }
