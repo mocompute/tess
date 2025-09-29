@@ -57,6 +57,14 @@ u32                     tl_type_subs_add(tl_type_subs *, tl_monotype from, tl_mo
 nodiscard tl_type_subs *tl_type_subs_compose(allocator *, tl_type_subs const *base,
                                              tl_type_subs const *subs);
 
+str                     tl_type_subs_to_string(allocator *, tl_type_subs const *);
+str                     tl_type_variable_to_string(allocator *, tl_type_variable const *);
+str                     tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
+str                     tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
+str                     tl_monotype_to_string(allocator *, tl_monotype const *);
+str                     tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
+str                     tl_type_v2_to_string(allocator *, tl_type_v2 const *);
+
 // -- context --
 
 typedef struct {

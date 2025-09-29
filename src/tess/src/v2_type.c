@@ -1,5 +1,8 @@
 #include "v2_type.h"
 #include "array.h"
+#include "str.h"
+
+#include <stdio.h>
 
 static void tl_monotype_collect_free_variables(tl_type_variable_array *, tl_monotype const *);
 static void tl_type_variable_collect_free_variables(tl_type_variable_array *, tl_type_variable const *);
@@ -146,3 +149,29 @@ void tl_type_env_subs_apply(tl_type_env *env, tl_type_subs const *subs) {
         tl_type_v2_apply_subs(&env->types.v[i], subs);
     }
 }
+
+str tl_type_variable_to_string(allocator *alloc, tl_type_variable const *self) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "t%u", *self);
+    return str_init(alloc, buf);
+}
+
+// str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_inst const *self) {
+//     str out = str_empty();
+//     str_dcat(alloc, &out, self->name);
+//     forall(i, self->args) {
+//         str_dcat(alloc, &out, S(" "));
+//     }
+// }
+
+str tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
+str tl_monotype_to_string(allocator *, tl_monotype const *);
+str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
+str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
+
+// str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
+//     str out = str_empty();
+//     forall(i, self->froms) {
+//         // str_dcat(alloc, &out, tl_type_variable_to_string(self->froms.v[i]));
+//     }
+// }
