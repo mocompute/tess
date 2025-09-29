@@ -115,11 +115,11 @@ typedef struct {
     do {                                                                                                   \
         static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));   \
+        (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x))); \
     } while (0)
 
 #define array_contains(p, x)                                                                               \
-    array_contains_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x))
+    array_contains_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)))
 
 #define array_push_val(p, x)                                                                               \
     do {                                                                                                   \
