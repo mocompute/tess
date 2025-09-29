@@ -1,5 +1,6 @@
 #include "str.h"
 #include "alloc.h"
+#include "array.h"
 #include "hash.h"
 
 #include <errno.h>
@@ -46,7 +47,11 @@ str str_init_static(char const *in) {
 }
 
 str str_init_allocated(char *in) {
-    return (str){.big = {.buf = in, .len = strlen(in)}};
+    return str_init_allocated_n(in, strlen(in));
+}
+
+str str_init_allocated_n(char *in, size_t n) {
+    return (str){.big = {.buf = in, .len = n}};
 }
 
 str str_init(allocator *alloc, char const *in) {
@@ -62,6 +67,19 @@ str str_init_n(allocator *alloc, char const *in, size_t len) {
 
     str out = {.big = {.len = len, .buf = alloc_malloc(alloc, len)}};
     memcpy(&out.big.buf[0], in, len);
+    return out;
+}
+
+str str_init_move_n(char **move_from, size_t len) {
+    if (len <= MOS_STR_MAX_SMALL) {
+        str out;
+        init_small(&out, *move_from, len);
+        *move_from = null;
+        return out;
+    }
+
+    str out    = str_init_allocated_n(*move_from, len);
+    *move_from = null;
     return out;
 }
 
@@ -287,6 +305,11 @@ span str_span(str *self) {
     else return (span){.len = self->big.len, .buf = self->big.buf};
 }
 
+cspan str_cspan(str const *self) {
+    if (is_small(*self)) return (cspan){.len = self->small.len, .buf = self->small.buf};
+    else return (cspan){.len = self->big.len, .buf = self->big.buf};
+}
+
 span str_slice_len(str *self, size_t start, size_t len) {
     if (!len) return (span){.len = 0, .buf = null};
     span out = str_span(self);
@@ -405,4 +428,44 @@ int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     buf[s.len] = '\0';
 
     return str_parse_cnum(buf, out_i64, out_u64, out_f64);
+}
+
+// -- str_build --
+
+nodiscard str_build str_build_init(allocator *alloc, u32 sz) {
+    str_build out = {.alloc = alloc};
+    array_reserve(out, sz);
+    return out;
+}
+
+void str_build_deinit(str_build self) {
+    array_free(self);
+}
+
+void str_build_cat(str_build *self, str str) {
+    span s = str_span(&str);
+    array_copy(*self, s.buf, s.len);
+}
+
+void str_build_join(str_build *self, str sep, str const *strs, u32 len) {
+    span ssep = str_span(&sep);
+    for (u32 i = 0; i < len; ++i) {
+        cspan sstr = str_cspan(&strs[i]);
+        array_copy(*self, sstr.buf, sstr.len);
+        if (i < len - 1) array_copy(*self, ssep.buf, ssep.len);
+    }
+}
+
+void str_build_join_array(str_build *self, str sep, str_array strs) {
+    str_build_join(self, sep, strs.v, strs.size);
+}
+
+str str_build_str(allocator *alloc, str_build self) {
+    return str_init_n(alloc, self.v, self.size);
+}
+
+str str_build_finish(str_build *p) {
+    str out = str_init_move_n(&p->v, p->size);
+    alloc_invalidate(p);
+    return out;
 }

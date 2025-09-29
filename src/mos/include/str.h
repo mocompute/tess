@@ -40,6 +40,11 @@ typedef struct {
     char *buf;
 } ispan;
 
+typedef struct {
+    size_t      len;
+    char const *buf;
+} cspan;
+
 // -- allocation and deallocation --
 
 // Literal string: do not deinit or dcat. Not for converting C strings.
@@ -50,11 +55,13 @@ typedef struct {
 str  str_empty();
 str  str_move(str *);
 
-str  str_init_small(char const *);  // fatal exit if string is too large
-str  str_init_static(char const *); // from static c strings: do not deinit!
-str  str_init_allocated(char *);    // from caller's allocator
+str  str_init_small(char const *);         // fatal exit if string is too large
+str  str_init_static(char const *);        // from static c strings: do not deinit!
+str  str_init_allocated(char *);           // from caller's allocator
+str  str_init_allocated_n(char *, size_t); // from caller's allocator
 str  str_init(allocator *, char const *);
 str  str_init_n(allocator *, char const *, size_t);
+str  str_init_move_n(char **, size_t); // destructive move
 str  str_copy(allocator *, str);
 str  str_copy_span(allocator *, span);
 void str_deinit(allocator *, str *);
@@ -70,7 +77,7 @@ str  str_cat_3(allocator *, str, str, str);
 str  str_cat_4(allocator *, str, str, str, str);
 str  str_cat_5(allocator *, str, str, str, str, str);
 str  str_cat_6(allocator *, str, str, str, str, str, str);
-str *str_dcat(allocator *, str *lhs, str); // 'd' for destructive; returns lhs
+str *str_dcat(allocator *, str *lhs, str); // 'd' for destructive; overwrites and returns lhs
 str *str_dcat_c(allocator *, str *lhs, char const *);
 str *str_dcat_array(allocator *, str *, str_sized);
 void str_resize(allocator *, str *, size_t);
@@ -105,4 +112,15 @@ int         str_array_contains(str_sized hay, str_sized need);
 int str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
 int str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
 
+// -- string builder --
+
+typedef char_array  str_build;
+
+nodiscard str_build str_build_init(allocator *, u32); // init builder with initial size
+void                str_build_cat(str_build *, str);
+void                str_build_join(str_build *, str, str const *, u32);
+void                str_build_join_array(str_build *, str, str_array);
+str                 str_build_str(allocator *, str_build); // construct str from copy of array
+str                 str_build_finish(str_build *);         // construct str from destr. move (do not deinit)
+void                str_build_deinit(str_build);
 #endif

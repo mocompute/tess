@@ -74,6 +74,25 @@ static int test_dcat(void) {
     return error;
 }
 
+static int test_build(void) {
+    int        error = 0;
+
+    allocator *alloc = leak_detector_create();
+    str_build  build = str_build_init(alloc, 8);
+
+    str        b[]   = {S("hello"), S("and"), S("goodbye")};
+    str_build_join(&build, S(" "), b, sizeof b / sizeof b[0]);
+
+    str res = str_build_finish(&build);
+
+    error += str_eq(S("hello and goodbye"), res) ? 0 : 1;
+
+    str_deinit(alloc, &res);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -94,6 +113,7 @@ int main(void) {
     T(test_alloc);
     T(test_cat);
     T(test_dcat);
+    T(test_build);
 
     return error;
 }
