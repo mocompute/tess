@@ -74,7 +74,7 @@ str str_init_move_n(char **move_from, size_t len) {
     if (len <= MOS_STR_MAX_SMALL) {
         str out;
         init_small(&out, *move_from, len);
-        *move_from = null;
+        // don't set move_from to null; caller must check it and free
         return out;
     }
 
@@ -466,6 +466,9 @@ str str_build_str(allocator *alloc, str_build self) {
 
 str str_build_finish(str_build *p) {
     str out = str_init_move_n(&p->v, p->size);
+    // move will leave p->v unchanged if it's copying into small
+    // string storage, so we have to free it.
+    if (p->v) array_free(*p);
     alloc_invalidate(p);
     return out;
 }
