@@ -80,6 +80,7 @@ function(tess_create_test NAME)
 endfunction()
 
 tess_create_test(tess)
+tess_create_test(type_v2)
 
 # -- tesslang tests --
 

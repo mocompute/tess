@@ -156,22 +156,84 @@ str tl_type_variable_to_string(allocator *alloc, tl_type_variable const *self) {
     return str_init(alloc, buf);
 }
 
-// str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_inst const *self) {
-//     str out = str_empty();
-//     str_dcat(alloc, &out, self->name);
-//     forall(i, self->args) {
-//         str_dcat(alloc, &out, S(" "));
-//     }
-// }
+str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_inst const *self) {
+    str_build b = str_build_init(alloc, 64);
+    str_build_cat(&b, self->name);
 
-str tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
-str tl_monotype_to_string(allocator *, tl_monotype const *);
-str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
-str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
+    forall(i, self->args) {
+        str_build_cat(&b, S(" "));
 
-// str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
-//     str out = str_empty();
-//     forall(i, self->froms) {
-//         // str_dcat(alloc, &out, tl_type_variable_to_string(self->froms.v[i]));
-//     }
-// }
+        // be friendly with bump allocators which can free the last allocated block
+        str mono = tl_monotype_to_string(alloc, &self->args.v[i]);
+        str_build_cat(&b, mono);
+        str_deinit(alloc, &mono);
+    }
+
+    return str_build_finish(&b);
+}
+
+str tl_type_arrow_to_string(allocator *alloc, tl_type_arrow const *self) {
+    str_build b = str_build_init(alloc, 64);
+    {
+        str left = tl_monotype_to_string(alloc, self->left);
+        str_build_cat(&b, left);
+        str_deinit(alloc, &left);
+    }
+    str_build_cat(&b, S(" -> "));
+    {
+        str right = tl_monotype_to_string(alloc, self->left);
+        str_build_cat(&b, right);
+        str_deinit(alloc, &right);
+    }
+    return str_build_finish(&b);
+}
+
+str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
+    switch (self->tag) {
+    case tl_cons:  return tl_type_constructor_inst_to_string(alloc, &self->cons);
+    case tl_var:   return tl_type_variable_to_string(alloc, &self->var);
+    case tl_arrow: return tl_type_arrow_to_string(alloc, &self->arrow);
+    }
+}
+
+str tl_type_scheme_to_string(allocator *alloc, tl_type_scheme const *self) {
+    // forall t0 t1 ... . (dot) (type)
+    str_build b = str_build_init(alloc, 64);
+    str_build_cat(&b, S("forall"));
+    forall(i, self->quantifiers) {
+        str_build_cat(&b, S(" "));
+        str tv = tl_type_variable_to_string(alloc, &self->quantifiers.v[i]);
+        str_build_cat(&b, tv);
+        str_deinit(alloc, &tv);
+    }
+
+    str_build_cat(&b, S(" . "));
+
+    str mono = tl_monotype_to_string(alloc, &self->type);
+    str_build_cat(&b, mono);
+    str_deinit(alloc, &mono);
+    return str_build_finish(&b);
+}
+
+str tl_type_v2_to_string(allocator *alloc, tl_type_v2 const *self) {
+    switch (self->tag) {
+    case tl_mono:   return tl_monotype_to_string(alloc, &self->mono);
+    case tl_scheme: return tl_type_scheme_to_string(alloc, &self->scheme);
+    }
+}
+
+str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
+    str_build b = str_build_init(alloc, 64);
+
+    forall(i, self->froms) {
+        str tv = tl_type_variable_to_string(alloc, &self->froms.v[i]);
+        str_build_cat(&b, tv);
+        str_deinit(alloc, &tv);
+        str_build_cat(&b, S(" => "));
+        str mono = tl_monotype_to_string(alloc, &self->tos.v[i]);
+        str_build_cat(&b, mono);
+        str_deinit(alloc, &mono);
+    }
+
+    return str_build_finish(&b);
+}
