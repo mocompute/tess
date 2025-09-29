@@ -42,6 +42,17 @@ typedef struct tl_type_v2 {
 // collect all free variables in type into new type variable set
 void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 const *);
 
+// -- monotype --
+
+tl_monotype tl_monotype_init_tv(tl_type_variable);
+tl_monotype tl_monotype_init_arrow(tl_type_arrow);
+tl_monotype tl_monotype_init_constructor_inst(tl_type_constructor_inst);
+
+// -- type --
+
+tl_type_v2 tl_type_init_mono(tl_monotype);
+tl_type_v2 tl_type_init_scheme(tl_type_scheme);
+
 // -- substitution --
 
 typedef struct {
@@ -50,20 +61,29 @@ typedef struct {
 } tl_type_subs;
 
 nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
-void                    tl_type_subs_destroy(tl_type_subs **);
+void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 u32                     tl_type_subs_add(tl_type_subs *, tl_monotype from, tl_monotype to);
 
 // apply subs to base and return new set
 nodiscard tl_type_subs *tl_type_subs_compose(allocator *, tl_type_subs const *base,
                                              tl_type_subs const *subs);
 
-str                     tl_type_subs_to_string(allocator *, tl_type_subs const *);
-str                     tl_type_variable_to_string(allocator *, tl_type_variable const *);
-str                     tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
-str                     tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
-str                     tl_monotype_to_string(allocator *, tl_monotype const *);
-str                     tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
-str                     tl_type_v2_to_string(allocator *, tl_type_v2 const *);
+// apply subs to array of types
+void tl_type_subs_apply(tl_type_subs const *, tl_type_v2_array *);
+
+// -- type_constructor --
+
+tl_type_constructor_inst tl_type_constructor_instantiate(tl_type_constructor const *, tl_type_subs);
+
+// -- strings --
+
+str tl_type_subs_to_string(allocator *, tl_type_subs const *);
+str tl_type_variable_to_string(allocator *, tl_type_variable const *);
+str tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
+str tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
+str tl_monotype_to_string(allocator *, tl_monotype const *);
+str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
+str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
 
 // -- context --
 
@@ -84,7 +104,7 @@ typedef struct {
 } tl_type_env;
 
 nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
-void                   tl_type_env_destroy(tl_type_env **);
+void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
 void                   tl_type_env_free_variables(tl_type_env const *, tl_type_variable_array *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);

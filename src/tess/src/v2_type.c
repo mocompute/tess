@@ -4,6 +4,32 @@
 
 #include <stdio.h>
 
+// -- monotype --
+
+tl_monotype tl_monotype_init_tv(tl_type_variable tv) {
+    return (tl_monotype){.tag = tl_var, .var = tv};
+}
+
+tl_monotype tl_monotype_init_arrow(tl_type_arrow arrow) {
+    return (tl_monotype){.tag = tl_arrow, .arrow = arrow};
+}
+
+tl_monotype tl_monotype_init_constructor_inst(tl_type_constructor_inst cons) {
+    return (tl_monotype){.tag = tl_cons, .cons = cons};
+}
+
+// -- type --
+
+tl_type_v2 tl_type_init_mono(tl_monotype mono) {
+    return (tl_type_v2){.tag = tl_mono, .mono = mono};
+}
+
+tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
+    return (tl_type_v2){.tag = tl_scheme, .scheme = scheme};
+}
+
+//
+
 static void tl_monotype_collect_free_variables(tl_type_variable_array *, tl_monotype const *);
 static void tl_type_variable_collect_free_variables(tl_type_variable_array *, tl_type_variable const *);
 static void tl_type_arrow_collect_free_variables(tl_type_variable_array *, tl_type_arrow const *);
@@ -116,6 +142,22 @@ static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
     forall(i, subs->froms) {
         tl_type_v2_substitute(self, subs->froms.v[i], subs->tos.v[i]);
     }
+}
+
+//
+
+tl_type_subs *tl_type_subs_create(allocator *alloc) {
+    tl_type_subs *self = new (alloc, tl_type_subs);
+    self->froms        = (tl_type_variable_array){.alloc = alloc};
+    self->tos          = (tl_monotype_array){.alloc = alloc};
+    return self;
+}
+
+void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
+    array_free((*p)->froms);
+    array_free((*p)->tos);
+    alloc_free(alloc, *p);
+    *p = null;
 }
 
 tl_type_subs *tl_type_subs_compose(allocator *alloc, tl_type_subs const *base, tl_type_subs const *subs) {
@@ -236,4 +278,21 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
     }
 
     return str_build_finish(&b);
+}
+
+// -- env --
+
+tl_type_env *tl_type_env_create(allocator *alloc) {
+    tl_type_env *self = new (alloc, tl_type_env);
+
+    self->names       = (str_array){.alloc = alloc};
+    self->types       = (tl_type_v2_array){.alloc = alloc};
+    return self;
+}
+
+void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
+    array_free((*p)->names);
+    array_free((*p)->types);
+    alloc_free(alloc, *p);
+    *p = null;
 }
