@@ -15,14 +15,14 @@ typedef struct {array_header; struct tl_monotype *v;}                 tl_monotyp
 typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
 typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
 typedef struct {str name; tl_monotype_array       args;}              tl_type_constructor_inst;
-typedef struct {struct tl_monotype *left; struct tl_monotype *right;} tl_type_arrow;
+typedef struct {struct tl_monotype *left; struct tl_monotype *right;} tl_type_v2_arrow;
 // clang-format on
 
 typedef struct tl_monotype {
     union {
         tl_type_constructor_inst cons;
         tl_type_variable         var;
-        tl_type_arrow            arrow;
+        tl_type_v2_arrow         arrow;
     };
     enum { tl_cons, tl_var, tl_arrow } tag;
 } tl_monotype;
@@ -46,7 +46,7 @@ void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 cons
 // -- monotype --
 
 tl_monotype            tl_monotype_init_tv(tl_type_variable);
-tl_monotype            tl_monotype_init_arrow(tl_type_arrow);
+tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
 nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
 void                   tl_monotype_dealloc(allocator *, tl_monotype *);
 tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
@@ -85,7 +85,7 @@ tl_type_constructor_inst tl_type_constructor_instantiate(tl_type_constructor con
 str tl_type_subs_to_string(allocator *, tl_type_subs const *);
 str tl_type_variable_to_string(allocator *, tl_type_variable const *);
 str tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
-str tl_type_arrow_to_string(allocator *, tl_type_arrow const *);
+str tl_type_arrow_to_string(allocator *, tl_type_v2_arrow const *);
 str tl_monotype_to_string(allocator *, tl_monotype const *);
 str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
 str tl_type_v2_to_string(allocator *, tl_type_v2 const *);

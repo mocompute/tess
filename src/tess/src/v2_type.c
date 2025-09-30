@@ -11,14 +11,14 @@ tl_monotype tl_monotype_init_tv(tl_type_variable tv) {
     return (tl_monotype){.tag = tl_var, .var = tv};
 }
 
-tl_monotype tl_monotype_init_arrow(tl_type_arrow arrow) {
+tl_monotype tl_monotype_init_arrow(tl_type_v2_arrow arrow) {
     return (tl_monotype){.tag = tl_arrow, .arrow = arrow};
 }
 
 tl_monotype tl_monotype_alloc_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
     tl_monotype *pleft  = tl_monotype_create(alloc, left);
     tl_monotype *pright = tl_monotype_create(alloc, right);
-    tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_arrow){.left = pleft, .right = pright});
+    tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_v2_arrow){.left = pleft, .right = pright});
     return arrow;
 }
 
@@ -69,7 +69,7 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
 
 static void tl_monotype_collect_free_variables(tl_type_variable_array *, tl_monotype const *);
 static void tl_type_variable_collect_free_variables(tl_type_variable_array *, tl_type_variable const *);
-static void tl_type_arrow_collect_free_variables(tl_type_variable_array *, tl_type_arrow const *);
+static void tl_type_arrow_collect_free_variables(tl_type_variable_array *, tl_type_v2_arrow const *);
 static void tl_type_scheme_collect_free_variables(tl_type_variable_array *, tl_type_scheme const *);
 
 void        tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 const *);
@@ -87,7 +87,8 @@ static void tl_type_variable_collect_free_variables(tl_type_variable_array *out,
     array_set_insert(*out, *var);
 }
 
-static void tl_type_arrow_collect_free_variables(tl_type_variable_array *out, tl_type_arrow const *arrow) {
+static void tl_type_arrow_collect_free_variables(tl_type_variable_array *out,
+                                                 tl_type_v2_arrow const *arrow) {
     tl_monotype_collect_free_variables(out, arrow->left);
     tl_monotype_collect_free_variables(out, arrow->right);
 }
@@ -251,7 +252,7 @@ str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_ins
     return str_build_finish(&b);
 }
 
-str tl_type_arrow_to_string(allocator *alloc, tl_type_arrow const *self) {
+str tl_type_arrow_to_string(allocator *alloc, tl_type_v2_arrow const *self) {
     str_build b = str_build_init(alloc, 64);
     {
         str left = tl_monotype_to_string(alloc, self->left);
