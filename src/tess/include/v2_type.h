@@ -62,6 +62,7 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme);
 
 // -- substitution --
 
+// FIXME: should be a hashmap as it is required that there be exactly one substitution from a given tv to a monotype. 
 typedef struct {
     tl_type_variable_array froms;
     tl_monotype_array      tos;
@@ -70,6 +71,7 @@ typedef struct {
 nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 u32                     tl_type_subs_add(tl_type_subs *, tl_monotype from, tl_monotype to);
+// FIXME: from should be a tv only
 
 // apply subs to base and return new set
 nodiscard tl_type_subs *tl_type_subs_compose(allocator *, tl_type_subs const *base,
