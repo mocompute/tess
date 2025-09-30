@@ -2,6 +2,7 @@
 #define TESS_TYPE_H_V2
 
 #include "alloc.h"
+#include "hashmap.h"
 #include "nodiscard.h"
 #include "str.h"
 
@@ -107,11 +108,14 @@ typedef struct {
     // a set of name : type assignments
     str_array        names;
     tl_type_v2_array types;
+
+    hashmap         *index; // name str => index
 } tl_type_env;
 
 nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
+tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
 void                   tl_type_env_free_variables(tl_type_env const *, tl_type_variable_array *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
 

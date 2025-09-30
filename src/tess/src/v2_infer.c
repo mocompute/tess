@@ -147,6 +147,48 @@ static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_e
     return tops;
 }
 
+static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
+    tl_type_subs subs = {.froms = {.alloc = self->arena}, .tos = {.alloc = self->arena}};
+    tl_type_v2   type = {0};
+
+    switch (node->tag) {
+    case ast_i64:                         type = *tl_type_env_lookup(self->env, S("Int")); break;
+    case ast_nil:
+    case ast_any:
+    case ast_address_of:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_tuple:
+    case ast_user_type:                   fatal("not implemented");
+    }
+
+    *out_type = type;
+    *out_subs = subs;
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     log(self, "-- start inference --");

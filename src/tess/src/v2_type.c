@@ -1,6 +1,7 @@
 #include "v2_type.h"
 #include "alloc.h"
 #include "array.h"
+#include "hashmap.h"
 #include "str.h"
 
 #include <stdio.h>
@@ -320,19 +321,52 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 
 // -- env --
 
+static void add_type_cons(tl_type_env *self, tl_type_constructor_inst inst) {
+    tl_type_env_add(self, inst.name, tl_type_init_mono(tl_monotype_init_constructor_inst(inst)));
+}
+
+static void make_builtin_type_constructors(tl_type_env *self) {
+
+    tl_type_constructor_inst inst = {0};
+    //
+    inst.name = S("Int");
+    add_type_cons(self, inst);
+    inst.name = S("Float");
+    add_type_cons(self, inst);
+    inst.name = S("String");
+    add_type_cons(self, inst);
+}
+
 tl_type_env *tl_type_env_create(allocator *alloc) {
     tl_type_env *self = new (alloc, tl_type_env);
 
     self->names       = (str_array){.alloc = alloc};
     self->types       = (tl_type_v2_array){.alloc = alloc};
+    self->index       = map_create(alloc, sizeof(u32), 128);
+
+    make_builtin_type_constructors(self);
+
     return self;
 }
 
 void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
+    map_destroy(&(*p)->index);
     array_free((*p)->names);
     array_free((*p)->types);
     alloc_free(alloc, *p);
     *p = null;
+}
+
+u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
+    array_push(self->names, name);
+    array_push(self->types, type);
+    assert(self->names.size == self->types.size);
+    return self->names.size - 1;
+}
+
+tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
+    u32 *found = str_map_get(self->index, name);
+    return found ? &self->types.v[*found] : null;
 }
 
 // -- context --
