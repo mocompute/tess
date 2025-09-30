@@ -34,7 +34,8 @@ void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
         alloc_free(alloc, self->arrow.right);
         break;
 
-    case tl_var: break;
+    case tl_var:
+    case tl_nil: break;
     }
 
     alloc_invalidate(self);
@@ -99,6 +100,7 @@ static void tl_monotype_collect_free_variables(tl_type_variable_array *out, tl_m
     case tl_cons:  return tl_type_constructor_inst_collect_free_variables(out, &mono->cons);
     case tl_var:   return tl_type_variable_collect_free_variables(out, &mono->var);
     case tl_arrow: return tl_type_arrow_collect_free_variables(out, &mono->arrow);
+    case tl_nil:   return;
     }
 }
 
@@ -153,6 +155,8 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_m
         tl_monotype_substitute(self->arrow.left, var, mono);
         tl_monotype_substitute(self->arrow.right, var, mono);
     } break;
+
+    case tl_nil: break;
     }
 }
 
@@ -274,6 +278,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     case tl_cons:  return tl_type_constructor_inst_to_string(alloc, &self->cons);
     case tl_var:   return tl_type_variable_to_string(alloc, &self->var);
     case tl_arrow: return tl_type_arrow_to_string(alloc, &self->arrow);
+    case tl_nil:   return str_copy(alloc, S("()"));
     }
 }
 
@@ -335,6 +340,10 @@ static void make_builtin_type_constructors(tl_type_env *self) {
     add_type_cons(self, inst);
     inst.name = S("String");
     add_type_cons(self, inst);
+
+    for (u32 i = 0; i < self->names.size; ++i) {
+        str_map_set(&self->index, self->names.v[i], &i);
+    }
 }
 
 tl_type_env *tl_type_env_create(allocator *alloc) {

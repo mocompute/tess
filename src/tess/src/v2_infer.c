@@ -160,8 +160,12 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     case ast_let: {
         if (str_eq(node->let.name->symbol.name, S("main"))) {
             // FIXME just force () -> Int
-
+            tl_monotype left  = {0}; // nil
+            tl_monotype right = tl_type_env_lookup(self->env, S("Int"))->mono;
+            tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
+            type              = tl_type_init_mono(arrow);
         } else {
+            // FIXME
         }
     } break;
 
@@ -209,6 +213,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     if (self->errors.size) {
         return 1;
     }
+
+    ast_node **found_main = str_map_get(self->toplevels, S("main"));
+    if (!found_main) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
+        return 1;
+    }
+    ast_node *main = *found_main;
+
+    // static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
+
+    tl_type_v2  *type = new (self->arena, tl_type_v2);
+    tl_type_subs subs;
+    infer_W(self, main, &subs, type);
+    main->type_v2 = type;
 
     log_toplevels(self);
 
@@ -275,6 +293,13 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return out;
     }
 
+    case ast_let: {
+        str out = node->let.name->symbol.name;
+        if (node->type_v2)
+            out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
+        return out;
+    }
+
     case ast_nil:                         return S("nil");
     case ast_any:                         return S("any");
     case ast_address_of:
@@ -301,7 +326,6 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_lambda_function_application:
-    case ast_let:
     case ast_named_function_application:
     case ast_tuple:
     case ast_user_type:                   return str_copy(alloc, S("FIXME: not yet implemented"));
