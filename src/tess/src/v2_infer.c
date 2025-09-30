@@ -46,6 +46,7 @@ static str  v2_ast_node_to_string(allocator *, ast_node const *);
 
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
+static void log_env(tl_infer const *);
 
 //
 
@@ -215,17 +216,9 @@ static str next_variable_name(tl_infer *self) {
     return str_init(self->arena, buf);
 }
 
-static void rename_symbol(tl_infer *self, ast_node *node, hashmap *lex) {
-    assert(ast_symbol == node->tag);
-    str *found;
-    if ((found = str_map_get(lex, node->symbol.name))) {
-        node->symbol.original = node->symbol.name;
-        node->symbol.name     = *found;
-    } else {
-        str newvar            = next_variable_name(self);
-        node->symbol.original = node->symbol.name;
-        node->symbol.name     = newvar;
-    }
+static void assign_new_type_variable(tl_infer *self, str name) {
+    tl_type_v2 type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+    tl_type_env_add(self->env, name, type);
 }
 
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
@@ -237,7 +230,28 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     if (null == node) return;
 
-    if (ast_let_in == node->tag) {
+    switch (node->tag) {
+    case ast_nil:
+    case ast_any:         break;
+    case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
+    case ast_arrow:       break;
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference: rename_variables(self, node->dereference.target, lex); break;
+    case ast_dereference_assign:
+        rename_variables(self, node->dereference_assign.target, lex);
+        rename_variables(self, node->dereference_assign.value, lex);
+        break;
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:      break;
+    case ast_if_then_else:
+        rename_variables(self, node->if_then_else.condition, lex);
+        rename_variables(self, node->if_then_else.yes, lex);
+        rename_variables(self, node->if_then_else.no, lex);
+        break;
+    case ast_let_in: {
         str name                           = node->let_in.name->symbol.name;
         str newvar                         = next_variable_name(self);
         node->let_in.name->symbol.original = node->symbol.name;
@@ -246,14 +260,14 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         // establish lexical scope of the let-in binding and recurse
         hashmap *save = map_copy(*lex);
         str_map_set(lex, name, &newvar);
+        assign_new_type_variable(self, newvar);
         rename_variables(self, node->let_in.body, lex);
 
         // restore prior scope
         map_destroy(lex);
         *lex = save;
-    }
-
-    else if (ast_let_match_in == node->tag) {
+    } break;
+    case ast_let_match_in: {
         hashmap *save = map_copy(*lex);
 
         for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
@@ -267,36 +281,34 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             name_node->symbol.name     = newvar;
 
             str_map_set(lex, name, &newvar);
+            assign_new_type_variable(self, newvar);
         }
 
         rename_variables(self, node->let_match_in.body, lex);
 
         map_destroy(lex);
         *lex = save;
-    }
-
-    else if (ast_let == node->tag) {
-
-        // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            assert(ast_symbol == param->tag);
-            str name               = param->symbol.name;
-            str newvar             = next_variable_name(self);
-            param->symbol.original = param->symbol.name;
-            param->symbol.name     = newvar;
-            str_map_set(lex, name, &newvar);
+    } break;
+    case ast_string: break;
+    case ast_symbol: {
+        str *found;
+        if ((found = str_map_get(*lex, node->symbol.name))) {
+            node->symbol.original = node->symbol.name;
+            node->symbol.name     = *found;
+        } else {
+            fatal("symbol found outside lexical scope");
         }
+    } break;
 
-        rename_variables(self, node->let.body, lex);
-
-        map_destroy(lex);
-        *lex = save;
-    }
-
-    else if (ast_lambda_function == node->tag) {
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:      {
         // establish lexical scope for formal parameters and recurse
         hashmap *save = map_copy(*lex);
 
@@ -308,12 +320,43 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             param->symbol.original = param->symbol.name;
             param->symbol.name     = newvar;
             str_map_set(lex, name, &newvar);
+            assign_new_type_variable(self, newvar);
         }
 
         rename_variables(self, node->lambda_function.body, lex);
 
         map_destroy(lex);
         *lex = save;
+    } break;
+    case ast_lambda_function_application:
+    case ast_let:                         {
+        // establish lexical scope for formal parameters and recurse
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node *param = node->let.parameters[i];
+            assert(ast_symbol == param->tag);
+            str name               = param->symbol.name;
+            str newvar             = next_variable_name(self);
+            param->symbol.original = param->symbol.name;
+            param->symbol.name     = newvar;
+            str_map_set(lex, name, &newvar);
+            assign_new_type_variable(self, newvar);
+        }
+
+        rename_variables(self, node->let.body, lex);
+
+        map_destroy(lex);
+        *lex = save;
+
+        // assign type variable to let-polymorphic function name
+        assert(ast_symbol == node->let.name->tag);
+        assign_new_type_variable(self, node->let.name->symbol.name);
+
+    } break;
+    case ast_named_function_application:
+    case ast_tuple:
+    case ast_user_type:                  break;
     }
 }
 
@@ -334,7 +377,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     }
     ast_node *main = *found_main;
 
-    // rename variables for lexical scope
+    // rename variables for lexical scope and assign type variables
     {
         hashmap *lex = map_create(self->arena, sizeof(str), 16);
         rename_variables(self, main, &lex);
@@ -349,6 +392,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     main->type_v2 = type;
 
     log_toplevels(self);
+    log_env(self);
 
     return 0;
 }
@@ -401,6 +445,16 @@ static void log_toplevels(tl_infer const *self) {
         str             str  = v2_ast_node_to_string(self->transient, node);
         log_str(self, str);
         str_deinit(self->transient, &str);
+    }
+}
+
+static void log_env(tl_infer const *self) {
+    forall(i, self->env->names) {
+        str const        *name     = &self->env->names.v[i];
+        tl_type_v2 const *type     = &self->env->types.v[i];
+        str               type_str = tl_type_v2_to_string(self->transient, type);
+        log(self, "%.*s : %.*s", str_ilen(*name), str_buf(name), str_ilen(type_str), str_buf(&type_str));
+        str_deinit(self->transient, &type_str);
     }
 }
 

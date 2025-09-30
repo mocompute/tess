@@ -1,1 +1,2 @@
-let main () = 0
+let main () =
+  let x = 0 in x
