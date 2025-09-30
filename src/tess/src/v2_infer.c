@@ -30,6 +30,7 @@ struct tl_infer {
 
     tl_type_context      context;
     tl_type_env         *env;
+    tl_type_subs         subs; // corresponds to E in algorithm J
 
     hashmap             *toplevels;
     tl_infer_error_array errors;
@@ -156,6 +157,46 @@ static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_e
     return tops;
 }
 
+static void infer(tl_infer *self, ast_node *node) {
+    // update subs by collecting and applying constraints found recursively starting at node.
+
+    if (null == node) return;
+
+    switch (node->tag) {
+    case ast_nil:
+    case ast_any:                         break;
+    case ast_address_of:                  fatal("FIXME: pointer types");
+    case ast_arrow:                       break;
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_tuple:
+    case ast_user_type:                   break;
+    }
+}
+
 static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
     tl_type_subs subs = {.froms = {.alloc = self->arena}, .tos = {.alloc = self->arena}};
     tl_type_v2   type = {0};
@@ -221,6 +262,11 @@ static void assign_new_type_variable(tl_infer *self, str name) {
     tl_type_env_add(self->env, name, type);
 }
 
+static void assign_new_expression_variable(tl_infer *self, ast_node *node) {
+    node->type_v2  = new (self->arena, tl_type_v2);
+    *node->type_v2 = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+}
+
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     // transform variables recursively in node so that every
     // occurrence is unique, respecting lexical scope created by
@@ -231,26 +277,27 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     if (null == node) return;
 
     switch (node->tag) {
-    case ast_nil:
-    case ast_any:         break;
-    case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
-    case ast_arrow:       break;
+
     case ast_assignment:
-    case ast_bool:
+        rename_variables(self, node->assignment.name, lex);
+        rename_variables(self, node->assignment.value, lex);
+        break;
+
+    case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
+
     case ast_dereference: rename_variables(self, node->dereference.target, lex); break;
+
     case ast_dereference_assign:
         rename_variables(self, node->dereference_assign.target, lex);
         rename_variables(self, node->dereference_assign.value, lex);
         break;
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:      break;
+
     case ast_if_then_else:
         rename_variables(self, node->if_then_else.condition, lex);
         rename_variables(self, node->if_then_else.yes, lex);
         rename_variables(self, node->if_then_else.no, lex);
         break;
+
     case ast_let_in: {
         str name                           = node->let_in.name->symbol.name;
         str newvar                         = next_variable_name(self);
@@ -267,6 +314,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         map_destroy(lex);
         *lex = save;
     } break;
+
     case ast_let_match_in: {
         hashmap *save = map_copy(*lex);
 
@@ -289,7 +337,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         map_destroy(lex);
         *lex = save;
     } break;
-    case ast_string: break;
+
     case ast_symbol: {
         str *found;
         if ((found = str_map_get(*lex, node->symbol.name))) {
@@ -300,15 +348,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         }
     } break;
 
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
-    case ast_function_declaration:
-    case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_lambda_function:      {
+    case ast_lambda_function: {
         // establish lexical scope for formal parameters and recurse
         hashmap *save = map_copy(*lex);
 
@@ -328,8 +368,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         map_destroy(lex);
         *lex = save;
     } break;
-    case ast_lambda_function_application:
-    case ast_let:                         {
+
+    case ast_let: {
         // establish lexical scope for formal parameters and recurse
         hashmap *save = map_copy(*lex);
 
@@ -354,9 +394,76 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         assign_new_type_variable(self, node->let.name->symbol.name);
 
     } break;
-    case ast_named_function_application:
+
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_labelled_tuple:
     case ast_tuple:
-    case ast_user_type:                  break;
+    case ast_lambda_function_application:
+    case ast_named_function_application:
+        // FIXME
+
+        fatal("fixme");
+        break;
+
+    case ast_string:
+    case ast_nil:
+    case ast_any:
+    case ast_arrow:
+    case ast_bool:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_user_type:            break;
+    }
+}
+
+void assign_expression_types(tl_infer *self, ast_node *node) {
+    if (null == node) return;
+
+    assign_new_expression_variable(self, node);
+
+    switch (node->tag) {
+    case ast_address_of: assign_expression_types(self, node->address_of.target); break;
+    case ast_assignment:
+        // name has type in the tl_type_env
+        assign_expression_types(self, node->assignment.value);
+        break;
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_arrow:                       break;
+    case ast_named_function_application:
+    case ast_nil:
+    case ast_any:                         break;
+    case ast_tuple:
+    case ast_user_type:                   break;
     }
 }
 
