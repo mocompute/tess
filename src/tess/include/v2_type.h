@@ -25,7 +25,7 @@ typedef struct tl_monotype {
         tl_type_variable         var;
         tl_type_v2_arrow         arrow;
     };
-    enum { tl_cons, tl_var, tl_arrow } tag;
+    enum { tl_nil, tl_cons, tl_var, tl_arrow } tag;
 } tl_monotype;
 
 typedef struct {
@@ -46,6 +46,7 @@ void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 cons
 
 // -- monotype --
 
+tl_monotype            tl_monotype_init_nil();
 tl_monotype            tl_monotype_init_tv(tl_type_variable);
 tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
 nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
@@ -81,16 +82,6 @@ void tl_type_subs_apply(tl_type_subs const *, tl_type_v2_array *);
 
 tl_type_constructor_inst tl_type_constructor_instantiate(tl_type_constructor const *, tl_type_subs);
 
-// -- strings --
-
-str tl_type_subs_to_string(allocator *, tl_type_subs const *);
-str tl_type_variable_to_string(allocator *, tl_type_variable const *);
-str tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
-str tl_type_arrow_to_string(allocator *, tl_type_v2_arrow const *);
-str tl_monotype_to_string(allocator *, tl_monotype const *);
-str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
-str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
-
 // -- context --
 
 typedef struct {
@@ -118,5 +109,15 @@ u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
 void                   tl_type_env_free_variables(tl_type_env const *, tl_type_variable_array *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
+
+// -- strings --
+
+str tl_type_subs_to_string(allocator *, tl_type_subs const *);
+str tl_type_variable_to_string(allocator *, tl_type_variable const *);
+str tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
+str tl_type_arrow_to_string(allocator *, tl_type_v2_arrow const *);
+str tl_monotype_to_string(allocator *, tl_monotype const *);
+str tl_type_scheme_to_string(allocator *, tl_type_scheme const *);
+str tl_type_v2_to_string(allocator *, tl_type_v2 const *);
 
 #endif

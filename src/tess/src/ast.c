@@ -21,6 +21,7 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     self->file     = "";
     self->line     = -1;
     self->type     = null;
+    self->type_v2  = null;
     self->error    = tl_err_ok;
 
     self->tag      = tag;

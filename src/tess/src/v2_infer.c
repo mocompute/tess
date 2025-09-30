@@ -39,6 +39,8 @@ struct tl_infer {
 
 //
 
+static str  v2_ast_node_to_string(allocator *, ast_node const *);
+
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
 
@@ -83,6 +85,7 @@ static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_e
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
+        dbg("processing: %s\n", ast_node_to_string(alloc, node));
         if (ast_symbol == node->tag) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(tops, name_str);
@@ -152,7 +155,16 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     tl_type_v2   type = {0};
 
     switch (node->tag) {
-    case ast_i64:                         type = *tl_type_env_lookup(self->env, S("Int")); break;
+    case ast_i64: type = *tl_type_env_lookup(self->env, S("Int")); break;
+
+    case ast_let: {
+        if (str_eq(node->let.name->symbol.name, S("main"))) {
+            // FIXME just force () -> Int
+
+        } else {
+        }
+    } break;
+
     case ast_nil:
     case ast_any:
     case ast_address_of:
@@ -179,7 +191,6 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_lambda_function_application:
-    case ast_let:
     case ast_named_function_application:
     case ast_tuple:
     case ast_user_type:                   fatal("not implemented");
@@ -238,12 +249,63 @@ static void log(tl_infer const *self, char const *restrict fmt, ...) {
     va_end(args);
 }
 
+static void log_str(tl_infer const *self, str str) {
+    if (!self->verbose) return;
+
+    int spaces = self->indent_level * 2;
+    fprintf(stderr, "%*stl_infer: %.*s\n", spaces, "", str_ilen(str), str_buf(&str));
+}
+
 static void log_toplevels(tl_infer const *self) {
     hashmap_iterator iter = {0};
     while (map_iter(self->toplevels, &iter)) {
         ast_node const *node = *(ast_node **)iter.data;
-        char           *cstr = ast_node_to_string(self->transient, node);
-        log(self, cstr);
-        alloc_free(self->transient, cstr);
+        str             str  = v2_ast_node_to_string(self->transient, node);
+        log_str(self, str);
+        str_deinit(self->transient, &str);
     }
 }
+
+static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
+    switch (node->tag) {
+    case ast_symbol: {
+        str out = node->symbol.name;
+        if (node->type_v2)
+            out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
+        return out;
+    }
+
+    case ast_nil:                         return S("nil");
+    case ast_any:                         return S("any");
+    case ast_address_of:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_tuple:
+    case ast_user_type:                   return str_copy(alloc, S("FIXME: not yet implemented"));
+    }
+}
+
+//
