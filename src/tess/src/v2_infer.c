@@ -1,5 +1,6 @@
 #include "v2_infer.h"
 #include "alloc.h"
+#include "ast_tags.h"
 #include "dbg.h"
 #include "error.h"
 #include "str.h"
@@ -33,6 +34,8 @@ struct tl_infer {
     hashmap             *toplevels;
     tl_infer_error_array errors;
 
+    u32                  next_var_name;
+
     int                  verbose;
     int                  indent_level;
 };
@@ -47,19 +50,21 @@ static void log_toplevels(tl_infer const *);
 //
 
 tl_infer *tl_infer_create(allocator *alloc) {
-    tl_infer *self     = new (alloc, tl_infer);
+    tl_infer *self      = new (alloc, tl_infer);
 
-    self->transient    = arena_create(alloc, 4096);
-    self->arena        = arena_create(alloc, 16 * 1024);
+    self->transient     = arena_create(alloc, 4096);
+    self->arena         = arena_create(alloc, 16 * 1024);
 
-    self->toplevels    = null;
-    self->context      = tl_type_context_empty();
-    self->env          = tl_type_env_create(alloc);
+    self->toplevels     = null;
+    self->context       = tl_type_context_empty();
+    self->env           = tl_type_env_create(alloc);
 
-    self->errors       = (tl_infer_error_array){.alloc = self->arena};
+    self->errors        = (tl_infer_error_array){.alloc = self->arena};
 
-    self->verbose      = 0;
-    self->indent_level = 0;
+    self->next_var_name = 1;
+
+    self->verbose       = 0;
+    self->indent_level  = 0;
 
     return self;
 }
@@ -204,6 +209,114 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     *out_subs = subs;
 }
 
+static str next_variable_name(tl_infer *self) {
+    char buf[32];
+    snprintf(buf, sizeof buf, "v%u", self->next_var_name++);
+    return str_init(self->arena, buf);
+}
+
+static void rename_symbol(tl_infer *self, ast_node *node, hashmap *lex) {
+    assert(ast_symbol == node->tag);
+    str *found;
+    if ((found = str_map_get(lex, node->symbol.name))) {
+        node->symbol.original = node->symbol.name;
+        node->symbol.name     = *found;
+    } else {
+        str newvar            = next_variable_name(self);
+        node->symbol.original = node->symbol.name;
+        node->symbol.name     = newvar;
+    }
+}
+
+static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
+    // transform variables recursively in node so that every
+    // occurrence is unique, respecting lexical scope created by
+    // lambda functions, let functions, and let in expressions to
+    // variables have the same name when they refer to the same bound
+    // value.
+
+    if (null == node) return;
+
+    if (ast_let_in == node->tag) {
+        str name                           = node->let_in.name->symbol.name;
+        str newvar                         = next_variable_name(self);
+        node->let_in.name->symbol.original = node->symbol.name;
+        node->let_in.name->symbol.name     = newvar;
+
+        // establish lexical scope of the let-in binding and recurse
+        hashmap *save = map_copy(*lex);
+        str_map_set(lex, name, &newvar);
+        rename_variables(self, node->let_in.body, lex);
+
+        // restore prior scope
+        map_destroy(lex);
+        *lex = save;
+    }
+
+    else if (ast_let_match_in == node->tag) {
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
+            ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
+            assert(ast_assignment == ass->tag);
+            ast_node *name_node = ass->assignment.name;
+            assert(ast_symbol == name_node->tag);
+            str name                   = name_node->symbol.name;
+            str newvar                 = next_variable_name(self);
+            name_node->symbol.original = name_node->symbol.name;
+            name_node->symbol.name     = newvar;
+
+            str_map_set(lex, name, &newvar);
+        }
+
+        rename_variables(self, node->let_match_in.body, lex);
+
+        map_destroy(lex);
+        *lex = save;
+    }
+
+    else if (ast_let == node->tag) {
+
+        // establish lexical scope for formal parameters and recurse
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node *param = node->let.parameters[i];
+            assert(ast_symbol == param->tag);
+            str name               = param->symbol.name;
+            str newvar             = next_variable_name(self);
+            param->symbol.original = param->symbol.name;
+            param->symbol.name     = newvar;
+            str_map_set(lex, name, &newvar);
+        }
+
+        rename_variables(self, node->let.body, lex);
+
+        map_destroy(lex);
+        *lex = save;
+    }
+
+    else if (ast_lambda_function == node->tag) {
+        // establish lexical scope for formal parameters and recurse
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
+            ast_node *param = node->lambda_function.parameters[i];
+            assert(ast_symbol == param->tag);
+            str name               = param->symbol.name;
+            str newvar             = next_variable_name(self);
+            param->symbol.original = param->symbol.name;
+            param->symbol.name     = newvar;
+            str_map_set(lex, name, &newvar);
+        }
+
+        rename_variables(self, node->lambda_function.body, lex);
+
+        map_destroy(lex);
+        *lex = save;
+    }
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     log(self, "-- start inference --");
@@ -221,11 +334,18 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     }
     ast_node *main = *found_main;
 
-    // static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
+    // rename variables for lexical scope
+    {
+        hashmap *lex = map_create(self->arena, sizeof(str), 16);
+        rename_variables(self, main, &lex);
+        map_destroy(&lex);
+    }
 
     tl_type_v2  *type = new (self->arena, tl_type_v2);
     tl_type_subs subs;
     infer_W(self, main, &subs, type);
+    tl_type_subs_apply(&subs, &(tl_type_v2_array){.size = 1, .v = type});
+
     main->type_v2 = type;
 
     log_toplevels(self);

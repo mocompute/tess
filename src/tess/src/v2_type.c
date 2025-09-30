@@ -229,6 +229,13 @@ tl_type_subs *tl_type_subs_compose(allocator *alloc, tl_type_subs const *base, t
     return out;
 }
 
+void tl_type_subs_apply(tl_type_subs const *subs, tl_type_v2_array *types) {
+    forall(i, *types) {
+        tl_type_v2 *type = &types->v[i];
+        tl_type_v2_apply_subs(type, subs);
+    }
+}
+
 void tl_type_env_subs_apply(tl_type_env *env, tl_type_subs const *subs) {
     forall(i, env->types) {
         tl_type_v2_apply_subs(&env->types.v[i], subs);
