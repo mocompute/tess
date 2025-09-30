@@ -57,6 +57,43 @@ void tl_monotype_destroy(allocator *alloc, tl_monotype **p) {
     *p = null;
 }
 
+int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
+    if (lhs.tag != rhs.tag) return 0;
+    switch (lhs.tag) {
+    case tl_nil: return 1;
+    case tl_cons:
+        if (!str_eq(lhs.cons.name, rhs.cons.name)) return 0;
+        if (lhs.cons.args.size != rhs.cons.args.size) return 0;
+        forall(i, lhs.cons.args) {
+            if (!tl_monotype_eq(lhs.cons.args.v[i], rhs.cons.args.v[i])) return 0;
+        }
+        return 1;
+    case tl_var:   return lhs.var == rhs.var;
+    case tl_arrow: return tl_monotype_eq(*lhs.arrow.left, *rhs.arrow.right); break;
+    }
+}
+
+int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
+    // return 1 if either side has a type variable that occurs on the other side
+    switch (lhs.tag) {
+
+    case tl_nil:
+        //
+        return 0;
+
+    case tl_cons:
+        forall(i, lhs.cons.args) if (tl_monotype_occurs(lhs.cons.args.v[i], rhs)) return 1;
+        return 0;
+
+    case tl_var:
+        if (tl_var == rhs.tag) return lhs.var == rhs.var;
+        return tl_monotype_occurs(rhs, lhs);
+
+    case tl_arrow:
+        return tl_monotype_occurs(*lhs.arrow.left, rhs) || tl_monotype_occurs(*lhs.arrow.right, rhs);
+    }
+}
+
 // -- type --
 
 tl_type_v2 tl_type_init_mono(tl_monotype mono) {
@@ -131,11 +168,6 @@ void tl_type_env_free_variables(tl_type_env const *env, tl_type_variable_array *
 
 //
 
-static void tl_type_subs_reserve(tl_type_subs *self, u32 n) {
-    array_reserve(self->froms, n);
-    array_reserve(self->tos, n);
-}
-
 static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_monotype mono);
 static void tl_type_scheme_substitute(tl_type_scheme *self, tl_type_variable var, tl_monotype mono);
 
@@ -160,30 +192,12 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_m
     }
 }
 
-static void tl_monotype_apply_subs(tl_monotype *self, tl_type_subs const *subs) {
-    forall(i, subs->froms) {
-        tl_monotype_substitute(self, subs->froms.v[i], subs->tos.v[i]);
-    }
-}
-
-static void tl_type_scheme_substitute(tl_type_scheme *self, tl_type_variable var, tl_monotype mono) {
-    forall(i, self->quantifiers) {
-        if (var == self->quantifiers.v[i]) return; // do not substitute quantifier
-    }
-
-    tl_monotype_substitute(&self->type, var, mono);
-}
-
-static void tl_type_v2_substitute(tl_type_v2 *self, tl_type_variable var, tl_monotype mono) {
-    switch (self->tag) {
-    case tl_mono:   return tl_monotype_substitute(&self->mono, var, mono);
-    case tl_scheme: return tl_type_scheme_substitute(&self->scheme, var, mono);
-    }
-}
-
 static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
-    forall(i, subs->froms) {
-        tl_type_v2_substitute(self, subs->froms.v[i], subs->tos.v[i]);
+    if (tl_mono == self->tag && tl_var == self->mono.tag) {
+        tl_monotype *sub = map_get(subs->map, &self->mono.var, sizeof self->mono.var);
+        if (sub) {
+            self->mono = *sub;
+        }
     }
 }
 
@@ -191,42 +205,42 @@ static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
     tl_type_subs *self = new (alloc, tl_type_subs);
-    self->froms        = (tl_type_variable_array){.alloc = alloc};
-    self->tos          = (tl_monotype_array){.alloc = alloc};
+    self->map          = map_create(alloc, sizeof(tl_monotype), 1024);
     return self;
 }
 
 void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
-    array_free((*p)->froms);
-    array_free((*p)->tos);
+    map_destroy(&(*p)->map);
     alloc_free(alloc, *p);
     *p = null;
 }
 
-tl_type_subs *tl_type_subs_compose(allocator *alloc, tl_type_subs const *base, tl_type_subs const *subs) {
-
-    tl_type_subs *out = tl_type_subs_create(alloc);
-    tl_type_subs_reserve(out, base->froms.size);
-
-    array_copy(out->froms, base->froms.v, base->froms.size);
-    array_copy(out->tos, base->tos.v, base->tos.size);
+void tl_type_subs_compose(tl_type_subs *base, tl_type_subs const *subs) {
 
     // apply subs to all monotypes in base
-    forall(i, out->tos) {
-        tl_monotype_apply_subs(&out->tos.v[i], subs);
+    {
+        hashmap_iterator iter = {0};
+        while (map_iter(subs->map, &iter)) {
+            tl_type_variable const *tv = iter.key_ptr;
+            assert(iter.key_size == sizeof(*tv));
+
+            tl_monotype *exist = map_get(base->map, tv, sizeof *tv);
+            if (exist) {
+                map_set(&base->map, tv, sizeof *tv, exist);
+            }
+        }
     }
 
     // copy remaining substitutions where type var is not in base
-    forall(i, subs->froms) {
-        tl_type_variable from = subs->froms.v[i];
+    {
+        hashmap_iterator iter = {0};
+        while (map_iter(subs->map, &iter)) {
+            tl_type_variable const *tv   = iter.key_ptr;
+            tl_monotype const      *mono = iter.data;
 
-        // TODO optimize inner loop
-        if (array_contains(out->froms, from)) continue;
-        array_push(out->froms, from);
-        array_push(out->tos, subs->tos.v[i]);
+            if (!map_contains(base->map, tv, sizeof *tv)) map_set(&base->map, tv, sizeof *tv, mono);
+        }
     }
-
-    return out;
 }
 
 void tl_type_subs_apply(tl_type_subs const *subs, tl_type_v2_array *types) {
@@ -235,6 +249,16 @@ void tl_type_subs_apply(tl_type_subs const *subs, tl_type_v2_array *types) {
         tl_type_v2_apply_subs(type, subs);
     }
 }
+
+void tl_type_subs_add(tl_type_subs *self, tl_type_variable from, tl_monotype to) {
+    map_set(&self->map, &from, sizeof from, &to);
+}
+
+tl_monotype *tl_type_subs_get(tl_type_subs *self, tl_type_variable from) {
+    return map_get(self->map, &from, sizeof from);
+}
+
+//
 
 void tl_type_env_subs_apply(tl_type_env *env, tl_type_subs const *subs) {
     forall(i, env->types) {
@@ -316,14 +340,17 @@ str tl_type_v2_to_string(allocator *alloc, tl_type_v2 const *self) {
 }
 
 str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
-    str_build b = str_build_init(alloc, 64);
+    str_build        b    = str_build_init(alloc, 64);
 
-    forall(i, self->froms) {
-        str tv = tl_type_variable_to_string(alloc, &self->froms.v[i]);
+    hashmap_iterator iter = {0};
+    while (map_iter(self->map, &iter)) {
+        tl_type_variable const *tvar  = iter.key_ptr;
+        tl_monotype const      *monot = iter.data;
+        str                     tv    = tl_type_variable_to_string(alloc, tvar);
         str_build_cat(&b, tv);
         str_deinit(alloc, &tv);
         str_build_cat(&b, S(" => "));
-        str mono = tl_monotype_to_string(alloc, &self->tos.v[i]);
+        str mono = tl_monotype_to_string(alloc, monot);
         str_build_cat(&b, mono);
         str_deinit(alloc, &mono);
     }

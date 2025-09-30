@@ -54,6 +54,8 @@ void                   tl_monotype_dealloc(allocator *, tl_monotype *);
 tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
 nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
 void                   tl_monotype_destroy(allocator *, tl_monotype **);
+int                    tl_monotype_eq(tl_monotype, tl_monotype);
+int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 
 // -- type --
 
@@ -62,20 +64,17 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme);
 
 // -- substitution --
 
-// FIXME: should be a hashmap as it is required that there be exactly one substitution from a given tv to a monotype. 
 typedef struct {
-    tl_type_variable_array froms;
-    tl_monotype_array      tos;
+    hashmap *map;
 } tl_type_subs;
 
 nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
-u32                     tl_type_subs_add(tl_type_subs *, tl_monotype from, tl_monotype to);
-// FIXME: from should be a tv only
+void                    tl_type_subs_add(tl_type_subs *, tl_type_variable from, tl_monotype to);
+tl_monotype            *tl_type_subs_get(tl_type_subs *, tl_type_variable);
 
-// apply subs to base and return new set
-nodiscard tl_type_subs *tl_type_subs_compose(allocator *, tl_type_subs const *base,
-                                             tl_type_subs const *subs);
+// apply subs to base destructively
+void tl_type_subs_compose(tl_type_subs *base, tl_type_subs const *subs);
 
 // apply subs to array of types
 void tl_type_subs_apply(tl_type_subs const *, tl_type_v2_array *);

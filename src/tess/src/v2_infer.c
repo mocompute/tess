@@ -157,6 +157,53 @@ static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_e
     return tops;
 }
 
+static int is_type_variable(tl_type_v2 const *self) {
+    return tl_mono == self->tag && tl_var == self->mono.tag;
+}
+
+static int can_apply_constraint(tl_monotype existing, tl_monotype apply) {
+    switch (existing.tag) {
+    case tl_nil:
+    case tl_cons:
+        if (!tl_monotype_eq(apply, existing)) return 0; // type error
+        return 1;
+
+    case tl_var: return 1;
+
+    case tl_arrow:
+        return tl_arrow == apply.tag && can_apply_constraint(*existing.arrow.left, *apply.arrow.left) &&
+               can_apply_constraint(*existing.arrow.right, *apply.arrow.right);
+    }
+}
+
+static int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right) {
+    tl_type_variable tv;
+    tl_monotype      mono;
+
+    if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
+
+    if (tl_monotype_occurs(left->mono, right->mono)) return 0;
+
+    if (is_type_variable(left)) {
+        tv   = left->mono.var;
+        mono = right->mono;
+    } else if (is_type_variable(right)) {
+        tv   = right->mono.var;
+        mono = left->mono;
+    } else {
+        return tl_monotype_eq(left->mono, right->mono);
+    }
+
+    tl_monotype *exist = tl_type_subs_get(&self->subs, tv);
+    if (exist) {
+        if (!can_apply_constraint(*exist, mono)) return 1; // type error
+
+    } else {
+        tl_type_subs_add(&self->subs, tv, mono);
+    }
+    return 0;
+}
+
 static void infer(tl_infer *self, ast_node *node) {
     // update subs by collecting and applying constraints found recursively starting at node.
 
@@ -167,7 +214,9 @@ static void infer(tl_infer *self, ast_node *node) {
     case ast_any:                         break;
     case ast_address_of:                  fatal("FIXME: pointer types");
     case ast_arrow:                       break;
-    case ast_assignment:
+
+    case ast_assignment:                  break;
+
     case ast_bool:
     case ast_dereference:
     case ast_dereference_assign:
