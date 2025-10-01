@@ -406,7 +406,10 @@ u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
     array_push(self->names, name);
     array_push(self->types, type);
     assert(self->names.size == self->types.size);
-    return self->names.size - 1;
+
+    u32 loc = self->names.size - 1;
+    str_map_set(&self->index, name, &loc);
+    return loc;
 }
 
 tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {

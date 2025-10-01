@@ -240,7 +240,15 @@ static void infer(tl_infer *self, ast_node *node) {
         constrain(self, node->type_v2, ty);
     } break;
 
+    case ast_let_in:
+        infer(self, node->let_in.value);
+        infer(self, node->let_in.body);
+        constrain(self, tl_type_env_lookup(self->env, node->let_in.name->symbol.name),
+                  node->let_in.value->type_v2);
+        break;
+
     case ast_let:
+
         if (str_eq(node->let.name->symbol.name, S("main"))) {
             // FIXME just force () -> Int
             tl_monotype left  = {0}; // nil
@@ -248,13 +256,14 @@ static void infer(tl_infer *self, ast_node *node) {
             tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
             tl_type_v2  ty    = tl_type_init_mono(arrow);
             constrain(self, node->type_v2, &ty);
+            infer(self, node->let.body);
         } else {
-            // FIXME
+            infer(self, node->let.body);
+            // FIXME do arrow
         }
         break;
 
     case ast_if_then_else:
-    case ast_let_in:
     case ast_let_match_in:
     case ast_string:
     case ast_symbol:
@@ -273,60 +282,6 @@ static void infer(tl_infer *self, ast_node *node) {
     case ast_user_type:                   break;
     }
 }
-
-// static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
-//     tl_type_subs subs = {.froms = {.alloc = self->arena}, .tos = {.alloc = self->arena}};
-//     tl_type_v2   type = {0};
-
-//     switch (node->tag) {
-//     case ast_i64: type = *tl_type_env_lookup(self->env, S("Int")); break;
-
-//     case ast_let: {
-//         if (str_eq(node->let.name->symbol.name, S("main"))) {
-//             // FIXME just force () -> Int
-//             tl_monotype left  = {0}; // nil
-//             tl_monotype right = tl_type_env_lookup(self->env, S("Int"))->mono;
-//             tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
-//             type              = tl_type_init_mono(arrow);
-//         } else {
-//             // FIXME
-//         }
-//     } break;
-
-//     case ast_nil:
-//     case ast_any:
-//     case ast_address_of:
-//     case ast_arrow:
-//     case ast_assignment:
-//     case ast_bool:
-//     case ast_dereference:
-//     case ast_dereference_assign:
-//     case ast_ellipsis:
-//     case ast_eof:
-//     case ast_f64:
-//     case ast_if_then_else:
-//     case ast_let_in:
-//     case ast_let_match_in:
-//     case ast_string:
-//     case ast_symbol:
-//     case ast_u64:
-//     case ast_user_type_definition:
-//     case ast_user_type_get:
-//     case ast_user_type_set:
-//     case ast_begin_end:
-//     case ast_function_declaration:
-//     case ast_labelled_tuple:
-//     case ast_lambda_declaration:
-//     case ast_lambda_function:
-//     case ast_lambda_function_application:
-//     case ast_named_function_application:
-//     case ast_tuple:
-//     case ast_user_type:                   fatal("not implemented");
-//     }
-
-//     *out_type = type;
-//     *out_subs = subs;
-// }
 
 static str next_variable_name(tl_infer *self) {
     char buf[32];
@@ -553,7 +508,8 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
         assign_expression_types(self, node->lambda_application.lambda);
         break;
 
-    case ast_let:
+    case ast_let:                        assign_expression_types(self, node->let.body); break;
+
     case ast_named_function_application:
     case ast_bool:
     case ast_ellipsis:
