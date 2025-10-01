@@ -1,5 +1,6 @@
 #include "v2_infer.h"
 #include "alloc.h"
+#include "array.h"
 #include "ast_tags.h"
 #include "dbg.h"
 #include "error.h"
@@ -571,20 +572,22 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
     if (params.size == 0) {
         tl_monotype    lhs   = tl_monotype_init_nil();
-        tl_monotype    rhs   = tl_monotype_init_tv(tl_type_context_new_variable(&self->context));
+        tl_monotype    rhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
         tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
 
-        tl_type_scheme s     = {.type = arrow};
+        tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
+        array_push(s.quantifiers, rhs.quant);
         return tl_type_init_scheme(s);
     }
 
     else if (params.size == 1) {
         tl_monotype    lhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
-        tl_monotype    rhs   = tl_monotype_init_tv(tl_type_context_new_variable(&self->context));
+        tl_monotype    rhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
         tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
 
         tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
         array_push(s.quantifiers, lhs.quant);
+        if (!array_contains(s.quantifiers, rhs.quant)) array_push(s.quantifiers, rhs.quant);
         return tl_type_init_scheme(s);
     }
 
@@ -596,7 +599,10 @@ static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
         tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs.scheme.type);
         tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
         array_push(s.quantifiers, lhs.quant);
-        array_copy(s.quantifiers, rhs.scheme.quantifiers.v, rhs.scheme.quantifiers.size);
+        forall(i, rhs.scheme.quantifiers) {
+            if (!array_contains(s.quantifiers, rhs.scheme.quantifiers.v[i]))
+                array_push(s.quantifiers, rhs.scheme.quantifiers.v[i]);
+        }
         array_free(rhs.scheme.quantifiers);
 
         return tl_type_init_scheme(s);
