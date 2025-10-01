@@ -37,6 +37,7 @@ struct tl_infer {
     tl_infer_error_array errors;
 
     u32                  next_var_name;
+    u32                  next_instantiation;
 
     int                  verbose;
     int                  indent_level;
@@ -48,6 +49,7 @@ static str          v2_ast_node_to_string(allocator *, ast_node const *);
 static void         assign_expression_types(tl_infer *self, ast_node *node);
 static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
 static tl_monotype *arrow_rightmost(tl_monotype *);
+static str          next_instantiation(tl_infer *, str);
 
 static void         log(tl_infer const *self, char const *restrict fmt, ...);
 static void         log_toplevels(tl_infer const *);
@@ -432,6 +434,11 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
         tl_type_v2 result_ty = tl_type_init_mono(*arrow_rightmost(&inst.mono));
         if (constrain(self, node->type_v2, &result_ty, node)) return 1;
 
+        // instantiate unique name
+        str name_inst                   = next_instantiation(self, node->let.name->symbol.name);
+        node->let.name->symbol.original = node->let.name->symbol.name;
+        node->let.name->symbol.name     = name_inst;
+
         // FIXME continue: constrain argument types
 
     } break;
@@ -456,6 +463,12 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
 static str next_variable_name(tl_infer *self) {
     char buf[32];
     snprintf(buf, sizeof buf, "v%u", self->next_var_name++);
+    return str_init(self->arena, buf);
+}
+
+static str next_instantiation(tl_infer *self, str name) {
+    char buf[128];
+    snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
     return str_init(self->arena, buf);
 }
 
