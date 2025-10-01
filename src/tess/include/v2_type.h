@@ -23,9 +23,10 @@ typedef struct tl_monotype {
     union {
         tl_type_constructor_inst cons;
         tl_type_variable         var;
+        tl_type_quantifier       quant; // because we use monotype struct for type schemes too
         tl_type_v2_arrow         arrow;
     };
-    enum { tl_nil, tl_cons, tl_var, tl_arrow } tag;
+    enum { tl_nil, tl_cons, tl_var, tl_quant, tl_arrow } tag;
 } tl_monotype;
 
 typedef struct {
@@ -48,6 +49,7 @@ void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 cons
 
 tl_monotype            tl_monotype_init_nil();
 tl_monotype            tl_monotype_init_tv(tl_type_variable);
+tl_monotype            tl_monotype_init_quant(tl_type_quantifier);
 tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
 nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
 void                   tl_monotype_dealloc(allocator *, tl_monotype *);
@@ -115,6 +117,7 @@ void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const 
 
 str tl_type_subs_to_string(allocator *, tl_type_subs const *);
 str tl_type_variable_to_string(allocator *, tl_type_variable const *);
+str tl_type_quantifier_to_string(allocator *, tl_type_quantifier const *);
 str tl_type_constructor_inst_to_string(allocator *, tl_type_constructor_inst const *);
 str tl_type_arrow_to_string(allocator *, tl_type_v2_arrow const *);
 str tl_monotype_to_string(allocator *, tl_monotype const *);

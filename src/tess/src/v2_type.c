@@ -8,8 +8,16 @@
 
 // -- monotype --
 
+tl_monotype tl_monotype_init_nil() {
+    return (tl_monotype){.tag = tl_nil};
+}
+
 tl_monotype tl_monotype_init_tv(tl_type_variable tv) {
     return (tl_monotype){.tag = tl_var, .var = tv};
+}
+
+tl_monotype tl_monotype_init_quant(tl_type_quantifier q) {
+    return (tl_monotype){.tag = tl_quant, .var = q};
 }
 
 tl_monotype tl_monotype_init_arrow(tl_type_v2_arrow arrow) {
@@ -35,7 +43,8 @@ void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
         break;
 
     case tl_var:
-    case tl_nil: break;
+    case tl_quant:
+    case tl_nil:   break;
     }
 
     alloc_invalidate(self);
@@ -69,6 +78,7 @@ int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
         }
         return 1;
     case tl_var:   return lhs.var == rhs.var;
+    case tl_quant: return lhs.quant == rhs.quant;
     case tl_arrow: return tl_monotype_eq(*lhs.arrow.lhs, *rhs.arrow.rhs); break;
     }
 }
@@ -87,6 +97,10 @@ int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
 
     case tl_var:
         if (tl_var == rhs.tag) return lhs.var == rhs.var;
+        return tl_monotype_occurs(rhs, lhs);
+
+    case tl_quant:
+        if (tl_quant == rhs.tag) return lhs.quant == rhs.quant;
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_arrow:
@@ -137,6 +151,8 @@ static void tl_monotype_collect_free_variables(tl_type_variable_array *out, tl_m
     case tl_cons:  return tl_type_constructor_inst_collect_free_variables(out, &mono->cons);
     case tl_var:   return tl_type_variable_collect_free_variables(out, &mono->var);
     case tl_arrow: return tl_type_arrow_collect_free_variables(out, &mono->arrow);
+
+    case tl_quant:
     case tl_nil:   return;
     }
 }
@@ -188,7 +204,8 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_m
         tl_monotype_substitute(self->arrow.rhs, var, mono);
     } break;
 
-    case tl_nil: break;
+    case tl_quant:
+    case tl_nil:   break;
     }
 }
 
@@ -272,6 +289,12 @@ str tl_type_variable_to_string(allocator *alloc, tl_type_variable const *self) {
     return str_init(alloc, buf);
 }
 
+str tl_type_quantifier_to_string(allocator *alloc, tl_type_quantifier const *self) {
+    char buf[64];
+    snprintf(buf, sizeof buf, "q%u", *self);
+    return str_init(alloc, buf);
+}
+
 str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_inst const *self) {
     str_build b = str_build_init(alloc, 64);
     str_build_cat(&b, self->name);
@@ -308,6 +331,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     switch (self->tag) {
     case tl_cons:  return tl_type_constructor_inst_to_string(alloc, &self->cons);
     case tl_var:   return tl_type_variable_to_string(alloc, &self->var);
+    case tl_quant: return tl_type_quantifier_to_string(alloc, &self->var);
     case tl_arrow: return tl_type_arrow_to_string(alloc, &self->arrow);
     case tl_nil:   return str_copy(alloc, S("()"));
     }
@@ -319,7 +343,7 @@ str tl_type_scheme_to_string(allocator *alloc, tl_type_scheme const *self) {
     str_build_cat(&b, S("forall"));
     forall(i, self->quantifiers) {
         str_build_cat(&b, S(" "));
-        str tv = tl_type_variable_to_string(alloc, &self->quantifiers.v[i]);
+        str tv = tl_type_quantifier_to_string(alloc, &self->quantifiers.v[i]);
         str_build_cat(&b, tv);
         str_deinit(alloc, &tv);
     }
@@ -403,6 +427,12 @@ void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
 }
 
 u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
+    u32 *found = str_map_get(self->index, name);
+    if (found) {
+        self->types.v[*found] = type;
+        return *found;
+    }
+
     array_push(self->names, name);
     array_push(self->types, type);
     assert(self->names.size == self->types.size);

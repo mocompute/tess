@@ -182,7 +182,8 @@ static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
         if (!tl_monotype_eq(apply, existing)) return 0; // type error
         return 1;
 
-    case tl_var: return 1;
+    case tl_var:   return 1;
+    case tl_quant: return 0;
 
     case tl_arrow:
         return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.lhs, *apply.arrow.lhs) &&
@@ -213,6 +214,8 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
         tl_monotype *mono_match = tl_type_subs_get(self->subs, mono.var);
         if (mono_match) return unify(self, tv, *mono_match);
     } break;
+
+    case tl_quant: fatal("attempt to unify quantifier");
 
     case tl_arrow: {
         // if either arm is an existing tv, use it's substitution instead, because we want to add a minimal
@@ -353,7 +356,7 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
     case ast_let:
 
         if (str_eq(node->let.name->symbol.name, S("main"))) {
-            // FIXME just force () -> Int
+            // main must : () -> Int
             tl_monotype left     = {0}; // nil
             tl_monotype right    = tl_type_env_lookup(self->env, S("Int"))->mono;
             tl_monotype arrow    = tl_monotype_alloc_arrow(self->arena, left, right);
@@ -363,6 +366,7 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
             if (constrain(self, node->type_v2, &arrow_ty, node)) return 1;
             if (infer(self, node->let.body)) return 1;
             if (constrain(self, node->let.body->type_v2, &right_ty, node)) return 1;
+
         } else {
             return infer(self, node->let.body);
             // FIXME do arrow
@@ -530,18 +534,23 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     } break;
 
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-        // FIXME
+    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex); break;
 
-        fatal("fixme");
+    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex); break;
+
+    case ast_begin_end:
+        for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
+            rename_variables(self, node->begin_end.expressions[i], lex);
         break;
 
+    case ast_labelled_tuple:
+    case ast_tuple:
+
+    case ast_lambda_function_application:
+        rename_variables(self, node->lambda_application.lambda, lex);
+        break;
+
+    case ast_named_function_application:
     case ast_string:
     case ast_nil:
     case ast_any:
@@ -555,8 +564,53 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_user_type_definition:
     case ast_function_declaration:
     case ast_lambda_declaration:
-    case ast_user_type:            break;
+    case ast_user_type:                  break;
     }
+}
+
+static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
+    if (params.size == 0) {
+        tl_monotype    lhs   = tl_monotype_init_nil();
+        tl_monotype    rhs   = tl_monotype_init_tv(tl_type_context_new_variable(&self->context));
+        tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+
+        tl_type_scheme s     = {.type = arrow};
+        return tl_type_init_scheme(s);
+    }
+
+    else if (params.size == 1) {
+        tl_monotype    lhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_monotype    rhs   = tl_monotype_init_tv(tl_type_context_new_variable(&self->context));
+        tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+
+        tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
+        array_push(s.quantifiers, lhs.quant);
+        return tl_type_init_scheme(s);
+    }
+
+    else {
+        tl_monotype lhs = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_type_v2  rhs =
+          make_generic_arrow(self, (ast_node_sized){.size = params.size - 1, .v = &params.v[1]});
+
+        tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs.scheme.type);
+        tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
+        array_push(s.quantifiers, lhs.quant);
+        array_copy(s.quantifiers, rhs.scheme.quantifiers.v, rhs.scheme.quantifiers.size);
+        array_free(rhs.scheme.quantifiers);
+
+        return tl_type_init_scheme(s);
+    }
+}
+
+static void add_generic(tl_infer *self, ast_node *node) {
+    if (!node) return;
+    if (ast_let != node->tag) return;
+
+    tl_type_v2 arrow =
+      make_generic_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters});
+
+    tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
 }
 
 void assign_expression_types(tl_infer *self, ast_node *node) {
@@ -613,7 +667,12 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
         assign_expression_types(self, node->lambda_application.lambda);
         break;
 
-    case ast_let:                        assign_expression_types(self, node->let.body); break;
+    case ast_let:
+        //
+        // add generic function to environment
+        add_generic(self, node);
+        assign_expression_types(self, node->let.body);
+        break;
 
     case ast_named_function_application: assign_expression_types(self, node->named_application.name); break;
     case ast_bool:
