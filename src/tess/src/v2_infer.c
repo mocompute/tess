@@ -772,7 +772,39 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     }
 }
 
+typedef struct {
+    tl_infer  *self;
+    str_array *array;
+} all_variables_ctx;
+
+static void do_all_variables(void *ctx_, ast_node *node) {
+    all_variables_ctx *ctx = ctx_;
+    if (ast_symbol != node->tag) return;
+
+    // record name if not already recorded
+    array_set_insert(*ctx->array, node->symbol.name);
+}
+
+static void all_variables(tl_infer *self, ast_node *node, str_array *names) {
+    all_variables_ctx ctx = {.self = self, .array = names};
+    ast_node_dfs(&ctx, node, do_all_variables);
+}
+
+static void remove_known_variables(tl_infer *self, str_array *names) {
+    for (u32 i = 0; i < names->size;) {
+        if (tl_type_env_lookup(self->env, names->v[i])) {
+            array_erase(*names, i);
+        } else {
+            ++i;
+        }
+    }
+}
+
 static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
+    // FIXME: do not simply assume every param becomes a quantifier: instead, analyze the source to identify
+    // free variables, then assign all NON-free variables a quantifier, ensuring the same variable gets the
+    // same quantifier. let id x = x should get one quantifer, not two.
+
     if (params.size == 0) {
         tl_monotype    lhs   = tl_monotype_init_nil();
         tl_monotype    rhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
