@@ -175,7 +175,7 @@ static int is_type_variable(tl_type_v2 const *self) {
     return tl_mono == self->tag && tl_var == self->mono.tag;
 }
 
-static int can_apply_constraint(tl_monotype existing, tl_monotype apply) {
+static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
     switch (existing.tag) {
     case tl_nil:
     case tl_cons:
@@ -185,12 +185,15 @@ static int can_apply_constraint(tl_monotype existing, tl_monotype apply) {
     case tl_var: return 1;
 
     case tl_arrow:
-        return tl_arrow == apply.tag && can_apply_constraint(*existing.arrow.left, *apply.arrow.left) &&
-               can_apply_constraint(*existing.arrow.right, *apply.arrow.right);
+        return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.left, *apply.arrow.left) &&
+               constraint_is_compatible(*existing.arrow.right, *apply.arrow.right);
     }
 }
 
 static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
+    // unify tv with mono in the context of self->subs: if mono is a type variable that exists in the
+    // context of subs, replace it with the existing substitution. Similarly recursively for type
+    // constructor arguments and arrow arms.
     switch (mono.tag) {
 
     case tl_nil:  break;
@@ -207,10 +210,7 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     case tl_var: {
         // if mono is a tv, unify it with existing tv, if any
         tl_monotype *mono_match = tl_type_subs_get(self->subs, mono.var);
-        if (mono_match) {
-            tl_type_subs_add(self->subs, tv, *mono_match);
-            return 0;
-        }
+        if (mono_match) return unify(self, tv, *mono_match);
     } break;
 
     case tl_arrow: {
@@ -227,11 +227,22 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
 
         if (left_match) mono.arrow.left = left_match;
         if (right_match) mono.arrow.right = right_match;
+        if (left_match || right_match) return unify(self, tv, mono);
 
     } break;
     }
 
     tl_type_subs_add(self->subs, tv, mono);
+
+    if (tl_var != mono.tag) {
+        // any subs with tv on the right hand side should be replaced
+        hashmap_iterator iter = {0};
+        while (map_iter(self->subs->map, &iter)) {
+            // tl_type_variable const *map_tv   = iter.key_ptr;
+            tl_monotype *map_mono = iter.data;
+            if (tl_var == map_mono->tag && map_mono->var == tv) *map_mono = mono;
+        }
+    }
 
     return 0;
 }
@@ -257,7 +268,7 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
 
     tl_monotype *exist = tl_type_subs_get(self->subs, tv);
     if (exist) {
-        if (!can_apply_constraint(*exist, mono)) {
+        if (!constraint_is_compatible(*exist, mono)) {
             str exist_str = tl_monotype_to_string(self->transient, exist);
             str new_str   = tl_monotype_to_string(self->transient, &mono);
             log(self, "new constraint %.*s is not compatible with existing constraint %.*s",
@@ -267,9 +278,7 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
             tl_type_v2 exist_ty = tl_type_init_mono(*exist);
             tl_type_v2 mono_ty  = tl_type_init_mono(mono);
             return constrain(self, &exist_ty, &mono_ty, node);
-        }
-
-        else if (tl_cons == exist->tag) {
+        } else if (tl_cons == exist->tag) {
             // ignore because they are equal
             return 0;
         }
