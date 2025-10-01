@@ -263,12 +263,15 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
             log(self, "new constraint %.*s is not compatible with existing constraint %.*s",
                 str_ilen(new_str), str_buf(&new_str), str_ilen(exist_str), str_buf(&exist_str));
             return type_error(self, node);
-        } else if (tl_var == exist->tag) {
+        } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
             tl_type_v2 exist_ty = tl_type_init_mono(*exist);
             tl_type_v2 mono_ty  = tl_type_init_mono(mono);
             return constrain(self, &exist_ty, &mono_ty, node);
-        } else {
-            fatal("what to do with new constraint on same tv...");
+        }
+
+        else if (tl_cons == exist->tag) {
+            // ignore because they are equal
+            return 0;
         }
     }
     return unify(self, tv, mono);

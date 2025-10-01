@@ -1,2 +1,2 @@
 let main () =
-  let x = 0.5 in x
+  let x = 0 in x
