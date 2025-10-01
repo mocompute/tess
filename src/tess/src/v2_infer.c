@@ -45,16 +45,17 @@ struct tl_infer {
 
 //
 
-static str          v2_ast_node_to_string(allocator *, ast_node const *);
-static void         assign_expression_types(tl_infer *self, ast_node *node);
-static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
-static tl_monotype *arrow_rightmost(tl_monotype *);
-static str          next_instantiation(tl_infer *, str);
+static str               v2_ast_node_to_string(allocator *, ast_node const *);
+static void              assign_expression_types(tl_infer *self, ast_node *node);
+static tl_type_v2        instantiate(tl_infer *, tl_type_v2);
+static tl_monotype      *arrow_rightmost(tl_monotype *);
+static tl_monotype_array arrow_left(allocator *, tl_monotype *);
+static str               next_instantiation(tl_infer *, str);
 
-static void         log(tl_infer const *self, char const *restrict fmt, ...);
-static void         log_toplevels(tl_infer const *);
-static void         log_env(tl_infer const *);
-static void         log_subs(tl_infer const *);
+static void              log(tl_infer const *self, char const *restrict fmt, ...);
+static void              log_toplevels(tl_infer const *);
+static void              log_env(tl_infer const *);
+static void              log_subs(tl_infer const *);
 
 //
 
@@ -431,6 +432,17 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
         tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->let.name->symbol.name);
         tl_type_v2  inst = instantiate(self, *fun);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+
+        // constrain argument types
+        tl_monotype_array params = arrow_left(self->transient, &inst.mono);
+        if (params.size != node->named_application.n_arguments) return type_error(self, node);
+
+        forall(i, params) {
+            tl_type_v2 param = tl_type_init_mono(params.v[i]);
+            tl_type_v2 arg   = *node->named_application.arguments[i]->type_v2;
+            if (constrain(self, &param, &arg, node)) return 1;
+        }
+
         tl_type_v2 result_ty = tl_type_init_mono(*arrow_rightmost(&inst.mono));
         if (constrain(self, node->type_v2, &result_ty, node)) return 1;
 
@@ -439,7 +451,7 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
         node->let.name->symbol.original = node->let.name->symbol.name;
         node->let.name->symbol.name     = name_inst;
 
-        // FIXME continue: constrain argument types
+        array_free(params);
 
     } break;
 
@@ -684,6 +696,21 @@ static tl_monotype *arrow_rightmost(tl_monotype *arrow) {
 
     if (tl_arrow == arrow->arrow.rhs->tag) return arrow_rightmost(arrow->arrow.rhs);
     return arrow->arrow.rhs;
+}
+
+static tl_monotype_array arrow_left_(tl_monotype *arrow, tl_monotype_array acc) {
+    if (tl_arrow != arrow->arrow.rhs->tag) {
+        array_push(acc, *arrow->arrow.lhs);
+        return acc;
+    }
+    array_push(acc, *arrow->arrow.lhs);
+    return arrow_left_(arrow->arrow.rhs, acc);
+}
+
+static tl_monotype_array arrow_left(allocator *alloc, tl_monotype *arrow) {
+    if (tl_arrow != arrow->tag) fatal("logic error");
+    tl_monotype_array out = {.alloc = alloc};
+    return arrow_left_(arrow, out);
 }
 
 static void replace_quant(hashmap *map, tl_monotype *mono) {
