@@ -19,7 +19,7 @@ tl_monotype tl_monotype_init_arrow(tl_type_v2_arrow arrow) {
 tl_monotype tl_monotype_alloc_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
     tl_monotype *pleft  = tl_monotype_create(alloc, left);
     tl_monotype *pright = tl_monotype_create(alloc, right);
-    tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_v2_arrow){.left = pleft, .right = pright});
+    tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_v2_arrow){.lhs = pleft, .rhs = pright});
     return arrow;
 }
 
@@ -30,8 +30,8 @@ void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
         str_deinit(alloc, &self->cons.name);
         break;
     case tl_arrow:
-        alloc_free(alloc, self->arrow.left);
-        alloc_free(alloc, self->arrow.right);
+        alloc_free(alloc, self->arrow.lhs);
+        alloc_free(alloc, self->arrow.rhs);
         break;
 
     case tl_var:
@@ -69,7 +69,7 @@ int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
         }
         return 1;
     case tl_var:   return lhs.var == rhs.var;
-    case tl_arrow: return tl_monotype_eq(*lhs.arrow.left, *rhs.arrow.right); break;
+    case tl_arrow: return tl_monotype_eq(*lhs.arrow.lhs, *rhs.arrow.rhs); break;
     }
 }
 
@@ -90,7 +90,7 @@ int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_arrow:
-        return tl_monotype_occurs(*lhs.arrow.left, rhs) || tl_monotype_occurs(*lhs.arrow.right, rhs);
+        return tl_monotype_occurs(*lhs.arrow.lhs, rhs) || tl_monotype_occurs(*lhs.arrow.rhs, rhs);
     }
 }
 
@@ -128,8 +128,8 @@ static void tl_type_variable_collect_free_variables(tl_type_variable_array *out,
 
 static void tl_type_arrow_collect_free_variables(tl_type_variable_array *out,
                                                  tl_type_v2_arrow const *arrow) {
-    tl_monotype_collect_free_variables(out, arrow->left);
-    tl_monotype_collect_free_variables(out, arrow->right);
+    tl_monotype_collect_free_variables(out, arrow->lhs);
+    tl_monotype_collect_free_variables(out, arrow->rhs);
 }
 
 static void tl_monotype_collect_free_variables(tl_type_variable_array *out, tl_monotype const *mono) {
@@ -184,8 +184,8 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_m
     } break;
 
     case tl_arrow: {
-        tl_monotype_substitute(self->arrow.left, var, mono);
-        tl_monotype_substitute(self->arrow.right, var, mono);
+        tl_monotype_substitute(self->arrow.lhs, var, mono);
+        tl_monotype_substitute(self->arrow.rhs, var, mono);
     } break;
 
     case tl_nil: break;
@@ -291,13 +291,13 @@ str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_ins
 str tl_type_arrow_to_string(allocator *alloc, tl_type_v2_arrow const *self) {
     str_build b = str_build_init(alloc, 64);
     {
-        str left = tl_monotype_to_string(alloc, self->left);
+        str left = tl_monotype_to_string(alloc, self->lhs);
         str_build_cat(&b, left);
         str_deinit(alloc, &left);
     }
     str_build_cat(&b, S(" -> "));
     {
-        str right = tl_monotype_to_string(alloc, self->right);
+        str right = tl_monotype_to_string(alloc, self->rhs);
         str_build_cat(&b, right);
         str_deinit(alloc, &right);
     }

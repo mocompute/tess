@@ -16,7 +16,7 @@ typedef struct {array_header; struct tl_monotype *v;}                 tl_monotyp
 typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
 typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
 typedef struct {str name; tl_monotype_array       args;}              tl_type_constructor_inst;
-typedef struct {struct tl_monotype *left; struct tl_monotype *right;} tl_type_v2_arrow;
+typedef struct {struct tl_monotype *lhs; struct tl_monotype *rhs;}    tl_type_v2_arrow;
 // clang-format on
 
 typedef struct tl_monotype {

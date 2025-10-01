@@ -185,8 +185,8 @@ static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
     case tl_var: return 1;
 
     case tl_arrow:
-        return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.left, *apply.arrow.left) &&
-               constraint_is_compatible(*existing.arrow.right, *apply.arrow.right);
+        return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.lhs, *apply.arrow.lhs) &&
+               constraint_is_compatible(*existing.arrow.rhs, *apply.arrow.rhs);
     }
 }
 
@@ -197,6 +197,7 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     switch (mono.tag) {
 
     case tl_nil:  break;
+
     case tl_cons: {
         // attempt to match type constructor arguments against existing type vars
         forall(i, mono.cons.args) {
@@ -214,20 +215,20 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     } break;
 
     case tl_arrow: {
-        // if either arm is an existing tv, use it instead
+        // if either arm is an existing tv, use it's substitution instead, because we want to add a minimal
+        // amount of new tvs to the context
         tl_monotype *left_match  = null;
         tl_monotype *right_match = null;
 
-        if (tl_var == mono.arrow.left->tag) {
-            left_match = tl_type_subs_get(self->subs, mono.arrow.left->var);
+        if (tl_var == mono.arrow.lhs->tag) {
+            left_match = tl_type_subs_get(self->subs, mono.arrow.lhs->var);
         }
-        if (tl_var == mono.arrow.right->tag) {
-            right_match = tl_type_subs_get(self->subs, mono.arrow.right->var);
+        if (tl_var == mono.arrow.rhs->tag) {
+            right_match = tl_type_subs_get(self->subs, mono.arrow.rhs->var);
         }
 
-        if (left_match) mono.arrow.left = left_match;
-        if (right_match) mono.arrow.right = right_match;
-        if (left_match || right_match) return unify(self, tv, mono);
+        if (left_match) mono.arrow.lhs = left_match;
+        if (right_match) mono.arrow.rhs = right_match;
 
     } break;
     }
@@ -235,12 +236,27 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     tl_type_subs_add(self->subs, tv, mono);
 
     if (tl_var != mono.tag) {
-        // any subs with tv on the right hand side should be replaced
+        // any existing subs with tv on the right hand side should be replaced with the new non-tv mono
         hashmap_iterator iter = {0};
         while (map_iter(self->subs->map, &iter)) {
-            // tl_type_variable const *map_tv   = iter.key_ptr;
-            tl_monotype *map_mono = iter.data;
-            if (tl_var == map_mono->tag && map_mono->var == tv) *map_mono = mono;
+            tl_monotype *rhs = iter.data;
+
+            if (tl_var == rhs->tag && rhs->var == tv) {
+                *rhs = mono;
+            }
+
+            else if (tl_arrow == rhs->tag) {
+                tl_type_v2_arrow *a = &rhs->arrow;
+                if (tl_var == a->lhs->tag && a->lhs->tag == tv) *a->lhs = mono;
+                if (tl_var == a->rhs->tag && a->rhs->tag == tv) *a->rhs = mono;
+            }
+
+            else if (tl_cons == rhs->tag) {
+                tl_type_constructor_inst *c = &rhs->cons;
+                forall(i, c->args) {
+                    if (tl_var == c->args.v[i].tag && c->args.v[i].var == tv) c->args.v[i] = mono;
+                }
+            }
         }
     }
 
