@@ -48,6 +48,7 @@ struct tl_infer {
 static str               v2_ast_node_to_string(allocator *, ast_node const *);
 static void              assign_expression_types(tl_infer *self, ast_node *node);
 static tl_type_v2        instantiate(tl_infer *, tl_type_v2);
+static tl_type_v2        make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 static tl_monotype      *arrow_rightmost(tl_monotype *);
 static tl_monotype_array arrow_left(allocator *, tl_monotype *);
 static str               next_instantiation(tl_infer *, str);
@@ -304,6 +305,14 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
 
     if (tl_monotype_occurs(left->mono, right->mono)) return 0;
 
+    if (self->verbose) {
+        str left_str  = tl_type_v2_to_string(self->transient, left);
+        str right_str = tl_type_v2_to_string(self->transient, right);
+        str node_str  = v2_ast_node_to_string(self->transient, node);
+        log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
+            str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
+    }
+
     if (is_type_variable(left)) {
         return constrain_tv(self, left->mono.var, right->mono, node);
     } else if (is_type_variable(right)) {
@@ -353,7 +362,16 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
     return 0;
 }
 
-static nodiscard int infer(tl_infer *self, ast_node *node) {
+static void ensure_tv(tl_infer *self, tl_type_v2 **type) {
+    if (!type) return;
+    if (*type) return;
+    *type  = new (self->arena, tl_type_v2);
+    **type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+}
+
+static str instantiate_fun_and_infer(tl_infer *, ast_node *, tl_monotype, hashmap **);
+
+static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
     // update subs by collecting and applying constraints found recursively starting at node.
 
     if (null == node) return 0;
@@ -373,85 +391,126 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
 
     case ast_string:             {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("String"));
+        ensure_tv(self, &node->type_v2);
         return constrain(self, node->type_v2, ty, node);
     } break;
 
     case ast_f64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Float"));
+        ensure_tv(self, &node->type_v2);
         return constrain(self, node->type_v2, ty, node);
     } break;
 
     case ast_i64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
+        ensure_tv(self, &node->type_v2);
         return constrain(self, node->type_v2, ty, node);
     } break;
 
     case ast_u64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int")); // FIXME unsigned int
+        ensure_tv(self, &node->type_v2);
         return constrain(self, node->type_v2, ty, node);
     } break;
 
-    case ast_let_in:
-        if (infer(self, node->let_in.value)) return 1;
-        if (infer(self, node->let_in.body)) return 1;
+    case ast_let_in: {
+        if (infer(self, node->let_in.value, lex)) return 1;
+
+        hashmap *save = map_copy(*lex);
+
+        ensure_tv(self, &node->let_in.name->type_v2);
+        str_map_set(lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+
+        if (infer(self, node->let_in.body, lex)) return 1;
+
+        ensure_tv(self, &node->type_v2);
         if (constrain(self, node->type_v2, node->let_in.body->type_v2, node)) return 1;
 
-        if (constrain(self, tl_type_env_lookup(self->env, node->let_in.name->symbol.name),
-                      node->let_in.value->type_v2, node))
-            return 1;
-        break;
+        map_destroy(lex);
+        *lex = save;
 
-    case ast_let:
+    } break;
 
-        if (str_eq(node->let.name->symbol.name, S("main"))) {
-            // main must : () -> Int
-            tl_monotype left     = {0}; // nil
-            tl_monotype right    = tl_type_env_lookup(self->env, S("Int"))->mono;
-            tl_monotype arrow    = tl_monotype_alloc_arrow(self->arena, left, right);
-            tl_type_v2  arrow_ty = tl_type_init_mono(arrow);
-            tl_type_v2  right_ty = tl_type_init_mono(right);
-
-            if (constrain(self, node->type_v2, &arrow_ty, node)) return 1;
-            if (infer(self, node->let.body)) return 1;
-            if (constrain(self, node->let.body->type_v2, &right_ty, node)) return 1;
-
-        } else {
-            // tl_type_v2 *fun = tl_type_env_lookup(self->env, node->let.name->symbol.name);
-
-            // return infer(self, node->let.body);
+    case ast_let: {
+        hashmap *save = map_copy(*lex);
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ensure_tv(self, &node->let.parameters[i]->type_v2);
+            str_map_set(lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
         }
-        break;
 
-    case ast_symbol:
-        if (constrain(self, tl_type_env_lookup(self->env, node->symbol.name), node->type_v2, node))
-            return 1;
-        break;
+        if (infer(self, node->let.body, lex)) return 1;
+
+        map_destroy(lex);
+        *lex = save;
+    } break;
+
+    case ast_symbol: {
+        ensure_tv(self, &node->type_v2);
+        tl_type_v2 *global = tl_type_env_lookup(self->env, node->symbol.name);
+        if (global) {
+            if (constrain(self, global, node->type_v2, node)) return 1;
+        } else {
+            tl_type_v2 **found;
+            if ((found = str_map_get(*lex, node->symbol.name))) {
+                if (constrain(self, *found, node->type_v2, node)) return 1;
+            }
+        }
+
+    } break;
 
     case ast_named_function_application: {
         //
-        tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->let.name->symbol.name);
+        ast_node **fun_let = str_map_get(self->toplevels, node->named_application.name->symbol.name);
+        if (!fun_let) {
+            array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
+                                                       .node = node->named_application.name}));
+            return 1;
+        }
+        if (infer(self, *fun_let, lex)) return 1;
+
+        tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
         tl_type_v2  inst = instantiate(self, *fun);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
-        // constrain argument types
-        tl_monotype_array params = arrow_left(self->transient, &inst.mono);
-        if (params.size != node->named_application.n_arguments) return type_error(self, node);
-
-        forall(i, params) {
-            tl_type_v2 param = tl_type_init_mono(params.v[i]);
-            tl_type_v2 arg   = *node->named_application.arguments[i]->type_v2;
-            if (constrain(self, &param, &arg, node)) return 1;
+        // infer the arguments
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            if (infer(self, node->named_application.arguments[i], lex)) return 1;
         }
 
-        tl_type_v2 result_ty = tl_type_init_mono(*arrow_rightmost(&inst.mono));
-        if (constrain(self, node->type_v2, &result_ty, node)) return 1;
+        // constrain arrow types
+        tl_type_v2 app = make_arrow(self,
+                                    (ast_node_sized){.size = node->named_application.n_arguments,
+                                                     .v    = node->named_application.arguments},
+                                    node);
+        if (constrain(self, &inst, &app, node)) return 1;
 
-        // instantiate unique name
-        str name_inst                   = next_instantiation(self, node->let.name->symbol.name);
-        node->let.name->symbol.original = node->let.name->symbol.name;
-        node->let.name->symbol.name     = name_inst;
+        // FIXME: now infer an *instantiated* function body
+        str name_inst = instantiate_fun_and_infer(self, *fun_let, inst.mono, lex);
 
-        array_free(params);
+        // constrain instantiated result type
+        tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
+        if (constrain(self, &inst_right, node->type_v2, node)) return 1;
+
+        // this constrains against the just-instantiated type vars that are in the generic node
+        if (constrain(self, &inst_right, (*fun_let)->let.body->type_v2, node)) return 1;
+
+        // replace instantiated unique name
+        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
+        node->named_application.name->symbol.name     = name_inst;
+
+    } break;
+
+    case ast_lambda_function_application: {
+
+        tl_type_v2 inst = *node->lambda_application.lambda->type_v2;
+        assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+
+        // constrain arrow types
+        tl_type_v2 app = make_arrow(self,
+                                    (ast_node_sized){.size = node->lambda_application.n_arguments,
+                                                     .v    = node->lambda_application.arguments},
+                                    node);
+        if (constrain(self, &inst, &app, node)) return 1;
 
     } break;
 
@@ -464,12 +523,51 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
     case ast_function_declaration:
     case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_lambda_function:
-    case ast_lambda_function_application:
+    case ast_lambda_function:      {
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ensure_tv(self, &node->let.parameters[i]->type_v2);
+            str_map_set(lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
+        }
+
+        if (infer(self, node->lambda_function.body, lex)) return 1;
+
+        map_destroy(lex);
+        *lex = save;
+    } break;
+
     case ast_tuple:
-    case ast_user_type:                   break;
+    case ast_user_type: break;
     }
     return 0;
+}
+
+static int start_infer(tl_infer *self, ast_node *node) {
+    hashmap *lex = map_create(self->transient, sizeof(tl_type_v2 *), 16);
+    int      res = infer(self, node, &lex);
+    map_destroy(&lex);
+    return res;
+}
+
+static str instantiate_fun_and_infer(tl_infer *self, ast_node *node, tl_monotype arrow, hashmap **lex) {
+    assert(ast_let == node->tag);
+
+    // TODO de-duplicate instances
+
+    // instantiate unique name
+    str name_inst = next_instantiation(self, node->let.name->symbol.name);
+    // node->let.name->symbol.original = node->let.name->symbol.name;
+    // node->let.name->symbol.name     = name_inst;
+
+    // add to type environment
+    tl_type_env_add(self->env, name_inst, tl_type_init_mono(arrow));
+
+    // assign fresh type variables to generic function body and infer
+    assign_expression_types(self, node->let.body);
+    if (infer(self, node->let.body, lex)) fatal("error handling");
+
+    return name_inst;
 }
 
 static str next_variable_name(tl_infer *self) {
@@ -484,10 +582,19 @@ static str next_instantiation(tl_infer *self, str name) {
     return str_init(self->arena, buf);
 }
 
-static void assign_new_type_variable(tl_infer *self, str name) {
-    tl_type_v2 type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
-    tl_type_env_add(self->env, name, type);
-}
+// static void assign_new_type_variable(tl_infer *self, str name) {
+//     tl_type_v2 type =
+//     tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+//     tl_type_env_add(self->env, name, type);
+// }
+
+// static void assign_new_type_quantifier(tl_infer *self, ast_node *param) {
+//     // tl_type_quantifier q = tl_type_context_new_quantifier(&self->context);
+//     // tl_type_scheme     s = {.type = tl_monotype_init_quant(q), .quantifiers = {.a}};
+//     // tl_type_v2         type =
+//     //   tl_type_init_scheme(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+//     tl_type_env_add(self->env, name, type);
+// }
 
 static void assign_new_expression_variable(tl_infer *self, ast_node *node) {
     node->type_v2  = new (self->arena, tl_type_v2);
@@ -532,7 +639,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         // establish lexical scope of the let-in binding and recurse
         hashmap *save = map_copy(*lex);
         str_map_set(lex, name, &newvar);
-        assign_new_type_variable(self, newvar);
+
+        // assign_new_type_variable(self, newvar);
         rename_variables(self, node->let_in.body, lex);
 
         // restore prior scope
@@ -554,7 +662,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             name_node->symbol.name     = newvar;
 
             str_map_set(lex, name, &newvar);
-            assign_new_type_variable(self, newvar);
+            // assign_new_type_variable(self, newvar);
         }
 
         rename_variables(self, node->let_match_in.body, lex);
@@ -580,12 +688,15 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
             ast_node *param = node->lambda_function.parameters[i];
             assert(ast_symbol == param->tag);
-            str name               = param->symbol.name;
-            str newvar             = next_variable_name(self);
-            param->symbol.original = param->symbol.name;
-            param->symbol.name     = newvar;
-            str_map_set(lex, name, &newvar);
-            assign_new_type_variable(self, newvar);
+            str name = param->symbol.name;
+            // str newvar             = next_variable_name(self);
+            // param->symbol.original = param->symbol.name;
+            // param->symbol.name     = newvar;
+            // str_map_set(lex, name, &newvar);
+            str_map_set(lex, name, &name);
+
+            // FIXME: do not assign unquantified type variables to parameters.
+            // assign_new_type_variable(self, newvar);
         }
 
         rename_variables(self, node->lambda_function.body, lex);
@@ -601,12 +712,15 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
             assert(ast_symbol == param->tag);
-            str name               = param->symbol.name;
-            str newvar             = next_variable_name(self);
-            param->symbol.original = param->symbol.name;
-            param->symbol.name     = newvar;
-            str_map_set(lex, name, &newvar);
-            assign_new_type_variable(self, newvar);
+            str name = param->symbol.name;
+            // str newvar             = next_variable_name(self);
+            // param->symbol.original = param->symbol.name;
+            // param->symbol.name     = newvar;
+            // str_map_set(lex, name, &newvar);
+            str_map_set(lex, name, &name);
+
+            // FIXME: do not assign unquantified type variables to parameters.
+            // assign_new_type_variable(self, newvar);
         }
 
         rename_variables(self, node->let.body, lex);
@@ -632,7 +746,15 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         rename_variables(self, node->lambda_application.lambda, lex);
         break;
 
-    case ast_named_function_application:
+    case ast_named_function_application: {
+        ast_node **fun_let = str_map_get(self->toplevels, node->named_application.name->symbol.name);
+        if (fun_let) {
+            rename_variables(self, *fun_let, lex);
+        } else {
+            // FIXME error
+        }
+    } break;
+
     case ast_string:
     case ast_nil:
     case ast_any:
@@ -646,7 +768,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_user_type_definition:
     case ast_function_declaration:
     case ast_lambda_declaration:
-    case ast_user_type:                  break;
+    case ast_user_type:            break;
     }
 }
 
@@ -687,6 +809,33 @@ static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
         array_free(rhs.scheme.quantifiers);
 
         return tl_type_init_scheme(s);
+    }
+}
+
+static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const *result) {
+    assert(tl_mono == result->type_v2->tag);
+
+    if (args.size == 0) {
+        tl_monotype lhs   = tl_monotype_init_nil();
+        tl_monotype rhs   = result->type_v2->mono;
+        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+        return tl_type_init_mono(arrow);
+    }
+
+    else if (args.size == 1) {
+        ensure_tv(self, &args.v[0]->type_v2);
+        tl_monotype lhs   = args.v[0]->type_v2->mono;
+        tl_monotype rhs   = result->type_v2->mono;
+        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+        return tl_type_init_mono(arrow);
+    }
+
+    else {
+        ensure_tv(self, &args.v[0]->type_v2);
+        tl_monotype lhs = args.v[0]->type_v2->mono;
+        tl_type_v2 rhs = make_arrow(self, (ast_node_sized){.size = args.size - 1, .v = &args.v[1]}, result);
+        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs.scheme.type);
+        return tl_type_init_mono(arrow);
     }
 }
 
@@ -752,6 +901,7 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
 
     tl_monotype out = s.type;
     replace_quant(map, &out);
+    map_destroy(&map);
     return tl_type_init_mono(out);
 }
 
@@ -768,9 +918,10 @@ static void add_generic(tl_infer *self, ast_node *node) {
 void assign_expression_types(tl_infer *self, ast_node *node) {
     if (null == node) return;
 
-    // every node gets a type, and some nodes need to recursively dispatch to their components
+    // every node gets a type, and some nodes need to recursively dispatch to their components. lambda
+    // function type is assigned in the switch.
 
-    assign_new_expression_variable(self, node);
+    if (ast_lambda_function != node->tag) assign_new_expression_variable(self, node);
 
     switch (node->tag) {
     case ast_address_of:  assign_expression_types(self, node->address_of.target); break;
@@ -814,7 +965,17 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
         }
         break;
 
-    case ast_lambda_function: assign_expression_types(self, node->lambda_function.body); break;
+    case ast_lambda_function:
+        // NOTE: this is ok even for generic functions, because upon instantiation we run this function
+        // again to get fresh variables.
+        assign_expression_types(self, node->lambda_function.body);
+
+        node->type_v2 = new (self->arena, tl_type_v2);
+        *node->type_v2 =
+          make_generic_arrow(self, (ast_node_sized){.size = node->lambda_function.n_parameters,
+                                                    .v    = node->lambda_function.parameters});
+        break;
+
     case ast_lambda_function_application:
         assign_expression_types(self, node->lambda_application.lambda);
         break;
@@ -822,11 +983,21 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
     case ast_let:
         //
         // add generic function to environment
-        if (!str_eq(node->let.name->symbol.name, S("main"))) add_generic(self, node);
+        add_generic(self, node);
+
+        // FIXME the quantifiers are wrong: the fun
+        // let id x = x should have type forall a . a -> a, not forall a b . a -> b
+
+        // NOTE: this is ok even for generic functions, because upon instantiation we run this function
+        // again to get fresh variables.
         assign_expression_types(self, node->let.body);
         break;
 
-    case ast_named_function_application: assign_expression_types(self, node->named_application.name); break;
+    case ast_named_function_application:
+        //
+        assign_expression_types(self, node->named_application.name);
+        break;
+
     case ast_bool:
     case ast_ellipsis:
     case ast_eof:
@@ -843,7 +1014,7 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
     case ast_nil:
     case ast_any:
     case ast_tuple:
-    case ast_user_type:                  break;
+    case ast_user_type:            break;
     }
 }
 
@@ -873,7 +1044,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     assign_expression_types(self, main);
 
-    if (infer(self, main)) return 1;
+    if (start_infer(self, main)) return 1;
 
     log(self, "toplevels");
     log_toplevels(self);
@@ -962,7 +1133,17 @@ static void log_subs(tl_infer const *self) {
 }
 
 static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
+    char buf[64];
+
     switch (node->tag) {
+    case ast_f64:    snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
+    case ast_i64:    snprintf(buf, sizeof buf, "%" PRIi64, node->i64.val); return str_init(alloc, buf);
+    case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
+    case ast_string: return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
+    case ast_bool:   return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
+    case ast_nil:    return S("nil");
+    case ast_any:    return S("any");
+
     case ast_symbol: {
         str out = node->symbol.name;
         if (node->type_v2)
@@ -971,29 +1152,45 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     }
 
     case ast_let: {
-        str out = node->let.name->symbol.name;
+        str out = str_copy(alloc, S("let "));
+        out     = str_cat(alloc, out, node->let.name->symbol.name);
         if (node->type_v2)
             out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
+        out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
         return out;
     }
 
-    case ast_nil:                         return S("nil");
-    case ast_any:                         return S("any");
+    case ast_let_in: {
+        str out = str_copy(alloc, S("let "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.name));
+        out     = str_cat(alloc, out, S(" = "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.value));
+        out     = str_cat(alloc, out, S(" in "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
+        return out;
+
+    } break;
+
+    case ast_named_function_application: {
+        str out = str_copy(alloc, node->named_application.name->symbol.name);
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            out = str_cat_3(alloc, out, S(" "),
+                            v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
+        }
+
+        return out;
+    } break;
+
     case ast_address_of:
     case ast_arrow:
     case ast_assignment:
-    case ast_bool:
     case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
-    case ast_f64:
-    case ast_i64:
+
     case ast_if_then_else:
-    case ast_let_in:
     case ast_let_match_in:
-    case ast_string:
-    case ast_u64:
     case ast_user_type_definition:
     case ast_user_type_get:
     case ast_user_type_set:
@@ -1003,7 +1200,6 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_lambda_function_application:
-    case ast_named_function_application:
     case ast_tuple:
     case ast_user_type:                   return str_copy(alloc, S("FIXME: not yet implemented"));
     }

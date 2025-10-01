@@ -1,4 +1,4 @@
-let f () = 0
+let f x = x
 
 let main () =
-  f ()
+  f 0
