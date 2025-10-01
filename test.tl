@@ -1,2 +1,4 @@
+let f () = 0
+
 let main () =
-  let x = 0 in x
+  0

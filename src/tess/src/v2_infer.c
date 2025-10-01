@@ -44,13 +44,15 @@ struct tl_infer {
 
 //
 
-static str  v2_ast_node_to_string(allocator *, ast_node const *);
-static void assign_expression_types(tl_infer *self, ast_node *node);
+static str          v2_ast_node_to_string(allocator *, ast_node const *);
+static void         assign_expression_types(tl_infer *self, ast_node *node);
+static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
+static tl_monotype *arrow_rightmost(tl_monotype *);
 
-static void log(tl_infer const *self, char const *restrict fmt, ...);
-static void log_toplevels(tl_infer const *);
-static void log_env(tl_infer const *);
-static void log_subs(tl_infer const *);
+static void         log(tl_infer const *self, char const *restrict fmt, ...);
+static void         log_toplevels(tl_infer const *);
+static void         log_env(tl_infer const *);
+static void         log_subs(tl_infer const *);
 
 //
 
@@ -268,24 +270,10 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
 }
 
 static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
-                               ast_node const *node) {
-    tl_type_variable tv;
-    tl_monotype      mono;
+                               ast_node const *node);
 
-    if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
-
-    if (tl_monotype_occurs(left->mono, right->mono)) return 0;
-
-    if (is_type_variable(left)) {
-        tv   = left->mono.var;
-        mono = right->mono;
-    } else if (is_type_variable(right)) {
-        tv   = right->mono.var;
-        mono = left->mono;
-    } else {
-        return tl_monotype_eq(left->mono, right->mono) ? 0 : 1;
-    }
-
+static nodiscard int constrain_tv(tl_infer *self, tl_type_variable tv, tl_monotype mono,
+                                  ast_node const *node) {
     tl_monotype *exist = tl_type_subs_get(self->subs, tv);
     if (exist) {
         if (!constraint_is_compatible(*exist, mono)) {
@@ -304,6 +292,62 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
         }
     }
     return unify(self, tv, mono);
+}
+
+static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
+                               ast_node const *node) {
+
+    if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
+
+    if (tl_monotype_occurs(left->mono, right->mono)) return 0;
+
+    if (is_type_variable(left)) {
+        return constrain_tv(self, left->mono.var, right->mono, node);
+    } else if (is_type_variable(right)) {
+        return constrain_tv(self, right->mono.var, left->mono, node);
+    }
+
+    if (left->mono.tag != right->mono.tag) {
+        str left_str  = tl_monotype_to_string(self->transient, &left->mono);
+        str right_str = tl_monotype_to_string(self->transient, &right->mono);
+        log(self, "constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
+            str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
+        return type_error(self, node);
+    }
+
+    switch (left->mono.tag) {
+    case tl_nil: return 0;
+    case tl_cons:
+        if (left->mono.cons.args.size != right->mono.cons.args.size) {
+            str left_str  = tl_monotype_to_string(self->transient, &left->mono);
+            str right_str = tl_monotype_to_string(self->transient, &right->mono);
+            log(self, "size mismatch:  %.*s versus %.*s", str_ilen(left_str), str_buf(&left_str),
+                str_ilen(right_str), str_buf(&right_str));
+            return type_error(self, node);
+        }
+        forall(i, left->mono.cons.args) {
+            tl_type_v2 left_ty  = tl_type_init_mono(left->mono.cons.args.v[i]);
+            tl_type_v2 right_ty = tl_type_init_mono(right->mono.cons.args.v[i]);
+            if (constrain(self, &left_ty, &right_ty, node)) return 1;
+        }
+        break;
+
+    case tl_var:
+    case tl_quant: fatal("logic error");
+
+    case tl_arrow: {
+        tl_type_v2 left_ty  = tl_type_init_mono(*left->mono.arrow.lhs);
+        tl_type_v2 right_ty = tl_type_init_mono(*right->mono.arrow.lhs);
+        if (constrain(self, &left_ty, &right_ty, node)) return 1;
+
+        left_ty  = tl_type_init_mono(*left->mono.arrow.rhs);
+        right_ty = tl_type_init_mono(*right->mono.arrow.rhs);
+        if (constrain(self, &left_ty, &right_ty, node)) return 1;
+
+    } break;
+    }
+
+    return 0;
 }
 
 static nodiscard int infer(tl_infer *self, ast_node *node) {
@@ -369,8 +413,9 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
             if (constrain(self, node->let.body->type_v2, &right_ty, node)) return 1;
 
         } else {
-            return infer(self, node->let.body);
-            // FIXME do arrow
+            // tl_type_v2 *fun = tl_type_env_lookup(self->env, node->let.name->symbol.name);
+
+            // return infer(self, node->let.body);
         }
         break;
 
@@ -378,6 +423,18 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
         if (constrain(self, tl_type_env_lookup(self->env, node->symbol.name), node->type_v2, node))
             return 1;
         break;
+
+    case ast_named_function_application: {
+        //
+        tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->let.name->symbol.name);
+        tl_type_v2  inst = instantiate(self, *fun);
+        assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+        tl_type_v2 result_ty = tl_type_init_mono(*arrow_rightmost(&inst.mono));
+        if (constrain(self, node->type_v2, &result_ty, node)) return 1;
+
+        // FIXME continue: constrain argument types
+
+    } break;
 
     case ast_if_then_else:
     case ast_let_match_in:
@@ -390,7 +447,6 @@ static nodiscard int infer(tl_infer *self, ast_node *node) {
     case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_lambda_function_application:
-    case ast_named_function_application:
     case ast_tuple:
     case ast_user_type:                   break;
     }
@@ -609,6 +665,56 @@ static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
     }
 }
 
+static tl_monotype *arrow_rightmost(tl_monotype *arrow) {
+
+    if (tl_arrow != arrow->tag) fatal("logic error");
+
+    if (tl_arrow == arrow->arrow.rhs->tag) return arrow_rightmost(arrow->arrow.rhs);
+    return arrow->arrow.rhs;
+}
+
+static void replace_quant(hashmap *map, tl_monotype *mono) {
+    switch (mono->tag) {
+    case tl_nil:
+    case tl_var: break;
+
+    case tl_cons:
+        //
+        forall(i, mono->cons.args) replace_quant(map, &mono->cons.args.v[i]);
+        break;
+
+    case tl_quant: {
+        tl_type_variable *tv = map_get(map, &mono->quant, sizeof mono->quant);
+        if (tv) {
+            mono->tag = tl_var;
+            mono->var = *tv;
+        } else {
+            fatal("quantifier not found");
+        }
+    } break;
+
+    case tl_arrow:
+        replace_quant(map, mono->arrow.lhs);
+        replace_quant(map, mono->arrow.rhs);
+        break;
+    }
+}
+
+static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
+    if (tl_mono == generic.tag) return generic;
+    tl_type_scheme s   = generic.scheme;
+
+    hashmap       *map = map_create(self->transient, sizeof(tl_type_variable), s.quantifiers.size);
+    forall(i, s.quantifiers) {
+        tl_type_variable tv = tl_type_context_new_variable(&self->context);
+        map_set(&map, &s.quantifiers.v[i], sizeof s.quantifiers.v[0], &tv);
+    }
+
+    tl_monotype out = s.type;
+    replace_quant(map, &out);
+    return tl_type_init_mono(out);
+}
+
 static void add_generic(tl_infer *self, ast_node *node) {
     if (!node) return;
     if (ast_let != node->tag) return;
@@ -676,7 +782,7 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
     case ast_let:
         //
         // add generic function to environment
-        add_generic(self, node);
+        if (!str_eq(node->let.name->symbol.name, S("main"))) add_generic(self, node);
         assign_expression_types(self, node->let.body);
         break;
 
