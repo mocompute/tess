@@ -370,6 +370,8 @@ static void make_builtin_type_constructors(tl_type_env *self) {
     //
     inst.name = S("Int");
     add_type_cons(self, inst);
+    inst.name = S("Bool");
+    add_type_cons(self, inst);
     inst.name = S("Float");
     add_type_cons(self, inst);
     inst.name = S("String");

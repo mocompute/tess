@@ -30,9 +30,9 @@ struct tl_infer {
 
     tl_type_context      context;
     tl_type_env         *env;
-    tl_type_subs         subs; // corresponds to E in algorithm J
+    tl_type_subs        *subs; // corresponds to E in algorithm J
 
-    hashmap             *toplevels;
+    hashmap             *toplevels; // str => ast_node*
     tl_infer_error_array errors;
 
     u32                  next_var_name;
@@ -44,10 +44,12 @@ struct tl_infer {
 //
 
 static str  v2_ast_node_to_string(allocator *, ast_node const *);
+static void assign_expression_types(tl_infer *self, ast_node *node);
 
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
 static void log_env(tl_infer const *);
+static void log_subs(tl_infer const *);
 
 //
 
@@ -60,6 +62,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
     self->toplevels     = null;
     self->context       = tl_type_context_empty();
     self->env           = tl_type_env_create(alloc);
+    self->subs          = tl_type_subs_create(alloc);
 
     self->errors        = (tl_infer_error_array){.alloc = self->arena};
 
@@ -73,6 +76,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 
+    tl_type_subs_destroy(alloc, &(*p)->subs);
     tl_type_env_destroy(alloc, &(*p)->env);
     map_destroy(&(*p)->toplevels);
 
@@ -86,13 +90,14 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->verbose = verbose;
 }
 
-static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_error_array *out_errors) {
+static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes,
+                              tl_infer_error_array *out_errors) {
     hashmap             *tops   = map_create(alloc, sizeof(ast_node *), 1024);
     tl_infer_error_array errors = {.alloc = alloc};
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
-        dbg("processing: %s\n", ast_node_to_string(alloc, node));
+        // dbg("processing: %s\n", ast_node_to_string(alloc, node));
         if (ast_symbol == node->tag) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(tops, name_str);
@@ -115,6 +120,10 @@ static hashmap *load_toplevel(allocator *alloc, ast_node_sized nodes, tl_infer_e
         else if (ast_let == node->tag) {
             str        name_str = ast_node_str(node->let.name);
             ast_node **p        = str_map_get(tops, name_str);
+
+            // assign expresion type
+            assign_expression_types(self, node);
+
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
                 if (ast_symbol != (*p)->tag) {
@@ -194,12 +203,12 @@ static int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *r
         return tl_monotype_eq(left->mono, right->mono);
     }
 
-    tl_monotype *exist = tl_type_subs_get(&self->subs, tv);
+    tl_monotype *exist = tl_type_subs_get(self->subs, tv);
     if (exist) {
         if (!can_apply_constraint(*exist, mono)) return 1; // type error
 
     } else {
-        tl_type_subs_add(&self->subs, tv, mono);
+        tl_type_subs_add(self->subs, tv, mono);
     }
     return 0;
 }
@@ -211,63 +220,9 @@ static void infer(tl_infer *self, ast_node *node) {
 
     switch (node->tag) {
     case ast_nil:
-    case ast_any:                         break;
-    case ast_address_of:                  fatal("FIXME: pointer types");
-    case ast_arrow:                       break;
+    case ast_any:        break;
+    case ast_address_of: fatal("FIXME: pointer types");
 
-    case ast_assignment:                  break;
-
-    case ast_bool:
-    case ast_dereference:
-    case ast_dereference_assign:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:
-    case ast_if_then_else:
-    case ast_let_in:
-    case ast_let_match_in:
-    case ast_string:
-    case ast_symbol:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
-    case ast_function_declaration:
-    case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_lambda_function:
-    case ast_lambda_function_application:
-    case ast_let:
-    case ast_named_function_application:
-    case ast_tuple:
-    case ast_user_type:                   break;
-    }
-}
-
-static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
-    tl_type_subs subs = {.froms = {.alloc = self->arena}, .tos = {.alloc = self->arena}};
-    tl_type_v2   type = {0};
-
-    switch (node->tag) {
-    case ast_i64: type = *tl_type_env_lookup(self->env, S("Int")); break;
-
-    case ast_let: {
-        if (str_eq(node->let.name->symbol.name, S("main"))) {
-            // FIXME just force () -> Int
-            tl_monotype left  = {0}; // nil
-            tl_monotype right = tl_type_env_lookup(self->env, S("Int"))->mono;
-            tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
-            type              = tl_type_init_mono(arrow);
-        } else {
-            // FIXME
-        }
-    } break;
-
-    case ast_nil:
-    case ast_any:
-    case ast_address_of:
     case ast_arrow:
     case ast_assignment:
     case ast_bool:
@@ -276,6 +231,28 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     case ast_ellipsis:
     case ast_eof:
     case ast_f64:
+        // FIXME
+        fatal("FIXME");
+        break;
+
+    case ast_i64: {
+        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
+        constrain(self, node->type_v2, ty);
+    } break;
+
+    case ast_let:
+        if (str_eq(node->let.name->symbol.name, S("main"))) {
+            // FIXME just force () -> Int
+            tl_monotype left  = {0}; // nil
+            tl_monotype right = tl_type_env_lookup(self->env, S("Int"))->mono;
+            tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
+            tl_type_v2  ty    = tl_type_init_mono(arrow);
+            constrain(self, node->type_v2, &ty);
+        } else {
+            // FIXME
+        }
+        break;
+
     case ast_if_then_else:
     case ast_let_in:
     case ast_let_match_in:
@@ -293,12 +270,63 @@ static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_t
     case ast_lambda_function_application:
     case ast_named_function_application:
     case ast_tuple:
-    case ast_user_type:                   fatal("not implemented");
+    case ast_user_type:                   break;
     }
-
-    *out_type = type;
-    *out_subs = subs;
 }
+
+// static void infer_W(tl_infer *self, ast_node *node, tl_type_subs *out_subs, tl_type_v2 *out_type) {
+//     tl_type_subs subs = {.froms = {.alloc = self->arena}, .tos = {.alloc = self->arena}};
+//     tl_type_v2   type = {0};
+
+//     switch (node->tag) {
+//     case ast_i64: type = *tl_type_env_lookup(self->env, S("Int")); break;
+
+//     case ast_let: {
+//         if (str_eq(node->let.name->symbol.name, S("main"))) {
+//             // FIXME just force () -> Int
+//             tl_monotype left  = {0}; // nil
+//             tl_monotype right = tl_type_env_lookup(self->env, S("Int"))->mono;
+//             tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, left, right);
+//             type              = tl_type_init_mono(arrow);
+//         } else {
+//             // FIXME
+//         }
+//     } break;
+
+//     case ast_nil:
+//     case ast_any:
+//     case ast_address_of:
+//     case ast_arrow:
+//     case ast_assignment:
+//     case ast_bool:
+//     case ast_dereference:
+//     case ast_dereference_assign:
+//     case ast_ellipsis:
+//     case ast_eof:
+//     case ast_f64:
+//     case ast_if_then_else:
+//     case ast_let_in:
+//     case ast_let_match_in:
+//     case ast_string:
+//     case ast_symbol:
+//     case ast_u64:
+//     case ast_user_type_definition:
+//     case ast_user_type_get:
+//     case ast_user_type_set:
+//     case ast_begin_end:
+//     case ast_function_declaration:
+//     case ast_labelled_tuple:
+//     case ast_lambda_declaration:
+//     case ast_lambda_function:
+//     case ast_lambda_function_application:
+//     case ast_named_function_application:
+//     case ast_tuple:
+//     case ast_user_type:                   fatal("not implemented");
+//     }
+
+//     *out_type = type;
+//     *out_subs = subs;
+// }
 
 static str next_variable_name(tl_infer *self) {
     char buf[32];
@@ -476,43 +504,74 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 void assign_expression_types(tl_infer *self, ast_node *node) {
     if (null == node) return;
 
-    assign_new_expression_variable(self, node);
+    // all expression nodes except symbols get a type. Symbol types are held in the environment.
+    if (ast_symbol != node->tag) assign_new_expression_variable(self, node);
 
     switch (node->tag) {
-    case ast_address_of: assign_expression_types(self, node->address_of.target); break;
-    case ast_assignment:
-        // name has type in the tl_type_env
-        assign_expression_types(self, node->assignment.value);
-        break;
-    case ast_bool:
-    case ast_dereference:
+    case ast_address_of:  assign_expression_types(self, node->address_of.target); break;
+    case ast_assignment:  assign_expression_types(self, node->assignment.value); break;
+    case ast_dereference: assign_expression_types(self, node->dereference.target); break;
     case ast_dereference_assign:
+        assign_expression_types(self, node->dereference_assign.target);
+        assign_expression_types(self, node->dereference_assign.value);
+        break;
+
+    case ast_if_then_else:
+        assign_expression_types(self, node->if_then_else.condition);
+        assign_expression_types(self, node->if_then_else.yes);
+        assign_expression_types(self, node->if_then_else.no);
+        break;
+
+    case ast_let_in:
+        assign_expression_types(self, node->let_in.value);
+        assign_expression_types(self, node->let_in.body);
+        break;
+
+    case ast_let_match_in:
+        assign_expression_types(self, node->let_match_in.body);
+        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
+            assign_expression_types(self, node->let_match_in.lt->labelled_tuple.assignments[i]);
+        }
+        break;
+
+    case ast_user_type_set: assign_expression_types(self, node->user_type_set.value); break;
+
+    case ast_begin_end:
+        for (u32 i = 0; i < node->begin_end.n_expressions; ++i) {
+            assign_expression_types(self, node->begin_end.expressions[i]);
+        }
+        break;
+
+    case ast_labelled_tuple:
+        for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i) {
+            assign_expression_types(self, node->labelled_tuple.assignments[i]);
+        }
+        break;
+
+    case ast_lambda_function: assign_expression_types(self, node->lambda_function.body); break;
+    case ast_lambda_function_application:
+        assign_expression_types(self, node->lambda_application.lambda);
+        break;
+
+    case ast_let:
+    case ast_named_function_application:
+    case ast_bool:
     case ast_ellipsis:
     case ast_eof:
     case ast_f64:
     case ast_i64:
-    case ast_if_then_else:
-    case ast_let_in:
-    case ast_let_match_in:
     case ast_string:
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:
     case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
     case ast_function_declaration:
-    case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_lambda_function:
-    case ast_lambda_function_application:
-    case ast_let:
-    case ast_arrow:                       break;
-    case ast_named_function_application:
+    case ast_arrow:
     case ast_nil:
-    case ast_any:                         break;
+    case ast_any:
     case ast_tuple:
-    case ast_user_type:                   break;
+    case ast_user_type:                  break;
     }
 }
 
@@ -520,7 +579,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     log(self, "-- start inference --");
 
-    self->toplevels = load_toplevel(self->arena, nodes, &self->errors);
+    self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
 
     if (self->errors.size) {
         return 1;
@@ -540,15 +599,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
         map_destroy(&lex);
     }
 
-    tl_type_v2  *type = new (self->arena, tl_type_v2);
-    tl_type_subs subs;
-    infer_W(self, main, &subs, type);
-    tl_type_subs_apply(&subs, &(tl_type_v2_array){.size = 1, .v = type});
+    assign_expression_types(self, main);
 
-    main->type_v2 = type;
+    infer(self, main);
+
+    // tl_type_v2  *type = new (self->arena, tl_type_v2);
+    // tl_type_subs subs;
+    // infer_W(self, main, &subs, type);
+    // tl_type_subs_apply(&subs, &(tl_type_v2_array){.size = 1, .v = type});
+
+    // main->type_v2 = type;
 
     log_toplevels(self);
     log_env(self);
+    log_subs(self);
 
     return 0;
 }
@@ -611,6 +675,21 @@ static void log_env(tl_infer const *self) {
         str               type_str = tl_type_v2_to_string(self->transient, type);
         log(self, "%.*s : %.*s", str_ilen(*name), str_buf(name), str_ilen(type_str), str_buf(&type_str));
         str_deinit(self->transient, &type_str);
+    }
+}
+
+static void log_subs(tl_infer const *self) {
+    hashmap_iterator iter = {0};
+    while (map_iter(self->subs->map, &iter)) {
+        tl_type_variable const *tv       = iter.key_ptr;
+        tl_monotype const      *mono     = iter.data;
+        str                     tv_str   = tl_type_variable_to_string(self->transient, tv);
+        str                     mono_str = tl_monotype_to_string(self->transient, mono);
+
+        log(self, "%.*s => %.*s", str_ilen(tv_str), str_buf(&tv_str), str_ilen(mono_str),
+            str_buf(&mono_str));
+        str_deinit(self->transient, &mono_str);
+        str_deinit(self->transient, &tv_str);
     }
 }
 
