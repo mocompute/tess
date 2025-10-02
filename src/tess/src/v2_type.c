@@ -481,6 +481,6 @@ tl_type_variable tl_type_context_new_variable(tl_type_context *self) {
     return (tl_type_variable)self->next_var++;
 }
 
-tl_type_quantifier tl_type_context_new_quantifier(tl_type_context *self) {
-    return (tl_type_quantifier)self->next_quant++;
+tl_monotype tl_type_context_new_quantifier(tl_type_context *self) {
+    return tl_monotype_init_quant((tl_type_quantifier)self->next_quant++);
 }

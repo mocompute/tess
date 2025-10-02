@@ -96,9 +96,98 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->verbose = verbose;
 }
 
+static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
+    if (ast_nil == ann->tag) {
+        return tl_type_env_lookup(self->env, S("Nil"));
+    }
+
+    // if (ast_ellipsis == ann->tag) {
+    //     tl_type **found = type_registry_find_name(self->type_registry, S("ellipsis"));
+    //     if (found) return *found;
+    //     fatal("ellipsis type not found");
+    // }
+
+    if (ast_symbol == ann->tag) {
+        // either a prim or user type, or a generic/quantifier
+        str         ann_str = ann->symbol.name;
+        tl_type_v2 *found   = tl_type_env_lookup(self->env, ann_str);
+        if (found) {
+            // If it's an any type, assign it a new quantifier
+            // if (type_any == (*found)->tag) return tl_type_context_new_quantifier(self);
+            return found;
+        }
+
+        // previously seen in the annotation? then assign same type
+        {
+            tl_type_v2 **map_found = str_map_get(*map, ann_str);
+            if (map_found) return *map_found;
+        }
+
+        // unknown symbol, consider it as a quantifier
+        tl_type_v2 *out = new (self->arena, tl_type_v2);
+        *out            = tl_type_init_mono(tl_type_context_new_quantifier(&self->context));
+        str_map_set(map, ann_str, &out);
+        return out;
+    }
+
+    // if (ast_tuple == ann->tag) {
+    //     struct ast_tuple *v        = ast_node_tuple(ann);
+    //     tl_type_array     elements = {.alloc = self->type_arena};
+    //     array_reserve(elements, v->n_elements);
+
+    //     for (u32 i = 0; i < v->n_elements; ++i) {
+    //         tl_type *res = make_type_annotation(self, v->elements[i], map);
+    //         array_push(elements, res);
+    //     }
+
+    //     return tl_type_create_tuple(self->type_arena, (tl_type_sized)sized_all(elements));
+    // }
+
+    if (ast_arrow == ann->tag) {
+        tl_type_v2 *left  = make_type_annotation(self, ann->arrow.left, map);
+        tl_type_v2 *right = make_type_annotation(self, ann->arrow.right, map);
+
+        // FIXME
+        if (!left || !right) return null;
+
+        // promote simple arrows like a -> b to tuple form: (a, ) -> b
+        // if (!is_any_tuple(left)) {
+        //     if (type_nil == left->tag) {
+        //         left = tl_type_create_tuple(self->type_arena, (tl_type_sized){.size = 0});
+        //     } else {
+        //         tl_type_sized elements = {.v    = alloc_malloc(self->type_arena, sizeof
+        //         elements.v[0]),
+        //                                   .size = 1};
+        //         elements.v[0]          = left;
+        //         left                   = tl_type_create_tuple(self->type_arena, elements);
+        //     }
+        // }
+
+        tl_type_v2 *out = new (self->arena, tl_type_v2);
+        *out            = tl_type_init_mono(tl_monotype_alloc_arrow(self->arena, left->mono, right->mono));
+        return out;
+    }
+
+    // if (ast_address_of == ann->tag) {
+    //     tl_type *target     = make_type_annotation(self, ann->address_of.target, map);
+    //     tl_type *ptr        = tl_type_create(self->type_arena, type_pointer);
+    //     ptr->pointer.target = target;
+    //     return ptr;
+    // }
+
+    // fatal("unknown annotation type: '%s'", ast_tag_to_string(ann->tag));
+    return null; // FIXME
+}
+
 static void process_annotation(tl_infer *self, ast_node *node) {
-    assert(ast_let == node->tag && node->let.name->symbol.annotation);
-    (void)self;
+    assert(ast_symbol == node->tag);
+    if (!node->symbol.annotation) return;
+
+    hashmap    *map                 = map_create(self->transient, sizeof(tl_type_v2 *), 8);
+    tl_type_v2 *ann                 = make_type_annotation(self, node->symbol.annotation, &map);
+    node->symbol.annotation_type_v2 = ann;
+
+    map_destroy(&map);
 }
 
 static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes,
@@ -109,7 +198,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
-        // dbg("processing: %s\n", ast_node_to_string(alloc, node));
+        dbg("processing: %s\n", ast_node_to_string(alloc, node));
         if (ast_symbol == node->tag) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(tops, name_str);
@@ -122,12 +211,13 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
                 if (node->symbol.annotation) {
                     (*p)->let.name->symbol.annotation = node->symbol.annotation;
-                    process_annotation(self, *p);
+                    process_annotation(self, (*p)->let.name);
                 }
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
                     str_map_set(&tops, name_str, &node);
+                    process_annotation(self, node);
                 }
             }
         }
@@ -146,18 +236,19 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                     continue;
                 }
 
-                // ignore prior type annotation if the current symbol is annotated: later declaration
-                // overrides
+                // ignore prior type annotation if the current symbol is annotated: later
+                // declaration overrides
                 if (node->let.name->symbol.annotation) continue;
 
                 // apply annotation
                 node->let.name->symbol.annotation = (*p)->symbol.annotation;
-                process_annotation(self, node);
+                process_annotation(self, node->let.name);
 
                 // replace prior symbol entry with let node
                 *p = node;
             } else {
                 str_map_set(&tops, name_str, &node);
+                process_annotation(self, node->let.name);
             }
         }
 
@@ -261,8 +352,8 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     case tl_quant: fatal("attempt to unify quantifier");
 
     case tl_arrow: {
-        // if either arm is an existing tv, use it's substitution instead, because we want to add a minimal
-        // amount of new tvs to the context
+        // if either arm is an existing tv, use it's substitution instead, because we want to add a
+        // minimal amount of new tvs to the context
         tl_monotype *left_match  = null;
         tl_monotype *right_match = null;
 
@@ -282,7 +373,8 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     tl_type_subs_add(ctx->subs, tv, mono);
 
     if (tl_var != mono.tag) {
-        // any existing subs with tv on the right hand side should be replaced with the new non-tv mono
+        // any existing subs with tv on the right hand side should be replaced with the new non-tv
+        // mono
         hashmap_iterator iter = {0};
         while (map_iter(ctx->subs->map, &iter)) {
             tl_monotype *rhs = iter.data;
@@ -349,7 +441,6 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
 
 static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
                                tl_type_v2 const *right, ast_node const *node) {
-
     if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
 
     if (tl_monotype_occurs(left->mono, right->mono)) return 0;
@@ -616,7 +707,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 }
 
 static int start_infer_global(tl_infer *self, ast_node *node) {
-
     infer_ctx *ctx = infer_ctx_create(self->transient);
 
     int        res = infer(self, ctx, node);
@@ -684,9 +774,9 @@ static void assign_new_expression_variable(tl_infer *self, ast_node *node) {
 }
 
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
-    // transform variables recursively in node so that every occurrence is unique, respecting lexical
-    // scope created by lambda functions, let functions, and let in expressions so that variables have
-    // the same name when they refer to the same bound value.
+    // transform variables recursively in node so that every occurrence is unique, respecting
+    // lexical scope created by lambda functions, let functions, and let in expressions so that
+    // variables have the same name when they refer to the same bound value.
 
     if (null == node) return;
 
@@ -876,6 +966,7 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
         if (tl_type_env_lookup(self->env, name)) {
+            // TODO: make an interface for this
             array_erase(env->names, i);
             array_erase(env->types, i);
             str_map_erase(env->index, name);
@@ -895,6 +986,7 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
             assert(ast_symbol == node->let.parameters[j]->tag);
             str param = node->let.parameters[j]->symbol.name;
             if (str_eq(name, param)) {
+                // TODO: make an interface for this
                 array_erase(env->names, i);
                 array_erase(env->types, i);
                 str_map_erase(env->index, name);
@@ -915,7 +1007,7 @@ static void quantify_one_tv(tl_infer *self, tl_monotype *type, hashmap **seen) {
     if (found) {
         *type = *found;
     } else {
-        tl_monotype q = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_monotype q = tl_type_context_new_quantifier(&self->context);
         map_set(seen, type, sizeof *type, &q);
         *type = q;
     }
@@ -943,23 +1035,25 @@ static void quantify_one(tl_infer *self, tl_monotype *type, hashmap **seen) {
 }
 
 static void quantify_env_types(tl_infer *self, tl_type_env *env) {
-    hashmap *seen = map_create(self->transient, sizeof(tl_monotype), 16);
+    hashmap *seen = map_create(self->transient, sizeof(tl_monotype), 8);
 
     forall(i, env->types) {
         tl_type_v2 *type = &env->types.v[i];
         if (tl_scheme == type->tag) continue;
         quantify_one(self, &type->mono, &seen);
     }
+
+    map_destroy(&seen);
 }
 
 static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
-    // FIXME: do not simply assume every param becomes a quantifier: instead, analyze the source to identify
-    // free variables, then assign all NON-free variables a quantifier, ensuring the same variable gets the
-    // same quantifier. let id x = x should get one quantifer, not two.
+    // FIXME: do not simply assume every param becomes a quantifier: instead, analyze the source to
+    // identify free variables, then assign all NON-free variables a quantifier, ensuring the same
+    // variable gets the same quantifier. let id x = x should get one quantifer, not two.
 
     if (params.size == 0) {
         tl_monotype    lhs   = tl_monotype_init_nil();
-        tl_monotype    rhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_monotype    rhs   = tl_type_context_new_quantifier(&self->context);
         tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
 
         tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
@@ -968,8 +1062,8 @@ static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
     }
 
     else if (params.size == 1) {
-        tl_monotype    lhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
-        tl_monotype    rhs   = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_monotype    lhs   = tl_type_context_new_quantifier(&self->context);
+        tl_monotype    rhs   = tl_type_context_new_quantifier(&self->context);
         tl_monotype    arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
 
         tl_type_scheme s     = {.type = arrow, .quantifiers = {.alloc = self->arena}};
@@ -979,7 +1073,7 @@ static tl_type_v2 make_generic_arrow(tl_infer *self, ast_node_sized params) {
     }
 
     else {
-        tl_monotype lhs = tl_monotype_init_quant(tl_type_context_new_quantifier(&self->context));
+        tl_monotype lhs = tl_type_context_new_quantifier(&self->context);
         tl_type_v2  rhs =
           make_generic_arrow(self, (ast_node_sized){.size = params.size - 1, .v = &params.v[1]});
 
@@ -1024,7 +1118,6 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
 }
 
 static tl_monotype *arrow_rightmost(tl_monotype *arrow) {
-
     if (tl_arrow != arrow->tag) fatal("logic error");
 
     if (tl_arrow == arrow->arrow.rhs->tag) return arrow_rightmost(arrow->arrow.rhs);
@@ -1114,8 +1207,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- local subs --");
     log_subs(self, ctx->subs);
 
-    // now determine which names in the local environment are not free (i.e. they exist in the global
-    // environment or as formal parameters)
+    // now determine which names in the local environment are not free (i.e. they exist in the
+    // global environment or as formal parameters)
     remove_known_variables(self, ctx->local_env);
     remove_formal_parameters(ctx->local_env, node);
 
@@ -1143,8 +1236,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
 void assign_expression_types(tl_infer *self, ast_node *node) {
     if (null == node) return;
 
-    // every node gets a type, and some nodes need to recursively dispatch to their components. lambda
-    // function type is assigned in the switch.
+    // every node gets a type, and some nodes need to recursively dispatch to their components.
+    // lambda function type is assigned in the switch.
 
     if (ast_lambda_function != node->tag) assign_new_expression_variable(self, node);
 
@@ -1191,8 +1284,8 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
         break;
 
     case ast_lambda_function:
-        // NOTE: this is ok even for generic functions, because upon instantiation we run this function
-        // again to get fresh variables.
+        // NOTE: this is ok even for generic functions, because upon instantiation we run this
+        // function again to get fresh variables.
         assign_expression_types(self, node->lambda_function.body);
 
         node->type_v2 = new (self->arena, tl_type_v2);
@@ -1213,9 +1306,8 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
         // FIXME the quantifiers are wrong: the fun
         // let id x = x should have type forall a . a -> a, not forall a b . a -> b
 
-        // NOTE: this is ok even for generic functions, because upon instantiation we run this function
-        // again to get fresh variables.
-        // assign_expression_types(self, node->let.body);
+        // NOTE: this is ok even for generic functions, because upon instantiation we run this
+        // function again to get fresh variables. assign_expression_types(self, node->let.body);
         break;
 
     case ast_named_function_application:
@@ -1244,7 +1336,6 @@ void assign_expression_types(tl_infer *self, ast_node *node) {
 }
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
-
     log(self, "-- start inference --");
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
@@ -1382,6 +1473,13 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_symbol: {
         str out = node->symbol.name;
+        if (node->symbol.annotation_type_v2) {
+            out = str_cat_4(alloc, out, S(" (v2: "),
+                            tl_type_v2_to_string(alloc, node->symbol.annotation_type_v2), S(")"));
+        } else if (node->symbol.annotation) {
+            out =
+              str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
+        }
         if (node->type_v2)
             out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
         return out;
@@ -1389,7 +1487,7 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_let: {
         str out = str_copy(alloc, S("let "));
-        out     = str_cat(alloc, out, node->let.name->symbol.name);
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let.name));
         if (node->type_v2)
             out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
         out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
@@ -1417,12 +1515,18 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return out;
     } break;
 
+    case ast_arrow: {
+        str out = str_cat_3(alloc, v2_ast_node_to_string(alloc, node->arrow.left), S(" -> "),
+                            v2_ast_node_to_string(alloc, node->arrow.right));
+        return out;
+    } break;
+
+    case ast_ellipsis:                    return str_copy(alloc, S("..."));
+
     case ast_address_of:
-    case ast_arrow:
     case ast_assignment:
     case ast_dereference:
     case ast_dereference_assign:
-    case ast_ellipsis:
     case ast_eof:
 
     case ast_if_then_else:
@@ -1437,7 +1541,7 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_lambda_function:
     case ast_lambda_function_application:
     case ast_tuple:
-    case ast_user_type:                   return str_copy(alloc, S("FIXME: not yet implemented"));
+    case ast_user_type:                   return str_init(alloc, ast_node_to_string(alloc, node));
     }
 }
 

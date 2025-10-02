@@ -30,24 +30,26 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 }
 
 ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
-    ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = str_init(alloc, str);
-    self->symbol.original        = str_empty();
-    self->symbol.annotation      = null;
-    self->symbol.annotation_type = null;
-    self->symbol.special_hash    = 0;
-    self->symbol.flags           = 0;
+    ast_node *self                  = ast_node_create(alloc, ast_symbol);
+    self->symbol.name               = str_init(alloc, str);
+    self->symbol.original           = str_empty();
+    self->symbol.annotation         = null;
+    self->symbol.annotation_type    = null;
+    self->symbol.annotation_type_v2 = null;
+    self->symbol.special_hash       = 0;
+    self->symbol.flags              = 0;
     return self;
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, str str) {
-    ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = str_copy(alloc, str);
-    self->symbol.original        = str_empty();
-    self->symbol.annotation      = null;
-    self->symbol.annotation_type = null;
-    self->symbol.special_hash    = 0;
-    self->symbol.flags           = 0;
+    ast_node *self                  = ast_node_create(alloc, ast_symbol);
+    self->symbol.name               = str_copy(alloc, str);
+    self->symbol.original           = str_empty();
+    self->symbol.annotation         = null;
+    self->symbol.annotation_type    = null;
+    self->symbol.annotation_type_v2 = null;
+    self->symbol.special_hash       = 0;
+    self->symbol.flags              = 0;
     return self;
 }
 

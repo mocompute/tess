@@ -32,6 +32,7 @@ typedef struct ast_node {
             str              original;
             struct ast_node *annotation;
             tl_type         *annotation_type;
+            tl_type_v2      *annotation_type_v2;
             u64              special_hash; // for use during specialisation
             u8               flags;
         } symbol;

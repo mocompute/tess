@@ -92,9 +92,9 @@ typedef struct {
     u32 next_quant;
 } tl_type_context;
 
-tl_type_context    tl_type_context_empty();
-tl_type_variable   tl_type_context_new_variable(tl_type_context *);
-tl_type_quantifier tl_type_context_new_quantifier(tl_type_context *);
+tl_type_context  tl_type_context_empty();
+tl_type_variable tl_type_context_new_variable(tl_type_context *);
+tl_monotype      tl_type_context_new_quantifier(tl_type_context *);
 
 // -- environment --
 
