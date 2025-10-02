@@ -120,6 +120,49 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
     return (tl_type_v2){.tag = tl_scheme, .scheme = scheme};
 }
 
+tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
+    tl_type_v2 clone = {0};
+    switch (orig.tag) {
+    case tl_mono:
+
+        clone.tag      = tl_mono;
+        clone.mono.tag = orig.mono.tag;
+
+        switch (orig.mono.tag) {
+        case tl_nil: break;
+        case tl_cons:
+            clone.mono.cons.name = str_copy(alloc, orig.mono.cons.name);
+            clone.mono.cons.args = (tl_monotype_array){.alloc = alloc};
+            array_copy(clone.mono.cons.args, orig.mono.cons.args.v, orig.mono.cons.args.size);
+            forall(i, clone.mono.cons.args) {
+                // cons args are monotype
+                clone.mono.cons.args.v[i] =
+                  tl_type_v2_clone(alloc, tl_type_init_mono(clone.mono.cons.args.v[i])).mono;
+            }
+            break;
+        case tl_var:   clone.mono.var = orig.mono.var; break;
+        case tl_quant: clone.mono.quant = orig.mono.quant; break;
+
+        case tl_arrow:
+            clone.mono.arrow.lhs  = new (alloc, tl_monotype);
+            clone.mono.arrow.rhs  = new (alloc, tl_monotype);
+            *clone.mono.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.mono.arrow.lhs)).mono;
+            *clone.mono.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.mono.arrow.rhs)).mono;
+            break;
+        }
+        break;
+    case tl_scheme:
+        clone.tag                = tl_scheme;
+
+        clone.scheme.type        = tl_type_v2_clone(alloc, tl_type_init_mono(orig.scheme.type)).mono;
+        clone.scheme.quantifiers = (tl_type_quantifier_array){.alloc = alloc};
+        array_copy(clone.scheme.quantifiers, orig.scheme.quantifiers.v, orig.scheme.quantifiers.size);
+        // tl_type_quantifier does not need to be cloned
+        break;
+    }
+    return clone;
+}
+
 //
 
 static void tl_monotype_collect_free_variables(tl_type_variable_array *, tl_monotype const *);
@@ -465,6 +508,7 @@ u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
 
 tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
     u32 *found = str_map_get(self->index, name);
+    assert(!found || *found < self->types.size);
     return found ? &self->types.v[*found] : null;
 }
 

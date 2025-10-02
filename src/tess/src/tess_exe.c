@@ -219,7 +219,8 @@ int compile_v2(state *self) {
     array_reserve(preamble, 32 * 1024);
 
     // embed std_tl header
-    array_copy(preamble, embed_std_tl, strlen(embed_std_tl));
+    // array_copy(preamble, embed_std_tl, strlen(embed_std_tl));
+    // FIXME
 
     parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
                                    (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});

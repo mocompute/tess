@@ -63,6 +63,7 @@ int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 
 tl_type_v2 tl_type_init_mono(tl_monotype);
 tl_type_v2 tl_type_init_scheme(tl_type_scheme);
+tl_type_v2 tl_type_v2_clone(allocator *, tl_type_v2);
 
 // -- substitution --
 

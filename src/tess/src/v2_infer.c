@@ -46,7 +46,6 @@ struct tl_infer {
 //
 
 static str               v2_ast_node_to_string(allocator *, ast_node const *);
-static void              assign_expression_types(tl_infer *self, ast_node *node);
 static tl_type_v2        instantiate(tl_infer *, tl_type_v2);
 static tl_type_v2        make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 static tl_monotype      *arrow_rightmost(tl_monotype *);
@@ -621,7 +620,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                                        .node = node->named_application.name}));
             return 1;
         }
-        if (infer(self, ctx, *fun_let)) return 1;
+
+        // if (infer(self, ctx, *fun_let)) return 1;
 
         tl_type_v2 *fun = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
         if (!fun) {
@@ -629,8 +629,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             fun = tl_type_env_lookup(ctx->local_env, node->named_application.name->symbol.name);
             if (!fun) fatal("logic error");
         }
+        log(self, "-- before instantitate");
+        log_env(self, self->env);
+
         tl_type_v2 inst = instantiate(self, *fun);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+
+        log(self, "-- after instantitate");
+        log_env(self, self->env);
 
         // infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
@@ -707,14 +713,16 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 }
 
 static int start_infer_global(tl_infer *self, ast_node *node) {
-    infer_ctx *ctx = infer_ctx_create(self->transient);
+    infer_ctx *ctx                = infer_ctx_create(self->transient);
+    ctx->instantiate_applications = 1;
+    ctx->local_env                = self->env;
+    ctx->subs                     = self->subs;
+    int res                       = infer(self, ctx, node);
 
-    int        res = infer(self, ctx, node);
-
-    tl_type_subs_destroy(self->arena, &self->subs);
-    tl_type_env_destroy(self->arena, &self->env);
-    self->subs     = ctx->subs;
-    self->env      = ctx->local_env;
+    // tl_type_subs_destroy(self->arena, &self->subs);
+    // tl_type_env_destroy(self->arena, &self->env);
+    // self->subs     = ctx->subs;
+    // self->env      = ctx->local_env;
     ctx->subs      = null;
     ctx->local_env = null;
 
@@ -736,7 +744,7 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
     tl_type_env_add(ctx->local_env, name_inst, tl_type_init_mono(arrow));
 
     // assign fresh type variables to generic function body and infer
-    assign_expression_types(self, node->let.body);
+    // assign_expression_types(self, node->let.body);
     if (infer(self, ctx, node->let.body)) fatal("error handling");
 
     return name_inst;
@@ -974,6 +982,12 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
             ++i;
         }
     }
+
+    // TODO make an interface for this: rebuild index after removals
+    map_reset(env->index);
+    forall(i, env->names) {
+        str_map_set(&env->index, env->names.v[i], &i);
+    }
 }
 
 static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
@@ -998,6 +1012,45 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
 
     erased:;
     }
+
+    // TODO make an interface for this: rebuild index after removals
+    map_reset(env->index);
+    forall(i, env->names) {
+        str_map_set(&env->index, env->names.v[i], &i);
+    }
+}
+
+void add_quantifier(tl_type_scheme *scheme, tl_monotype *type) {
+    switch (type->tag) {
+    case tl_nil:
+    case tl_var: break;
+
+    case tl_cons:
+        //
+        forall(i, type->cons.args) {
+            add_quantifier(scheme, &type->cons.args.v[i]);
+        }
+        break;
+
+    case tl_quant:
+        //
+        array_set_insert(scheme->quantifiers, type->quant);
+        break;
+
+    case tl_arrow: {
+        add_quantifier(scheme, type->arrow.lhs);
+        add_quantifier(scheme, type->arrow.rhs);
+    } break;
+    }
+}
+
+static void promote_to_type_scheme(allocator *alloc, tl_type_v2 *type) {
+    if (tl_scheme == type->tag) return;
+
+    tl_monotype mono = type->mono;
+
+    *type            = tl_type_init_scheme((tl_type_scheme){.type = mono, .quantifiers = {.alloc = alloc}});
+    add_quantifier(&type->scheme, &mono);
 }
 
 static void quantify_one_tv(tl_infer *self, tl_monotype *type, hashmap **seen) {
@@ -1041,6 +1094,7 @@ static void quantify_env_types(tl_infer *self, tl_type_env *env) {
         tl_type_v2 *type = &env->types.v[i];
         if (tl_scheme == type->tag) continue;
         quantify_one(self, &type->mono, &seen);
+        promote_to_type_scheme(self->arena, type);
     }
 
     map_destroy(&seen);
@@ -1167,8 +1221,11 @@ static void replace_quant(hashmap *map, tl_monotype *mono) {
 }
 
 static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
-    if (tl_mono == generic.tag) return generic;
-    tl_type_scheme s   = generic.scheme;
+
+    assert(tl_scheme == generic.tag);
+
+    tl_type_v2     src = tl_type_v2_clone(self->arena, generic);
+    tl_type_scheme s   = src.scheme;
 
     hashmap       *map = map_create(self->transient, sizeof(tl_type_variable), s.quantifiers.size);
     forall(i, s.quantifiers) {
@@ -1222,7 +1279,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     // add function to global environment
     tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
-    assert(arrow && tl_mono == arrow->tag && tl_arrow == arrow->mono.tag);
+    assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     tl_type_env_add(self->env, name, *arrow);
 
     log(self, "-- global env --");
@@ -1233,107 +1290,107 @@ static void add_generic(tl_infer *self, ast_node *node) {
     infer_ctx_destroy(self->transient, &ctx);
 }
 
-void assign_expression_types(tl_infer *self, ast_node *node) {
-    if (null == node) return;
+// void assign_expression_types(tl_infer *self, ast_node *node) {
+//     if (null == node) return;
 
-    // every node gets a type, and some nodes need to recursively dispatch to their components.
-    // lambda function type is assigned in the switch.
+//     // every node gets a type, and some nodes need to recursively dispatch to their components.
+//     // lambda function type is assigned in the switch.
 
-    if (ast_lambda_function != node->tag) assign_new_expression_variable(self, node);
+//     if (ast_lambda_function != node->tag) assign_new_expression_variable(self, node);
 
-    switch (node->tag) {
-    case ast_address_of:  assign_expression_types(self, node->address_of.target); break;
-    case ast_assignment:  assign_expression_types(self, node->assignment.value); break;
-    case ast_dereference: assign_expression_types(self, node->dereference.target); break;
-    case ast_dereference_assign:
-        assign_expression_types(self, node->dereference_assign.target);
-        assign_expression_types(self, node->dereference_assign.value);
-        break;
+//     switch (node->tag) {
+//     case ast_address_of:  assign_expression_types(self, node->address_of.target); break;
+//     case ast_assignment:  assign_expression_types(self, node->assignment.value); break;
+//     case ast_dereference: assign_expression_types(self, node->dereference.target); break;
+//     case ast_dereference_assign:
+//         assign_expression_types(self, node->dereference_assign.target);
+//         assign_expression_types(self, node->dereference_assign.value);
+//         break;
 
-    case ast_if_then_else:
-        assign_expression_types(self, node->if_then_else.condition);
-        assign_expression_types(self, node->if_then_else.yes);
-        assign_expression_types(self, node->if_then_else.no);
-        break;
+//     case ast_if_then_else:
+//         assign_expression_types(self, node->if_then_else.condition);
+//         assign_expression_types(self, node->if_then_else.yes);
+//         assign_expression_types(self, node->if_then_else.no);
+//         break;
 
-    case ast_let_in:
-        assign_expression_types(self, node->let_in.name);
-        assign_expression_types(self, node->let_in.value);
-        assign_expression_types(self, node->let_in.body);
-        break;
+//     case ast_let_in:
+//         assign_expression_types(self, node->let_in.name);
+//         assign_expression_types(self, node->let_in.value);
+//         assign_expression_types(self, node->let_in.body);
+//         break;
 
-    case ast_let_match_in:
-        assign_expression_types(self, node->let_match_in.body);
-        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
-            assign_expression_types(self, node->let_match_in.lt->labelled_tuple.assignments[i]);
-        }
-        break;
+//     case ast_let_match_in:
+//         assign_expression_types(self, node->let_match_in.body);
+//         for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
+//             assign_expression_types(self, node->let_match_in.lt->labelled_tuple.assignments[i]);
+//         }
+//         break;
 
-    case ast_user_type_set: assign_expression_types(self, node->user_type_set.value); break;
+//     case ast_user_type_set: assign_expression_types(self, node->user_type_set.value); break;
 
-    case ast_begin_end:
-        for (u32 i = 0; i < node->begin_end.n_expressions; ++i) {
-            assign_expression_types(self, node->begin_end.expressions[i]);
-        }
-        break;
+//     case ast_begin_end:
+//         for (u32 i = 0; i < node->begin_end.n_expressions; ++i) {
+//             assign_expression_types(self, node->begin_end.expressions[i]);
+//         }
+//         break;
 
-    case ast_labelled_tuple:
-        for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i) {
-            assign_expression_types(self, node->labelled_tuple.assignments[i]);
-        }
-        break;
+//     case ast_labelled_tuple:
+//         for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i) {
+//             assign_expression_types(self, node->labelled_tuple.assignments[i]);
+//         }
+//         break;
 
-    case ast_lambda_function:
-        // NOTE: this is ok even for generic functions, because upon instantiation we run this
-        // function again to get fresh variables.
-        assign_expression_types(self, node->lambda_function.body);
+//     case ast_lambda_function:
+//         // NOTE: this is ok even for generic functions, because upon instantiation we run this
+//         // function again to get fresh variables.
+//         assign_expression_types(self, node->lambda_function.body);
 
-        node->type_v2 = new (self->arena, tl_type_v2);
-        *node->type_v2 =
-          make_generic_arrow(self, (ast_node_sized){.size = node->lambda_function.n_parameters,
-                                                    .v    = node->lambda_function.parameters});
-        break;
+//         node->type_v2 = new (self->arena, tl_type_v2);
+//         *node->type_v2 =
+//           make_generic_arrow(self, (ast_node_sized){.size = node->lambda_function.n_parameters,
+//                                                     .v    = node->lambda_function.parameters});
+//         break;
 
-    case ast_lambda_function_application:
-        assign_expression_types(self, node->lambda_application.lambda);
-        break;
+//     case ast_lambda_function_application:
+//         assign_expression_types(self, node->lambda_application.lambda);
+//         break;
 
-    case ast_let:
-        //
-        // add generic function to environment
-        add_generic(self, node);
+//     case ast_let:
+//         //
+//         // add generic function to environment
+//         add_generic(self, node);
 
-        // FIXME the quantifiers are wrong: the fun
-        // let id x = x should have type forall a . a -> a, not forall a b . a -> b
+//         // FIXME the quantifiers are wrong: the fun
+//         // let id x = x should have type forall a . a -> a, not forall a b . a -> b
 
-        // NOTE: this is ok even for generic functions, because upon instantiation we run this
-        // function again to get fresh variables. assign_expression_types(self, node->let.body);
-        break;
+//         // NOTE: this is ok even for generic functions, because upon instantiation we run this
+//         // function again to get fresh variables. assign_expression_types(self, node->let.body);
+//         break;
 
-    case ast_named_function_application:
-        //
-        assign_expression_types(self, node->named_application.name);
-        break;
+//     case ast_named_function_application:
+//         //
+//         assign_expression_types(self, node->named_application.name);
+//         break;
 
-    case ast_bool:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:
-    case ast_string:
-    case ast_symbol:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_user_type_get:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_arrow:
-    case ast_nil:
-    case ast_any:
-    case ast_tuple:
-    case ast_user_type:            break;
-    }
-}
+//     case ast_bool:
+//     case ast_ellipsis:
+//     case ast_eof:
+//     case ast_f64:
+//     case ast_i64:
+//     case ast_string:
+//     case ast_symbol:
+//     case ast_u64:
+//     case ast_user_type_definition:
+//     case ast_user_type_get:
+//     case ast_function_declaration:
+//     case ast_lambda_declaration:
+//     case ast_arrow:
+//     case ast_nil:
+//     case ast_any:
+//     case ast_tuple:
+//     case ast_user_type:            break;
+//     }
+// }
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- start inference --");
@@ -1363,21 +1420,21 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     ast_node *main = *found_main;
 
     // rename variables for lexical scope and assign type variables
-    {
-        hashmap *lex = map_create(self->arena, sizeof(str), 16);
-        rename_variables(self, main, &lex);
-        map_destroy(&lex);
-    }
+    // {
+    //     hashmap *lex = map_create(self->arena, sizeof(str), 16);
+    //     rename_variables(self, main, &lex);
+    //     map_destroy(&lex);
+    // }
 
     // assign_expression_types(self, main);
 
     if (start_infer_global(self, main)) return 1;
 
-    log(self, "toplevels");
+    log(self, "-- toplevels");
     log_toplevels(self);
-    log(self, "env");
+    log(self, "-- env");
     log_env(self, self->env);
-    log(self, "subs");
+    log(self, "-- subs");
     log_subs(self, self->subs);
 
     return 0;
