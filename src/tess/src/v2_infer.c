@@ -96,6 +96,11 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->verbose = verbose;
 }
 
+static void process_annotation(tl_infer *self, ast_node *node) {
+    assert(ast_let == node->tag && node->let.name->symbol.annotation);
+    (void)self;
+}
+
 static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes,
                               tl_infer_error_array *out_errors) {
     hashmap             *tops   = map_create(alloc, sizeof(ast_node *), 1024);
@@ -115,7 +120,10 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                     continue;
                 }
 
-                if (node->symbol.annotation) (*p)->let.name->symbol.annotation = node->symbol.annotation;
+                if (node->symbol.annotation) {
+                    (*p)->let.name->symbol.annotation = node->symbol.annotation;
+                    process_annotation(self, *p);
+                }
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
@@ -144,6 +152,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
                 // apply annotation
                 node->let.name->symbol.annotation = (*p)->symbol.annotation;
+                process_annotation(self, node);
 
                 // replace prior symbol entry with let node
                 *p = node;
@@ -876,6 +885,29 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
     }
 }
 
+static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
+    assert(ast_let == node->tag);
+
+    for (u32 i = 0; i < env->names.size;) {
+        str name = env->names.v[i];
+
+        for (u32 j = 0; j < node->let.n_parameters; j++) {
+            assert(ast_symbol == node->let.parameters[j]->tag);
+            str param = node->let.parameters[j]->symbol.name;
+            if (str_eq(name, param)) {
+                array_erase(env->names, i);
+                array_erase(env->types, i);
+                str_map_erase(env->index, name);
+                goto erased;
+            }
+        }
+
+        ++i;
+
+    erased:;
+    }
+}
+
 static void quantify_one_tv(tl_infer *self, tl_monotype *type, hashmap **seen) {
     assert(tl_var == type->tag);
 
@@ -1061,6 +1093,17 @@ static void add_generic(tl_infer *self, ast_node *node) {
     if (!node) return;
     if (ast_let != node->tag) return;
 
+    str name = node->let.name->symbol.name;
+
+    log(self, "-- add_generic: %.*s --", str_ilen(name), str_buf(&name));
+
+    // is there an annotated type??
+    ast_node *fun = *(ast_node **)str_map_get(self->toplevels, name);
+    {
+        str str = v2_ast_node_to_string(self->transient, fun);
+        log(self, "%.*s", str_ilen(str), str_buf(&str));
+    }
+
     // run local inference: this function is not yet in the global environment.
     infer_ctx *ctx = infer_ctx_create(self->transient);
     if (infer(self, ctx, node)) fatal("error handling");
@@ -1073,9 +1116,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     // now determine which names in the local environment are not free (i.e. they exist in the global
     // environment or as formal parameters)
-    str_array non_free = {.alloc = self->transient};
-    array_copy(non_free, ctx->local_env->names.v, ctx->local_env->names.size);
     remove_known_variables(self, ctx->local_env);
+    remove_formal_parameters(ctx->local_env, node);
 
     log(self, "-- local env after removal --");
     log_env(self, ctx->local_env);
@@ -1086,9 +1128,9 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log_env(self, ctx->local_env);
 
     // add function to global environment
-    tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, node->let.name->symbol.name);
+    tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
     assert(arrow && tl_mono == arrow->tag && tl_arrow == arrow->mono.tag);
-    tl_type_env_add(self->env, node->let.name->symbol.name, *arrow);
+    tl_type_env_add(self->env, name, *arrow);
 
     log(self, "-- global env --");
     log_env(self, self->env);
