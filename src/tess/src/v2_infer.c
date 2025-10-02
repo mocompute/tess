@@ -280,6 +280,7 @@ typedef struct {
     tl_type_env  *local_env;                // local environment
     int           instantiate_applications; // whether to instantiate generic applications
     int           add_to_env;               // whether to add variable types to the environment
+    tl_type_v2    lambda_type;              // for inferring lambda_function only
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
@@ -410,7 +411,7 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
     tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
     if (exist) {
         if (!constraint_is_compatible(*exist, mono)) {
-            if (!constraint_is_compatible(mono, *exist)) {
+            if (!constraint_is_compatible(mono, *exist)) { // try the mirror
                 if (self->verbose) {
                     str exist_str = tl_monotype_to_string(self->transient, exist);
                     str new_str   = tl_monotype_to_string(self->transient, &mono);
@@ -418,9 +419,16 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
                         str_ilen(new_str), str_buf(&new_str), str_ilen(exist_str), str_buf(&exist_str));
                 }
                 return type_error(self, node);
-            } else if (!tl_type_subs_get(ctx->subs, mono.var)) {
+            }
+
+            else if (tl_var == mono.tag && !tl_type_subs_get(ctx->subs, mono.var)) {
+                // mono is a type variable that has not yet been constrained
                 return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
-            } else {
+            }
+
+            else {
+                // ignore this constraint: often they are duplicates anyway. Not sure how to determine that
+                // ignoring is sound, versus a type error. (TODO)
                 if (self->verbose) {
                     str new_str = tl_monotype_to_string(self->transient, &mono);
                     log(self, "ignoring constraint t%u : %.*s due to conflict", tv, str_ilen(new_str),
@@ -432,11 +440,13 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
             tl_type_v2 exist_ty = tl_type_init_mono(*exist);
             tl_type_v2 mono_ty  = tl_type_init_mono(mono);
             return constrain(self, ctx, &exist_ty, &mono_ty, node);
+
         } else if (tl_cons == exist->tag) {
-            // ignore because they are equal
+            // ignore because they are equal, according to the logic of constraint_is_compatible
             return 0;
         }
     }
+
     return unify(self, ctx, tv, mono);
 }
 
@@ -556,21 +566,52 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_let_in: {
-        if (infer(self, ctx, node->let_in.value)) return 1;
+        if (ast_lambda_function == node->let_in.value->tag) {
+            // define a generic lambda in local scope
 
-        hashmap *save = map_copy(ctx->lex);
+            add_generic(self, node);
 
-        ensure_tv(self, &node->let_in.name->type_v2);
-        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+            // do not infer the node value - add_generic takes care of that
 
-        if (infer(self, ctx, node->let_in.body)) return 1;
+            hashmap *save = map_copy(ctx->lex);
 
-        ensure_tv(self, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
+            ensure_tv(self, &node->let_in.name->type_v2);
+            str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
 
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
+            if (infer(self, ctx, node->let_in.body)) return 1;
 
+            ensure_tv(self, &node->type_v2);
+            if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
+
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
+
+            // add_generic will have added generic lambda to its local environment, using the
+            // ctx->lambda_type field
+
+        } else {
+
+            if (infer(self, ctx, node->let_in.value)) return 1;
+
+            hashmap *save = map_copy(ctx->lex);
+
+            ensure_tv(self, &node->let_in.name->type_v2);
+            str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+
+            if (infer(self, ctx, node->let_in.body)) return 1;
+
+            ensure_tv(self, &node->type_v2);
+            if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
+
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
+
+            // add to local environment
+            if (ctx->add_to_env) {
+                tl_type_env_add(ctx->local_env, node->let_in.name->symbol.name,
+                                *node->let_in.value->type_v2);
+            }
+        }
     } break;
 
     case ast_let: {
@@ -649,7 +690,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                     node);
         if (constrain(self, ctx, &inst, &app, node)) return 1;
 
-        // FIXME: now infer an *instantiated* function body
+        // now infer an *instantiated* function body
         str name_inst = instantiate_fun_and_infer(self, ctx, *fun_let, inst.mono);
 
         // constrain instantiated result type
@@ -696,7 +737,17 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (infer(self, ctx, node->lambda_function.body)) return 1;
 
         map_destroy(&ctx->lex);
-        ctx->lex = save;
+        ctx->lex         = save;
+
+        tl_type_v2 arrow = make_arrow(self,
+                                      (ast_node_sized){.size = node->lambda_function.n_parameters,
+                                                       .v    = node->lambda_function.parameters},
+                                      node->lambda_function.body);
+
+        ensure_tv(self, &node->type_v2);
+        if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
+        ctx->lambda_type = arrow;
+
     } break;
 
     case ast_tuple:
@@ -761,177 +812,6 @@ static void assign_new_expression_variable(tl_infer *self, ast_node *node) {
     *node->type_v2 = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
 }
 
-static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
-    // transform variables recursively in node so that every occurrence is unique, respecting
-    // lexical scope created by lambda functions, let functions, and let in expressions so that
-    // variables have the same name when they refer to the same bound value.
-
-    if (null == node) return;
-
-    switch (node->tag) {
-
-    case ast_assignment:
-        rename_variables(self, node->assignment.name, lex);
-        rename_variables(self, node->assignment.value, lex);
-        break;
-
-    case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
-
-    case ast_dereference: rename_variables(self, node->dereference.target, lex); break;
-
-    case ast_dereference_assign:
-        rename_variables(self, node->dereference_assign.target, lex);
-        rename_variables(self, node->dereference_assign.value, lex);
-        break;
-
-    case ast_if_then_else:
-        rename_variables(self, node->if_then_else.condition, lex);
-        rename_variables(self, node->if_then_else.yes, lex);
-        rename_variables(self, node->if_then_else.no, lex);
-        break;
-
-    case ast_let_in: {
-        str name                           = node->let_in.name->symbol.name;
-        str newvar                         = next_variable_name(self);
-        node->let_in.name->symbol.original = node->let_in.name->symbol.name;
-        node->let_in.name->symbol.name     = newvar;
-
-        // establish lexical scope of the let-in binding and recurse
-        hashmap *save = map_copy(*lex);
-        str_map_set(lex, name, &newvar);
-
-        // assign_new_type_variable(self, newvar);
-        rename_variables(self, node->let_in.body, lex);
-
-        // restore prior scope
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_let_match_in: {
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
-            ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
-            assert(ast_assignment == ass->tag);
-            ast_node *name_node = ass->assignment.name;
-            assert(ast_symbol == name_node->tag);
-            str name                   = name_node->symbol.name;
-            str newvar                 = next_variable_name(self);
-            name_node->symbol.original = name_node->symbol.name;
-            name_node->symbol.name     = newvar;
-
-            str_map_set(lex, name, &newvar);
-            // assign_new_type_variable(self, newvar);
-        }
-
-        rename_variables(self, node->let_match_in.body, lex);
-
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_symbol: {
-        str *found;
-        if ((found = str_map_get(*lex, node->symbol.name))) {
-            node->symbol.original = node->symbol.name;
-            node->symbol.name     = *found;
-        } else {
-            fatal("symbol found outside lexical scope");
-        }
-    } break;
-
-    case ast_lambda_function: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
-            ast_node *param = node->lambda_function.parameters[i];
-            assert(ast_symbol == param->tag);
-            str name = param->symbol.name;
-            // str newvar             = next_variable_name(self);
-            // param->symbol.original = param->symbol.name;
-            // param->symbol.name     = newvar;
-            // str_map_set(lex, name, &newvar);
-            str_map_set(lex, name, &name);
-
-            // FIXME: do not assign unquantified type variables to parameters.
-            // assign_new_type_variable(self, newvar);
-        }
-
-        rename_variables(self, node->lambda_function.body, lex);
-
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_let: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            assert(ast_symbol == param->tag);
-            str name = param->symbol.name;
-            // str newvar             = next_variable_name(self);
-            // param->symbol.original = param->symbol.name;
-            // param->symbol.name     = newvar;
-            // str_map_set(lex, name, &newvar);
-            str_map_set(lex, name, &name);
-
-            // FIXME: do not assign unquantified type variables to parameters.
-            // assign_new_type_variable(self, newvar);
-        }
-
-        rename_variables(self, node->let.body, lex);
-
-        map_destroy(lex);
-        *lex = save;
-
-    } break;
-
-    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex); break;
-
-    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex); break;
-
-    case ast_begin_end:
-        for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
-            rename_variables(self, node->begin_end.expressions[i], lex);
-        break;
-
-    case ast_labelled_tuple:
-    case ast_tuple:
-
-    case ast_lambda_function_application:
-        rename_variables(self, node->lambda_application.lambda, lex);
-        break;
-
-    case ast_named_function_application: {
-        ast_node **fun_let = str_map_get(self->toplevels, node->named_application.name->symbol.name);
-        if (fun_let) {
-            rename_variables(self, *fun_let, lex);
-        } else {
-            // FIXME error
-        }
-    } break;
-
-    case ast_string:
-    case ast_nil:
-    case ast_any:
-    case ast_arrow:
-    case ast_bool:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_user_type:            break;
-    }
-}
-
 typedef struct {
     tl_infer  *self;
     str_array *array;
@@ -971,12 +851,21 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
 }
 
 static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
-    assert(ast_let == node->tag);
+
+    ast_node_sized params = {0};
+
+    if (ast_let == node->tag) {
+        params.size = node->let.n_parameters;
+        params.v    = node->let.parameters;
+    } else if (ast_lambda_function == node->tag) {
+        params.size = node->lambda_function.n_parameters;
+        params.v    = node->lambda_function.parameters;
+    } else fatal("logic error");
 
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
 
-        for (u32 j = 0; j < node->let.n_parameters; j++) {
+        forall(j, params) {
             assert(ast_symbol == node->let.parameters[j]->tag);
             str param = node->let.parameters[j]->symbol.name;
             if (str_eq(name, param)) {
@@ -1230,23 +1119,33 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
 
 static void add_generic(tl_infer *self, ast_node *node) {
     if (!node) return;
-    if (ast_let != node->tag) return;
 
-    str name = node->let.name->symbol.name;
+    ast_node *infer_target = null;
+    str       name;
+    if (ast_let == node->tag) {
+        name         = node->let.name->symbol.name;
+        infer_target = node;
+    } else if (ast_node_is_let_in_lambda(node)) {
+        name         = node->let_in.name->symbol.name;
+        infer_target = node->let_in.value;
+    } else {
+        fatal("logic error");
+    }
 
     log(self, "-- add_generic: %.*s --", str_ilen(name), str_buf(&name));
 
     // is there an annotated type??
-    ast_node *fun = *(ast_node **)str_map_get(self->toplevels, name);
-    {
-        str str = v2_ast_node_to_string(self->transient, fun);
-        log(self, "%.*s", str_ilen(str), str_buf(&str));
-    }
 
     // run local inference: this function is not yet in the global environment.
     infer_ctx *ctx  = infer_ctx_create(self->transient);
     ctx->add_to_env = 1;
-    if (infer(self, ctx, node)) fatal("error handling");
+    if (infer(self, ctx, infer_target)) fatal("error handling");
+
+    if (ast_lambda_function == infer_target->tag) {
+        // since the infer target is unnamed, the lambda function could not add itself to the environment.
+        // We must do so here before the quantified variable analysis.
+        tl_type_env_add(ctx->local_env, name, ctx->lambda_type);
+    }
 
     log(self, "-- local env --");
     log_env(self, ctx->local_env);
@@ -1254,10 +1153,11 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- local subs --");
     log_subs(self, ctx->subs);
 
-    // now determine which names in the local environment are not free (i.e. they exist in the
-    // global environment or as formal parameters)
+    // now determine which names in the local environment are not free (i.e. they exist in the global
+    // environment or as formal parameters). Whatever is left must be quantified. This assumes the function
+    // under analysis has been added with an arrow type to the local environment.
     remove_known_variables(self, ctx->local_env);
-    remove_formal_parameters(ctx->local_env, node);
+    remove_formal_parameters(ctx->local_env, infer_target);
 
     log(self, "-- local env after removal --");
     log_env(self, ctx->local_env);
@@ -1267,13 +1167,15 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- local env after quantification --");
     log_env(self, ctx->local_env);
 
-    // add function type to global environment
-    tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
-    assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
-    tl_type_env_add(self->env, name, *arrow);
+    // add LET function type to GLOBAL environment - not local lambdas
+    if (ast_let == node->tag) {
+        tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
+        assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
+        tl_type_env_add(self->env, name, *arrow);
+    }
 
     // remove type information from function tree
-    remove_types(node);
+    remove_types(infer_target);
 
     log(self, "-- global env --");
     log_env(self, self->env);
@@ -1298,7 +1200,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
         while (map_iter(self->toplevels, &iter)) {
             // str const *name = iter.key_ptr;
             ast_node *node = *(ast_node **)iter.data;
-
             add_generic(self, node);
         }
     }
@@ -1310,13 +1211,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     }
     ast_node *main = *found_main;
 
-    // rename variables for lexical scope and assign type variables
-    // {
-    //     hashmap *lex = map_create(self->arena, sizeof(str), 16);
-    //     rename_variables(self, main, &lex);
-    //     map_destroy(&lex);
-    // }
-
     if (start_infer_global(self, main)) return 1;
 
     log(self, "-- toplevels");
@@ -1326,6 +1220,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- subs");
     log_subs(self, self->subs);
 
+    // apply subs to global environment
     tl_type_env_subs_apply(self->env, self->subs);
 
     log(self, "-- final env --");
