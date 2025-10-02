@@ -227,6 +227,7 @@ tl_type_subs *tl_type_subs_create(allocator *alloc) {
 }
 
 void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
+    if (!p || !*p) return;
     map_destroy(&(*p)->map);
     alloc_free(alloc, *p);
     *p = null;
@@ -421,6 +422,7 @@ tl_type_env *tl_type_env_create(allocator *alloc) {
 }
 
 void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
+    if (!p || !*p) return;
     map_destroy(&(*p)->index);
     array_free((*p)->names);
     array_free((*p)->types);

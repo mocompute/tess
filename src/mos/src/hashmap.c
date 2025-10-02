@@ -278,7 +278,7 @@ hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
 }
 
 void map_destroy(hashmap **map) {
-    if (!map) return;
+    if (!map || !*map) return;
 
     hashmap_iterator     iter = {0};
     hashmap_entry const *entry;

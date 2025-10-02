@@ -173,6 +173,32 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
     return tops;
 }
 
+// -- inference --
+
+typedef struct {
+    hashmap             *lex;
+    tl_type_subs        *subs;      // corresponds to E in algorithm J
+    tl_type_env         *local_env; // local environment
+    tl_infer_error_array errors;
+} infer_ctx;
+
+static infer_ctx *infer_ctx_create(allocator *alloc) {
+    infer_ctx *out = new (alloc, infer_ctx);
+    out->lex       = map_create(alloc, sizeof(tl_type_v2 *), 16);
+    out->local_env = tl_type_env_create(alloc);
+    return out;
+}
+
+static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
+    if ((*p)->lex) map_destroy(&(*p)->lex);
+    if ((*p)->subs) tl_type_subs_destroy(alloc, &(*p)->subs);
+    if ((*p)->local_env) tl_type_env_destroy(alloc, &(*p)->local_env);
+
+    array_free((*p)->errors);
+    alloc_free(alloc, *p);
+    *p = null;
+}
+
 static int type_error(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
     return 1;
@@ -198,8 +224,8 @@ static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
     }
 }
 
-static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
-    // unify tv with mono in the context of self->subs: if mono is a type variable that exists in the
+static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono) {
+    // unify tv with mono in the context of ctx->subs: if mono is a type variable that exists in the
     // context of subs, replace it with the existing substitution. Similarly recursively for type
     // constructor arguments and arrow arms.
     switch (mono.tag) {
@@ -210,7 +236,7 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
         // attempt to match type constructor arguments against existing type vars
         forall(i, mono.cons.args) {
             if (tl_var == mono.cons.args.v[i].tag) {
-                tl_monotype *found = tl_type_subs_get(self->subs, mono.cons.args.v[i].var);
+                tl_monotype *found = tl_type_subs_get(ctx->subs, mono.cons.args.v[i].var);
                 if (found) mono.cons.args.v[i] = *found;
             }
         }
@@ -218,8 +244,8 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
 
     case tl_var: {
         // if mono is a tv, unify it with existing tv, if any
-        tl_monotype *mono_match = tl_type_subs_get(self->subs, mono.var);
-        if (mono_match) return unify(self, tv, *mono_match);
+        tl_monotype *mono_match = tl_type_subs_get(ctx->subs, mono.var);
+        if (mono_match) return unify(self, ctx, tv, *mono_match);
     } break;
 
     case tl_quant: fatal("attempt to unify quantifier");
@@ -231,10 +257,10 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
         tl_monotype *right_match = null;
 
         if (tl_var == mono.arrow.lhs->tag) {
-            left_match = tl_type_subs_get(self->subs, mono.arrow.lhs->var);
+            left_match = tl_type_subs_get(ctx->subs, mono.arrow.lhs->var);
         }
         if (tl_var == mono.arrow.rhs->tag) {
-            right_match = tl_type_subs_get(self->subs, mono.arrow.rhs->var);
+            right_match = tl_type_subs_get(ctx->subs, mono.arrow.rhs->var);
         }
 
         if (left_match) mono.arrow.lhs = left_match;
@@ -243,12 +269,12 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     } break;
     }
 
-    tl_type_subs_add(self->subs, tv, mono);
+    tl_type_subs_add(ctx->subs, tv, mono);
 
     if (tl_var != mono.tag) {
         // any existing subs with tv on the right hand side should be replaced with the new non-tv mono
         hashmap_iterator iter = {0};
-        while (map_iter(self->subs->map, &iter)) {
+        while (map_iter(ctx->subs->map, &iter)) {
             tl_monotype *rhs = iter.data;
 
             if (tl_var == rhs->tag && rhs->var == tv) {
@@ -273,12 +299,12 @@ static int unify(tl_infer *self, tl_type_variable tv, tl_monotype mono) {
     return 0;
 }
 
-static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
-                               ast_node const *node);
+static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
+                               tl_type_v2 const *right, ast_node const *node);
 
-static nodiscard int constrain_tv(tl_infer *self, tl_type_variable tv, tl_monotype mono,
+static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
                                   ast_node const *node) {
-    tl_monotype *exist = tl_type_subs_get(self->subs, tv);
+    tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
     if (exist) {
         if (!constraint_is_compatible(*exist, mono)) {
             str exist_str = tl_monotype_to_string(self->transient, exist);
@@ -289,17 +315,17 @@ static nodiscard int constrain_tv(tl_infer *self, tl_type_variable tv, tl_monoty
         } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
             tl_type_v2 exist_ty = tl_type_init_mono(*exist);
             tl_type_v2 mono_ty  = tl_type_init_mono(mono);
-            return constrain(self, &exist_ty, &mono_ty, node);
+            return constrain(self, ctx, &exist_ty, &mono_ty, node);
         } else if (tl_cons == exist->tag) {
             // ignore because they are equal
             return 0;
         }
     }
-    return unify(self, tv, mono);
+    return unify(self, ctx, tv, mono);
 }
 
-static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
-                               ast_node const *node) {
+static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
+                               tl_type_v2 const *right, ast_node const *node) {
 
     if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
 
@@ -314,9 +340,9 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
     }
 
     if (is_type_variable(left)) {
-        return constrain_tv(self, left->mono.var, right->mono, node);
+        return constrain_tv(self, ctx, left->mono.var, right->mono, node);
     } else if (is_type_variable(right)) {
-        return constrain_tv(self, right->mono.var, left->mono, node);
+        return constrain_tv(self, ctx, right->mono.var, left->mono, node);
     }
 
     if (left->mono.tag != right->mono.tag) {
@@ -340,7 +366,7 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
         forall(i, left->mono.cons.args) {
             tl_type_v2 left_ty  = tl_type_init_mono(left->mono.cons.args.v[i]);
             tl_type_v2 right_ty = tl_type_init_mono(right->mono.cons.args.v[i]);
-            if (constrain(self, &left_ty, &right_ty, node)) return 1;
+            if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
         }
         break;
 
@@ -350,11 +376,11 @@ static nodiscard int constrain(tl_infer *self, tl_type_v2 const *left, tl_type_v
     case tl_arrow: {
         tl_type_v2 left_ty  = tl_type_init_mono(*left->mono.arrow.lhs);
         tl_type_v2 right_ty = tl_type_init_mono(*right->mono.arrow.lhs);
-        if (constrain(self, &left_ty, &right_ty, node)) return 1;
+        if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
 
         left_ty  = tl_type_init_mono(*left->mono.arrow.rhs);
         right_ty = tl_type_init_mono(*right->mono.arrow.rhs);
-        if (constrain(self, &left_ty, &right_ty, node)) return 1;
+        if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
 
     } break;
     }
@@ -369,10 +395,11 @@ static void ensure_tv(tl_infer *self, tl_type_v2 **type) {
     **type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
 }
 
-static str instantiate_fun_and_infer(tl_infer *, ast_node *, tl_monotype, hashmap **);
+static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
 
-static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
-    // update subs by collecting and applying constraints found recursively starting at node.
+static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+    // - update ctx->subs by collecting and applying constraints found recursively starting at node.
+    // - adds symbol : type information to ctx->env.
 
     if (null == node) return 0;
 
@@ -392,67 +419,67 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_string:             {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("String"));
         ensure_tv(self, &node->type_v2);
-        return constrain(self, node->type_v2, ty, node);
+        return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_f64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Float"));
         ensure_tv(self, &node->type_v2);
-        return constrain(self, node->type_v2, ty, node);
+        return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_i64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
         ensure_tv(self, &node->type_v2);
-        return constrain(self, node->type_v2, ty, node);
+        return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_u64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int")); // FIXME unsigned int
         ensure_tv(self, &node->type_v2);
-        return constrain(self, node->type_v2, ty, node);
+        return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_let_in: {
-        if (infer(self, node->let_in.value, lex)) return 1;
+        if (infer(self, ctx, node->let_in.value)) return 1;
 
-        hashmap *save = map_copy(*lex);
+        hashmap *save = map_copy(ctx->lex);
 
         ensure_tv(self, &node->let_in.name->type_v2);
-        str_map_set(lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
 
-        if (infer(self, node->let_in.body, lex)) return 1;
+        if (infer(self, ctx, node->let_in.body)) return 1;
 
         ensure_tv(self, &node->type_v2);
-        if (constrain(self, node->type_v2, node->let_in.body->type_v2, node)) return 1;
+        if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
 
-        map_destroy(lex);
-        *lex = save;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
 
     } break;
 
     case ast_let: {
-        hashmap *save = map_copy(*lex);
+        hashmap *save = map_copy(ctx->lex);
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ensure_tv(self, &node->let.parameters[i]->type_v2);
-            str_map_set(lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
+            str_map_set(&ctx->lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
         }
 
-        if (infer(self, node->let.body, lex)) return 1;
+        if (infer(self, ctx, node->let.body)) return 1;
 
-        map_destroy(lex);
-        *lex = save;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
     } break;
 
     case ast_symbol: {
         ensure_tv(self, &node->type_v2);
         tl_type_v2 *global = tl_type_env_lookup(self->env, node->symbol.name);
         if (global) {
-            if (constrain(self, global, node->type_v2, node)) return 1;
+            if (constrain(self, ctx, global, node->type_v2, node)) return 1;
         } else {
             tl_type_v2 **found;
-            if ((found = str_map_get(*lex, node->symbol.name))) {
-                if (constrain(self, *found, node->type_v2, node)) return 1;
+            if ((found = str_map_get(ctx->lex, node->symbol.name))) {
+                if (constrain(self, ctx, *found, node->type_v2, node)) return 1;
             }
         }
 
@@ -466,7 +493,7 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
                                                        .node = node->named_application.name}));
             return 1;
         }
-        if (infer(self, *fun_let, lex)) return 1;
+        if (infer(self, ctx, *fun_let)) return 1;
 
         tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
         tl_type_v2  inst = instantiate(self, *fun);
@@ -474,7 +501,7 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
 
         // infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            if (infer(self, node->named_application.arguments[i], lex)) return 1;
+            if (infer(self, ctx, node->named_application.arguments[i])) return 1;
         }
 
         // constrain arrow types
@@ -482,17 +509,17 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
                                     (ast_node_sized){.size = node->named_application.n_arguments,
                                                      .v    = node->named_application.arguments},
                                     node);
-        if (constrain(self, &inst, &app, node)) return 1;
+        if (constrain(self, ctx, &inst, &app, node)) return 1;
 
         // FIXME: now infer an *instantiated* function body
-        str name_inst = instantiate_fun_and_infer(self, *fun_let, inst.mono, lex);
+        str name_inst = instantiate_fun_and_infer(self, ctx, *fun_let, inst.mono);
 
         // constrain instantiated result type
         tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
-        if (constrain(self, &inst_right, node->type_v2, node)) return 1;
+        if (constrain(self, ctx, &inst_right, node->type_v2, node)) return 1;
 
         // this constrains against the just-instantiated type vars that are in the generic node
-        if (constrain(self, &inst_right, (*fun_let)->let.body->type_v2, node)) return 1;
+        if (constrain(self, ctx, &inst_right, (*fun_let)->let.body->type_v2, node)) return 1;
 
         // replace instantiated unique name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
@@ -510,7 +537,7 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
                                     (ast_node_sized){.size = node->lambda_application.n_arguments,
                                                      .v    = node->lambda_application.arguments},
                                     node);
-        if (constrain(self, &inst, &app, node)) return 1;
+        if (constrain(self, ctx, &inst, &app, node)) return 1;
 
     } break;
 
@@ -524,17 +551,17 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_labelled_tuple:
     case ast_lambda_declaration:
     case ast_lambda_function:      {
-        hashmap *save = map_copy(*lex);
+        hashmap *save = map_copy(ctx->lex);
 
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ensure_tv(self, &node->let.parameters[i]->type_v2);
-            str_map_set(lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
+            str_map_set(&ctx->lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
         }
 
-        if (infer(self, node->lambda_function.body, lex)) return 1;
+        if (infer(self, ctx, node->lambda_function.body)) return 1;
 
-        map_destroy(lex);
-        *lex = save;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
     } break;
 
     case ast_tuple:
@@ -543,14 +570,17 @@ static int infer(tl_infer *self, ast_node *node, hashmap **lex) {
     return 0;
 }
 
-static int start_infer(tl_infer *self, ast_node *node) {
-    hashmap *lex = map_create(self->transient, sizeof(tl_type_v2 *), 16);
-    int      res = infer(self, node, &lex);
-    map_destroy(&lex);
+static int start_infer_global(tl_infer *self, ast_node *node) {
+
+    infer_ctx *ctx = infer_ctx_create(self->transient);
+
+    int        res = infer(self, ctx, node);
+
+    infer_ctx_destroy(self->transient, &ctx);
     return res;
 }
 
-static str instantiate_fun_and_infer(tl_infer *self, ast_node *node, tl_monotype arrow, hashmap **lex) {
+static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype arrow) {
     assert(ast_let == node->tag);
 
     // TODO de-duplicate instances
@@ -565,7 +595,7 @@ static str instantiate_fun_and_infer(tl_infer *self, ast_node *node, tl_monotype
 
     // assign fresh type variables to generic function body and infer
     assign_expression_types(self, node->let.body);
-    if (infer(self, node->let.body, lex)) fatal("error handling");
+    if (infer(self, ctx, node->let.body)) fatal("error handling");
 
     return name_inst;
 }
@@ -941,10 +971,18 @@ static void add_generic(tl_infer *self, ast_node *node) {
     if (!node) return;
     if (ast_let != node->tag) return;
 
+    tl_type_subs *save = self->subs;
+    self->subs         = tl_type_subs_create(self->transient);
+
+    if (start_infer(self, node)) fatal("error handling");
+
     tl_type_v2 arrow =
       make_generic_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters});
 
     tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
+
+    tl_type_subs_destroy(self->transient, &self->subs);
+    self->subs = save;
 }
 
 void assign_expression_types(tl_infer *self, ast_node *node) {
