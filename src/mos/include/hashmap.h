@@ -52,6 +52,7 @@ int    str_map_contains(hashmap const *, str key);
 void  *map_get(hashmap *, void const *key, u8 key_len);
 void  *str_map_get(hashmap *, str key);
 void   map_erase(hashmap *, void const *key, u8 key_len);
+void   str_map_erase(hashmap *, str key);
 void   map_reset(hashmap *);
 
 void   hset_insert(hashmap **, void const *, u8);

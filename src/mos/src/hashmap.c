@@ -428,6 +428,12 @@ void map_erase(hashmap *map, void const *key, u8 key_len) {
     map->n_occupied--;
 }
 
+void str_map_erase(hashmap *self, str key) {
+    span s = str_span(&key);
+    assert(s.len < UINT8_MAX);
+    return map_erase(self, s.buf, s.len);
+}
+
 void map_reset(hashmap *map) {
     if (map->n_occupied) {
         memset(map->entries, 0, map->n_cells * hashmap_entry_size(map));

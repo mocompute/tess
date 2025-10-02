@@ -1,6 +1,8 @@
 #include "v2_type.h"
+
 #include "alloc.h"
 #include "array.h"
+#include "dbg.h"
 #include "hashmap.h"
 #include "str.h"
 
@@ -421,6 +423,20 @@ tl_type_env *tl_type_env_create(allocator *alloc) {
     return self;
 }
 
+nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *src) {
+
+    allocator   *alloc = src->names.alloc;
+
+    tl_type_env *self  = new (alloc, tl_type_env);
+    self->index        = map_copy(self->index);
+    self->names        = (str_array){.alloc = alloc};
+    self->types        = (tl_type_v2_array){.alloc = alloc};
+    array_copy(self->names, src->names.v, src->names.size);
+    array_copy(self->types, src->types.v, src->types.size);
+
+    return self;
+}
+
 void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
     if (!p || !*p) return;
     map_destroy(&(*p)->index);
@@ -431,6 +447,7 @@ void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
 }
 
 u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
+    assert(!str_is_empty(name));
     u32 *found = str_map_get(self->index, name);
     if (found) {
         self->types.v[*found] = type;
