@@ -68,8 +68,8 @@ tl_infer *tl_infer_create(allocator *alloc) {
 
     self->toplevels     = null;
     self->context       = tl_type_context_empty();
-    self->env           = tl_type_env_create(alloc);
-    self->subs          = tl_type_subs_create(alloc);
+    self->env           = tl_type_env_create(self->arena);
+    self->subs          = tl_type_subs_create(self->arena);
 
     self->errors        = (tl_infer_error_array){.alloc = self->arena};
 
@@ -83,9 +83,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 
-    tl_type_subs_destroy(alloc, &(*p)->subs);
-    tl_type_env_destroy(alloc, &(*p)->env);
-    map_destroy(&(*p)->toplevels);
+    if ((*p)->toplevels) map_destroy(&(*p)->toplevels);
 
     arena_destroy(alloc, &(*p)->transient);
     arena_destroy(alloc, &(*p)->arena);
@@ -101,6 +99,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                               tl_infer_error_array *out_errors) {
     hashmap             *tops   = map_create(alloc, sizeof(ast_node *), 1024);
     tl_infer_error_array errors = {.alloc = alloc};
+    (void)self;
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
@@ -129,7 +128,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             ast_node **p        = str_map_get(tops, name_str);
 
             // assign expresion type
-            assign_expression_types(self, node);
+            // assign_expression_types(self, node);
 
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
@@ -176,15 +175,15 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 // -- inference --
 
 typedef struct {
-    hashmap             *lex;
-    tl_type_subs        *subs;      // corresponds to E in algorithm J
-    tl_type_env         *local_env; // local environment
-    tl_infer_error_array errors;
+    hashmap      *lex;       // str => tl_type_v2*
+    tl_type_subs *subs;      // corresponds to E in algorithm J
+    tl_type_env  *local_env; // local environment
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
     infer_ctx *out = new (alloc, infer_ctx);
     out->lex       = map_create(alloc, sizeof(tl_type_v2 *), 16);
+    out->subs      = tl_type_subs_create(alloc);
     out->local_env = tl_type_env_create(alloc);
     return out;
 }
@@ -194,7 +193,6 @@ static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
     if ((*p)->subs) tl_type_subs_destroy(alloc, &(*p)->subs);
     if ((*p)->local_env) tl_type_env_destroy(alloc, &(*p)->local_env);
 
-    array_free((*p)->errors);
     alloc_free(alloc, *p);
     *p = null;
 }
@@ -307,11 +305,21 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
     tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
     if (exist) {
         if (!constraint_is_compatible(*exist, mono)) {
-            str exist_str = tl_monotype_to_string(self->transient, exist);
-            str new_str   = tl_monotype_to_string(self->transient, &mono);
-            log(self, "new constraint %.*s is not compatible with existing constraint %.*s",
-                str_ilen(new_str), str_buf(&new_str), str_ilen(exist_str), str_buf(&exist_str));
-            return type_error(self, node);
+            if (!constraint_is_compatible(mono, *exist)) {
+                str exist_str = tl_monotype_to_string(self->transient, exist);
+                str new_str   = tl_monotype_to_string(self->transient, &mono);
+                log(self, "new constraint %.*s is not compatible with existing constraint %.*s",
+                    str_ilen(new_str), str_buf(&new_str), str_ilen(exist_str), str_buf(&exist_str));
+                return type_error(self, node);
+            } else if (!tl_type_subs_get(ctx->subs, mono.var)) {
+                return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
+            } else {
+                // str exist_str = tl_monotype_to_string(self->transient, exist);
+                str new_str = tl_monotype_to_string(self->transient, &mono);
+                log(self, "ignoring constraint t%u : %.*s due to conflict", tv, str_ilen(new_str),
+                    str_buf(&new_str));
+                return 0;
+            }
         } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
             tl_type_v2 exist_ty = tl_type_init_mono(*exist);
             tl_type_v2 mono_ty  = tl_type_init_mono(mono);
@@ -469,19 +477,28 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         map_destroy(&ctx->lex);
         ctx->lex = save;
+
+        // add to local environment
+        tl_type_v2 arrow =
+          make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
+                     node->let.body);
+        tl_type_env_add(ctx->local_env, node->let.name->symbol.name, arrow);
+
     } break;
 
     case ast_symbol: {
-        ensure_tv(self, &node->type_v2);
-        tl_type_v2 *global = tl_type_env_lookup(self->env, node->symbol.name);
+        tl_type_v2  *global = tl_type_env_lookup(self->env, node->symbol.name);
+        tl_type_v2 **found  = null;
         if (global) {
-            if (constrain(self, ctx, global, node->type_v2, node)) return 1;
+            node->type_v2 = global;
+        } else if ((found = str_map_get(ctx->lex, node->symbol.name)) && *found) {
+            node->type_v2 = *found;
         } else {
-            tl_type_v2 **found;
-            if ((found = str_map_get(ctx->lex, node->symbol.name))) {
-                if (constrain(self, ctx, *found, node->type_v2, node)) return 1;
-            }
+            ensure_tv(self, &node->type_v2);
         }
+
+        // add to local environment
+        tl_type_env_add(ctx->local_env, node->symbol.name, *node->type_v2);
 
     } break;
 
@@ -495,8 +512,13 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
         if (infer(self, ctx, *fun_let)) return 1;
 
-        tl_type_v2 *fun  = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
-        tl_type_v2  inst = instantiate(self, *fun);
+        tl_type_v2 *fun = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
+        if (!fun) {
+            // fun is not yet in global type environment.
+            fun = tl_type_env_lookup(ctx->local_env, node->named_application.name->symbol.name);
+            if (!fun) fatal("logic error");
+        }
+        tl_type_v2 inst = instantiate(self, *fun);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
         // infer the arguments
@@ -505,6 +527,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         // constrain arrow types
+        ensure_tv(self, &node->type_v2);
         tl_type_v2 app = make_arrow(self,
                                     (ast_node_sized){.size = node->named_application.n_arguments,
                                                      .v    = node->named_application.arguments},
@@ -567,6 +590,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_tuple:
     case ast_user_type: break;
     }
+
+    tl_type_env_subs_apply(ctx->local_env, ctx->subs);
     return 0;
 }
 
@@ -575,6 +600,13 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
     infer_ctx *ctx = infer_ctx_create(self->transient);
 
     int        res = infer(self, ctx, node);
+
+    tl_type_subs_destroy(self->arena, &self->subs);
+    tl_type_env_destroy(self->arena, &self->env);
+    self->subs     = ctx->subs;
+    self->env      = ctx->local_env;
+    ctx->subs      = null;
+    ctx->local_env = null;
 
     infer_ctx_destroy(self->transient, &ctx);
     return res;
@@ -591,7 +623,7 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
     // node->let.name->symbol.name     = name_inst;
 
     // add to type environment
-    tl_type_env_add(self->env, name_inst, tl_type_init_mono(arrow));
+    tl_type_env_add(ctx->local_env, name_inst, tl_type_init_mono(arrow));
 
     // assign fresh type variables to generic function body and infer
     assign_expression_types(self, node->let.body);
@@ -971,18 +1003,15 @@ static void add_generic(tl_infer *self, ast_node *node) {
     if (!node) return;
     if (ast_let != node->tag) return;
 
-    tl_type_subs *save = self->subs;
-    self->subs         = tl_type_subs_create(self->transient);
-
-    if (start_infer(self, node)) fatal("error handling");
+    // run local inference
+    infer_ctx *ctx = infer_ctx_create(self->transient);
+    if (infer(self, ctx, node)) fatal("error handling");
 
     tl_type_v2 arrow =
       make_generic_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters});
 
     tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
-
-    tl_type_subs_destroy(self->transient, &self->subs);
-    self->subs = save;
+    infer_ctx_destroy(self->transient, &ctx);
 }
 
 void assign_expression_types(tl_infer *self, ast_node *node) {
@@ -1114,7 +1143,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     assign_expression_types(self, main);
 
-    if (start_infer(self, main)) return 1;
+    if (start_infer_global(self, main)) return 1;
 
     log(self, "toplevels");
     log_toplevels(self);

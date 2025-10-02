@@ -11,7 +11,7 @@ void *array_alloc_impl(array_header_t *h, u32 num, u32 width, u16 align) {
 }
 
 void array_free_impl(array_header_t *h, void *ptr) {
-    if (!h) return;
+    if (!h || !ptr) return;
     assert(h->alloc);
     alloc_free(h->alloc, ptr);
 }
