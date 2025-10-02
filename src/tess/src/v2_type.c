@@ -229,24 +229,25 @@ void tl_type_env_free_variables(tl_type_env const *env, tl_type_variable_array *
 
 //
 
-static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_monotype mono);
 static void tl_type_scheme_substitute(tl_type_scheme *self, tl_type_variable var, tl_monotype mono);
 
-static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_monotype mono) {
+static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) {
     switch (self->tag) {
     case tl_cons: {
         forall(i, self->cons.args) {
-            tl_monotype_substitute(&self->cons.args.v[i], var, mono);
+            tl_monotype_substitute(&self->cons.args.v[i], subs);
         }
     } break;
 
     case tl_var: {
-        if (self->var == var) *self = mono;
+        tl_monotype *sub = map_get(subs->map, &self->var, sizeof self->var);
+        if (sub) *self = *sub;
+
     } break;
 
     case tl_arrow: {
-        tl_monotype_substitute(self->arrow.lhs, var, mono);
-        tl_monotype_substitute(self->arrow.rhs, var, mono);
+        tl_monotype_substitute(self->arrow.lhs, subs);
+        tl_monotype_substitute(self->arrow.rhs, subs);
     } break;
 
     case tl_quant:
@@ -255,12 +256,8 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_variable var, tl_m
 }
 
 static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
-    if (tl_mono == self->tag && tl_var == self->mono.tag) {
-        tl_monotype *sub = map_get(subs->map, &self->mono.var, sizeof self->mono.var);
-        if (sub) {
-            self->mono = *sub;
-        }
-    }
+    if (tl_mono != self->tag) return;
+    return tl_monotype_substitute(&self->mono, subs);
 }
 
 //

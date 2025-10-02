@@ -279,6 +279,7 @@ typedef struct {
     tl_type_subs *subs;                     // corresponds to E in algorithm J
     tl_type_env  *local_env;                // local environment
     int           instantiate_applications; // whether to instantiate generic applications
+    int           add_to_env;               // whether to add variable types to the environment
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
@@ -287,6 +288,7 @@ static infer_ctx *infer_ctx_create(allocator *alloc) {
     out->subs                     = tl_type_subs_create(alloc);
     out->local_env                = tl_type_env_create(alloc);
     out->instantiate_applications = 0;
+    out->add_to_env               = 0;
     return out;
 }
 
@@ -584,10 +586,13 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         ctx->lex = save;
 
         // add to local environment
-        tl_type_v2 arrow =
-          make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
-                     node->let.body);
-        tl_type_env_add(ctx->local_env, node->let.name->symbol.name, arrow);
+        if (ctx->add_to_env) {
+            tl_type_v2 arrow =
+              make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
+                         node->let.body);
+
+            tl_type_env_add(ctx->local_env, node->let.name->symbol.name, arrow);
+        }
 
     } break;
 
@@ -603,7 +608,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         // add to local environment
-        tl_type_env_add(ctx->local_env, node->symbol.name, *node->type_v2);
+        if (ctx->add_to_env) tl_type_env_add(ctx->local_env, node->symbol.name, *node->type_v2);
 
     } break;
 
@@ -621,22 +626,15 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 1;
         }
 
-        // if (infer(self, ctx, *fun_let)) return 1;
-
         tl_type_v2 *fun = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
         if (!fun) {
             // fun is not yet in global type environment.
             fun = tl_type_env_lookup(ctx->local_env, node->named_application.name->symbol.name);
             if (!fun) fatal("logic error");
         }
-        log(self, "-- before instantitate");
-        log_env(self, self->env);
 
         tl_type_v2 inst = instantiate(self, *fun);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
-
-        log(self, "-- after instantitate");
-        log_env(self, self->env);
 
         // infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
@@ -659,7 +657,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (constrain(self, ctx, &inst_right, node->type_v2, node)) return 1;
 
         // this constrains against the just-instantiated type vars that are in the generic node
-        if (constrain(self, ctx, &inst_right, (*fun_let)->let.body->type_v2, node)) return 1;
+        // if (constrain(self, ctx, &inst_right, (*fun_let)->let.body->type_v2, node)) return 1;
 
         // replace instantiated unique name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
@@ -717,7 +715,15 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
     ctx->instantiate_applications = 1;
     ctx->local_env                = self->env;
     ctx->subs                     = self->subs;
-    int res                       = infer(self, ctx, node);
+
+    log(self, "-- start_infer_global --");
+    log(self, "-- local subs --");
+    log_subs(self, ctx->subs);
+
+    int res = infer(self, ctx, node);
+
+    log(self, "-- local subs after infer --");
+    log_subs(self, ctx->subs);
 
     // tl_type_subs_destroy(self->arena, &self->subs);
     // tl_type_env_destroy(self->arena, &self->env);
@@ -745,7 +751,10 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
 
     // assign fresh type variables to generic function body and infer
     // assign_expression_types(self, node->let.body);
-    if (infer(self, ctx, node->let.body)) fatal("error handling");
+
+    ast_node *clone = ast_node_clone(self->transient, node);
+    if (infer(self, ctx, clone->let.body)) fatal("error handling");
+    // TODO destroy clone?
 
     return name_inst;
 }
@@ -1020,6 +1029,15 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
     }
 }
 
+void do_remove_types(void *ctx, ast_node *node) {
+    (void)ctx;
+    node->type_v2 = null;
+}
+
+void remove_types(ast_node *node) {
+    ast_node_dfs(null, node, do_remove_types);
+}
+
 void add_quantifier(tl_type_scheme *scheme, tl_monotype *type) {
     switch (type->tag) {
     case tl_nil:
@@ -1255,7 +1273,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
     }
 
     // run local inference: this function is not yet in the global environment.
-    infer_ctx *ctx = infer_ctx_create(self->transient);
+    infer_ctx *ctx  = infer_ctx_create(self->transient);
+    ctx->add_to_env = 1;
     if (infer(self, ctx, node)) fatal("error handling");
 
     log(self, "-- local env --");
@@ -1277,10 +1296,13 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- local env after quantification --");
     log_env(self, ctx->local_env);
 
-    // add function to global environment
+    // add function type to global environment
     tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     tl_type_env_add(self->env, name, *arrow);
+
+    // remove type information from function tree
+    remove_types(node);
 
     log(self, "-- global env --");
     log_env(self, self->env);
@@ -1426,8 +1448,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     //     map_destroy(&lex);
     // }
 
-    // assign_expression_types(self, main);
-
     if (start_infer_global(self, main)) return 1;
 
     log(self, "-- toplevels");
@@ -1437,6 +1457,12 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- subs");
     log_subs(self, self->subs);
 
+    tl_type_env_subs_apply(self->env, self->subs);
+
+    log(self, "-- final env --");
+    log_env(self, self->env);
+
+    // TODO self->subs is no longer useful
     return 0;
 }
 
