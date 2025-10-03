@@ -67,6 +67,8 @@ int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 u64                    tl_monotype_hash64(tl_monotype);
 void                   tl_monotype_union_fv(tl_monotype *dst, tl_monotype src);
 
+void                   tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *);
+
 // -- type --
 
 tl_type_v2 tl_type_init_mono(tl_monotype);

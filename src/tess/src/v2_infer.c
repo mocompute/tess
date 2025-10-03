@@ -1478,6 +1478,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     if (ast_let == node->tag) {
         arrow->scheme.type.arrow.fvs = fvs;
+        tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
         tl_type_env_add(self->env, name, *arrow);
     }
 

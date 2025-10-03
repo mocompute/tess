@@ -262,6 +262,10 @@ int str_cmp(str lhs, str rhs) {
     return memcmp(&left.buf[0], &right.buf[0], left.len);
 }
 
+int str_cmp_v(void const *lhs, void const *rhs) {
+    return str_cmp(*(str const *)lhs, *(str const *)rhs);
+}
+
 int str_cmp_c(str lhs, char const *rhs) {
     return str_cmp(lhs, (str){.big = {.buf = (char *)rhs, .len = strlen(rhs)}});
 }

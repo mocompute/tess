@@ -145,6 +145,11 @@ void tl_monotype_union_fv(tl_monotype *dst, tl_monotype src) {
     forall(i, src.arrow.fvs) array_set_insert(dst->arrow.fvs, src.arrow.fvs.v[i]);
 }
 
+void tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *self) {
+    if (!self->fvs.size) return;
+    qsort(self->fvs.v, self->fvs.size, sizeof self->fvs.v[0], str_cmp_v);
+}
+
 // -- type --
 
 tl_type_v2 tl_type_init_mono(tl_monotype mono) {

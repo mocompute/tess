@@ -87,6 +87,7 @@ void str_resize(allocator *, str *, size_t);
 size_t      str_len(str);
 int         str_is_empty(str);
 int         str_cmp(str, str);
+int         str_cmp_v(void const *, void const *);
 int         str_cmp_c(str, char const *);
 int         str_cmp_nc(str, char const *, size_t);
 int         str_eq(str, str);
