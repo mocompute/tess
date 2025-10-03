@@ -315,6 +315,10 @@ static int is_type_variable(tl_type_v2 const *self) {
     return tl_mono == self->tag && tl_var == self->mono.tag;
 }
 
+static int is_tv_eq(tl_type_variable tv, tl_monotype const *mono) {
+    return tl_var == mono->tag && tv == mono->var;
+}
+
 static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
     switch (existing.tag) {
     case tl_nil:
@@ -335,6 +339,9 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     // unify tv with mono in the context of ctx->subs: if mono is a type variable that exists in the
     // context of subs, replace it with the existing substitution. Similarly recursively for type
     // constructor arguments and arrow arms.
+
+    if (tl_monotype_occurs(tl_monotype_init_tv(tv), mono)) return 0;
+
     switch (mono.tag) {
 
     case tl_nil:  break;
@@ -363,12 +370,8 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
         tl_monotype *left_match  = null;
         tl_monotype *right_match = null;
 
-        if (tl_var == mono.arrow.lhs->tag) {
-            left_match = tl_type_subs_get(ctx->subs, mono.arrow.lhs->var);
-        }
-        if (tl_var == mono.arrow.rhs->tag) {
-            right_match = tl_type_subs_get(ctx->subs, mono.arrow.rhs->var);
-        }
+        if (tl_var == mono.arrow.lhs->tag) left_match = tl_type_subs_get(ctx->subs, mono.arrow.lhs->var);
+        if (tl_var == mono.arrow.rhs->tag) right_match = tl_type_subs_get(ctx->subs, mono.arrow.rhs->var);
 
         if (left_match) mono.arrow.lhs = left_match;
         if (right_match) mono.arrow.rhs = right_match;
@@ -376,8 +379,10 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     } break;
     }
 
+    // add the substitution
     tl_type_subs_add(ctx->subs, tv, mono);
 
+    // apply the substitution, if possible, to the rest of substitutions
     if (tl_var != mono.tag) {
         // any existing subs with tv on the right hand side should be replaced with the new non-tv
         // mono
@@ -385,24 +390,20 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
         while (map_iter(ctx->subs->map, &iter)) {
             tl_monotype *rhs = iter.data;
 
-            if (tl_var == rhs->tag && rhs->var == tv) {
-                *rhs = mono;
-            }
+            if (tl_var == rhs->tag && rhs->var == tv) *rhs = mono;
 
             else if (tl_arrow == rhs->tag) {
                 tl_type_v2_arrow *a = &rhs->arrow;
 
                 // Note: clone required here to prevent recursive arrows
-                if (tl_var == a->lhs->tag && a->lhs->tag == tv)
-                    *a->lhs = tl_monotype_clone(self->arena, mono);
-                if (tl_var == a->rhs->tag && a->rhs->tag == tv)
-                    *a->rhs = tl_monotype_clone(self->arena, mono);
+                if (is_tv_eq(tv, a->lhs)) *a->lhs = tl_monotype_clone(self->arena, mono);
+                if (is_tv_eq(tv, a->rhs)) *a->rhs = tl_monotype_clone(self->arena, mono);
             }
 
             else if (tl_cons == rhs->tag) {
                 tl_type_constructor_inst *c = &rhs->cons;
                 forall(i, c->args) {
-                    if (tl_var == c->args.v[i].tag && c->args.v[i].var == tv) c->args.v[i] = mono;
+                    if (is_tv_eq(tv, &c->args.v[i])) c->args.v[i] = tl_monotype_clone(self->arena, mono);
                 }
             }
         }
@@ -411,78 +412,80 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     return 0;
 }
 
-static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
-                               tl_type_v2 const *right, ast_node const *node);
+static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
+                           ast_node const *node) {
+    if (!self->verbose) return;
+    str left_str  = tl_type_v2_to_string(self->transient, left);
+    str right_str = tl_type_v2_to_string(self->transient, right);
+    str node_str  = v2_ast_node_to_string(self->transient, node);
+    log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
+        str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
+}
 
-static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
-                                  ast_node const *node) {
+static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right) {
+    if (!self->verbose) return;
+    str left_str  = tl_type_v2_to_string(self->transient, left);
+    str right_str = tl_type_v2_to_string(self->transient, right);
+    log(self, "error: constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
+        str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
+}
+static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
+    tl_type_v2 l = tl_type_init_mono(*left), r = tl_type_init_mono(*right);
+    return log_type_error(self, &l, &r);
+}
+
+static int constrain(tl_infer *, infer_ctx *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
+static int constrain_mm(tl_infer *, infer_ctx *, tl_monotype const *, tl_monotype const *,
+                        ast_node const *);
+
+static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
+                        ast_node const *node) {
     tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
-    if (exist) {
-        if (!constraint_is_compatible(*exist, mono)) {
-            if (!constraint_is_compatible(mono, *exist)) { // try the mirror
-                if (self->verbose) {
-                    str exist_str = tl_monotype_to_string(self->transient, exist);
-                    str new_str   = tl_monotype_to_string(self->transient, &mono);
-                    log(self, "new constraint %.*s is not compatible with existing constraint %.*s",
-                        str_ilen(new_str), str_buf(&new_str), str_ilen(exist_str), str_buf(&exist_str));
-                }
-                return type_error(self, node);
-            }
+    if (!exist) return unify(self, ctx, tv, mono);
 
-            else if (tl_var == mono.tag && !tl_type_subs_get(ctx->subs, mono.var)) {
-                // mono is a type variable that has not yet been constrained
-                return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
-            }
+    if (!constraint_is_compatible(*exist, mono)) {
+        if (!constraint_is_compatible(mono, *exist)) { // try the mirror
+            log_type_error_mm(self, exist, &mono);
+            return type_error(self, node);
+        }
 
-            else {
-                // ignore this constraint: often they are duplicates anyway. Not sure how to determine that
-                // ignoring is sound, versus a type error. (TODO)
-                if (self->verbose) {
-                    str new_str = tl_monotype_to_string(self->transient, &mono);
-                    log(self, "ignoring constraint t%u : %.*s due to conflict", tv, str_ilen(new_str),
-                        str_buf(&new_str));
-                }
-                return 0;
-            }
-        } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
-            tl_type_v2 exist_ty = tl_type_init_mono(*exist);
-            tl_type_v2 mono_ty  = tl_type_init_mono(mono);
-            return constrain(self, ctx, &exist_ty, &mono_ty, node);
+        else if (tl_var == mono.tag && !tl_type_subs_get(ctx->subs, mono.var)) {
+            // mono is a type variable that has not yet been constrained
+            return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
+        }
 
-        } else if (tl_cons == exist->tag) {
-            // ignore because they are equal, according to the logic of constraint_is_compatible
+        else {
+            // ignore this constraint: often they are duplicates anyway. Not sure how to determine that
+            // ignoring is sound, versus a type error. (TODO)
+            if (self->verbose) {
+                str new_str = tl_monotype_to_string(self->transient, &mono);
+                log(self, "ignoring constraint t%u : %.*s due to conflict", tv, str_ilen(new_str),
+                    str_buf(&new_str));
+            }
             return 0;
         }
+    } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
+        return constrain_mm(self, ctx, exist, &mono, node);
+
+    } else if (tl_cons == exist->tag) {
+        // ignore because they are equal, according to the logic of constraint_is_compatible
+        return 0;
     }
 
     return unify(self, ctx, tv, mono);
 }
 
-static nodiscard int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
-                                  tl_monotype const *right, ast_node const *node);
-
 static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
                                tl_type_v2 const *right, ast_node const *node) {
     if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
-
     if (tl_monotype_occurs(left->mono, right->mono)) return 0;
-
-    if (self->verbose) {
-        str left_str  = tl_type_v2_to_string(self->transient, left);
-        str right_str = tl_type_v2_to_string(self->transient, right);
-        str node_str  = v2_ast_node_to_string(self->transient, node);
-        log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
-            str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
-    }
+    log_constraint(self, left, right, node);
 
     if (is_type_variable(left)) return constrain_tv(self, ctx, left->mono.var, right->mono, node);
     else if (is_type_variable(right)) return constrain_tv(self, ctx, right->mono.var, left->mono, node);
 
     if (left->mono.tag != right->mono.tag) {
-        str left_str  = tl_monotype_to_string(self->transient, &left->mono);
-        str right_str = tl_monotype_to_string(self->transient, &right->mono);
-        log(self, "constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
-            str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
+        log_type_error(self, left, right);
         return type_error(self, node);
     }
 
@@ -490,12 +493,10 @@ static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const 
     case tl_nil: return 0;
     case tl_cons:
         if (left->mono.cons.args.size != right->mono.cons.args.size) {
-            str left_str  = tl_monotype_to_string(self->transient, &left->mono);
-            str right_str = tl_monotype_to_string(self->transient, &right->mono);
-            log(self, "size mismatch:  %.*s versus %.*s", str_ilen(left_str), str_buf(&left_str),
-                str_ilen(right_str), str_buf(&right_str));
+            log_type_error(self, left, right);
             return type_error(self, node);
         }
+
         forall(i, left->mono.cons.args) {
             if (constrain_mm(self, ctx, &left->mono.cons.args.v[i], &right->mono.cons.args.v[i], node))
                 return 1;
