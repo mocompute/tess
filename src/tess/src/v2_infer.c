@@ -1437,8 +1437,10 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
     }
 
     tl_monotype out = s.type;
+
     replace_quant(map, &out);
     map_destroy(&map);
+
     return tl_type_init_mono(out);
 }
 

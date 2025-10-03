@@ -175,8 +175,10 @@ tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
     case tl_arrow:
         clone.arrow.lhs  = new (alloc, tl_monotype);
         clone.arrow.rhs  = new (alloc, tl_monotype);
+        clone.arrow.fvs  = (str_array){.alloc = alloc};
         *clone.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.lhs)).mono;
         *clone.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.rhs)).mono;
+        array_copy(clone.arrow.fvs, orig.arrow.fvs.v, orig.arrow.fvs.size);
         break;
     }
     return clone;
