@@ -271,31 +271,33 @@ void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 
 // -- utilities --
 
-char       *ast_node_to_string(allocator *alloc, ast_node const *node);
-char       *ast_node_to_string_for_error(allocator *, ast_node const *);
+char          *ast_node_to_string(allocator *alloc, ast_node const *node);
+char          *ast_node_to_string_for_error(allocator *, ast_node const *);
 
-char const *ast_tag_to_string(ast_tag);
-int         string_to_ast_operator(char const *, ast_operator *);
+char const    *ast_tag_to_string(ast_tag);
+int            string_to_ast_operator(char const *, ast_operator *);
 
-str_sized   ast_nodes_get_names(allocator *, ast_node_slice);
+str_sized      ast_nodes_get_names(allocator *, ast_node_slice);
 
-void        ast_node_dfs(void *, ast_node *, ast_op_fun);
-void        ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
-void        ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
-ast_node   *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
+void           ast_node_dfs(void *, ast_node *, ast_op_fun);
+void           ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
+void           ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
+ast_node      *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
 
-int         ast_node_is_specialized(ast_node const *);
-int         ast_node_is_tuple_constructor(ast_node const *);
-void        ast_node_set_is_specialized(ast_node *);
-void        ast_node_set_is_tuple_constructor(ast_node *);
+int            ast_node_is_specialized(ast_node const *);
+int            ast_node_is_tuple_constructor(ast_node const *);
+void           ast_node_set_is_specialized(ast_node *);
+void           ast_node_set_is_tuple_constructor(ast_node *);
 
-ast_node  **ast_node_assignment_names(allocator *, ast_node const *);
+ast_node     **ast_node_assignment_names(allocator *, ast_node const *);
 
-u64         ast_node_hash(ast_node const *);
+u64            ast_node_hash(ast_node const *);
 
-int         ast_node_is_let_in_lambda(ast_node const *);
-int         ast_node_is_named_application(ast_node const *);
+int            ast_node_is_let_in_lambda(ast_node const *);
+int            ast_node_is_named_application(ast_node const *);
 
-tl_type    *ast_node_get_arrow(ast_node const *);
+tl_type       *ast_node_get_arrow(ast_node const *);
+
+ast_node_sized ast_node_sized_from_ast_array(ast_node *);
 
 #endif

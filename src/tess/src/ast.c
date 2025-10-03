@@ -1355,3 +1355,7 @@ tl_type *ast_node_get_arrow(ast_node const *self) {
 
     return null;
 }
+
+ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {
+    return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
+}

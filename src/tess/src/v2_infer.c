@@ -1174,15 +1174,8 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
 
 static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
 
-    ast_node_sized params = {0};
-
-    if (ast_let == node->tag) {
-        params.size = node->let.n_parameters;
-        params.v    = node->let.parameters;
-    } else if (ast_lambda_function == node->tag) {
-        params.size = node->lambda_function.n_parameters;
-        params.v    = node->lambda_function.parameters;
-    } else fatal("logic error");
+    ast_node_sized params = ast_node_sized_from_ast_array(node);
+    if (ast_let != node->tag && ast_lambda_function != node->tag) fatal("logic error");
 
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
