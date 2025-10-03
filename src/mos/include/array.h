@@ -133,6 +133,15 @@ typedef struct {
         array_free_impl((array_header_t *)&(p), (p).v);                                                    \
     } while (0)
 
+#define array_copy(p, s)                                                                                   \
+    do {                                                                                                   \
+        static_assert(sizeof((s).v[0]) == sizeof((p).v[0]), "size mismatch");                              \
+        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
+        static_assert(sizeof(s) >= sizeof(array_tmpl), "not an array");                                    \
+        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),     \
+                                     (void *)(s).v, (s).size);                                             \
+    } while (0)
+
 #define array_push_many(p, xs, n)                                                                          \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
