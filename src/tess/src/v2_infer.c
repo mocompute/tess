@@ -1172,11 +1172,7 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
         }
     }
 
-    // TODO make an interface for this: rebuild index after removals
-    map_reset(env->index);
-    forall(i, env->names) {
-        str_map_set(&env->index, env->names.v[i], &i);
-    }
+    tl_type_env_reindex(env);
 }
 
 static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
@@ -1211,11 +1207,7 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
     erased:;
     }
 
-    // TODO make an interface for this: rebuild index after removals
-    map_reset(env->index);
-    forall(i, env->names) {
-        str_map_set(&env->index, env->names.v[i], &i);
-    }
+    tl_type_env_reindex(env);
 }
 
 void do_remove_types(void *ctx, ast_node *node) {

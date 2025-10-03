@@ -110,7 +110,6 @@ typedef struct {
     // a set of name : type assignments
     str_array        names;
     tl_type_v2_array types;
-
     hashmap         *index; // name str => index
 } tl_type_env;
 
@@ -119,6 +118,7 @@ nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
+void                   tl_type_env_reindex(tl_type_env *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
 
 // -- strings --

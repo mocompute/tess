@@ -468,6 +468,13 @@ tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
     return found ? &self->types.v[*found] : null;
 }
 
+void tl_type_env_reindex(tl_type_env *self) {
+    map_reset(self->index);
+    forall(i, self->names) {
+        str_map_set(&self->index, self->names.v[i], &i);
+    }
+}
+
 // -- context --
 
 tl_type_context tl_type_context_empty() {
