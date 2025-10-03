@@ -15,7 +15,7 @@ typedef struct {array_header; tl_type_quantifier *v;}                 tl_type_qu
 typedef struct {array_header; struct tl_monotype *v;}                 tl_monotype_array;
 typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
 typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
-typedef struct {str name; tl_monotype_array       args;}              tl_type_constructor_inst;
+typedef struct {str name; tl_monotype_array        args;}             tl_type_constructor_inst;
 typedef struct {struct tl_monotype *lhs; struct tl_monotype *rhs;}    tl_type_v2_arrow;
 // clang-format on
 
@@ -58,6 +58,7 @@ nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
 void                   tl_monotype_destroy(allocator *, tl_monotype **);
 int                    tl_monotype_eq(tl_monotype, tl_monotype);
 int                    tl_monotype_occurs(tl_monotype, tl_monotype);
+u64                    tl_monotype_hash64(tl_monotype);
 
 // -- type --
 
@@ -81,6 +82,9 @@ void tl_type_subs_compose(tl_type_subs *base, tl_type_subs const *subs);
 
 // apply subs to array of types
 void tl_type_subs_apply(tl_type_subs const *, tl_type_v2_array *);
+
+// apply subs to a single type
+void tl_type_v2_apply_subs(tl_type_v2 *, tl_type_subs const *);
 
 // -- type_constructor --
 

@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "dbg.h"
+#include "hash.h"
 #include "hashmap.h"
 #include "str.h"
 
@@ -108,6 +109,33 @@ int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
     case tl_arrow:
         return tl_monotype_occurs(*lhs.arrow.lhs, rhs) || tl_monotype_occurs(*lhs.arrow.rhs, rhs);
     }
+}
+
+u64 tl_monotype_hash64(tl_monotype self) {
+    u64 hash = hash64(&self.tag, sizeof self.tag);
+    switch (self.tag) {
+
+    case tl_nil: break;
+
+    case tl_cons:
+        hash = str_hash64_combine(hash, self.cons.name);
+        forall(i, self.cons.args) {
+            u64 h = tl_monotype_hash64(self.cons.args.v[i]);
+            hash  = hash64_combine(hash, &h, sizeof h);
+        }
+        break;
+
+    case tl_var:   hash = hash64_combine(hash, &self.var, sizeof self.var); break;
+    case tl_quant: hash = hash64_combine(hash, &self.quant, sizeof self.quant); break;
+
+    case tl_arrow: {
+        u64 h = tl_monotype_hash64(*self.arrow.lhs);
+        hash  = hash64_combine(hash, &h, sizeof h);
+        h     = tl_monotype_hash64(*self.arrow.rhs);
+        hash  = hash64_combine(hash, &h, sizeof h);
+    } break;
+    }
+    return hash;
 }
 
 // -- type --
@@ -255,7 +283,7 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) 
     }
 }
 
-static void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
+void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
     if (tl_mono != self->tag) return;
     return tl_monotype_substitute(&self->mono, subs);
 }

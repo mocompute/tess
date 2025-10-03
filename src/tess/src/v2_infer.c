@@ -4,6 +4,7 @@
 #include "ast_tags.h"
 #include "dbg.h"
 #include "error.h"
+#include "hash.h"
 #include "str.h"
 #include "v2_type.h"
 
@@ -34,6 +35,7 @@ struct tl_infer {
     tl_type_subs        *subs; // corresponds to E in algorithm J
 
     hashmap             *toplevels; // str => ast_node*
+    hashmap             *instances; // u64 hash => str specialised name in env
     tl_infer_error_array errors;
 
     u32                  next_var_name;
@@ -61,22 +63,22 @@ static void              log_subs(tl_infer const *, tl_type_subs const *);
 //
 
 tl_infer *tl_infer_create(allocator *alloc) {
-    tl_infer *self      = new (alloc, tl_infer);
+    tl_infer *self           = new (alloc, tl_infer);
 
-    self->transient     = arena_create(alloc, 4096);
-    self->arena         = arena_create(alloc, 16 * 1024);
+    self->transient          = arena_create(alloc, 4096);
+    self->arena              = arena_create(alloc, 16 * 1024);
+    self->context            = tl_type_context_empty();
+    self->env                = tl_type_env_create(self->arena);
+    self->subs               = tl_type_subs_create(self->arena);
+    self->toplevels          = null;
+    self->instances          = map_create(self->arena, sizeof(str), 512);
+    self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
-    self->toplevels     = null;
-    self->context       = tl_type_context_empty();
-    self->env           = tl_type_env_create(self->arena);
-    self->subs          = tl_type_subs_create(self->arena);
+    self->next_var_name      = 0;
+    self->next_instantiation = 0;
 
-    self->errors        = (tl_infer_error_array){.alloc = self->arena};
-
-    self->next_var_name = 1;
-
-    self->verbose       = 0;
-    self->indent_level  = 0;
+    self->verbose            = 0;
+    self->indent_level       = 0;
 
     return self;
 }
@@ -84,6 +86,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 
     if ((*p)->toplevels) map_destroy(&(*p)->toplevels);
+    if ((*p)->instances) map_destroy(&(*p)->instances);
 
     arena_destroy(alloc, &(*p)->transient);
     arena_destroy(alloc, &(*p)->arena);
@@ -689,9 +692,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                     (ast_node_sized){.size = node->named_application.n_arguments,
                                                      .v    = node->named_application.arguments},
                                     node);
-        if (constrain(self, ctx, &inst, &app, node)) return 1;
 
-        // now infer an *instantiated* function body
+        // constrain and apply substitutions to determine most specific type before instantiating the
+        // generic function: otherwise the inst arrow will just be new typevars and deduplication of
+        // instantiations won't be effective.
+        if (constrain(self, ctx, &inst, &app, node)) return 1;
+        tl_type_v2_apply_subs(&inst, ctx->subs);
+
+        // now infer an *instantiated* function body (or use a prior instantiation)
         str name_inst = instantiate_fun_and_infer(self, ctx, *fun_let, inst.mono);
 
         // constrain instantiated result type
@@ -781,13 +789,22 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
     return res;
 }
 
+static u64 hash_name_and_type(str name, tl_monotype type) {
+    return str_hash64_combine(tl_monotype_hash64(type), name);
+}
+
 static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype arrow) {
     assert(ast_let == node->tag);
 
-    // TODO de-duplicate instances
+    // de-duplicate instances. Note however that in many cases the arrow type will contain unique type vars
+    // that have not been inferred yet.
+    u64  hash     = hash_name_and_type(node->let.name->symbol.name, arrow);
+    str *existing = map_get(self->instances, &hash, sizeof hash);
+    if (existing) return *existing;
 
     // instantiate unique name
     str name_inst = next_instantiation(self, node->let.name->symbol.name);
+    map_set(&self->instances, &hash, sizeof hash, &name_inst);
 
     // add to type environment
     tl_type_env_add(ctx->local_env, name_inst, tl_type_init_mono(arrow));
