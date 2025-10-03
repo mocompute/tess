@@ -1,3 +1,6 @@
+let add x y = x
+let add4 x y z w = x
+
 let f x = let fv = foo in x
 
 let main () =

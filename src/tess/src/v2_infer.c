@@ -443,36 +443,49 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
     tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
     if (!exist) return unify(self, ctx, tv, mono);
 
-    if (!constraint_is_compatible(*exist, mono)) {
-        if (!constraint_is_compatible(mono, *exist)) { // try the mirror
-            log_type_error_mm(self, exist, &mono);
-            return type_error(self, node);
-        }
+    // There exists a substitution on tv. Decide how to compose with the new substitution.
+    if (constraint_is_compatible(*exist, mono)) {
+        // the new constraint does not conflict
+        switch (exist->tag) {
+        case tl_var:
+        case tl_arrow: return constrain_mm(self, ctx, exist, &mono, node);
 
-        else if (tl_var == mono.tag && !tl_type_subs_get(ctx->subs, mono.var)) {
-            // mono is a type variable that has not yet been constrained
-            return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
-        }
+        case tl_nil:
+        case tl_cons:
+            // the compat check decided the types were equal, so we can ignore it
+            return 0;
 
-        else {
-            // ignore this constraint: often they are duplicates anyway. Not sure how to determine that
-            // ignoring is sound, versus a type error. (TODO)
-            if (self->verbose) {
-                str new_str = tl_monotype_to_string(self->transient, &mono);
-                log(self, "ignoring constraint t%u : %.*s due to conflict", tv, str_ilen(new_str),
-                    str_buf(&new_str));
+        case tl_quant: fatal("logic error"); // unreachable
+        }
+    } else if (constraint_is_compatible(mono, *exist)) {
+        // the mirror does not conflict: mono could be a tv we can add to subs
+        if (tl_var == mono.tag) {
+            if (!tl_type_subs_get(ctx->subs, mono.var)) {
+                return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
+            } else {
+                // the tv also exists: check all three right-hand
+                // constraints: the two existing ones, and the new
+                // one. They must all be compatible.
+                tl_monotype *exist2 = tl_type_subs_get(ctx->subs, mono.var);
+                assert(exist2);
+                if (!constraint_is_compatible(mono, *exist2)) {
+                    log_type_error_mm(self, &mono, exist2);
+                    return type_error(self, node);
+                }
+
+                // since we don't have room, we can't add this new substitution. We can try to eliminate a
+                // substitution by applying it to our environment. But I don't know if this is sound yet.
+                // For example: exist: 1 == 2, 2 == 3, 3 == 1 : add 3 == 4
+                fatal("oops");
             }
+        } else {
+            // a compatible nil, cons or arrow: this can be ignored
             return 0;
         }
-    } else if (tl_var == exist->tag || tl_arrow == exist->tag) {
-        return constrain_mm(self, ctx, exist, &mono, node);
-
-    } else if (tl_cons == exist->tag) {
-        // ignore because they are equal, according to the logic of constraint_is_compatible
-        return 0;
+    } else {
+        log_type_error_mm(self, exist, &mono);
+        return type_error(self, node);
     }
-
-    return unify(self, ctx, tv, mono);
 }
 
 static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
