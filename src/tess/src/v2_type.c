@@ -163,7 +163,7 @@ tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
     case tl_cons:
         clone.cons.name = str_copy(alloc, orig.cons.name);
         clone.cons.args = (tl_monotype_array){.alloc = alloc};
-        array_copy(clone.cons.args, orig.cons.args.v, orig.cons.args.size);
+        array_push_many(clone.cons.args, orig.cons.args.v, orig.cons.args.size);
         forall(i, clone.cons.args) {
             // cons args are monotype
             clone.cons.args.v[i] = tl_type_v2_clone(alloc, tl_type_init_mono(clone.cons.args.v[i])).mono;
@@ -178,7 +178,7 @@ tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
         clone.arrow.fvs  = (str_array){.alloc = alloc};
         *clone.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.lhs)).mono;
         *clone.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.rhs)).mono;
-        array_copy(clone.arrow.fvs, orig.arrow.fvs.v, orig.arrow.fvs.size);
+        array_push_many(clone.arrow.fvs, orig.arrow.fvs.v, orig.arrow.fvs.size);
         break;
     }
     return clone;
@@ -197,7 +197,7 @@ tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
 
         clone.scheme.type        = tl_type_v2_clone(alloc, tl_type_init_mono(orig.scheme.type)).mono;
         clone.scheme.quantifiers = (tl_type_quantifier_array){.alloc = alloc};
-        array_copy(clone.scheme.quantifiers, orig.scheme.quantifiers.v, orig.scheme.quantifiers.size);
+        array_push_many(clone.scheme.quantifiers, orig.scheme.quantifiers.v, orig.scheme.quantifiers.size);
         // tl_type_quantifier does not need to be cloned
         break;
     }
@@ -526,8 +526,8 @@ nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *src) {
     self->index        = map_copy(self->index);
     self->names        = (str_array){.alloc = alloc};
     self->types        = (tl_type_v2_array){.alloc = alloc};
-    array_copy(self->names, src->names.v, src->names.size);
-    array_copy(self->types, src->types.v, src->types.size);
+    array_push_many(self->names, src->names.v, src->names.size);
+    array_push_many(self->types, src->types.v, src->types.size);
 
     return self;
 }

@@ -133,20 +133,20 @@ typedef struct {
         array_free_impl((array_header_t *)&(p), (p).v);                                                    \
     } while (0)
 
-#define array_copy(p, xs, n)                                                                               \
+#define array_push_many(p, xs, n)                                                                          \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_copy_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),          \
-                                (void *)(xs), (u32)(n));                                                   \
+        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),     \
+                                     (void *)(xs), (u32)(n));                                              \
     } while (0)
 
-#define array_copy_(p, ty, xs, n)                                                                          \
+#define array_push_many_(p, ty, xs, n)                                                                     \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof(ty), "size mismatch");                                     \
         static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v =                                                                                            \
-          array_copy_impl((array_header_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), (u32)(n)); \
+        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), \
+                                     (u32)(n));                                                            \
     } while (0)
 
 // TODO: this doesn't do what you think it does
@@ -246,7 +246,8 @@ char_cslice char_cslice_from(char const *, u32);
 nodiscard void *array_alloc_impl(array_header_t *, u32, u32, u16) mallocfun;
 nodiscard void *array_reserve_impl(array_header_t *, void *, u32, u32, u16);
 nodiscard void *array_push_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict);
-nodiscard void *array_copy_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict, u32);
+nodiscard void *array_push_many_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict,
+                                     u32);
 nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32);
 nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
                                   void const *restrict, u32);

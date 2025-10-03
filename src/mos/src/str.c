@@ -444,15 +444,15 @@ void str_build_deinit(str_build self) {
 
 void str_build_cat(str_build *self, str str) {
     span s = str_span(&str);
-    array_copy(*self, s.buf, s.len);
+    array_push_many(*self, s.buf, s.len);
 }
 
 void str_build_join(str_build *self, str sep, str const *strs, u32 len) {
     span ssep = str_span(&sep);
     for (u32 i = 0; i < len; ++i) {
         cspan sstr = str_cspan(&strs[i]);
-        array_copy(*self, sstr.buf, sstr.len);
-        if (i < len - 1) array_copy(*self, ssep.buf, ssep.len);
+        array_push_many(*self, sstr.buf, sstr.len);
+        if (i < len - 1) array_push_many(*self, ssep.buf, ssep.len);
     }
 }
 

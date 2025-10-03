@@ -391,12 +391,12 @@ static void generate_thunks(transpiler *self, ast_node **nodes, u32 n) {
 }
 
 static void out_put(transpiler *self, char const *str) {
-    array_copy(*self->bytes, str, strlen(str));
+    array_push_many(*self->bytes, str, strlen(str));
 }
 
 static void out_put_str(transpiler *self, str str) {
     span s = str_span(&str);
-    array_copy(*self->bytes, s.buf, s.len);
+    array_push_many(*self->bytes, s.buf, s.len);
 }
 
 static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
@@ -412,7 +412,7 @@ static void out_put_fmt(transpiler *self, char const *restrict fmt, ...) {
     vsnprintf(buf, (size_t)len, fmt, args);
     va_end(args);
 
-    array_copy(*self->bytes, buf, strlen(buf));
+    array_push_many(*self->bytes, buf, strlen(buf));
     alloc_free(self->strings, buf);
 }
 
@@ -427,7 +427,7 @@ static void vout_put_fmt(transpiler *self, char const *restrict fmt, va_list arg
     char *buf = alloc_malloc(self->strings, len);
     vsnprintf(buf, (size_t)len, fmt, args2);
 
-    array_copy(*self->bytes, buf, strlen(buf));
+    array_push_many(*self->bytes, buf, strlen(buf));
     alloc_free(self->strings, buf);
 
     va_end(args2);

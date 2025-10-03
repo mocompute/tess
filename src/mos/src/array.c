@@ -59,8 +59,8 @@ int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 al
     return 0;
 }
 
-void *array_copy_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
-                      void const *restrict data, u32 num) {
+void *array_push_many_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+                           void const *restrict data, u32 num) {
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
     memcpy(&ptr[h->size * alloc_align(width, align)], data, num * width);
@@ -188,7 +188,7 @@ void *array_set_union_impl(array_header_t *res, void *restrict res_ptr, array_he
 
     assert(res->alloc);
     res_ptr = array_reserve_impl(res, res_ptr, lhs->size + rhs->size, width, align);
-    res_ptr = array_copy_impl(res, res_ptr, width, align, lhs_ptr, lhs->size);
+    res_ptr = array_push_many_impl(res, res_ptr, width, align, lhs_ptr, lhs->size);
 
     // TODO optimize nested loop
     for (u32 i = 0; i < rhs->size; ++i) {
