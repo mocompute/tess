@@ -239,8 +239,14 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) 
 }
 
 void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
-    if (tl_mono != self->tag) return;
-    return tl_monotype_substitute(&self->mono, subs);
+
+    // for type schemes, we can treat its type as a monotype for the
+    // purpose of substitution, because quantified variables (which
+    // are not substitutable) are a different C type than unquantified
+    // type variables.
+
+    if (tl_mono == self->tag) return tl_monotype_substitute(&self->mono, subs);
+    else return tl_monotype_substitute(&self->scheme.type, subs);
 }
 
 //
