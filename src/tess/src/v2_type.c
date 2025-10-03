@@ -148,36 +148,40 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
     return (tl_type_v2){.tag = tl_scheme, .scheme = scheme};
 }
 
+tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
+    tl_monotype clone = {0};
+    clone.tag         = orig.tag;
+    switch (orig.tag) {
+    case tl_nil: break;
+    case tl_cons:
+        clone.cons.name = str_copy(alloc, orig.cons.name);
+        clone.cons.args = (tl_monotype_array){.alloc = alloc};
+        array_copy(clone.cons.args, orig.cons.args.v, orig.cons.args.size);
+        forall(i, clone.cons.args) {
+            // cons args are monotype
+            clone.cons.args.v[i] = tl_type_v2_clone(alloc, tl_type_init_mono(clone.cons.args.v[i])).mono;
+        }
+        break;
+    case tl_var:   clone.var = orig.var; break;
+    case tl_quant: clone.quant = orig.quant; break;
+
+    case tl_arrow:
+        clone.arrow.lhs  = new (alloc, tl_monotype);
+        clone.arrow.rhs  = new (alloc, tl_monotype);
+        *clone.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.lhs)).mono;
+        *clone.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.rhs)).mono;
+        break;
+    }
+    return clone;
+}
+
 tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
     tl_type_v2 clone = {0};
     switch (orig.tag) {
     case tl_mono:
 
-        clone.tag      = tl_mono;
-        clone.mono.tag = orig.mono.tag;
-
-        switch (orig.mono.tag) {
-        case tl_nil: break;
-        case tl_cons:
-            clone.mono.cons.name = str_copy(alloc, orig.mono.cons.name);
-            clone.mono.cons.args = (tl_monotype_array){.alloc = alloc};
-            array_copy(clone.mono.cons.args, orig.mono.cons.args.v, orig.mono.cons.args.size);
-            forall(i, clone.mono.cons.args) {
-                // cons args are monotype
-                clone.mono.cons.args.v[i] =
-                  tl_type_v2_clone(alloc, tl_type_init_mono(clone.mono.cons.args.v[i])).mono;
-            }
-            break;
-        case tl_var:   clone.mono.var = orig.mono.var; break;
-        case tl_quant: clone.mono.quant = orig.mono.quant; break;
-
-        case tl_arrow:
-            clone.mono.arrow.lhs  = new (alloc, tl_monotype);
-            clone.mono.arrow.rhs  = new (alloc, tl_monotype);
-            *clone.mono.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.mono.arrow.lhs)).mono;
-            *clone.mono.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.mono.arrow.rhs)).mono;
-            break;
-        }
+        clone.tag  = tl_mono;
+        clone.mono = tl_monotype_clone(alloc, orig.mono);
         break;
     case tl_scheme:
         clone.tag                = tl_scheme;
@@ -269,7 +273,10 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) 
 
     case tl_var: {
         tl_monotype *sub = map_get(subs->map, &self->var, sizeof self->var);
-        if (sub) *self = *sub;
+        // Note: prevent arrow recursion when substituting
+        if (sub) {
+            *self = *sub;
+        }
 
     } break;
 
@@ -383,6 +390,7 @@ str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_ins
 }
 
 str tl_type_arrow_to_string(allocator *alloc, tl_type_v2_arrow const *self) {
+    assert(self && (void *)self != self->lhs && (void *)self != self->rhs);
     str_build b = str_build_init(alloc, 64);
     {
         str left = tl_monotype_to_string(alloc, self->lhs);

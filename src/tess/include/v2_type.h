@@ -53,6 +53,7 @@ tl_monotype            tl_monotype_init_quant(tl_type_quantifier);
 tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
 nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
 void                   tl_monotype_dealloc(allocator *, tl_monotype *);
+tl_monotype            tl_monotype_clone(allocator *, tl_monotype);
 tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
 nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
 void                   tl_monotype_destroy(allocator *, tl_monotype **);
