@@ -1163,10 +1163,7 @@ static void remove_known_variables(tl_infer *self, tl_type_env *env) {
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
         if (tl_type_env_lookup(self->env, name)) {
-            // TODO: make an interface for this
-            array_erase(env->names, i);
-            array_erase(env->types, i);
-            str_map_erase(env->index, name);
+            tl_type_env_erase(env, i);
         } else {
             ++i;
         }
@@ -1194,10 +1191,7 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
             if (ast_symbol != node->let.parameters[j]->tag) continue;
             str param = node->let.parameters[j]->symbol.name;
             if (str_eq(name, param)) {
-                // TODO: make an interface for this
-                array_erase(env->names, i);
-                array_erase(env->types, i);
-                str_map_erase(env->index, name);
+                tl_type_env_erase(env, i);
                 goto erased;
             }
         }

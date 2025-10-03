@@ -468,6 +468,15 @@ tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
     return found ? &self->types.v[*found] : null;
 }
 
+void tl_type_env_erase(tl_type_env *self, u32 idx) {
+    assert(idx < self->names.size);
+
+    str name = self->names.v[idx];
+    array_erase(self->names, idx);
+    array_erase(self->types, idx);
+    str_map_erase(self->index, name);
+}
+
 void tl_type_env_reindex(tl_type_env *self) {
     map_reset(self->index);
     forall(i, self->names) {
