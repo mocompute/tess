@@ -617,8 +617,9 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_let: {
         hashmap *save = map_copy(ctx->lex);
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ensure_tv(self, &node->let.parameters[i]->type_v2);
-            str_map_set(&ctx->lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
+            ast_node *param = node->let.parameters[i];
+            ensure_tv(self, &param->type_v2);
+            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->let.body)) return 1;
@@ -730,8 +731,9 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         hashmap *save = map_copy(ctx->lex);
 
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ensure_tv(self, &node->let.parameters[i]->type_v2);
-            str_map_set(&ctx->lex, node->let.parameters[i]->symbol.name, &node->let.parameters[i]->type_v2);
+            ast_node *param = node->let.parameters[i];
+            ensure_tv(self, &param->type_v2);
+            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->lambda_function.body)) return 1;
@@ -866,7 +868,7 @@ static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
         str name = env->names.v[i];
 
         forall(j, params) {
-            assert(ast_symbol == node->let.parameters[j]->tag);
+            if (ast_symbol != node->let.parameters[j]->tag) continue;
             str param = node->let.parameters[j]->symbol.name;
             if (str_eq(name, param)) {
                 // TODO: make an interface for this
@@ -1315,7 +1317,7 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
     case ast_string: return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
     case ast_bool:   return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
-    case ast_nil:    return S("nil");
+    case ast_nil:    return S("()");
     case ast_any:    return S("any");
 
     case ast_symbol: {

@@ -1720,11 +1720,15 @@ static int a_let_struct_phase(transpiler *self, ast_node const *node) {
     // params
     out_put(self, "(");
     for (u32 i = 0; i < v->n_parameters; ++i) {
-        out_put_str(self,
-                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
-        // a_declaration(self, v->parameters[i]->type, null, ast_node_name_string(v->parameters[i]));
+        ast_node *param = v->parameters[i];
+        if (ast_nil == param->tag) {
+            out_put(self, "void");
+            break;
+        }
+        out_put_str(self, emit_symbol_declaration(self, param, ast_node_str(param), 0));
         if (i < v->n_parameters - 1) out_put(self, ", ");
     }
+
     if (!v->n_parameters) out_put(self, "void");
     out_put(self, ")");
 
@@ -1834,9 +1838,15 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
     }
 
     for (u32 i = 0; i < v->n_parameters; ++i) {
+        ast_node *param = v->parameters[i];
+        if (ast_nil == param->tag) {
+            out_put(self, "void");
+            break;
+        }
+
         if (i || free_variables.size) out_put(self, ", ");
-        out_put_str(self,
-                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
+
+        out_put_str(self, emit_symbol_declaration(self, param, ast_node_str(param), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ")");
@@ -1915,9 +1925,13 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
     if (free_variables.size)
         out_put_fmt(self, "struct %.*s *", str_ilen(struct_name), str_buf(&struct_name));
     for (u32 i = 0; i < v->n_parameters; ++i) {
+        ast_node *param = v->parameters[i];
+        if (ast_nil == param->tag) {
+            out_put(self, "void");
+            break;
+        }
         if (i || !str_is_empty(struct_name)) out_put(self, ", ");
-        out_put_str(self,
-                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
+        out_put_str(self, emit_symbol_declaration(self, param, ast_node_str(param), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ");\n");
@@ -1979,9 +1993,14 @@ static int a_let(transpiler *self, ast_node const *node) {
         out_put_fmt(self, "struct %.*s * %.*s", s.len, s.buf, s.len, s.buf);
     }
     for (u32 i = 0; i < v->n_parameters; ++i) {
+        ast_node *param = v->parameters[i];
+        if (ast_nil == param->tag) {
+            // FIXME: this is the 3rd identical code block in this file
+            out_put(self, "void");
+            break;
+        }
         if (i || !str_is_empty(struct_name)) out_put(self, ", ");
-        out_put_str(self,
-                    emit_symbol_declaration(self, v->parameters[i], ast_node_str(v->parameters[i]), 0));
+        out_put_str(self, emit_symbol_declaration(self, param, ast_node_str(param), 0));
     }
     if (!free_variables.size && !v->n_parameters) out_put(self, "void");
     out_put(self, ")");

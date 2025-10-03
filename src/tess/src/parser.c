@@ -1257,9 +1257,6 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     node->array.nodes = parameters->v;
     if (parameters->size > 0xff) return too_many_arguments(self);
 
-    // nil: if we parsed ast_nil as a single parameter, we
-    // understand that to indicate no (zero) parameters.
-    if (parameters->size == 1 && ast_nil == parameters->v[0]->tag) parameters->size = 0;
     node->array.n = (u8)parameters->size;
     return 0;
 }
@@ -1365,12 +1362,6 @@ static int function_definition(parser *self) {
     return expression(self);
 }
 
-static void repair_single_nil_argument(ast_node_array *arguments) {
-    // detect special case of a single nil argument and replace with
-    // empty argument list
-    if (arguments->size == 1 && ast_nil == arguments->v[0]->tag) arguments->size = 0;
-}
-
 static int function_application(parser *self) {
     // f a b c ...
 
@@ -1419,7 +1410,6 @@ static int function_application(parser *self) {
             if (is_intrinsic) BIT_SET(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);
-            repair_single_nil_argument(&arguments);
             node->array.n     = (u8)arguments.size;
             node->array.nodes = arguments.v;
             if (arguments.size > 0xff) {
@@ -1616,7 +1606,6 @@ static int lambda_function_application(parser *self) {
             node->lambda_application.lambda      = lambda;
 
             array_shrink(arguments);
-            repair_single_nil_argument(&arguments);
             node->array.n     = (u8)arguments.size;
             node->array.nodes = arguments.v;
             if (arguments.size > 0xff) {
