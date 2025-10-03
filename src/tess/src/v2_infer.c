@@ -458,6 +458,9 @@ static nodiscard int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variab
     return unify(self, ctx, tv, mono);
 }
 
+static nodiscard int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
+                                  tl_monotype const *right, ast_node const *node);
+
 static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
                                tl_type_v2 const *right, ast_node const *node) {
     if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
@@ -472,11 +475,8 @@ static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const 
             str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
     }
 
-    if (is_type_variable(left)) {
-        return constrain_tv(self, ctx, left->mono.var, right->mono, node);
-    } else if (is_type_variable(right)) {
-        return constrain_tv(self, ctx, right->mono.var, left->mono, node);
-    }
+    if (is_type_variable(left)) return constrain_tv(self, ctx, left->mono.var, right->mono, node);
+    else if (is_type_variable(right)) return constrain_tv(self, ctx, right->mono.var, left->mono, node);
 
     if (left->mono.tag != right->mono.tag) {
         str left_str  = tl_monotype_to_string(self->transient, &left->mono);
@@ -497,9 +497,8 @@ static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const 
             return type_error(self, node);
         }
         forall(i, left->mono.cons.args) {
-            tl_type_v2 left_ty  = tl_type_init_mono(left->mono.cons.args.v[i]);
-            tl_type_v2 right_ty = tl_type_init_mono(right->mono.cons.args.v[i]);
-            if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
+            if (constrain_mm(self, ctx, &left->mono.cons.args.v[i], &right->mono.cons.args.v[i], node))
+                return 1;
         }
         break;
 
@@ -507,18 +506,20 @@ static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const 
     case tl_quant: fatal("logic error");
 
     case tl_arrow: {
-        tl_type_v2 left_ty  = tl_type_init_mono(*left->mono.arrow.lhs);
-        tl_type_v2 right_ty = tl_type_init_mono(*right->mono.arrow.lhs);
-        if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
-
-        left_ty  = tl_type_init_mono(*left->mono.arrow.rhs);
-        right_ty = tl_type_init_mono(*right->mono.arrow.rhs);
-        if (constrain(self, ctx, &left_ty, &right_ty, node)) return 1;
+        if (constrain_mm(self, ctx, left->mono.arrow.lhs, right->mono.arrow.lhs, node)) return 1;
+        if (constrain_mm(self, ctx, left->mono.arrow.rhs, right->mono.arrow.rhs, node)) return 1;
 
     } break;
     }
 
     return 0;
+}
+
+static nodiscard int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
+                                  tl_monotype const *right, ast_node const *node) {
+    tl_type_v2 left_ty  = tl_type_init_mono(*left);
+    tl_type_v2 right_ty = tl_type_init_mono(*right);
+    return constrain(self, ctx, &left_ty, &right_ty, node);
 }
 
 static void ensure_tv(tl_infer *self, tl_type_v2 **type) {
@@ -659,9 +660,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (!ctx->instantiate_applications) {
             ensure_tv(self, &node->type_v2);
 
-            // even if we are not instantiating fun applications this pass, we can still infer the arguments
-            // to aid in free variable discovery
-            // infer the arguments
+            // even if we are not instantiating fun applications this pass, we can still infer the
+            // arguments to aid in free variable discovery infer the arguments
             for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
                 if (infer(self, ctx, node->named_application.arguments[i])) return 1;
             }
@@ -1129,8 +1129,8 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
 static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype arrow) {
     assert(ast_let == node->tag);
 
-    // de-duplicate instances. Note however that in many cases the arrow type will contain unique type vars
-    // that have not been inferred yet.
+    // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
+    // vars that have not been inferred yet.
     u64  hash     = hash_name_and_type(node->let.name->symbol.name, arrow);
     str *existing = map_get(self->instances, &hash, sizeof hash);
     if (existing) return *existing;
@@ -1413,8 +1413,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
     if (infer(self, ctx, infer_target)) fatal("error handling");
 
     if (ast_lambda_function == infer_target->tag) {
-        // since the infer target is unnamed, the lambda function could not add itself to the environment.
-        // We must do so here before the quantified variable analysis.
+        // since the infer target is unnamed, the lambda function could not add itself to the
+        // environment. We must do so here before the quantified variable analysis.
         tl_type_env_add(ctx->local_env, name, ctx->lambda_type);
     }
 
@@ -1425,8 +1425,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log_subs(self, ctx->subs);
 
     // now determine which names in the local environment are not free (i.e. they exist in the global
-    // environment or as formal parameters). Whatever is left must be quantified. This assumes the function
-    // under analysis has been added with an arrow type to the local environment.
+    // environment or as formal parameters). Whatever is left must be quantified. This assumes the
+    // function under analysis has been added with an arrow type to the local environment.
     remove_known_variables(self, ctx->local_env);
     remove_formal_parameters(ctx->local_env, infer_target);
 
