@@ -43,6 +43,7 @@ void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
     case tl_arrow:
         alloc_free(alloc, self->arrow.lhs);
         alloc_free(alloc, self->arrow.rhs);
+        array_free(self->arrow.fvs);
         break;
 
     case tl_var:
@@ -136,6 +137,12 @@ u64 tl_monotype_hash64(tl_monotype self) {
     } break;
     }
     return hash;
+}
+
+void tl_monotype_union_fv(tl_monotype *dst, tl_monotype src) {
+    assert(tl_arrow == dst->tag);
+    if (tl_arrow != src.tag) return;
+    forall(i, src.arrow.fvs) array_set_insert(dst->arrow.fvs, src.arrow.fvs.v[i]);
 }
 
 // -- type --
@@ -403,6 +410,16 @@ str tl_type_arrow_to_string(allocator *alloc, tl_type_v2_arrow const *self) {
         str_build_cat(&b, right);
         str_deinit(alloc, &right);
     }
+
+    if (self->fvs.size) {
+        str_build_cat(&b, S(" ["));
+        forall(i, self->fvs) {
+            str_build_cat(&b, self->fvs.v[i]);
+            if (i < self->fvs.size - 1) str_build_cat(&b, S(" "));
+        }
+        str_build_cat(&b, S("]"));
+    }
+
     return str_build_finish(&b);
 }
 

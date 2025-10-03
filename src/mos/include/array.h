@@ -217,6 +217,7 @@ typedef struct {
           array_set_insert_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));   \
     } while (0)
 
+// each array is restrict - must not alias
 #define array_set_difference(res, lhs, rhs)                                                                \
     do {                                                                                                   \
         static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \
@@ -227,6 +228,7 @@ typedef struct {
                                             alignof((lhs).v[0]));                                          \
     } while (0)
 
+// each array is restrict - must not alias
 #define array_set_union(res, lhs, rhs)                                                                     \
     do {                                                                                                   \
         static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \

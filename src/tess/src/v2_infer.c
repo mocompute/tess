@@ -55,6 +55,7 @@ static tl_monotype      *arrow_rightmost(tl_monotype *);
 static tl_monotype_array arrow_left(allocator *, tl_monotype *);
 static str               next_instantiation(tl_infer *, str);
 static void              add_generic(tl_infer *, ast_node *);
+static void              collect_free_variables(tl_infer *, ast_node *, hashmap **, str_array *);
 
 static void              log(tl_infer const *self, char const *restrict fmt, ...);
 static void              log_toplevels(tl_infer const *);
@@ -658,6 +659,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         if (!ctx->instantiate_applications) {
             ensure_tv(self, &node->type_v2);
+
+            // even if we are not instantiating fun applications this pass, we can still infer the arguments
+            // to aid in free variable discovery
+            // infer the arguments
+            for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+                if (infer(self, ctx, node->named_application.arguments[i])) return 1;
+            }
+
             return 0;
         }
 
@@ -781,13 +790,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     switch (node->tag) {
 
-    case ast_assignment:
-        rename_variables(self, node->assignment.name, lex);
-        rename_variables(self, node->assignment.value, lex);
-        break;
-
     case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
-
     case ast_dereference: rename_variables(self, node->dereference.target, lex); break;
 
     case ast_dereference_assign:
@@ -802,6 +805,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         break;
 
     case ast_let_in: {
+
+        // recurse on value prior to adding name to lexical scope
+        rename_variables(self, node->let_in.value, lex);
+
         str name                           = node->let_in.name->symbol.name;
         str newvar                         = next_variable_name(self);
         node->let_in.name->symbol.original = node->let_in.name->symbol.name;
@@ -819,6 +826,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     } break;
 
     case ast_let_match_in: {
+
+        // recurse on value prior to adding name to lexical scope
+        rename_variables(self, node->let_in.value, lex);
+
         hashmap *save = map_copy(*lex);
 
         for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
@@ -846,7 +857,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             node->symbol.original = node->symbol.name;
             node->symbol.name     = *found;
         } else {
-            fatal("symbol found outside lexical scope");
+            // a free variable
         }
     } break;
 
@@ -893,31 +904,187 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     } break;
 
-    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex); break;
-
-    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex); break;
-
     case ast_begin_end:
         for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
             rename_variables(self, node->begin_end.expressions[i], lex);
         break;
-
-    case ast_labelled_tuple:
-    case ast_tuple:
 
     case ast_lambda_function_application:
         rename_variables(self, node->lambda_application.lambda, lex);
         break;
 
     case ast_named_function_application: {
-        ast_node **fun_let = str_map_get(self->toplevels, node->named_application.name->symbol.name);
-        if (fun_let) {
-            rename_variables(self, *fun_let, lex);
-        } else {
-            fatal("toplevel not found");
+        rename_variables(self, node->named_application.name, lex);
+
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            ast_node *param = node->named_application.arguments[i];
+            if (ast_nil == param->tag) break;
+            rename_variables(self, param, lex);
         }
     } break;
 
+    case ast_user_type_get:        rename_variables(self, node->user_type_get.struct_name, lex); break;
+    case ast_user_type_set:        rename_variables(self, node->user_type_set.struct_name, lex); break;
+
+    case ast_assignment:
+    case ast_labelled_tuple:
+    case ast_tuple:
+    case ast_string:
+    case ast_nil:
+    case ast_any:
+    case ast_arrow:
+    case ast_bool:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_function_declaration:
+    case ast_lambda_declaration:
+    case ast_user_type:            break;
+    }
+}
+
+static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex, str_array *fvs) {
+
+    if (null == node) return;
+
+    switch (node->tag) {
+
+    case ast_address_of:  collect_free_variables(self, node->address_of.target, lex, fvs); break;
+    case ast_dereference: collect_free_variables(self, node->dereference.target, lex, fvs); break;
+
+    case ast_dereference_assign:
+        collect_free_variables(self, node->dereference_assign.target, lex, fvs);
+        collect_free_variables(self, node->dereference_assign.value, lex, fvs);
+        break;
+
+    case ast_if_then_else:
+        collect_free_variables(self, node->if_then_else.condition, lex, fvs);
+        collect_free_variables(self, node->if_then_else.yes, lex, fvs);
+        collect_free_variables(self, node->if_then_else.no, lex, fvs);
+        break;
+
+    case ast_let: {
+        // establish lexical scope for formal parameters and recurse
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node *param = node->let.parameters[i];
+            if (ast_nil == param->tag) break;
+            assert(ast_symbol == param->tag);
+            str name = param->symbol.name;
+            str_map_set(lex, name, &name);
+        }
+
+        collect_free_variables(self, node->let.body, lex, fvs);
+
+        map_destroy(lex);
+        *lex = save;
+
+    } break;
+
+    case ast_let_in: {
+
+        // recurse on value prior to adding name to lexical scope
+        collect_free_variables(self, node->let_in.value, lex, fvs);
+
+        str name = node->let_in.name->symbol.name;
+
+        // establish lexical scope of the let-in binding and recurse
+        hashmap *save = map_copy(*lex);
+        str_map_set(lex, name, &name);
+
+        collect_free_variables(self, node->let_in.body, lex, fvs);
+
+        // restore prior scope
+        map_destroy(lex);
+        *lex = save;
+    } break;
+
+    case ast_let_match_in: {
+
+        // recurse on value prior to adding name to lexical scope
+        collect_free_variables(self, node->let_in.value, lex, fvs);
+
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
+            ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
+            assert(ast_assignment == ass->tag);
+            ast_node *name_node = ass->assignment.name;
+            assert(ast_symbol == name_node->tag);
+            str name = name_node->symbol.name;
+
+            str_map_set(lex, name, &name);
+        }
+
+        collect_free_variables(self, node->let_match_in.body, lex, fvs);
+
+        map_destroy(lex);
+        *lex = save;
+    } break;
+
+    case ast_symbol: {
+        str *found;
+        if ((found = str_map_get(*lex, node->symbol.name))) {
+            ;
+        } else {
+            // a free variable
+            array_set_insert(*fvs, node->symbol.name);
+        }
+
+        // if symbol has a type which carries fvs, we also collect those.
+        // TODO so many indirections
+        if (node->type_v2 && tl_mono == node->type_v2->tag && tl_arrow == node->type_v2->mono.tag) {
+            forall(i, node->type_v2->mono.arrow.fvs)
+              array_set_insert(*fvs, node->type_v2->mono.arrow.fvs.v[i]);
+        }
+    } break;
+
+    case ast_lambda_function: {
+        // establish lexical scope for formal parameters and recurse
+        hashmap *save = map_copy(*lex);
+
+        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
+            ast_node *param = node->lambda_function.parameters[i];
+            if (ast_nil == param->tag) break;
+            assert(ast_symbol == param->tag);
+            str name = param->symbol.name;
+            str_map_set(lex, name, &name);
+        }
+
+        collect_free_variables(self, node->lambda_function.body, lex, fvs);
+
+        map_destroy(lex);
+        *lex = save;
+    } break;
+
+    case ast_begin_end:
+        for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
+            collect_free_variables(self, node->begin_end.expressions[i], lex, fvs);
+        break;
+
+    case ast_lambda_function_application:
+        collect_free_variables(self, node->lambda_application.lambda, lex, fvs);
+        break;
+
+    case ast_named_function_application: {
+        collect_free_variables(self, node->named_application.name, lex, fvs);
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            ast_node *param = node->named_application.arguments[i];
+            if (ast_nil == param->tag) break;
+            collect_free_variables(self, param, lex, fvs);
+        }
+    } break;
+
+    case ast_user_type_get:        collect_free_variables(self, node->user_type_get.struct_name, lex, fvs); break;
+    case ast_user_type_set:        collect_free_variables(self, node->user_type_set.struct_name, lex, fvs); break;
+
+    case ast_assignment:
+    case ast_labelled_tuple:
+    case ast_tuple:
     case ast_string:
     case ast_nil:
     case ast_any:
@@ -1280,19 +1447,23 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     ast_node *infer_target = null;
     str       name;
+    str       orig_name;
     if (ast_let == node->tag) {
         name         = node->let.name->symbol.name;
+        orig_name    = node->let.name->symbol.original;
         infer_target = node;
     } else if (ast_node_is_let_in_lambda(node)) {
         name         = node->let_in.name->symbol.name;
+        orig_name    = node->let_in.name->symbol.original;
         infer_target = node->let_in.value;
     } else {
         fatal("logic error");
     }
 
-    log(self, "-- add_generic: %.*s --", str_ilen(name), str_buf(&name));
+    log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
+        str_buf(&orig_name));
 
-    // is there an annotated type??
+    // FIXME: is there an annotated type??
 
     // run local inference: this function is not yet in the global environment.
     infer_ctx *ctx  = infer_ctx_create(self->transient);
@@ -1325,10 +1496,25 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- local env after quantification --");
     log_env(self, ctx->local_env);
 
+    // collect free variables from infer target and add to the generic's arrow type
+    str_array fvs = {.alloc = self->arena};
+    {
+        hashmap *lex = map_create(self->transient, sizeof(str), 16);
+        collect_free_variables(self, infer_target, &lex, &fvs);
+        map_destroy(&lex);
+
+        array_shrink(fvs);
+        log(self, "-- free variables: %u --", fvs.size);
+        forall(i, fvs) {
+            log(self, "%.*s", str_ilen(fvs.v[i]), str_buf(&fvs.v[i]));
+        }
+    }
+
     // add LET function type to GLOBAL environment - not local lambdas
+    tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
+    assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     if (ast_let == node->tag) {
-        tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
-        assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
+        arrow->scheme.type.arrow.fvs = fvs;
         tl_type_env_add(self->env, name, *arrow);
     }
 

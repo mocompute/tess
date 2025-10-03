@@ -16,8 +16,13 @@ typedef struct {array_header; struct tl_monotype *v;}                 tl_monotyp
 typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
 typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
 typedef struct {str name; tl_monotype_array        args;}             tl_type_constructor_inst;
-typedef struct {struct tl_monotype *lhs; struct tl_monotype *rhs;}    tl_type_v2_arrow;
 // clang-format on
+
+typedef struct {
+    struct tl_monotype *lhs;
+    struct tl_monotype *rhs;
+    str_array           fvs;
+} tl_type_v2_arrow;
 
 typedef struct tl_monotype {
     union {
@@ -60,6 +65,7 @@ void                   tl_monotype_destroy(allocator *, tl_monotype **);
 int                    tl_monotype_eq(tl_monotype, tl_monotype);
 int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 u64                    tl_monotype_hash64(tl_monotype);
+void                   tl_monotype_union_fv(tl_monotype *dst, tl_monotype src);
 
 // -- type --
 
