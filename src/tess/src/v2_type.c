@@ -209,6 +209,27 @@ tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
     return clone;
 }
 
+str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
+    str_sized out = {0};
+    switch (self->tag) {
+    case tl_mono:
+        if (tl_arrow == self->mono.tag) {
+            out.size = self->mono.arrow.fvs.size;
+            out.v    = self->mono.arrow.fvs.v;
+        }
+        break;
+
+    case tl_scheme:
+        if (tl_arrow == self->scheme.type.tag) {
+            out.size = self->scheme.type.arrow.fvs.size;
+            out.v    = self->scheme.type.arrow.fvs.v;
+        }
+        break;
+    }
+
+    return out;
+}
+
 //
 
 static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) {

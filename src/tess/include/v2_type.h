@@ -47,8 +47,7 @@ typedef struct tl_type_v2 {
     enum { tl_mono, tl_scheme } tag;
 } tl_type_v2;
 
-// collect all free variables in type into new type variable set
-void tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 const *);
+str_sized tl_type_v2_free_variables(tl_type_v2 const *);
 
 // -- monotype --
 

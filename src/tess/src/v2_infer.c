@@ -19,6 +19,7 @@
 typedef struct {
     enum tl_error_tag tag;
     ast_node const   *node;
+    str               message;
 } tl_infer_error;
 
 typedef struct {
@@ -1486,6 +1487,31 @@ static void add_generic(tl_infer *self, ast_node *node) {
     infer_ctx_destroy(self->transient, &ctx);
 }
 
+int check_missing_free_variables(tl_infer *self) {
+    int error = 0;
+
+    forall(i, self->env->names) {
+        str               name = self->env->names.v[i];
+        tl_type_v2 const *type = &self->env->types.v[i];
+
+        str_sized         fvs  = tl_type_v2_free_variables(type);
+        forall(j, fvs) {
+            if (!str_map_contains(self->env->index, fvs.v[j])) {
+
+                ast_node  *node  = null;
+                ast_node **found = str_map_get(self->toplevels, name);
+                if (found) node = *found;
+
+                array_push(self->errors,
+                           ((tl_infer_error){
+                             .tag = tl_err_free_variable_not_found, .node = node, .message = fvs.v[j]}));
+                ++error;
+            }
+        }
+    }
+    return error;
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- start inference --");
 
@@ -1536,6 +1562,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- final env --");
     log_env(self, self->env);
 
+    if (check_missing_free_variables(self)) return 1;
+
     // TODO self->subs is no longer useful
     return 0;
 }
@@ -1543,14 +1571,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 void tl_infer_report_errors(tl_infer *self) {
     if (self->errors.size) {
         forall(i, self->errors) {
-            tl_infer_error *err  = &self->errors.v[i];
-            ast_node const *node = err->node;
+            tl_infer_error *err     = &self->errors.v[i];
+            ast_node const *node    = err->node;
+            str             message = err->message;
 
-            if (node)
-                fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line, tl_error_tag_to_string(err->tag),
-                        ast_node_to_string_for_error(self->transient, node));
+            if (node) {
+                str node_str = v2_ast_node_to_string(self->transient, node);
+                fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
+                        tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
+                        str_ilen(node_str), str_buf(&node_str));
+            }
 
-            else fprintf(stderr, "error: %s\n", tl_error_tag_to_string(err->tag));
+            else
+                fprintf(stderr, "error: %s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
+                        str_buf(&message));
         }
     }
 }
