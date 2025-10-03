@@ -1368,6 +1368,18 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return out;
     } break;
 
+    case ast_lambda_function: {
+        str out = str_copy(alloc, S("fun"));
+        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
+            out = str_cat_3(alloc, out, S(" "),
+                            v2_ast_node_to_string(alloc, node->lambda_function.parameters[i]));
+        }
+        out = str_cat(alloc, out, S(" -> "));
+        out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->lambda_function.body));
+        return out;
+
+    } break;
+
     case ast_ellipsis:                    return str_copy(alloc, S("..."));
 
     case ast_address_of:
@@ -1385,7 +1397,6 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_function_declaration:
     case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_lambda_function:
     case ast_lambda_function_application:
     case ast_tuple:
     case ast_user_type:                   return str_init(alloc, ast_node_to_string(alloc, node));
