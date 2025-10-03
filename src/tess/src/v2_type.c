@@ -206,72 +206,6 @@ tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
 
 //
 
-static void tl_monotype_collect_free_variables(tl_type_variable_array *, tl_monotype const *);
-static void tl_type_variable_collect_free_variables(tl_type_variable_array *, tl_type_variable const *);
-static void tl_type_arrow_collect_free_variables(tl_type_variable_array *, tl_type_v2_arrow const *);
-static void tl_type_scheme_collect_free_variables(tl_type_variable_array *, tl_type_scheme const *);
-
-void        tl_type_v2_collect_free_variables(tl_type_variable_array *, tl_type_v2 const *);
-void        tl_type_env_free_variables(tl_type_env const *, tl_type_variable_array *);
-
-static void tl_type_constructor_inst_collect_free_variables(tl_type_variable_array         *out,
-                                                            tl_type_constructor_inst const *inst) {
-    forall(i, inst->args) {
-        tl_monotype_collect_free_variables(out, &inst->args.v[i]);
-    }
-}
-
-static void tl_type_variable_collect_free_variables(tl_type_variable_array *out,
-                                                    tl_type_variable const *var) {
-    array_set_insert(*out, *var);
-}
-
-static void tl_type_arrow_collect_free_variables(tl_type_variable_array *out,
-                                                 tl_type_v2_arrow const *arrow) {
-    tl_monotype_collect_free_variables(out, arrow->lhs);
-    tl_monotype_collect_free_variables(out, arrow->rhs);
-}
-
-static void tl_monotype_collect_free_variables(tl_type_variable_array *out, tl_monotype const *mono) {
-    switch (mono->tag) {
-    case tl_cons:  return tl_type_constructor_inst_collect_free_variables(out, &mono->cons);
-    case tl_var:   return tl_type_variable_collect_free_variables(out, &mono->var);
-    case tl_arrow: return tl_type_arrow_collect_free_variables(out, &mono->arrow);
-
-    case tl_quant:
-    case tl_nil:   return;
-    }
-}
-
-static void tl_type_scheme_collect_free_variables(tl_type_variable_array *out,
-                                                  tl_type_scheme const   *scheme) {
-    // fv(type) - quantifiers
-
-    tl_type_variable_array type_vars = {.alloc = out->alloc};
-    tl_monotype_collect_free_variables(&type_vars, &scheme->type);
-
-    array_set_difference(*out, type_vars, scheme->quantifiers);
-    array_free(type_vars);
-}
-
-void tl_type_v2_collect_free_variables(tl_type_variable_array *out, tl_type_v2 const *type) {
-
-    switch (type->tag) {
-    case tl_mono:   return tl_monotype_collect_free_variables(out, &type->mono);
-    case tl_scheme: return tl_type_scheme_collect_free_variables(out, &type->scheme);
-    }
-}
-
-void tl_type_env_free_variables(tl_type_env const *env, tl_type_variable_array *out) {
-    forall(i, env->types) {
-        tl_type_v2_collect_free_variables(out, &env->types.v[i]);
-    }
-}
-
-//
-
-static void tl_type_scheme_substitute(tl_type_scheme *self, tl_type_variable var, tl_monotype mono);
-
 static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) {
     switch (self->tag) {
     case tl_cons: {
@@ -317,41 +251,6 @@ void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
     map_destroy(&(*p)->map);
     alloc_free(alloc, *p);
     *p = null;
-}
-
-void tl_type_subs_compose(tl_type_subs *base, tl_type_subs const *subs) {
-
-    // apply subs to all monotypes in base
-    {
-        hashmap_iterator iter = {0};
-        while (map_iter(subs->map, &iter)) {
-            tl_type_variable const *tv = iter.key_ptr;
-            assert(iter.key_size == sizeof(*tv));
-
-            tl_monotype *exist = map_get(base->map, tv, sizeof *tv);
-            if (exist) {
-                map_set(&base->map, tv, sizeof *tv, exist);
-            }
-        }
-    }
-
-    // copy remaining substitutions where type var is not in base
-    {
-        hashmap_iterator iter = {0};
-        while (map_iter(subs->map, &iter)) {
-            tl_type_variable const *tv   = iter.key_ptr;
-            tl_monotype const      *mono = iter.data;
-
-            if (!map_contains(base->map, tv, sizeof *tv)) map_set(&base->map, tv, sizeof *tv, mono);
-        }
-    }
-}
-
-void tl_type_subs_apply(tl_type_subs const *subs, tl_type_v2_array *types) {
-    forall(i, *types) {
-        tl_type_v2 *type = &types->v[i];
-        tl_type_v2_apply_subs(type, subs);
-    }
 }
 
 void tl_type_subs_add(tl_type_subs *self, tl_type_variable from, tl_monotype to) {

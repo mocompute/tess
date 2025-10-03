@@ -84,12 +84,6 @@ void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 void                    tl_type_subs_add(tl_type_subs *, tl_type_variable from, tl_monotype to);
 tl_monotype            *tl_type_subs_get(tl_type_subs *, tl_type_variable);
 
-// apply subs to base destructively
-void tl_type_subs_compose(tl_type_subs *base, tl_type_subs const *subs);
-
-// apply subs to array of types
-void tl_type_subs_apply(tl_type_subs const *, tl_type_v2_array *);
-
 // apply subs to a single type
 void tl_type_v2_apply_subs(tl_type_v2 *, tl_type_subs const *);
 
@@ -123,7 +117,6 @@ nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
-void                   tl_type_env_free_variables(tl_type_env const *, tl_type_variable_array *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
 
 // -- strings --

@@ -47,20 +47,19 @@ struct tl_infer {
 
 //
 
-static str               v2_ast_node_to_string(allocator *, ast_node const *);
-static str               next_variable_name(tl_infer *);
-static tl_type_v2        instantiate(tl_infer *, tl_type_v2);
-static tl_type_v2        make_arrow(tl_infer *, ast_node_sized, ast_node const *);
-static tl_monotype      *arrow_rightmost(tl_monotype *);
-static tl_monotype_array arrow_left(allocator *, tl_monotype *);
-static str               next_instantiation(tl_infer *, str);
-static void              add_generic(tl_infer *, ast_node *);
-static void              collect_free_variables(tl_infer *, ast_node *, hashmap **, str_array *);
+static str          v2_ast_node_to_string(allocator *, ast_node const *);
+static str          next_variable_name(tl_infer *);
+static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
+static tl_type_v2   make_arrow(tl_infer *, ast_node_sized, ast_node const *);
+static tl_monotype *arrow_rightmost(tl_monotype *);
+static str          next_instantiation(tl_infer *, str);
+static void         add_generic(tl_infer *, ast_node *);
+static void         collect_free_variables(tl_infer *, ast_node *, hashmap **, str_array *);
 
-static void              log(tl_infer const *self, char const *restrict fmt, ...);
-static void              log_toplevels(tl_infer const *);
-static void              log_env(tl_infer const *, tl_type_env const *);
-static void              log_subs(tl_infer const *, tl_type_subs const *);
+static void         log(tl_infer const *self, char const *restrict fmt, ...);
+static void         log_toplevels(tl_infer const *);
+static void         log_env(tl_infer const *, tl_type_env const *);
+static void         log_subs(tl_infer const *, tl_type_subs const *);
 
 //
 
@@ -1160,29 +1159,6 @@ static str next_instantiation(tl_infer *self, str name) {
     return str_init(self->arena, buf);
 }
 
-static void assign_new_expression_variable(tl_infer *self, ast_node *node) {
-    node->type_v2  = new (self->arena, tl_type_v2);
-    *node->type_v2 = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
-}
-
-typedef struct {
-    tl_infer  *self;
-    str_array *array;
-} all_variables_ctx;
-
-static void do_all_variables(void *ctx_, ast_node *node) {
-    all_variables_ctx *ctx = ctx_;
-    if (ast_symbol != node->tag) return;
-
-    // record name if not already recorded
-    array_set_insert(*ctx->array, node->symbol.name);
-}
-
-static void all_variables(tl_infer *self, ast_node *node, str_array *names) {
-    all_variables_ctx ctx = {.self = self, .array = names};
-    ast_node_dfs(&ctx, node, do_all_variables);
-}
-
 static void remove_known_variables(tl_infer *self, tl_type_env *env) {
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
@@ -1379,21 +1355,6 @@ static tl_monotype *arrow_rightmost(tl_monotype *arrow) {
 
     if (tl_arrow == arrow->arrow.rhs->tag) return arrow_rightmost(arrow->arrow.rhs);
     return arrow->arrow.rhs;
-}
-
-static tl_monotype_array arrow_left_(tl_monotype *arrow, tl_monotype_array acc) {
-    if (tl_arrow != arrow->arrow.rhs->tag) {
-        array_push(acc, *arrow->arrow.lhs);
-        return acc;
-    }
-    array_push(acc, *arrow->arrow.lhs);
-    return arrow_left_(arrow->arrow.rhs, acc);
-}
-
-static tl_monotype_array arrow_left(allocator *alloc, tl_monotype *arrow) {
-    if (tl_arrow != arrow->tag) fatal("logic error");
-    tl_monotype_array out = {.alloc = alloc};
-    return arrow_left_(arrow, out);
 }
 
 static void replace_quant(hashmap *map, tl_monotype *mono) {
