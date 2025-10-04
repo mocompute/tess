@@ -1,9 +1,6 @@
-let id x = x
+let id x0 = x0
+let f x1 = id x1
+let g x2 = f x2
 
 let main () =
-  let val = 0 in
-  let _ = id "string" in
-  let f1 = fun x -> id val in
-  let _ = f1 "hello" in
-  let _ = f1 123 in
-  f1 "hello"
+  g 0

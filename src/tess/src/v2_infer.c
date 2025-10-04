@@ -812,10 +812,10 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_symbol: {
         tl_type_v2  *global = tl_type_env_lookup(self->env, node->symbol.name);
         tl_type_v2 **found  = null;
-        if (global) {
-            node->type_v2 = global;
-        } else if ((found = str_map_get(ctx->lex, node->symbol.name)) && *found) {
+        if ((found = str_map_get(ctx->lex, node->symbol.name)) && *found) {
             node->type_v2 = *found;
+        } else if (global) {
+            node->type_v2 = global;
         } else {
             ensure_tv(self, &node->symbol.name, &node->type_v2);
         }
@@ -1174,9 +1174,9 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
         // if symbol has a type which carries fvs, we also collect those.
         // TODO so many indirections
-        if (node->type_v2 && tl_mono == node->type_v2->tag && tl_arrow == node->type_v2->mono.tag) {
-            forall(i, node->type_v2->mono.arrow.fvs)
-              array_set_insert(*fvs, node->type_v2->mono.arrow.fvs.v[i]);
+        tl_type_v2 *type = tl_type_env_lookup(self->env, node->symbol.name);
+        if (type && tl_mono == type->tag && tl_arrow == type->mono.tag) {
+            forall(i, type->mono.arrow.fvs) array_set_insert(*fvs, type->mono.arrow.fvs.v[i]);
         }
     } break;
 
@@ -1756,8 +1756,19 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     }
 
     case ast_let: {
-        str out = str_copy(alloc, S("let "));
-        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let.name));
+        str out               = str_copy(alloc, S("let "));
+        out                   = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let.name));
+
+        ast_node_sized params = ast_node_sized_from_ast_array((ast_node *)node);
+        forall(i, params) {
+            if (ast_nil == params.v[i]->tag) {
+                out = str_cat(alloc, out, S(" ()"));
+                break;
+            } else {
+                out = str_cat_3(alloc, out, S(" "), params.v[i]->symbol.name);
+            }
+        }
+
         if (node->type_v2)
             out = str_cat_3(alloc, out, S(" : "), tl_type_v2_to_string(alloc, node->type_v2));
         out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
