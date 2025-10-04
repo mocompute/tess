@@ -559,19 +559,16 @@ static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
 static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (!type) return;
     if (*type) return;
-
     if (name) *type = tl_type_env_lookup(self->env, *name);
-
     if (*type) return;
     *type =
       tl_type_alloc_mono(self->arena, tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
 }
 
-static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex);
-
+static void rename_variables(tl_infer *, ast_node *, hashmap **);
 static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
+static int  infer(tl_infer *, infer_ctx *, ast_node *);
 
-static int  infer(tl_infer *self, infer_ctx *ctx, ast_node *node);
 static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // only infer function applications, traversing ast
 
@@ -1365,15 +1362,6 @@ static str next_instantiation(tl_infer *self, str name) {
     return str_init(self->arena, buf);
 }
 
-void do_remove_types(void *ctx, ast_node *node) {
-    (void)ctx;
-    node->type_v2 = null;
-}
-
-void remove_types(ast_node *node) {
-    ast_node_dfs(null, node, do_remove_types);
-}
-
 void add_quantifier(tl_type_scheme *scheme, tl_monotype *type) {
     switch (type->tag) {
     case tl_nil:
@@ -1631,10 +1619,6 @@ static void add_generic(tl_infer *self, ast_node *node) {
     // add to env
     tl_type_env_add(self->env, name, *arrow);
 
-    // remove type information from function tree
-    // FIXME: needed?
-    // remove_types(infer_target);
-
     log(self, "-- global env --");
     log_env(self, self->env);
 
@@ -1691,6 +1675,7 @@ void remove_generic_toplevels(tl_infer *self) {
     forall(i, names) {
         str_map_erase(self->toplevels, names.v[i]);
     }
+    array_free(names);
 }
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
