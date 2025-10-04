@@ -1,10 +1,10 @@
-let id x = x
-let f x = id x
-let g x = f x
+// let id x = x
+// let f x = id x
+// let g x = f x
 
 let main () =
   let f1 = fun x -> x in
   let a = f1 "hello" in
   let b = f1 123 in
   let c = f1 0.5 in
-  g 0
+  f1 0

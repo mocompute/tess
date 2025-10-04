@@ -911,18 +911,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             // instantiate and constrain
             infer_applications(self, ctx, node);
-            name                 = node->named_application.name->symbol.name; // instantiated
-
-            tl_type_v2 *fun_type = tl_type_env_lookup(self->env, name);
-            if (fun_type && tl_mono == fun_type->tag) {
-                tl_monotype *result_type = arrow_rightmost(&fun_type->mono);
-                if (constrain_mt(self, ctx, result_type, node->type_v2, node)) return 1;
-            }
+            name = node->named_application.name->symbol.name; // instantiated
         }
 
-        // FIXME can this be done in normal phase?
-        // FIXME can it be done immediately after generalising and instantiating?
         else if (ctx->final_phase) {
+            // Note: this must be done in a final phase after all functions have been instantiated and the
+            // program is fully typed. The purpose is to propagate monomorphic type information downward
+            // through the call chain, in contrast to the recursive type inference algorithm which attempts
+            // to infer from the bottom of the call chain upwards.
             return populate_types_down(self, ctx, node);
         }
     } break;
