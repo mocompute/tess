@@ -564,8 +564,6 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (*type) return;
     *type  = new (self->arena, tl_type_v2);
     **type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
-    if (name) log(self, "ensure: %.*s : t%u", str_ilen(*name), str_buf(name), (*type)->mono.var);
-    else log(self, "ensure: t%u", (*type)->mono.var);
 }
 
 static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
