@@ -53,7 +53,7 @@ static str          next_variable_name(tl_infer *);
 static str          next_instantiation(tl_infer *, str);
 static tl_type_v2   make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 static tl_monotype *arrow_rightmost(tl_monotype *);
-static void         add_generic(tl_infer *, ast_node *);
+static int          add_generic(tl_infer *, ast_node *);
 static str          v2_ast_node_to_string(allocator *, ast_node const *);
 
 static void         toplevel_add(tl_infer *, str, ast_node *);
@@ -783,7 +783,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             str name = node->let_in.name->symbol.name;
 
             // define a generic lambda
-            add_generic(self, node);
+            if (add_generic(self, node)) return 1;
 
             // add let-in node to toplevels (because we need the name and the body)
             if (!toplevel_get(self, name)) {
@@ -846,8 +846,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         map_destroy(&ctx->lex);
         ctx->lex = save;
 
-        // add to environment if not already present - we don't want to make a new arrow with no fvs during
-        // final phase
+        // Note: add a new arrow type to environment only if not already present - we don't want to make a
+        // new arrow with no fvs during final phase
         if (!tl_type_env_lookup(self->env, node->let.name->symbol.name)) {
             tl_type_v2 arrow =
               make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
@@ -882,12 +882,18 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             if (infer(self, ctx, node->named_application.arguments[i])) return 1;
         }
 
-        str name = node->named_application.name->symbol.name;
+        str         name = node->named_application.name->symbol.name;
+        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        if (!type) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
+            return 1;
+        }
 
-        if (tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name))) {
+        if (tl_type_v2_is_scheme(type)) {
             // we are trying to apply a generic function
             ast_node *fun = toplevel_get(self, name);
-            add_generic(self, fun);
+            if (add_generic(self, fun)) return 1;
 
             // instantiate and constrain
             infer_applications(self, ctx, node);
@@ -1520,8 +1526,8 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
     return tl_type_init_mono(out);
 }
 
-static void add_generic(tl_infer *self, ast_node *node) {
-    if (!node) return;
+static int add_generic(tl_infer *self, ast_node *node) {
+    if (!node) return 0;
 
     ast_node *infer_target = null;
     str       name;
@@ -1539,7 +1545,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
     }
 
     // do not process a second time
-    if (tl_type_env_lookup(self->env, name)) return;
+    if (tl_type_env_lookup(self->env, name)) return 0;
 
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
@@ -1548,7 +1554,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     // run inference: this function is not yet in the global environment.
     infer_ctx *ctx = infer_ctx_create(self->transient);
-    if (infer(self, ctx, infer_target)) fatal("error handling");
+    if (infer(self, ctx, infer_target)) return 1;
 
     if (ast_lambda_function == infer_target->tag) {
         // since the infer target is unnamed, the lambda function could not add itself to the
@@ -1603,6 +1609,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
         str_buf(&orig_name));
 
     infer_ctx_destroy(self->transient, &ctx);
+    return 0;
 }
 
 int check_missing_free_variables(tl_infer *self) {
