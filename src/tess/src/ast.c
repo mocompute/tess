@@ -128,12 +128,17 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_symbol:
     case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
-        vclone->name            = str_copy(alloc, vorig->name);
-        vclone->original        = str_copy(alloc, vorig->original);
-        vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
-        vclone->annotation_type = tl_type_clone_shallow(alloc, vorig->annotation_type);
-        vclone->special_hash    = vorig->special_hash;
-        vclone->flags           = vorig->flags;
+        vclone->name               = str_copy(alloc, vorig->name);
+        vclone->original           = str_copy(alloc, vorig->original);
+        vclone->annotation         = ast_node_clone(alloc, vorig->annotation);
+        vclone->annotation_type    = tl_type_clone_shallow(alloc, vorig->annotation_type);
+        vclone->annotation_type_v2 = null;
+        if (vorig->annotation_type_v2) {
+            vclone->annotation_type_v2  = new (alloc, tl_type_v2);
+            *vclone->annotation_type_v2 = tl_type_v2_clone(alloc, *vorig->annotation_type_v2);
+        }
+        vclone->special_hash = vorig->special_hash;
+        vclone->flags        = vorig->flags;
     } break;
 
     case ast_let_in: {
