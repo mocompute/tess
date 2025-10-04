@@ -287,28 +287,21 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 // -- inference --
 
 typedef struct {
-    hashmap      *lex;                      // str => tl_type_v2*
-    tl_type_subs *subs;                     // corresponds to E in algorithm J
-    tl_type_env  *local_env;                // local environment
-    int           instantiate_applications; // whether to instantiate generic applications
-    int           add_to_env;               // whether to add variable types to the environment
-    tl_type_v2    lambda_type;              // for inferring lambda_function only
+    hashmap   *lex;                      // str => tl_type_v2*
+    int        instantiate_applications; // whether to instantiate generic applications
+    tl_type_v2 lambda_type;              // for inferring lambda_function only
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
     infer_ctx *out                = new (alloc, infer_ctx);
     out->lex                      = map_create(alloc, sizeof(tl_type_v2 *), 16);
-    out->subs                     = tl_type_subs_create(alloc);
-    out->local_env                = tl_type_env_create(alloc);
     out->instantiate_applications = 0;
-    out->add_to_env               = 0;
+
     return out;
 }
 
 static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
     if ((*p)->lex) map_destroy(&(*p)->lex);
-    if ((*p)->subs) tl_type_subs_destroy(alloc, &(*p)->subs);
-    if ((*p)->local_env) tl_type_env_destroy(alloc, &(*p)->local_env);
 
     alloc_free(alloc, *p);
     *p = null;
@@ -358,7 +351,7 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
         // attempt to match type constructor arguments against existing type vars
         forall(i, mono.cons.args) {
             if (tl_var == mono.cons.args.v[i].tag) {
-                tl_monotype *found = tl_type_subs_get(ctx->subs, mono.cons.args.v[i].var);
+                tl_monotype *found = tl_type_subs_get(self->subs, mono.cons.args.v[i].var);
                 if (found) mono.cons.args.v[i] = *found;
             }
         }
@@ -366,7 +359,7 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
 
     case tl_var: {
         // if mono is a tv, unify it with existing tv, if any
-        tl_monotype *mono_match = tl_type_subs_get(ctx->subs, mono.var);
+        tl_monotype *mono_match = tl_type_subs_get(self->subs, mono.var);
         if (mono_match) return unify(self, ctx, tv, *mono_match);
     } break;
 
@@ -378,8 +371,8 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
         tl_monotype *left_match  = null;
         tl_monotype *right_match = null;
 
-        if (tl_var == mono.arrow.lhs->tag) left_match = tl_type_subs_get(ctx->subs, mono.arrow.lhs->var);
-        if (tl_var == mono.arrow.rhs->tag) right_match = tl_type_subs_get(ctx->subs, mono.arrow.rhs->var);
+        if (tl_var == mono.arrow.lhs->tag) left_match = tl_type_subs_get(self->subs, mono.arrow.lhs->var);
+        if (tl_var == mono.arrow.rhs->tag) right_match = tl_type_subs_get(self->subs, mono.arrow.rhs->var);
 
         if (left_match) mono.arrow.lhs = left_match;
         if (right_match) mono.arrow.rhs = right_match;
@@ -388,14 +381,14 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     }
 
     // add the substitution
-    tl_type_subs_add(ctx->subs, tv, mono);
+    tl_type_subs_add(self->subs, tv, mono);
 
     // apply the substitution, if possible, to the rest of substitutions
     if (tl_var != mono.tag) {
         // any existing subs with tv on the right hand side should be replaced with the new non-tv
         // mono
         hashmap_iterator iter = {0};
-        while (map_iter(ctx->subs->map, &iter)) {
+        while (map_iter(self->subs->map, &iter)) {
             tl_monotype *rhs = iter.data;
 
             if (tl_var == rhs->tag && rhs->var == tv) *rhs = mono;
@@ -449,7 +442,7 @@ static int constrain_mt(tl_infer *, infer_ctx *, tl_monotype const *, tl_type_v2
 
 static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
                         ast_node const *node) {
-    tl_monotype *exist = tl_type_subs_get(ctx->subs, tv);
+    tl_monotype *exist = tl_type_subs_get(self->subs, tv);
     if (!exist) return unify(self, ctx, tv, mono);
 
     // There exists a substitution on tv. Decide how to compose with the new substitution.
@@ -469,13 +462,13 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
     } else if (constraint_is_compatible(mono, *exist)) {
         // the mirror does not conflict: mono could be a tv we can add to subs
         if (tl_var == mono.tag) {
-            if (!tl_type_subs_get(ctx->subs, mono.var)) {
+            if (!tl_type_subs_get(self->subs, mono.var)) {
                 return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
             } else {
                 // the tv also exists: check all three right-hand
                 // constraints: the two existing ones, and the new
                 // one. They must all be compatible.
-                tl_monotype *exist2 = tl_type_subs_get(ctx->subs, mono.var);
+                tl_monotype *exist2 = tl_type_subs_get(self->subs, mono.var);
                 assert(exist2);
                 if (!constraint_is_compatible(mono, *exist2)) {
                     log_type_error_mm(self, &mono, exist2);
@@ -483,9 +476,19 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
                 }
 
                 // since we don't have room, we can't add this new substitution. We can try to eliminate a
-                // substitution by applying it to our environment. But I don't know if this is sound yet.
+                // substitution by applying it to our environment.
                 // For example: exist: 1 == 2, 2 == 3, 3 == 1 : add 3 == 4
-                fatal("oops");
+
+                // tv, mono, exist are each keys in self->subs. We apply subs to environment and then remove
+                // all subs that are no longer relevant (because their tvs no longer exist in the
+                // environment). If we can remove at least one substitution, recurse and try to apply the
+                // constraint again.
+                if (tl_type_subs_cleanup(self->transient, self->subs, self->env)) {
+                    return constrain_tv(self, ctx, tv, mono, node);
+                } else {
+                    // we have failed
+                    fatal("oops");
+                }
             }
         } else {
             // a compatible nil, cons or arrow: this can be ignored
@@ -568,7 +571,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
 static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
 
 static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    // - update ctx->subs by collecting and applying constraints found recursively starting at node.
+    // - update self->subs by collecting and applying constraints found recursively starting at node.
     // - adds symbol : type information to ctx->env.
     // - can be run multiple times on the same node
 
@@ -608,7 +611,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             str name = node->let_in.name->symbol.name;
 
-            // define a generic lambda in local scope
+            // define a generic lambda
+            // tl_type_env_subs_apply(self->env, self->subs);
             add_generic(self, node);
 
             // add let-in node to toplevels (because we need the name and the body)
@@ -631,12 +635,18 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             map_destroy(&ctx->lex);
             ctx->lex = save;
 
-            // add_generic will have added generic lambda to its local environment, using the
+            // add_generic will have added generic lambda to the environment, using the
             // ctx->lambda_type field
 
         } else {
 
             if (infer(self, ctx, node->let_in.value)) return 1;
+            ensure_tv(self, &node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+            if (constrain(self, ctx, node->let_in.name->type_v2, node->let_in.value->type_v2, node))
+                return 1;
+
+            // add value to environment
+            tl_type_env_add(self->env, node->let_in.name->symbol.name, *node->let_in.value->type_v2);
 
             hashmap *save = map_copy(ctx->lex);
 
@@ -650,12 +660,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             map_destroy(&ctx->lex);
             ctx->lex = save;
-
-            // add to local environment
-            if (ctx->add_to_env) {
-                tl_type_env_add(ctx->local_env, node->let_in.name->symbol.name,
-                                *node->let_in.value->type_v2);
-            }
         }
     } break;
 
@@ -672,14 +676,12 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         map_destroy(&ctx->lex);
         ctx->lex = save;
 
-        // add to local environment
-        if (ctx->add_to_env) {
-            tl_type_v2 arrow =
-              make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
-                         node->let.body);
+        // add to  environment
+        tl_type_v2 arrow =
+          make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
+                     node->let.body);
 
-            tl_type_env_add(ctx->local_env, node->let.name->symbol.name, arrow);
-        }
+        tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
 
     } break;
 
@@ -694,15 +696,15 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             ensure_tv(self, &node->symbol.name, &node->type_v2);
         }
 
-        // add to local environment
-        if (ctx->add_to_env) tl_type_env_add(ctx->local_env, node->symbol.name, *node->type_v2);
+        // add to environment
+        tl_type_env_add(self->env, node->symbol.name, *node->type_v2);
 
     } break;
 
     case ast_named_function_application: {
 
         if (!ctx->instantiate_applications) {
-            ensure_tv(self, &node->named_application.name->symbol.name, &node->type_v2);
+            ensure_tv(self, null, &node->type_v2);
 
             // even if we are not instantiating fun applications this pass, we can still infer the
             // arguments to aid in free variable discovery infer the arguments
@@ -713,10 +715,9 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 0;
         }
 
-        // name can be: local_env fun, global env fun, toplevel fun
+        // name can be: global env fun, toplevel fun
         str         name = node->named_application.name->symbol.name;
-        tl_type_v2 *fun  = tl_type_env_lookup(ctx->local_env, name);
-        if (!fun) fun = tl_type_env_lookup(self->env, name);
+        tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
 
         // name and type must exist in toplevels
         ast_node *fun_node = toplevel_get(self, name);
@@ -745,7 +746,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
         // instantiations won't be effective.
         if (constrain(self, ctx, &inst, &app, node)) return 1;
-        tl_type_v2_apply_subs(&inst, ctx->subs);
+        tl_type_v2_apply_subs(&inst, self->subs);
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
@@ -818,7 +819,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_user_type:            break;
     }
 
-    tl_type_env_subs_apply(ctx->local_env, ctx->subs);
+    tl_type_env_subs_apply(self->env, self->subs);
     return 0;
 }
 
@@ -1149,17 +1150,10 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
     // after generics are created, we can process callsites for instantiation
     ctx->instantiate_applications = 1;
 
-    // this infer operates on global environment
-    ctx->local_env = self->env;
-    ctx->subs      = self->subs;
-
     log(self, "-- start_infer_global --");
     int res = infer(self, ctx, node);
     log(self, "-- end start_infer_global --");
 
-    // don't destroy self's environment
-    ctx->subs      = null;
-    ctx->local_env = null;
     infer_ctx_destroy(self->transient, &ctx);
 
     return res;
@@ -1194,7 +1188,7 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
     map_set(&self->instances, &hash, sizeof hash, &name_inst);
 
     // add to type environment
-    tl_type_env_add(ctx->local_env, name_inst, tl_type_init_mono(arrow));
+    tl_type_env_add(self->env, name_inst, tl_type_init_mono(arrow));
 
     if (infer(self, ctx, body)) fatal("error handling");
 
@@ -1211,48 +1205,6 @@ static str next_instantiation(tl_infer *self, str name) {
     char buf[128];
     snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
     return str_init(self->arena, buf);
-}
-
-static void remove_known_variables(tl_infer *self, tl_type_env *env, str except) {
-    for (u32 i = 0; i < env->names.size;) {
-        str name = env->names.v[i];
-        if (str_eq(name, except)) {
-            ++i;
-            continue;
-        }
-        if (tl_type_env_lookup(self->env, name)) {
-            tl_type_env_erase(env, i);
-        } else {
-            ++i;
-        }
-    }
-
-    tl_type_env_reindex(env);
-}
-
-static void remove_formal_parameters(tl_type_env *env, ast_node *node) {
-
-    ast_node_sized params = ast_node_sized_from_ast_array(node);
-    if (ast_let != node->tag && ast_lambda_function != node->tag) fatal("logic error");
-
-    for (u32 i = 0; i < env->names.size;) {
-        str name = env->names.v[i];
-
-        forall(j, params) {
-            if (ast_symbol != node->let.parameters[j]->tag) continue;
-            str param = node->let.parameters[j]->symbol.name;
-            if (str_eq(name, param)) {
-                tl_type_env_erase(env, i);
-                goto erased;
-            }
-        }
-
-        ++i;
-
-    erased:;
-    }
-
-    tl_type_env_reindex(env);
 }
 
 void do_remove_types(void *ctx, ast_node *node) {
@@ -1466,46 +1418,29 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     // FIXME: is there an annotated type??
 
-    // run local inference: this function is not yet in the global environment. We use a local context for
-    // ease of discovery of free variables.
-    infer_ctx *ctx  = infer_ctx_create(self->transient);
-    ctx->add_to_env = 1;
+    // run inference: this function is not yet in the global environment.
+    infer_ctx *ctx = infer_ctx_create(self->transient);
     if (infer(self, ctx, infer_target)) fatal("error handling");
 
     if (ast_lambda_function == infer_target->tag) {
         // since the infer target is unnamed, the lambda function could not add itself to the
         // environment. We must do so here before the quantified variable analysis.
-        tl_type_env_add(ctx->local_env, name, ctx->lambda_type);
+        tl_type_env_add(self->env, name, ctx->lambda_type);
     }
 
-    log(self, "-- local env --");
-    log_env(self, ctx->local_env);
+    log(self, "-- global env --");
+    log_env(self, self->env);
 
-    log(self, "-- local subs --");
-    log_subs(self, ctx->subs);
+    log(self, "-- global subs --");
+    log_subs(self, self->subs);
 
-    // add local context back to global context. Do this before free variable analysis, which removes known
-    // variables from local environment, because we would lose type information on the removed types.
-    forall(i, ctx->local_env->names) {
-        str               name = ctx->local_env->names.v[i];
-        tl_type_v2 const *type = &ctx->local_env->types.v[i];
-        tl_type_env_add(self->env, name, *type);
-    }
-    tl_type_env_subs_apply(self->env, ctx->subs);
+    // FIXME: needed?
+    // tl_type_env_subs_apply(self->env, self->subs);
 
-    // now determine which names in the local environment are not free (i.e. they exist in the global
-    // environment or as formal parameters). Whatever is left must be quantified. This assumes the
-    // function under analysis has been added with an arrow type to the local environment.
-    remove_known_variables(self, ctx->local_env, name);
-    remove_formal_parameters(ctx->local_env, infer_target);
+    quantify_env_arrow_types(self, self->env);
 
-    log(self, "-- local env after removal --");
-    log_env(self, ctx->local_env);
-
-    quantify_env_arrow_types(self, ctx->local_env);
-
-    log(self, "-- local env after quantification --");
-    log_env(self, ctx->local_env);
+    log(self, "-- global env after quantification --");
+    log_env(self, self->env);
 
     // collect free variables from infer target and add to the generic's arrow type
     str_array fvs = {.alloc = self->arena};
@@ -1521,25 +1456,25 @@ static void add_generic(tl_infer *self, ast_node *node) {
         }
     }
 
-    // add free variables to arrow type
-    tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
+    // add free variables to arrow type and put into global environment
+    tl_type_v2 *arrow = tl_type_env_lookup(self->env, name);
+
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     arrow->scheme.type.arrow.fvs = fvs;
     tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
-    tl_type_env_add(ctx->local_env, name, *arrow);
+
+    // add to env
+    tl_type_env_add(self->env, name, *arrow);
 
     // remove type information from function tree
-    remove_types(infer_target);
+    // FIXME: needed?
+    // remove_types(infer_target);
 
     log(self, "-- global env --");
     log_env(self, self->env);
 
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
-
-    // always add to GLOBAL the generic just added
-    arrow = tl_type_env_lookup(ctx->local_env, name);
-    tl_type_env_add(self->env, name, *arrow);
 
     infer_ctx_destroy(self->transient, &ctx);
 }

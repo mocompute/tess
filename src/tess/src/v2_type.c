@@ -300,6 +300,31 @@ tl_monotype *tl_type_subs_get(tl_type_subs *self, tl_type_variable from) {
     return map_get(self->map, &from, sizeof from);
 }
 
+int tl_type_subs_cleanup(allocator *alloc, tl_type_subs *self, tl_type_env *env) {
+    // remove subs for tvs that do not exist in env. Return number of removals.
+    tl_type_variable_array remove = {.alloc = alloc};
+    int                    count  = 0;
+
+    // Apply substitutions.
+    tl_type_env_subs_apply(env, self);
+
+    // Find tvs that don't occur in the environment.
+    hashmap_iterator iter = {0};
+    while (map_iter(self->map, &iter)) {
+        tl_type_variable tv = *(tl_type_variable *)iter.key_ptr;
+        if (!tl_type_env_find_tv(env, tv, null)) {
+            ++count;
+            array_push(remove, tv);
+        }
+    }
+
+    // Remove them from the subs map.
+    forall(i, remove) map_erase(self->map, &remove.v[i], sizeof remove.v[0]);
+
+    array_free(remove);
+    return count;
+}
+
 //
 
 void tl_type_env_subs_apply(tl_type_env *env, tl_type_subs const *subs) {
@@ -500,6 +525,30 @@ tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
     u32 *found = str_map_get(self->index, name);
     assert(!found || *found < self->types.size);
     return found ? &self->types.v[*found] : null;
+}
+
+int tl_type_env_find_tv(tl_type_env const *self, tl_type_variable tv, u32 *out_index) {
+    tl_monotype tv_mono = tl_monotype_init_tv(tv);
+
+    forall(i, self->types) {
+        tl_type_v2 *type = &self->types.v[i];
+        switch (type->tag) {
+        case tl_mono:
+            if (tl_monotype_occurs(tv_mono, type->mono)) {
+                if (out_index) *out_index = i;
+                return 1;
+            }
+            break;
+
+        case tl_scheme:
+            if (tl_monotype_occurs(tv_mono, type->scheme.type)) {
+                if (out_index) *out_index = i;
+                return 1;
+            }
+            break;
+        }
+    }
+    return 0;
 }
 
 void tl_type_env_erase(tl_type_env *self, u32 idx) {

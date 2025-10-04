@@ -118,9 +118,11 @@ nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
+int                    tl_type_env_find_tv(tl_type_env const *, tl_type_variable, u32 *);
 void                   tl_type_env_erase(tl_type_env *, u32);
 void                   tl_type_env_reindex(tl_type_env *);
 void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
+int                    tl_type_subs_cleanup(allocator *, tl_type_subs *, tl_type_env *);
 
 // -- strings --
 
