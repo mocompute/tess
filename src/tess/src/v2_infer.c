@@ -445,6 +445,7 @@ static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monoty
 static int constrain(tl_infer *, infer_ctx *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
 static int constrain_mm(tl_infer *, infer_ctx *, tl_monotype const *, tl_monotype const *,
                         ast_node const *);
+static int constrain_mt(tl_infer *, infer_ctx *, tl_monotype const *, tl_type_v2 const *, ast_node const *);
 
 static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
                         ast_node const *node) {
@@ -496,9 +497,12 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
     }
 }
 
-static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left,
-                               tl_type_v2 const *right, ast_node const *node) {
-    if (tl_mono != left->tag || tl_mono != right->tag) fatal("cannot constrain type scheme");
+static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
+                     ast_node const *node) {
+    if (left == right) return 0;
+    if (tl_scheme == left->tag) return constrain_mt(self, ctx, &left->scheme.type, right, node);
+    if (tl_scheme == right->tag) return constrain_mt(self, ctx, &right->scheme.type, left, node);
+
     if (tl_monotype_occurs(left->mono, right->mono)) return 0;
     log_constraint(self, left, right, node);
 
@@ -537,15 +541,25 @@ static nodiscard int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const 
     return 0;
 }
 
-static nodiscard int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
-                                  tl_monotype const *right, ast_node const *node) {
+static int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left, tl_monotype const *right,
+                        ast_node const *node) {
     tl_type_v2 left_ty  = tl_type_init_mono(*left);
     tl_type_v2 right_ty = tl_type_init_mono(*right);
     return constrain(self, ctx, &left_ty, &right_ty, node);
 }
 
-static void ensure_tv(tl_infer *self, tl_type_v2 **type) {
+static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype const *left, tl_type_v2 const *right,
+                        ast_node const *node) {
+    tl_type_v2 left_ty = tl_type_init_mono(*left);
+    return constrain(self, ctx, &left_ty, right, node);
+}
+
+static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (!type) return;
+    if (*type) return;
+
+    if (name) *type = tl_type_env_lookup(self->env, *name);
+
     if (*type) return;
     *type  = new (self->arena, tl_type_v2);
     **type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
@@ -567,25 +581,25 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     case ast_string:     {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("String"));
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_f64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Float"));
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_i64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
     case ast_u64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int")); // FIXME unsigned int
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
@@ -606,12 +620,12 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             hashmap *save = map_copy(ctx->lex);
 
-            ensure_tv(self, &node->let_in.name->type_v2);
+            ensure_tv(self, &node->let_in.name->symbol.name, &node->let_in.name->type_v2);
             str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
 
             if (infer(self, ctx, node->let_in.body)) return 1;
 
-            ensure_tv(self, &node->type_v2);
+            ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
 
             map_destroy(&ctx->lex);
@@ -626,12 +640,12 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             hashmap *save = map_copy(ctx->lex);
 
-            ensure_tv(self, &node->let_in.name->type_v2);
+            ensure_tv(self, &node->let_in.name->symbol.name, &node->let_in.name->type_v2);
             str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
 
             if (infer(self, ctx, node->let_in.body)) return 1;
 
-            ensure_tv(self, &node->type_v2);
+            ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
 
             map_destroy(&ctx->lex);
@@ -649,7 +663,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         hashmap *save = map_copy(ctx->lex);
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
-            ensure_tv(self, &param->type_v2);
+            ensure_tv(self, null, &param->type_v2);
             if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
@@ -677,7 +691,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         } else if ((found = str_map_get(ctx->lex, node->symbol.name)) && *found) {
             node->type_v2 = *found;
         } else {
-            ensure_tv(self, &node->type_v2);
+            ensure_tv(self, &node->symbol.name, &node->type_v2);
         }
 
         // add to local environment
@@ -688,7 +702,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_named_function_application: {
 
         if (!ctx->instantiate_applications) {
-            ensure_tv(self, &node->type_v2);
+            ensure_tv(self, &node->named_application.name->symbol.name, &node->type_v2);
 
             // even if we are not instantiating fun applications this pass, we can still infer the
             // arguments to aid in free variable discovery infer the arguments
@@ -721,7 +735,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         // constrain arrow types
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self,
                                     (ast_node_sized){.size = node->named_application.n_arguments,
                                                      .v    = node->named_application.arguments},
@@ -764,7 +778,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
-            ensure_tv(self, &param->type_v2);
+            ensure_tv(self, null, &param->type_v2);
             if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
@@ -778,7 +792,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                                        .v    = node->lambda_function.parameters},
                                       node->lambda_function.body);
 
-        ensure_tv(self, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
         ctx->lambda_type = arrow;
 
@@ -1141,7 +1155,6 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
 
     log(self, "-- start_infer_global --");
     int res = infer(self, ctx, node);
-    // tl_type_env_subs_apply(self->env, self->subs);
     log(self, "-- end start_infer_global --");
 
     // don't destroy self's environment
@@ -1349,7 +1362,7 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 
     else if (args.size == 1) {
-        ensure_tv(self, &args.v[0]->type_v2);
+        ensure_tv(self, null, &args.v[0]->type_v2);
         tl_monotype lhs   = args.v[0]->type_v2->mono;
         tl_monotype rhs   = result->type_v2->mono;
         tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
@@ -1362,7 +1375,7 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 
     else {
-        ensure_tv(self, &args.v[0]->type_v2);
+        ensure_tv(self, null, &args.v[0]->type_v2);
         tl_monotype lhs = args.v[0]->type_v2->mono;
         tl_type_v2 rhs = make_arrow(self, (ast_node_sized){.size = args.size - 1, .v = &args.v[1]}, result);
         tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs.mono);
@@ -1448,15 +1461,13 @@ static void add_generic(tl_infer *self, ast_node *node) {
         fatal("logic error");
     }
 
-    // ignore subsequent calls
-    if (tl_type_env_lookup(self->env, name)) return;
-
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
     // FIXME: is there an annotated type??
 
-    // run local inference: this function is not yet in the global environment.
+    // run local inference: this function is not yet in the global environment. We use a local context for
+    // ease of discovery of free variables.
     infer_ctx *ctx  = infer_ctx_create(self->transient);
     ctx->add_to_env = 1;
     if (infer(self, ctx, infer_target)) fatal("error handling");
@@ -1472,6 +1483,15 @@ static void add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- local subs --");
     log_subs(self, ctx->subs);
+
+    // add local context back to global context. Do this before free variable analysis, which removes known
+    // variables from local environment, because we would lose type information on the removed types.
+    forall(i, ctx->local_env->names) {
+        str               name = ctx->local_env->names.v[i];
+        tl_type_v2 const *type = &ctx->local_env->types.v[i];
+        tl_type_env_add(self->env, name, *type);
+    }
+    tl_type_env_subs_apply(self->env, ctx->subs);
 
     // now determine which names in the local environment are not free (i.e. they exist in the global
     // environment or as formal parameters). Whatever is left must be quantified. This assumes the
@@ -1501,12 +1521,12 @@ static void add_generic(tl_infer *self, ast_node *node) {
         }
     }
 
-    // add all function types to GLOBAL environment
+    // add free variables to arrow type
     tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     arrow->scheme.type.arrow.fvs = fvs;
     tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
-    tl_type_env_add(self->env, name, *arrow);
+    tl_type_env_add(ctx->local_env, name, *arrow);
 
     // remove type information from function tree
     remove_types(infer_target);
@@ -1514,7 +1534,12 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- global env --");
     log_env(self, self->env);
 
-    log(self, "-- done add_generic  --");
+    log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
+        str_buf(&orig_name));
+
+    // always add to GLOBAL the generic just added
+    arrow = tl_type_env_lookup(ctx->local_env, name);
+    tl_type_env_add(self->env, name, *arrow);
 
     infer_ctx_destroy(self->transient, &ctx);
 }

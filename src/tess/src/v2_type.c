@@ -101,10 +101,12 @@ int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
 
     case tl_var:
         if (tl_var == rhs.tag) return lhs.var == rhs.var;
+        else if (tl_quant == rhs.tag || tl_nil == rhs.tag) return 0;
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_quant:
         if (tl_quant == rhs.tag) return lhs.quant == rhs.quant;
+        else if (tl_var == rhs.tag || tl_nil == rhs.tag) return 0;
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_arrow:

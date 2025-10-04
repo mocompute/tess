@@ -1,3 +1,4 @@
 let main () =
-  let f1 = fun x -> x in
+  let val = 0 in
+  let f1 = fun x -> val in
   f1 0
