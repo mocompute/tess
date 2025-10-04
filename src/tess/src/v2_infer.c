@@ -608,8 +608,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // name and type must exist in toplevels
         ast_node *fun_node = toplevel_get(self, name);
 
-        if (!fun_node && toplevel_get(self, orig))
-            // this node has already been instantiated
+        if (!fun_node && toplevel_get(self, orig)) // this node has already been instantiated
             return 0;
 
         if (!fun_node || !fun) {
@@ -641,14 +640,6 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
-
-        // constrain instantiated arrow type
-        // tl_type_v2 *actual = tl_type_env_lookup(self->env, name_inst);
-        // if (constrain(self, ctx, actual, &inst, node)) return 1;
-
-        // constrain instantiated result type
-        tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
-        if (constrain(self, ctx, &inst_right, node->type_v2, node)) return 1;
 
         // replace name with instantiated name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
@@ -1636,8 +1627,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
         return 1;
     }
     ast_node *main = *found_main;
-
     (void)main;
+
+    // FIXME add a phase to actually monomorphise the ast, so we can push the inferred types back down all
+    // the way through the ast.
 
     log(self, "-- toplevels");
     log_toplevels(self);
