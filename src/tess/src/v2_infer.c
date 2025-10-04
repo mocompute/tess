@@ -706,14 +706,13 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     str orig = node->named_application.name->symbol.original;
     assert(!str_is_empty(orig) && !str_eq(name, orig));
 
+    // is there an instantiation in the toplevel? If so, we're done.
+    if (toplevel_get(self, name)) return 0;
+
     tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
     assert(tl_mono == inst_type->tag);
     tl_monotype *inst_result_mono = arrow_rightmost(&inst_type->mono);
     tl_type_v2  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
-
-    // is there an instantiation in the toplevel? If so, we're done.
-    if (toplevel_get(self, name)) return 0;
-	// FIXME move this before allocation
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
@@ -921,8 +920,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             }
         }
 
-		// FIXME can this be done in normal phase?
-		// FIXME can it be done immediately after generalising and instantiating?
+        // FIXME can this be done in normal phase?
+        // FIXME can it be done immediately after generalising and instantiating?
         else if (ctx->final_phase) {
             return populate_types_down(self, ctx, node);
         }
@@ -1700,16 +1699,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
     // inside the iteration because infer will add lambda functions to the toplevel.
-    {
-        ast_node_array   nodes = {.alloc = self->transient};
-
-        hashmap_iterator iter  = {0};
-        ast_node        *node  = null;
-        while ((node = toplevel_iter(self, &iter))) array_push(nodes, node);
-
-        forall(i, nodes) add_generic(self, nodes.v[i]);
-        array_free(nodes);
-    }
+    forall(i, nodes) add_generic(self, nodes.v[i]);
 
     if (self->errors.size) return 1;
     if (check_missing_free_variables(self)) return 1;
