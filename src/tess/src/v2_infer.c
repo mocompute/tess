@@ -48,14 +48,13 @@ struct tl_infer {
 
 //
 
-static str          v2_ast_node_to_string(allocator *, ast_node const *);
-static str          next_variable_name(tl_infer *);
 static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
+static str          next_variable_name(tl_infer *);
+static str          next_instantiation(tl_infer *, str);
 static tl_type_v2   make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 static tl_monotype *arrow_rightmost(tl_monotype *);
-static str          next_instantiation(tl_infer *, str);
 static void         add_generic(tl_infer *, ast_node *);
-static void         collect_free_variables(tl_infer *, ast_node *, hashmap **, str_array *);
+static str          v2_ast_node_to_string(allocator *, ast_node const *);
 
 static void         toplevel_add(tl_infer *, str, ast_node *);
 static ast_node    *toplevel_get(tl_infer *, str);
@@ -233,9 +232,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             str        name_str = ast_node_str(node->let.name);
             ast_node **p        = str_map_get(tops, name_str);
 
-            // assign expresion type
-            // assign_expression_types(self, node);
-
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
                 if (ast_symbol != (*p)->tag) {
@@ -411,31 +407,13 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     return 0;
 }
 
-static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
-                           ast_node const *node) {
-    if (!self->verbose) return;
-    str left_str  = tl_type_v2_to_string(self->transient, left);
-    str right_str = tl_type_v2_to_string(self->transient, right);
-    str node_str  = v2_ast_node_to_string(self->transient, node);
-    log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
-        str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
-}
+static void log_constraint(tl_infer *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
+static void log_type_error(tl_infer *, tl_type_v2 const *, tl_type_v2 const *);
+static void log_type_error_mm(tl_infer *, tl_monotype const *, tl_monotype const *);
 
-static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right) {
-    if (!self->verbose) return;
-    str left_str  = tl_type_v2_to_string(self->transient, left);
-    str right_str = tl_type_v2_to_string(self->transient, right);
-    log(self, "error: constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
-        str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
-}
-static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
-    tl_type_v2 l = tl_type_init_mono(*left), r = tl_type_init_mono(*right);
-    return log_type_error(self, &l, &r);
-}
-
-static int constrain(tl_infer *, infer_ctx *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
-static int constrain_mm(tl_infer *, infer_ctx *, tl_monotype const *, tl_monotype const *,
-                        ast_node const *);
+static int  constrain(tl_infer *, infer_ctx *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
+static int  constrain_mm(tl_infer *, infer_ctx *, tl_monotype const *, tl_monotype const *,
+                         ast_node const *);
 static int constrain_mt(tl_infer *, infer_ctx *, tl_monotype const *, tl_type_v2 const *, ast_node const *);
 
 static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
@@ -501,8 +479,8 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
 static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
                      ast_node const *node) {
     if (left == right) return 0;
-    if (tl_scheme == left->tag) return constrain_mt(self, ctx, &left->scheme.type, right, node);
-    if (tl_scheme == right->tag) return constrain_mt(self, ctx, &right->scheme.type, left, node);
+    if (tl_type_v2_is_scheme(left)) return constrain_mt(self, ctx, &left->scheme.type, right, node);
+    if (tl_type_v2_is_scheme(right)) return constrain_mt(self, ctx, &right->scheme.type, left, node);
 
     if (tl_monotype_occurs(left->mono, right->mono)) return 0;
     log_constraint(self, left, right, node);
@@ -568,8 +546,14 @@ static void rename_variables(tl_infer *, ast_node *, hashmap **);
 static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
 static int  infer(tl_infer *, infer_ctx *, ast_node *);
 
-static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    // only infer function applications, traversing ast
+static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
+    assert(ast_symbol == name->tag);
+    return !tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name->symbol.name));
+}
+
+static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+    // only infer function applications in order to instantiate generics into specialised instances,
+    // traversing ast
 
     if (null == node) return 0;
 
@@ -601,19 +585,18 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // name can be: global env fun, toplevel fun
         str         name = node->named_application.name->symbol.name;
-        str         orig = node->named_application.name->symbol.original;
         tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
 
-        // name and type must exist in toplevels
-        ast_node *fun_node = toplevel_get(self, name);
-
-        if (!fun_node && toplevel_get(self, orig)) { // this node has already been instantiated
+        if (is_name_instanatiated(self, node->named_application.name))
+            // this node has already been instantiated
             return 0;
-        }
+
+        // if generic, name and type must exist in toplevels
+        ast_node *fun_node = toplevel_get(self, name);
 
         if (!fun_node || !fun) {
             array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
-                                                        .node = node->named_application.name}));
+                                                       .node = node->named_application.name}));
             return 1;
         }
 
@@ -628,9 +611,9 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // constrain arrow types
         ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self,
-                                     (ast_node_sized){.size = node->named_application.n_arguments,
-                                                      .v    = node->named_application.arguments},
-                                     node);
+                                    (ast_node_sized){.size = node->named_application.n_arguments,
+                                                     .v    = node->named_application.arguments},
+                                    node);
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
@@ -644,10 +627,6 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // replace name with instantiated name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
         node->named_application.name->symbol.name     = name_inst;
-    } break;
-
-    case ast_lambda_function_application: {
-
     } break;
 
     case ast_lambda_function: {
@@ -665,6 +644,7 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     } break;
 
+    case ast_lambda_function_application:
     case ast_symbol:
     case ast_address_of:
     case ast_nil:
@@ -690,7 +670,7 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_labelled_tuple:
     case ast_lambda_declaration:
     case ast_tuple:
-    case ast_user_type:            break;
+    case ast_user_type:                   break;
     }
 
     return 0;
@@ -1957,4 +1937,26 @@ static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
         return *(ast_node **)iter->data;
     }
     return null;
+}
+
+static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
+                           ast_node const *node) {
+    if (!self->verbose) return;
+    str left_str  = tl_type_v2_to_string(self->transient, left);
+    str right_str = tl_type_v2_to_string(self->transient, right);
+    str node_str  = v2_ast_node_to_string(self->transient, node);
+    log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
+        str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
+}
+
+static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right) {
+    if (!self->verbose) return;
+    str left_str  = tl_type_v2_to_string(self->transient, left);
+    str right_str = tl_type_v2_to_string(self->transient, right);
+    log(self, "error: constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
+        str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
+}
+static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
+    tl_type_v2 l = tl_type_init_mono(*left), r = tl_type_init_mono(*right);
+    return log_type_error(self, &l, &r);
 }

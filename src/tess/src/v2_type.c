@@ -232,6 +232,10 @@ int tl_type_v2_is_scheme(tl_type_v2 const *self) {
     return tl_scheme == self->tag;
 }
 
+int tl_type_v2_is_mono(tl_type_v2 const *self) {
+    return tl_mono == self->tag;
+}
+
 str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
     str_sized out = {0};
     switch (self->tag) {
