@@ -205,7 +205,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
-        dbg("processing: %s\n", ast_node_to_string(alloc, node));
         if (ast_symbol == node->tag) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(tops, name_str);
@@ -1832,10 +1831,12 @@ static void log_env(tl_infer const *self, tl_type_env const *env) {
 static void log_subs(tl_infer const *self, tl_type_subs const *subs) {
     hashmap_iterator iter = {0};
     while (map_iter(subs->map, &iter)) {
-        tl_type_variable const *tv       = iter.key_ptr;
-        tl_monotype const      *mono     = iter.data;
-        str                     tv_str   = tl_type_variable_to_string(self->transient, tv);
-        str                     mono_str = tl_monotype_to_string(self->transient, mono);
+        tl_type_variable tv;
+        memcpy(&tv, iter.key_ptr, sizeof(tl_type_variable));
+
+        tl_monotype const *mono     = iter.data;
+        str                tv_str   = tl_type_variable_to_string(self->transient, &tv);
+        str                mono_str = tl_monotype_to_string(self->transient, mono);
 
         log(self, "%.*s => %.*s", str_ilen(tv_str), str_buf(&tv_str), str_ilen(mono_str),
             str_buf(&mono_str));

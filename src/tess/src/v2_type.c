@@ -327,7 +327,8 @@ int tl_type_subs_cleanup(allocator *alloc, tl_type_subs *self, tl_type_env *env)
     // Find tvs that don't occur in the environment.
     hashmap_iterator iter = {0};
     while (map_iter(self->map, &iter)) {
-        tl_type_variable tv = *(tl_type_variable *)iter.key_ptr;
+        tl_type_variable tv;
+        memcpy(&tv, iter.key_ptr, sizeof(tl_type_variable));
         if (!tl_type_env_find_tv(env, tv, null)) {
             ++count;
             array_push(remove, tv);
@@ -445,9 +446,12 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 
     hashmap_iterator iter = {0};
     while (map_iter(self->map, &iter)) {
-        tl_type_variable const *tvar  = iter.key_ptr;
-        tl_monotype const      *monot = iter.data;
-        str                     tv    = tl_type_variable_to_string(alloc, tvar);
+
+        tl_type_variable tvar;
+        memcpy(&tvar, iter.key_ptr, sizeof(tl_type_variable));
+
+        tl_monotype const *monot = iter.data;
+        str                tv    = tl_type_variable_to_string(alloc, &tvar);
         str_build_cat(&b, tv);
         str_deinit(alloc, &tv);
         str_build_cat(&b, S(" => "));

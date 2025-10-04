@@ -256,6 +256,9 @@ cleanup_ti:
 
 cleanup_parser:
     array_free(preamble);
+    parser_destroy(&parser);
+    array_free(nodes);
+    arena_destroy(default_allocator(), &nodes_alloc);
     return error;
 }
 

@@ -61,6 +61,7 @@ int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 al
 
 void *array_push_many_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
                            void const *restrict data, u32 num) {
+    if (!data || !num) return ptr;
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
     memcpy(&ptr[h->size * alloc_align(width, align)], data, num * width);
