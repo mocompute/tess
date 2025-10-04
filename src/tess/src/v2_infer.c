@@ -568,6 +568,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
 
 static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
 
+static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node);
 static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // only infer function applications, traversing ast
 
@@ -601,10 +602,16 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // name can be: global env fun, toplevel fun
         str         name = node->named_application.name->symbol.name;
+        str         orig = node->named_application.name->symbol.original;
         tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
 
         // name and type must exist in toplevels
         ast_node *fun_node = toplevel_get(self, name);
+
+        if (!fun_node && toplevel_get(self, orig))
+            // this node has already been instantiated
+            return 0;
+
         if (!fun_node || !fun) {
             array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
                                                        .node = node->named_application.name}));
@@ -616,7 +623,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            if (infer_applications(self, ctx, node->named_application.arguments[i])) return 1;
+            if (infer(self, ctx, node->named_application.arguments[i])) return 1;
         }
 
         // constrain arrow types
@@ -634,6 +641,10 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
+
+        // constrain instantiated arrow type
+        // tl_type_v2 *actual = tl_type_env_lookup(self->env, name_inst);
+        // if (constrain(self, ctx, actual, &inst, node)) return 1;
 
         // constrain instantiated result type
         tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
@@ -1366,16 +1377,15 @@ static void quantify_one(tl_infer *self, tl_monotype *type, hashmap **seen) {
     }
 }
 
-static void quantify_env_arrow_types(tl_infer *self, tl_type_env *env) {
+static void quantify_arrow(tl_infer *self, tl_type_v2 *type) {
+
+    if (tl_scheme == type->tag) return;
+    if (tl_arrow != type->mono.tag) return;
+
     hashmap *seen = map_create(self->transient, sizeof(tl_monotype), 8);
 
-    forall(i, env->types) {
-        tl_type_v2 *type = &env->types.v[i];
-        if (tl_scheme == type->tag) continue;
-        if (tl_arrow != type->mono.tag) continue;
-        quantify_one(self, &type->mono, &seen);
-        promote_to_type_scheme(self->arena, type);
-    }
+    quantify_one(self, &type->mono, &seen);
+    promote_to_type_scheme(self->arena, type);
 
     map_destroy(&seen);
 }
@@ -1524,7 +1534,8 @@ static void add_generic(tl_infer *self, ast_node *node) {
     // quantified) with primitives if possible.
     tl_type_env_subs_apply(self->env, self->subs);
 
-    quantify_env_arrow_types(self, self->env);
+    tl_type_v2 *arrow = tl_type_env_lookup(self->env, name);
+    quantify_arrow(self, arrow);
 
     log(self, "-- global env after quantification --");
     log_env(self, self->env);
@@ -1544,7 +1555,7 @@ static void add_generic(tl_infer *self, ast_node *node) {
     }
 
     // add free variables to arrow type and put into global environment
-    tl_type_v2 *arrow = tl_type_env_lookup(self->env, name);
+    arrow = tl_type_env_lookup(self->env, name);
 
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     arrow->scheme.type.arrow.fvs = fvs;
@@ -1637,6 +1648,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     // apply subs to global environment
     tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_subs_cleanup(self->transient, self->subs, self->env);
+
+    log(self, "-- final subs");
+    log_subs(self, self->subs);
 
     log(self, "-- final env --");
     log_env(self, self->env);
