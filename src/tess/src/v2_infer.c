@@ -700,6 +700,71 @@ static int  infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+    assert(ast_named_function_application == node->tag);
+
+    // This path is for specializing instantiated function types after type inference has concluded we have
+    // a well-typed program. We pass type information down, rather than infer and gather.
+
+    str name = node->named_application.name->symbol.name;
+    str orig = node->named_application.name->symbol.original;
+    assert(!str_is_empty(orig) && !str_eq(name, orig));
+
+    tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
+    assert(tl_mono == inst_type->tag);
+    tl_monotype *inst_result_mono = arrow_rightmost(&inst_type->mono);
+    tl_type_v2  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
+
+    // is there an instantiation in the toplevel? If so, we're done.
+    if (toplevel_get(self, name)) return 0;
+
+    // when we are recursing in the final phase, the outer frame set my type to correspond to its
+    // expected type.
+    if (constrain(self, ctx, node->type_v2, inst_result_type, node)) return 1;
+
+    // clone function source ast and rename variables
+    ast_node *generic_node = ast_node_clone(self->transient, toplevel_get(self, orig));
+    hashmap  *rename_lex   = map_create(self->transient, sizeof(str), 16);
+    rename_variables(self, generic_node, &rename_lex);
+    map_destroy(&rename_lex);
+
+    // assign typevars and constrain params and result type based on my instantiated types
+    ast_node      *body = null;
+    ast_node_sized params;
+    if (ast_let == generic_node->tag) {
+        body                                    = generic_node->let.body;
+        params                                  = ast_node_sized_from_ast_array(generic_node);
+        generic_node->let.name->symbol.name     = name;
+        generic_node->let.name->symbol.original = orig;
+    } else if (ast_node_is_let_in_lambda(generic_node)) {
+        body                                   = generic_node->let_in.value->lambda_function.body;
+        params                                 = ast_node_sized_from_ast_array(generic_node->let_in.value);
+        generic_node->let_in.name->symbol.name = name;
+        generic_node->let_in.name->symbol.original = orig;
+
+    } else {
+        fatal("logic error");
+    }
+
+    tl_monotype *args = &inst_type->mono;
+    forall(i, params) {
+        ast_node *param = params.v[i];
+        param->type_v2  = tl_type_alloc_mono(self->arena, *args->arrow.lhs);
+        args            = args->arrow.rhs;
+    }
+    body->type_v2 = inst_result_type;
+
+    // now constrain the arrows
+    tl_type_v2 arrow = make_arrow(self, params, body);
+    if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
+
+    // recurse and add to toplevel
+    if (infer(self, ctx, generic_node)) return 1;
+    toplevel_add(self, name, generic_node);
+
+    return 0;
+}
+
 static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // - update self->subs by collecting and applying constraints found recursively starting at node.
     // - adds symbol : type information to ctx->env.
@@ -861,65 +926,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         else if (ctx->final_phase) {
-            // this path is for specializing instantiated function types. We pass type information down,
-            // rather than infer and gather.
-            assert(!str_is_empty(orig) && !str_eq(name, orig));
-
-            tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
-            assert(tl_mono == inst_type->tag);
-            tl_monotype *inst_result_mono = arrow_rightmost(&inst_type->mono);
-            tl_type_v2  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
-
-            // is there an instantiation in the toplevel? If so, we're done.
-            if (toplevel_get(self, name)) break;
-
-            // when we are recursing in the final phase, the outer frame set my type to correspond to its
-            // expected type.
-            if (constrain(self, ctx, node->type_v2, inst_result_type, node)) return 1;
-
-            // clone function source ast and rename variables
-            ast_node *generic_node = ast_node_clone(self->transient, toplevel_get(self, orig));
-            hashmap  *rename_lex   = map_create(self->transient, sizeof(str), 16);
-            rename_variables(self, generic_node, &rename_lex);
-            map_destroy(&rename_lex);
-
-            // assign typevars and constrain params and result type based on my instantiated types
-            ast_node      *body = null;
-            ast_node_sized params;
-            if (ast_let == generic_node->tag) {
-                body                                    = generic_node->let.body;
-                params                                  = ast_node_sized_from_ast_array(generic_node);
-                generic_node->let.name->symbol.name     = name;
-                generic_node->let.name->symbol.original = orig;
-            } else if (ast_node_is_let_in_lambda(generic_node)) {
-                body   = generic_node->let_in.value->lambda_function.body;
-                params = ast_node_sized_from_ast_array(generic_node->let_in.value);
-                generic_node->let_in.name->symbol.name     = name;
-                generic_node->let_in.name->symbol.original = orig;
-
-            } else {
-                fatal("logic error");
-            }
-
-            tl_monotype *args = &inst_type->mono;
-            forall(i, params) {
-                ast_node *param = params.v[i];
-                param->type_v2  = tl_type_alloc_mono(self->arena, *args->arrow.lhs);
-                args            = args->arrow.rhs;
-            }
-            body->type_v2 = inst_result_type;
-
-            // now constrain the arrows
-            tl_type_v2 arrow = make_arrow(self, params, body);
-            if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
-
-            // recurse and add to toplevel
-            if (infer(self, ctx, generic_node)) return 1;
-            toplevel_add(self, name, generic_node);
+            return populate_types_down(self, ctx, node);
         }
-
-        return 0;
-
     } break;
 
     case ast_lambda_function_application: {
