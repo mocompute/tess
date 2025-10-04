@@ -1141,6 +1141,8 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
 
     log(self, "-- start_infer_global --");
     int res = infer(self, ctx, node);
+    // tl_type_env_subs_apply(self->env, self->subs);
+    log(self, "-- end start_infer_global --");
 
     // don't destroy self's environment
     ctx->subs      = null;
@@ -1198,9 +1200,13 @@ static str next_instantiation(tl_infer *self, str name) {
     return str_init(self->arena, buf);
 }
 
-static void remove_known_variables(tl_infer *self, tl_type_env *env) {
+static void remove_known_variables(tl_infer *self, tl_type_env *env, str except) {
     for (u32 i = 0; i < env->names.size;) {
         str name = env->names.v[i];
+        if (str_eq(name, except)) {
+            ++i;
+            continue;
+        }
         if (tl_type_env_lookup(self->env, name)) {
             tl_type_env_erase(env, i);
         } else {
@@ -1312,12 +1318,13 @@ static void quantify_one(tl_infer *self, tl_monotype *type, hashmap **seen) {
     }
 }
 
-static void quantify_env_types(tl_infer *self, tl_type_env *env) {
+static void quantify_env_arrow_types(tl_infer *self, tl_type_env *env) {
     hashmap *seen = map_create(self->transient, sizeof(tl_monotype), 8);
 
     forall(i, env->types) {
         tl_type_v2 *type = &env->types.v[i];
         if (tl_scheme == type->tag) continue;
+        if (tl_arrow != type->mono.tag) continue;
         quantify_one(self, &type->mono, &seen);
         promote_to_type_scheme(self->arena, type);
     }
@@ -1469,13 +1476,13 @@ static void add_generic(tl_infer *self, ast_node *node) {
     // now determine which names in the local environment are not free (i.e. they exist in the global
     // environment or as formal parameters). Whatever is left must be quantified. This assumes the
     // function under analysis has been added with an arrow type to the local environment.
-    remove_known_variables(self, ctx->local_env);
+    remove_known_variables(self, ctx->local_env, name);
     remove_formal_parameters(ctx->local_env, infer_target);
 
     log(self, "-- local env after removal --");
     log_env(self, ctx->local_env);
 
-    quantify_env_types(self, ctx->local_env);
+    quantify_env_arrow_types(self, ctx->local_env);
 
     log(self, "-- local env after quantification --");
     log_env(self, ctx->local_env);
