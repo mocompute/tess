@@ -564,6 +564,8 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (*type) return;
     *type  = new (self->arena, tl_type_v2);
     **type = tl_type_init_mono(tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+    if (name) log(self, "ensure: %.*s : t%u", str_ilen(*name), str_buf(name), (*type)->mono.var);
+    else log(self, "ensure: t%u", (*type)->mono.var);
 }
 
 static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
@@ -829,10 +831,24 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         ensure_tv(self, null, &node->type_v2);
 
-        // even if we are not instantiating fun applications this pass, we can still infer the
-        // arguments to aid in free variable discovery infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
             if (infer(self, ctx, node->named_application.arguments[i])) return 1;
+        }
+
+        str       name = node->named_application.name->symbol.name;
+        ast_node *fun  = toplevel_get(self, name);
+        if (fun) {
+            add_generic(self, fun);
+
+            // instantiate and constrain
+            infer_applications(self, ctx, node);
+            name                 = node->named_application.name->symbol.name; // instantiated
+
+            tl_type_v2 *fun_type = tl_type_env_lookup(self->env, name);
+            if (fun_type && tl_mono == fun_type->tag) {
+                tl_monotype *result_type = arrow_rightmost(&fun_type->mono);
+                if (constrain_mt(self, ctx, result_type, node->type_v2, node)) return 1;
+            }
         }
 
         return 0;
@@ -977,6 +993,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         if ((found = str_map_get(*lex, node->symbol.name))) {
             node->symbol.original = node->symbol.name;
             node->symbol.name     = *found;
+            log(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
+                str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
         } else {
             // a free variable
         }
@@ -1223,20 +1241,6 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
     }
 }
 
-static int start_infer_global(tl_infer *self, ast_node *node) {
-    infer_ctx *ctx = infer_ctx_create(self->transient);
-
-    // after generics are created, we can process callsites for instantiation
-
-    log(self, "-- start_infer_global --");
-    int res = infer_applications(self, ctx, node);
-    log(self, "-- end start_infer_global --");
-
-    infer_ctx_destroy(self->transient, &ctx);
-
-    return res;
-}
-
 static u64 hash_name_and_type(str name, tl_monotype type) {
     return str_hash64_combine(tl_monotype_hash64(type), name);
 }
@@ -1319,12 +1323,15 @@ void add_quantifier(tl_type_scheme *scheme, tl_monotype *type) {
 }
 
 static void promote_to_type_scheme(allocator *alloc, tl_type_v2 *type) {
-    if (tl_scheme == type->tag) return;
+    // promotes to type scheme unless there are no quantifiers
+    if (tl_scheme != type->tag) {
+        tl_monotype mono = type->mono;
 
-    tl_monotype mono = type->mono;
+        *type = tl_type_init_scheme((tl_type_scheme){.type = mono, .quantifiers = {.alloc = alloc}});
+        add_quantifier(&type->scheme, &mono);
+    }
 
-    *type            = tl_type_init_scheme((tl_type_scheme){.type = mono, .quantifiers = {.alloc = alloc}});
-    add_quantifier(&type->scheme, &mono);
+    if (!type->scheme.quantifiers.size) *type = tl_type_init_mono(type->scheme.type);
 }
 
 static void quantify_one_tv(tl_infer *self, tl_monotype *type, hashmap **seen) {
@@ -1515,8 +1522,9 @@ static void add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- global subs --");
     log_subs(self, self->subs);
 
-    // FIXME: needed?
-    // tl_type_env_subs_apply(self->env, self->subs);
+    // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
+    // quantified) with primitives if possible.
+    tl_type_env_subs_apply(self->env, self->subs);
 
     quantify_env_arrow_types(self, self->env);
 
@@ -1620,7 +1628,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     }
     ast_node *main = *found_main;
 
-    if (start_infer_global(self, main)) return 1;
+    (void)main;
 
     log(self, "-- toplevels");
     log_toplevels(self);
