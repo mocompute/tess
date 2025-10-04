@@ -76,6 +76,7 @@ nodiscard tl_type_v2 *tl_type_alloc_mono(allocator *, tl_monotype) mallocfun;
 nodiscard tl_type_v2 *tl_type_alloc_type(allocator *, tl_type_v2 const *) mallocfun;
 tl_type_v2            tl_type_v2_clone(allocator *, tl_type_v2);
 int                   tl_type_v2_is_arrow(tl_type_v2 const *);
+int                   tl_type_v2_is_scheme(tl_type_v2 const *);
 
 // -- substitution --
 

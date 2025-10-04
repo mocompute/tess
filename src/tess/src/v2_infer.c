@@ -907,10 +907,9 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         str name = node->named_application.name->symbol.name;
-        str orig = node->named_application.name->symbol.original;
-        if (str_is_empty(orig)) {
-            // an empty string in original means this application node is still naming a generic function
-            // target.
+
+        if (tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name))) {
+            // we are trying to apply a generic function
             ast_node *fun = toplevel_get(self, name);
             add_generic(self, fun);
 
@@ -1698,6 +1697,17 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
         array_free(nodes);
     }
 
+    if (self->errors.size) return 1;
+    if (check_missing_free_variables(self)) return 1;
+    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_subs_cleanup(self->transient, self->subs, self->env);
+
+    log(self, "-- inference complete --");
+    log(self, "-- toplevels");
+    log_toplevels(self);
+    log(self, "-- env");
+    log_env(self, self->env);
+
     ast_node **found_main = str_map_get(self->toplevels, S("main"));
     if (!found_main) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
@@ -1708,8 +1718,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up
     // for the transpiler.
-    tl_type_env_subs_apply(self->env, self->subs);
-    tl_type_subs_cleanup(self->transient, self->subs, self->env);
+    log(self, "-- final phase");
 
     infer_ctx *ctx   = infer_ctx_create(self->transient);
     ctx->final_phase = 1;
@@ -1732,8 +1741,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
 
     log(self, "-- final env --");
     log_env(self, self->env);
-
-    if (check_missing_free_variables(self)) return 1;
 
     // TODO self->subs is no longer useful
     return 0;

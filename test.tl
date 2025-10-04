@@ -1,6 +1,6 @@
-let id x0 = x0
-let f x1 = id x1
-let g x2 = let foo = bar in f x2
-
 let main () =
-  g 0
+  let f1 = fun x -> x in
+  let a = f1 "hello" in
+  let b = f1 123 in
+  let c = f1 0.5 in
+  f1 0
