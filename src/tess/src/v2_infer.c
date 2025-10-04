@@ -713,6 +713,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     // is there an instantiation in the toplevel? If so, we're done.
     if (toplevel_get(self, name)) return 0;
+	// FIXME move this before allocation
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
@@ -920,6 +921,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             }
         }
 
+		// FIXME can this be done in normal phase?
+		// FIXME can it be done immediately after generalising and instantiating?
         else if (ctx->final_phase) {
             return populate_types_down(self, ctx, node);
         }
