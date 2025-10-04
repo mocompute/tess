@@ -57,6 +57,10 @@ static str          next_instantiation(tl_infer *, str);
 static void         add_generic(tl_infer *, ast_node *);
 static void         collect_free_variables(tl_infer *, ast_node *, hashmap **, str_array *);
 
+static void         toplevel_add(tl_infer *, str, ast_node *);
+static ast_node    *toplevel_get(tl_infer *, str);
+static ast_node    *toplevel_iter(tl_infer *, hashmap_iterator *);
+
 static void         log(tl_infer const *self, char const *restrict fmt, ...);
 static void         log_toplevels(tl_infer const *);
 static void         log_env(tl_infer const *, tl_type_env const *);
@@ -220,6 +224,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
+                    log(self, "toplevel 7: add %.*s", str_ilen(name_str), str_buf(&name_str));
                     str_map_set(&tops, name_str, &node);
                     process_annotation(self, node);
                 }
@@ -251,6 +256,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                 // replace prior symbol entry with let node
                 *p = node;
             } else {
+                log(self, "toplevel 8: add %.*s", str_ilen(name_str), str_buf(&name_str));
                 str_map_set(&tops, name_str, &node);
                 process_annotation(self, node->let.name);
             }
@@ -263,6 +269,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             if (p) {
                 array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
+                log(self, "toplevel 9: add %.*s", str_ilen(name_str), str_buf(&name_str));
                 str_map_set(&tops, name_str, &node);
             }
         }
@@ -549,6 +556,7 @@ static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_mon
 static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // - update ctx->subs by collecting and applying constraints found recursively starting at node.
     // - adds symbol : type information to ctx->env.
+    // - can be run multiple times on the same node
 
     if (null == node) return 0;
 
@@ -583,9 +591,16 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     case ast_let_in: {
         if (ast_lambda_function == node->let_in.value->tag) {
-            // define a generic lambda in local scope
 
+            str name = node->let_in.name->symbol.name;
+
+            // define a generic lambda in local scope
             add_generic(self, node);
+
+            // add let-in node to toplevels (because we need the name and the body)
+            if (!toplevel_get(self, name)) {
+                toplevel_add(self, name, node);
+            }
 
             // do not infer the node value - add_generic takes care of that
 
@@ -684,18 +699,17 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 0;
         }
 
-        ast_node **fun_let = str_map_get(self->toplevels, node->named_application.name->symbol.name);
-        if (!fun_let) {
+        // name can be: local_env fun, global env fun, toplevel fun
+        str         name = node->named_application.name->symbol.name;
+        tl_type_v2 *fun  = tl_type_env_lookup(ctx->local_env, name);
+        if (!fun) fun = tl_type_env_lookup(self->env, name);
+
+        // name and type must exist in toplevels
+        ast_node *fun_node = toplevel_get(self, name);
+        if (!fun_node || !fun) {
             array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
                                                        .node = node->named_application.name}));
             return 1;
-        }
-
-        tl_type_v2 *fun = tl_type_env_lookup(self->env, node->named_application.name->symbol.name);
-        if (!fun) {
-            // fun is not yet in global type environment.
-            fun = tl_type_env_lookup(ctx->local_env, node->named_application.name->symbol.name);
-            if (!fun) fatal("logic error");
         }
 
         tl_type_v2 inst = instantiate(self, *fun);
@@ -720,7 +734,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         tl_type_v2_apply_subs(&inst, ctx->subs);
 
         // now infer an *instantiated* function body (or use a prior instantiation)
-        str name_inst = instantiate_fun_and_infer(self, ctx, *fun_let, inst.mono);
+        str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
 
         // constrain instantiated result type
         tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
@@ -729,7 +743,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // replace name with instantiated name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
         node->named_application.name->symbol.name     = name_inst;
-
     } break;
 
     case ast_lambda_function_application: {
@@ -1142,22 +1155,33 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
 }
 
 static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype arrow) {
-    assert(ast_let == node->tag);
+    str       name;
+    ast_node *body = null;
+
+    if (ast_let == node->tag) {
+        name = node->let.name->symbol.name;
+        body = node->let.body;
+    } else if (ast_node_is_let_in_lambda(node)) {
+        name = node->let_in.name->symbol.name;
+        body = node->let_in.value->lambda_function.body;
+    } else {
+        fatal("logic error");
+    }
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
-    u64  hash     = hash_name_and_type(node->let.name->symbol.name, arrow);
+    u64  hash     = hash_name_and_type(name, arrow);
     str *existing = map_get(self->instances, &hash, sizeof hash);
     if (existing) return *existing;
 
     // instantiate unique name
-    str name_inst = next_instantiation(self, node->let.name->symbol.name);
+    str name_inst = next_instantiation(self, name);
     map_set(&self->instances, &hash, sizeof hash, &name_inst);
 
     // add to type environment
     tl_type_env_add(ctx->local_env, name_inst, tl_type_init_mono(arrow));
 
-    if (infer(self, ctx, node->let.body)) fatal("error handling");
+    if (infer(self, ctx, body)) fatal("error handling");
 
     return name_inst;
 }
@@ -1417,6 +1441,9 @@ static void add_generic(tl_infer *self, ast_node *node) {
         fatal("logic error");
     }
 
+    // ignore subsequent calls
+    if (tl_type_env_lookup(self->env, name)) return;
+
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
@@ -1467,14 +1494,12 @@ static void add_generic(tl_infer *self, ast_node *node) {
         }
     }
 
-    // add LET function type to GLOBAL environment - not local lambdas
+    // add all function types to GLOBAL environment
     tl_type_v2 *arrow = tl_type_env_lookup(ctx->local_env, name);
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
-    if (ast_let == node->tag) {
-        arrow->scheme.type.arrow.fvs = fvs;
-        tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
-        tl_type_env_add(self->env, name, *arrow);
-    }
+    arrow->scheme.type.arrow.fvs = fvs;
+    tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
+    tl_type_env_add(self->env, name, *arrow);
 
     // remove type information from function tree
     remove_types(infer_target);
@@ -1498,10 +1523,7 @@ int check_missing_free_variables(tl_infer *self) {
         forall(j, fvs) {
             if (!str_map_contains(self->env->index, fvs.v[j])) {
 
-                ast_node  *node  = null;
-                ast_node **found = str_map_get(self->toplevels, name);
-                if (found) node = *found;
-
+                ast_node *node = toplevel_get(self, name);
                 array_push(self->errors,
                            ((tl_infer_error){
                              .tag = tl_err_free_variable_not_found, .node = node, .message = fvs.v[j]}));
@@ -1533,11 +1555,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     // now go through the toplevel let nodes and create generic functions
     {
         hashmap_iterator iter = {0};
-        while (map_iter(self->toplevels, &iter)) {
-            // str const *name = iter.key_ptr;
-            ast_node *node = *(ast_node **)iter.data;
-            add_generic(self, node);
-        }
+        ast_node        *node = null;
+        while ((node = toplevel_iter(self, &iter))) add_generic(self, node);
     }
 
     ast_node **found_main = str_map_get(self->toplevels, S("main"));
@@ -1748,3 +1767,18 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 }
 
 //
+static void toplevel_add(tl_infer *self, str name, ast_node *node) {
+    str_map_set(&self->toplevels, name, &node);
+}
+
+static ast_node *toplevel_get(tl_infer *self, str name) {
+    ast_node **found = str_map_get(self->toplevels, name);
+    return found ? *found : null;
+}
+
+static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
+    if (map_iter(self->toplevels, iter)) {
+        return *(ast_node **)iter->data;
+    }
+    return null;
+}

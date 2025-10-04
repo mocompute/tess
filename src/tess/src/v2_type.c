@@ -209,6 +209,11 @@ tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
     return clone;
 }
 
+int tl_type_v2_is_arrow(tl_type_v2 const *self) {
+    return (tl_scheme == self->tag && tl_arrow == self->scheme.type.tag) ||
+           (tl_mono == self->tag && tl_arrow == self->mono.tag);
+}
+
 str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
     str_sized out = {0};
     switch (self->tag) {
