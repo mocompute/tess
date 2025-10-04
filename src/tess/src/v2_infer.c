@@ -1666,6 +1666,33 @@ int check_missing_free_variables(tl_infer *self) {
     return error;
 }
 
+void remove_generic_toplevels(tl_infer *self) {
+    str_array        names = {.alloc = self->transient};
+
+    ast_node        *node;
+    hashmap_iterator iter = {0};
+    while ((node = toplevel_iter(self, &iter))) {
+        str         name;
+        tl_type_v2 *type = null;
+        if (ast_symbol == node->tag) {
+            name = node->symbol.name;
+            type = tl_type_env_lookup(self->env, name);
+        } else if (ast_node_is_let_in_lambda(node)) {
+            name = node->let_in.name->symbol.name;
+            type = tl_type_env_lookup(self->env, name);
+        } else if (ast_let == node->tag) {
+            name = node->let.name->symbol.name;
+            type = tl_type_env_lookup(self->env, name);
+        } else fatal("logic error");
+        if (str_eq(S("main"), name)) continue;
+        if (tl_type_v2_is_scheme(type)) array_push(names, name);
+    }
+
+    forall(i, names) {
+        str_map_erase(self->toplevels, names.v[i]);
+    }
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- start inference --");
 
@@ -1742,7 +1769,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- final env --");
     log_env(self, self->env);
 
-    // TODO self->subs is no longer useful
+    remove_generic_toplevels(self);
+
+    log(self, "-- final toplevels");
+    log_toplevels(self);
+
     return 0;
 }
 
