@@ -287,15 +287,13 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 // -- inference --
 
 typedef struct {
-    hashmap   *lex;                      // str => tl_type_v2*
-    int        instantiate_applications; // whether to instantiate generic applications
-    tl_type_v2 lambda_type;              // for inferring lambda_function only
+    hashmap   *lex;         // str => tl_type_v2*
+    tl_type_v2 lambda_type; // for inferring lambda_function only
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out                = new (alloc, infer_ctx);
-    out->lex                      = map_create(alloc, sizeof(tl_type_v2 *), 16);
-    out->instantiate_applications = 0;
+    infer_ctx *out = new (alloc, infer_ctx);
+    out->lex       = map_create(alloc, sizeof(tl_type_v2 *), 16);
 
     return out;
 }
@@ -570,6 +568,132 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
 
 static str instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
 
+static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+    // only infer function applications, traversing ast
+
+    if (null == node) return 0;
+
+    switch (node->tag) {
+
+    case ast_let_in: {
+        if (infer_applications(self, ctx, node->let_in.value)) return 1;
+        hashmap *save = map_copy(ctx->lex);
+        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+        if (infer_applications(self, ctx, node->let_in.body)) return 1;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+    } break;
+
+    case ast_let: {
+        hashmap *save = map_copy(ctx->lex);
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node *param = node->let.parameters[i];
+            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+        }
+        if (infer_applications(self, ctx, node->let.body)) return 1;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+    } break;
+
+    case ast_named_function_application: {
+
+        // name can be: global env fun, toplevel fun
+        str         name = node->named_application.name->symbol.name;
+        tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
+
+        // name and type must exist in toplevels
+        ast_node *fun_node = toplevel_get(self, name);
+        if (!fun_node || !fun) {
+            array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
+                                                       .node = node->named_application.name}));
+            return 1;
+        }
+
+        tl_type_v2 inst = instantiate(self, *fun);
+        assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+
+        // infer the arguments
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            if (infer_applications(self, ctx, node->named_application.arguments[i])) return 1;
+        }
+
+        // constrain arrow types
+        ensure_tv(self, null, &node->type_v2);
+        tl_type_v2 app = make_arrow(self,
+                                    (ast_node_sized){.size = node->named_application.n_arguments,
+                                                     .v    = node->named_application.arguments},
+                                    node);
+
+        // constrain and apply substitutions to determine most specific type before instantiating the
+        // generic function: otherwise the inst arrow will just be new typevars and deduplication of
+        // instantiations won't be effective.
+        if (constrain(self, ctx, &inst, &app, node)) return 1;
+        tl_type_v2_apply_subs(&inst, self->subs);
+
+        // now infer an *instantiated* function body (or use a prior instantiation)
+        str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
+
+        // constrain instantiated result type
+        tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
+        if (constrain(self, ctx, &inst_right, node->type_v2, node)) return 1;
+
+        // replace name with instantiated name
+        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
+        node->named_application.name->symbol.name     = name_inst;
+    } break;
+
+    case ast_lambda_function_application: {
+
+    } break;
+
+    case ast_lambda_function: {
+        hashmap *save = map_copy(ctx->lex);
+
+        for (u32 i = 0; i < node->let.n_parameters; ++i) {
+            ast_node *param = node->let.parameters[i];
+            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+        }
+
+        if (infer_applications(self, ctx, node->lambda_function.body)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+    } break;
+
+    case ast_symbol:
+    case ast_address_of:
+    case ast_nil:
+    case ast_any:
+    case ast_string:
+    case ast_f64:
+    case ast_i64:
+    case ast_u64:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_if_then_else:
+    case ast_let_match_in:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_tuple:
+    case ast_user_type:            break;
+    }
+
+    return 0;
+}
+
 static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // - update self->subs by collecting and applying constraints found recursively starting at node.
     // - adds symbol : type information to ctx->env.
@@ -703,61 +827,16 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     case ast_named_function_application: {
 
-        if (!ctx->instantiate_applications) {
-            ensure_tv(self, null, &node->type_v2);
+        ensure_tv(self, null, &node->type_v2);
 
-            // even if we are not instantiating fun applications this pass, we can still infer the
-            // arguments to aid in free variable discovery infer the arguments
-            for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-                if (infer(self, ctx, node->named_application.arguments[i])) return 1;
-            }
-
-            return 0;
-        }
-
-        // name can be: global env fun, toplevel fun
-        str         name = node->named_application.name->symbol.name;
-        tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
-
-        // name and type must exist in toplevels
-        ast_node *fun_node = toplevel_get(self, name);
-        if (!fun_node || !fun) {
-            array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
-                                                       .node = node->named_application.name}));
-            return 1;
-        }
-
-        tl_type_v2 inst = instantiate(self, *fun);
-        assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
-
-        // infer the arguments
+        // even if we are not instantiating fun applications this pass, we can still infer the
+        // arguments to aid in free variable discovery infer the arguments
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
             if (infer(self, ctx, node->named_application.arguments[i])) return 1;
         }
 
-        // constrain arrow types
-        ensure_tv(self, null, &node->type_v2);
-        tl_type_v2 app = make_arrow(self,
-                                    (ast_node_sized){.size = node->named_application.n_arguments,
-                                                     .v    = node->named_application.arguments},
-                                    node);
+        return 0;
 
-        // constrain and apply substitutions to determine most specific type before instantiating the
-        // generic function: otherwise the inst arrow will just be new typevars and deduplication of
-        // instantiations won't be effective.
-        if (constrain(self, ctx, &inst, &app, node)) return 1;
-        tl_type_v2_apply_subs(&inst, self->subs);
-
-        // now infer an *instantiated* function body (or use a prior instantiation)
-        str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
-
-        // constrain instantiated result type
-        tl_type_v2 inst_right = tl_type_init_mono(*arrow_rightmost(&inst.mono));
-        if (constrain(self, ctx, &inst_right, node->type_v2, node)) return 1;
-
-        // replace name with instantiated name
-        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
-        node->named_application.name->symbol.name     = name_inst;
     } break;
 
     case ast_lambda_function_application: {
@@ -1148,10 +1227,9 @@ static int start_infer_global(tl_infer *self, ast_node *node) {
     infer_ctx *ctx = infer_ctx_create(self->transient);
 
     // after generics are created, we can process callsites for instantiation
-    ctx->instantiate_applications = 1;
 
     log(self, "-- start_infer_global --");
-    int res = infer(self, ctx, node);
+    int res = infer_applications(self, ctx, node);
     log(self, "-- end start_infer_global --");
 
     infer_ctx_destroy(self->transient, &ctx);
@@ -1413,6 +1491,9 @@ static void add_generic(tl_infer *self, ast_node *node) {
         fatal("logic error");
     }
 
+    // do not process a second time
+    if (tl_type_env_lookup(self->env, name)) return;
+
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
@@ -1519,11 +1600,17 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
         map_destroy(&lex);
     }
 
-    // now go through the toplevel let nodes and create generic functions
+    // now go through the toplevel let nodes and create generic functions: don't call add_generic from
+    // inside the iteration because infer will add lambda functions to the toplevel.
     {
-        hashmap_iterator iter = {0};
-        ast_node        *node = null;
-        while ((node = toplevel_iter(self, &iter))) add_generic(self, node);
+        ast_node_array   nodes = {.alloc = self->transient};
+
+        hashmap_iterator iter  = {0};
+        ast_node        *node  = null;
+        while ((node = toplevel_iter(self, &iter))) array_push(nodes, node);
+
+        forall(i, nodes) add_generic(self, nodes.v[i]);
+        array_free(nodes);
     }
 
     ast_node **found_main = str_map_get(self->toplevels, S("main"));
