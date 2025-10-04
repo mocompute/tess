@@ -684,7 +684,6 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     str name = node->named_application.name->symbol.name;
     str orig = node->named_application.name->symbol.original;
-    assert(!str_is_empty(orig) && !str_eq(name, orig));
 
     // is there an instantiation in the toplevel? If so, we're done.
     if (toplevel_get(self, name)) return 0;
@@ -1540,6 +1539,12 @@ static int add_generic(tl_infer *self, ast_node *node) {
         name         = node->let_in.name->symbol.name;
         orig_name    = node->let_in.name->symbol.original;
         infer_target = node->let_in.value;
+    } else if (ast_symbol == node->tag) {
+        // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
+        // take precedence to any later declarations, so let's be careful
+        name         = node->symbol.name;
+        orig_name    = node->symbol.original;
+        infer_target = null;
     } else {
         fatal("logic error");
     }
@@ -1549,6 +1554,17 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
+
+    if (!infer_target) {
+        // no function body, so let's treat this as a type declaration
+        process_annotation(self, node);
+        if (!node->symbol.annotation_type_v2) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+            return 1;
+        }
+        tl_type_env_add(self->env, name, *node->symbol.annotation_type_v2);
+        return 0;
+    }
 
     // FIXME: is there an annotated type??
 
