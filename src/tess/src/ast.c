@@ -8,6 +8,7 @@
 #include "string_t.h"
 #include "type.h"
 #include "util.h"
+#include "v2_type.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -68,6 +69,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     clone->line     = orig->line;
 
     clone->type     = orig->type ? tl_type_clone_shallow(alloc, orig->type) : null;
+
+    if (orig->type_v2) {
+        tl_type_v2 tmp = tl_type_v2_clone(alloc, *orig->type_v2);
+        clone->type_v2 = tl_type_alloc_type(alloc, &tmp);
+    } else clone->type_v2 = null;
 
     // clone common array for some tags
     if (TL_AST_HAS_ARRAY(clone->tag)) {

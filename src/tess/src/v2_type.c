@@ -162,6 +162,18 @@ tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
     return (tl_type_v2){.tag = tl_scheme, .scheme = scheme};
 }
 
+tl_type_v2 *tl_type_alloc_mono(allocator *alloc, tl_monotype mono) {
+    tl_type_v2 *out = new (alloc, tl_type_v2);
+    *out            = tl_type_init_mono(mono);
+    return out;
+}
+
+tl_type_v2 *tl_type_alloc_type(allocator *alloc, tl_type_v2 const *type) {
+    tl_type_v2 *out = new (alloc, tl_type_v2);
+    *out            = *type;
+    return out;
+}
+
 tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
     tl_monotype clone = {0};
     clone.tag         = orig.tag;
