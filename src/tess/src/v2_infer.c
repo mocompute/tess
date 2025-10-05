@@ -233,7 +233,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
-                    log(self, "toplevel 7: add %.*s", str_ilen(name_str), str_buf(&name_str));
                     str_map_set(&tops, name_str, &node);
                     process_annotation(self, node);
                 }
@@ -262,7 +261,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                 // replace prior symbol entry with let node
                 *p = node;
             } else {
-                log(self, "toplevel 8: add %.*s", str_ilen(name_str), str_buf(&name_str));
                 str_map_set(&tops, name_str, &node);
                 process_annotation(self, node->let.name);
             }
@@ -275,7 +273,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             if (p) {
                 array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
-                log(self, "toplevel 9: add %.*s", str_ilen(name_str), str_buf(&name_str));
                 str_map_set(&tops, name_str, &node);
             }
         }
@@ -1257,8 +1254,14 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
     } break;
 
     case ast_symbol: {
-        str *found;
-        if ((found = str_map_get(*lex, node->symbol.name))) {
+        str        *found;
+        tl_type_v2 *type     = tl_type_env_lookup(self->env, node->symbol.name);
+        int         is_arrow = type && tl_type_v2_is_arrow(type);
+
+        // Note: arrow types in the environment are global functions and are not free variables. Note that
+        // even local let-in-lambda functions are also in the environment, but their names will never clash
+        // with function names.
+        if (is_arrow || (found = str_map_get(*lex, node->symbol.name))) {
             ;
         } else {
             // a free variable
@@ -1267,8 +1270,7 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
         // if symbol has a type which carries fvs, we also collect those.
         // TODO so many indirections
-        tl_type_v2 *type = tl_type_env_lookup(self->env, node->symbol.name);
-        if (type && tl_mono == type->tag && tl_arrow == type->mono.tag) {
+        if (is_arrow && tl_type_v2_is_mono(type)) {
             forall(i, type->mono.arrow.fvs) array_set_insert(*fvs, type->mono.arrow.fvs.v[i]);
         }
     } break;
@@ -1369,8 +1371,8 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
 }
 
 static str next_variable_name(tl_infer *self) {
-    char buf[32];
-    snprintf(buf, sizeof buf, "v%u", self->next_var_name++);
+    char buf[40];
+    snprintf(buf, sizeof buf, "tl_v%u", self->next_var_name++);
     return str_init(self->arena, buf);
 }
 

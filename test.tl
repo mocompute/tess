@@ -1,3 +1,13 @@
+// let id x = x
+// let unrelated x =
+//   let local = fun x -> x in
+//   0
+// let foo x = id x
+
+
+
+
+
 let _tl_sizeof_  : a -> Int     // actually forall a. a -> int
 let sizeof x     : a -> Int = _tl_sizeof_ x
 
@@ -14,6 +24,9 @@ let f x = x
 let foo ()  = let val = f 1 in val
 let bar ()  = foo ()
 let baz ()  = bar ()
-let main () = baz ()
+let main () =
+  let val = 1 in
+  let l = fun x -> val in
+  baz ()
 
 let tl_main () = main ()
