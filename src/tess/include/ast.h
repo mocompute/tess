@@ -5,6 +5,7 @@
 #include "array.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "hashmap.h"
 #include "nodiscard.h"
 #include "str.h"
 #include "type.h"
@@ -299,5 +300,13 @@ int            ast_node_is_named_application(ast_node const *);
 tl_type       *ast_node_get_arrow(ast_node const *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
+
+// -- hashmap: str => ast_node* --
+
+nodiscard hashmap *ast_node_str_map_create(allocator *, u32) mallocfun;
+void               ast_node_str_map_destroy(hashmap **);
+void               ast_node_str_map_add(hashmap **, str, ast_node *);
+ast_node          *ast_node_str_map_get(hashmap *, str);
+ast_node          *ast_node_str_map_iter(hashmap *, hashmap_iterator *);
 
 #endif

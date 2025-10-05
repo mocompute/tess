@@ -1370,3 +1370,29 @@ tl_type *ast_node_get_arrow(ast_node const *self) {
 ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {
     return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
 }
+
+//
+
+hashmap *ast_node_str_map_create(allocator *alloc, u32 n) {
+    return map_create(alloc, sizeof(ast_node *), n);
+}
+
+void ast_node_str_map_destroy(hashmap **p) {
+    map_destroy(p);
+}
+
+void ast_node_str_map_add(hashmap **p, str key, ast_node *val) {
+    str_map_set(p, key, &val);
+}
+
+ast_node *ast_node_str_map_get(hashmap *map, str key) {
+    ast_node **found = str_map_get(map, key);
+    return found ? *found : null;
+}
+
+ast_node *ast_node_str_map_iter(hashmap *map, hashmap_iterator *iter) {
+    if (map_iter(map, iter)) {
+        return *(ast_node **)iter->data;
+    }
+    return null;
+}

@@ -209,7 +209,7 @@ static void process_annotation(tl_infer *self, ast_node *node) {
 
 static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes,
                               tl_infer_error_array *out_errors) {
-    hashmap             *tops   = map_create(alloc, sizeof(ast_node *), 1024);
+    hashmap             *tops   = ast_node_str_map_create(alloc, 1024);
     tl_infer_error_array errors = {.alloc = alloc};
     (void)self;
 
@@ -1999,19 +1999,15 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
 //
 static void toplevel_add(tl_infer *self, str name, ast_node *node) {
-    str_map_set(&self->toplevels, name, &node);
+    ast_node_str_map_add(&self->toplevels, name, node);
 }
 
 static ast_node *toplevel_get(tl_infer *self, str name) {
-    ast_node **found = str_map_get(self->toplevels, name);
-    return found ? *found : null;
+    return ast_node_str_map_get(self->toplevels, name);
 }
 
 static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
-    if (map_iter(self->toplevels, iter)) {
-        return *(ast_node **)iter->data;
-    }
-    return null;
+    return ast_node_str_map_iter(self->toplevels, iter);
 }
 
 static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,

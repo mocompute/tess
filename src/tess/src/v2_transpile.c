@@ -1,6 +1,7 @@
 #include "v2_transpile.h"
 
 #include "alloc.h"
+#include "ast.h"
 #include "str.h"
 #include "v2_type.h"
 
@@ -29,6 +30,8 @@ static void cat_sp(transpile *);
 static void cat_double_slash(transpile *);
 static void cat_open_round(transpile *);
 static void cat_close_round(transpile *);
+static void cat_open_curly(transpile *);
+static void cat_close_curly(transpile *);
 static void cat_semicolon(transpile *);
 static void catln(transpile *, str);
 static void cat_comment(transpile *, str);
@@ -60,9 +63,18 @@ static void generate_prototypes(transpile *self) {
         cat(self, arrow_to_c_params(self, type));
         cat_close_round(self);
         cat_semicolon(self);
-
         cat_nl(self);
     }
+}
+
+static void generate_main(transpile *self) {
+    ast_node *main = ast_node_str_map_get(self->toplevels, S("main"));
+    if (!main) fatal("no main function");
+
+    cat(self, S("int main(void) {"));
+
+    cat_close_curly(self);
+    cat_nl(self);
 }
 
 int transpile_compile(transpile *self, str_build *out_build) {
@@ -70,8 +82,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
     self->build = str_build_init(self->parent, TRANSPILE_BUILD_SIZE);
 
     generate_prototypes(self);
-
-    cat_comment(self, S("hello, world"));
+    cat_nl(self);
+    generate_main(self);
 
     if (out_build) {
         *out_build = self->build;
@@ -127,6 +139,12 @@ static void cat_open_round(transpile *self) {
 }
 static void cat_close_round(transpile *self) {
     cat(self, S(")"));
+}
+static void cat_open_curly(transpile *self) {
+    cat(self, S("{"));
+}
+static void cat_close_curly(transpile *self) {
+    cat(self, S("}"));
 }
 static void cat_semicolon(transpile *self) {
     cat(self, S(";"));
