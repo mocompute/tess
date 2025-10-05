@@ -58,7 +58,7 @@ static void        cat_commentln(transpile *, str);
 static void        cat_i64(transpile *, i64);
 static void        cat_f64(transpile *, f64);
 
-tl_monotype       *env_lookup(transpile *, str);
+tl_monotype       *env_lookup(transpile *, str); // may be null
 static str         mangle_fun(transpile *, str); // allocates transient
 static int         is_intrinsic(str);
 static int         should_generate(str, tl_type_v2 const *);
@@ -190,6 +190,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     arrow = tl_type_v2_arrow_head(arrow);
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
+        if (ast_node_is_nil(args.v[i])) break;
         str res = generate_expr(self, arrow, args.v[i]);
         array_push(args_res, res);
         arrow = tl_type_v2_arrow_next(arrow);
@@ -201,6 +202,7 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
+    if (!type) fatal("funcall with null type");
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
@@ -232,15 +234,16 @@ static str generate_let_in(transpile *self, ast_node const *node) {
     assert(ast_let_in == node->tag);
 
     str                name        = ast_node_str(node->let_in.name);
-    tl_monotype const *type        = env_lookup(self, name);
+    tl_monotype const *type        = env_lookup(self, name); // may be null
     tl_type_v2 const  *result_type = node->type_v2;
-    assert(type);
     assert(tl_type_v2_is_mono(result_type));
 
-    str value = generate_expr(self, type, node->let_in.value);
+    if (type) {
+        str value = generate_expr(self, type, node->let_in.value);
 
-    generate_decl(self, name, type);
-    generate_assign(self, name, value);
+        generate_decl(self, name, type);
+        generate_assign(self, name, value);
+    }
 
     str body = generate_expr(self, null, node->let_in.body);
     str res  = next_res(self);
@@ -526,8 +529,9 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
 }
 
 tl_monotype *env_lookup(transpile *self, str name) {
+    // may return null if type is missing or is a type scheme
     tl_type_v2 *type = tl_type_env_lookup(self->env, name);
     if (!type) fatal("type missing");
-    if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+    if (tl_type_v2_is_scheme(type)) return null;
     return &type->mono;
 }

@@ -1750,30 +1750,21 @@ void remove_generic_toplevels(tl_infer *self) {
 
 static int check_main_function(tl_infer *self, ast_node const *main) {
     // instantiate and infer main
+    assert(ast_let == main->tag);
     tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
 
     tl_type_v2 inst = instantiate(self, *type);
     assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
-    infer_ctx *ctx       = infer_ctx_create(self->transient);
-    str        inst_name = instantiate_fun_and_infer(self, ctx, main, inst.mono);
-    infer_ctx_destroy(self->transient, &ctx);
-    tl_type_v2 *inst_type = tl_type_env_lookup(self->env, inst_name);
-    tl_type_env_add(self->env, S("main"), inst_type);
-    type = tl_type_env_lookup(self->env, S("main"));
-
-    if (!type || !tl_type_v2_is_mono(type) || !tl_type_v2_is_arrow(type)) {
+    tl_type_v2 const *body_type = main->let.body->type_v2;
+    if (!body_type || !tl_type_v2_is_mono(body_type)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
         return 1;
     }
 
-    tl_monotype const *right = tl_type_v2_arrow_rightmost(&inst_type->mono);
-    if (tl_cons != right->tag || !str_eq(right->cons.name, S("Int"))) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
-        return 1;
-    }
-
+    inst.mono.arrow.rhs = (tl_monotype *)&body_type->mono;
+    tl_type_env_add(self->env, S("main"), &inst);
     return 0;
 }
 
@@ -1838,15 +1829,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // apply subs to global environment
     tl_type_env_subs_apply(self->env, self->subs);
     apply_subs_to_ast(self);
-    tl_type_subs_cleanup(self->transient, self->subs, self->env);
 
-    {
-        // infer_ctx *ctx   = infer_ctx_create(self->transient);
-        // ctx->final_phase = 1;
-        // infer(self, ctx, main);
-        // infer_ctx_destroy(self->transient, &ctx);
-        if (check_main_function(self, main)) return 1;
-    }
+    // ensure main function has the correct type
+    if (check_main_function(self, main)) return 1;
+    tl_type_subs_cleanup(self->transient, self->subs, self->env); // keep this last
 
     log(self, "-- final subs");
     log_subs(self, self->subs);
