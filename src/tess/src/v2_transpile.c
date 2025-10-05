@@ -269,23 +269,25 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_named_function_application: return generate_funcall(self, node);
     case ast_let_in:                     return generate_let_in(self, node);
     case ast_i64:                        return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
+    case ast_u64:                        return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
     case ast_f64:                        return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
-    case ast_symbol:                     return node->symbol.name;
+    case ast_bool:                       return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
+    case ast_string:
+        return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
+    case ast_symbol: return node->symbol.name;
 
-    case ast_nil:
-    case ast_any:
+    case ast_nil:    fatal("cannot generate nil");
+    case ast_any:    fatal("cannot generate any");
+
     case ast_address_of:
     case ast_arrow:
     case ast_assignment:
-    case ast_bool:
     case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
     case ast_if_then_else:
     case ast_let_match_in:
-    case ast_string:
-    case ast_u64:
     case ast_user_type_definition:
     case ast_user_type_get:
     case ast_user_type_set:
@@ -474,6 +476,8 @@ static str type_to_c(tl_type_v2 const *type) {
             return S("int64_t");
         } else if (str_eq(S("Float"), mono->cons.name)) {
             return S("double");
+        } else if (str_eq(S("Bool"), mono->cons.name)) {
+            return S("/*bool*/int");
         } else if (str_eq(S("String"), mono->cons.name)) {
             return S("char const*");
         } else fatal("unknown type constructor");
@@ -492,9 +496,6 @@ static str arrow_rhs_to_c(tl_type_v2 const *type) {
     tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
     return type_to_c_mono(right);
 }
-
-// tl_monotype const     *tl_type_v2_arrow_head(tl_monotype const *);
-// tl_monotype const     *tl_type_v2_arrow_next(tl_monotype const *);
 
 static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized param_names) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");

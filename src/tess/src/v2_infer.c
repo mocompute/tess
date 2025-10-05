@@ -807,6 +807,12 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         return constrain(self, ctx, node->type_v2, ty, node);
     } break;
 
+    case ast_bool: {
+        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Bool"));
+        ensure_tv(self, null, &node->type_v2);
+        return constrain(self, ctx, node->type_v2, ty, node);
+    } break;
+
     case ast_let_in: {
         if (ast_lambda_function == node->let_in.value->tag) {
 
@@ -980,7 +986,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     case ast_arrow:
     case ast_assignment:
-    case ast_bool:
     case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:

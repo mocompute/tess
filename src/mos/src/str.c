@@ -440,6 +440,12 @@ str str_init_i64(allocator *alloc, i64 val) {
     return str_init_n(alloc, buf, len);
 }
 
+str str_init_u64(allocator *alloc, u64 val) {
+    char buf[32];
+    int  len = snprintf(buf, sizeof buf, "%" PRIu64, val);
+    return str_init_n(alloc, buf, len);
+}
+
 str str_init_f64(allocator *alloc, f64 val) {
     char buf[40];
     int  len = snprintf(buf, sizeof buf, "%f", val);
