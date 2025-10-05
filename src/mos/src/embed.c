@@ -8,7 +8,7 @@
 static void make_c_identifier(char *dest, char const *src, size_t len) {
     size_t j = 0;
     for (size_t i = 0; src[i] && j < len - 1; i++) {
-        if (isalnum(src[i])) {
+        if (isalnum(src[i]) || src[i] == '_') {
             dest[j++] = src[i];
         } else if (src[i] == '.' || src[i] == '-' || src[i] == ' ') {
             dest[j++] = '_';
