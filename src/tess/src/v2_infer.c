@@ -843,7 +843,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                 return 1;
 
             // add value to environment
-            tl_type_env_add(self->env, node->let_in.name->symbol.name, *node->let_in.value->type_v2);
+            tl_type_env_add(self->env, node->let_in.name->symbol.name, node->let_in.value->type_v2);
 
             hashmap *save = map_copy(ctx->lex);
 
@@ -880,7 +880,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
               make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
                          node->let.body);
 
-            tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
+            tl_type_env_add(self->env, node->let.name->symbol.name, &arrow);
         }
 
     } break;
@@ -897,7 +897,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         // add to environment
-        tl_type_env_add(self->env, node->symbol.name, *node->type_v2);
+        tl_type_env_add(self->env, node->symbol.name, node->type_v2);
 
     } break;
 
@@ -1353,7 +1353,7 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *n
     map_set(&self->instances, &hash, sizeof hash, &name_inst);
 
     // add to type environment
-    tl_type_env_add(self->env, name_inst, tl_type_init_mono(arrow));
+    tl_type_env_add_mono(self->env, name_inst, arrow);
 
     if (infer(self, ctx, body)) fatal("error handling");
 
@@ -1536,7 +1536,7 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
 
     assert(tl_scheme == generic.tag);
 
-    tl_type_v2     src = tl_type_v2_clone(self->arena, generic);
+    tl_type_v2     src = tl_type_v2_clone(self->arena, &generic);
     tl_type_scheme s   = src.scheme;
 
     hashmap       *map = map_create(self->transient, sizeof(tl_type_variable), s.quantifiers.size);
@@ -1590,7 +1590,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
             return 1;
         }
-        tl_type_env_add(self->env, name, *node->symbol.annotation_type_v2);
+        tl_type_env_add(self->env, name, node->symbol.annotation_type_v2);
         return 0;
     }
 
@@ -1601,7 +1601,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (ast_lambda_function == infer_target->tag) {
         // since the infer target is unnamed, the lambda function could not add itself to the
         // environment. We must do so here before the quantified variable analysis.
-        tl_type_env_add(self->env, name, ctx->lambda_type);
+        tl_type_env_add(self->env, name, &ctx->lambda_type);
     }
 
     log(self, "-- global env --");
@@ -1646,7 +1646,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
 
     // add to env
-    tl_type_env_add(self->env, name, *arrow);
+    tl_type_env_add(self->env, name, arrow);
 
     log(self, "-- global env --");
     log_env(self, self->env);

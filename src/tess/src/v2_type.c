@@ -185,7 +185,7 @@ tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
         array_copy(clone.cons.args, orig.cons.args);
         forall(i, clone.cons.args) {
             // cons args are monotype
-            clone.cons.args.v[i] = tl_type_v2_clone(alloc, tl_type_init_mono(clone.cons.args.v[i])).mono;
+            clone.cons.args.v[i] = tl_monotype_clone(alloc, clone.cons.args.v[i]);
         }
         break;
     case tl_var:   clone.var = orig.var; break;
@@ -195,28 +195,28 @@ tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
         clone.arrow.lhs  = new (alloc, tl_monotype);
         clone.arrow.rhs  = new (alloc, tl_monotype);
         clone.arrow.fvs  = (str_array){.alloc = alloc};
-        *clone.arrow.lhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.lhs)).mono;
-        *clone.arrow.rhs = tl_type_v2_clone(alloc, tl_type_init_mono(*orig.arrow.rhs)).mono;
+        *clone.arrow.lhs = tl_monotype_clone(alloc, *orig.arrow.lhs);
+        *clone.arrow.rhs = tl_monotype_clone(alloc, *orig.arrow.rhs);
         array_copy(clone.arrow.fvs, orig.arrow.fvs);
         break;
     }
     return clone;
 }
 
-tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 orig) {
+tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 const *orig) {
     tl_type_v2 clone = {0};
-    switch (orig.tag) {
+    switch (orig->tag) {
     case tl_mono:
 
         clone.tag  = tl_mono;
-        clone.mono = tl_monotype_clone(alloc, orig.mono);
+        clone.mono = tl_monotype_clone(alloc, orig->mono);
         break;
     case tl_scheme:
         clone.tag                = tl_scheme;
 
-        clone.scheme.type        = tl_type_v2_clone(alloc, tl_type_init_mono(orig.scheme.type)).mono;
+        clone.scheme.type        = tl_monotype_clone(alloc, orig->scheme.type);
         clone.scheme.quantifiers = (tl_type_quantifier_array){.alloc = alloc};
-        array_copy(clone.scheme.quantifiers, orig.scheme.quantifiers);
+        array_copy(clone.scheme.quantifiers, orig->scheme.quantifiers);
         // tl_type_quantifier does not need to be cloned
         break;
     }
@@ -470,7 +470,7 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 // -- env --
 
 static void add_type_cons(tl_type_env *self, tl_type_constructor_inst inst) {
-    tl_type_env_add(self, inst.name, tl_type_init_mono(tl_monotype_init_constructor_inst(inst)));
+    tl_type_env_add_mono(self, inst.name, tl_monotype_init_constructor_inst(inst));
 }
 
 static void make_builtin_type_constructors(tl_type_env *self) {
@@ -528,21 +528,26 @@ void tl_type_env_destroy(allocator *alloc, tl_type_env **p) {
     *p = null;
 }
 
-u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 type) {
+u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 const *type) {
     assert(!str_is_empty(name));
     u32 *found = str_map_get(self->index, name);
     if (found) {
-        self->types.v[*found] = type;
+        self->types.v[*found] = *type;
         return *found;
     }
 
     array_push(self->names, name);
-    array_push(self->types, type);
+    array_push(self->types, *type);
     assert(self->names.size == self->types.size);
 
     u32 loc = self->names.size - 1;
     str_map_set(&self->index, name, &loc);
     return loc;
+}
+
+u32 tl_type_env_add_mono(tl_type_env *self, str name, tl_monotype mono) {
+    tl_type_v2 type = tl_type_init_mono(mono);
+    return tl_type_env_add(self, name, &type);
 }
 
 tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {

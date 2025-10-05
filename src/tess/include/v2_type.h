@@ -74,7 +74,7 @@ tl_type_v2            tl_type_init_mono(tl_monotype);
 tl_type_v2            tl_type_init_scheme(tl_type_scheme);
 nodiscard tl_type_v2 *tl_type_alloc_mono(allocator *, tl_monotype) mallocfun;
 nodiscard tl_type_v2 *tl_type_alloc_type(allocator *, tl_type_v2 const *) mallocfun;
-tl_type_v2            tl_type_v2_clone(allocator *, tl_type_v2);
+tl_type_v2            tl_type_v2_clone(allocator *, tl_type_v2 const *);
 int                   tl_type_v2_is_arrow(tl_type_v2 const *);
 int                   tl_type_v2_is_scheme(tl_type_v2 const *);
 int                   tl_type_v2_is_mono(tl_type_v2 const *);
@@ -120,7 +120,8 @@ typedef struct {
 nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
 nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
-u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2);
+u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2 const *);
+u32                    tl_type_env_add_mono(tl_type_env *, str, tl_monotype);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
 int                    tl_type_env_find_tv(tl_type_env const *, tl_type_variable, u32 *);
 void                   tl_type_env_erase(tl_type_env *, u32);
