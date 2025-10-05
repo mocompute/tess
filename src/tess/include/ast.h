@@ -191,7 +191,7 @@ typedef struct ast_node {
     char const       *file;
     u32               line;
     tl_type          *type;
-    tl_type_v2       *type_v2;
+    tl_type_v2 const *type_v2;
     ast_tag           tag;
     enum tl_error_tag error;
 } ast_node;

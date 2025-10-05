@@ -48,22 +48,21 @@ struct tl_infer {
 
 //
 
-static tl_type_v2   instantiate(tl_infer *, tl_type_v2);
-static str          next_variable_name(tl_infer *);
-static str          next_instantiation(tl_infer *, str);
-static tl_type_v2   make_arrow(tl_infer *, ast_node_sized, ast_node const *);
-static tl_monotype *arrow_rightmost(tl_monotype *);
-static int          add_generic(tl_infer *, ast_node *);
-static str          v2_ast_node_to_string(allocator *, ast_node const *);
+static tl_type_v2 instantiate(tl_infer *, tl_type_v2);
+static str        next_variable_name(tl_infer *);
+static str        next_instantiation(tl_infer *, str);
+static tl_type_v2 make_arrow(tl_infer *, ast_node_sized, ast_node const *);
+static int        add_generic(tl_infer *, ast_node *);
+static str        v2_ast_node_to_string(allocator *, ast_node const *);
 
-static void         toplevel_add(tl_infer *, str, ast_node *);
-static ast_node    *toplevel_get(tl_infer *, str);
-static ast_node    *toplevel_iter(tl_infer *, hashmap_iterator *);
+static void       toplevel_add(tl_infer *, str, ast_node *);
+static ast_node  *toplevel_get(tl_infer *, str);
+static ast_node  *toplevel_iter(tl_infer *, hashmap_iterator *);
 
-static void         log(tl_infer const *self, char const *restrict fmt, ...);
-static void         log_toplevels(tl_infer const *);
-static void         log_env(tl_infer const *, tl_type_env const *);
-static void         log_subs(tl_infer const *, tl_type_subs const *);
+static void       log(tl_infer const *self, char const *restrict fmt, ...);
+static void       log_toplevels(tl_infer const *);
+static void       log_env(tl_infer const *, tl_type_env const *);
+static void       log_subs(tl_infer const *, tl_type_subs const *);
 
 //
 
@@ -545,7 +544,7 @@ static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
     return constrain(self, ctx, &left_ty, right, node);
 }
 
-static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
+static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) {
     if (!type) return;
     if (*type) return;
     if (name) *type = tl_type_env_lookup(self->env, *name);
@@ -718,8 +717,8 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
     assert(tl_mono == inst_type->tag);
-    tl_monotype *inst_result_mono = arrow_rightmost(&inst_type->mono);
-    tl_type_v2  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
+    tl_monotype const *inst_result_mono = tl_type_v2_arrow_rightmost(&inst_type->mono);
+    tl_type_v2 const  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
@@ -1498,10 +1497,10 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 }
 
-static tl_monotype *arrow_rightmost(tl_monotype *arrow) {
+tl_monotype const *tl_type_v2_arrow_rightmost(tl_monotype const *arrow) {
     if (tl_arrow != arrow->tag) fatal("logic error");
 
-    if (tl_arrow == arrow->arrow.rhs->tag) return arrow_rightmost(arrow->arrow.rhs);
+    if (tl_arrow == arrow->arrow.rhs->tag) return tl_type_v2_arrow_rightmost(arrow->arrow.rhs);
     return arrow->arrow.rhs;
 }
 
