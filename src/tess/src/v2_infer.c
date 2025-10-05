@@ -1471,7 +1471,11 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 
     else if (args.size == 1) {
-        ensure_tv(self, null, &args.v[0]->type_v2);
+        // nil type
+        if (ast_nil == args.v[0]->tag)
+            args.v[0]->type_v2 = tl_type_alloc_mono(self->arena, tl_monotype_init_nil());
+        else ensure_tv(self, null, &args.v[0]->type_v2);
+
         tl_monotype lhs   = args.v[0]->type_v2->mono;
         tl_monotype rhs   = result->type_v2->mono;
         tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
@@ -1640,9 +1644,14 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // add free variables to arrow type and put into global environment
-    assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
-    arrow->scheme.type.arrow.fvs = fvs;
-    tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
+    assert(arrow);
+    if (tl_scheme == arrow->tag) {
+        arrow->scheme.type.arrow.fvs = fvs;
+        tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
+    } else {
+        arrow->mono.arrow.fvs = fvs;
+        tl_type_v2_arrow_sort_fvs(&arrow->mono.arrow);
+    }
 
     // add to env
     tl_type_env_add(self->env, name, arrow);
