@@ -1708,7 +1708,7 @@ void remove_generic_toplevels(tl_infer *self) {
     array_free(names);
 }
 
-int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
+int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
@@ -1780,6 +1780,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes) {
     log(self, "-- final toplevels");
     log_toplevels(self);
 
+    if (out_result) {
+        out_result->env       = self->env;
+        out_result->toplevels = self->toplevels;
+    }
     return 0;
 }
 

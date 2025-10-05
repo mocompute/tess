@@ -2,12 +2,14 @@
 #include "array.h"
 #include "file.h"
 #include "parser.h"
+#include "str.h"
 #include "syntax.h"
 #include "transpiler.h"
 #include "type_inference.h"
 #include "type_registry.h"
 #include "types.h"
 #include "v2_infer.h"
+#include "v2_transpile.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -213,13 +215,13 @@ cleanup_parser:
 int compile_v2(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
-    int        error    = 0;
-
-    char_array preamble = {.alloc = default_allocator()};
-    array_reserve(preamble, 32 * 1024);
+    int error = 0;
 
     // embed std_tl header
-    // array_push_many(preamble, embed_std_tl, strlen(embed_std_tl));
+    char_array preamble     = {.alloc = default_allocator()};
+    size_t     preamble_len = strlen(embed_std_tl);
+    array_reserve(preamble, preamble_len);
+    // array_push_many(preamble, embed_std_tl, preamble_len);
     // FIXME
 
     parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
@@ -243,13 +245,38 @@ int compile_v2(state *self) {
         }
     }
 
-    tl_infer *infer = tl_infer_create(default_allocator());
+    tl_infer       *infer        = tl_infer_create(default_allocator());
+    tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
-    if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes))) {
+    if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes), &infer_result)) {
         tl_infer_report_errors(infer);
         error++;
         goto cleanup_ti;
     }
+
+    transpile_opts transpile_opts = {.infer_result = infer_result};
+    transpile     *transpile      = transpile_create(default_allocator(), &transpile_opts);
+
+    str_build      program_build;
+    if (transpile_compile(transpile, &program_build)) goto cleanup_tp;
+
+    str program = str_build_finish(&program_build);
+
+    if (self->out_path) {
+        FILE *f = fopen(self->out_path, "wb");
+        if (!f) fatal("could not open output file: '%s'", self->out_path);
+
+        fprintf(f, "%.*s", str_ilen(program), str_buf(&program));
+
+        fclose(f);
+    } else {
+        printf("%.*s", str_ilen(program), str_buf(&program));
+    }
+
+    str_deinit(default_allocator(), &program);
+
+cleanup_tp:
+    transpile_destroy(default_allocator(), &transpile);
 
 cleanup_ti:
     tl_infer_destroy(default_allocator(), &infer);

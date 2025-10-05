@@ -3,16 +3,17 @@
 
 #include "alloc.h"
 #include "v2_infer.h"
-#include "v2_type.h"
 
 typedef struct transpile transpile;
 
 typedef struct {
-    tl_type_env *env;
-    hashmap     *toplevels; // str => ast_node*
+    tl_infer_result infer_result;
+    int             verbose;
 } transpile_opts;
 
 nodiscard transpile *transpile_create(allocator *, transpile_opts const *) mallocfun;
 void                 transpile_destroy(allocator *, transpile **);
+int                  transpile_compile(transpile *, str_build *);
+void                 transpile_set_verbose(transpile *, int);
 
 #endif
