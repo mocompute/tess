@@ -324,6 +324,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
     self->build = str_build_init(self->parent, TRANSPILE_BUILD_SIZE);
 
     str_build_cat(&self->build, str_init_static(embed_std_c));
+    cat_nl(self);
+    cat_nl(self);
 
     generate_prototypes(self);
     cat_nl(self);
@@ -447,8 +449,8 @@ static void cat_f64(transpile *self, f64 val) {
 //
 
 static str mangle_fun(transpile *self, str s) {
-    str_build b = str_build_init(self->transient, str_len(s) + 8);
-    str_build_cat(&b, S("_tl_fun_"));
+    str_build b = str_build_init(self->transient, str_len(s) + 7);
+    str_build_cat(&b, S("tl_fun_"));
     str_build_cat(&b, s);
 
     return str_build_finish(&b);

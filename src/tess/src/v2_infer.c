@@ -1735,6 +1735,22 @@ void remove_generic_toplevels(tl_infer *self) {
     array_free(names);
 }
 
+static int check_main_function(tl_infer *self, ast_node const *main) {
+    tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
+    if (!type || !tl_type_v2_is_mono(type) || !tl_type_v2_is_arrow(type)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
+        return 1;
+    }
+
+    tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
+    if (tl_cons != right->tag || !str_eq(right->cons.name, S("Int"))) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
+        return 1;
+    }
+
+    return 0;
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
@@ -1775,6 +1791,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         return 1;
     }
     ast_node *main = *found_main;
+
+    // FIXME
+    // if (check_main_function(self, main)) return 1;
 
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up

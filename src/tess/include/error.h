@@ -72,6 +72,7 @@
     X(tl_err_function_exists, "function_exists")                                                           \
     X(tl_err_not_compatible, "not_compatible")                                                             \
     X(tl_err_no_main_function, "no_main_function")                                                         \
+    X(tl_err_main_function_bad_type, "main_function_bad_type")                                             \
     X(tl_err_invalid_toplevel, "invalid_toplevel_node_type")                                               \
     X(tl_err_function_not_found, "function_not_found")                                                     \
     X(tl_err_free_variable_not_found, "free_variable_not_found")                                           \
