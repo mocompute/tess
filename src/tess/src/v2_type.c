@@ -87,6 +87,10 @@ int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
     }
 }
 
+int tl_monotype_is_nil(tl_monotype const *mono) {
+    return tl_nil == mono->tag;
+}
+
 int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
     // return 1 if either side has a type variable that occurs on the other side
     switch (lhs.tag) {

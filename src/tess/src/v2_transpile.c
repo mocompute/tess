@@ -1,7 +1,7 @@
 #include "v2_transpile.h"
+
 #include "alloc.h"
 #include "str.h"
-#include "type_inference.h"
 #include "v2_type.h"
 
 #define TRANSPILE_ARENA_SIZE     32 * 1024
@@ -29,6 +29,7 @@ static void cat_sp(transpile *);
 static void cat_double_slash(transpile *);
 static void cat_open_round(transpile *);
 static void cat_close_round(transpile *);
+static void cat_semicolon(transpile *);
 static void catln(transpile *, str);
 static void cat_comment(transpile *, str);
 static void cat_commentln(transpile *, str);
@@ -38,6 +39,8 @@ static int  is_intrinsic(str);
 static int  should_generate(str, tl_type_v2 const *);
 static str  type_to_c(tl_type_v2 const *);
 static str  arrow_rhs_to_c(tl_type_v2 const *);
+static str  arrow_to_c_params(transpile *, tl_type_v2 const *); // allocates transient
+
 //
 
 static void generate_prototypes(transpile *self) {
@@ -54,7 +57,10 @@ static void generate_prototypes(transpile *self) {
         cat_sp(self);
         cat(self, mangle_fun(self, name));
         cat_open_round(self);
+        cat(self, arrow_to_c_params(self, type));
         cat_close_round(self);
+        cat_semicolon(self);
+
         cat_nl(self);
     }
 }
@@ -122,6 +128,9 @@ static void cat_open_round(transpile *self) {
 static void cat_close_round(transpile *self) {
     cat(self, S(")"));
 }
+static void cat_semicolon(transpile *self) {
+    cat(self, S(";"));
+}
 static void catln(transpile *self, str s) {
     cat(self, s);
     cat_nl(self);
@@ -171,6 +180,8 @@ static str type_to_c(tl_type_v2 const *type) {
         } else if (str_eq(S("String"), mono->cons.name)) {
             return S("char const*");
         } else fatal("unknown type constructor");
+    } else if (tl_nil == mono->tag) {
+        return S("void");
     } else fatal("not yet implemented");
 }
 static str type_to_c_mono(tl_monotype const *type) {
@@ -182,4 +193,27 @@ static str arrow_rhs_to_c(tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
     tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
     return type_to_c_mono(right);
+}
+
+// tl_monotype const     *tl_type_v2_arrow_head(tl_monotype const *);
+// tl_monotype const     *tl_type_v2_arrow_next(tl_monotype const *);
+
+static str arrow_to_c_params(transpile *self, tl_type_v2 const *type) {
+    if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+
+    str_build          b    = str_build_init(self->transient, 64);
+    tl_monotype const *args = tl_type_v2_arrow_head(&type->mono);
+    if (!tl_monotype_is_nil(args)) {
+        int done = 0;
+        while (!done) {
+            str_build_cat(&b, type_to_c_mono(args));
+            tl_monotype const *next = tl_type_v2_arrow_next(args);
+            if (next) {
+                str_build_cat(&b, S(", "));
+                args = next;
+            } else done = 1;
+        }
+    }
+
+    return str_build_finish(&b);
 }

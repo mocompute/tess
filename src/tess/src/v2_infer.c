@@ -1501,6 +1501,16 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 }
 
+tl_monotype const *tl_type_v2_arrow_head(tl_monotype const *arrow) {
+    if (tl_arrow != arrow->tag) fatal("logic error");
+    return arrow->arrow.lhs;
+}
+
+tl_monotype const *tl_type_v2_arrow_next(tl_monotype const *mono) {
+    if (tl_arrow == mono->tag) return mono->arrow.rhs;
+    return null;
+}
+
 tl_monotype const *tl_type_v2_arrow_rightmost(tl_monotype const *arrow) {
     if (tl_arrow != arrow->tag) fatal("logic error");
 
