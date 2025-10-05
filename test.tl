@@ -1,4 +1,5 @@
 let _tl_sizeof_  : a -> Int     // actually forall a. a -> int
+let sizeof x     : a -> Int        = _tl_sizeof_ x
 
 
 // let id x = x
@@ -8,5 +9,5 @@ let _tl_sizeof_  : a -> Int     // actually forall a. a -> int
 let main () =
   let val = 1 in
   let str = "hello" in
-  let _ = _tl_sizeof_ str in
-  _tl_sizeof_ val
+  let _ = sizeof str in
+  sizeof val

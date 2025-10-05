@@ -186,11 +186,23 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
 }
 
 static void process_annotation(tl_infer *self, ast_node *node) {
-    assert(ast_symbol == node->tag);
-    if (!node->symbol.annotation) return;
+    ast_node *name = null;
+
+    if (ast_symbol == node->tag) {
+        name = node;
+    } else if (ast_let == node->tag) {
+        name = node->let.name;
+    } else if (ast_node_is_let_in_lambda(node)) {
+        name = node->let_in.name;
+    } else {
+        fatal("logic error");
+    }
+    assert(ast_symbol == name->tag);
+
+    if (!name->symbol.annotation) return;
 
     hashmap    *map                 = map_create(self->transient, sizeof(tl_type_v2 *), 8);
-    tl_type_v2 *ann                 = make_type_annotation(self, node->symbol.annotation, &map);
+    tl_type_v2 *ann                 = make_type_annotation(self, name->symbol.annotation, &map);
     node->symbol.annotation_type_v2 = ann;
 
     map_destroy(&map);
@@ -315,14 +327,16 @@ static int is_tv_eq(tl_type_variable tv, tl_monotype const *mono) {
 }
 
 static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
+    if (tl_var == existing.tag || tl_quant == existing.tag) return 1; // tv and quant compat with everything
+    if (tl_var == apply.tag || tl_quant == apply.tag) return 1;       // tv and quant compat with everything
     switch (existing.tag) {
     case tl_nil:
     case tl_cons:
         if (!tl_monotype_eq(apply, existing)) return 0; // type error
         return 1;
 
-    case tl_var:   return 1;
-    case tl_quant: return 0;
+    case tl_var:
+    case tl_quant: return 1; // quant compatible with everything
 
     case tl_arrow:
         return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.lhs, *apply.arrow.lhs) &&
@@ -488,11 +502,6 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_
     if (is_type_variable(left)) return constrain_tv(self, ctx, left->mono.var, right->mono, node);
     else if (is_type_variable(right)) return constrain_tv(self, ctx, right->mono.var, left->mono, node);
 
-    if (left->mono.tag != right->mono.tag) {
-        log_type_error(self, left, right);
-        return type_error(self, node);
-    }
-
     switch (left->mono.tag) {
     case tl_nil: return 0;
     case tl_cons:
@@ -507,14 +516,17 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_
         }
         break;
 
-    case tl_var:
-    case tl_quant: fatal("logic error");
+    case tl_quant:
+        // no constraints on quantified type variables
+        break;
 
     case tl_arrow: {
         if (constrain_mm(self, ctx, left->mono.arrow.lhs, right->mono.arrow.lhs, node)) return 1;
         if (constrain_mm(self, ctx, left->mono.arrow.rhs, right->mono.arrow.rhs, node)) return 1;
 
     } break;
+
+    case tl_var: fatal("logic error");
     }
 
     return 0;
@@ -676,6 +688,22 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
+    ast_node *clone = ast_node_clone(alloc, node);
+    ast_node *name  = null;
+    if (ast_let == clone->tag) {
+        name = clone->let.name;
+    } else if (ast_node_is_let_in_lambda(clone)) {
+        name = clone->let_in.name;
+    } else {
+        fatal("logic error");
+    }
+    assert(ast_symbol == name->tag);
+    name->symbol.annotation_type_v2 = null;
+    name->symbol.annotation         = null;
+    return clone;
+}
+
 static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     assert(ast_named_function_application == node->tag);
 
@@ -698,7 +726,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     if (constrain(self, ctx, node->type_v2, inst_result_type, node)) return 1;
 
     // clone function source ast and rename variables
-    ast_node *generic_node = ast_node_clone(self->transient, toplevel_get(self, orig));
+    ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, orig));
     hashmap  *rename_lex   = map_create(self->transient, sizeof(str), 16);
     rename_variables(self, generic_node, &rename_lex);
     map_destroy(&rename_lex);
@@ -1529,25 +1557,24 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
     ast_node *infer_target = null;
-    str       name;
-    str       orig_name;
+    ast_node *name_node    = null;
     if (ast_let == node->tag) {
-        name         = node->let.name->symbol.name;
-        orig_name    = node->let.name->symbol.original;
+        name_node    = node->let.name;
         infer_target = node;
     } else if (ast_node_is_let_in_lambda(node)) {
-        name         = node->let_in.name->symbol.name;
-        orig_name    = node->let_in.name->symbol.original;
+        name_node    = node->let_in.name;
         infer_target = node->let_in.value;
     } else if (ast_symbol == node->tag) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
-        name         = node->symbol.name;
-        orig_name    = node->symbol.original;
+        name_node    = node;
         infer_target = null;
     } else {
         fatal("logic error");
     }
+
+    str name      = name_node->symbol.name;
+    str orig_name = name_node->symbol.original;
 
     // do not process a second time
     if (tl_type_env_lookup(self->env, name)) return 0;
@@ -1555,18 +1582,17 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
+    process_annotation(self, name_node);
+
     if (!infer_target) {
         // no function body, so let's treat this as a type declaration
-        process_annotation(self, node);
-        if (!node->symbol.annotation_type_v2) {
+        if (!name_node->symbol.annotation_type_v2) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
             return 1;
         }
         tl_type_env_add(self->env, name, *node->symbol.annotation_type_v2);
         return 0;
     }
-
-    // FIXME: is there an annotated type??
 
     // run inference: this function is not yet in the global environment.
     infer_ctx *ctx = infer_ctx_create(self->transient);
@@ -1588,7 +1614,13 @@ static int add_generic(tl_infer *self, ast_node *node) {
     // quantified) with primitives if possible.
     tl_type_env_subs_apply(self->env, self->subs);
 
-    tl_type_v2 *arrow = tl_type_env_lookup(self->env, name);
+    // get the arrow type from the annotation, or else from the result of inference
+    tl_type_v2 *arrow = null;
+    if (name_node->symbol.annotation_type_v2) {
+        arrow = name_node->symbol.annotation_type_v2;
+    } else {
+        arrow = tl_type_env_lookup(self->env, name);
+    }
     quantify_arrow(self, arrow);
 
     log(self, "-- global env after quantification --");
@@ -1609,8 +1641,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // add free variables to arrow type and put into global environment
-    arrow = tl_type_env_lookup(self->env, name);
-
     assert(arrow && tl_scheme == arrow->tag && tl_arrow == arrow->scheme.type.tag);
     arrow->scheme.type.arrow.fvs = fvs;
     tl_type_v2_arrow_sort_fvs(&arrow->scheme.type.arrow);
