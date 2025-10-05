@@ -113,6 +113,9 @@ int         str_array_contains(str_sized hay, str_sized need);
 int str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
 int str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
 
+str str_init_i64(allocator *, i64);
+str str_init_f64(allocator *, f64);
+
 // -- string builder --
 
 typedef char_array  str_build;

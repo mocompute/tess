@@ -434,6 +434,18 @@ int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     return str_parse_cnum(buf, out_i64, out_u64, out_f64);
 }
 
+str str_init_i64(allocator *alloc, i64 val) {
+    char buf[32];
+    int  len = snprintf(buf, sizeof buf, "%" PRIi64, val);
+    return str_init_n(alloc, buf, len);
+}
+
+str str_init_f64(allocator *alloc, f64 val) {
+    char buf[40];
+    int  len = snprintf(buf, sizeof buf, "%f", val);
+    return str_init_n(alloc, buf, len);
+}
+
 // -- str_build --
 
 nodiscard str_build str_build_init(allocator *alloc, u32 sz) {

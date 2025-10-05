@@ -661,8 +661,8 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_nil:
     case ast_any:
     case ast_string:
-    case ast_f64:
     case ast_i64:
+    case ast_f64:
     case ast_u64:
     case ast_arrow:
     case ast_assignment:

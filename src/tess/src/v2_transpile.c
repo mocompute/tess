@@ -5,6 +5,8 @@
 #include "str.h"
 #include "v2_type.h"
 
+#include <stdio.h>
+
 #define TRANSPILE_ARENA_SIZE     32 * 1024
 #define TRANSPILE_TRANSIENT_SIZE 32 * 1024
 #define TRANSPILE_BUILD_SIZE     32 * 1024
@@ -19,28 +21,40 @@ struct transpile {
 
     str_build    build;
 
+    u32          next_res;
+
     int          verbose;
 };
 
-static void generate_prototypes(transpile *self);
+static str  next_res(transpile *);
+
+static void generate_decl(transpile *, str, tl_monotype const *);
+static str  generate_expr(transpile *, ast_node const *);
+static void generate_main(transpile *);
+static void generate_prototypes(transpile *);
 
 static void cat(transpile *, str);
 static void cat_nl(transpile *);
 static void cat_sp(transpile *);
+static void cat_assign(transpile *);
 static void cat_double_slash(transpile *);
 static void cat_open_round(transpile *);
 static void cat_close_round(transpile *);
 static void cat_open_curly(transpile *);
 static void cat_close_curly(transpile *);
 static void cat_semicolon(transpile *);
+static void cat_semicolonln(transpile *);
 static void catln(transpile *, str);
 static void cat_comment(transpile *, str);
 static void cat_commentln(transpile *, str);
+static void cat_i64(transpile *, i64);
+static void cat_f64(transpile *, f64);
 
 static str  mangle_fun(transpile *, str); // allocates transient
 static int  is_intrinsic(str);
 static int  should_generate(str, tl_type_v2 const *);
 static str  type_to_c(tl_type_v2 const *);
+static str  type_to_c_mono(tl_monotype const *);
 static str  arrow_rhs_to_c(tl_type_v2 const *);
 static str  arrow_to_c_params(transpile *, tl_type_v2 const *); // allocates transient
 
@@ -68,13 +82,133 @@ static void generate_prototypes(transpile *self) {
 }
 
 static void generate_main(transpile *self) {
-    ast_node *main = ast_node_str_map_get(self->toplevels, S("main"));
+    ast_node const *main = ast_node_str_map_get(self->toplevels, S("main"));
     if (!main) fatal("no main function");
+    if (ast_let != main->tag) fatal("logic error");
+    ast_node const *body = main->let.body;
 
     cat(self, S("int main(void) {"));
+    cat_nl(self);
+
+    generate_expr(self, body);
 
     cat_close_curly(self);
     cat_nl(self);
+}
+
+static void generate_assign_lhs(transpile *self, str var) {
+    cat(self, var);
+    cat_assign(self);
+}
+
+static void generate_funcall_head(transpile *self, tl_monotype const *type, str name) {
+    // TODO: function call context goes here
+
+    (void)type;
+    cat(self, name);
+    cat_open_round(self);
+}
+
+static str generate_funcall(transpile *self, ast_node const *node) {
+    assert(ast_node_is_named_application(node));
+    str         name = ast_node_str(node->named_application.name);
+    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+    if (!type) fatal("type missing");
+    if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+
+    // generate arguments: an array of variables will hold their values
+    str_array      args_res = {.alloc = self->transient};
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    array_reserve(args_res, args.size);
+    forall(i, args) {
+        str res = generate_expr(self, args.v[i]);
+        array_push(args_res, res);
+    }
+
+    // declare variable to hold funcall result if it's not nil
+    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(&type->mono);
+    str                res                 = str_empty(); // empty signals void result
+    if (tl_nil != funcall_result_type->tag) {
+        res = next_res(self);
+        generate_decl(self, res, tl_type_v2_arrow_rightmost(&type->mono));
+        generate_assign_lhs(self, res);
+    }
+
+    // function call
+    generate_funcall_head(self, &type->mono, name);
+
+    // args list
+    str_build b = str_build_init(self->transient, 128);
+    str_build_join_array(&b, S(", "), args_res);
+    cat(self, str_build_finish(&b));
+    cat_close_round(self);
+    cat_semicolonln(self);
+
+    return res;
+}
+
+static str generate_str(transpile *self, str expr, tl_monotype const *type) {
+    if (str_is_empty(expr)) return expr;
+    str res = next_res(self);
+    generate_decl(self, res, tl_type_v2_arrow_rightmost(type));
+    generate_assign_lhs(self, res);
+    cat(self, expr);
+    cat_semicolonln(self);
+    return res;
+}
+
+static str generate_expr(transpile *self, ast_node const *node) {
+    if (tl_type_v2_is_scheme(node->type_v2)) fatal("type scheme");
+    tl_monotype const *mono = &node->type_v2->mono;
+
+    switch (node->tag) {
+    case ast_nil:
+    case ast_any:
+    case ast_address_of:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), mono);
+    case ast_i64:                         return generate_str(self, str_init_i64(self->transient, node->i64.val), mono);
+    case ast_if_then_else:
+    case ast_let_in:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:  return generate_funcall(self, node);
+    case ast_tuple:
+    case ast_user_type:
+        cat_commentln(self, S("FIXME: generate_expr"));
+        return str_copy(self->transient, S("FIXME_generate_expr"));
+        break;
+    }
+}
+
+static void generate_decl(transpile *self, str name, tl_monotype const *type) {
+    if (tl_arrow == type->tag) fatal("not yet implemented");
+    else if (tl_cons == type->tag) {
+        str typec = type_to_c_mono(type);
+        cat(self, typec);
+        cat_sp(self);
+        cat(self, name);
+        cat_semicolonln(self);
+
+    } else fatal("type not expected");
 }
 
 int transpile_compile(transpile *self, str_build *out_build) {
@@ -102,6 +236,9 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
 
     self->env       = opts->infer_result.env;
     self->toplevels = opts->infer_result.toplevels;
+
+    self->next_res  = 0;
+
     self->verbose   = !!opts->verbose;
 
     return self;
@@ -122,6 +259,14 @@ void transpile_set_verbose(transpile *self, int val) {
 
 //
 
+static str next_res(transpile *self) {
+    char buf[64];
+    int  len = snprintf(buf, sizeof buf, "tl_res%u", self->next_res++);
+    return str_init_n(self->transient, buf, len);
+}
+
+//
+
 static void cat(transpile *self, str s) {
     str_build_cat(&self->build, s);
 }
@@ -130,6 +275,9 @@ static void cat_nl(transpile *self) {
 }
 static void cat_sp(transpile *self) {
     cat(self, S(" "));
+}
+static void cat_assign(transpile *self) {
+    cat(self, S(" = "));
 }
 static void cat_double_slash(transpile *self) {
     cat(self, S("// "));
@@ -149,6 +297,9 @@ static void cat_close_curly(transpile *self) {
 static void cat_semicolon(transpile *self) {
     cat(self, S(";"));
 }
+static void cat_semicolonln(transpile *self) {
+    cat(self, S(";\n"));
+}
 static void catln(transpile *self, str s) {
     cat(self, s);
     cat_nl(self);
@@ -161,6 +312,16 @@ static void cat_comment(transpile *self, str s) {
 static void cat_commentln(transpile *self, str s) {
     cat_comment(self, s);
     cat_nl(self);
+}
+static void cat_i64(transpile *self, i64 val) {
+    str s = str_init_i64(self->transient, val);
+    cat(self, s);
+    str_deinit(self->transient, &s);
+}
+static void cat_f64(transpile *self, f64 val) {
+    str s = str_init_f64(self->transient, val);
+    cat(self, s);
+    str_deinit(self->transient, &s);
 }
 
 //
@@ -209,6 +370,7 @@ static str type_to_c_mono(tl_monotype const *type) {
 
 static str arrow_rhs_to_c(tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+    if (!tl_type_v2_is_arrow(type)) fatal("expected arrow");
     tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
     return type_to_c_mono(right);
 }
@@ -218,6 +380,7 @@ static str arrow_rhs_to_c(tl_type_v2 const *type) {
 
 static str arrow_to_c_params(transpile *self, tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+    if (!tl_type_v2_is_arrow(type)) fatal("expected arrow");
 
     str_build          b    = str_build_init(self->transient, 64);
     tl_monotype const *args = tl_type_v2_arrow_head(&type->mono);
