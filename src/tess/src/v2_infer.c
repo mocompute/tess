@@ -1794,6 +1794,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // FIXME
     // if (check_main_function(self, main)) return 1;
+    // FIXME: to infer main return type properly, we need an outer function to call main, and to run our
+    // final phase on that outer function.
 
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up

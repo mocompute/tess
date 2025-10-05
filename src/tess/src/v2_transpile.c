@@ -485,7 +485,8 @@ static str type_to_c(tl_type_v2 const *type) {
         } else fatal("unknown type constructor");
     } else if (tl_nil == mono->tag) {
         return S("void");
-    } else fatal("not yet implemented");
+    } else if (tl_var == mono->tag || tl_quant == mono->tag) fatal("can't render a type variable");
+    else fatal("not yet implemented");
 }
 static str type_to_c_mono(tl_monotype const *type) {
     tl_type_v2 t = tl_type_init_mono(*type);

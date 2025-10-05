@@ -11,5 +11,9 @@ let sizeof x     : a -> Int = _tl_sizeof_ x
 
 let f x = x
 
-let main () =
-  let val = 0 in val
+let foo ()  = let val = f 1 in val
+let bar ()  = foo ()
+let baz ()  = bar ()
+let main () = baz ()
+
+let tl_main () = main ()
