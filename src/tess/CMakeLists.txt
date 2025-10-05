@@ -33,6 +33,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
 
   ${PROJECT_SOURCE_DIR}/src/tess/include/v2_infer.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/v2_transpile.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/v2_type.h
 )
 
@@ -50,6 +51,7 @@ set(SOURCES
   src/type_registry.c
 
   src/v2_infer.c
+  src/v2_transpile.c
   src/v2_type.c
 
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
