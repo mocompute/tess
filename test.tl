@@ -12,4 +12,4 @@ let sizeof x     : a -> Int = _tl_sizeof_ x
 let f x = x
 
 let main () =
-  f 0
+  let val = 0 in val

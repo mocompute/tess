@@ -32,12 +32,12 @@ extern char const *embed_std_c;
 static str         next_res(transpile *);
 
 static void        generate_decl(transpile *, str, tl_monotype const *);
-static str         generate_expr(transpile *, ast_node const *);
-static str         generate_typed_expr(transpile *, tl_monotype const *, ast_node const *);
+static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
 static void        generate_main(transpile *);
 static void        generate_prototypes(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
+static void        generate_assign(transpile *, str, str);
 
 static void        cat(transpile *, str);
 static void        cat_nl(transpile *);
@@ -58,6 +58,7 @@ static void        cat_commentln(transpile *, str);
 static void        cat_i64(transpile *, i64);
 static void        cat_f64(transpile *, f64);
 
+tl_monotype       *env_lookup(transpile *, str);
 static str         mangle_fun(transpile *, str); // allocates transient
 static int         is_intrinsic(str);
 static int         should_generate(str, tl_type_v2 const *);
@@ -134,12 +135,10 @@ static void generate_toplevels(transpile *self) {
         cat_close_round(self);
         cat_open_curlyln(self);
 
-        str body_res = generate_expr(self, body);
+        str body_res = generate_expr(self, return_type, body);
         if (!res_is_void) {
             generate_decl(self, res, return_type);
-            generate_assign_lhs(self, res);
-            cat(self, body_res);
-            cat_semicolonln(self);
+            generate_assign(self, res, body_res);
             cat_return(self, res);
         }
         cat_close_curly(self);
@@ -156,7 +155,7 @@ static void generate_main(transpile *self) {
     cat(self, S("int main(void) {"));
     cat_nl(self);
 
-    str res = generate_expr(self, body);
+    str res = generate_expr(self, null, body);
     cat_return(self, res);
 
     cat_close_curly(self);
@@ -166,6 +165,13 @@ static void generate_main(transpile *self) {
 static void generate_assign_lhs(transpile *self, str var) {
     cat(self, var);
     cat_assign(self);
+}
+
+static void generate_assign(transpile *self, str lhs, str rhs) {
+    cat(self, lhs);
+    cat_assign(self);
+    cat(self, rhs);
+    cat_semicolonln(self);
 }
 
 static void generate_funcall_head(transpile *self, tl_monotype const *type, str name) {
@@ -184,7 +190,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     arrow = tl_type_v2_arrow_head(arrow);
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
-        str res = generate_typed_expr(self, arrow, args.v[i]);
+        str res = generate_expr(self, arrow, args.v[i]);
         array_push(args_res, res);
         arrow = tl_type_v2_arrow_next(arrow);
     }
@@ -193,26 +199,24 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 
 static str generate_funcall(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
-    str         name = ast_node_str(node->named_application.name);
-    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
-    if (!type) fatal("type missing");
-    if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+    str          name = ast_node_str(node->named_application.name);
+    tl_monotype *type = env_lookup(self, name);
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, &type->mono);
+    str_array      args_res = generate_args(self, args, type);
 
     // declare variable to hold funcall result if it's not nil
-    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(&type->mono);
+    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(type);
     str                res                 = str_empty(); // empty signals void result
     if (tl_nil != funcall_result_type->tag) {
         res = next_res(self);
-        generate_decl(self, res, tl_type_v2_arrow_rightmost(&type->mono));
+        generate_decl(self, res, tl_type_v2_arrow_rightmost(type));
         generate_assign_lhs(self, res);
     }
 
     // function call
-    generate_funcall_head(self, &type->mono, name);
+    generate_funcall_head(self, type, name);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -220,6 +224,28 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     cat(self, str_build_finish(&b));
     cat_close_round(self);
     cat_semicolonln(self);
+
+    return res;
+}
+
+static str generate_let_in(transpile *self, ast_node const *node) {
+    assert(ast_let_in == node->tag);
+
+    str                name        = ast_node_str(node->let_in.name);
+    tl_monotype const *type        = env_lookup(self, name);
+    tl_type_v2 const  *result_type = node->type_v2;
+    assert(type);
+    assert(tl_type_v2_is_mono(result_type));
+
+    str value = generate_expr(self, type, node->let_in.value);
+
+    generate_decl(self, name, type);
+    generate_assign(self, name, value);
+
+    str body = generate_expr(self, null, node->let_in.body);
+    str res  = next_res(self);
+    generate_decl(self, res, &result_type->mono);
+    generate_assign(self, res, body);
 
     return res;
 }
@@ -234,63 +260,19 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     return res;
 }
 
-static str generate_typed_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. We do it this way because type inference now works top down, meaning the type of
     // an object is held by the object's name, or point of application for unnamed literals.
 
     switch (node->tag) {
-    case ast_i64: return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
-    case ast_f64: return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
-    case ast_nil:
-    case ast_any:
-    case ast_address_of:
-    case ast_arrow:
-    case ast_assignment:
-    case ast_bool:
-    case ast_dereference:
-    case ast_dereference_assign:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_if_then_else:
-    case ast_let_in:
-    case ast_let_match_in:
-    case ast_string:
-    case ast_symbol:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
-    case ast_function_declaration:
-    case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_lambda_function:
-    case ast_lambda_function_application:
-    case ast_let:
-    case ast_named_function_application:
-    case ast_tuple:
-    case ast_user_type:
-        cat_commentln(self, S("FIXME: generate_typed_expr"));
-        return str_copy(self->transient, S("FIXME_generate_typed_expr"));
-        break;
-    }
-}
-
-static str generate_expr(transpile *self, ast_node const *node) {
-    if (tl_type_v2_is_scheme(node->type_v2)) fatal("type scheme");
-
-    switch (node->tag) {
     case ast_named_function_application: return generate_funcall(self, node);
-
-    case ast_nil:
-    case ast_f64:
-    case ast_i64:
-    case ast_u64:
-    case ast_string:                     fatal("literals must be evaluated by generate_typed_expr");
-
+    case ast_let_in:                     return generate_let_in(self, node);
+    case ast_i64:                        return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
+    case ast_f64:                        return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
     case ast_symbol:                     return node->symbol.name;
 
+    case ast_nil:
     case ast_any:
     case ast_address_of:
     case ast_arrow:
@@ -301,8 +283,9 @@ static str generate_expr(transpile *self, ast_node const *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_if_then_else:
-    case ast_let_in:
     case ast_let_match_in:
+    case ast_string:
+    case ast_u64:
     case ast_user_type_definition:
     case ast_user_type_get:
     case ast_user_type_set:
@@ -329,8 +312,9 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
-
-    } else fatal("type not expected");
+    } else if (tl_nil == type->tag) fatal("can't declare a void type");
+    else if (tl_var == type->tag || tl_quant == type->tag) fatal("got a type variable");
+    else fatal("type not expected");
 }
 
 int transpile_compile(transpile *self, str_build *out_build) {
@@ -535,4 +519,11 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
     }
 
     return str_build_finish(&b);
+}
+
+tl_monotype *env_lookup(transpile *self, str name) {
+    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+    if (!type) fatal("type missing");
+    if (tl_type_v2_is_scheme(type)) fatal("type scheme");
+    return &type->mono;
 }
