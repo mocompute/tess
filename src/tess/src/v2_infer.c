@@ -505,6 +505,11 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_
     switch (left->mono.tag) {
     case tl_nil: return 0;
     case tl_cons:
+        if (!str_eq(left->mono.cons.name, right->mono.cons.name)) {
+            log_type_error(self, left, right);
+            return type_error(self, node);
+        }
+
         if (left->mono.cons.args.size != right->mono.cons.args.size) {
             log_type_error(self, left, right);
             return type_error(self, node);
@@ -555,7 +560,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) 
 }
 
 static void rename_variables(tl_infer *, ast_node *, hashmap **);
-static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node *, tl_monotype);
+static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node const *, tl_monotype);
 static int  infer(tl_infer *, infer_ctx *, ast_node *);
 
 static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
@@ -939,6 +944,11 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             // through the call chain, in contrast to the recursive type inference algorithm which attempts
             // to infer from the bottom of the call chain upwards.
             return populate_types_down(self, ctx, node);
+        }
+
+        else {
+            tl_type_v2 result = tl_type_init_mono(*tl_type_v2_arrow_rightmost(&type->mono));
+            if (constrain(self, ctx, &result, node->type_v2, node)) return 1;
         }
     } break;
 
@@ -1338,7 +1348,8 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
     return str_hash64_combine(tl_monotype_hash64(type), name);
 }
 
-static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype arrow) {
+static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node const *node,
+                                     tl_monotype arrow) {
     str       name;
     ast_node *body = null;
 
@@ -1738,13 +1749,26 @@ void remove_generic_toplevels(tl_infer *self) {
 }
 
 static int check_main_function(tl_infer *self, ast_node const *main) {
+    // instantiate and infer main
     tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
+    if (!type) fatal("main function with no type");
+
+    tl_type_v2 inst = instantiate(self, *type);
+    assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
+
+    infer_ctx *ctx       = infer_ctx_create(self->transient);
+    str        inst_name = instantiate_fun_and_infer(self, ctx, main, inst.mono);
+    infer_ctx_destroy(self->transient, &ctx);
+    tl_type_v2 *inst_type = tl_type_env_lookup(self->env, inst_name);
+    tl_type_env_add(self->env, S("main"), inst_type);
+    type = tl_type_env_lookup(self->env, S("main"));
+
     if (!type || !tl_type_v2_is_mono(type) || !tl_type_v2_is_arrow(type)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
         return 1;
     }
 
-    tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
+    tl_monotype const *right = tl_type_v2_arrow_rightmost(&inst_type->mono);
     if (tl_cons != right->tag || !str_eq(right->cons.name, S("Int"))) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
         return 1;
@@ -1794,11 +1818,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
     ast_node *main = *found_main;
 
-    // FIXME
-    // if (check_main_function(self, main)) return 1;
-    // FIXME: to infer main return type properly, we need an outer function to call main, and to run our
-    // final phase on that outer function.
-
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up
     // for the transpiler.
@@ -1820,6 +1839,14 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     tl_type_env_subs_apply(self->env, self->subs);
     apply_subs_to_ast(self);
     tl_type_subs_cleanup(self->transient, self->subs, self->env);
+
+    {
+        // infer_ctx *ctx   = infer_ctx_create(self->transient);
+        // ctx->final_phase = 1;
+        // infer(self, ctx, main);
+        // infer_ctx_destroy(self->transient, &ctx);
+        if (check_main_function(self, main)) return 1;
+    }
 
     log(self, "-- final subs");
     log_subs(self, self->subs);
