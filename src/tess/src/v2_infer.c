@@ -54,6 +54,7 @@ static str        next_instantiation(tl_infer *, str);
 static tl_type_v2 make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 static int        add_generic(tl_infer *, ast_node *);
 static str        v2_ast_node_to_string(allocator *, ast_node const *);
+static void       apply_subs_to_ast(tl_infer *);
 
 static void       toplevel_add(tl_infer *, str, ast_node *);
 static ast_node  *toplevel_get(tl_infer *, str);
@@ -472,6 +473,9 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
                 // all subs that are no longer relevant (because their tvs no longer exist in the
                 // environment). If we can remove at least one substitution, recurse and try to apply the
                 // constraint again.
+
+                // before cleanup, apply types to ast so we don't lose any type info
+                apply_subs_to_ast(self);
                 if (tl_type_subs_cleanup(self->transient, self->subs, self->env)) {
                     return constrain_tv(self, ctx, tv, mono, node);
                 } else {
@@ -1751,6 +1755,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (self->errors.size) return 1;
     if (check_missing_free_variables(self)) return 1;
     tl_type_env_subs_apply(self->env, self->subs);
+    apply_subs_to_ast(self);
     tl_type_subs_cleanup(self->transient, self->subs, self->env);
 
     log(self, "-- inference complete --");
@@ -1785,6 +1790,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // apply subs to global environment
     tl_type_env_subs_apply(self->env, self->subs);
+    apply_subs_to_ast(self);
     tl_type_subs_cleanup(self->transient, self->subs, self->env);
 
     log(self, "-- final subs");
@@ -1998,6 +2004,24 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 }
 
 //
+
+static void do_apply_subs(void *ctx, ast_node *node) {
+    tl_infer *self = ctx;
+    if (node->type_v2) {
+        tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs); // const_cast
+    }
+}
+
+static void apply_subs_to_ast(tl_infer *self) {
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        ast_node_dfs(self, node, do_apply_subs);
+    }
+}
+
+//
+
 static void toplevel_add(tl_infer *self, str name, ast_node *node) {
     ast_node_str_map_add(&self->toplevels, name, node);
 }
@@ -2009,6 +2033,8 @@ static ast_node *toplevel_get(tl_infer *self, str name) {
 static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
     return ast_node_str_map_iter(self->toplevels, iter);
 }
+
+//
 
 static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
                            ast_node const *node) {
