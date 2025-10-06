@@ -970,6 +970,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_lambda_function_application: {
+		
+		// FIXME: need to infer lambda first, and arguments, etc - this is rotted code
 
         tl_type_v2 inst = *node->lambda_application.lambda->type_v2;
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
@@ -998,10 +1000,13 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         map_destroy(&ctx->lex);
         ctx->lex         = save;
 
+		// FIXME: apply subs before arrow - we inferred body above
         tl_type_v2 arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
+		
+		// FIXME: apply subs before saving type, to get the constraints
         ctx->lambda_type = arrow;
 
     } break;
