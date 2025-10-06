@@ -34,6 +34,8 @@ static str         next_res(transpile *);
 static void        generate_decl(transpile *, str, tl_monotype const *);
 static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
 static void        generate_main(transpile *);
+static str         generate_funcall(transpile *, ast_node const *);
+static str         generate_funcall_intrinsic(transpile *, ast_node const *);
 static void        generate_prototypes(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
@@ -187,20 +189,23 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     // generate args to match arrow type
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
-    arrow = tl_type_v2_arrow_head(arrow);
+
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
-        str res = generate_expr(self, arrow, args.v[i]);
+
+        str res = generate_expr(self, arrow->arrow.lhs, args.v[i]);
         array_push(args_res, res);
-        arrow = tl_type_v2_arrow_next(arrow);
+        arrow = arrow->arrow.rhs;
     }
     return args_res;
 }
 
 static str generate_funcall(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
-    str          name = ast_node_str(node->named_application.name);
+    str name = ast_node_str(node->named_application.name);
+    if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node);
+
     tl_monotype *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
@@ -507,20 +512,26 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
     if (!tl_type_v2_is_arrow(type)) fatal("expected arrow");
 
-    str_build          b    = str_build_init(self->transient, 64);
-    tl_monotype const *args = tl_type_v2_arrow_head(&type->mono);
-    if (!tl_monotype_is_nil(args)) {
+    str_build          b     = str_build_init(self->transient, 64);
+
+    tl_monotype const *arrow = &type->mono;
+
+    if (!tl_monotype_is_nil(arrow)) {
         int done = 0;
         for (u32 idx = 0; !done; ++idx) {
-            str_build_cat(&b, type_to_c_mono(args));
+            tl_monotype const *arg = tl_arrow == arrow->tag ? arrow->arrow.lhs : arrow;
+            str_build_cat(&b, type_to_c_mono(arg));
             if (idx < param_names.size) {
                 str_build_cat(&b, S(" "));
                 str_build_cat(&b, param_names.v[idx]);
             }
-            tl_monotype const *next = tl_type_v2_arrow_next(args);
-            if (next) {
-                str_build_cat(&b, S(", "));
-                args = next;
+
+            if (tl_arrow == arrow->tag) {
+                if (arrow->arrow.rhs &&
+                    tl_arrow == arrow->arrow.rhs->tag) { // don't proceed past result type
+                    str_build_cat(&b, S(", "));
+                    arrow = arrow->arrow.rhs;
+                } else done = 1;
             } else done = 1;
         }
     }
@@ -534,4 +545,108 @@ tl_monotype *env_lookup(transpile *self, str name) {
     if (!type) fatal("type missing");
     if (tl_type_v2_is_scheme(type)) return null;
     return &type->mono;
+}
+
+//
+
+// static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
+// }
+
+static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
+    assert(ast_node_is_named_application(node));
+    str          name = ast_node_str(node->named_application.name);
+
+    tl_monotype *type = env_lookup(self, name);
+    if (!type) fatal("funcall with null type");
+
+    // generate arguments: an array of variables will hold their values
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    str_array      args_res = generate_args(self, args, type);
+
+    str_build      b        = str_build_init(self->transient, 80);
+    str            op_str   = str_init_small(op);
+
+    str_build_cat(&b, op_str);
+    str_deinit(self->transient, &op_str);
+
+    str_build_cat(&b, S("("));
+    if (args_res.size < 1) fatal("missing argument");
+    str_build_cat(&b, args_res.v[0]);
+    str_build_cat(&b, S(")"));
+    return str_build_finish(&b);
+}
+
+static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
+    assert(ast_node_is_named_application(node));
+    str          name = ast_node_str(node->named_application.name);
+
+    tl_monotype *type = env_lookup(self, name);
+    if (!type) fatal("funcall with null type");
+
+    // generate arguments: an array of variables will hold their values
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    str_array      args_res = generate_args(self, args, type);
+
+    // args list: join with operator
+    str_build b = str_build_init(self->transient, 128);
+    str_build_cat(&b, S("("));
+
+    str op_str = str_cat_3(self->transient, S(" "), str_init_small(op), S(" "));
+    str_build_join_array(&b, op_str, args_res);
+    str_deinit(self->transient, &op_str);
+
+    str_build_cat(&b, S(")"));
+
+    return str_build_finish(&b);
+}
+
+static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
+    assert(ast_node_is_named_application(node));
+    str name = ast_node_str(node->named_application.name);
+
+    struct dispatch {
+        char const *name;
+        str (*fun)(transpile *, ast_node const *, void *extra);
+        void *extra;
+    };
+
+    static const struct dispatch table[] = {
+      // {"_tl_sizeof_", tl_sizeof, null},
+      // {"_tl_sizeoft_", tl_sizeoft, null},
+
+      {"_tl_add_", tl_binary_op, "+"},
+      {"_tl_sub_", tl_binary_op, "-"},
+      {"_tl_mod_", tl_binary_op, "%"},
+      {"_tl_mul_", tl_binary_op, "*"},
+      {"_tl_div_", tl_binary_op, "/"},
+
+      {"_tl_lt_", tl_binary_op, "<"},
+      {"_tl_lte_", tl_binary_op, "<="},
+      {"_tl_eq_", tl_binary_op, "=="},
+      {"_tl_neq_", tl_binary_op, "!="},
+      {"_tl_gte_", tl_binary_op, ">="},
+      {"_tl_gt_", tl_binary_op, ">"},
+
+      // {"_tl_and_", tl_and, null},
+      // {"_tl_or_", tl_or, null},
+
+      {"_tl_band_", tl_binary_op, "&"},
+      {"_tl_bor_", tl_binary_op, "|"},
+      {"_tl_bxor_", tl_binary_op, "^"},
+
+      {"_tl_bsl_", tl_binary_op, "<<"},
+      {"_tl_bsr_", tl_binary_op, ">>"},
+
+      {"_tl_bcomp_", tl_unary_op, "~"},
+
+      {"", null, null},
+    };
+
+    // NOTE: matches prefix of name limited to length of the defined intrinsics, because inference may
+    // replace applications with phantom specialised names, which have a numeric suffix.
+    struct dispatch const *p = table;
+    for (; p && p->name[0]; ++p)
+        if (0 == str_cmp_nc(name, p->name, strlen(p->name))) return p->fun(self, node, p->extra);
+
+    return str_empty();
 }

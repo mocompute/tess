@@ -68,8 +68,6 @@ u64                    tl_monotype_hash64(tl_monotype);
 void                   tl_monotype_union_fv(tl_monotype *dst, tl_monotype src);
 
 void                   tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *);
-tl_monotype const     *tl_type_v2_arrow_head(tl_monotype const *);
-tl_monotype const     *tl_type_v2_arrow_next(tl_monotype const *);
 tl_monotype const     *tl_type_v2_arrow_rightmost(tl_monotype const *);
 
 // -- type --

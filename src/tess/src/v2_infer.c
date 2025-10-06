@@ -2,9 +2,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast_tags.h"
-#include "dbg.h"
 #include "error.h"
-#include "hash.h"
 #include "str.h"
 #include "v2_type.h"
 
@@ -700,6 +698,8 @@ static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
         name = clone->let.name;
     } else if (ast_node_is_let_in_lambda(clone)) {
         name = clone->let_in.name;
+    } else if (ast_symbol == clone->tag) {
+        name = clone;
     } else {
         fatal("logic error");
     }
@@ -732,13 +732,14 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, orig));
+
     hashmap  *rename_lex   = map_create(self->transient, sizeof(str), 16);
     rename_variables(self, generic_node, &rename_lex);
     map_destroy(&rename_lex);
 
     // assign typevars and constrain params and result type based on my instantiated types
-    ast_node      *body = null;
-    ast_node_sized params;
+    ast_node      *body   = null;
+    ast_node_sized params = {0};
     if (ast_let == generic_node->tag) {
         body                                    = generic_node->let.body;
         params                                  = ast_node_sized_from_ast_array(generic_node);
@@ -749,27 +750,30 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         params                                 = ast_node_sized_from_ast_array(generic_node->let_in.value);
         generic_node->let_in.name->symbol.name = name;
         generic_node->let_in.name->symbol.original = orig;
-
+    } else if (ast_symbol == generic_node->tag) {
+        // no body
+        ;
     } else {
         fatal("logic error");
     }
 
-    tl_monotype *args = &inst_type->mono;
-    forall(i, params) {
-        ast_node *param = params.v[i];
-        param->type_v2  = tl_type_alloc_mono(self->arena, *args->arrow.lhs);
-        args            = args->arrow.rhs;
+    if (body) {
+        tl_monotype *args = &inst_type->mono;
+        forall(i, params) {
+            ast_node *param = params.v[i];
+            param->type_v2  = tl_type_alloc_mono(self->arena, *args->arrow.lhs);
+            args            = args->arrow.rhs;
+        }
+        body->type_v2 = inst_result_type;
+
+        // now constrain the arrows
+        tl_type_v2 arrow = make_arrow(self, params, body);
+        if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
+
+        // recurse and add to toplevel
+        if (infer(self, ctx, generic_node)) return 1;
+        toplevel_add(self, name, generic_node);
     }
-    body->type_v2 = inst_result_type;
-
-    // now constrain the arrows
-    tl_type_v2 arrow = make_arrow(self, params, body);
-    if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
-
-    // recurse and add to toplevel
-    if (infer(self, ctx, generic_node)) return 1;
-    toplevel_add(self, name, generic_node);
-
     return 0;
 }
 
@@ -1359,9 +1363,9 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node co
     } else if (ast_node_is_let_in_lambda(node)) {
         name = node->let_in.name->symbol.name;
         body = node->let_in.value->lambda_function.body;
-    } else {
-        fatal("logic error");
-    }
+    } else if (ast_symbol == node->tag) {
+        name = node->symbol.name;
+    } else fatal("logic error");
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
@@ -1376,7 +1380,9 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node co
     // add to type environment
     tl_type_env_add_mono(self->env, name_inst, arrow);
 
-    if (infer(self, ctx, body)) fatal("error handling");
+    if (body) {
+        if (infer(self, ctx, body)) fatal("error handling");
+    }
 
     return name_inst;
 }
@@ -1523,16 +1529,6 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     }
 }
 
-tl_monotype const *tl_type_v2_arrow_head(tl_monotype const *arrow) {
-    if (tl_arrow != arrow->tag) fatal("logic error");
-    return arrow->arrow.lhs;
-}
-
-tl_monotype const *tl_type_v2_arrow_next(tl_monotype const *mono) {
-    if (tl_arrow == mono->tag) return mono->arrow.rhs;
-    return null;
-}
-
 tl_monotype const *tl_type_v2_arrow_rightmost(tl_monotype const *arrow) {
     if (tl_arrow != arrow->tag) fatal("logic error");
 
@@ -1625,6 +1621,10 @@ static int add_generic(tl_infer *self, ast_node *node) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
             return 1;
         }
+
+        // must quantify arrow types
+        if (tl_type_v2_is_arrow(node->symbol.annotation_type_v2))
+            quantify_arrow(self, node->symbol.annotation_type_v2);
         tl_type_env_add(self->env, name, node->symbol.annotation_type_v2);
         return 0;
     }
