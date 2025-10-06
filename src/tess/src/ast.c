@@ -1349,6 +1349,24 @@ int ast_node_is_named_application(ast_node const *self) {
 int ast_node_is_nil(ast_node const *self) {
     return ast_nil == self->tag;
 }
+int ast_node_is_symbol(ast_node const *self) {
+    return ast_symbol == self->tag;
+}
+int ast_node_is_let(ast_node const *self) {
+    return ast_let == self->tag;
+}
+int ast_node_is_utd(ast_node const *self) {
+    return ast_user_type_definition == self->tag;
+}
+int ast_node_is_nfa(ast_node const *self) {
+    return ast_named_function_application == self->tag;
+}
+int ast_node_is_lambda_function(ast_node const *self) {
+    return ast_lambda_function == self->tag;
+}
+int ast_node_is_assignment(ast_node const *self) {
+    return ast_assignment == self->tag;
+}
 
 tl_type *ast_node_get_arrow(ast_node const *self) {
 

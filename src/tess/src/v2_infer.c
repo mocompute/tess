@@ -186,16 +186,16 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
 static void process_annotation(tl_infer *self, ast_node *node) {
     ast_node *name = null;
 
-    if (ast_symbol == node->tag) {
+    if (ast_node_is_symbol(node)) {
         name = node;
-    } else if (ast_let == node->tag) {
+    } else if (ast_node_is_let(node)) {
         name = node->let.name;
     } else if (ast_node_is_let_in_lambda(node)) {
         name = node->let_in.name;
     } else {
         fatal("logic error");
     }
-    assert(ast_symbol == name->tag);
+    assert(ast_node_is_symbol(name));
 
     if (!name->symbol.annotation) return;
 
@@ -214,12 +214,12 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
-        if (ast_symbol == node->tag) {
+        if (ast_node_is_symbol(node)) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(tops, name_str);
             if (p) {
                 // merge annotation if existing node is a let node; otherwise error
-                if (ast_let != (*p)->tag) {
+                if (!ast_node_is_let(*p)) {
                     array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
                     continue;
                 }
@@ -237,13 +237,13 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             }
         }
 
-        else if (ast_let == node->tag) {
+        else if (ast_node_is_let(node)) {
             str        name_str = ast_node_str(node->let.name);
             ast_node **p        = str_map_get(tops, name_str);
 
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
-                if (ast_symbol != (*p)->tag) {
+                if (!ast_node_is_symbol(*p)) {
                     array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
                     continue;
                 }
@@ -264,7 +264,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             }
         }
 
-        else if (ast_user_type_definition == node->tag) {
+        else if (ast_node_is_utd(node)) {
             str        name_str = ast_node_str(node->user_type_def.name);
             ast_node **p        = str_map_get(tops, name_str);
 
@@ -562,7 +562,7 @@ static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node const *,
 static int  infer(tl_infer *, infer_ctx *, ast_node *);
 
 static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
-    assert(ast_symbol == name->tag);
+    assert(ast_node_is_symbol(name));
     return !tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name->symbol.name));
 }
 
@@ -694,23 +694,23 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
     ast_node *clone = ast_node_clone(alloc, node);
     ast_node *name  = null;
-    if (ast_let == clone->tag) {
+    if (ast_node_is_let(clone)) {
         name = clone->let.name;
     } else if (ast_node_is_let_in_lambda(clone)) {
         name = clone->let_in.name;
-    } else if (ast_symbol == clone->tag) {
+    } else if (ast_node_is_symbol(clone)) {
         name = clone;
     } else {
         fatal("logic error");
     }
-    assert(ast_symbol == name->tag);
+    assert(ast_node_is_symbol(name));
     name->symbol.annotation_type_v2 = null;
     name->symbol.annotation         = null;
     return clone;
 }
 
 static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    assert(ast_named_function_application == node->tag);
+    assert(ast_node_is_nfa(node));
 
     // This path is for specializing instantiated function types after type inference has concluded we have
     // a well-typed program. We pass type information down, rather than infer and gather.
@@ -740,7 +740,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // assign typevars and constrain params and result type based on my instantiated types
     ast_node      *body   = null;
     ast_node_sized params = {0};
-    if (ast_let == generic_node->tag) {
+    if (ast_node_is_let(generic_node)) {
         body                                    = generic_node->let.body;
         params                                  = ast_node_sized_from_ast_array(generic_node);
         generic_node->let.name->symbol.name     = name;
@@ -750,7 +750,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         params                                 = ast_node_sized_from_ast_array(generic_node->let_in.value);
         generic_node->let_in.name->symbol.name = name;
         generic_node->let_in.name->symbol.original = orig;
-    } else if (ast_symbol == generic_node->tag) {
+    } else if (ast_node_is_symbol(generic_node)) {
         // no body
         ;
     } else {
@@ -820,7 +820,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_let_in: {
-        if (ast_lambda_function == node->let_in.value->tag) {
+        if (ast_node_is_lambda_function(node->let_in.value)) {
 
             str name = node->let_in.name->symbol.name;
 
@@ -880,7 +880,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
             if (infer(self, ctx, param)) return 1;
-            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            if (!ast_node_is_nil(param)) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->let.body)) return 1;
@@ -976,7 +976,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
             if (infer(self, ctx, param)) return 1;
-            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            if (!ast_node_is_nil(param)) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->lambda_function.body)) return 1;
@@ -1071,9 +1071,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
         for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
             ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
-            assert(ast_assignment == ass->tag);
+            assert(ast_node_is_assignment(ass));
             ast_node *name_node = ass->assignment.name;
-            assert(ast_symbol == name_node->tag);
+            assert(ast_node_is_symbol(name_node));
             str name                   = name_node->symbol.name;
             str newvar                 = next_variable_name(self);
             name_node->symbol.original = name_node->symbol.name;
@@ -1106,8 +1106,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
             ast_node *param = node->lambda_function.parameters[i];
-            if (ast_nil == param->tag) break;
-            assert(ast_symbol == param->tag);
+            if (ast_node_is_nil(param)) break;
+            assert(ast_node_is_symbol(param));
             str name               = param->symbol.name;
             str newvar             = next_variable_name(self);
             param->symbol.original = param->symbol.name;
@@ -1128,8 +1128,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
-            if (ast_nil == param->tag) break;
-            assert(ast_symbol == param->tag);
+            if (ast_node_is_nil(param)) break;
+            assert(ast_node_is_symbol(param));
             str name               = param->symbol.name;
             str newvar             = next_variable_name(self);
             param->symbol.original = param->symbol.name;
@@ -1159,7 +1159,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
             ast_node *param = node->named_application.arguments[i];
-            if (ast_nil == param->tag) break;
+            if (ast_node_is_nil(param)) break;
             rename_variables(self, param, lex);
         }
     } break;
@@ -1213,8 +1213,8 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
         for (u32 i = 0; i < node->let.n_parameters; ++i) {
             ast_node *param = node->let.parameters[i];
-            if (ast_nil == param->tag) break;
-            assert(ast_symbol == param->tag);
+            if (ast_node_is_nil(param)) break;
+            assert(ast_node_is_symbol(param));
             str name = param->symbol.name;
             str_map_set(lex, name, &name);
         }
@@ -1253,9 +1253,9 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
         for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
             ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
-            assert(ast_assignment == ass->tag);
+            assert(ast_node_is_assignment(ass));
             ast_node *name_node = ass->assignment.name;
-            assert(ast_symbol == name_node->tag);
+            assert(ast_node_is_symbol(name_node));
             str name = name_node->symbol.name;
 
             str_map_set(lex, name, &name);
@@ -1295,8 +1295,8 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
             ast_node *param = node->lambda_function.parameters[i];
-            if (ast_nil == param->tag) break;
-            assert(ast_symbol == param->tag);
+            if (ast_node_is_nil(param)) break;
+            assert(ast_node_is_symbol(param));
             str name = param->symbol.name;
             str_map_set(lex, name, &name);
         }
@@ -1320,7 +1320,7 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
         collect_free_variables(self, node->named_application.name, lex, fvs);
         for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
             ast_node *param = node->named_application.arguments[i];
-            if (ast_nil == param->tag) break;
+            if (ast_node_is_nil(param)) break;
             collect_free_variables(self, param, lex, fvs);
         }
     } break;
@@ -1357,13 +1357,13 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node co
     str       name;
     ast_node *body = null;
 
-    if (ast_let == node->tag) {
+    if (ast_node_is_let(node)) {
         name = node->let.name->symbol.name;
         body = node->let.body;
     } else if (ast_node_is_let_in_lambda(node)) {
         name = node->let_in.name->symbol.name;
         body = node->let_in.value->lambda_function.body;
-    } else if (ast_symbol == node->tag) {
+    } else if (ast_node_is_symbol(node)) {
         name = node->symbol.name;
     } else fatal("logic error");
 
@@ -1500,7 +1500,7 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
 
     else if (args.size == 1) {
         // nil type
-        if (ast_nil == args.v[0]->tag)
+        if (ast_node_is_nil(args.v[0]))
             args.v[0]->type_v2 = tl_type_alloc_mono(self->arena, tl_monotype_init_nil());
         else ensure_tv(self, null, &args.v[0]->type_v2);
 
@@ -1589,13 +1589,13 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     ast_node *infer_target = null;
     ast_node *name_node    = null;
-    if (ast_let == node->tag) {
+    if (ast_node_is_let(node)) {
         name_node    = node->let.name;
         infer_target = node;
     } else if (ast_node_is_let_in_lambda(node)) {
         name_node    = node->let_in.name;
         infer_target = node->let_in.value;
-    } else if (ast_symbol == node->tag) {
+    } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
         name_node    = node;
@@ -1633,7 +1633,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     infer_ctx *ctx = infer_ctx_create(self->transient);
     if (infer(self, ctx, infer_target)) return 1;
 
-    if (ast_lambda_function == infer_target->tag) {
+    if (ast_node_is_lambda_function(infer_target)) {
         // since the infer target is unnamed, the lambda function could not add itself to the
         // environment. We must do so here before the quantified variable analysis.
         tl_type_env_add(self->env, name, &ctx->lambda_type);
@@ -1728,13 +1728,13 @@ void remove_generic_toplevels(tl_infer *self) {
     while ((node = toplevel_iter(self, &iter))) {
         str         name;
         tl_type_v2 *type = null;
-        if (ast_symbol == node->tag) {
+        if (ast_node_is_symbol(node)) {
             name = node->symbol.name;
             type = tl_type_env_lookup(self->env, name);
         } else if (ast_node_is_let_in_lambda(node)) {
             name = node->let_in.name->symbol.name;
             type = tl_type_env_lookup(self->env, name);
-        } else if (ast_let == node->tag) {
+        } else if (ast_node_is_let(node)) {
             name = node->let.name->symbol.name;
             type = tl_type_env_lookup(self->env, name);
         } else fatal("logic error");
@@ -1750,7 +1750,7 @@ void remove_generic_toplevels(tl_infer *self) {
 
 static int check_main_function(tl_infer *self, ast_node const *main) {
     // instantiate and infer main
-    assert(ast_let == main->tag);
+    assert(ast_node_is_let(main));
     tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
 

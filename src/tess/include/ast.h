@@ -294,9 +294,15 @@ ast_node     **ast_node_assignment_names(allocator *, ast_node const *);
 
 u64            ast_node_hash(ast_node const *);
 
+int            ast_node_is_assignment(ast_node const *);
+int            ast_node_is_let(ast_node const *);
 int            ast_node_is_let_in_lambda(ast_node const *);
 int            ast_node_is_named_application(ast_node const *);
 int            ast_node_is_nil(ast_node const *);
+int            ast_node_is_symbol(ast_node const *);
+int            ast_node_is_lambda_function(ast_node const *);
+int            ast_node_is_utd(ast_node const *);
+int            ast_node_is_nfa(ast_node const *);
 
 tl_type       *ast_node_get_arrow(ast_node const *);
 
