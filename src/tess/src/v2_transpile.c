@@ -119,6 +119,7 @@ static void generate_toplevels(transpile *self) {
         str_array params_str = {.alloc = self->transient};
         array_reserve(params_str, params.size);
         forall(i, params) {
+            if (ast_node_is_nil(params.v[i])) break;
             array_push(params_str, params.v[i]->symbol.name);
         }
 

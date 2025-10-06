@@ -1,5 +1,20 @@
+// let fact x =
+//     // confirmed that this will be tail call optimised by clang at -O,
+//     if   lte x 1
+//     then 1
+//     else mul x (fact (decr x))
+
+// let main () =
+//   fact 20
+//     // if   eq (fact 20) 2432902008176640000
+//     // then 0
+//     // else 1
+
+let id x = x
+
+
+
 let main () =
-  let val = 123 in
-  let x1 = _tl_sizeof_ val in
-  let x2 = _tl_sizeof_ "hello" in
-  x2
+  let val = 1 in
+  let f1 = fun () -> val in
+  val

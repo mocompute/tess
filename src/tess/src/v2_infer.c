@@ -1806,7 +1806,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     forall(i, nodes) add_generic(self, nodes.v[i]);
 
     if (self->errors.size) return 1;
+
+    // check if free variables are present
     if (check_missing_free_variables(self)) return 1;
+
     tl_type_env_subs_apply(self->env, self->subs);
     apply_subs_to_ast(self);
     tl_type_subs_cleanup(self->transient, self->subs, self->env);
