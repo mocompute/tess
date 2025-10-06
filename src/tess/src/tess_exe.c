@@ -33,6 +33,7 @@ typedef struct {
 
     int             verbose;
     int             verbose_parse;
+    int             no_preamble;
     int             help;
 } state;
 
@@ -45,6 +46,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    repl                   launch the repl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage\n");
+    printf("    -no-preamble           do not include std.tl preamble\n");
     printf("    -o                     write output to path instead of stdout\n");
     printf("    -v                     verbose logging\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
@@ -60,6 +62,7 @@ void state_init(state *self) {
     array_reserve(self->words, 32);
     self->verbose       = 0;
     self->verbose_parse = 0;
+    self->no_preamble   = 0;
     self->help          = 0;
 }
 
@@ -82,6 +85,7 @@ void state_gather_single_options(state *self, char *str) {
 
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
+    else if (0 == strcmp("--no-preamble", str)) self->no_preamble = 1;
 }
 
 void state_gather_options(state *self, int argc, char *argv[]) {
@@ -135,7 +139,7 @@ int compile(state *self) {
     array_reserve(preamble, 32 * 1024);
 
     // embed std_tl header
-    array_push_many(preamble, embed_std_tl, strlen(embed_std_tl));
+    if (!self->no_preamble) array_push_many(preamble, embed_std_tl, strlen(embed_std_tl));
 
     parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
                                    (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
@@ -221,7 +225,8 @@ int compile_v2(state *self) {
     char_array preamble     = {.alloc = default_allocator()};
     size_t     preamble_len = strlen(embed_std_tl);
     array_reserve(preamble, preamble_len);
-    array_push_many(preamble, embed_std_tl, preamble_len);
+
+    if (!self->no_preamble) array_push_many(preamble, embed_std_tl, preamble_len);
 
     parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
                                    (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
