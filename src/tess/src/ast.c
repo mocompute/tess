@@ -826,6 +826,16 @@ ast_node *ast_node_body(ast_node *self) {
     else return null;
 }
 
+str ast_node_toplevel_name(ast_node const *node) {
+    if (ast_node_is_let(node)) {
+        return node->let.name->symbol.name;
+    } else if (ast_node_is_let_in_lambda(node)) {
+        return node->let_in.name->symbol.name;
+    } else if (ast_node_is_symbol(node)) {
+        return node->symbol.name;
+    } else fatal("logic error");
+}
+
 //
 
 struct dfs_ctx {

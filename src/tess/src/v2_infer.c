@@ -1374,18 +1374,8 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
 
 static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node const *node,
                                      tl_monotype arrow) {
-    str       name;
-    ast_node *body = null;
-
-    if (ast_node_is_let(node)) {
-        name = node->let.name->symbol.name;
-        body = node->let.body;
-    } else if (ast_node_is_let_in_lambda(node)) {
-        name = node->let_in.name->symbol.name;
-        body = node->let_in.value->lambda_function.body;
-    } else if (ast_node_is_symbol(node)) {
-        name = node->symbol.name;
-    } else fatal("logic error");
+    str       name = ast_node_toplevel_name(node);
+    ast_node *body = ast_node_body((ast_node *)node);
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
