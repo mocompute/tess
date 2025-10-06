@@ -1222,6 +1222,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex);
 
+        // establishes scope for lambda body
         rename_variables(self, node->lambda_application.lambda, lex);
     } break;
 

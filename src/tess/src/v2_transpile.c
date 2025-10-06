@@ -33,6 +33,7 @@ static str         next_res(transpile *);
 
 static void        generate_decl(transpile *, str, tl_monotype const *);
 static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
+static void        generate_inline_lambda(transpile *, ast_node const *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *);
@@ -230,7 +231,7 @@ static str generate_funcall(transpile *self, ast_node const *node) {
 }
 
 static str generate_let_in(transpile *self, ast_node const *node) {
-    assert(ast_let_in == node->tag);
+    assert(ast_node_is_let_in(node));
 
     str                name        = ast_node_str(node->let_in.name);
     tl_monotype const *type        = env_lookup(self, name); // may be null
@@ -252,6 +253,30 @@ static str generate_let_in(transpile *self, ast_node const *node) {
     return res;
 }
 
+static void generate_inline_lambda(transpile *self, ast_node const *node) {
+    assert(ast_node_is_lambda_application(node));
+
+    ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
+    ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
+    assert(params.size == args.size);
+
+    // eval the args, then assign to the params
+    forall(i, args) {
+        ast_node const *arg = args.v[i];
+        if (ast_node_is_nil(arg)) break;
+        // FIXME: continue
+    }
+
+    forall(i, params) {
+        ast_node const *param = params.v[i];
+        if (ast_node_is_nil(param)) break;
+        assert(ast_node_is_symbol(param));
+        assert(tl_type_v2_is_mono(param->type_v2));
+
+        generate_decl(self, param->symbol.name, &param->type_v2->mono);
+    }
+}
+
 static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     if (str_is_empty(expr)) return expr;
     str res = next_res(self);
@@ -268,12 +293,13 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // an object is held by the object's name, or point of application for unnamed literals.
 
     switch (node->tag) {
-    case ast_named_function_application: return generate_funcall(self, node);
-    case ast_let_in:                     return generate_let_in(self, node);
-    case ast_i64:                        return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
-    case ast_u64:                        return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
-    case ast_f64:                        return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
-    case ast_bool:                       return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
+    case ast_named_function_application:  return generate_funcall(self, node);
+    case ast_lambda_function_application: return generate_inline_lambda(self, node);
+    case ast_let_in:                      return generate_let_in(self, node);
+    case ast_i64:                         return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
+    case ast_u64:                         return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
+    case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
+    case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
     case ast_symbol: return node->symbol.name;
@@ -298,7 +324,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_labelled_tuple:
     case ast_lambda_declaration:
     case ast_lambda_function:
-    case ast_lambda_function_application:
     case ast_let:
     case ast_tuple:
     case ast_user_type:

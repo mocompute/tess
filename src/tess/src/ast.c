@@ -1392,6 +1392,9 @@ int ast_node_is_symbol(ast_node const *self) {
 int ast_node_is_let(ast_node const *self) {
     return ast_let == self->tag;
 }
+int ast_node_is_let_in(ast_node const *self) {
+    return ast_let_in == self->tag;
+}
 int ast_node_is_utd(ast_node const *self) {
     return ast_user_type_definition == self->tag;
 }

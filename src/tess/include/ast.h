@@ -309,6 +309,7 @@ u64            ast_node_hash(ast_node const *);
 
 int            ast_node_is_assignment(ast_node const *);
 int            ast_node_is_let(ast_node const *);
+int            ast_node_is_let_in(ast_node const *);
 int            ast_node_is_let_in_lambda(ast_node const *);
 int            ast_node_is_named_application(ast_node const *);
 int            ast_node_is_nil(ast_node const *);
