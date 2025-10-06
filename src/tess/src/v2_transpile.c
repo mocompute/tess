@@ -103,24 +103,16 @@ static void generate_toplevels(transpile *self) {
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
-        ast_node      *body = null;
-        ast_node_sized params;
-        if (ast_let == node->tag) {
-            params.size = node->let.n_parameters;
-            params.v    = node->let.parameters;
-            body        = node->let.body;
-        } else if (ast_node_is_let_in_lambda(node)) {
-            params.size = node->let_in.value->lambda_function.n_parameters;
-            params.v    = node->let_in.value->lambda_function.parameters;
-            body        = node->let_in.value->lambda_function.body;
-        }
+        ast_node *body = ast_node_body(node);
         if (!body) fatal("function body not found");
 
-        str_array params_str = {.alloc = self->transient};
-        array_reserve(params_str, params.size);
-        forall(i, params) {
-            if (ast_node_is_nil(params.v[i])) break;
-            array_push(params_str, params.v[i]->symbol.name);
+        ast_arguments_iter iter       = ast_node_arguments_iter(node);
+        str_array          params_str = {.alloc = self->transient};
+        array_reserve(params_str, iter.nodes.size);
+
+        ast_node *param;
+        while ((param = ast_arguments_next(&iter))) {
+            array_push(params_str, param->symbol.name);
         }
 
         str ret         = arrow_rhs_to_c(type);

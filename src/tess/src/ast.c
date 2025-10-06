@@ -803,6 +803,31 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
     }
 }
 
+//
+
+ast_arguments_iter ast_node_arguments_iter(ast_node *node) {
+    if (ast_node_is_let_in_lambda(node)) node = node->let_in.value;
+
+    // These variants all share the same layout for parameters or arguments:
+    // ast_let, ast_named_function_application, ast_lambda_application, ast_lambda_function
+    return (ast_arguments_iter){.index = 0,
+                                .nodes = (ast_node_sized){.size = node->array.n, .v = node->array.nodes}};
+}
+
+ast_node *ast_arguments_next(ast_arguments_iter *iter) {
+    if (iter->index >= iter->nodes.size) return null;
+    ast_node *node = iter->nodes.v[iter->index++];
+    return ast_node_is_nil(node) ? null : node;
+}
+
+ast_node *ast_node_body(ast_node *self) {
+    if (ast_node_is_let(self)) return self->let.body;
+    else if (ast_node_is_let_in_lambda(self)) return self->let_in.value->lambda_function.body;
+    else return null;
+}
+
+//
+
 struct dfs_ctx {
     void      *caller_ctx;
     ast_op_fun fun;

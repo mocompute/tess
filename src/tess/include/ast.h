@@ -270,6 +270,18 @@ void ast_node_each_node(void *, ast_node_each_node_fun, ast_node *);
 void ast_node_map_node(void *, ast_node_map_node_fun, ast_node *);
 void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 
+// -- arguments
+
+typedef struct {
+    ast_node_sized nodes;
+    u32            index;
+} ast_arguments_iter;
+
+ast_arguments_iter ast_node_arguments_iter(ast_node *);      // smart selection based on node tag
+ast_node          *ast_arguments_next(ast_arguments_iter *); // recognises nil argument
+
+ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
+
 // -- utilities --
 
 char          *ast_node_to_string(allocator *alloc, ast_node const *node);

@@ -585,11 +585,12 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_let: {
-        hashmap *save = map_copy(ctx->lex);
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-        }
+        hashmap           *save = map_copy(ctx->lex);
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter)))
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+
         if (infer_applications(self, ctx, node->let.body)) return 1;
         map_destroy(&ctx->lex);
         ctx->lex = save;
@@ -619,16 +620,14 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
         // infer the arguments
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            if (infer(self, ctx, node->named_application.arguments[i])) return 1;
-        }
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (infer(self, ctx, arg)) return 1;
 
         // constrain arrow types
         ensure_tv(self, null, &node->type_v2);
-        tl_type_v2 app = make_arrow(self,
-                                    (ast_node_sized){.size = node->named_application.n_arguments,
-                                                     .v    = node->named_application.arguments},
-                                    node);
+        tl_type_v2 app = make_arrow(self, iter.nodes, node);
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
@@ -645,12 +644,12 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_lambda_function: {
-        hashmap *save = map_copy(ctx->lex);
+        hashmap           *save = map_copy(ctx->lex);
 
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            if (ast_nil != param->tag) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-        }
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter)))
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
 
         if (infer_applications(self, ctx, node->lambda_function.body)) return 1;
 
@@ -881,11 +880,13 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_let: {
-        hashmap *save = map_copy(ctx->lex);
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
+        hashmap           *save = map_copy(ctx->lex);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             if (infer(self, ctx, param)) return 1;
-            if (!ast_node_is_nil(param)) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->let.body)) return 1;
@@ -896,10 +897,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // Note: add a new arrow type to environment only if not already present - we don't want to make a
         // new arrow with no fvs during final phase
         if (!tl_type_env_lookup(self->env, node->let.name->symbol.name)) {
-            tl_type_v2 arrow =
-              make_arrow(self, (ast_node_sized){.size = node->let.n_parameters, .v = node->let.parameters},
-                         node->let.body);
-
+            tl_type_v2 arrow = make_arrow(self, iter.nodes, node->let.body);
             tl_type_env_add(self->env, node->let.name->symbol.name, &arrow);
         }
 
@@ -925,9 +923,10 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         ensure_tv(self, null, &node->type_v2);
 
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            if (infer(self, ctx, node->named_application.arguments[i])) return 1;
-        }
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (infer(self, ctx, arg)) return 1;
 
         str         name = node->named_application.name->symbol.name;
         tl_type_v2 *type = tl_type_env_lookup(self->env, name);
@@ -976,12 +975,13 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_lambda_function: {
-        hashmap *save = map_copy(ctx->lex);
+        hashmap           *save = map_copy(ctx->lex);
 
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             if (infer(self, ctx, param)) return 1;
-            if (!ast_node_is_nil(param)) str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
         if (infer(self, ctx, node->lambda_function.body)) return 1;
@@ -989,10 +989,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         map_destroy(&ctx->lex);
         ctx->lex         = save;
 
-        tl_type_v2 arrow = make_arrow(self,
-                                      (ast_node_sized){.size = node->lambda_function.n_parameters,
-                                                       .v    = node->lambda_function.parameters},
-                                      node->lambda_function.body);
+        tl_type_v2 arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
@@ -1117,11 +1114,11 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     case ast_lambda_function: {
         // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
+        hashmap           *save = map_copy(*lex);
 
-        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
-            ast_node *param = node->lambda_function.parameters[i];
-            if (ast_node_is_nil(param)) break;
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name               = param->symbol.name;
             str newvar             = next_variable_name(self);
@@ -1139,11 +1136,11 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     case ast_let: {
         // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
+        hashmap           *save = map_copy(*lex);
 
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            if (ast_node_is_nil(param)) break;
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name               = param->symbol.name;
             str newvar             = next_variable_name(self);
@@ -1172,11 +1169,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_named_function_application: {
         rename_variables(self, node->named_application.name, lex);
 
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            ast_node *param = node->named_application.arguments[i];
-            if (ast_node_is_nil(param)) break;
-            rename_variables(self, param, lex);
-        }
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex);
+
     } break;
 
     case ast_user_type_get:        rename_variables(self, node->user_type_get.struct_name, lex); break;
@@ -1224,11 +1220,11 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
     case ast_let: {
         // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
+        hashmap           *save = map_copy(*lex);
 
-        for (u32 i = 0; i < node->let.n_parameters; ++i) {
-            ast_node *param = node->let.parameters[i];
-            if (ast_node_is_nil(param)) break;
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name = param->symbol.name;
             str_map_set(lex, name, &name);
@@ -1306,11 +1302,11 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
     case ast_lambda_function: {
         // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(*lex);
+        hashmap           *save = map_copy(*lex);
 
-        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
-            ast_node *param = node->lambda_function.parameters[i];
-            if (ast_node_is_nil(param)) break;
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name = param->symbol.name;
             str_map_set(lex, name, &name);
@@ -1333,11 +1329,10 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 
     case ast_named_function_application: {
         collect_free_variables(self, node->named_application.name, lex, fvs);
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            ast_node *param = node->named_application.arguments[i];
-            if (ast_node_is_nil(param)) break;
-            collect_free_variables(self, param, lex, fvs);
-        }
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) collect_free_variables(self, arg, lex, fvs);
+
     } break;
 
     case ast_user_type_get:        collect_free_variables(self, node->user_type_get.struct_name, lex, fvs); break;
@@ -2029,6 +2024,8 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_lambda_function: {
         str out = str_copy(alloc, S("fun"));
+
+        // here we want to include the nil value
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
             out = str_cat_3(alloc, out, S(" "),
                             v2_ast_node_to_string(alloc, node->lambda_function.parameters[i]));
