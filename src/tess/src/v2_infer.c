@@ -490,6 +490,9 @@ static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_
 
 static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
                      ast_node const *node) {
+    // NOTE: it is often required to apply constraints created by calling this function immediately, at the
+    // callsite.
+
     if (left == right) return 0;
     if (tl_type_v2_is_scheme(left)) return constrain_mt(self, ctx, &left->scheme.type, right, node);
     if (tl_type_v2_is_scheme(right)) return constrain_mt(self, ctx, &right->scheme.type, left, node);
@@ -692,6 +695,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_user_type:                   break;
     }
 
+    tl_type_env_subs_apply(self->env, self->subs);
     return 0;
 }
 
@@ -728,11 +732,14 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
     assert(tl_mono == inst_type->tag);
     tl_monotype const *inst_result_mono = tl_type_v2_arrow_rightmost(&inst_type->mono);
-    tl_type_v2 const  *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
+    tl_type_v2        *inst_result_type = tl_type_alloc_mono(self->arena, *inst_result_mono);
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
     if (constrain(self, ctx, node->type_v2, inst_result_type, node)) return 1;
+    tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs);
+    tl_type_v2_apply_subs(inst_type, self->subs);
+    tl_type_v2_apply_subs(inst_result_type, self->subs);
 
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, orig));
@@ -773,6 +780,8 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // now constrain the arrows
         tl_type_v2 arrow = make_arrow(self, params, body);
         if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
+        tl_type_v2_apply_subs(inst_type, self->subs);
+        tl_type_v2_apply_subs(&arrow, self->subs);
 
         // recurse and add to toplevel
         if (infer(self, ctx, generic_node)) return 1;
@@ -796,31 +805,31 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_string:     {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("String"));
         ensure_tv(self, null, &node->type_v2);
-        return constrain(self, ctx, node->type_v2, ty, node);
+        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_f64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Float"));
         ensure_tv(self, null, &node->type_v2);
-        return constrain(self, ctx, node->type_v2, ty, node);
+        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_i64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
         ensure_tv(self, null, &node->type_v2);
-        return constrain(self, ctx, node->type_v2, ty, node);
+        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_u64: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int")); // FIXME unsigned int
         ensure_tv(self, null, &node->type_v2);
-        return constrain(self, ctx, node->type_v2, ty, node);
+        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_bool: {
         tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Bool"));
         ensure_tv(self, null, &node->type_v2);
-        return constrain(self, ctx, node->type_v2, ty, node);
+        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_let_in: {
@@ -1026,6 +1035,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_user_type:            break;
     }
 
+    // apply newly created constraint substitutions
     tl_type_env_subs_apply(self->env, self->subs);
     return 0;
 }
