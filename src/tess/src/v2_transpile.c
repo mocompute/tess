@@ -549,8 +549,27 @@ tl_monotype *env_lookup(transpile *self, str name) {
 
 //
 
-// static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
-// }
+static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
+    (void)extra;
+
+    assert(ast_node_is_named_application(node));
+    str          name = ast_node_str(node->named_application.name);
+
+    tl_monotype *type = env_lookup(self, name);
+    if (!type) fatal("funcall with null type");
+
+    // generate arguments: an array of variables will hold their values
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    str_array      args_res = generate_args(self, args, type);
+
+    str_build      b        = str_build_init(self->transient, 80);
+
+    str_build_cat(&b, S("sizeof ("));
+    if (args_res.size < 1) fatal("missing argument");
+    str_build_cat(&b, args_res.v[0]);
+    str_build_cat(&b, S(")"));
+    return str_build_finish(&b);
+}
 
 static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
     assert(ast_node_is_named_application(node));
@@ -611,7 +630,7 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
     };
 
     static const struct dispatch table[] = {
-      // {"_tl_sizeof_", tl_sizeof, null},
+      {"_tl_sizeof_", tl_sizeof, null},
       // {"_tl_sizeoft_", tl_sizeoft, null},
 
       {"_tl_add_", tl_binary_op, "+"},

@@ -615,7 +615,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 1;
         }
 
-        tl_type_v2 inst = instantiate(self, *fun);
+        tl_type_v2 inst = tl_type_v2_is_scheme(fun) ? instantiate(self, *fun) : *fun;
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
         // infer the arguments
@@ -1754,7 +1754,7 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
 
-    tl_type_v2 inst = instantiate(self, *type);
+    tl_type_v2 inst = tl_type_v2_is_scheme(type) ? instantiate(self, *type) : *type;
     assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
     tl_type_v2 const *body_type = main->let.body->type_v2;
