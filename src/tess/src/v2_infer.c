@@ -646,6 +646,27 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         node->named_application.name->symbol.name     = name_inst;
     } break;
 
+    case ast_lambda_function_application: {
+        if (infer(self, ctx, node->lambda_application.lambda)) return 1;
+        tl_type_v2 const *fun  = node->lambda_application.lambda->type_v2;
+        tl_type_v2        inst = *fun;
+        tl_type_v2_apply_subs(&inst, self->subs);
+
+        // infer the arguments
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (infer(self, ctx, arg)) return 1;
+
+        ensure_tv(self, null, &node->type_v2);
+        tl_type_v2 app = make_arrow(self, iter.nodes, node);
+        if (constrain(self, ctx, &inst, &app, node)) return 1;
+        tl_type_v2_apply_subs(&inst, self->subs);
+
+        if (infer(self, ctx, node->lambda_application.lambda)) return 1;
+
+    } break;
+
     case ast_lambda_function: {
         hashmap           *save = map_copy(ctx->lex);
 
@@ -667,7 +688,6 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (infer_applications(self, ctx, node->if_then_else.no)) return 1;
     } break;
 
-    case ast_lambda_function_application:
     case ast_symbol:
     case ast_address_of:
     case ast_nil:
@@ -692,7 +712,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_labelled_tuple:
     case ast_lambda_declaration:
     case ast_tuple:
-    case ast_user_type:                   break;
+    case ast_user_type:            break;
     }
 
     tl_type_env_subs_apply(self->env, self->subs);
@@ -970,10 +990,20 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_lambda_function_application: {
-		
-		// FIXME: need to infer lambda first, and arguments, etc - this is rotted code
+
+        ensure_tv(self, null, &node->type_v2);
+        infer_applications(self, ctx, node);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (infer(self, ctx, arg)) return 1;
+
+        if (infer_applications(self, ctx, node)) return 1;
 
         tl_type_v2 inst = *node->lambda_application.lambda->type_v2;
+        tl_type_v2_apply_subs(&inst, self->subs);
+        tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
         // constrain arrow types
@@ -998,15 +1028,17 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (infer(self, ctx, node->lambda_function.body)) return 1;
 
         map_destroy(&ctx->lex);
-        ctx->lex         = save;
+        ctx->lex = save;
 
-		// FIXME: apply subs before arrow - we inferred body above
+        // apply subs before arrow - we inferred body above
+        tl_type_v2_apply_subs((tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
         tl_type_v2 arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
-		
-		// FIXME: apply subs before saving type, to get the constraints
+
+        // apply subs before saving type, to get the constraints
+        tl_type_v2_apply_subs(&arrow, self->subs);
         ctx->lambda_type = arrow;
 
     } break;
@@ -1077,6 +1109,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         str newvar                         = next_variable_name(self);
         node->let_in.name->symbol.original = node->let_in.name->symbol.name;
         node->let_in.name->symbol.name     = newvar;
+        log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
+            str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
+            str_buf(&node->let_in.name->symbol.name));
 
         // establish lexical scope of the let-in binding and recurse
         hashmap *save = map_copy(*lex);
@@ -1177,9 +1212,13 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             rename_variables(self, node->begin_end.expressions[i], lex);
         break;
 
-    case ast_lambda_function_application:
+    case ast_lambda_function_application: {
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex);
+
         rename_variables(self, node->lambda_application.lambda, lex);
-        break;
+    } break;
 
     case ast_named_function_application: {
         rename_variables(self, node->named_application.name, lex);

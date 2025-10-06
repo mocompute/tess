@@ -806,6 +806,8 @@ void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
 //
 
 ast_arguments_iter ast_node_arguments_iter(ast_node *node) {
+    assert(ast_node_is_let(node) || ast_node_is_let_in_lambda(node) || ast_node_is_lambda_function(node) ||
+           ast_node_is_lambda_application(node) || ast_node_is_nfa(node));
     if (ast_node_is_let_in_lambda(node)) node = node->let_in.value;
 
     // These variants all share the same layout for parameters or arguments:
@@ -1398,6 +1400,9 @@ int ast_node_is_nfa(ast_node const *self) {
 }
 int ast_node_is_lambda_function(ast_node const *self) {
     return ast_lambda_function == self->tag;
+}
+int ast_node_is_lambda_application(ast_node const *self) {
+    return ast_lambda_function_application == self->tag;
 }
 int ast_node_is_assignment(ast_node const *self) {
     return ast_assignment == self->tag;

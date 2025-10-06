@@ -10,11 +10,11 @@
 //     // then 0
 //     // else 1
 
-let id x = x
-let f x = id x
-let g x = f x
-let h x = g x
+// let id x = x
+// let f x = id x
+// let g x = f x
+// let h x = g x
 
 let main () =
   let val = 1 in
-  h val
+  (fun x -> x) val
