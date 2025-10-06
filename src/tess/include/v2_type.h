@@ -10,12 +10,12 @@ typedef u32 tl_type_variable;   // t0, t1, etc
 typedef u32 tl_type_quantifier; // forall a. b. etc
 
 // clang-format off
-typedef struct {array_header; tl_type_variable *v;}                   tl_type_variable_array;
-typedef struct {array_header; tl_type_quantifier *v;}                 tl_type_quantifier_array;
-typedef struct {array_header; struct tl_monotype *v;}                 tl_monotype_array;
-typedef struct {array_header; struct tl_type_v2 *v;}                  tl_type_v2_array;
-typedef struct {str name; tl_type_quantifier_array vars;}             tl_type_constructor;
-typedef struct {str name; tl_monotype_array        args;}             tl_type_constructor_inst;
+typedef struct {array_header; tl_type_variable *v;}       tl_type_variable_array;
+typedef struct {array_header; tl_type_quantifier *v;}     tl_type_quantifier_array;
+typedef struct {array_header; struct tl_monotype *v;}     tl_monotype_array;
+typedef struct {array_header; struct tl_type_v2 *v;}      tl_type_v2_array;
+typedef struct {str name; tl_type_quantifier_array vars;} tl_type_constructor;
+typedef struct {str name; tl_monotype_array        args;} tl_type_constructor_inst;
 // clang-format on
 
 typedef struct {
