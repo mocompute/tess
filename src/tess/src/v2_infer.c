@@ -659,6 +659,12 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     } break;
 
+    case ast_if_then_else: {
+        if (infer_applications(self, ctx, node->if_then_else.condition)) return 1;
+        if (infer_applications(self, ctx, node->if_then_else.yes)) return 1;
+        if (infer_applications(self, ctx, node->if_then_else.no)) return 1;
+    } break;
+
     case ast_lambda_function_application:
     case ast_symbol:
     case ast_address_of:
@@ -675,7 +681,6 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
-    case ast_if_then_else:
     case ast_let_match_in:
     case ast_user_type_definition:
     case ast_user_type_get:
@@ -995,13 +1000,23 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     } break;
 
+    case ast_if_then_else: {
+        if (infer(self, ctx, node->if_then_else.condition)) return 1;
+        if (infer(self, ctx, node->if_then_else.yes)) return 1;
+        if (infer(self, ctx, node->if_then_else.no)) return 1;
+
+        tl_type_v2 *bool_type = tl_type_env_lookup(self->env, S("Bool"));
+        if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
+        if (constrain(self, ctx, node->if_then_else.yes->type_v2, node->if_then_else.no->type_v2, node))
+            return 1;
+    } break;
+
     case ast_arrow:
     case ast_assignment:
     case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
-    case ast_if_then_else:
     case ast_let_match_in:
     case ast_user_type_definition:
     case ast_user_type_get:
