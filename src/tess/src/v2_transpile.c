@@ -101,7 +101,7 @@ static void generate_toplevels(transpile *self) {
 
         tl_monotype const *return_type = tl_type_v2_arrow_rightmost(&type->mono);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
-        if (!node) fatal("function not found");
+        if (!node) continue; // e.g. std.tl funs that aren't used
 
         ast_node      *body = null;
         ast_node_sized params;
@@ -144,6 +144,7 @@ static void generate_toplevels(transpile *self) {
             cat_return(self, res);
         }
         cat_close_curly(self);
+        cat_nl(self);
         cat_nl(self);
     }
 }

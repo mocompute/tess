@@ -221,8 +221,7 @@ int compile_v2(state *self) {
     char_array preamble     = {.alloc = default_allocator()};
     size_t     preamble_len = strlen(embed_std_tl);
     array_reserve(preamble, preamble_len);
-    // array_push_many(preamble, embed_std_tl, preamble_len);
-    // FIXME
+    array_push_many(preamble, embed_std_tl, preamble_len);
 
     parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
                                    (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
