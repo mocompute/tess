@@ -631,6 +631,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // constrain arrow types
         ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self, iter.nodes, node);
+        tl_type_v2_apply_subs(&app, self->subs);
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
@@ -660,6 +661,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self, iter.nodes, node);
+        tl_type_v2_apply_subs(&app, self->subs);
         if (constrain(self, ctx, &inst, &app, node)) return 1;
         tl_type_v2_apply_subs(&inst, self->subs);
 
@@ -799,6 +801,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // now constrain the arrows
         tl_type_v2 arrow = make_arrow(self, params, body);
+        tl_type_v2_apply_subs(&arrow, self->subs);
         if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
         tl_type_v2_apply_subs(inst_type, self->subs);
         tl_type_v2_apply_subs(&arrow, self->subs);
@@ -927,6 +930,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // new arrow with no fvs during final phase
         if (!tl_type_env_lookup(self->env, node->let.name->symbol.name)) {
             tl_type_v2 arrow = make_arrow(self, iter.nodes, node->let.body);
+            tl_type_v2_apply_subs(&arrow, self->subs);
             tl_type_env_add(self->env, node->let.name->symbol.name, &arrow);
         }
 
@@ -1011,6 +1015,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                     (ast_node_sized){.size = node->lambda_application.n_arguments,
                                                      .v    = node->lambda_application.arguments},
                                     node);
+        tl_type_v2_apply_subs(&app, self->subs);
         if (constrain(self, ctx, &inst, &app, node)) return 1;
 
     } break;
