@@ -521,7 +521,12 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_
     else if (is_type_variable(right)) return constrain_tv(self, ctx, right->mono.var, left->mono, node);
 
     switch (left->mono.tag) {
-    case tl_nil: return 0;
+    case tl_nil:
+        if (tl_nil != right->mono.tag) {
+            log_type_error(self, left, right);
+            return type_error(self, node);
+        }
+        break;
     case tl_cons:
         if (!str_eq(left->mono.cons.name, right->mono.cons.name)) {
             log_type_error(self, left, right);
@@ -586,7 +591,7 @@ static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
     return !tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name->symbol.name));
 }
 
-static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // only infer function applications in order to instantiate generics into specialised instances,
     // traversing ast
 
@@ -623,10 +628,6 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         str         name = node->named_application.name->symbol.name;
         tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
 
-        if (is_name_instanatiated(self, node->named_application.name))
-            // this node has already been instantiated
-            return 0;
-
         // if generic, name and type must exist in toplevels
         ast_node *fun_node = toplevel_get(self, name);
 
@@ -657,6 +658,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         tl_type_v2_apply_subs(&inst, self->subs);
 
         // now infer an *instantiated* function body (or use a prior instantiation)
+        if (is_name_instanatiated(self, node->named_application.name)) return 0;
         str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
 
         // replace name with instantiated name
@@ -983,7 +985,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             if (add_generic(self, fun)) return 1;
 
             // instantiate and constrain
-            infer_applications(self, ctx, node);
+            if (infer_applications(self, ctx, node)) return 1;
             name = node->named_application.name->symbol.name; // instantiated
         }
 
@@ -998,13 +1000,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         else {
             tl_type_v2 result = tl_type_init_mono(*tl_type_v2_arrow_rightmost(&type->mono));
             if (constrain(self, ctx, &result, node->type_v2, node)) return 1;
+
+            if (infer_applications(self, ctx, node)) return 1;
         }
     } break;
 
     case ast_lambda_function_application: {
 
         ensure_tv(self, null, &node->type_v2);
-        infer_applications(self, ctx, node);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;

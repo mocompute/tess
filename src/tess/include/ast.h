@@ -275,6 +275,7 @@ void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 typedef struct {
     ast_node_sized nodes;
     u32            index;
+    u32            count;
 } ast_arguments_iter;
 
 ast_arguments_iter ast_node_arguments_iter(ast_node *);      // smart selection based on node tag

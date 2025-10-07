@@ -812,8 +812,10 @@ ast_arguments_iter ast_node_arguments_iter(ast_node *node) {
 
     // These variants all share the same layout for parameters or arguments:
     // ast_let, ast_named_function_application, ast_lambda_application, ast_lambda_function
-    return (ast_arguments_iter){.index = 0,
-                                .nodes = (ast_node_sized){.size = node->array.n, .v = node->array.nodes}};
+    return (ast_arguments_iter){
+      .index = 0,
+      .count = node->array.n ? (node->array.nodes[0]->tag == ast_nil ? 0 : node->array.n) : 0,
+      .nodes = (ast_node_sized){.size = node->array.n, .v = node->array.nodes}};
 }
 
 ast_node *ast_arguments_next(ast_arguments_iter *iter) {
