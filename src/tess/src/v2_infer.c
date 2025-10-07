@@ -361,7 +361,7 @@ static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotyp
     // context of subs, replace it with the existing substitution. Similarly recursively for type
     // constructor arguments and arrow arms.
 
-    if (tl_monotype_occurs(tl_monotype_init_tv(tv), mono)) return 0;
+    if (tl_monotype_occurs(tl_monotype_init_tv(tv), mono)) return 1;
 
     switch (mono.tag) {
 
