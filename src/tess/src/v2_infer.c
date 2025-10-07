@@ -46,23 +46,10 @@ struct tl_infer {
 
 //
 
-static tl_type_v2 instantiate(tl_infer *, tl_type_v2);
-static str        next_variable_name(tl_infer *);
-static str        next_instantiation(tl_infer *, str);
-static tl_type_v2 make_arrow(tl_infer *, ast_node_sized, ast_node const *);
-static int        add_generic(tl_infer *, ast_node *);
-static str        v2_ast_node_to_string(allocator *, ast_node const *);
-static void       apply_subs_to_ast(tl_infer *);
-
-static void       toplevel_add(tl_infer *, str, ast_node *);
-static void       toplevel_del(tl_infer *self, str name);
-static ast_node  *toplevel_get(tl_infer *, str);
-static ast_node  *toplevel_iter(tl_infer *, hashmap_iterator *);
-
-static void       log(tl_infer const *self, char const *restrict fmt, ...);
-static void       log_toplevels(tl_infer const *);
-static void       log_env(tl_infer const *, tl_type_env const *);
-static void       log_subs(tl_infer *);
+static void log(tl_infer const *self, char const *restrict fmt, ...);
+static void log_toplevels(tl_infer const *);
+static void log_env(tl_infer const *, tl_type_env const *);
+static void log_subs(tl_infer *);
 
 //
 
@@ -277,6 +264,8 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
 // -- tree shake --
 
+static ast_node *toplevel_get(tl_infer *, str);
+
 typedef struct {
     tl_infer *self;
     hashmap  *names; // str set
@@ -353,8 +342,10 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     type_error(ctx->self, ctx->node);
 }
 
-static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
-                     ast_node const *node) {
+static tl_type_v2 instantiate(tl_infer *, tl_type_v2);
+
+static int        constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
+                            ast_node const *node) {
     (void)ctx;
     log_constraint(self, left, right, node);
 
@@ -380,11 +371,12 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     *type = tl_type_alloc_mono(self->arena, tl_monotype_init_tv(tl_type_subs_fresh(self->subs)));
 }
 
-static void rename_variables(tl_infer *, ast_node *, hashmap **);
-static str  specialise_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype);
-static int  infer(tl_infer *, infer_ctx *, ast_node *);
+static void       rename_variables(tl_infer *, ast_node *, hashmap **);
+static str        specialise_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype);
+static int        infer(tl_infer *, infer_ctx *, ast_node *);
+static tl_type_v2 make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 
-static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
+static int        is_name_instanatiated(tl_infer *self, ast_node *name) {
     assert(ast_node_is_symbol(name));
     return !tl_type_v2_is_scheme(tl_type_env_lookup(self->env, name->symbol.name));
 }
@@ -548,7 +540,9 @@ static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
     return clone;
 }
 
-static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+static void toplevel_add(tl_infer *, str, ast_node *);
+
+static int  populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     assert(ast_node_is_nfa(node));
 
     // This path is for specializing instantiated function types after type inference has concluded we have
@@ -621,6 +615,8 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     }
     return 0;
 }
+
+static int add_generic(tl_infer *, ast_node *);
 
 static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // - update self->subs by collecting and applying constraints found recursively starting at node.
@@ -892,10 +888,11 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static str next_variable_name(tl_infer *);
+
+// Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
+// preserving lexical scope. This simplifies later passes by removing name collision concerns.
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
-    // transform variables recursively in node so that every occurrence is unique, respecting lexical
-    // scope created by lambda functions, let functions, and let in expressions so that variables have
-    // the same name when they refer to the same bound value.
 
     if (null == node) return;
 
@@ -1231,6 +1228,8 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 static u64 hash_name_and_type(str name, tl_monotype type) {
     return str_hash64_combine(tl_monotype_hash64(type), name);
 }
+
+static str next_instantiation(tl_infer *, str);
 
 static str specialise_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, tl_monotype arrow) {
     str       name = toplevel_name(node);
@@ -1589,7 +1588,9 @@ int check_missing_free_variables(tl_infer *self) {
     return error;
 }
 
-void remove_generic_toplevels(tl_infer *self) {
+static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
+
+void             remove_generic_toplevels(tl_infer *self) {
     str_array        names = {.alloc = self->transient};
 
     ast_node        *node;
@@ -1617,7 +1618,9 @@ void remove_generic_toplevels(tl_infer *self) {
     array_free(names);
 }
 
-void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
+static void toplevel_del(tl_infer *self, str name);
+
+void        tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     hashmap         *used   = tree_shake(self, start);
 
     str_array        remove = {.alloc = self->transient};
@@ -1654,7 +1657,9 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
-int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
+static void apply_subs_to_ast(tl_infer *);
+
+int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
@@ -1741,7 +1746,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     return 0;
 }
 
-void tl_infer_report_errors(tl_infer *self) {
+static str v2_ast_node_to_string(allocator *, ast_node const *);
+
+void       tl_infer_report_errors(tl_infer *self) {
     if (self->errors.size) {
         forall(i, self->errors) {
             tl_infer_error *err     = &self->errors.v[i];
@@ -1751,13 +1758,13 @@ void tl_infer_report_errors(tl_infer *self) {
             if (node) {
                 str node_str = v2_ast_node_to_string(self->transient, node);
                 fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
-                        tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
-                        str_ilen(node_str), str_buf(&node_str));
+                              tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
+                              str_ilen(node_str), str_buf(&node_str));
             }
 
             else
                 fprintf(stderr, "error: %s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
-                        str_buf(&message));
+                              str_buf(&message));
         }
     }
 }
