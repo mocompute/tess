@@ -6,6 +6,7 @@
 #include "hash.h"
 #include "hashmap.h"
 #include "str.h"
+#include "util.h"
 
 #include <stdio.h>
 
@@ -283,6 +284,168 @@ str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
 
 //
 
+// -- tl_type_subs --
+
+tl_type_variable tl_type_subs_fresh(tl_type_subs *self) {
+    tl_type_uf_node x = {.parent = self->size};
+    array_push(*self, x);
+    return x.parent;
+}
+
+static tl_type_variable uf_find(tl_type_subs *self, tl_type_variable tv) {
+    assert(tv < self->size);
+    if (self->v[tv].parent != tv) {
+        // path compression
+        self->v[tv].parent = uf_find(self, self->v[tv].parent);
+    }
+    return self->v[tv].parent;
+}
+
+static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable tv2) {
+    tl_type_variable x = uf_find(self, tv1);
+    tl_type_variable y = uf_find(self, tv2);
+    assert(max(x, y) < self->size);
+
+    if (x == y) return;
+
+    // merge by rank
+    if (self->v[x].rank < self->v[y].rank) swap(x, y);
+
+    // make x the new root
+    self->v[y].parent = x;
+    if (self->v[x].rank == self->v[y].rank) self->v[x].rank++;
+}
+
+int tl_monotype_unify(allocator *alloc, tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
+                      type_error_cb_fun cb, void *user) {
+
+    // resolve type variables, if possible
+    if (tl_var == left->tag) {
+        tl_type_variable root     = uf_find(subs, left->var);
+        tl_monotype     *resolved = subs->v[root].type;
+        if (resolved) left = resolved;
+    }
+    if (tl_var == right->tag) {
+        tl_type_variable root     = uf_find(subs, right->var);
+        tl_monotype     *resolved = subs->v[root].type;
+        if (resolved) right = resolved;
+    }
+
+    // if both are still tvs, unify them
+    if (tl_var == left->tag && tl_var == right->tag) {
+        return tl_type_subs_unify(alloc, subs, left->var, right, cb, user);
+    }
+
+    // otherwise one is tv, the other is concrete or structural
+    if (tl_var == left->tag) return tl_type_subs_unify(alloc, subs, left->var, right, cb, user);
+    if (tl_var == right->tag) return tl_type_subs_unify(alloc, subs, right->var, left, cb, user);
+
+    // both are concrete, must unify structures:
+    if (left->tag != right->tag) {
+        if (cb) cb(user, left, right);
+        return 1;
+    }
+
+    switch (left->tag) {
+    case tl_nil: return 0;
+
+    case tl_cons:
+        if (!str_eq(left->cons.name, right->cons.name)) {
+            return 1;
+        }
+        if (left->cons.args.size != right->cons.args.size) {
+            return 1;
+        }
+        forall(i, left->cons.args) {
+            if (tl_monotype_unify(alloc, subs, &left->cons.args.v[i], &right->cons.args.v[i], cb, user)) {
+                if (cb) cb(user, &left->cons.args.v[i], &right->cons.args.v[i]);
+                return 1;
+            }
+        }
+        return 0;
+
+    case tl_arrow:
+        if (tl_monotype_unify(alloc, subs, left->arrow.lhs, right->arrow.lhs, cb, user)) {
+            if (cb) cb(user, left->arrow.lhs, right->arrow.lhs);
+            return 1;
+        }
+
+        if (tl_monotype_unify(alloc, subs, left->arrow.rhs, right->arrow.rhs, cb, user)) {
+            if (cb) cb(user, left->arrow.rhs, right->arrow.rhs);
+            return 1;
+        }
+        return 0;
+
+    case tl_quant:
+    case tl_var:   fatal("unreachable");
+    }
+}
+
+int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
+    switch (mono->tag) {
+    case tl_nil: return 0;
+    case tl_var: {
+        tl_type_variable root = uf_find(self, mono->var);
+        if (root == tv) return 1;
+        tl_monotype *resolved = self->v[root].type;
+        if (resolved) return tl_type_subs_monotype_occurs(self, tv, resolved);
+        return 0;
+    } break;
+
+    case tl_cons:
+        forall(i, mono->cons.args) {
+            if (tl_type_subs_monotype_occurs(self, tv, &mono->cons.args.v[i])) return 1;
+        }
+        return 0;
+
+    case tl_arrow:
+        return tl_type_subs_monotype_occurs(self, tv, mono->arrow.lhs) ||
+               tl_type_subs_monotype_occurs(self, tv, mono->arrow.rhs);
+    case tl_quant: fatal("unreachable");
+    }
+}
+
+int tl_type_subs_unify(allocator *alloc, tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
+                       type_error_cb_fun cb, void *user) {
+    tl_type_variable tv_root = uf_find(self, tv);
+
+    // case 1: both are tvs
+    if (tl_var == mono->tag) {
+        tl_type_variable mono_root = uf_find(self, mono->var);
+        if (tv_root == mono_root) return 0; // already in same equivalence class
+
+        tl_monotype *tv_type   = self->v[tv_root].type;
+        tl_monotype *mono_type = self->v[mono_root].type;
+        if (tv_type && mono_type) {
+            // both are resolved: must unify
+            if (!tl_monotype_unify(alloc, self, tv_type, mono_type, cb, user)) return 1;
+        }
+
+        // union the two classes
+        uf_union(self, tv_root, mono_root);
+
+        // preserve the resolved type, if any
+        tl_type_variable union_root = uf_find(self, tv_root);
+        if (tv_type) self->v[union_root].type = tv_type;
+        else if (mono_type) self->v[union_root].type = mono_type;
+        return 0;
+    }
+
+    // case 2: tv = concrete type
+    if (tl_monotype_occurs(tl_monotype_init_tv(tv_root), *mono)) return 1;
+
+    tl_monotype *tv_type = self->v[tv_root].type;
+    if (tv_type) {
+        // must unify
+        return tl_monotype_unify(alloc, self, tv_type, mono, cb, user);
+    }
+
+    // store the type at the root
+    self->v[tv_root].type  = new (alloc, tl_monotype);
+    *self->v[tv_root].type = tl_monotype_clone(alloc, *mono);
+    return 0;
+}
+
 static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) {
     switch (self->tag) {
     case tl_cons: {
@@ -292,11 +455,9 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) 
     } break;
 
     case tl_var: {
-        tl_monotype *sub = map_get(subs->map, &self->var, sizeof self->var);
-        // Note: prevent arrow recursion when substituting
-        if (sub) {
-            *self = *sub;
-        }
+        tl_type_variable root     = uf_find((tl_type_subs *)subs, self->var);
+        tl_monotype     *resolved = subs->v[root].type;
+        if (resolved) *self = *resolved;
 
     } break;
 
@@ -321,53 +482,18 @@ void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
     else return tl_monotype_substitute(&self->scheme.type, subs);
 }
 
-//
-
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
     tl_type_subs *self = new (alloc, tl_type_subs);
-    self->map          = map_create(alloc, sizeof(tl_monotype), 1024);
+    self->alloc        = alloc;
+    array_reserve(*self, 1024);
     return self;
 }
 
 void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
     if (!p || !*p) return;
-    map_destroy(&(*p)->map);
+    array_free(**p);
     alloc_free(alloc, *p);
     *p = null;
-}
-
-void tl_type_subs_add(tl_type_subs *self, tl_type_variable from, tl_monotype to) {
-    map_set(&self->map, &from, sizeof from, &to);
-}
-
-tl_monotype *tl_type_subs_get(tl_type_subs *self, tl_type_variable from) {
-    return map_get(self->map, &from, sizeof from);
-}
-
-int tl_type_subs_cleanup(allocator *alloc, tl_type_subs *self, tl_type_env *env) {
-    // remove subs for tvs that do not exist in env. Return number of removals.
-    tl_type_variable_array remove = {.alloc = alloc};
-    int                    count  = 0;
-
-    // Apply substitutions.
-    tl_type_env_subs_apply(env, self);
-
-    // Find tvs that don't occur in the environment.
-    hashmap_iterator iter = {0};
-    while (map_iter(self->map, &iter)) {
-        tl_type_variable tv;
-        memcpy(&tv, iter.key_ptr, sizeof(tl_type_variable));
-        if (!tl_type_env_find_tv(env, tv, null)) {
-            ++count;
-            array_push(remove, tv);
-        }
-    }
-
-    // Remove them from the subs map.
-    forall(i, remove) map_erase(self->map, &remove.v[i], sizeof remove.v[0]);
-
-    array_free(remove);
-    return count;
 }
 
 //
@@ -470,25 +596,8 @@ str tl_type_v2_to_string(allocator *alloc, tl_type_v2 const *self) {
 }
 
 str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
-    str_build        b    = str_build_init(alloc, 64);
-
-    hashmap_iterator iter = {0};
-    while (map_iter(self->map, &iter)) {
-
-        tl_type_variable tvar;
-        memcpy(&tvar, iter.key_ptr, sizeof(tl_type_variable));
-
-        tl_monotype const *monot = iter.data;
-        str                tv    = tl_type_variable_to_string(alloc, &tvar);
-        str_build_cat(&b, tv);
-        str_deinit(alloc, &tv);
-        str_build_cat(&b, S(" => "));
-        str mono = tl_monotype_to_string(alloc, monot);
-        str_build_cat(&b, mono);
-        str_deinit(alloc, &mono);
-    }
-
-    return str_build_finish(&b);
+    return str_copy(alloc, S("not implemented"));
+    (void)self;
 }
 
 // -- env --
@@ -624,13 +733,8 @@ void tl_type_env_reindex(tl_type_env *self) {
 
 tl_type_context tl_type_context_empty() {
     return (tl_type_context){
-      .next_var   = 0,
       .next_quant = 0,
     };
-}
-
-tl_type_variable tl_type_context_new_variable(tl_type_context *self) {
-    return (tl_type_variable)self->next_var++;
 }
 
 tl_monotype tl_type_context_new_quantifier(tl_type_context *self) {

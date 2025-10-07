@@ -62,7 +62,6 @@ static ast_node  *toplevel_iter(tl_infer *, hashmap_iterator *);
 static void       log(tl_infer const *self, char const *restrict fmt, ...);
 static void       log_toplevels(tl_infer const *);
 static void       log_env(tl_infer const *, tl_type_env const *);
-static void       log_subs(tl_infer const *, tl_type_subs const *);
 
 //
 
@@ -356,208 +355,42 @@ static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
     }
 }
 
-static int unify(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono) {
-    // unify tv with mono in the context of ctx->subs: if mono is a type variable that exists in the
-    // context of subs, replace it with the existing substitution. Similarly recursively for type
-    // constructor arguments and arrow arms.
-
-    if (tl_monotype_occurs(tl_monotype_init_tv(tv), mono)) return 1;
-
-    switch (mono.tag) {
-
-    case tl_nil:  break;
-
-    case tl_cons: {
-        // attempt to match type constructor arguments against existing type vars
-        forall(i, mono.cons.args) {
-            if (tl_var == mono.cons.args.v[i].tag) {
-                tl_monotype *found = tl_type_subs_get(self->subs, mono.cons.args.v[i].var);
-                if (found) mono.cons.args.v[i] = *found;
-            }
-        }
-    } break;
-
-    case tl_var: {
-        // if mono is a tv, unify it with existing tv, if any
-        tl_monotype *mono_match = tl_type_subs_get(self->subs, mono.var);
-        if (mono_match) return unify(self, ctx, tv, *mono_match);
-    } break;
-
-    case tl_quant: fatal("attempt to unify quantifier");
-
-    case tl_arrow: {
-        // if either arm is an existing tv, use its substitution instead, because we want to add a
-        // minimal amount of new tvs to the context
-        tl_monotype *left_match  = null;
-        tl_monotype *right_match = null;
-
-        if (tl_var == mono.arrow.lhs->tag) left_match = tl_type_subs_get(self->subs, mono.arrow.lhs->var);
-        if (tl_var == mono.arrow.rhs->tag) right_match = tl_type_subs_get(self->subs, mono.arrow.rhs->var);
-
-        if (left_match) mono.arrow.lhs = left_match;
-        if (right_match) mono.arrow.rhs = right_match;
-
-    } break;
-    }
-
-    // add the substitution
-    tl_type_subs_add(self->subs, tv, mono);
-
-    // apply the substitution, if possible, to the rest of substitutions
-    if (tl_var != mono.tag) {
-        // any existing subs with tv on the right hand side should be replaced with the new non-tv
-        // mono
-        hashmap_iterator iter = {0};
-        while (map_iter(self->subs->map, &iter)) {
-            tl_monotype *rhs = iter.data;
-
-            if (tl_var == rhs->tag && rhs->var == tv) *rhs = mono;
-
-            else if (tl_arrow == rhs->tag) {
-                tl_type_v2_arrow *a = &rhs->arrow;
-
-                // Note: clone required here to prevent recursive arrows
-                if (is_tv_eq(tv, a->lhs)) *a->lhs = tl_monotype_clone(self->arena, mono);
-                if (is_tv_eq(tv, a->rhs)) *a->rhs = tl_monotype_clone(self->arena, mono);
-            }
-
-            else if (tl_cons == rhs->tag) {
-                tl_type_constructor_inst *c = &rhs->cons;
-                forall(i, c->args) {
-                    if (is_tv_eq(tv, &c->args.v[i])) c->args.v[i] = tl_monotype_clone(self->arena, mono);
-                }
-            }
-        }
-    }
-
-    return 0;
-}
-
 static void log_constraint(tl_infer *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
 static void log_type_error(tl_infer *, tl_type_v2 const *, tl_type_v2 const *);
 static void log_type_error_mm(tl_infer *, tl_monotype const *, tl_monotype const *);
 
-static int  constrain(tl_infer *, infer_ctx *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
-static int  constrain_mm(tl_infer *, infer_ctx *, tl_monotype const *, tl_monotype const *,
-                         ast_node const *);
-static int constrain_mt(tl_infer *, infer_ctx *, tl_monotype const *, tl_type_v2 const *, ast_node const *);
+static int  constrain(tl_infer *, infer_ctx *, tl_type_v2 *, tl_type_v2 *, ast_node const *);
 
-static int constrain_tv(tl_infer *self, infer_ctx *ctx, tl_type_variable tv, tl_monotype mono,
-                        ast_node const *node) {
-    tl_monotype *exist = tl_type_subs_get(self->subs, tv);
-    if (!exist) return unify(self, ctx, tv, mono);
+typedef struct {
+    tl_infer       *self;
+    ast_node const *node;
+} type_error_cb_ctx;
 
-    // There exists a substitution on tv. Decide how to compose with the new substitution.
-    if (constraint_is_compatible(*exist, mono)) {
-        // the new constraint does not conflict
-        switch (exist->tag) {
-        case tl_var:
-        case tl_arrow: return constrain_mm(self, ctx, exist, &mono, node);
-
-        case tl_nil:
-        case tl_cons:
-            // the compat check decided the types were equal, so we can ignore it
-            return 0;
-
-        case tl_quant: fatal("logic error"); // unreachable
-        }
-    } else if (constraint_is_compatible(mono, *exist)) {
-        // the mirror does not conflict: mono could be a tv we can add to subs
-        if (tl_var == mono.tag) {
-            if (!tl_type_subs_get(self->subs, mono.var)) {
-                return constrain_tv(self, ctx, mono.var, tl_monotype_init_tv(tv), node);
-            } else {
-                // the tv also exists: check all three right-hand
-                // constraints: the two existing ones, and the new
-                // one. They must all be compatible.
-                tl_monotype *exist2 = tl_type_subs_get(self->subs, mono.var);
-                assert(exist2);
-                if (!constraint_is_compatible(mono, *exist2)) {
-                    log_type_error_mm(self, &mono, exist2);
-                    return type_error(self, node);
-                }
-
-                // since we don't have room, we can't add this new substitution. We can try to eliminate a
-                // substitution by applying it to our environment.
-                // For example: exist: 1 == 2, 2 == 3, 3 == 1 : add 3 == 4
-
-                // tv, mono, exist are each keys in self->subs. We apply subs to environment and then remove
-                // all subs that are no longer relevant (because their tvs no longer exist in the
-                // environment). If we can remove at least one substitution, recurse and try to apply the
-                // constraint again.
-
-                // before cleanup, apply types to ast so we don't lose any type info
-                apply_subs_to_ast(self);
-                if (tl_type_subs_cleanup(self->transient, self->subs, self->env)) {
-                    return constrain_tv(self, ctx, tv, mono, node);
-                } else {
-                    // we have failed
-                    fatal("oops");
-                }
-            }
-        } else {
-            // a compatible nil, cons or arrow: this can be ignored
-            return 0;
-        }
-    } else {
-        log_type_error_mm(self, exist, &mono);
-        return type_error(self, node);
-    }
+static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
+    type_error_cb_ctx *ctx = ctx_;
+    log_type_error_mm(ctx->self, left, right);
+    type_error(ctx->self, ctx->node);
 }
 
-static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
+static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
                      ast_node const *node) {
-    // NOTE: it is often required to apply constraints created by calling this function immediately, at the
-    // callsite.
+    (void)ctx;
 
     if (left == right) return 0;
-    if (tl_type_v2_is_scheme(left)) return constrain_mt(self, ctx, &left->scheme.type, right, node);
-    if (tl_type_v2_is_scheme(right)) return constrain_mt(self, ctx, &right->scheme.type, left, node);
-
-    if (tl_monotype_occurs(left->mono, right->mono)) return 0;
-    log_constraint(self, left, right, node);
-
-    if (is_type_variable(left)) return constrain_tv(self, ctx, left->mono.var, right->mono, node);
-    else if (is_type_variable(right)) return constrain_tv(self, ctx, right->mono.var, left->mono, node);
-
-    switch (left->mono.tag) {
-    case tl_nil:
-        if (tl_nil != right->mono.tag) {
-            log_type_error(self, left, right);
-            return type_error(self, node);
-        }
-        break;
-    case tl_cons:
-        if (!str_eq(left->mono.cons.name, right->mono.cons.name)) {
-            log_type_error(self, left, right);
-            return type_error(self, node);
-        }
-
-        if (left->mono.cons.args.size != right->mono.cons.args.size) {
-            log_type_error(self, left, right);
-            return type_error(self, node);
-        }
-
-        forall(i, left->mono.cons.args) {
-            if (constrain_mm(self, ctx, &left->mono.cons.args.v[i], &right->mono.cons.args.v[i], node))
-                return 1;
-        }
-        break;
-
-    case tl_quant:
-        // no constraints on quantified type variables
-        break;
-
-    case tl_arrow: {
-        if (constrain_mm(self, ctx, left->mono.arrow.lhs, right->mono.arrow.lhs, node)) return 1;
-        if (constrain_mm(self, ctx, left->mono.arrow.rhs, right->mono.arrow.rhs, node)) return 1;
-
-    } break;
-
-    case tl_var: fatal("logic error");
+    if (tl_type_v2_is_scheme(left)) {
+        tl_type_v2 inst = instantiate(self, *left);
+        return constrain(self, ctx, &inst, right, node);
+    }
+    if (tl_type_v2_is_scheme(right)) {
+        tl_type_v2 inst = instantiate(self, *right);
+        return constrain(self, ctx, left, &inst, node);
     }
 
-    return 0;
+    log_constraint(self, left, right, node);
+
+    type_error_cb_ctx error_ctx = {.self = self, .node = node};
+
+    return tl_monotype_unify(self->arena, self->subs, &left->mono, &right->mono, type_error_cb, &error_ctx);
 }
 
 static int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left, tl_monotype const *right,
@@ -567,19 +400,18 @@ static int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left,
     return constrain(self, ctx, &left_ty, &right_ty, node);
 }
 
-static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype const *left, tl_type_v2 const *right,
+static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype *left, tl_type_v2 *right,
                         ast_node const *node) {
     tl_type_v2 left_ty = tl_type_init_mono(*left);
     return constrain(self, ctx, &left_ty, right, node);
 }
 
-static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) {
+static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (!type) return;
     if (*type) return;
     if (name) *type = tl_type_env_lookup(self->env, *name);
     if (*type) return;
-    *type =
-      tl_type_alloc_mono(self->arena, tl_monotype_init_tv(tl_type_context_new_variable(&self->context)));
+    *type = tl_type_alloc_mono(self->arena, tl_monotype_init_tv(tl_type_subs_fresh(self->subs)));
 }
 
 static void rename_variables(tl_infer *, ast_node *, hashmap **);
@@ -768,7 +600,7 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
-    if (constrain(self, ctx, node->type_v2, inst_result_type, node)) return 1;
+    if (constrain(self, ctx, (tl_type_v2 *)node->type_v2, inst_result_type, node)) return 1;
     tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs);
     tl_type_v2_apply_subs(inst_type, self->subs);
     tl_type_v2_apply_subs(inst_result_type, self->subs);
@@ -1643,7 +1475,7 @@ static tl_type_v2 instantiate(tl_infer *self, tl_type_v2 generic) {
 
     hashmap       *map = map_create(self->transient, sizeof(tl_type_variable), s.quantifiers.size);
     forall(i, s.quantifiers) {
-        tl_type_variable tv = tl_type_context_new_variable(&self->context);
+        tl_type_variable tv = tl_type_subs_fresh(self->subs);
         map_set(&map, &s.quantifiers.v[i], sizeof s.quantifiers.v[0], &tv);
     }
 
@@ -1709,9 +1541,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- global env --");
     log_env(self, self->env);
-
-    log(self, "-- global subs --");
-    log_subs(self, self->subs);
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
     // quantified) with primitives if possible.
@@ -1882,7 +1711,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     tl_type_env_subs_apply(self->env, self->subs);
     apply_subs_to_ast(self);
-    tl_type_subs_cleanup(self->transient, self->subs, self->env);
 
     log(self, "-- inference complete --");
     log(self, "-- toplevels");
@@ -1911,8 +1739,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_toplevels(self);
     log(self, "-- env");
     log_env(self, self->env);
-    log(self, "-- subs");
-    log_subs(self, self->subs);
 
     // apply subs to global environment
     tl_type_env_subs_apply(self->env, self->subs);
@@ -1920,10 +1746,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // ensure main function has the correct type
     if (check_main_function(self, main)) return 1;
-    tl_type_subs_cleanup(self->transient, self->subs, self->env); // keep this last
-
-    log(self, "-- final subs");
-    log_subs(self, self->subs);
 
     log(self, "-- final env --");
     log_env(self, self->env);
@@ -2005,23 +1827,6 @@ static void log_env(tl_infer const *self, tl_type_env const *env) {
         str               type_str = tl_type_v2_to_string(self->transient, type);
         log(self, "%.*s : %.*s", str_ilen(*name), str_buf(name), str_ilen(type_str), str_buf(&type_str));
         str_deinit(self->transient, &type_str);
-    }
-}
-
-static void log_subs(tl_infer const *self, tl_type_subs const *subs) {
-    hashmap_iterator iter = {0};
-    while (map_iter(subs->map, &iter)) {
-        tl_type_variable tv;
-        memcpy(&tv, iter.key_ptr, sizeof(tl_type_variable));
-
-        tl_monotype const *mono     = iter.data;
-        str                tv_str   = tl_type_variable_to_string(self->transient, &tv);
-        str                mono_str = tl_monotype_to_string(self->transient, mono);
-
-        log(self, "%.*s => %.*s", str_ilen(tv_str), str_buf(&tv_str), str_ilen(mono_str),
-            str_buf(&mono_str));
-        str_deinit(self->transient, &mono_str);
-        str_deinit(self->transient, &tv_str);
     }
 }
 

@@ -47,8 +47,6 @@ typedef struct tl_type_v2 {
     enum { tl_mono, tl_scheme } tag;
 } tl_type_v2;
 
-str_sized tl_type_v2_free_variables(tl_type_v2 const *);
-
 // -- monotype --
 
 tl_monotype            tl_monotype_init_nil();
@@ -82,17 +80,30 @@ int                   tl_type_v2_is_arrow(tl_type_v2 const *);
 int                   tl_type_v2_is_scheme(tl_type_v2 const *);
 int                   tl_type_v2_is_mono(tl_type_v2 const *);
 int                   tl_type_v2_is_monomorphic(tl_type_v2 const *);
+str_sized             tl_type_v2_free_variables(tl_type_v2 const *);
 
 // -- substitution --
 
 typedef struct {
-    hashmap *map;
+    tl_type_variable parent;
+    tl_monotype     *type; // null if unresolved
+    u32              rank;
+} tl_type_uf_node;
+
+typedef struct {
+    array_header;
+    tl_type_uf_node *v;
 } tl_type_subs;
+
+typedef void (*type_error_cb_fun)(void *ctx, tl_monotype *, tl_monotype *);
 
 nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
-void                    tl_type_subs_add(tl_type_subs *, tl_type_variable from, tl_monotype to);
-tl_monotype            *tl_type_subs_get(tl_type_subs *, tl_type_variable);
+
+tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
+int tl_type_subs_unify(allocator *, tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
+                       void *);
+int tl_monotype_unify(allocator *, tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *);
 
 // apply subs to a single type
 void tl_type_v2_apply_subs(tl_type_v2 *, tl_type_subs const *);
@@ -104,13 +115,11 @@ tl_type_constructor_inst tl_type_constructor_instantiate(tl_type_constructor con
 // -- context --
 
 typedef struct {
-    u32 next_var;
     u32 next_quant;
 } tl_type_context;
 
-tl_type_context  tl_type_context_empty();
-tl_type_variable tl_type_context_new_variable(tl_type_context *);
-tl_monotype      tl_type_context_new_quantifier(tl_type_context *);
+tl_type_context tl_type_context_empty();
+tl_monotype     tl_type_context_new_quantifier(tl_type_context *);
 
 // -- environment --
 
