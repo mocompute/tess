@@ -814,8 +814,8 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         tl_type_v2_apply_subs(inst_type, self->subs);
         tl_type_v2_apply_subs(&arrow, self->subs);
 
-        // recurse and add to toplevel
-        if (infer(self, ctx, generic_node)) return 1;
+        // recurse over body and add to toplevel
+        if (infer(self, ctx, body)) return 1;
         toplevel_add(self, name, generic_node);
     }
     return 0;

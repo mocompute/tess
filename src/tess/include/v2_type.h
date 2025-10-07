@@ -64,6 +64,7 @@ void                   tl_monotype_destroy(allocator *, tl_monotype **);
 int                    tl_monotype_eq(tl_monotype, tl_monotype); // TODO const* all the monotypes
 int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 int                    tl_monotype_is_nil(tl_monotype const *);
+int                    tl_monotype_is_monomorphic(tl_monotype const *);
 u64                    tl_monotype_hash64(tl_monotype);
 void                   tl_monotype_union_fv(tl_monotype *dst, tl_monotype src);
 
@@ -80,6 +81,7 @@ tl_type_v2            tl_type_v2_clone(allocator *, tl_type_v2 const *);
 int                   tl_type_v2_is_arrow(tl_type_v2 const *);
 int                   tl_type_v2_is_scheme(tl_type_v2 const *);
 int                   tl_type_v2_is_mono(tl_type_v2 const *);
+int                   tl_type_v2_is_monomorphic(tl_type_v2 const *);
 
 // -- substitution --
 

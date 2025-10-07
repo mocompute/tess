@@ -91,6 +91,21 @@ int tl_monotype_is_nil(tl_monotype const *mono) {
     return tl_nil == mono->tag;
 }
 
+int tl_monotype_is_monomorphic(tl_monotype const *self) {
+    switch (self->tag) {
+    case tl_nil: return 1;
+    case tl_cons:
+        forall(i, self->cons.args) {
+            if (!tl_monotype_is_monomorphic(&self->cons.args.v[i])) return 0;
+        }
+        return 1;
+    case tl_var:
+    case tl_quant: return 0;
+    case tl_arrow:
+        return tl_monotype_is_monomorphic(self->arrow.lhs) && tl_monotype_is_monomorphic(self->arrow.rhs);
+    }
+}
+
 int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
     // return 1 if either side has a type variable that occurs on the other side
     switch (lhs.tag) {
@@ -238,6 +253,11 @@ int tl_type_v2_is_scheme(tl_type_v2 const *self) {
 
 int tl_type_v2_is_mono(tl_type_v2 const *self) {
     return tl_mono == self->tag;
+}
+
+int tl_type_v2_is_monomorphic(tl_type_v2 const *self) {
+    if (tl_type_v2_is_scheme(self)) return 0;
+    return tl_monotype_is_monomorphic(&self->mono);
 }
 
 str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
