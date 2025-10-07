@@ -85,6 +85,9 @@ static void generate_prototypes(transpile *self) {
         tl_type_v2 *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
 
+        // skip non-arrow types, main, any generic types, intrinsics
+        if (!should_generate(name, type)) continue;
+
         str ret = arrow_rhs_to_c(type);
         cat(self, ret);
         cat_sp(self);
