@@ -329,37 +329,9 @@ static int type_error(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
-static int is_type_variable(tl_type_v2 const *self) {
-    return tl_mono == self->tag && tl_var == self->mono.tag;
-}
-
-static int is_tv_eq(tl_type_variable tv, tl_monotype const *mono) {
-    return tl_var == mono->tag && tv == mono->var;
-}
-
-static int constraint_is_compatible(tl_monotype existing, tl_monotype apply) {
-    if (tl_var == existing.tag || tl_quant == existing.tag) return 1; // tv and quant compat with everything
-    if (tl_var == apply.tag || tl_quant == apply.tag) return 1;       // tv and quant compat with everything
-    switch (existing.tag) {
-    case tl_nil:
-    case tl_cons:
-        if (!tl_monotype_eq(apply, existing)) return 0; // type error
-        return 1;
-
-    case tl_var:
-    case tl_quant: return 1; // quant compatible with everything
-
-    case tl_arrow:
-        return tl_arrow == apply.tag && constraint_is_compatible(*existing.arrow.lhs, *apply.arrow.lhs) &&
-               constraint_is_compatible(*existing.arrow.rhs, *apply.arrow.rhs);
-    }
-}
-
 static void log_constraint(tl_infer *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
 static void log_type_error(tl_infer *, tl_type_v2 const *, tl_type_v2 const *);
 static void log_type_error_mm(tl_infer *, tl_monotype const *, tl_monotype const *);
-
-static int  constrain(tl_infer *, infer_ctx *, tl_type_v2 *, tl_type_v2 *, ast_node const *);
 
 typedef struct {
     tl_infer       *self;
@@ -391,19 +363,6 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
     return tl_monotype_unify(self->arena, self->subs, &left->mono, &right->mono, type_error_cb, &error_ctx);
-}
-
-static int constrain_mm(tl_infer *self, infer_ctx *ctx, tl_monotype const *left, tl_monotype const *right,
-                        ast_node const *node) {
-    tl_type_v2 left_ty  = tl_type_init_mono(*left);
-    tl_type_v2 right_ty = tl_type_init_mono(*right);
-    return constrain(self, ctx, &left_ty, &right_ty, node);
-}
-
-static int constrain_mt(tl_infer *self, infer_ctx *ctx, tl_monotype *left, tl_type_v2 *right,
-                        ast_node const *node) {
-    tl_type_v2 left_ty = tl_type_init_mono(*left);
-    return constrain(self, ctx, &left_ty, right, node);
 }
 
 static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
