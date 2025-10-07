@@ -285,7 +285,15 @@ void do_tree_shake(void *ctx_, ast_node *node) {
     tree_shake_ctx *ctx = ctx_;
 
     if (ast_node_is_nfa(node)) {
-        str_hset_insert(&ctx->names, node->named_application.name->symbol.name);
+        str name = toplevel_name(node);
+        if (!str_hset_contains(ctx->names, name)) {
+            str_hset_insert(&ctx->names, name);
+
+            ast_node *next = toplevel_get(ctx->self, name);
+            if (next) {
+                ast_node_dfs(ctx, next, do_tree_shake);
+            }
+        }
     }
 }
 
@@ -296,7 +304,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
     str_hset_insert(&ctx.names, toplevel_name(node));
 
-    ast_node_dfs_safe_for_recur(self->transient, &ctx, (ast_node *)node, do_tree_shake);
+    ast_node_dfs(&ctx, (ast_node *)node, do_tree_shake);
 
     return ctx.names;
 }
@@ -1949,6 +1957,7 @@ ast_node *toplevel_name_node(ast_node *node) {
     else if (ast_node_is_let_in_lambda(node)) return node->let_in.name;
     else if (ast_node_is_symbol(node)) return node;
     else if (ast_node_is_utd(node)) return node->user_type_def.name;
+    else if (ast_node_is_nfa(node)) return node->named_application.name;
     else fatal("logic error");
 }
 
