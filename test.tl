@@ -15,9 +15,8 @@
 // let g x = f x
 // let h x = g x
 
-let fakeadd a b = a
 
 let main () =
   let val = 1 in
-  let f = fun x -> fakeadd x 1 in
-  f 2
+  let f = fun () -> val in
+  f ()

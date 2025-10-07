@@ -369,7 +369,16 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 }
 
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
-    if (tl_arrow == type->tag) fatal("not yet implemented");
+    if (tl_arrow == type->tag) {
+
+        tl_monotype const *result_type = tl_type_v2_arrow_rightmost(type);
+        str                typec       = type_to_c_mono(result_type);
+        cat(self, typec);
+
+        fatal("not yet implemented");
+
+    }
+
     else if (tl_cons == type->tag) {
         str typec = type_to_c_mono(type);
         cat(self, typec);
