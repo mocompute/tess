@@ -61,6 +61,7 @@ mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(str)
 mos_create_test(types)
+mos_create_test(util)
 
 mos_create_exe(hash)
 

@@ -13,4 +13,25 @@
 #define FIELD_SET(value, start, len, field)                                                                \
     ((value) = ((value) & ~FIELD_MASK(start, len)) | (((field) & MASK(len)) << (start)))
 
+#define max(a, b)                                                                                          \
+    ({                                                                                                     \
+        typeof(a) _a = (a);                                                                                \
+        typeof(b) _b = (b);                                                                                \
+        _a > _b ? _a : _b;                                                                                 \
+    })
+
+#define min(a, b)                                                                                          \
+    ({                                                                                                     \
+        typeof(a) _a = (a);                                                                                \
+        typeof(b) _b = (b);                                                                                \
+        _a < _b ? _a : _b;                                                                                 \
+    })
+
+#define swap(a, b)                                                                                         \
+    do {                                                                                                   \
+        typeof(a) _tmp = (a);                                                                              \
+        (a)            = (b);                                                                              \
+        (b)            = _tmp;                                                                             \
+    } while (0)
+
 #endif
