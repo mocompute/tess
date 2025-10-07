@@ -62,6 +62,7 @@ static ast_node  *toplevel_iter(tl_infer *, hashmap_iterator *);
 static void       log(tl_infer const *self, char const *restrict fmt, ...);
 static void       log_toplevels(tl_infer const *);
 static void       log_env(tl_infer const *, tl_type_env const *);
+static void       log_subs(tl_infer *);
 
 //
 
@@ -1507,7 +1508,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- global env --");
     log_env(self, self->env);
     log(self, "-- subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
     // quantified) with primitives if possible.
@@ -1525,7 +1526,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- global env after quantification --");
     log_env(self, self->env);
     log(self, "-- subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
 
     // collect free variables from infer target and add to the generic's arrow type
     str_array fvs = {.alloc = self->arena};
@@ -1557,7 +1558,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- global env --");
     log_env(self, self->env);
     log(self, "-- subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
 
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
@@ -1687,7 +1688,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log(self, "-- toplevels");
     log_toplevels(self);
     log(self, "-- subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
     log(self, "-- env");
     log_env(self, self->env);
 
@@ -1711,7 +1712,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log(self, "-- toplevels");
     log_toplevels(self);
     log(self, "-- subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
     log(self, "-- env");
     log_env(self, self->env);
 
@@ -1723,7 +1724,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (check_main_function(self, main)) return 1;
 
     log(self, "-- final subs");
-    tl_type_subs_log(self->transient, self->subs);
+    log_subs(self);
     log(self, "-- final env --");
     log_env(self, self->env);
 
@@ -1987,4 +1988,8 @@ static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 co
 static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
     tl_type_v2 l = tl_type_init_mono(*left), r = tl_type_init_mono(*right);
     return log_type_error(self, &l, &r);
+}
+
+static void log_subs(tl_infer *self) {
+    if (self->verbose) tl_type_subs_log(self->transient, self->subs);
 }
