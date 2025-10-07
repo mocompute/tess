@@ -110,6 +110,32 @@ function(tesslang_create_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+function(tesslang_create_v2_test NAME)
+  set(TEST_NAME test-tl-${NAME})
+
+  # transpile to C
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
+    COMMAND tess_exe
+      cv2
+      -o ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    DEPENDS
+      $<TARGET_FILE:tess_exe>
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Compiling test_${NAME}.tl to test_${NAME}.c"
+  )
+
+  add_executable(${TEST_NAME} "${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c")
+  target_link_libraries(${TEST_NAME} PRIVATE tess)
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_ASAN} -Wno-format-security)
+  target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_ASAN})
+  add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
+endfunction()
+
+tesslang_create_v2_test(v2_nested_basic)
+
 # FIXME: previously working tests
 # tesslang_create_test(generic_lambda)
 # tesslang_create_test(nested_lambda_context)
