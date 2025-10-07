@@ -17,4 +17,4 @@
 
 let main () =
   let val = 1 in
-  (fun x -> x) val
+  (fun x -> add x 1) val

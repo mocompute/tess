@@ -33,7 +33,8 @@ static str         next_res(transpile *);
 
 static void        generate_decl(transpile *, str, tl_monotype const *);
 static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
-static void        generate_inline_lambda(transpile *, ast_node const *);
+static str         generate_inline_lambda(transpile *, tl_monotype const *, ast_node const *);
+static str         generate_let_in(transpile *, tl_monotype const *, ast_node const *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *);
@@ -196,6 +197,17 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     return args_res;
 }
 
+static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
+    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(type);
+    str                res                 = str_empty(); // empty signals void result
+    if (tl_nil != funcall_result_type->tag) {
+        res = next_res(self);
+        generate_decl(self, res, tl_type_v2_arrow_rightmost(type));
+        if (do_assign_lhs) generate_assign_lhs(self, res);
+    }
+    return res;
+}
+
 static str generate_funcall(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
@@ -209,13 +221,7 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     str_array      args_res = generate_args(self, args, type);
 
     // declare variable to hold funcall result if it's not nil
-    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(type);
-    str                res                 = str_empty(); // empty signals void result
-    if (tl_nil != funcall_result_type->tag) {
-        res = next_res(self);
-        generate_decl(self, res, tl_type_v2_arrow_rightmost(type));
-        generate_assign_lhs(self, res);
-    }
+    str res = generate_funcall_result(self, type, 1);
 
     // function call
     generate_funcall_head(self, type, name);
@@ -230,13 +236,11 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     return res;
 }
 
-static str generate_let_in(transpile *self, ast_node const *node) {
+static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_node const *node) {
     assert(ast_node_is_let_in(node));
 
-    str                name        = ast_node_str(node->let_in.name);
-    tl_monotype const *type        = env_lookup(self, name); // may be null
-    tl_type_v2 const  *result_type = node->type_v2;
-    assert(tl_type_v2_is_mono(result_type));
+    str                name = ast_node_str(node->let_in.name);
+    tl_monotype const *type = env_lookup(self, name); // may be null
 
     if (type) {
         str value = generate_expr(self, type, node->let_in.value);
@@ -247,26 +251,26 @@ static str generate_let_in(transpile *self, ast_node const *node) {
 
     str body = generate_expr(self, null, node->let_in.body);
     str res  = next_res(self);
-    generate_decl(self, res, &result_type->mono);
+    generate_decl(self, res, result_type);
     generate_assign(self, res, body);
 
     return res;
 }
 
-static void generate_inline_lambda(transpile *self, ast_node const *node) {
+static str generate_inline_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node) {
     assert(ast_node_is_lambda_application(node));
 
     ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
     ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
     assert(params.size == args.size);
 
-    // eval the args, then assign to the params
-    forall(i, args) {
-        ast_node const *arg = args.v[i];
-        if (ast_node_is_nil(arg)) break;
-        // FIXME: continue
-    }
+    if (!tl_type_v2_is_mono(node->lambda_application.lambda->type_v2)) fatal("type scheme");
+    tl_monotype const *arrow = &node->lambda_application.lambda->type_v2->mono;
+    assert(tl_type_v2_is_arrow(node->lambda_application.lambda->type_v2));
+    str_array args_res = generate_args(self, args, arrow);
+    assert(args_res.size == params.size);
 
+    // initialise parameters
     forall(i, params) {
         ast_node const *param = params.v[i];
         if (ast_node_is_nil(param)) break;
@@ -274,7 +278,21 @@ static void generate_inline_lambda(transpile *self, ast_node const *node) {
         assert(tl_type_v2_is_mono(param->type_v2));
 
         generate_decl(self, param->symbol.name, &param->type_v2->mono);
+        generate_assign_lhs(self, param->symbol.name);
+        cat(self, args_res.v[i]);
+        cat_semicolonln(self);
     }
+
+    // declare variable to hold funcall result if it's not nil
+    str res = generate_funcall_result(self, arrow, 0);
+
+    // generate lambda body
+    str lambda_res =
+      generate_expr(self, result_type, node->lambda_application.lambda->lambda_function.body);
+    generate_assign_lhs(self, res);
+    cat(self, lambda_res);
+    cat_semicolonln(self);
+    return res;
 }
 
 static str generate_str(transpile *self, str expr, tl_monotype const *type) {
@@ -292,10 +310,15 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // function arguments. We do it this way because type inference now works top down, meaning the type of
     // an object is held by the object's name, or point of application for unnamed literals.
 
+    if (!type) {
+        assert(tl_type_v2_is_mono(node->type_v2));
+        type = &node->type_v2->mono;
+    }
+
     switch (node->tag) {
     case ast_named_function_application:  return generate_funcall(self, node);
-    case ast_lambda_function_application: return generate_inline_lambda(self, node);
-    case ast_let_in:                      return generate_let_in(self, node);
+    case ast_lambda_function_application: return generate_inline_lambda(self, type, node);
+    case ast_let_in:                      return generate_let_in(self, type, node);
     case ast_i64:                         return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
     case ast_u64:                         return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
     case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
