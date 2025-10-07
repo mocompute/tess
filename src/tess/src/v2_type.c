@@ -447,24 +447,30 @@ int tl_type_subs_unify(allocator *alloc, tl_type_subs *self, tl_type_variable tv
     return 0;
 }
 
-static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) {
+static void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs const *subs) {
     switch (self->tag) {
     case tl_cons: {
         forall(i, self->cons.args) {
-            tl_monotype_substitute(&self->cons.args.v[i], subs);
+            tl_monotype_substitute(alloc, &self->cons.args.v[i], subs);
         }
     } break;
 
     case tl_var: {
         tl_type_variable root     = uf_find((tl_type_subs *)subs, self->var);
         tl_monotype     *resolved = subs->v[root].type;
-        if (resolved) *self = *resolved;
+        if (resolved) {
+            *self = tl_monotype_clone(alloc, *resolved);
+            tl_monotype_substitute(alloc, self, subs);
+        } else {
+            // update to representative tv
+            self->var = root;
+        }
 
     } break;
 
     case tl_arrow: {
-        tl_monotype_substitute(self->arrow.lhs, subs);
-        tl_monotype_substitute(self->arrow.rhs, subs);
+        tl_monotype_substitute(alloc, self->arrow.lhs, subs);
+        tl_monotype_substitute(alloc, self->arrow.rhs, subs);
     } break;
 
     case tl_quant:
@@ -472,15 +478,15 @@ static void tl_monotype_substitute(tl_monotype *self, tl_type_subs const *subs) 
     }
 }
 
-void tl_type_v2_apply_subs(tl_type_v2 *self, tl_type_subs const *subs) {
+void tl_type_v2_apply_subs(allocator *alloc, tl_type_v2 *self, tl_type_subs const *subs) { //
 
     // for type schemes, we can treat its type as a monotype for the
     // purpose of substitution, because quantified variables (which
     // are not substitutable) are a different C type than unquantified
     // type variables.
 
-    if (tl_mono == self->tag) return tl_monotype_substitute(&self->mono, subs);
-    else return tl_monotype_substitute(&self->scheme.type, subs);
+    if (tl_mono == self->tag) return tl_monotype_substitute(alloc, &self->mono, subs);
+    else return tl_monotype_substitute(alloc, &self->scheme.type, subs);
 }
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
@@ -499,9 +505,9 @@ void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
 
 //
 
-void tl_type_env_subs_apply(tl_type_env *env, tl_type_subs const *subs) {
+void tl_type_env_subs_apply(allocator *alloc, tl_type_env *env, tl_type_subs const *subs) {
     forall(i, env->types) {
-        tl_type_v2_apply_subs(&env->types.v[i], subs);
+        tl_type_v2_apply_subs(alloc, &env->types.v[i], subs);
     }
 }
 

@@ -107,7 +107,7 @@ int tl_monotype_unify(allocator *, tl_type_subs *, tl_monotype *, tl_monotype *,
 void tl_type_subs_log(allocator *, tl_type_subs *);
 
 // apply subs to a single type
-void tl_type_v2_apply_subs(tl_type_v2 *, tl_type_subs const *);
+void tl_type_v2_apply_subs(allocator *, tl_type_v2 *, tl_type_subs const *);
 
 // -- type_constructor --
 
@@ -140,7 +140,7 @@ tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
 int                    tl_type_env_find_tv(tl_type_env const *, tl_type_variable, u32 *);
 void                   tl_type_env_erase(tl_type_env *, u32);
 void                   tl_type_env_reindex(tl_type_env *);
-void                   tl_type_env_subs_apply(tl_type_env *, tl_type_subs const *);
+void                   tl_type_env_subs_apply(allocator *, tl_type_env *, tl_type_subs const *);
 int                    tl_type_subs_cleanup(allocator *, tl_type_subs *, tl_type_env *);
 
 // -- strings --

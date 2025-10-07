@@ -438,13 +438,13 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         // constrain arrow types
         ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self, iter.nodes, node);
-        tl_type_v2_apply_subs(&app, self->subs);
+        tl_type_v2_apply_subs(self->arena, &app, self->subs);
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
         // instantiations won't be effective.
         if (constrain(self, ctx, &inst, &app, node)) return 1;
-        tl_type_v2_apply_subs(&inst, self->subs);
+        tl_type_v2_apply_subs(self->arena, &inst, self->subs);
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         if (is_name_instanatiated(self, node->named_application.name)) return 0;
@@ -460,7 +460,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         if (infer(self, ctx, node->lambda_application.lambda)) return 1;
         tl_type_v2 const *fun  = node->lambda_application.lambda->type_v2;
         tl_type_v2        inst = *fun;
-        tl_type_v2_apply_subs(&inst, self->subs);
+        tl_type_v2_apply_subs(self->arena, &inst, self->subs);
 
         // infer the arguments
         ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -470,9 +470,9 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
 
         ensure_tv(self, null, &node->type_v2);
         tl_type_v2 app = make_arrow(self, iter.nodes, node);
-        tl_type_v2_apply_subs(&app, self->subs);
+        tl_type_v2_apply_subs(self->arena, &app, self->subs);
         if (constrain(self, ctx, &inst, &app, node)) return 1;
-        tl_type_v2_apply_subs(&inst, self->subs);
+        tl_type_v2_apply_subs(self->arena, &inst, self->subs);
 
         if (infer(self, ctx, node->lambda_application.lambda)) return 1;
 
@@ -526,7 +526,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
     case ast_user_type:            break;
     }
 
-    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_env_subs_apply(self->arena, self->env, self->subs);
     return 0;
 }
 
@@ -559,9 +559,9 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
     if (constrain(self, ctx, (tl_type_v2 *)node->type_v2, inst_result_type, node)) return 1;
-    tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs);
-    tl_type_v2_apply_subs(inst_type, self->subs);
-    tl_type_v2_apply_subs(inst_result_type, self->subs);
+    tl_type_v2_apply_subs(self->arena, (tl_type_v2 *)node->type_v2, self->subs);
+    tl_type_v2_apply_subs(self->arena, inst_type, self->subs);
+    tl_type_v2_apply_subs(self->arena, inst_result_type, self->subs);
 
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, orig));
@@ -601,10 +601,10 @@ static int populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // now constrain the arrows
         tl_type_v2 arrow = make_arrow(self, params, body);
-        tl_type_v2_apply_subs(&arrow, self->subs);
+        tl_type_v2_apply_subs(self->arena, &arrow, self->subs);
         if (constrain(self, ctx, inst_type, &arrow, generic_node)) return 1;
-        tl_type_v2_apply_subs(inst_type, self->subs);
-        tl_type_v2_apply_subs(&arrow, self->subs);
+        tl_type_v2_apply_subs(self->arena, inst_type, self->subs);
+        tl_type_v2_apply_subs(self->arena, &arrow, self->subs);
 
         // recurse over body and add to toplevel
         if (infer(self, ctx, body)) return 1;
@@ -730,7 +730,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         // new arrow with no fvs during final phase
         if (!tl_type_env_lookup(self->env, node->let.name->symbol.name)) {
             tl_type_v2 arrow = make_arrow(self, iter.nodes, node->let.body);
-            tl_type_v2_apply_subs(&arrow, self->subs);
+            tl_type_v2_apply_subs(self->arena, &arrow, self->subs);
             tl_type_env_add(self->env, node->let.name->symbol.name, &arrow);
         }
 
@@ -807,8 +807,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (infer_applications(self, ctx, node)) return 1;
 
         tl_type_v2 inst = *node->lambda_application.lambda->type_v2;
-        tl_type_v2_apply_subs(&inst, self->subs);
-        tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs);
+        tl_type_v2_apply_subs(self->arena, &inst, self->subs);
+        tl_type_v2_apply_subs(self->arena, (tl_type_v2 *)node->type_v2, self->subs);
         assert(tl_mono == inst.tag && tl_arrow == inst.mono.tag);
 
         // constrain arrow types
@@ -816,7 +816,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                                     (ast_node_sized){.size = node->lambda_application.n_arguments,
                                                      .v    = node->lambda_application.arguments},
                                     node);
-        tl_type_v2_apply_subs(&app, self->subs);
+        tl_type_v2_apply_subs(self->arena, &app, self->subs);
         if (constrain(self, ctx, &inst, &app, node)) return 1;
 
     } break;
@@ -837,14 +837,14 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         ctx->lex = save;
 
         // apply subs before arrow - we inferred body above
-        tl_type_v2_apply_subs((tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
+        tl_type_v2_apply_subs(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
         tl_type_v2 arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, &arrow, node->type_v2, node)) return 1;
 
         // apply subs before saving type, to get the constraints
-        tl_type_v2_apply_subs(&arrow, self->subs);
+        tl_type_v2_apply_subs(self->arena, &arrow, self->subs);
         ctx->lambda_type = arrow;
 
     } break;
@@ -879,7 +879,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     }
 
     // apply newly created constraint substitutions
-    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_env_subs_apply(self->arena, self->env, self->subs);
     return 0;
 }
 
@@ -1503,7 +1503,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
     // quantified) with primitives if possible.
-    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_env_subs_apply(self->arena, self->env, self->subs);
 
     // get the arrow type from the annotation, or else from the result of inference
     tl_type_v2 *arrow = null;
@@ -1672,7 +1672,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // check if free variables are present
     if (check_missing_free_variables(self)) return 1;
 
-    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_env_subs_apply(self->arena, self->env, self->subs);
     apply_subs_to_ast(self);
 
     log(self, "-- inference complete --");
@@ -1708,7 +1708,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_env(self, self->env);
 
     // apply subs to global environment
-    tl_type_env_subs_apply(self->env, self->subs);
+    tl_type_env_subs_apply(self->arena, self->env, self->subs);
     apply_subs_to_ast(self);
 
     // ensure main function has the correct type
@@ -1914,7 +1914,7 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 static void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
     if (node->type_v2) {
-        tl_type_v2_apply_subs((tl_type_v2 *)node->type_v2, self->subs); // const_cast
+        tl_type_v2_apply_subs(self->arena, (tl_type_v2 *)node->type_v2, self->subs); // const_cast
     }
 }
 
