@@ -49,16 +49,16 @@ typedef struct tl_type_v2 {
 
 // -- monotype --
 
+// types are leaky: use an arena
+nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype, tl_monotype) mallocfun;
+
 tl_monotype            tl_monotype_init_nil();
 tl_monotype            tl_monotype_init_tv(tl_type_variable);
 tl_monotype            tl_monotype_init_quant(tl_type_quantifier);
 tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
-nodiscard tl_monotype  tl_monotype_alloc_arrow(allocator *, tl_monotype, tl_monotype);
-void                   tl_monotype_dealloc(allocator *, tl_monotype *);
 tl_monotype            tl_monotype_clone(allocator *, tl_monotype);
 tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
-nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
-void                   tl_monotype_destroy(allocator *, tl_monotype **);
 int                    tl_monotype_eq(tl_monotype, tl_monotype); // TODO const* all the monotypes
 int                    tl_monotype_occurs(tl_monotype, tl_monotype);
 int                    tl_monotype_is_nil(tl_monotype const *);

@@ -156,7 +156,7 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
         // }
 
         tl_type_v2 *out =
-          tl_type_alloc_mono(self->arena, tl_monotype_alloc_arrow(self->arena, left->mono, right->mono));
+          tl_type_alloc_mono(self->arena, *tl_monotype_create_arrow(self->arena, left->mono, right->mono));
         return out;
     }
 
@@ -1354,16 +1354,16 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
     assert(tl_mono == result->type_v2->tag);
 
     if (args.size == 0) {
-        tl_monotype lhs   = tl_monotype_init_nil();
-        tl_monotype rhs   = result->type_v2->mono;
-        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+        tl_monotype  lhs   = tl_monotype_init_nil();
+        tl_monotype  rhs   = result->type_v2->mono;
+        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
-            str str = tl_monotype_to_string(self->transient, &arrow);
+            str str = tl_monotype_to_string(self->transient, arrow);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
-        return tl_type_init_mono(arrow);
+        return tl_type_init_mono(*arrow);
     }
 
     else if (args.size == 1) {
@@ -1372,28 +1372,28 @@ static tl_type_v2 make_arrow(tl_infer *self, ast_node_sized args, ast_node const
             args.v[0]->type_v2 = tl_type_alloc_mono(self->arena, tl_monotype_init_nil());
         else ensure_tv(self, null, &args.v[0]->type_v2);
 
-        tl_monotype lhs   = args.v[0]->type_v2->mono;
-        tl_monotype rhs   = result->type_v2->mono;
-        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs);
+        tl_monotype  lhs   = args.v[0]->type_v2->mono;
+        tl_monotype  rhs   = result->type_v2->mono;
+        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
         {
-            str str = tl_monotype_to_string(self->transient, &arrow);
+            str str = tl_monotype_to_string(self->transient, arrow);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
-        return tl_type_init_mono(arrow);
+        return tl_type_init_mono(*arrow);
     }
 
     else {
         ensure_tv(self, null, &args.v[0]->type_v2);
         tl_monotype lhs = args.v[0]->type_v2->mono;
         tl_type_v2 rhs = make_arrow(self, (ast_node_sized){.size = args.size - 1, .v = &args.v[1]}, result);
-        tl_monotype arrow = tl_monotype_alloc_arrow(self->arena, lhs, rhs.mono);
+        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs.mono);
         {
-            str str = tl_monotype_to_string(self->transient, &arrow);
+            str str = tl_monotype_to_string(self->transient, arrow);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
-        return tl_type_init_mono(arrow);
+        return tl_type_init_mono(*arrow);
     }
 }
 
@@ -1668,7 +1668,8 @@ int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *
         return 1;
     }
 
-    // rename lexical variables
+    // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
+    // preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
         hashmap *lex = map_create(self->transient, sizeof(str), 16);
         forall(i, nodes) {

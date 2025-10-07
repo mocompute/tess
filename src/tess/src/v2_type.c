@@ -29,31 +29,11 @@ tl_monotype tl_monotype_init_arrow(tl_type_v2_arrow arrow) {
     return (tl_monotype){.tag = tl_arrow, .arrow = arrow};
 }
 
-tl_monotype tl_monotype_alloc_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
+tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
     tl_monotype *pleft  = tl_monotype_create(alloc, left);
     tl_monotype *pright = tl_monotype_create(alloc, right);
     tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_v2_arrow){.lhs = pleft, .rhs = pright});
-    return arrow;
-}
-
-void tl_monotype_dealloc(allocator *alloc, tl_monotype *self) {
-    switch (self->tag) {
-    case tl_cons:
-        array_free(self->cons.args);
-        str_deinit(alloc, &self->cons.name);
-        break;
-    case tl_arrow:
-        alloc_free(alloc, self->arrow.lhs);
-        alloc_free(alloc, self->arrow.rhs);
-        array_free(self->arrow.fvs);
-        break;
-
-    case tl_var:
-    case tl_quant:
-    case tl_nil:   break;
-    }
-
-    alloc_invalidate(self);
+    return tl_monotype_create(alloc, arrow);
 }
 
 tl_monotype tl_monotype_init_constructor_inst(tl_type_constructor_inst cons) {
@@ -64,12 +44,6 @@ tl_monotype *tl_monotype_create(allocator *alloc, tl_monotype init) {
     tl_monotype *self = new (alloc, tl_monotype);
     *self             = init;
     return self;
-}
-
-void tl_monotype_destroy(allocator *alloc, tl_monotype **p) {
-    // shallow destroy; use an arena at least for arrow types if not for everything
-    alloc_free(alloc, *p);
-    *p = null;
 }
 
 int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
