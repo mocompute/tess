@@ -347,6 +347,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
                      ast_node const *node) {
     (void)ctx;
+    log_constraint(self, left, right, node);
 
     if (left == right) return 0;
     if (tl_type_v2_is_scheme(left)) {
@@ -358,10 +359,7 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v
         return constrain(self, ctx, left, &inst, node);
     }
 
-    log_constraint(self, left, right, node);
-
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
-
     return tl_monotype_unify(self->arena, self->subs, &left->mono, &right->mono, type_error_cb, &error_ctx);
 }
 
@@ -374,7 +372,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
 }
 
 static void rename_variables(tl_infer *, ast_node *, hashmap **);
-static str  instantiate_fun_and_infer(tl_infer *, infer_ctx *, ast_node const *, tl_monotype);
+static str  specialise_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype);
 static int  infer(tl_infer *, infer_ctx *, ast_node *);
 
 static int  is_name_instanatiated(tl_infer *self, ast_node *name) {
@@ -450,7 +448,8 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         if (is_name_instanatiated(self, node->named_application.name)) return 0;
-        str name_inst = instantiate_fun_and_infer(self, ctx, fun_node, inst.mono);
+        str name_inst = specialise_fun(self, ctx, fun_node, inst.mono);
+        if (str_is_empty(name_inst)) return 1;
 
         // replace name with instantiated name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
@@ -792,7 +791,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             tl_type_v2 result = tl_type_init_mono(*tl_type_v2_arrow_rightmost(&type->mono));
             if (constrain(self, ctx, &result, node->type_v2, node)) return 1;
 
-            if (infer_applications(self, ctx, node)) return 1;
+            // if (infer_applications(self, ctx, node)) return 1;
         }
     } break;
 
@@ -1224,8 +1223,7 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
     return str_hash64_combine(tl_monotype_hash64(type), name);
 }
 
-static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node const *node,
-                                     tl_monotype arrow) {
+static str specialise_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, tl_monotype arrow) {
     str       name = toplevel_name(node);
     ast_node *body = ast_node_body((ast_node *)node);
 
@@ -1243,7 +1241,7 @@ static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node co
     tl_type_env_add_mono(self->env, name_inst, arrow);
 
     if (body) {
-        if (infer(self, ctx, body)) fatal("error handling");
+        if (infer(self, ctx, body)) return str_empty();
     }
 
     return name_inst;
@@ -1500,6 +1498,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- global env --");
     log_env(self, self->env);
+    log(self, "-- subs");
+    tl_type_subs_log(self->transient, self->subs);
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
     // quantified) with primitives if possible.
@@ -1516,6 +1516,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- global env after quantification --");
     log_env(self, self->env);
+    log(self, "-- subs");
+    tl_type_subs_log(self->transient, self->subs);
 
     // collect free variables from infer target and add to the generic's arrow type
     str_array fvs = {.alloc = self->arena};
@@ -1546,6 +1548,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     log(self, "-- global env --");
     log_env(self, self->env);
+    log(self, "-- subs");
+    tl_type_subs_log(self->transient, self->subs);
 
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
@@ -1674,6 +1678,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log(self, "-- inference complete --");
     log(self, "-- toplevels");
     log_toplevels(self);
+    log(self, "-- subs");
+    tl_type_subs_log(self->transient, self->subs);
     log(self, "-- env");
     log_env(self, self->env);
 
@@ -1696,6 +1702,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     log(self, "-- toplevels");
     log_toplevels(self);
+    log(self, "-- subs");
+    tl_type_subs_log(self->transient, self->subs);
     log(self, "-- env");
     log_env(self, self->env);
 
@@ -1706,6 +1714,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // ensure main function has the correct type
     if (check_main_function(self, main)) return 1;
 
+    log(self, "-- final subs");
+    tl_type_subs_log(self->transient, self->subs);
     log(self, "-- final env --");
     log_env(self, self->env);
 

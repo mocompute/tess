@@ -104,6 +104,7 @@ tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
 int tl_type_subs_unify(allocator *, tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
                        void *);
 int tl_monotype_unify(allocator *, tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *);
+void tl_type_subs_log(allocator *, tl_type_subs *);
 
 // apply subs to a single type
 void tl_type_v2_apply_subs(tl_type_v2 *, tl_type_subs const *);

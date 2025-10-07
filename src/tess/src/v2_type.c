@@ -8,6 +8,7 @@
 #include "str.h"
 #include "util.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 
 // -- monotype --
@@ -739,4 +740,41 @@ tl_type_context tl_type_context_empty() {
 
 tl_monotype tl_type_context_new_quantifier(tl_type_context *self) {
     return tl_monotype_init_quant((tl_type_quantifier)self->next_quant++);
+}
+
+//
+
+void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
+    hashmap               *seen        = hset_create(alloc, 128);
+    tl_type_variable_array equiv_class = {.alloc = alloc};
+
+    forall(i, *self) {
+        tl_type_variable root = uf_find(self, i);
+        if (hset_contains(seen, &root, sizeof root)) continue;
+        hset_insert(&seen, &root, sizeof root);
+
+        equiv_class.size = 0;
+        forall(j, *self) {
+            if (uf_find(self, j) == root) array_push(equiv_class, j);
+        }
+
+        fprintf(stderr, "  {");
+        forall(j, equiv_class) {
+            fprintf(stderr, "t%u", equiv_class.v[j]);
+            if (j + 1 < equiv_class.size) fprintf(stderr, ", ");
+        }
+        fprintf(stderr, "}");
+
+        tl_monotype *type = self->v[root].type;
+        if (type) {
+            fprintf(stderr, " = ");
+            str s = tl_monotype_to_string(alloc, type);
+            fprintf(stderr, "%.*s", str_ilen(s), str_buf(&s));
+        }
+
+        fprintf(stderr, "\n");
+    }
+
+    array_free(equiv_class);
+    hset_destroy(&seen);
 }
