@@ -280,8 +280,7 @@ typedef struct {
 ast_arguments_iter ast_node_arguments_iter(ast_node *);      // smart selection based on node tag
 ast_node          *ast_arguments_next(ast_arguments_iter *); // recognises nil argument
 
-ast_node          *ast_node_body(ast_node *);                // body of let or let in lambda.
-str                ast_node_toplevel_name(ast_node const *); // name of let, let-in-lambda, or symbol
+ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
 
 // -- utilities --
 
@@ -328,6 +327,7 @@ ast_node_sized ast_node_sized_from_ast_array(ast_node *);
 nodiscard hashmap *ast_node_str_map_create(allocator *, u32) mallocfun;
 void               ast_node_str_map_destroy(hashmap **);
 void               ast_node_str_map_add(hashmap **, str, ast_node *);
+void               ast_node_str_map_erase(hashmap *, str);
 ast_node          *ast_node_str_map_get(hashmap *, str);
 ast_node          *ast_node_str_map_iter(hashmap *, hashmap_iterator *);
 

@@ -55,6 +55,7 @@ static str        v2_ast_node_to_string(allocator *, ast_node const *);
 static void       apply_subs_to_ast(tl_infer *);
 
 static void       toplevel_add(tl_infer *, str, ast_node *);
+static void       toplevel_del(tl_infer *self, str name);
 static ast_node  *toplevel_get(tl_infer *, str);
 static ast_node  *toplevel_iter(tl_infer *, hashmap_iterator *);
 
@@ -184,18 +185,7 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
 }
 
 static void process_annotation(tl_infer *self, ast_node *node) {
-    ast_node *name = null;
-
-    if (ast_node_is_symbol(node)) {
-        name = node;
-    } else if (ast_node_is_let(node)) {
-        name = node->let.name;
-    } else if (ast_node_is_let_in_lambda(node)) {
-        name = node->let_in.name;
-    } else {
-        fatal("logic error");
-    }
-    assert(ast_node_is_symbol(name));
+    ast_node const *name = toplevel_name_node(node);
 
     if (!name->symbol.annotation) return;
 
@@ -283,6 +273,33 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
     *out_errors = errors;
     return tops;
+}
+
+// -- tree shake --
+
+typedef struct {
+    tl_infer *self;
+    hashmap  *names; // str set
+} tree_shake_ctx;
+
+void do_tree_shake(void *ctx_, ast_node *node) {
+    tree_shake_ctx *ctx = ctx_;
+
+    if (ast_node_is_nfa(node)) {
+        str_hset_insert(&ctx->names, node->named_application.name->symbol.name);
+    }
+}
+
+hashmap *tree_shake(tl_infer *self, ast_node const *node) {
+
+    tree_shake_ctx ctx = {.self = self};
+    ctx.names          = hset_create(self->transient, 1024);
+
+    str_hset_insert(&ctx.names, toplevel_name(node));
+
+    ast_node_dfs_safe_for_recur(self->transient, &ctx, (ast_node *)node, do_tree_shake);
+
+    return ctx.names;
 }
 
 // -- inference --
@@ -723,16 +740,7 @@ static int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
 static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
     ast_node *clone = ast_node_clone(alloc, node);
-    ast_node *name  = null;
-    if (ast_node_is_let(clone)) {
-        name = clone->let.name;
-    } else if (ast_node_is_let_in_lambda(clone)) {
-        name = clone->let_in.name;
-    } else if (ast_node_is_symbol(clone)) {
-        name = clone;
-    } else {
-        fatal("logic error");
-    }
+    ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
     name->symbol.annotation_type_v2 = null;
     name->symbol.annotation         = null;
@@ -1424,7 +1432,7 @@ static u64 hash_name_and_type(str name, tl_monotype type) {
 
 static str instantiate_fun_and_infer(tl_infer *self, infer_ctx *ctx, ast_node const *node,
                                      tl_monotype arrow) {
-    str       name = ast_node_toplevel_name(node);
+    str       name = toplevel_name(node);
     ast_node *body = ast_node_body((ast_node *)node);
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
@@ -1648,17 +1656,14 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
     ast_node *infer_target = null;
-    ast_node *name_node    = null;
+    ast_node *name_node    = toplevel_name_node(node);
     if (ast_node_is_let(node)) {
-        name_node    = node->let.name;
         infer_target = node;
     } else if (ast_node_is_let_in_lambda(node)) {
-        name_node    = node->let_in.name;
         infer_target = node->let_in.value;
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
-        name_node    = node;
         infer_target = null;
     } else {
         fatal("logic error");
@@ -1808,6 +1813,23 @@ void remove_generic_toplevels(tl_infer *self) {
     array_free(names);
 }
 
+void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
+    hashmap         *used   = tree_shake(self, start);
+
+    str_array        remove = {.alloc = self->transient};
+
+    hashmap_iterator iter   = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        str name = toplevel_name(node);
+        if (!str_hset_contains(used, name)) array_push(remove, name);
+    }
+
+    forall(i, remove) toplevel_del(self, remove.v[i]);
+    array_free(remove);
+    map_destroy(&used);
+}
+
 static int check_main_function(tl_infer *self, ast_node const *main) {
     // instantiate and infer main
     assert(ast_node_is_let(main));
@@ -1904,6 +1926,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_env(self, self->env);
 
     remove_generic_toplevels(self);
+    tree_shake_toplevels(self, main);
 
     log(self, "-- final toplevels");
     log_toplevels(self);
@@ -2132,12 +2155,28 @@ static void toplevel_add(tl_infer *self, str name, ast_node *node) {
     ast_node_str_map_add(&self->toplevels, name, node);
 }
 
+static void toplevel_del(tl_infer *self, str name) {
+    ast_node_str_map_erase(self->toplevels, name);
+}
+
 static ast_node *toplevel_get(tl_infer *self, str name) {
     return ast_node_str_map_get(self->toplevels, name);
 }
 
 static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
     return ast_node_str_map_iter(self->toplevels, iter);
+}
+
+ast_node *toplevel_name_node(ast_node *node) {
+    if (ast_node_is_let(node)) return node->let.name;
+    else if (ast_node_is_let_in_lambda(node)) return node->let_in.name;
+    else if (ast_node_is_symbol(node)) return node;
+    else if (ast_node_is_utd(node)) return node->user_type_def.name;
+    else fatal("logic error");
+}
+
+str toplevel_name(ast_node const *node) {
+    return toplevel_name_node((ast_node *)node)->symbol.name;
 }
 
 //

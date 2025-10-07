@@ -3,7 +3,9 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
+#include "hashmap.h"
 #include "str.h"
+#include "v2_infer.h"
 #include "v2_type.h"
 
 #include <stdio.h>
@@ -74,12 +76,14 @@ static str         arrow_to_c_params(transpile *, tl_type_v2 const *, str_sized)
 //
 
 static void generate_prototypes(transpile *self) {
-    forall(i, self->env->names) {
-        str         name = self->env->names.v[i];
-        tl_type_v2 *type = &self->env->types.v[i];
 
-        // skip non-arrow types, main, any generic types, intrinsics
-        if (!should_generate(name, type)) continue;
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+
+        str         name = toplevel_name(node);
+        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        if (!type) fatal("missing type");
 
         str ret = arrow_rhs_to_c(type);
         cat(self, ret);
@@ -94,9 +98,12 @@ static void generate_prototypes(transpile *self) {
 }
 
 static void generate_toplevels(transpile *self) {
-    forall(i, self->env->names) {
-        str         name = self->env->names.v[i];
-        tl_type_v2 *type = &self->env->types.v[i];
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        str         name = toplevel_name(node);
+        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        if (!type) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
@@ -124,13 +131,15 @@ static void generate_toplevels(transpile *self) {
             res = next_res(self);
         }
 
-        cat(self, ret);
+        cat(self, ret); // return type
         cat_sp(self);
-        cat(self, mangle_fun(self, name));
-        cat_open_round(self);
+        cat(self, mangle_fun(self, name)); // fun name
+
+        cat_open_round(self); // args
         cat(self, arrow_to_c_params(self, type, (str_sized)sized_all(params_str)));
         cat_close_round(self);
-        cat_open_curlyln(self);
+
+        cat_open_curlyln(self); // body
 
         str body_res = generate_expr(self, return_type, body);
         if (!res_is_void) {

@@ -19,4 +19,7 @@ void                tl_infer_set_verbose(tl_infer *, int);
 int                 tl_infer_run(tl_infer *, ast_node_sized, tl_infer_result *);
 void                tl_infer_report_errors(tl_infer *);
 
+str                 toplevel_name(ast_node const *);
+ast_node           *toplevel_name_node(ast_node *);
+
 #endif
