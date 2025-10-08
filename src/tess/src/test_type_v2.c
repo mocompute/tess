@@ -18,15 +18,16 @@ static int test_type_variable_to_string(void) {
 static int test_arrow_to_string(void) {
     int          error = 0;
 
-    allocator   *alloc = leak_detector_create();
+    allocator   *alloc = arena_create(default_allocator(), 1024);
     tl_monotype *arrow =
-      tl_monotype_create_arrow(alloc, tl_monotype_init_tv(123), tl_monotype_init_tv(456));
+      tl_monotype_create_arrow(alloc, tl_monotype_create(alloc, tl_monotype_init_tv(123)),
+                               tl_monotype_create(alloc, tl_monotype_init_tv(456)));
 
     str res = tl_type_arrow_to_string(alloc, &arrow->arrow);
     error += 0 == str_cmp_c(res, "t123 -> t456") ? 0 : 1;
 
     str_deinit(alloc, &res);
-    leak_detector_destroy(&alloc);
+    arena_destroy(default_allocator(), &alloc);
     return error;
 }
 

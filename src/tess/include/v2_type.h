@@ -12,7 +12,7 @@ typedef u32 tl_type_quantifier; // forall a. b. etc
 // clang-format off
 typedef struct {array_header; tl_type_variable *v;}       tl_type_variable_array;
 typedef struct {array_header; tl_type_quantifier *v;}     tl_type_quantifier_array;
-typedef struct {array_header; struct tl_monotype *v;}     tl_monotype_array;
+typedef struct {array_header; struct tl_monotype **v;}    tl_monotype_array;
 typedef struct {array_header; struct tl_type_v2 *v;}      tl_type_v2_array;
 typedef struct {str name; tl_type_quantifier_array vars;} tl_type_constructor;
 typedef struct {str name; tl_monotype_array        args;} tl_type_constructor_inst;
@@ -36,13 +36,13 @@ typedef struct tl_monotype {
 
 typedef struct {
     tl_type_quantifier_array quantifiers;
-    tl_monotype              type;
+    tl_monotype             *type;
 } tl_type_scheme;
 
 typedef struct tl_type_v2 {
     union {
-        tl_monotype    mono;
-        tl_type_scheme scheme;
+        tl_monotype    *mono;
+        tl_type_scheme *scheme;
     };
     enum { tl_mono, tl_scheme } tag;
 } tl_type_v2;
@@ -50,32 +50,38 @@ typedef struct tl_type_v2 {
 // -- monotype --
 
 // types are leaky: use an arena
-nodiscard tl_monotype *tl_monotype_create(allocator *, tl_monotype) mallocfun;
-nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype, tl_monotype) mallocfun;
+nodiscard tl_monotype    *tl_monotype_create(allocator *, tl_monotype) mallocfun;
+nodiscard tl_monotype    *tl_monotype_create_nil(allocator *) mallocfun;
+nodiscard tl_monotype    *tl_monotype_create_arrow(allocator *, tl_monotype *, tl_monotype *) mallocfun;
+nodiscard tl_monotype    *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
 
-tl_monotype            tl_monotype_init_nil();
-tl_monotype            tl_monotype_init_tv(tl_type_variable);
-tl_monotype            tl_monotype_init_quant(tl_type_quantifier);
-tl_monotype            tl_monotype_init_arrow(tl_type_v2_arrow);
-tl_monotype            tl_monotype_clone(allocator *, tl_monotype);
-tl_monotype            tl_monotype_init_constructor_inst(tl_type_constructor_inst);
-int                    tl_monotype_eq(tl_monotype, tl_monotype); // TODO const* all the monotypes
-int                    tl_monotype_occurs(tl_monotype, tl_monotype);
-int                    tl_monotype_is_nil(tl_monotype const *);
-int                    tl_monotype_is_monomorphic(tl_monotype const *);
-u64                    tl_monotype_hash64(tl_monotype);
-void                   tl_monotype_union_fv(tl_monotype *dst, tl_monotype src);
+tl_monotype               tl_monotype_init_nil();
+tl_monotype               tl_monotype_init_tv(tl_type_variable);
+tl_monotype               tl_monotype_init_quant(tl_type_quantifier);
+tl_monotype               tl_monotype_init_arrow(tl_type_v2_arrow);
+tl_monotype               tl_monotype_init_constructor_inst(tl_type_constructor_inst);
+int                       tl_monotype_eq(tl_monotype const *, tl_monotype const *);
+int                       tl_monotype_occurs(tl_monotype const *, tl_monotype const *);
+int                       tl_monotype_occurs_tv(tl_type_variable, tl_monotype const *);
+int                       tl_monotype_is_nil(tl_monotype const *);
+int                       tl_monotype_is_monomorphic(tl_monotype const *);
+u64                       tl_monotype_hash64(tl_monotype const *);
+void                      tl_monotype_union_fv(tl_monotype *dst, tl_monotype const *src);
 
-void                   tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *);
-tl_monotype const     *tl_type_v2_arrow_rightmost(tl_monotype const *);
+void                      tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *);
+tl_monotype              *tl_type_v2_arrow_rightmost(tl_monotype *);
+
+nodiscard tl_type_scheme *tl_type_scheme_create(allocator *, tl_type_scheme) mallocfun;
 
 // -- type --
 
-tl_type_v2            tl_type_init_mono(tl_monotype);
-tl_type_v2            tl_type_init_scheme(tl_type_scheme);
-nodiscard tl_type_v2 *tl_type_alloc_mono(allocator *, tl_monotype) mallocfun;
-nodiscard tl_type_v2 *tl_type_alloc_type(allocator *, tl_type_v2 const *) mallocfun;
-tl_type_v2            tl_type_v2_clone(allocator *, tl_type_v2 const *);
+nodiscard tl_type_v2 *tl_type_v2_create(allocator *, tl_type_v2) mallocfun;
+nodiscard tl_type_v2 *tl_type_alloc_mono(allocator *, tl_monotype *) mallocfun;
+nodiscard tl_type_v2 *tl_type_alloc_scheme(allocator *, tl_type_scheme *) mallocfun;
+
+tl_type_v2            tl_type_init_mono(tl_monotype *);
+tl_type_v2            tl_type_init_scheme(tl_type_scheme *);
+tl_type_v2           *tl_type_v2_clone(allocator *, tl_type_v2 const *);
 int                   tl_type_v2_is_arrow(tl_type_v2 const *);
 int                   tl_type_v2_is_scheme(tl_type_v2 const *);
 int                   tl_type_v2_is_mono(tl_type_v2 const *);
@@ -135,9 +141,8 @@ nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
 nodiscard tl_type_env *tl_type_env_copy(tl_type_env const *) mallocfun;
 void                   tl_type_env_destroy(allocator *, tl_type_env **);
 u32                    tl_type_env_add(tl_type_env *, str, tl_type_v2 const *);
-u32                    tl_type_env_add_mono(tl_type_env *, str, tl_monotype);
+u32                    tl_type_env_add_mono(tl_type_env *, str, tl_monotype *);
 tl_type_v2            *tl_type_env_lookup(tl_type_env *, str);
-int                    tl_type_env_find_tv(tl_type_env const *, tl_type_variable, u32 *);
 void                   tl_type_env_erase(tl_type_env *, u32);
 void                   tl_type_env_reindex(tl_type_env *);
 void                   tl_type_env_subs_apply(allocator *, tl_type_env *, tl_type_subs const *);

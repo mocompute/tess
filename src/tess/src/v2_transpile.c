@@ -111,7 +111,7 @@ static void generate_toplevels(transpile *self) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
 
-        tl_monotype const *return_type = tl_type_v2_arrow_rightmost(&type->mono);
+        tl_monotype const *return_type = tl_type_v2_arrow_rightmost(type->mono);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
@@ -210,11 +210,11 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 }
 
 static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
-    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost(type);
+    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost((tl_monotype *)type);
     str                res                 = str_empty(); // empty signals void result
     if (tl_nil != funcall_result_type->tag) {
         res = next_res(self);
-        generate_decl(self, res, tl_type_v2_arrow_rightmost(type));
+        generate_decl(self, res, tl_type_v2_arrow_rightmost((tl_monotype *)type));
         if (do_assign_lhs) generate_assign_lhs(self, res);
     }
     return res;
@@ -277,7 +277,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     assert(params.size == args.size);
 
     if (!tl_type_v2_is_mono(node->lambda_application.lambda->type_v2)) fatal("type scheme");
-    tl_monotype const *arrow = &node->lambda_application.lambda->type_v2->mono;
+    tl_monotype const *arrow = node->lambda_application.lambda->type_v2->mono;
     assert(tl_type_v2_is_arrow(node->lambda_application.lambda->type_v2));
     str_array args_res = generate_args(self, args, arrow);
     assert(args_res.size == params.size);
@@ -289,7 +289,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
         assert(ast_node_is_symbol(param));
         assert(tl_type_v2_is_mono(param->type_v2));
 
-        generate_decl(self, param->symbol.name, &param->type_v2->mono);
+        generate_decl(self, param->symbol.name, param->type_v2->mono);
         generate_assign_lhs(self, param->symbol.name);
         cat(self, args_res.v[i]);
         cat_semicolonln(self);
@@ -324,7 +324,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     if (!type) {
         assert(tl_type_v2_is_mono(node->type_v2));
-        type = &node->type_v2->mono;
+        type = node->type_v2->mono;
     }
 
     switch (node->tag) {
@@ -371,7 +371,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     if (tl_arrow == type->tag) {
 
-        tl_monotype const *result_type = tl_type_v2_arrow_rightmost(type);
+        tl_monotype const *result_type = tl_type_v2_arrow_rightmost((tl_monotype *)type);
         str                typec       = type_to_c_mono(result_type);
         cat(self, typec);
 
@@ -543,7 +543,7 @@ static int should_generate(str name, tl_type_v2 const *type) {
 
 static str type_to_c(tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
-    tl_monotype const *mono = &type->mono;
+    tl_monotype const *mono = type->mono;
     if (tl_cons == mono->tag) {
         if (str_eq(S("Int"), mono->cons.name)) {
             return S("int64_t");
@@ -560,14 +560,14 @@ static str type_to_c(tl_type_v2 const *type) {
     else fatal("not yet implemented");
 }
 static str type_to_c_mono(tl_monotype const *type) {
-    tl_type_v2 t = tl_type_init_mono(*type);
+    tl_type_v2 t = tl_type_init_mono((tl_monotype *)type);
     return type_to_c(&t);
 }
 
 static str arrow_rhs_to_c(tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
     if (!tl_type_v2_is_arrow(type)) fatal("expected arrow");
-    tl_monotype const *right = tl_type_v2_arrow_rightmost(&type->mono);
+    tl_monotype const *right = tl_type_v2_arrow_rightmost(type->mono);
     return type_to_c_mono(right);
 }
 
@@ -577,7 +577,7 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
 
     str_build          b     = str_build_init(self->transient, 64);
 
-    tl_monotype const *arrow = &type->mono;
+    tl_monotype const *arrow = type->mono;
 
     if (!tl_monotype_is_nil(arrow)) {
         int done = 0;
@@ -607,7 +607,7 @@ tl_monotype *env_lookup(transpile *self, str name) {
     tl_type_v2 *type = tl_type_env_lookup(self->env, name);
     if (!type) fatal("type missing");
     if (tl_type_v2_is_scheme(type)) return null;
-    return &type->mono;
+    return type->mono;
 }
 
 //

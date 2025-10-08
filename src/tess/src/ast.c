@@ -71,8 +71,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     clone->type     = orig->type ? tl_type_clone_shallow(alloc, orig->type) : null;
 
     if (orig->type_v2) {
-        tl_type_v2 tmp = tl_type_v2_clone(alloc, orig->type_v2);
-        clone->type_v2 = tl_type_alloc_type(alloc, &tmp);
+        clone->type_v2 = tl_type_v2_clone(alloc, orig->type_v2);
     } else clone->type_v2 = null;
 
     // clone common array for some tags
@@ -140,8 +139,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation_type    = tl_type_clone_shallow(alloc, vorig->annotation_type);
         vclone->annotation_type_v2 = null;
         if (vorig->annotation_type_v2) {
-            vclone->annotation_type_v2  = new (alloc, tl_type_v2);
-            *vclone->annotation_type_v2 = tl_type_v2_clone(alloc, vorig->annotation_type_v2);
+            vclone->annotation_type_v2 = new (alloc, tl_type_v2);
+            vclone->annotation_type_v2 = tl_type_v2_clone(alloc, vorig->annotation_type_v2);
         }
         vclone->special_hash = vorig->special_hash;
         vclone->flags        = vorig->flags;

@@ -29,9 +29,9 @@ tl_monotype tl_monotype_init_arrow(tl_type_v2_arrow arrow) {
     return (tl_monotype){.tag = tl_arrow, .arrow = arrow};
 }
 
-tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype left, tl_monotype right) {
-    tl_monotype *pleft  = tl_monotype_create(alloc, left);
-    tl_monotype *pright = tl_monotype_create(alloc, right);
+tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype *left, tl_monotype *right) {
+    tl_monotype *pleft  = left;
+    tl_monotype *pright = right;
     tl_monotype  arrow  = tl_monotype_init_arrow((tl_type_v2_arrow){.lhs = pleft, .rhs = pright});
     return tl_monotype_create(alloc, arrow);
 }
@@ -46,20 +46,26 @@ tl_monotype *tl_monotype_create(allocator *alloc, tl_monotype init) {
     return self;
 }
 
-int tl_monotype_eq(tl_monotype lhs, tl_monotype rhs) {
-    if (lhs.tag != rhs.tag) return 0;
-    switch (lhs.tag) {
+tl_monotype *tl_monotype_create_nil(allocator *alloc) {
+    tl_monotype *self = new (alloc, tl_monotype);
+    *self             = tl_monotype_init_nil();
+    return self;
+}
+
+int tl_monotype_eq(tl_monotype const *lhs, tl_monotype const *rhs) {
+    if (lhs->tag != rhs->tag) return 0;
+    switch (lhs->tag) {
     case tl_nil: return 1;
     case tl_cons:
-        if (!str_eq(lhs.cons.name, rhs.cons.name)) return 0;
-        if (lhs.cons.args.size != rhs.cons.args.size) return 0;
-        forall(i, lhs.cons.args) {
-            if (!tl_monotype_eq(lhs.cons.args.v[i], rhs.cons.args.v[i])) return 0;
+        if (!str_eq(lhs->cons.name, rhs->cons.name)) return 0;
+        if (lhs->cons.args.size != rhs->cons.args.size) return 0;
+        forall(i, lhs->cons.args) {
+            if (!tl_monotype_eq(lhs->cons.args.v[i], rhs->cons.args.v[i])) return 0;
         }
         return 1;
-    case tl_var:   return lhs.var == rhs.var;
-    case tl_quant: return lhs.quant == rhs.quant;
-    case tl_arrow: return tl_monotype_eq(*lhs.arrow.lhs, *rhs.arrow.rhs); break;
+    case tl_var:   return lhs->var == rhs->var;
+    case tl_quant: return lhs->quant == rhs->quant;
+    case tl_arrow: return tl_monotype_eq(lhs->arrow.lhs, rhs->arrow.rhs); break;
     }
 }
 
@@ -72,7 +78,7 @@ int tl_monotype_is_monomorphic(tl_monotype const *self) {
     case tl_nil: return 1;
     case tl_cons:
         forall(i, self->cons.args) {
-            if (!tl_monotype_is_monomorphic(&self->cons.args.v[i])) return 0;
+            if (!tl_monotype_is_monomorphic(self->cons.args.v[i])) return 0;
         }
         return 1;
     case tl_var:
@@ -82,64 +88,76 @@ int tl_monotype_is_monomorphic(tl_monotype const *self) {
     }
 }
 
-int tl_monotype_occurs(tl_monotype lhs, tl_monotype rhs) {
+int tl_monotype_occurs(tl_monotype const *lhs, tl_monotype const *rhs) {
     // return 1 if either side has a type variable that occurs on the other side
-    switch (lhs.tag) {
+    switch (lhs->tag) {
 
     case tl_nil:
         //
         return 0;
 
     case tl_cons:
-        forall(i, lhs.cons.args) if (tl_monotype_occurs(lhs.cons.args.v[i], rhs)) return 1;
+        forall(i, lhs->cons.args) if (tl_monotype_occurs(lhs->cons.args.v[i], rhs)) return 1;
         return 0;
 
     case tl_var:
-        if (tl_var == rhs.tag) return lhs.var == rhs.var;
-        else if (tl_quant == rhs.tag || tl_nil == rhs.tag) return 0;
+        if (tl_var == rhs->tag) return lhs->var == rhs->var;
+        else if (tl_quant == rhs->tag || tl_nil == rhs->tag) return 0;
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_quant:
-        if (tl_quant == rhs.tag) return lhs.quant == rhs.quant;
-        else if (tl_var == rhs.tag || tl_nil == rhs.tag) return 0;
+        if (tl_quant == rhs->tag) return lhs->quant == rhs->quant;
+        else if (tl_var == rhs->tag || tl_nil == rhs->tag) return 0;
         return tl_monotype_occurs(rhs, lhs);
 
     case tl_arrow:
-        return tl_monotype_occurs(*lhs.arrow.lhs, rhs) || tl_monotype_occurs(*lhs.arrow.rhs, rhs);
+        return tl_monotype_occurs(lhs->arrow.lhs, rhs) || tl_monotype_occurs(lhs->arrow.rhs, rhs);
     }
 }
 
-u64 tl_monotype_hash64(tl_monotype self) {
-    u64 hash = hash64(&self.tag, sizeof self.tag);
-    switch (self.tag) {
+int tl_monotype_occurs_tv(tl_type_variable lhs, tl_monotype const *rhs) {
+    if (tl_var == rhs->tag) return lhs == rhs->var;
+    else if (tl_quant == rhs->tag || tl_nil == rhs->tag) return 0;
+    else if (tl_cons == rhs->tag) {
+        forall(i, rhs->cons.args) if (tl_monotype_occurs_tv(lhs, rhs->cons.args.v[i])) return 1;
+        return 0;
+
+    } else if (tl_arrow == rhs->tag) {
+        return tl_monotype_occurs_tv(lhs, rhs->arrow.lhs) || tl_monotype_occurs_tv(lhs, rhs->arrow.rhs);
+    } else fatal("unreachable");
+}
+
+u64 tl_monotype_hash64(tl_monotype const *self) {
+    u64 hash = hash64(&self->tag, sizeof self->tag);
+    switch (self->tag) {
 
     case tl_nil: break;
 
     case tl_cons:
-        hash = str_hash64_combine(hash, self.cons.name);
-        forall(i, self.cons.args) {
-            u64 h = tl_monotype_hash64(self.cons.args.v[i]);
+        hash = str_hash64_combine(hash, self->cons.name);
+        forall(i, self->cons.args) {
+            u64 h = tl_monotype_hash64(self->cons.args.v[i]);
             hash  = hash64_combine(hash, &h, sizeof h);
         }
         break;
 
-    case tl_var:   hash = hash64_combine(hash, &self.var, sizeof self.var); break;
-    case tl_quant: hash = hash64_combine(hash, &self.quant, sizeof self.quant); break;
+    case tl_var:   hash = hash64_combine(hash, &self->var, sizeof self->var); break;
+    case tl_quant: hash = hash64_combine(hash, &self->quant, sizeof self->quant); break;
 
     case tl_arrow: {
-        u64 h = tl_monotype_hash64(*self.arrow.lhs);
+        u64 h = tl_monotype_hash64(self->arrow.lhs);
         hash  = hash64_combine(hash, &h, sizeof h);
-        h     = tl_monotype_hash64(*self.arrow.rhs);
+        h     = tl_monotype_hash64(self->arrow.rhs);
         hash  = hash64_combine(hash, &h, sizeof h);
     } break;
     }
     return hash;
 }
 
-void tl_monotype_union_fv(tl_monotype *dst, tl_monotype src) {
+void tl_monotype_union_fv(tl_monotype *dst, tl_monotype const *src) {
     assert(tl_arrow == dst->tag);
-    if (tl_arrow != src.tag) return;
-    forall(i, src.arrow.fvs) array_set_insert(dst->arrow.fvs, src.arrow.fvs.v[i]);
+    if (tl_arrow != src->tag) return;
+    forall(i, src->arrow.fvs) array_set_insert(dst->arrow.fvs, src->arrow.fvs.v[i]);
 }
 
 void tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *self) {
@@ -149,56 +167,64 @@ void tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *self) {
 
 // -- type --
 
-tl_type_v2 tl_type_init_mono(tl_monotype mono) {
+tl_type_scheme *tl_type_scheme_create(allocator *alloc, tl_type_scheme scheme) {
+    tl_type_scheme *out = alloc_malloc(alloc, sizeof *out);
+    *out                = scheme;
+    return out;
+}
+
+tl_type_v2 *tl_type_v2_create(allocator *alloc, tl_type_v2 type) {
+    tl_type_v2 *out = alloc_malloc(alloc, sizeof *out);
+    *out            = type;
+    return out;
+}
+
+tl_type_v2 tl_type_init_mono(tl_monotype *mono) {
     return (tl_type_v2){.tag = tl_mono, .mono = mono};
 }
 
-tl_type_v2 tl_type_init_scheme(tl_type_scheme scheme) {
+tl_type_v2 tl_type_init_scheme(tl_type_scheme *scheme) {
     return (tl_type_v2){.tag = tl_scheme, .scheme = scheme};
 }
 
-tl_type_v2 *tl_type_alloc_mono(allocator *alloc, tl_monotype mono) {
-    tl_type_v2 *out = new (alloc, tl_type_v2);
-    *out            = tl_type_init_mono(mono);
-    return out;
+tl_type_v2 *tl_type_alloc_mono(allocator *alloc, tl_monotype *mono) {
+    return tl_type_v2_create(alloc, tl_type_init_mono(mono));
 }
 
-tl_type_v2 *tl_type_alloc_type(allocator *alloc, tl_type_v2 const *type) {
-    tl_type_v2 *out = new (alloc, tl_type_v2);
-    *out            = *type;
-    return out;
+tl_type_v2 *tl_type_alloc_scheme(allocator *alloc, tl_type_scheme *scheme) {
+    return tl_type_v2_create(alloc, tl_type_init_scheme(scheme));
 }
 
-tl_monotype tl_monotype_clone(allocator *alloc, tl_monotype orig) {
+tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     tl_monotype clone = {0};
-    clone.tag         = orig.tag;
-    switch (orig.tag) {
+    clone.tag         = orig->tag;
+    switch (orig->tag) {
     case tl_nil: break;
     case tl_cons:
-        clone.cons.name = str_copy(alloc, orig.cons.name);
+        clone.cons.name = str_copy(alloc, orig->cons.name);
         clone.cons.args = (tl_monotype_array){.alloc = alloc};
-        array_copy(clone.cons.args, orig.cons.args);
+        array_copy(clone.cons.args, orig->cons.args);
         forall(i, clone.cons.args) {
             // cons args are monotype
             clone.cons.args.v[i] = tl_monotype_clone(alloc, clone.cons.args.v[i]);
         }
         break;
-    case tl_var:   clone.var = orig.var; break;
-    case tl_quant: clone.quant = orig.quant; break;
+    case tl_var:   clone.var = orig->var; break;
+    case tl_quant: clone.quant = orig->quant; break;
 
     case tl_arrow:
-        clone.arrow.lhs  = new (alloc, tl_monotype);
-        clone.arrow.rhs  = new (alloc, tl_monotype);
-        clone.arrow.fvs  = (str_array){.alloc = alloc};
-        *clone.arrow.lhs = tl_monotype_clone(alloc, *orig.arrow.lhs);
-        *clone.arrow.rhs = tl_monotype_clone(alloc, *orig.arrow.rhs);
-        array_copy(clone.arrow.fvs, orig.arrow.fvs);
+        clone.arrow.lhs = new (alloc, tl_monotype);
+        clone.arrow.rhs = new (alloc, tl_monotype);
+        clone.arrow.fvs = (str_array){.alloc = alloc};
+        clone.arrow.lhs = tl_monotype_clone(alloc, orig->arrow.lhs);
+        clone.arrow.rhs = tl_monotype_clone(alloc, orig->arrow.rhs);
+        array_copy(clone.arrow.fvs, orig->arrow.fvs);
         break;
     }
-    return clone;
+    return tl_monotype_create(alloc, clone);
 }
 
-tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 const *orig) {
+tl_type_v2 *tl_type_v2_clone(allocator *alloc, tl_type_v2 const *orig) {
     tl_type_v2 clone = {0};
     switch (orig->tag) {
     case tl_mono:
@@ -207,20 +233,20 @@ tl_type_v2 tl_type_v2_clone(allocator *alloc, tl_type_v2 const *orig) {
         clone.mono = tl_monotype_clone(alloc, orig->mono);
         break;
     case tl_scheme:
-        clone.tag                = tl_scheme;
+        clone.tag                 = tl_scheme;
 
-        clone.scheme.type        = tl_monotype_clone(alloc, orig->scheme.type);
-        clone.scheme.quantifiers = (tl_type_quantifier_array){.alloc = alloc};
-        array_copy(clone.scheme.quantifiers, orig->scheme.quantifiers);
+        clone.scheme->type        = tl_monotype_clone(alloc, orig->scheme->type);
+        clone.scheme->quantifiers = (tl_type_quantifier_array){.alloc = alloc};
+        array_copy(clone.scheme->quantifiers, orig->scheme->quantifiers);
         // tl_type_quantifier does not need to be cloned
         break;
     }
-    return clone;
+    return tl_type_v2_create(alloc, clone);
 }
 
 int tl_type_v2_is_arrow(tl_type_v2 const *self) {
-    return (tl_scheme == self->tag && tl_arrow == self->scheme.type.tag) ||
-           (tl_mono == self->tag && tl_arrow == self->mono.tag);
+    return (tl_scheme == self->tag && tl_arrow == self->scheme->type->tag) ||
+           (tl_mono == self->tag && tl_arrow == self->mono->tag);
 }
 
 int tl_type_v2_is_scheme(tl_type_v2 const *self) {
@@ -233,23 +259,23 @@ int tl_type_v2_is_mono(tl_type_v2 const *self) {
 
 int tl_type_v2_is_monomorphic(tl_type_v2 const *self) {
     if (tl_type_v2_is_scheme(self)) return 0;
-    return tl_monotype_is_monomorphic(&self->mono);
+    return tl_monotype_is_monomorphic(self->mono);
 }
 
 str_sized tl_type_v2_free_variables(tl_type_v2 const *self) {
     str_sized out = {0};
     switch (self->tag) {
     case tl_mono:
-        if (tl_arrow == self->mono.tag) {
-            out.size = self->mono.arrow.fvs.size;
-            out.v    = self->mono.arrow.fvs.v;
+        if (tl_arrow == self->mono->tag) {
+            out.size = self->mono->arrow.fvs.size;
+            out.v    = self->mono->arrow.fvs.v;
         }
         break;
 
     case tl_scheme:
-        if (tl_arrow == self->scheme.type.tag) {
-            out.size = self->scheme.type.arrow.fvs.size;
-            out.v    = self->scheme.type.arrow.fvs.v;
+        if (tl_arrow == self->scheme->type->tag) {
+            out.size = self->scheme->type->arrow.fvs.size;
+            out.v    = self->scheme->type->arrow.fvs.v;
         }
         break;
     }
@@ -332,8 +358,8 @@ int tl_monotype_unify(allocator *alloc, tl_type_subs *subs, tl_monotype *left, t
             return 1;
         }
         forall(i, left->cons.args) {
-            if (tl_monotype_unify(alloc, subs, &left->cons.args.v[i], &right->cons.args.v[i], cb, user)) {
-                if (cb) cb(user, &left->cons.args.v[i], &right->cons.args.v[i]);
+            if (tl_monotype_unify(alloc, subs, left->cons.args.v[i], right->cons.args.v[i], cb, user)) {
+                if (cb) cb(user, left->cons.args.v[i], right->cons.args.v[i]);
                 return 1;
             }
         }
@@ -369,7 +395,7 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
 
     case tl_cons:
         forall(i, mono->cons.args) {
-            if (tl_type_subs_monotype_occurs(self, tv, &mono->cons.args.v[i])) return 1;
+            if (tl_type_subs_monotype_occurs(self, tv, mono->cons.args.v[i])) return 1;
         }
         return 0;
 
@@ -407,7 +433,7 @@ int tl_type_subs_unify(allocator *alloc, tl_type_subs *self, tl_type_variable tv
     }
 
     // case 2: tv = concrete type
-    if (tl_monotype_occurs(tl_monotype_init_tv(tv_root), *mono)) return 1;
+    if (tl_monotype_occurs_tv(tv_root, mono)) return 1;
 
     tl_monotype *tv_type = self->v[tv_root].type;
     if (tv_type) {
@@ -416,8 +442,8 @@ int tl_type_subs_unify(allocator *alloc, tl_type_subs *self, tl_type_variable tv
     }
 
     // store the type at the root
-    self->v[tv_root].type  = new (alloc, tl_monotype);
-    *self->v[tv_root].type = tl_monotype_clone(alloc, *mono);
+    self->v[tv_root].type = new (alloc, tl_monotype);
+    self->v[tv_root].type = tl_monotype_clone(alloc, mono);
     return 0;
 }
 
@@ -425,7 +451,7 @@ static void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_
     switch (self->tag) {
     case tl_cons: {
         forall(i, self->cons.args) {
-            tl_monotype_substitute(alloc, &self->cons.args.v[i], subs);
+            tl_monotype_substitute(alloc, self->cons.args.v[i], subs);
         }
     } break;
 
@@ -433,7 +459,7 @@ static void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_
         tl_type_variable root     = uf_find((tl_type_subs *)subs, self->var);
         tl_monotype     *resolved = subs->v[root].type;
         if (resolved) {
-            *self = tl_monotype_clone(alloc, *resolved);
+            self = tl_monotype_clone(alloc, resolved);
             tl_monotype_substitute(alloc, self, subs);
         } else {
             // update to representative tv
@@ -459,8 +485,8 @@ void tl_type_v2_apply_subs(allocator *alloc, tl_type_v2 *self, tl_type_subs cons
     // are not substitutable) are a different C type than unquantified
     // type variables.
 
-    if (tl_mono == self->tag) return tl_monotype_substitute(alloc, &self->mono, subs);
-    else return tl_monotype_substitute(alloc, &self->scheme.type, subs);
+    if (tl_mono == self->tag) return tl_monotype_substitute(alloc, self->mono, subs);
+    else return tl_monotype_substitute(alloc, self->scheme->type, subs);
 }
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
@@ -505,7 +531,7 @@ str tl_type_constructor_inst_to_string(allocator *alloc, tl_type_constructor_ins
         str_build_cat(&b, S(" "));
 
         // be friendly with bump allocators which can free the last allocated block
-        str mono = tl_monotype_to_string(alloc, &self->args.v[i]);
+        str mono = tl_monotype_to_string(alloc, self->args.v[i]);
         str_build_cat(&b, mono);
         str_deinit(alloc, &mono);
     }
@@ -563,7 +589,7 @@ str tl_type_scheme_to_string(allocator *alloc, tl_type_scheme const *self) {
 
     str_build_cat(&b, S(" . "));
 
-    str mono = tl_monotype_to_string(alloc, &self->type);
+    str mono = tl_monotype_to_string(alloc, self->type);
     str_build_cat(&b, mono);
     str_deinit(alloc, &mono);
     return str_build_finish(&b);
@@ -571,8 +597,8 @@ str tl_type_scheme_to_string(allocator *alloc, tl_type_scheme const *self) {
 
 str tl_type_v2_to_string(allocator *alloc, tl_type_v2 const *self) {
     switch (self->tag) {
-    case tl_mono:   return tl_monotype_to_string(alloc, &self->mono);
-    case tl_scheme: return tl_type_scheme_to_string(alloc, &self->scheme);
+    case tl_mono:   return tl_monotype_to_string(alloc, self->mono);
+    case tl_scheme: return tl_type_scheme_to_string(alloc, self->scheme);
     }
 }
 
@@ -583,24 +609,25 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 
 // -- env --
 
-static void add_type_cons(tl_type_env *self, tl_type_constructor_inst inst) {
-    tl_type_env_add_mono(self, inst.name, tl_monotype_init_constructor_inst(inst));
+static void add_type_cons(allocator *alloc, tl_type_env *self, tl_type_constructor_inst inst) {
+    tl_type_env_add_mono(self, inst.name,
+                         tl_monotype_create(alloc, tl_monotype_init_constructor_inst(inst)));
 }
 
-static void make_builtin_type_constructors(tl_type_env *self) {
+static void make_builtin_type_constructors(allocator *alloc, tl_type_env *self) {
 
     tl_type_constructor_inst inst = {0};
     //
     inst.name = S("Nil");
-    add_type_cons(self, inst);
+    add_type_cons(alloc, self, inst);
     inst.name = S("Int");
-    add_type_cons(self, inst);
+    add_type_cons(alloc, self, inst);
     inst.name = S("Bool");
-    add_type_cons(self, inst);
+    add_type_cons(alloc, self, inst);
     inst.name = S("Float");
-    add_type_cons(self, inst);
+    add_type_cons(alloc, self, inst);
     inst.name = S("String");
-    add_type_cons(self, inst);
+    add_type_cons(alloc, self, inst);
 
     for (u32 i = 0; i < self->names.size; ++i) {
         str_map_set(&self->index, self->names.v[i], &i);
@@ -614,7 +641,7 @@ tl_type_env *tl_type_env_create(allocator *alloc) {
     self->types       = (tl_type_v2_array){.alloc = alloc};
     self->index       = map_create(alloc, sizeof(u32), 128);
 
-    make_builtin_type_constructors(self);
+    make_builtin_type_constructors(alloc, self);
 
     return self;
 }
@@ -659,7 +686,7 @@ u32 tl_type_env_add(tl_type_env *self, str name, tl_type_v2 const *type) {
     return loc;
 }
 
-u32 tl_type_env_add_mono(tl_type_env *self, str name, tl_monotype mono) {
+u32 tl_type_env_add_mono(tl_type_env *self, str name, tl_monotype *mono) {
     tl_type_v2 type = tl_type_init_mono(mono);
     return tl_type_env_add(self, name, &type);
 }
@@ -668,30 +695,6 @@ tl_type_v2 *tl_type_env_lookup(tl_type_env *self, str name) {
     u32 *found = str_map_get(self->index, name);
     assert(!found || *found < self->types.size);
     return found ? &self->types.v[*found] : null;
-}
-
-int tl_type_env_find_tv(tl_type_env const *self, tl_type_variable tv, u32 *out_index) {
-    tl_monotype tv_mono = tl_monotype_init_tv(tv);
-
-    forall(i, self->types) {
-        tl_type_v2 *type = &self->types.v[i];
-        switch (type->tag) {
-        case tl_mono:
-            if (tl_monotype_occurs(tv_mono, type->mono)) {
-                if (out_index) *out_index = i;
-                return 1;
-            }
-            break;
-
-        case tl_scheme:
-            if (tl_monotype_occurs(tv_mono, type->scheme.type)) {
-                if (out_index) *out_index = i;
-                return 1;
-            }
-            break;
-        }
-    }
-    return 0;
 }
 
 void tl_type_env_erase(tl_type_env *self, u32 idx) {
