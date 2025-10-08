@@ -2,21 +2,33 @@
 #define TESS_TYPE_H_V2
 
 #include "alloc.h"
+#include "array.h"
 #include "hashmap.h"
 #include "nodiscard.h"
 #include "str.h"
 
-typedef u32 tl_type_variable;   // t0, t1, etc
-typedef u32 tl_type_quantifier; // forall a. b. etc
+typedef u32 tl_type_variable; // t0, t1, etc
 
 // clang-format off
-typedef struct {array_header; tl_type_variable *v;}       tl_type_variable_array;
-typedef struct {array_header; tl_type_quantifier *v;}     tl_type_quantifier_array;
-typedef struct {array_header; struct tl_monotype **v;}    tl_monotype_array;
-typedef struct {array_header; struct tl_type_v2 *v;}      tl_type_v2_array;
-typedef struct {str name; tl_type_quantifier_array vars;} tl_type_constructor;
-typedef struct {str name; tl_monotype_array        args;} tl_type_constructor_inst;
+typedef struct {array_header; tl_type_variable *v;} tl_type_variable_array;
+typedef struct {array_sized;  tl_type_variable *v;} tl_type_variable_sized;
 // clang-format on
+
+typedef struct {
+    str name;
+    u32 arity;
+} tl_type_constructor_def;
+
+typedef struct {
+    tl_type_constructor_def const *def;
+    struct tl_monotype            *args; // list of arguments
+} tl_type_constructor_inst;
+
+typedef struct {
+    allocator *alloc;       // manages lifetime of all type constructors
+    hashmap   *definitions; // map str => tl_type_constructor_def*
+    hashmap   *instances;   // map tl_type_constructor_def => tl_type_constructor_inst*
+} tl_type_registry;
 
 typedef struct {
     struct tl_monotype *lhs;
@@ -25,29 +37,33 @@ typedef struct {
 } tl_type_v2_arrow;
 
 typedef struct tl_monotype {
-    union {
-        tl_type_constructor_inst cons;
-        tl_type_variable         var;
-        tl_type_quantifier       quant; // because we use monotype struct for type schemes too
-        tl_type_v2_arrow         arrow;
-    };
-    enum { tl_nil, tl_cons, tl_var, tl_quant, tl_arrow } tag;
+    struct tl_monotype       *next; // a list/arrow of cons/vars
+    str_sized                *fvs;  // if head of arrow (first element), fvs is a pointer to free variables
+    tl_type_constructor_inst *cons; // if not null, a concrete type
+    tl_type_variable          var;  // else a type variable
 } tl_monotype;
 
 typedef struct {
-    tl_type_quantifier_array quantifiers;
-    tl_monotype             *type;
-} tl_type_scheme;
+    tl_type_variable_sized quantifiers;
+    tl_monotype            body;
+} tl_polytype;
 
-typedef struct tl_type_v2 {
-    union {
-        tl_monotype    *mono;
-        tl_type_scheme *scheme;
-    };
-    enum { tl_mono, tl_scheme } tag;
-} tl_type_v2;
+// -- type constructor and registry --
+
+nodiscard tl_type_registry *tl_type_registry_create(allocator *) mallocfun;
+tl_type_constructor_def    *tl_type_constructor_def_create(tl_type_registry *, str, u32) mallocfun;
+tl_type_constructor_inst   *tl_type_registry_instantiate(tl_type_registry *, str,
+                                                         tl_monotype const *) mallocfun;
+tl_type_constructor_inst   *tl_type_registry_get(tl_type_registry *, str, tl_monotype const *);
+
+tl_monotype                *tl_type_registry_create_type(tl_type_registry *, str, tl_monotype *);
 
 // -- monotype --
+
+u32          tl_monotype_list_length(tl_monotype const *);
+tl_monotype *tl_monotype_list_copy(allocator *, tl_monotype const *);
+
+//
 
 // types are leaky: use an arena
 nodiscard tl_monotype    *tl_monotype_create(allocator *, tl_monotype) mallocfun;
@@ -57,7 +73,6 @@ nodiscard tl_monotype    *tl_monotype_clone(allocator *, tl_monotype const *) ma
 
 tl_monotype               tl_monotype_init_nil();
 tl_monotype               tl_monotype_init_tv(tl_type_variable);
-tl_monotype               tl_monotype_init_quant(tl_type_quantifier);
 tl_monotype               tl_monotype_init_arrow(tl_type_v2_arrow);
 tl_monotype               tl_monotype_init_constructor_inst(tl_type_constructor_inst);
 int                       tl_monotype_eq(tl_monotype const *, tl_monotype const *);

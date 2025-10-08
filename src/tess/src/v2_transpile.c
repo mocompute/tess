@@ -386,7 +386,7 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
         cat(self, name);
         cat_semicolonln(self);
     } else if (tl_nil == type->tag) fatal("can't declare a void type");
-    else if (tl_var == type->tag || tl_quant == type->tag) fatal("got a type variable");
+    else if (tl_var == type->tag) fatal("got a type variable");
     else fatal("type not expected");
 }
 
@@ -556,7 +556,7 @@ static str type_to_c(tl_type_v2 const *type) {
         } else fatal("unknown type constructor");
     } else if (tl_nil == mono->tag) {
         return S("void");
-    } else if (tl_var == mono->tag || tl_quant == mono->tag) fatal("can't render a type variable");
+    } else if (tl_var == mono->tag) fatal("can't render a type variable");
     else fatal("not yet implemented");
 }
 static str type_to_c_mono(tl_monotype const *type) {
