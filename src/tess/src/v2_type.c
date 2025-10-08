@@ -56,6 +56,7 @@ tl_type_constructor_inst *tl_type_registry_instantiate(tl_type_registry *self, s
 }
 
 tl_type_constructor_inst *tl_type_registry_get(tl_type_registry *self, str name, tl_monotype const *args) {
+    // args may be null for empty list
     tl_type_constructor_def def = {.name = name, .arity = tl_monotype_list_length(args)};
     return map_get_ptr(self->instances, &def, sizeof def);
 }
@@ -246,7 +247,11 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 }
 
 int tl_monotype_is_tv(tl_monotype const *self) {
-    return !self->next && !self->cons;
+    return self && !self->next && !self->cons;
+}
+
+int tl_monotype_is_nil(tl_monotype const *self) {
+    return self && self->cons && str_eq(self->cons->def->name, S("Nil"));
 }
 
 str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {

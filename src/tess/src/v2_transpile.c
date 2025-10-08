@@ -111,7 +111,7 @@ static void generate_toplevels(transpile *self) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
 
-        tl_monotype const *return_type = tl_monotype_list_last(type->mono);
+        tl_monotype const *return_type = tl_monotype_list_last(type->type);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
@@ -198,13 +198,15 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
+    tl_monotype const *hd = arrow;
+
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
 
-        str res = generate_expr(self, arrow->arrow.lhs, args.v[i]);
+        str res = generate_expr(self, hd, args.v[i]);
         array_push(args_res, res);
-        arrow = arrow->arrow.rhs;
+        hd = hd->next;
     }
     return args_res;
 }
@@ -212,7 +214,8 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
     tl_monotype const *funcall_result_type = tl_monotype_list_last((tl_monotype *)type);
     str                res                 = str_empty(); // empty signals void result
-    if (tl_nil != funcall_result_type->tag) {
+
+    if (tl_monotype_is_nil(funcall_result_type)) {
         res = next_res(self);
         generate_decl(self, res, tl_monotype_list_last((tl_monotype *)type));
         if (do_assign_lhs) generate_assign_lhs(self, res);
@@ -276,10 +279,10 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
     assert(params.size == args.size);
 
-    if (!tl_type_v2_is_mono(node->lambda_application.lambda->type_v2)) fatal("type scheme");
-    tl_monotype const *arrow = node->lambda_application.lambda->type_v2->mono;
-    assert(tl_type_v2_is_arrow(node->lambda_application.lambda->type_v2));
-    str_array args_res = generate_args(self, args, arrow);
+    if (node->lambda_application.lambda->type_v2->quantifiers.size) fatal("type scheme");
+    tl_monotype const *arrow    = node->lambda_application.lambda->type_v2->type;
+
+    str_array          args_res = generate_args(self, args, arrow);
     assert(args_res.size == params.size);
 
     // initialise parameters
@@ -287,9 +290,9 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
         ast_node const *param = params.v[i];
         if (ast_node_is_nil(param)) break;
         assert(ast_node_is_symbol(param));
-        assert(tl_type_v2_is_mono(param->type_v2));
+        assert(!param->type_v2->quantifiers.size);
 
-        generate_decl(self, param->symbol.name, param->type_v2->mono);
+        generate_decl(self, param->symbol.name, param->type_v2->type);
         generate_assign_lhs(self, param->symbol.name);
         cat(self, args_res.v[i]);
         cat_semicolonln(self);
@@ -323,8 +326,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // an object is held by the object's name, or point of application for unnamed literals.
 
     if (!type) {
-        assert(tl_type_v2_is_mono(node->type_v2));
-        type = node->type_v2->mono;
+        assert(!node->type_v2->quantifiers.size);
+        type = node->type_v2->type;
     }
 
     switch (node->tag) {
@@ -369,7 +372,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 }
 
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
-    if (tl_arrow == type->tag) {
+    if (type->next) {
+        // arrow
 
         tl_monotype const *result_type = tl_monotype_list_last((tl_monotype *)type);
         str                typec       = type_to_c_mono(result_type);
@@ -379,15 +383,19 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
 
     }
 
-    else if (tl_cons == type->tag) {
+    else if (type->cons) {
+        if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
+
         str typec = type_to_c_mono(type);
         cat(self, typec);
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
-    } else if (tl_nil == type->tag) fatal("can't declare a void type");
-    else if (tl_var == type->tag) fatal("got a type variable");
-    else fatal("type not expected");
+    }
+
+    else {
+        fatal("got a type variable");
+    }
 }
 
 int transpile_compile(transpile *self, str_build *out_build) {

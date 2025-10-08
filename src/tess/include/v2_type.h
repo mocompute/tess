@@ -87,6 +87,7 @@ void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_typ
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_tv(tl_monotype const *);
+int                    tl_monotype_is_nil(tl_monotype const *);
 
 // -- polytype --
 

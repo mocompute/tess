@@ -541,15 +541,15 @@ static int  populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) 
     tl_type_v2 *inst_type = tl_type_env_lookup(self->env, name);
     assert(!inst_type->quantifiers.size);
 
-    tl_monotype *inst_result = tl_monotype_list_last(inst_type->type);
-    tl_polytype  wrap        = tl_polytype_wrap(inst_result);
+    tl_monotype *inst_result      = tl_monotype_list_last(inst_type->type);
+    tl_polytype  inst_result_wrap = tl_polytype_wrap(inst_result);
 
     // when we are recursing in the final phase, the outer frame set my type to correspond to its
     // expected type.
-    if (constrain(self, ctx, (tl_type_v2 *)node->type_v2, &wrap, node)) return 1;
+    if (constrain(self, ctx, (tl_type_v2 *)node->type_v2, &inst_result_wrap, node)) return 1;
     tl_polytype_substitute(self->arena, (tl_type_v2 *)node->type_v2, self->subs);
     tl_polytype_substitute(self->arena, inst_type, self->subs);
-    tl_polytype_substitute(self->arena, &wrap, self->subs);
+    tl_polytype_substitute(self->arena, &inst_result_wrap, self->subs);
 
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, orig));
@@ -581,11 +581,13 @@ static int  populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) 
     if (body) {
         tl_monotype *args = inst_type->type;
         forall(i, params) {
-            ast_node *param = params.v[i];
-            param->type_v2  = tl_type_alloc_mono(self->arena, args->arrow.lhs);
-            args            = args->arrow.rhs;
+            ast_node   *param = params.v[i];
+            tl_polytype wrap  = tl_polytype_wrap(args);
+            param->type_v2    = tl_polytype_clone(self->arena, &wrap);
+            args              = args->next;
+            assert(args);
         }
-        body->type_v2 = inst_result_type;
+        body->type_v2 = tl_polytype_clone(self->arena, &inst_result_wrap);
 
         // now constrain the arrows
         tl_type_v2 *arrow = make_arrow(self, params, body);
@@ -684,7 +686,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
                 return 1;
 
             // add value to environment
-            tl_type_env_add(self->env, node->let_in.name->symbol.name, node->let_in.value->type_v2);
+            tl_type_env_insert(self->env, node->let_in.name->symbol.name, node->let_in.value->type_v2);
 
             hashmap *save = map_copy(ctx->lex);
 
@@ -721,7 +723,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (!tl_type_env_lookup(self->env, node->let.name->symbol.name)) {
             tl_type_v2 *arrow = make_arrow(self, iter.nodes, node->let.body);
             tl_polytype_substitute(self->arena, arrow, self->subs);
-            tl_type_env_add(self->env, node->let.name->symbol.name, arrow);
+            tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
         }
 
     } break;
@@ -738,7 +740,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         }
 
         // add to environment
-        tl_type_env_add(self->env, node->symbol.name, node->type_v2);
+        tl_type_env_insert(self->env, node->symbol.name, node->type_v2);
 
     } break;
 
@@ -1423,7 +1425,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         // must quantify arrow types
         if (tl_type_v2_is_arrow(node->symbol.annotation_type_v2))
             quantify_arrow(self, node->symbol.annotation_type_v2);
-        tl_type_env_add(self->env, name, node->symbol.annotation_type_v2);
+        tl_type_env_insert(self->env, name, node->symbol.annotation_type_v2);
         return 0;
     }
 
@@ -1434,7 +1436,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (ast_node_is_lambda_function(infer_target)) {
         // since the infer target is unnamed, the lambda function could not add itself to the
         // environment. We must do so here before the quantified variable analysis.
-        tl_type_env_add(self->env, name, ctx->lambda_type);
+        tl_type_env_insert(self->env, name, ctx->lambda_type);
     }
 
     log(self, "-- global env --");
@@ -1485,7 +1487,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // add to env
-    tl_type_env_add(self->env, name, arrow);
+    tl_type_env_insert(self->env, name, arrow);
 
     log(self, "-- global env --");
     log_env(self, self->env);
@@ -1586,7 +1588,7 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     }
 
     inst->mono->arrow.rhs = (tl_monotype *)&body_type->mono;
-    tl_type_env_add(self->env, S("main"), inst);
+    tl_type_env_insert(self->env, S("main"), inst);
     return 0;
 }
 
