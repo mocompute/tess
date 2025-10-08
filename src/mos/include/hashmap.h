@@ -11,7 +11,19 @@
 
 // -- hash map --
 
-#define HASHMAP_MAX_KEY_LEN 255
+typedef struct hashmap_key {
+    u8   size;
+    byte data[];
+} hashmap_key;
+
+typedef struct {
+    struct hashmap_key *key;
+    u8                  status;
+    alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
+} hashmap_entry;
+
+#define HASHMAP_MAX_KEY_LEN      255
+#define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
 
 typedef struct hashmap hashmap;
 
@@ -30,7 +42,6 @@ nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 
 nodiscard hashmap *hset_create(allocator *, u32 n) mallocfun;
 void               hset_destroy(hashmap **);
-
 nodiscard hashmap *hset_of_str(allocator *, str_sized) mallocfun;
 
 // -- read-only access --
@@ -44,13 +55,18 @@ f32    map_load_factor(hashmap const *);
 // -- insertion and removal --
 
 void   map_set(hashmap **, void const *key, u8 key_len, void const *data);
+void   map_set_ptr(hashmap **, void const *key, u8 key_len, void const *data);
 void   str_map_set(hashmap **, str key, void const *data);
-void   map_set_v(hashmap **, void const *key, u8 key_len, void const *data); // value fits in void*
-void   str_map_set_v(hashmap **, str key, void const *data);                 // value fits in void*
+void   str_map_set_ptr(hashmap **, str key, void const *data);
+void   map_set_v(hashmap **, void const *key, u8 key_len,
+                 void const *data);                          // value fits in void* TODO use set_ptr?
+void   str_map_set_v(hashmap **, str key, void const *data); // value fits in void* TODO use set_ptr?
 int    map_contains(hashmap const *, void const *key, u8 key_len);
 int    str_map_contains(hashmap const *, str key);
 void  *map_get(hashmap *, void const *key, u8 key_len);
+void  *map_get_ptr(hashmap *, void const *key, u8 key_len);
 void  *str_map_get(hashmap *, str key);
+void  *str_map_get_ptr(hashmap *, str key);
 void   map_erase(hashmap *, void const *key, u8 key_len);
 void   str_map_erase(hashmap *, str key);
 void   map_reset(hashmap *);

@@ -10,21 +10,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR      0.75
-#define DEFAULT_N_BUCKETS        64
-#define MAX_PROBE_LEN            (1 << 6) - 1
-#define HASHMAP_MAX_ELEMENT_SIZE (64 - sizeof(hashmap_entry))
-
-typedef struct hashmap_key {
-    u8   size;
-    byte data[];
-} hashmap_key;
-
-typedef struct {
-    struct hashmap_key *key;
-    u8                  status;
-    alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
-} hashmap_entry;
+#define DEFAULT_LOAD_FACTOR 0.75
+#define DEFAULT_N_BUCKETS   64
+#define MAX_PROBE_LEN       (1 << 6) - 1
 
 static_assert(16 == sizeof(hashmap_entry), "");
 
@@ -37,7 +25,6 @@ struct hashmap {
     u32        n_occupied;
 
     u16        value_size;
-    u16        aligned_value_size;
 
     alignas(alignof(hashmap_entry)) byte entries[];
 };
@@ -77,7 +64,8 @@ static inline void set_tombstone(u8 *status) {
 }
 
 static inline size_t hashmap_entry_size(hashmap const *map) {
-    return map->aligned_value_size + sizeof(hashmap_entry);
+    size_t aligned_value_size = alloc_align_to_word_size(map->value_size);
+    return aligned_value_size + sizeof(hashmap_entry);
 }
 
 static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len) {
@@ -254,23 +242,16 @@ hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     size_t aligned_value_size = alloc_align_to_word_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
 
-    size_t   bucket_size    = (sizeof(hashmap_entry) + aligned_value_size);
+    size_t   bucket_size = (sizeof(hashmap_entry) + aligned_value_size);
 
-    hashmap *map            = alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * bucket_size);
+    hashmap *map         = alloc_calloc(alloc, 1, sizeof(hashmap) + n_buckets * bucket_size);
 
-    map->parent_alloc       = alloc;
-    map->key_alloc          = alloc;
+    map->parent_alloc    = alloc;
+    map->key_alloc       = alloc;
 
-    map->n_cells            = n_buckets;
-    map->n_occupied         = 0;
-    map->value_size         = value_size;
-    map->aligned_value_size = (u16)aligned_value_size;
-
-    assert(map->aligned_value_size <= HASHMAP_MAX_ELEMENT_SIZE);
-    if (map->aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) {
-        alloc_free(alloc, map);
-        map = null;
-    }
+    map->n_cells         = n_buckets;
+    map->n_occupied      = 0;
+    map->value_size      = value_size;
 
     memset(map->entries, 0, n_buckets * bucket_size);
 
@@ -384,6 +365,9 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
         exit(1);
     }
 }
+void map_set_ptr(hashmap **self, void const *key, u8 key_len, void const *data) {
+    return map_set(self, key, key_len, &data);
+}
 
 void map_set_v(hashmap **self, void const *key, u8 key_len, void const *data) {
     assert((*self)->value_size <= sizeof(void *));
@@ -403,17 +387,27 @@ void str_map_set(hashmap **self, str key, void const *data) {
     map_set(self, s.buf, s.len, data);
 }
 
+void str_map_set_ptr(hashmap **self, str key, void const *data) {
+    return str_map_set(self, key, &data);
+}
+
 void *map_get(hashmap *map, void const *key, u8 key_len) {
     // returns pointer to value or null
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return null;
     return cell->data;
 }
+void *map_get_ptr(hashmap *map, void const *key, u8 key_len) {
+    return *(void **)map_get(map, key, key_len);
+}
 
 void *str_map_get(hashmap *self, str key) {
     span s = str_span(&key);
     assert(s.len < UINT8_MAX);
     return map_get(self, s.buf, s.len);
+}
+void *str_map_get_ptr(hashmap *self, str key) {
+    return *(void **)str_map_get(self, key);
 }
 
 void map_erase(hashmap *map, void const *key, u8 key_len) {
