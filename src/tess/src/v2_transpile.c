@@ -111,7 +111,7 @@ static void generate_toplevels(transpile *self) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
 
-        tl_monotype const *return_type = tl_type_v2_arrow_rightmost(type->mono);
+        tl_monotype const *return_type = tl_monotype_list_last(type->mono);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
@@ -210,11 +210,11 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 }
 
 static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
-    tl_monotype const *funcall_result_type = tl_type_v2_arrow_rightmost((tl_monotype *)type);
+    tl_monotype const *funcall_result_type = tl_monotype_list_last((tl_monotype *)type);
     str                res                 = str_empty(); // empty signals void result
     if (tl_nil != funcall_result_type->tag) {
         res = next_res(self);
-        generate_decl(self, res, tl_type_v2_arrow_rightmost((tl_monotype *)type));
+        generate_decl(self, res, tl_monotype_list_last((tl_monotype *)type));
         if (do_assign_lhs) generate_assign_lhs(self, res);
     }
     return res;
@@ -371,7 +371,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     if (tl_arrow == type->tag) {
 
-        tl_monotype const *result_type = tl_type_v2_arrow_rightmost((tl_monotype *)type);
+        tl_monotype const *result_type = tl_monotype_list_last((tl_monotype *)type);
         str                typec       = type_to_c_mono(result_type);
         cat(self, typec);
 
@@ -567,7 +567,7 @@ static str type_to_c_mono(tl_monotype const *type) {
 static str arrow_rhs_to_c(tl_type_v2 const *type) {
     if (tl_type_v2_is_scheme(type)) fatal("type scheme");
     if (!tl_type_v2_is_arrow(type)) fatal("expected arrow");
-    tl_monotype const *right = tl_type_v2_arrow_rightmost(type->mono);
+    tl_monotype const *right = tl_monotype_list_last(type->mono);
     return type_to_c_mono(right);
 }
 
