@@ -1359,7 +1359,7 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node cons
 
     if (args.size == 0) {
         tl_monotype *lhs   = tl_monotype_create_nil(self->arena);
-        tl_monotype *rhs   = result->type_v2->mono;
+        tl_monotype *rhs   = tl_monotype_clone(self->arena, result->type_v2->mono);
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
@@ -1376,8 +1376,8 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node cons
             args.v[0]->type_v2 = tl_type_alloc_mono(self->arena, tl_monotype_create_nil(self->arena));
         else ensure_tv(self, null, &args.v[0]->type_v2);
 
-        tl_monotype *lhs   = args.v[0]->type_v2->mono;
-        tl_monotype *rhs   = result->type_v2->mono;
+        tl_monotype *lhs   = tl_monotype_clone(self->arena, args.v[0]->type_v2->mono);
+        tl_monotype *rhs   = tl_monotype_clone(self->arena, result->type_v2->mono);
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
         {
             str str = tl_monotype_to_string(self->transient, arrow);
@@ -1389,7 +1389,7 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node cons
 
     else {
         ensure_tv(self, null, &args.v[0]->type_v2);
-        tl_monotype *lhs = args.v[0]->type_v2->mono;
+        tl_monotype *lhs = tl_monotype_clone(self->arena, args.v[0]->type_v2->mono);
         tl_type_v2  *rhs =
           make_arrow(self, (ast_node_sized){.size = args.size - 1, .v = &args.v[1]}, result);
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs->mono);

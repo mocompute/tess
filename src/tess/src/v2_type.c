@@ -213,8 +213,6 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     case tl_quant: clone.quant = orig->quant; break;
 
     case tl_arrow:
-        clone.arrow.lhs = new (alloc, tl_monotype);
-        clone.arrow.rhs = new (alloc, tl_monotype);
         clone.arrow.fvs = (str_array){.alloc = alloc};
         clone.arrow.lhs = tl_monotype_clone(alloc, orig->arrow.lhs);
         clone.arrow.rhs = tl_monotype_clone(alloc, orig->arrow.rhs);
