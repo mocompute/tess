@@ -71,6 +71,33 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
     return out;
 }
 
+// -- type environment --
+
+tl_type_env *tl_type_env_create(allocator *alloc) {
+    tl_type_env *self = alloc_malloc(alloc, sizeof *self);
+    self->alloc       = alloc;
+    self->map         = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
+
+    return self;
+}
+
+void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
+    str_map_set_ptr(&self->map, str_copy(self->alloc, name), type);
+}
+
+tl_polytype *tl_type_env_lookup(tl_type_env *self, str name) {
+    return str_map_get_ptr(self->map, name);
+}
+
+// -- polytype --
+
+tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
+    tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
+    clone->quantifiers = orig->quantifiers;
+    clone->type        = tl_monotype_clone(alloc, orig->type);
+    return clone;
+}
+
 // -- monotype --
 
 static u32 list_length(tl_monotype const *head, u32 count) {
@@ -96,6 +123,55 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     }
 
     return copy;
+}
+
+tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
+
+    tl_monotype *clone = null;
+
+    // if orig is a list, use the list copy interface
+    if (orig->next) clone = tl_monotype_list_copy(alloc, orig);
+    else clone = alloc_malloc(alloc, sizeof *clone);
+
+    // constructor_inst are shallow copied
+    return clone;
+}
+
+str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
+
+    str_build b = str_build_init(alloc, 64);
+
+    if (self->fvs) {
+        str_build_cat(&b, S("["));
+        forall(i, *self->fvs) {
+            str_build_cat(&b, self->fvs->v[i]);
+        }
+        str_build_cat(&b, S("] "));
+    }
+
+    if (self->cons) {
+        str_build_cat(&b, self->cons->def->name);
+        tl_monotype const *arg = self->cons->args;
+        while (arg) {
+            str_build_cat(&b, S(" "));
+            str_build_cat(&b, tl_monotype_to_string(alloc, arg));
+            arg = arg->next;
+        }
+    } else {
+        char buf[64];
+        snprintf(buf, sizeof buf, "t%u", self->var);
+        str_build_cat(&b, str_init(alloc, buf));
+    }
+
+    if (self->next) {
+        str_build_cat(&b, S(" -> "));
+        while (self->next) {
+            str_build_cat(&b, tl_monotype_to_string(alloc, self->next));
+            self = self->next;
+        }
+    }
+
+    return str_build_finish(&b);
 }
 
 // -- monotype --
