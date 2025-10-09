@@ -184,10 +184,12 @@ tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
 
 void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rhs) {
     if (rhs->quantifiers.size) {
+        // FIXME: do a merge, not an append
         tl_type_variable_array arr = {.alloc = alloc};
         array_reserve(arr, lhs->quantifiers.size + rhs->quantifiers.size);
         array_push_many(arr, lhs->quantifiers.v, lhs->quantifiers.size);
         array_push_many(arr, rhs->quantifiers.v, rhs->quantifiers.size);
+        // FIXME: so what do you do with the array??
     }
 
     tl_monotype *tail = lhs->type;
@@ -213,6 +215,7 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, tl_type_subs *subs) {
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
+    // FIXME: shouldn't the type variables be fresh even if they weren't quantified?
 
     hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
 
@@ -229,13 +232,16 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, 
 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
+    
+    // FIXME: should they be fresh type vars?
 
     if (self->cons) {
         generalize(self->cons->args, quant);
     } else {
         array_set_insert(*quant, self->var);
     }
-
+    
+    // process list
     generalize(self->next, quant);
 }
 
