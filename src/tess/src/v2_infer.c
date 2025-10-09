@@ -91,7 +91,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
-        return tl_type_env_lookup(self->env, S("Nil"));
+        return tl_polytype_clone(self->arena, tl_type_env_lookup(self->env, S("Nil")));
     }
 
     // if (ast_ellipsis == ann->tag) {
@@ -107,13 +107,13 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
         if (found) {
             // If it's an any type, assign it a new quantifier
             // if (type_any == (*found)->tag) return tl_type_context_new_quantifier(self);
-            return found;
+            return tl_polytype_clone(self->arena, found);
         }
 
         // previously seen in the annotation? then assign same type
         {
             tl_type_v2 **map_found = str_map_get(*map, ann_str);
-            if (map_found) return *map_found;
+            if (map_found) return tl_polytype_clone(self->arena, *map_found);
         }
 
         // unknown symbol, consider it as a quantifier
