@@ -398,7 +398,8 @@ void *map_get(hashmap *map, void const *key, u8 key_len) {
     return cell->data;
 }
 void *map_get_ptr(hashmap *map, void const *key, u8 key_len) {
-    return *(void **)map_get(map, key, key_len);
+    void **res = map_get(map, key, key_len);
+    return res ? *res : null;
 }
 
 void *str_map_get(hashmap *self, str key) {
@@ -407,7 +408,8 @@ void *str_map_get(hashmap *self, str key) {
     return map_get(self, s.buf, s.len);
 }
 void *str_map_get_ptr(hashmap *self, str key) {
-    return *(void **)str_map_get(self, key);
+    void **res = str_map_get(self, key);
+    return res ? *res : null;
 }
 
 void map_erase(hashmap *map, void const *key, u8 key_len) {
