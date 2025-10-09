@@ -120,13 +120,12 @@ tl_polytype *tl_type_env_lookup(tl_type_env *self, str name) {
     return str_map_get_ptr(self->map, name);
 }
 
-// typedef void (*missing_fv_cb)(void *, str fun, str var);
 int tl_type_env_check_missing_fvs(tl_type_env const *self, missing_fv_cb cb, void *user) {
     int              error = 0;
 
     hashmap_iterator iter  = {0};
     while (map_iter(self->map, &iter)) {
-        str          name = *(str *)iter.key_ptr;
+        str          name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
         tl_polytype *type = *(tl_polytype **)iter.data;
 
         str_sized    fvs  = tl_monotype_fvs(type->type);
@@ -663,7 +662,7 @@ void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
 
     hashmap_iterator iter    = {0};
     while (map_iter(env->map, &iter)) {
-        tl_polytype *poly = *(tl_polytype **)iter.key_ptr;
+        tl_polytype *poly = *(tl_polytype **)iter.data;
         tl_polytype_substitute_ext(subs->alloc, poly, subs, &exclude);
     }
 
@@ -764,7 +763,7 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 void tl_type_env_log(tl_type_env *self) {
     hashmap_iterator iter = {0};
     while (map_iter(self->map, &iter)) {
-        str                name     = *(str *)iter.key_ptr;
+        str                name     = str_init_n(self->transient, iter.key_ptr, iter.key_size);
         tl_polytype const *type     = *(tl_polytype **)iter.data;
         str                type_str = tl_polytype_to_string(self->transient, type);
 
