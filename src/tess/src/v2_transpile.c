@@ -552,7 +552,7 @@ static int should_generate(str name, tl_type_v2 const *type) {
 static str type_to_c(tl_type_v2 const *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype const *mono = type->type;
-    if (tl_monotype_is_concrete(mono)) {
+    if (tl_monotype_is_concrete_no_arrow(mono)) {
         if (str_eq(S("Int"), mono->cons->def->name)) {
             return S("int64_t");
         } else if (str_eq(S("Float"), mono->cons->def->name)) {
@@ -566,10 +566,10 @@ static str type_to_c(tl_type_v2 const *type) {
         } else fatal("unknown type constructor");
     }
 
-    else if (tl_monotype_is_tv(mono))
-        fatal("can't render a type variable");
+    else if (tl_monotype_is_arrow(mono))
+        fatal("not yet implemented");
 
-    else fatal("not yet implemented");
+    else fatal("can't render a type variable");
 }
 static str type_to_c_mono(tl_monotype const *type) {
     tl_type_v2 wrap = tl_polytype_wrap((tl_monotype *)type);

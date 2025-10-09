@@ -98,16 +98,17 @@ void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
-int                    tl_monotype_is_tv(tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
-int                    tl_monotype_is_concrete(tl_monotype const *); // constructed non-arrow type
+int                    tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int                    tl_monotype_is_arrow(tl_monotype const *);
 
 // -- polytype --
 
 nodiscard tl_polytype *tl_polytype_absorb_mono(allocator *, tl_monotype *) mallocfun; // no clone
 nodiscard tl_polytype *tl_polytype_create_qv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_polytype *tl_polytype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
+nodiscard tl_polytype *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
 
 void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype *);

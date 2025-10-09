@@ -162,8 +162,17 @@ tl_polytype *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
     return self;
 }
 
+tl_polytype *tl_polytype_create_tv(allocator *alloc, tl_type_variable tv) {
+    tl_monotype *mono = tl_monotype_create_tv(alloc, tv);
+    return tl_polytype_absorb_mono(alloc, mono);
+}
+
 tl_polytype *tl_polytype_create_fresh_qv(allocator *alloc, tl_type_subs *subs) {
     return tl_polytype_create_qv(alloc, tl_type_subs_fresh(subs));
+}
+
+tl_polytype *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
+    return tl_polytype_create_tv(alloc, tl_type_subs_fresh(subs));
 }
 
 tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
@@ -189,20 +198,15 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
 static void replace_tv(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
-    if (tl_monotype_is_tv(self)) {
+    if (self->cons) {
+        replace_tv(self->cons->args, map);
+    } else {
         tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
-    } else {
+    }
 
-        // type cons args
-        if (self->cons) {
-            replace_tv(self->cons->args, map);
-        }
-
-        // list elements, if any
-        if (self->next) {
-            replace_tv(self->next, map);
-        }
+    if (self->next) {
+        replace_tv(self->next, map);
     }
 }
 
@@ -318,11 +322,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     return clone;
 }
 
-int tl_monotype_is_tv(tl_monotype const *self) {
-    return self && !self->next && !self->cons;
-}
-
-int tl_monotype_is_concrete(tl_monotype const *self) {
+int tl_monotype_is_concrete_no_arrow(tl_monotype const *self) {
     return self && !self->next && self->cons;
 }
 
@@ -453,27 +453,27 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
                             type_error_cb_fun cb, void *user) {
 
     // resolve type variables, if possible
-    if (tl_monotype_is_tv(left)) {
+    if (!left->cons) {
         tl_type_variable root     = uf_find(subs, left->var);
         tl_monotype     *resolved = subs->v[root].type;
         if (resolved) left = resolved;
     }
-    if (tl_monotype_is_tv(right)) {
+    if (!right->cons) {
         tl_type_variable root     = uf_find(subs, right->var);
         tl_monotype     *resolved = subs->v[root].type;
         if (resolved) right = resolved;
     }
 
     // if both are still tvs, unify them
-    if (tl_monotype_is_tv(left) && tl_monotype_is_tv(right)) {
-        return tl_type_subs_unify(subs, left->var, right, cb, user);
+    if (!left->cons && !right->cons) {
+        if (tl_type_subs_unify(subs, left->var, right, cb, user)) return 1;
+    } else {
+        // otherwise if one is tv, the other is concrete or structural
+        if (!left->cons && !left->next) return tl_type_subs_unify(subs, left->var, right, cb, user);
+        if (!right->cons && !right->next) return tl_type_subs_unify(subs, right->var, left, cb, user);
     }
 
-    // otherwise one is tv, the other is concrete or structural
-    if (tl_monotype_is_tv(left)) return tl_type_subs_unify(subs, left->var, right, cb, user);
-    if (tl_monotype_is_tv(right)) return tl_type_subs_unify(subs, right->var, left, cb, user);
-
-    // both are concrete, must unify constructed types and/or arrows/lists
+    // both are concrete or structural, must unify constructed types and/or arrows/lists
     if (left->cons || right->cons) {
         if (!left->cons || !right->cons) {
             if (cb) cb(user, left, right);
@@ -486,7 +486,13 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
         if (unify_list(subs, left->cons->args, right->cons->args, cb, user)) return 1;
     }
 
-    if (unify_list(subs, left->next, right->next, cb, user)) return 1;
+    if (left->next || right->next) {
+        if (!left->next || !right->next) {
+            if (cb) cb(user, left, right);
+            return 1;
+        }
+        if (unify_list(subs, left->next, right->next, cb, user)) return 1;
+    }
 
     return 0;
 }
@@ -513,31 +519,34 @@ int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *r
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype const *mono) {
     if (!mono) return 0;
 
-    if (tl_monotype_is_tv(mono)) {
+    if (!mono->cons) {
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) return 1;
         tl_monotype *resolved = self->v[root].type;
         if (resolved) return tl_type_subs_monotype_occurs(self, tv, resolved);
-        return 0;
-    } else {
-        if (mono->cons) {
-            tl_monotype const *hd = mono->cons->args;
-            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
-        }
-        if (mono->next) {
-            tl_monotype const *hd = mono->next;
-            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
-        }
-        return 0;
     }
+
+    if (mono->cons) {
+        tl_monotype const *hd = mono->cons->args;
+        if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
+    }
+
+    if (mono->next) {
+        tl_monotype const *hd = mono->next;
+        if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
+    }
+    return 0;
 }
 
 int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype const *mono,
                        type_error_cb_fun cb, void *user) {
+
+    if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
+
     tl_type_variable tv_root = uf_find(self, tv);
 
-    // case 1: both are tvs
-    if (tl_monotype_is_tv(mono)) {
+    if (!mono->cons) {
+        // case 1: both are tvs
         tl_type_variable mono_root = uf_find(self, mono->var);
         if (tv_root == mono_root) return 0; // already in same equivalence class
 
@@ -555,20 +564,18 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
         tl_type_variable union_root = uf_find(self, tv_root);
         if (tv_type) self->v[union_root].type = tv_type;
         else if (mono_type) self->v[union_root].type = mono_type;
-        return 0;
+    } else {
+        // case 2: tv = concrete type or arrow
+        tl_monotype *tv_type = self->v[tv_root].type;
+        if (tv_type) {
+            // must unify
+            return tl_type_subs_unify_mono(self, tv_type, mono, cb, user);
+        }
+
+        // store the type at the root
+        self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
     }
 
-    // case 2: tv = concrete type
-    if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
-
-    tl_monotype *tv_type = self->v[tv_root].type;
-    if (tv_type) {
-        // must unify
-        return tl_type_subs_unify_mono(self, tv_type, mono, cb, user);
-    }
-
-    // store the type at the root
-    self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
     return 0;
 }
 
@@ -577,7 +584,7 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
     // exclude may be null
     if (!self) return;
 
-    if (tl_monotype_is_tv(self)) {
+    if (!self->cons) {
         if (exclude && hset_contains(exclude, &self->var, sizeof self->var)) return;
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);
         if (exclude && hset_contains(exclude, &root, sizeof root)) return;
@@ -590,15 +597,14 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
             // update to representative tv
             self->var = root;
         }
+    }
 
-    } else {
-        if (self->cons) {
-            tl_monotype_substitute(alloc, self->cons->args, subs, exclude);
-        }
+    if (self->cons) {
+        tl_monotype_substitute(alloc, self->cons->args, subs, exclude);
+    }
 
-        if (self->next) {
-            tl_monotype_substitute(alloc, self->next, subs, exclude);
-        }
+    if (self->next) {
+        tl_monotype_substitute(alloc, self->next, subs, exclude);
     }
 }
 

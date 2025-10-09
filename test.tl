@@ -10,10 +10,10 @@
 //     // then 0
 //     // else 1
 
-let id x = x
-let f x = id x
-let g x = f x
-let h x = g x
+let id x1 = x1
+let f x2 = id x2
+let g x3 = f x3
+let h x4 = g x4
 
 
 

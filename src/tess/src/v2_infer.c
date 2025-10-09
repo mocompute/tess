@@ -352,7 +352,8 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     if (*type) return;
     if (name) *type = tl_type_env_lookup(self->env, *name);
     if (*type) return;
-    *type = tl_polytype_create_fresh_qv(self->arena, self->subs);
+
+    *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
 static void        rename_variables(tl_infer *, ast_node *, hashmap **);
