@@ -42,23 +42,34 @@ tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, 
     return def;
 }
 
+typedef struct {
+    // Note: key uses reference equality, not structural, so there may be duplication in the hashmap.
+    str                name;
+    tl_monotype const *args;
+} registry_key;
+
 tl_type_constructor_inst *tl_type_registry_instantiate(tl_type_registry *self, str name,
                                                        tl_monotype const *args) {
+    tl_type_constructor_inst *inst = null;
+    registry_key              key  = {.name = name, .args = args};
+    if ((inst = map_get_ptr(self->instances, &key, sizeof key))) return inst;
+
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
     if (tl_monotype_list_length(args) != def->arity) return null;
 
-    tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
-    inst->def                      = def;
-    inst->args                     = tl_monotype_list_copy(self->alloc, args);
-    map_set_ptr(&self->instances, def, sizeof *def, inst);
+    inst       = alloc_malloc(self->alloc, sizeof *inst);
+    inst->def  = def;
+    inst->args = tl_monotype_list_copy(self->alloc, args);
+    map_set_ptr(&self->instances, &key, sizeof key, inst);
+
     return inst;
 }
 
 tl_type_constructor_inst *tl_type_registry_get(tl_type_registry *self, str name, tl_monotype const *args) {
     // args may be null for empty list
-    tl_type_constructor_def def = {.name = name, .arity = tl_monotype_list_length(args)};
-    return map_get_ptr(self->instances, &def, sizeof def);
+    registry_key key = {.name = name, .args = args};
+    return map_get_ptr(self->instances, &key, sizeof key);
 }
 
 tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_monotype *args) {
@@ -66,32 +77,67 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
     tl_type_constructor_inst *inst = tl_type_registry_get(self, name, args);
     if (!inst) return null;
 
-    // must clone constructed args list for type inference substitutions
-    tl_type_constructor_inst *clone = alloc_malloc(self->alloc, sizeof *clone);
-    memcpy(clone, inst, sizeof *clone);
-    clone->args      = tl_monotype_list_copy(self->alloc, clone->args);
-
     tl_monotype *out = alloc_malloc(self->alloc, sizeof *out);
-    *out             = (tl_monotype){.cons = clone};
+
+    // must clone constructed args list for type inference substitutions
+    if (inst->args) {
+        tl_type_constructor_inst *clone = alloc_malloc(self->alloc, sizeof *clone);
+        memcpy(clone, inst, sizeof *clone);
+        clone->args = tl_monotype_list_copy(self->alloc, clone->args);
+
+        //
+        *out = (tl_monotype){.cons = clone};
+    } else {
+        // use same inst for basic nullary constructed types
+        *out = (tl_monotype){.cons = inst};
+    }
+
     return out;
 }
 
 // -- type environment --
 
-tl_type_env *tl_type_env_create(allocator *alloc) {
+tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
     tl_type_env *self = alloc_malloc(alloc, sizeof *self);
     self->alloc       = alloc;
+    self->transient   = transient;
     self->map         = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
 
     return self;
 }
 
-void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
-    str_map_set_ptr(&self->map, str_copy(self->alloc, name), type);
+void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
+    tl_polytype *clone = tl_polytype_clone(self->alloc, type);
+    str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
+}
+
+void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype const *type) {
+    tl_polytype *clone = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
+    str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
 
 tl_polytype *tl_type_env_lookup(tl_type_env *self, str name) {
     return str_map_get_ptr(self->map, name);
+}
+
+// typedef void (*missing_fv_cb)(void *, str fun, str var);
+int tl_type_env_check_missing_fvs(tl_type_env const *self, missing_fv_cb cb, void *user) {
+    int              error = 0;
+
+    hashmap_iterator iter  = {0};
+    while (map_iter(self->map, &iter)) {
+        str          name = *(str *)iter.key_ptr;
+        tl_polytype *type = *(tl_polytype **)iter.data;
+
+        str_sized    fvs  = tl_monotype_fvs(type->type);
+        forall(i, fvs) {
+            if (!str_map_contains(self->map, fvs.v[i])) {
+                if (cb) cb(user, name, fvs.v[i]);
+                ++error;
+            }
+        }
+    }
+    return error;
 }
 
 // -- polytype --
@@ -179,6 +225,34 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, 
     return fresh;
 }
 
+static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
+    if (self->cons) {
+        tl_monotype *arg = self->cons->args;
+        while (arg) {
+            generalize(arg, quant);
+            arg = arg->next;
+        }
+    } else {
+        array_set_insert(*quant, self->var);
+    }
+
+    tl_monotype *next = self->next;
+    while (next) {
+        generalize(next, quant);
+        next = next->next;
+    }
+}
+
+void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_subs const *subs) {
+    tl_polytype_substitute(env->alloc, self, subs);
+
+    tl_type_variable_array quant = {.alloc = env->alloc};
+    generalize(self->type, &quant);
+    self->quantifiers.size = quant.size;
+    self->quantifiers.v    = quant.v;
+    // leaks prior array, if any
+}
+
 // -- monotype --
 
 static u32 list_length(tl_monotype const *head, u32 count) {
@@ -223,6 +297,12 @@ tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs, 
     return self;
 }
 
+tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst *cons) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.cons = cons};
+    return self;
+}
+
 tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
@@ -250,8 +330,31 @@ int tl_monotype_is_tv(tl_monotype const *self) {
     return self && !self->next && !self->cons;
 }
 
+int tl_monotype_is_concrete(tl_monotype const *self) {
+    return self && !self->next && self->cons;
+}
+
+int tl_monotype_is_arrow(tl_monotype const *self) {
+    return self && self->next;
+}
+
 int tl_monotype_is_nil(tl_monotype const *self) {
     return self && self->cons && str_eq(self->cons->def->name, S("Nil"));
+}
+
+int tl_polytype_is_scheme(tl_polytype const *poly) {
+    return poly->quantifiers.size != 0;
+}
+
+void tl_monotype_sort_fvs(tl_monotype *self) {
+    if (!self->fvs) return;
+    if (!self->fvs->size) return;
+    qsort(self->fvs->v, self->fvs->size, sizeof self->fvs->v[0], str_cmp_v);
+}
+
+str_sized tl_monotype_fvs(tl_monotype const *self) {
+    if (self->fvs) return *self->fvs;
+    return (str_sized){0};
 }
 
 str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
@@ -579,18 +682,9 @@ void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
 //     forall(i, src->arrow.fvs) array_set_insert(dst->arrow.fvs, src->arrow.fvs.v[i]);
 // }
 
-void tl_type_v2_arrow_sort_fvs(tl_monotype *self) {
-    if (!self->fvs) return;
-    if (!self->fvs->size) return;
-    qsort(self->fvs->v, self->fvs->size, sizeof self->fvs->v[0], str_cmp_v);
-}
 
 // -- type --
 
-str_sized tl_type_v2_free_variables(tl_monotype const *self) {
-    if (self->fvs) return *self->fvs;
-    return (str_sized){0};
-}
 
 //
 
@@ -666,6 +760,18 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs const *self) {
 }
 
 // -- env --
+
+void tl_type_env_log(tl_type_env *self) {
+    hashmap_iterator iter = {0};
+    while (map_iter(self->map, &iter)) {
+        str                name     = *(str *)iter.key_ptr;
+        tl_polytype const *type     = *(tl_polytype **)iter.data;
+        str                type_str = tl_polytype_to_string(self->transient, type);
+
+        fprintf(stderr, "%.*s : %.*s\n", str_ilen(name), str_buf(&name), str_ilen(type_str),
+                str_buf(&type_str));
+    }
+}
 
 //
 

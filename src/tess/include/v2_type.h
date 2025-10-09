@@ -47,6 +47,7 @@ typedef tl_polytype tl_type_v2;
 typedef struct {
     // A map of name : type assignments. Manages lifetimes of its elements.
     allocator *alloc;
+    allocator *transient;
     hashmap   *map; // str => tl_polytype*
 } tl_type_env;
 
@@ -72,22 +73,34 @@ tl_monotype                *tl_type_registry_create_type(tl_type_registry *, str
 
 // -- type environment --
 
-nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
-void                   tl_type_env_insert(tl_type_env *, str, tl_polytype *);
+nodiscard tl_type_env *tl_type_env_create(allocator *, allocator *) mallocfun;
+void                   tl_type_env_insert(tl_type_env *, str, tl_polytype const *);
+void                   tl_type_env_insert_mono(tl_type_env *, str, tl_monotype const *);
 tl_polytype           *tl_type_env_lookup(tl_type_env *, str);
+
+typedef void (*missing_fv_cb)(void *, str fun, str var);
+int  tl_type_env_check_missing_fvs(tl_type_env const *, missing_fv_cb, void *);
+
+void tl_type_env_log(tl_type_env *);
 
 // -- monotype --
 
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype const *, tl_monotype const *);
+nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
 u32                    tl_monotype_list_length(tl_monotype const *);
 tl_monotype           *tl_monotype_list_copy(allocator *, tl_monotype const *);
 tl_monotype           *tl_monotype_list_last(tl_monotype *);
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
+void                   tl_monotype_sort_fvs(tl_monotype *);
+str_sized              tl_monotype_fvs(tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_tv(tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
+int                    tl_monotype_is_concrete(tl_monotype const *); // constructed non-arrow type
+int                    tl_monotype_is_arrow(tl_monotype const *);
 
 // -- polytype --
 
@@ -99,9 +112,12 @@ nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype const *) mallo
 void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype *);
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype const *, tl_type_subs *);
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs const *);
+void                   tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs const *);
 
 tl_polytype            tl_polytype_wrap(tl_monotype *);
 str                    tl_polytype_to_string(allocator *, tl_polytype const *);
+
+int                    tl_polytype_is_scheme(tl_polytype const *);
 
 // -- substitution --
 
