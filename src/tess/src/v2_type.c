@@ -447,7 +447,7 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
     // merge by rank
     if (self->v[x].rank < self->v[y].rank) swap(x, y);
 
-    // make x the new root
+    // make x the new root, with rank >= y rank
     self->v[y].parent = x;
     if (self->v[x].rank == self->v[y].rank) self->v[x].rank++;
 }
@@ -567,6 +567,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
         uf_union(self, tv_root, mono_root);
 
         // preserve the resolved type, if any
+		// FIXME: simplify
         tl_type_variable union_root = uf_find(self, tv_root);
         if (tv_type) self->v[union_root].type = tv_type;
         else if (mono_type) self->v[union_root].type = mono_type;
@@ -580,6 +581,8 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 
         // store the type at the root
         self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
+		
+		// FIXME: missing arrow case
     }
 
     return 0;
