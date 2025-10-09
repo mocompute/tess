@@ -389,11 +389,11 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype const *self) {
         str_build_cat(&b, S("forall"));
         forall(i, self->quantifiers) {
             char buf[64];
-            snprintf(buf, sizeof buf, "q%u", self->quantifiers.v[i]);
+            snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
             str_build_cat(&b, S(" "));
             str_build_cat(&b, str_init(alloc, buf));
         }
-        str_build_cat(&b, S(". "));
+        str_build_cat(&b, S(" . "));
     }
 
     str_build_cat(&b, tl_monotype_to_string(alloc, self->type));
