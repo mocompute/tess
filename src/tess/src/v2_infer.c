@@ -91,7 +91,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
-        return tl_polytype_clone(self->arena, tl_type_env_lookup(self->env, S("Nil")));
+        return tl_type_registry_create_type_poly(self->registry, S("Nil"), null);
     }
 
     // if (ast_ellipsis == ann->tag) {
@@ -620,31 +620,32 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_address_of: fatal("FIXME: pointer types");
 
     case ast_string:     {
-        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("String"));
+        tl_type_v2 *ty = tl_type_registry_create_type_poly(self->registry, S("String"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_f64: {
-        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Float"));
+        tl_type_v2 *ty = tl_type_registry_create_type_poly(self->registry, S("Float"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_i64: {
-        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int"));
+        tl_type_v2 *ty = tl_type_registry_create_type_poly(self->registry, S("Int"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_u64: {
-        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Int")); // FIXME unsigned int
+        tl_type_v2 *ty =
+          tl_type_registry_create_type_poly(self->registry, S("Int"), null); // FIXME unsigned
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_bool: {
-        tl_type_v2 *ty = tl_type_env_lookup(self->env, S("Bool"));
+        tl_type_v2 *ty = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;

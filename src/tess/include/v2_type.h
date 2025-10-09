@@ -70,6 +70,7 @@ tl_type_constructor_inst   *tl_type_registry_instantiate(tl_type_registry *, str
                                                          tl_monotype const *) mallocfun;
 tl_type_constructor_inst   *tl_type_registry_get(tl_type_registry *, str, tl_monotype const *);
 tl_monotype                *tl_type_registry_create_type(tl_type_registry *, str, tl_monotype *);
+tl_polytype                *tl_type_registry_create_type_poly(tl_type_registry *, str, tl_monotype *);
 
 // -- type environment --
 

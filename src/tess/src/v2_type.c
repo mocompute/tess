@@ -95,6 +95,11 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
     return out;
 }
 
+tl_polytype *tl_type_registry_create_type_poly(tl_type_registry *self, str name, tl_monotype *args) {
+    tl_monotype *mono = tl_type_registry_create_type(self, name, args);
+    return tl_polytype_absorb_mono(self->alloc, mono);
+}
+
 // -- type environment --
 
 tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
@@ -182,27 +187,21 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
 }
 
 static void replace_tv(tl_monotype *self, hashmap *map) {
+    if (!self) return;
 
     if (tl_monotype_is_tv(self)) {
         tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
     } else {
-        tl_monotype *hd = null;
 
         // type cons args
         if (self->cons) {
-            hd = self->cons->args;
-            while (hd) {
-                replace_tv(hd, map);
-                hd = hd->next;
-            }
+            replace_tv(self->cons->args, map);
         }
 
-        // list elements
-        hd = self->next;
-        while (hd) {
-            replace_tv(hd, map);
-            hd = hd->next;
+        // list elements, if any
+        if (self->next) {
+            replace_tv(self->next, map);
         }
     }
 }
@@ -225,21 +224,15 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, 
 }
 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
+    if (!self) return;
+
     if (self->cons) {
-        tl_monotype *arg = self->cons->args;
-        while (arg) {
-            generalize(arg, quant);
-            arg = arg->next;
-        }
+        generalize(self->cons->args, quant);
     } else {
         array_set_insert(*quant, self->var);
     }
 
-    tl_monotype *next = self->next;
-    while (next) {
-        generalize(next, quant);
-        next = next->next;
-    }
+    generalize(self->next, quant);
 }
 
 void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_subs const *subs) {
@@ -371,10 +364,9 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     if (self->cons) {
         str_build_cat(&b, self->cons->def->name);
         tl_monotype const *arg = self->cons->args;
-        while (arg) {
+        if (arg) {
             str_build_cat(&b, S(" "));
             str_build_cat(&b, tl_monotype_to_string(alloc, arg));
-            arg = arg->next;
         }
     } else {
         char buf[64];
@@ -384,10 +376,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
 
     if (self->next) {
         str_build_cat(&b, S(" -> "));
-        while (self->next) {
-            str_build_cat(&b, tl_monotype_to_string(alloc, self->next));
-            self = self->next;
-        }
+        str_build_cat(&b, tl_monotype_to_string(alloc, self->next));
     }
 
     return str_build_finish(&b);
@@ -522,6 +511,7 @@ int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *r
 }
 
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype const *mono) {
+    if (!mono) return 0;
 
     if (tl_monotype_is_tv(mono)) {
         tl_type_variable root = uf_find(self, mono->var);
@@ -532,17 +522,11 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     } else {
         if (mono->cons) {
             tl_monotype const *hd = mono->cons->args;
-            while (hd) {
-                if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1;
-                hd = hd->next;
-            }
+            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
         }
         if (mono->next) {
             tl_monotype const *hd = mono->next;
-            while (hd) {
-                if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1;
-                hd = hd->next;
-            }
+            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1; // recurses list
         }
         return 0;
     }
@@ -591,6 +575,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs const *subs,
                             hashmap *exclude) {
     // exclude may be null
+    if (!self) return;
 
     if (tl_monotype_is_tv(self)) {
         if (exclude && hset_contains(exclude, &self->var, sizeof self->var)) return;
@@ -608,19 +593,11 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
     } else {
         if (self->cons) {
-            tl_monotype *hd = self->cons->args;
-            while (hd) {
-                tl_monotype_substitute(alloc, hd, subs, exclude);
-                hd = hd->next;
-            }
+            tl_monotype_substitute(alloc, self->cons->args, subs, exclude);
         }
 
         if (self->next) {
-            tl_monotype *hd = self->next;
-            while (hd) {
-                tl_monotype_substitute(alloc, hd, subs, exclude);
-                hd = hd->next;
-            }
+            tl_monotype_substitute(alloc, self->next, subs, exclude);
         }
     }
 }
