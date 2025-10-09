@@ -1399,9 +1399,11 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // add free variables to arrow type and put into global environment
-    arrow->type->fvs  = new (self->arena, str_sized);
-    *arrow->type->fvs = (str_sized)sized_all(fvs);
-    tl_monotype_sort_fvs(arrow->type);
+    if (fvs.size) {
+        arrow->type->fvs  = new (self->arena, str_sized);
+        *arrow->type->fvs = (str_sized)sized_all(fvs);
+        tl_monotype_sort_fvs(arrow->type);
+    }
 
     // add to env
     tl_type_env_insert(self->env, name, arrow);
