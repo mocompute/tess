@@ -458,36 +458,57 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
 int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
                void *user);
 
+static tl_monotype const *resolve_tv(tl_type_subs *subs, tl_monotype const *type, tl_monotype const *left,
+                                     tl_monotype const *right, type_error_cb_fun cb, void *user) {
+
+    if (type->cons) return type;
+
+    tl_type_variable root     = uf_find(subs, type->var);
+    tl_monotype     *resolved = subs->v[root].type;
+    if (!resolved) return type;
+
+    if (resolved->next && type->next) {
+        // conflict: both the list element and its resolved type are lists
+        if (cb) cb(user, left, right);
+        return null;
+    } else if (type->next) {
+        // is a list element, so we must preserve the list
+        resolved       = tl_monotype_clone(subs->alloc, resolved);
+        resolved->next = type->next;
+    }
+
+    return resolved;
+}
+
+int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun, void *);
+
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
                             type_error_cb_fun cb, void *user) {
 
     // resolve type variables, if possible
-    if (!left->cons) {
-        tl_type_variable root     = uf_find(subs, left->var);
-        tl_monotype     *resolved = subs->v[root].type;
-        if (resolved) left = resolved;
-    }
-    if (!right->cons) {
-        tl_type_variable root     = uf_find(subs, right->var);
-        tl_monotype     *resolved = subs->v[root].type;
-        if (resolved) right = resolved;
-    }
+    left = resolve_tv(subs, left, left, right, cb, user);
+    if (!left) return 1;
+    right = resolve_tv(subs, right, left, right, cb, user);
+    if (!right) return 1;
 
-    // if both are still tvs, unify them
     if (!left->cons && !right->cons) {
-        if (tl_type_subs_unify(subs, left->var, right, cb, user)) return 1;
-    } else {
-        // otherwise if one is tv, the other is concrete or structural
-        if (!left->cons && !left->next) return tl_type_subs_unify(subs, left->var, right, cb, user);
-        if (!right->cons && !right->next) return tl_type_subs_unify(subs, right->var, left, cb, user);
+        if (tl_type_subs_unify_tv(subs, left->var, right->var, cb, user)) return 1;
     }
 
-    // both are concrete or structural, must unify constructed types and/or arrows/lists
-    if (left->cons || right->cons) {
-        if (!left->cons || !right->cons) {
-            if (cb) cb(user, left, right);
-            return 1;
-        }
+    else if (!left->cons) {
+        tl_monotype head = *right;
+        head.next        = null; // unify list element
+        if (tl_type_subs_unify(subs, left->var, &head, cb, user)) return 1;
+    }
+
+    else if (!right->cons) {
+        tl_monotype head = *left;
+        head.next        = null; // unify list element
+        if (tl_type_subs_unify(subs, right->var, &head, cb, user)) return 1;
+    }
+
+    if (left->cons && right->cons) {
+        // otherwise both are concrete types
         if (left->cons->def != right->cons->def) {
             if (cb) cb(user, left, right);
             return 1;
@@ -495,15 +516,14 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
         if (unify_list(subs, left->cons->args, right->cons->args, cb, user)) return 1;
     }
 
-    if (left->next || right->next) {
-        if (!left->next || !right->next) {
-            if (cb) cb(user, left, right);
-            return 1;
-        }
-        if (unify_list(subs, left->next, right->next, cb, user)) return 1;
-    }
+    // unify tails if present
+    if (!left->next && !right->next) return 0;
 
-    return 0;
+    if (!left->next || !right->next) {
+        if (cb) cb(user, left, right);
+        return 1;
+    }
+    return unify_list(subs, left->next, right->next, cb, user);
 }
 
 int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
@@ -547,6 +567,33 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     return 0;
 }
 
+int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
+                          type_error_cb_fun cb, void *user) {
+
+    if (left == right) return 0;
+
+    tl_type_variable left_root  = uf_find(self, left);
+    tl_type_variable right_root = uf_find(self, right);
+    if (left_root == right_root) return 0; // already in same equivalence class
+
+    tl_monotype *left_type  = self->v[left_root].type;
+    tl_monotype *right_type = self->v[right_root].type;
+    if (left_type && right_type) {
+        // both are resolved: must unify
+        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user)) {
+            return 1;
+        }
+    }
+
+    // union the two classes
+    uf_union(self, left_root, right_root);
+
+    // preserve the resolved type, if any
+    tl_type_variable union_root = uf_find(self, left_root);
+    self->v[union_root].type    = left_type ? left_type : right_type;
+    return 0;
+}
+
 int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype const *mono,
                        type_error_cb_fun cb, void *user) {
 
@@ -556,22 +603,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 
     if (!mono->cons) {
         // case 1: both are tvs
-        tl_type_variable mono_root = uf_find(self, mono->var);
-        if (tv_root == mono_root) return 0; // already in same equivalence class
-
-        tl_monotype *tv_type   = self->v[tv_root].type;
-        tl_monotype *mono_type = self->v[mono_root].type;
-        if (tv_type && mono_type) {
-            // both are resolved: must unify
-            if (!tl_type_subs_unify_mono(self, tv_type, mono_type, cb, user)) return 1;
-        }
-
-        // union the two classes
-        uf_union(self, tv_root, mono_root);
-
-        // preserve the resolved type, if any
-        tl_type_variable union_root = uf_find(self, tv_root);
-        self->v[union_root].type    = tv_type ? tv_type : mono_type;
+        return tl_type_subs_unify_tv(self, tv, mono->var, cb, user);
     } else {
         // case 2: tv = concrete type or arrow
         tl_monotype *tv_type = self->v[tv_root].type;
@@ -600,7 +632,11 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
         tl_monotype *resolved = subs->v[root].type;
         if (resolved) {
-            // apply substitution
+            // apply substitution, preserving list structure if any
+            if (self->next) {
+                resolved       = tl_monotype_clone(alloc, resolved);
+                resolved->next = self->next;
+            }
             *self = *resolved;
         } else {
             // update to representative tv
