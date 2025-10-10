@@ -847,10 +847,11 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
         if (infer(self, ctx, node->if_then_else.yes)) return 1;
         if (infer(self, ctx, node->if_then_else.no)) return 1;
 
-        tl_type_v2 *bool_type = tl_type_env_lookup(self->env, S("Bool"));
+        tl_type_v2 *bool_type = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
         if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
         if (constrain(self, ctx, node->if_then_else.yes->type_v2, node->if_then_else.no->type_v2, node))
             return 1;
+        if (constrain(self, ctx, node->type_v2, node->if_then_else.yes->type_v2, node)) return 1;
     } break;
 
     case ast_arrow:
