@@ -371,6 +371,8 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
     // only infer function applications in order to instantiate generics into specialised instances,
     // traversing ast
 
+	// FIXME: a lot of calls to infer here
+	
     if (null == node) return 0;
 
     switch (node->tag) {
@@ -443,6 +445,8 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         // replace name with instantiated name
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
         node->named_application.name->symbol.name     = name_inst;
+		
+		// FIXME: recurse through call chain?
     } break;
 
     case ast_lambda_function_application: {
