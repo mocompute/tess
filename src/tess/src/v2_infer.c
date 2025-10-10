@@ -357,7 +357,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
 }
 
 static void        rename_variables(tl_infer *, ast_node *, hashmap **);
-static str         specialise_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype *);
+static str         specialize_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype *);
 static int         infer(tl_infer *, infer_ctx *, ast_node *);
 static tl_type_v2 *make_arrow(tl_infer *, ast_node_sized, ast_node const *);
 
@@ -413,8 +413,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
             return 1;
         }
 
-        tl_monotype *inst =
-          fun->quantifiers.size ? tl_polytype_instantiate(self->arena, fun, self->subs) : fun->type;
+        tl_monotype *inst = tl_polytype_instantiate(self->arena, fun, self->subs);
 
         // infer the arguments
         ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -422,11 +421,12 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         while ((arg = ast_arguments_next(&iter)))
             if (infer(self, ctx, arg)) return 1;
 
-        // constrain arrow types
+        // constrain arrow types: callsite with inferred arguments and the instantiated function being
+        // called
         ensure_tv(self, null, &node->type_v2);
 
         tl_type_v2 *app = make_arrow(self, iter.nodes, node);
-        tl_polytype_substitute(self->arena, app, self->subs);
+        // tl_polytype_substitute(self->arena, app, self->subs);
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
@@ -437,7 +437,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
 
         // now infer an *instantiated* function body (or use a prior instantiation)
         if (is_name_instanatiated(self, node->named_application.name)) return 0;
-        str name_inst = specialise_fun(self, ctx, fun_node, inst);
+        str name_inst = specialize_fun(self, ctx, fun_node, inst);
         if (str_is_empty(name_inst)) return 1;
 
         // replace name with instantiated name
@@ -1242,9 +1242,10 @@ typedef struct {
 
 static str next_instantiation(tl_infer *, str);
 
-static str specialise_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, tl_monotype *arrow) {
-    str       name = toplevel_name(node);
-    ast_node *body = ast_node_body((ast_node *)node);
+static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, tl_monotype *arrow) {
+    (void)ctx;
+    str name = toplevel_name(node);
+    // ast_node *body = ast_node_body((ast_node *)node);
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
@@ -1259,9 +1260,9 @@ static str specialise_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, 
     // add to type environment
     tl_type_env_insert_mono(self->env, name_inst, arrow);
 
-    if (body) {
-        if (infer(self, ctx, body)) return str_empty();
-    }
+    // if (body) {
+    //     if (infer(self, ctx, body)) return str_empty();
+    // }
 
     return name_inst;
 }
@@ -1388,7 +1389,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log_subs(self);
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
-    // quantified) with primitives if possible.
+    // quantified) with primitives if possible, or the same root of an equivalence class
     tl_type_subs_apply(self->subs, self->env);
 
     // get the arrow type from the annotation, or else from the result of inference
