@@ -77,20 +77,13 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
     tl_type_constructor_inst *inst = tl_type_registry_get(self, name, args);
     if (!inst) return null;
 
+    tl_type_constructor_inst *clone = alloc_malloc(self->alloc, sizeof *clone);
+    memcpy(clone, inst, sizeof *clone);
+    clone->args      = tl_monotype_list_copy(self->alloc, clone->args);
+    inst             = clone;
+
     tl_monotype *out = alloc_malloc(self->alloc, sizeof *out);
-
-    // must clone constructed args list for type inference substitutions
-    if (inst->args) {
-        tl_type_constructor_inst *clone = alloc_malloc(self->alloc, sizeof *clone);
-        memcpy(clone, inst, sizeof *clone);
-        clone->args = tl_monotype_list_copy(self->alloc, clone->args);
-
-        //
-        *out = (tl_monotype){.cons = clone};
-    } else {
-        // use same inst for basic nullary constructed types
-        *out = (tl_monotype){.cons = inst};
-    }
+    *out             = (tl_monotype){.cons = clone};
 
     return out;
 }
@@ -288,6 +281,12 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
 tl_monotype *tl_monotype_list_last(tl_monotype *self) {
     if (!self->next) return self;
     return tl_monotype_list_last(self->next);
+}
+
+tl_monotype tl_monotype_wrap_list_el(tl_monotype const *self) {
+    tl_monotype out = *self;
+    out.next        = null;
+    return out;
 }
 
 tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
@@ -496,14 +495,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     }
 
     else if (!left->cons) {
-        tl_monotype head = *right;
-        head.next        = null; // unify list element
+        tl_monotype head = tl_monotype_wrap_list_el(right);
         if (tl_type_subs_unify(subs, left->var, &head, cb, user)) return 1;
     }
 
     else if (!right->cons) {
-        tl_monotype head = *left;
-        head.next        = null; // unify list element
+        tl_monotype head = tl_monotype_wrap_list_el(left);
         if (tl_type_subs_unify(subs, right->var, &head, cb, user)) return 1;
     }
 

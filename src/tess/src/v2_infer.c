@@ -1655,9 +1655,15 @@ static void log_env(tl_infer const *self) {
 static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     char buf[64];
 
+    str  ty_str = node->type_v2 ? tl_polytype_to_string(alloc, node->type_v2) : str_empty();
+
     switch (node->tag) {
-    case ast_f64:    snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
-    case ast_i64:    snprintf(buf, sizeof buf, "%" PRIi64, node->i64.val); return str_init(alloc, buf);
+    case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
+    case ast_i64:
+        snprintf(buf, sizeof buf, "(%" PRIi64 " : %.*s)", node->i64.val, str_ilen(ty_str),
+                 str_buf(&ty_str));
+        return str_init(alloc, buf);
+
     case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
     case ast_string: return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
     case ast_bool:   return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));

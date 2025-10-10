@@ -93,6 +93,7 @@ nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype const *) mallo
 u32                    tl_monotype_list_length(tl_monotype const *);
 tl_monotype           *tl_monotype_list_copy(allocator *, tl_monotype const *);
 tl_monotype           *tl_monotype_list_last(tl_monotype *);
+tl_monotype            tl_monotype_wrap_list_el(tl_monotype const *); // extracted element from list
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);

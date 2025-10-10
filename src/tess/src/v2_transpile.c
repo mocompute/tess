@@ -204,7 +204,8 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
 
-        str res = generate_expr(self, hd, args.v[i]);
+        tl_monotype element = tl_monotype_wrap_list_el(hd);
+        str         res     = generate_expr(self, &element, args.v[i]);
         array_push(args_res, res);
         hd = hd->next;
     }
@@ -215,7 +216,7 @@ static str generate_funcall_result(transpile *self, tl_monotype const *type, int
     tl_monotype const *funcall_result_type = tl_monotype_list_last((tl_monotype *)type);
     str                res                 = str_empty(); // empty signals void result
 
-    if (tl_monotype_is_nil(funcall_result_type)) {
+    if (!tl_monotype_is_nil(funcall_result_type)) {
         res = next_res(self);
         generate_decl(self, res, tl_monotype_list_last((tl_monotype *)type));
         if (do_assign_lhs) generate_assign_lhs(self, res);
@@ -594,8 +595,9 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
     if (!tl_monotype_is_nil(arrow)) {
         int done = 0;
         for (u32 idx = 0; !done; ++idx) {
-            tl_monotype const *arg = arrow;
-            str_build_cat(&b, type_to_c_mono(arg));
+            tl_monotype arg = *arrow;
+            arg.next        = null;
+            str_build_cat(&b, type_to_c_mono(&arg));
             if (idx < param_names.size) {
                 str_build_cat(&b, S(" "));
                 str_build_cat(&b, param_names.v[idx]);
