@@ -424,6 +424,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
 
         // constrain arrow types
         ensure_tv(self, null, &node->type_v2);
+
         tl_type_v2 *app = make_arrow(self, iter.nodes, node);
         tl_polytype_substitute(self->arena, app, self->subs);
 
@@ -457,6 +458,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
             if (infer(self, ctx, arg)) return 1;
 
         ensure_tv(self, null, &node->type_v2);
+
         tl_type_v2 *app = make_arrow(self, iter.nodes, node);
         tl_polytype_substitute(self->arena, app, self->subs);
         if (constrain(self, ctx, &inst, app, node)) return 1;
@@ -752,11 +754,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         ensure_tv(self, null, &node->type_v2);
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter)))
-            if (infer(self, ctx, arg)) return 1;
-
         str         name = node->named_application.name->symbol.name;
         tl_type_v2 *type = tl_type_env_lookup(self->env, name);
         if (!type) {
@@ -765,14 +762,20 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 1;
         }
 
-        if (tl_polytype_is_scheme(type)) {
-            // we are trying to apply a generic function
-            ast_node *fun = toplevel_get(self, name);
-            if (add_generic(self, fun)) return 1;
+        if (!ctx->final_phase && tl_polytype_is_scheme(type)) {
+            // we are trying to apply a generic function, instantiate the type
+            tl_monotype *inst = tl_polytype_instantiate(self->arena, type, self->subs);
 
-            // instantiate and constrain
-            if (infer_applications(self, ctx, node)) return 1;
-            name = node->named_application.name->symbol.name; // instantiated
+            // infer the arguments
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            ast_node          *arg;
+            while ((arg = ast_arguments_next(&iter)))
+                if (infer(self, ctx, arg)) return 1;
+
+            // constrain the callsite implied arrow with the function type
+            tl_polytype *app  = make_arrow(self, ast_node_sized_from_ast_array(node), node);
+            tl_polytype  wrap = tl_polytype_wrap(inst);
+            if (constrain(self, ctx, app, &wrap, node)) return 1;
         }
 
         else if (ctx->final_phase) {
@@ -780,14 +783,26 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             // program is fully typed. The purpose is to propagate monomorphic type information downward
             // through the call chain, in contrast to the recursive type inference algorithm which attempts
             // to infer from the bottom of the call chain upwards.
+
+            if (infer_applications(self, ctx, node)) return 1;
+
             return populate_types_down(self, ctx, node);
         }
 
         else {
-            tl_type_v2 wrap = tl_polytype_wrap(tl_monotype_list_last(type->type));
-            if (constrain(self, ctx, &wrap, node->type_v2, node)) return 1;
 
-            // if (infer_applications(self, ctx, node)) return 1;
+            tl_monotype *inst = type->type;
+
+            // infer the arguments
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            ast_node          *arg;
+            while ((arg = ast_arguments_next(&iter)))
+                if (infer(self, ctx, arg)) return 1;
+
+            // constrain the callsite implied arrow with the function type
+            tl_polytype *app  = make_arrow(self, ast_node_sized_from_ast_array(node), node);
+            tl_polytype  wrap = tl_polytype_wrap(inst);
+            if (constrain(self, ctx, app, &wrap, node)) return 1;
         }
     } break;
 
@@ -833,6 +848,7 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
         // apply subs before arrow - we inferred body above
         tl_polytype_substitute(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
+
         tl_type_v2 *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
         ensure_tv(self, null, &node->type_v2);
@@ -1354,7 +1370,11 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // run inference: this function is not yet in the global environment.
     infer_ctx *ctx = infer_ctx_create(self->transient);
-    if (infer(self, ctx, infer_target)) return 1;
+    if (infer(self, ctx, infer_target)) {
+        log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+            str_ilen(orig_name), str_buf(&orig_name));
+        return 1;
+    }
 
     if (ast_node_is_lambda_function(infer_target)) {
         // since the infer target is unnamed, the lambda function could not add itself to the
