@@ -3,6 +3,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "ast.h"
+#include "ast_tags.h"
 #include "hashmap.h"
 #include "str.h"
 #include "v2_infer.h"
@@ -37,6 +38,7 @@ static void        generate_decl(transpile *, str, tl_monotype const *);
 static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
 static str         generate_inline_lambda(transpile *, tl_monotype const *, ast_node const *);
 static str         generate_let_in(transpile *, tl_monotype const *, ast_node const *);
+static str         generate_if_then_else(transpile *, ast_node const *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *);
@@ -273,6 +275,33 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     return res;
 }
 
+static str generate_if_then_else(transpile *self, ast_node const *node) {
+    assert(ast_if_then_else == node->tag);
+    ast_node const    *cond        = node->if_then_else.condition;
+    ast_node const    *yes         = node->if_then_else.yes;
+    ast_node const    *no          = node->if_then_else.no;
+    tl_monotype const *result_type = yes->type_v2->type;
+
+    str                cond_str    = generate_expr(self, null, cond);
+    str                res         = next_res(self);
+
+    generate_decl(self, res, result_type);
+    cat(self, S("if ("));
+    cat(self, cond_str);
+    cat(self, S(") {\n"));
+
+    str yes_str = generate_expr(self, null, yes);
+    generate_assign(self, res, yes_str);
+    cat(self, S("}\n"));
+
+    cat(self, S("else {\n"));
+    str no_str = generate_expr(self, null, no);
+    generate_assign(self, res, no_str);
+    cat(self, S("}\n"));
+
+    return res;
+}
+
 static str generate_inline_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node) {
     assert(ast_node_is_lambda_application(node));
 
@@ -341,10 +370,12 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
-    case ast_symbol: return node->symbol.name;
+    case ast_symbol:       return node->symbol.name;
 
-    case ast_nil:    fatal("cannot generate nil");
-    case ast_any:    fatal("cannot generate any");
+    case ast_if_then_else: return generate_if_then_else(self, node);
+
+    case ast_nil:          fatal("cannot generate nil");
+    case ast_any:          fatal("cannot generate any");
 
     case ast_address_of:
     case ast_arrow:
@@ -353,7 +384,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
-    case ast_if_then_else:
     case ast_let_match_in:
     case ast_user_type_definition:
     case ast_user_type_get:
