@@ -184,12 +184,15 @@ tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
 
 void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rhs) {
     if (rhs->quantifiers.size) {
-        // FIXME: do a merge, not an append
         tl_type_variable_array arr = {.alloc = alloc};
         array_reserve(arr, lhs->quantifiers.size + rhs->quantifiers.size);
         array_push_many(arr, lhs->quantifiers.v, lhs->quantifiers.size);
-        array_push_many(arr, rhs->quantifiers.v, rhs->quantifiers.size);
-        // FIXME: so what do you do with the array??
+
+        // merge rhs quants into lhs
+        forall(i, rhs->quantifiers) array_set_insert(arr, rhs->quantifiers.v[i]);
+        lhs->quantifiers.size = arr.size;
+        lhs->quantifiers.v    = arr.v;
+        // leaks prior quantifiers array
     }
 
     tl_monotype *tail = lhs->type;
@@ -215,11 +218,11 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, tl_type_subs *subs) {
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
-    // FIXME: shouldn't the type variables be fresh even if they weren't quantified?
 
     hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
 
     forall(i, self->quantifiers) {
+        // make a fresh variable for each quantified type variable
         tl_type_variable tv = tl_type_subs_fresh(subs);
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
     }
@@ -232,7 +235,7 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, 
 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
-    
+
     // FIXME: should they be fresh type vars?
 
     if (self->cons) {
@@ -240,7 +243,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     } else {
         array_set_insert(*quant, self->var);
     }
-    
+
     // process list
     generalize(self->next, quant);
 }
@@ -567,10 +570,8 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
         uf_union(self, tv_root, mono_root);
 
         // preserve the resolved type, if any
-		// FIXME: simplify
         tl_type_variable union_root = uf_find(self, tv_root);
-        if (tv_type) self->v[union_root].type = tv_type;
-        else if (mono_type) self->v[union_root].type = mono_type;
+        self->v[union_root].type    = tv_type ? tv_type : mono_type;
     } else {
         // case 2: tv = concrete type or arrow
         tl_monotype *tv_type = self->v[tv_root].type;
@@ -581,8 +582,6 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 
         // store the type at the root
         self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
-		
-		// FIXME: missing arrow case
     }
 
     return 0;
@@ -594,14 +593,15 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
     if (!self) return;
 
     if (!self->cons) {
+
         if (exclude && hset_contains(exclude, &self->var, sizeof self->var)) return;
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);
         if (exclude && hset_contains(exclude, &root, sizeof root)) return;
 
         tl_monotype *resolved = subs->v[root].type;
         if (resolved) {
-            self = tl_monotype_clone(alloc, resolved);
-            tl_monotype_substitute(alloc, self, subs, exclude);
+            // apply substitution
+            *self = *resolved;
         } else {
             // update to representative tv
             self->var = root;
@@ -617,30 +617,24 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
     }
 }
 
-void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs const *subs,
-                                hashmap **exclude) {
-    map_reset(*exclude);
+static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs const *subs,
+                                       hashmap **exclude) {
+    if (exclude) map_reset(*exclude);
 
-    if (self->quantifiers.size) {
+    if (exclude && self->quantifiers.size) {
         forall(i, self->quantifiers) {
             hset_insert(exclude, &self->quantifiers.v[i], sizeof(tl_type_variable));
         }
     }
 
-    tl_monotype_substitute(alloc, self->type, subs, *exclude);
+    tl_monotype_substitute(alloc, self->type, subs, exclude ? *exclude : null);
 }
 
 void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs const *subs) {
     hashmap *exclude = null;
-    if (self->quantifiers.size) {
-        exclude = map_create(alloc, sizeof(tl_type_variable), 8);
-        forall(i, self->quantifiers) {
-            hset_insert(&exclude, &self->quantifiers.v[i], sizeof(tl_type_variable));
-        }
-    }
 
-    tl_monotype_substitute(alloc, self->type, subs, exclude);
-
+    if (self->quantifiers.size) exclude = map_create(alloc, sizeof(tl_type_variable), 8);
+    tl_polytype_substitute_ext(alloc, self, subs, exclude ? &exclude : null);
     if (exclude) map_destroy(&exclude);
 }
 
