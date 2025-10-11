@@ -17,8 +17,8 @@ let f  x2 = id x2
 // let g x3 = f x3
 // let h x4 = g x4
 
-// let main () =
-//   f 0
+let main () =
+  f 0
 
 
 

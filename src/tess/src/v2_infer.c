@@ -285,8 +285,30 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 // -- inference --
 
 typedef struct {
-    hashmap    *lex;         // str => tl_type_v2*
-    hashmap    *call_chain;  // hset str
+    hashmap *lex;        // str => tl_type_v2*
+    hashmap *call_chain; // hset str
+    void    *user;
+} traverse_ctx;
+
+typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
+
+static traverse_ctx *traverse_ctx_create(allocator *alloc) {
+    traverse_ctx *out = new (alloc, traverse_ctx);
+    out->lex          = map_create(alloc, sizeof(tl_type_v2 *), 16);
+    out->call_chain   = hset_create(alloc, 16);
+
+    return out;
+}
+
+static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
+    if ((*p)->lex) map_destroy(&(*p)->lex);
+    if ((*p)->call_chain) map_destroy(&(*p)->call_chain);
+
+    alloc_free(alloc, *p);
+    *p = null;
+}
+
+typedef struct {
     tl_type_v2 *lambda_type; // for inferring lambda_function only
     int         phase_specialize;
     int         phase_final;
@@ -294,8 +316,6 @@ typedef struct {
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
     infer_ctx *out        = new (alloc, infer_ctx);
-    out->lex              = map_create(alloc, sizeof(tl_type_v2 *), 16);
-    out->call_chain       = hset_create(alloc, 16);
     out->phase_specialize = 0;
     out->phase_final      = 0;
 
@@ -303,8 +323,6 @@ static infer_ctx *infer_ctx_create(allocator *alloc) {
 }
 
 static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
-    if ((*p)->lex) map_destroy(&(*p)->lex);
-    if ((*p)->call_chain) map_destroy(&(*p)->call_chain);
 
     alloc_free(alloc, *p);
     *p = null;
@@ -361,187 +379,32 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void          rename_variables(tl_infer *, ast_node *, hashmap **);
-static str           specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype *);
-static int           infer(tl_infer *, infer_ctx *, ast_node *);
-static nodiscard int infer_applications(tl_infer *, infer_ctx *, ast_node *);
-static tl_type_v2   *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static void        rename_variables(tl_infer *, ast_node *, hashmap **);
+static str         specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype *);
+static tl_type_v2 *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 
-static int           is_name_instanatiated(tl_infer *self, ast_node *name) {
+static int         is_name_instanatiated(tl_infer *self, ast_node *name) {
     assert(ast_node_is_symbol(name));
     tl_polytype const *poly = tl_type_env_lookup(self->env, name->symbol.name);
     return poly && !poly->quantifiers.size;
 }
 
-static tl_polytype *callsite_arrow(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+// static tl_polytype *callsite_arrow(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
-    // infer the arguments
-    ast_arguments_iter iter = ast_node_arguments_iter(node);
-    ast_node          *arg;
-    while ((arg = ast_arguments_next(&iter))) {
-        if (infer(self, ctx, arg)) {
-            return null;
-        }
-    }
+//     // infer the arguments
+//     ast_arguments_iter iter = ast_node_arguments_iter(node);
+//     ast_node          *arg;
+//     while ((arg = ast_arguments_next(&iter))) {
+//         if (infer(self, ctx, arg)) {
+//             return null;
+//         }
+//     }
 
-    // constrain arrow types: callsite with inferred arguments and the instantiated function being
-    // called
-    ensure_tv(self, null, &node->type_v2);
-    return make_arrow(self, iter.nodes, node);
-}
-
-static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    // only infer function applications in order to instantiate generics into specialised instances,
-    // traversing ast
-
-    if (null == node) return 0;
-
-    switch (node->tag) {
-
-    case ast_let_in: {
-        if (infer_applications(self, ctx, node->let_in.value)) return 1;
-        hashmap *save = map_copy(ctx->lex);
-        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
-        if (infer_applications(self, ctx, node->let_in.body)) return 1;
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
-
-    } break;
-
-    case ast_let: {
-        hashmap           *save = map_copy(ctx->lex);
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter)))
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-
-        if (infer_applications(self, ctx, node->let.body)) {
-            return 1;
-        }
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
-
-    } break;
-
-    case ast_named_function_application: {
-
-        // name can be: global env fun, toplevel fun
-        str         name = node->named_application.name->symbol.name;
-        tl_type_v2 *fun  = tl_type_env_lookup(self->env, name);
-
-        // if generic, name and type must exist in toplevels
-        ast_node *fun_node = toplevel_get(self, name);
-
-        if (!fun_node || !fun) {
-            array_push(self->errors, ((tl_infer_error){.tag  = tl_err_function_not_found,
-                                                       .node = node->named_application.name}));
-            return 1;
-        }
-
-        tl_monotype *inst = tl_polytype_instantiate(self->arena, fun, self->subs);
-        tl_type_v2  *app  = callsite_arrow(self, ctx, node);
-        if (!app) {
-            return 1;
-        }
-
-        // constrain and apply substitutions to determine most specific type before instantiating the
-        // generic function: otherwise the inst arrow will just be new typevars and deduplication of
-        // instantiations won't be effective.
-        tl_polytype wrap = tl_polytype_wrap(inst);
-        if (constrain(self, ctx, &wrap, app, node)) return 1;
-        tl_monotype_substitute(self->arena, inst, self->subs, null);
-
-        // now infer an *instantiated* function body (or use a prior instantiation)
-        if (!is_name_instanatiated(self, node->named_application.name) || !toplevel_get(self, name)) {
-            str name_inst = specialize_fun(self, ctx, fun_node, inst);
-            if (str_is_empty(name_inst)) fatal("specialize failed");
-
-            // replace name with instantiated name
-            node->named_application.name->symbol.original = node->named_application.name->symbol.name;
-            node->named_application.name->symbol.name     = name_inst;
-
-            // update local name for the rest of this block
-            name = name_inst;
-        }
-
-        // recurse through call chain? ignore errors FIXME
-        ast_node *special = toplevel_get(self, name);
-        if (special) (void)infer_applications(self, ctx, special);
-        // there may be no toplevel, e.g. for a specialised intrinsic function
-
-    } break;
-
-    case ast_lambda_function_application: {
-        if (infer(self, ctx, node->lambda_application.lambda)) return 1;
-        tl_type_v2 const *fun  = node->lambda_application.lambda->type_v2;
-        tl_type_v2        inst = *fun;
-        // tl_polytype_substitute(self->arena, &inst, self->subs);
-
-        tl_type_v2 *app = callsite_arrow(self, ctx, node);
-        if (!app) return 1;
-
-        tl_polytype_substitute(self->arena, app, self->subs);
-        if (constrain(self, ctx, &inst, app, node)) return 1;
-        tl_polytype_substitute(self->arena, &inst, self->subs);
-
-        // FIXME: infer vs infer_applications?
-        if (infer(self, ctx, node->lambda_application.lambda)) return 1;
-
-    } break;
-
-    case ast_lambda_function: {
-        hashmap           *save = map_copy(ctx->lex);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter)))
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-
-        if (infer_applications(self, ctx, node->lambda_function.body)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
-
-    } break;
-
-    case ast_if_then_else: {
-        if (infer_applications(self, ctx, node->if_then_else.condition)) return 1;
-        if (infer_applications(self, ctx, node->if_then_else.yes)) return 1;
-        if (infer_applications(self, ctx, node->if_then_else.no)) return 1;
-
-    } break;
-
-    case ast_symbol:
-    case ast_address_of:
-    case ast_nil:
-    case ast_any:
-    case ast_string:
-    case ast_i64:
-    case ast_f64:
-    case ast_u64:
-    case ast_arrow:
-    case ast_assignment:
-    case ast_bool:
-    case ast_dereference:
-    case ast_dereference_assign:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_let_match_in:
-    case ast_user_type_definition:
-    case ast_user_type_get:
-    case ast_user_type_set:
-    case ast_begin_end:
-    case ast_function_declaration:
-    case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_tuple:
-    case ast_user_type:            break;
-    }
-
-    tl_type_subs_apply(self->subs, self->env);
-    return 0;
-}
+//     // constrain arrow types: callsite with inferred arguments and the instantiated function being
+//     // called
+//     ensure_tv(self, null, &node->type_v2);
+//     return make_arrow(self, iter.nodes, node);
+// }
 
 static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
     ast_node *clone = ast_node_clone(alloc, node);
@@ -652,12 +515,153 @@ static int  populate_types_down(tl_infer *self, infer_ctx *ctx, ast_node *node) 
     return 0;
 }
 
+static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+    if (null == node) return 0;
+
+    switch (node->tag) {
+    case ast_let: {
+        hashmap           *save = map_copy(ctx->lex);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
+            ensure_tv(self, null, &param->type_v2);
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+        }
+
+        if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+    } break;
+
+    case ast_let_in: {
+
+        // traverse value first, then set up lexical context and traverse body
+        if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
+
+        hashmap *save = map_copy(ctx->lex);
+
+        ensure_tv(self, null, &node->let_in.name->type_v2);
+        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+
+        if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+        if (cb(self, ctx, node)) return 1;
+    } break;
+
+    case ast_named_function_application: {
+
+        str         name = node->named_application.name->symbol.name;
+        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        if (!type) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
+            return 1;
+        }
+
+        // do not process recursive calls
+        if (str_hset_contains(ctx->call_chain, name)) return 0;
+
+        // traverse arguments
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (traverse_ast(self, ctx, arg, cb)) return 1;
+
+        if (cb(self, ctx, node)) return 1;
+
+        // continue traversal through the call chain
+        ast_node *fun_node = toplevel_get(self, name);
+        assert(fun_node);
+        if (traverse_ast(self, ctx, fun_node, cb)) return 1;
+
+    } break;
+
+    case ast_lambda_function: {
+        hashmap           *save = map_copy(ctx->lex);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
+            ensure_tv(self, null, &param->type_v2);
+            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+        }
+
+        if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+        if (cb(self, ctx, node)) return 1;
+    } break;
+
+    case ast_lambda_function_application: {
+
+        ensure_tv(self, null, &node->type_v2);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter)))
+            if (traverse_ast(self, ctx, arg, cb)) return 1;
+
+        if (traverse_ast(self, ctx, node->lambda_application.lambda, cb)) return 1;
+
+        if (cb(self, ctx, node)) return 1;
+    } break;
+
+    case ast_if_then_else: {
+        if (traverse_ast(self, ctx, node->if_then_else.condition, cb)) return 1;
+        if (traverse_ast(self, ctx, node->if_then_else.yes, cb)) return 1;
+        if (traverse_ast(self, ctx, node->if_then_else.no, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+    } break;
+
+        // FIXME: complete the misisng traversals for the various ast types below
+
+    case ast_nil:
+    case ast_any:
+    case ast_address_of:
+    case ast_arrow:
+    case ast_assignment:
+    case ast_bool:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_let_match_in:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_tuple:
+    case ast_user_type:
+
+        // operate on the leaf node
+        if (cb(self, ctx, node)) return 1;
+
+        break;
+    }
+
+    return 0;
+}
+
 static int add_generic(tl_infer *, ast_node *);
 
-static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    // - update self->subs by collecting and applying constraints found recursively starting at node.
-    // - adds symbol : type information to ctx->env.
-    // - can be run multiple times on the same node
+static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    infer_ctx *ctx = traverse_ctx->user;
 
     if (null == node) return 0;
 
@@ -712,63 +716,29 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
             // do not infer the node value - add_generic takes care of that
 
-            hashmap *save = map_copy(ctx->lex);
-
-            if (infer(self, ctx, node->let_in.name)) return 1;
-            str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
-
-            if (infer(self, ctx, node->let_in.body)) return 1;
-
             ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
-
-            map_destroy(&ctx->lex);
-            ctx->lex = save;
 
             // add_generic will have added generic lambda to the environment, using the
             // ctx->lambda_type field
 
         } else {
 
-            if (infer(self, ctx, node->let_in.value)) return 1;
-            if (infer(self, ctx, node->let_in.name)) return 1;
             if (constrain(self, ctx, node->let_in.name->type_v2, node->let_in.value->type_v2, node))
                 return 1;
 
             // add value to environment
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, node->let_in.value->type_v2);
 
-            hashmap *save = map_copy(ctx->lex);
-
-            ensure_tv(self, &node->let_in.name->symbol.name, &node->let_in.name->type_v2);
-            str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
-
-            if (infer(self, ctx, node->let_in.body)) return 1;
-
             ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
-
-            map_destroy(&ctx->lex);
-            ctx->lex = save;
         }
     } break;
 
     case ast_let: {
-        hashmap           *save = map_copy(ctx->lex);
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            if (infer(self, ctx, param)) return 1;
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-        }
-
-        if (infer(self, ctx, node->let.body)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex          = save;
-
-        tl_type_v2 *arrow = make_arrow(self, iter.nodes, node->let.body);
+        ast_arguments_iter iter  = ast_node_arguments_iter(node);
+        tl_type_v2        *arrow = make_arrow(self, iter.nodes, node->let.body);
         tl_polytype_substitute(self->arena, arrow, self->subs);
         tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
 
@@ -777,7 +747,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     case ast_symbol: {
         tl_type_v2  *global = tl_type_env_lookup(self->env, node->symbol.name);
         tl_type_v2 **found  = null;
-        if ((found = str_map_get(ctx->lex, node->symbol.name)) && *found) {
+
+        if ((found = str_map_get(traverse_ctx->lex, node->symbol.name)) && *found) {
             if (node->type_v2) {
                 if (constrain(self, ctx, node->type_v2, *found, node)) return 1;
             } else {
@@ -814,110 +785,25 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             return 1;
         }
 
-        // do not process recursive calls
-        if (str_hset_contains(ctx->call_chain, name)) return 0;
-
-        // infer arguments
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter)))
-            if (infer(self, ctx, arg)) return 1;
-
         // instantiate generic function type being applied
-        ast_node *fun_node = toplevel_get(self, name);
+        ast_arguments_iter iter     = ast_node_arguments_iter(node);
+        ast_node          *fun_node = toplevel_get(self, name);
         assert(fun_node);
-        tl_monotype *inst = tl_polytype_instantiate(self->arena, type, self->subs);
-        tl_polytype *app  = make_arrow(self, iter.nodes, node);
-        tl_polytype  wrap = tl_polytype_wrap(inst);
+        tl_monotype *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
+        tl_polytype *app     = make_arrow(self, iter.nodes, node);
+        str          app_str = tl_polytype_to_string(self->transient, app);
+        log(self, "application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
+            str_ilen(app_str), str_buf(&app_str));
+        tl_polytype wrap = tl_polytype_wrap(inst);
 
         // and constrain it with the callsite types (arguments -> result)
         if (constrain(self, ctx, &wrap, app, node)) return 1;
-
-        // continue traversal through the call chain
-        if (infer(self, ctx, fun_node)) return 1;
-
-        // if (ctx->phase_specialize) {
-
-        //     ast_node *fun_node = toplevel_get(self, name);
-        //     assert(fun_node);
-
-        //     tl_monotype *inst = tl_polytype_instantiate(self->arena, type, self->subs);
-        //     tl_polytype *app  = make_arrow(self, iter.nodes, node);
-
-        //     tl_polytype  wrap = tl_polytype_wrap(inst);
-        //     if (constrain(self, ctx, &wrap, app, node)) return 1;
-        //     tl_monotype_substitute(self->arena, inst, self->subs, null);
-
-        //     if (type->quantifiers.size) {
-        //         str name_inst = specialize_fun(self, ctx, fun_node, inst);
-        //         if (str_is_empty(name_inst)) fatal("specialize failed");
-
-        //         // replace name with instantiated name
-        //         node->named_application.name->symbol.original =
-        //         node->named_application.name->symbol.name; node->named_application.name->symbol.name =
-        //         name_inst;
-
-        //         // update local name for the rest of this block
-        //         name = name_inst;
-        //     }
-
-        //     ast_node *special = toplevel_get(self, name);
-        //     if (special) {
-        //         // could be null due to no-body generics like intrinsic functions
-
-        //         if (infer(self, ctx, special)) fatal("special infer failed");
-        //     }
-        // }
-
-        // else if (ctx->phase_final) {
-        //     return populate_types_down(self, ctx, node);
-        // }
-
-        /***
-                if (!ctx->final_phase && tl_polytype_is_scheme(type)) {
-                    // we are trying to apply a generic function, instantiate the type
-                    // tl_monotype *inst = tl_polytype_instantiate(self->arena, type, self->subs);
-
-                    // tl_polytype *app  = callsite_arrow(self, ctx, node);
-                    // if (!app) return 1;
-                    // tl_polytype wrap = tl_polytype_wrap(inst);
-                    // if (constrain(self, ctx, app, &wrap, node)) return 1;
-                }
-
-                else if (ctx->final_phase) {
-                    // Note: this must be done in a final phase after all functions have been instantiated
-        and the
-                    // program is fully typed. The purpose is to propagate monomorphic type information
-        downward
-                    // through the call chain, in contrast to the recursive type inference algorithm which
-        attempts
-                    // to infer from the bottom of the call chain upwards.
-
-                    // FIXME: ignore errors during this application, which can happen during processing of
-        recursive
-                    // functions
-                    // (void)infer_applications(self, ctx, node);
-                    return populate_types_down(self, ctx, node);
-                }
-
-                else {
-                    // callsites are not processed during initial phase
-                }
-        ***/
 
     } break;
 
     case ast_lambda_function_application: {
 
         ensure_tv(self, null, &node->type_v2);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter)))
-            if (infer(self, ctx, arg)) return 1;
-
-        // FIXME
-        // if (infer_applications(self, ctx, node)) return 1;
 
         tl_type_v2 *inst = node->lambda_application.lambda->type_v2;
         tl_polytype_substitute(self->arena, inst, self->subs);
@@ -934,19 +820,8 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_lambda_function: {
-        hashmap           *save = map_copy(ctx->lex);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            if (infer(self, ctx, param)) return 1;
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
-        }
-
-        if (infer(self, ctx, node->lambda_function.body)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
 
         // apply subs before arrow - we inferred body above
         tl_polytype_substitute(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
@@ -963,9 +838,6 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     } break;
 
     case ast_if_then_else: {
-        if (infer(self, ctx, node->if_then_else.condition)) return 1;
-        if (infer(self, ctx, node->if_then_else.yes)) return 1;
-        if (infer(self, ctx, node->if_then_else.no)) return 1;
 
         tl_type_v2 *bool_type = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
         if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
@@ -994,6 +866,42 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
 
     // apply newly created constraint substitutions
     tl_type_subs_apply(self->subs, self->env);
+    return 0;
+}
+
+static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    if (!ast_node_is_nfa(node)) return 0;
+
+    infer_ctx  *ctx  = traverse_ctx->user;
+
+    str         name = node->named_application.name->symbol.name;
+    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+    if (!type) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
+        return 1;
+    }
+
+    // instantiate generic function type being applied
+    ast_arguments_iter iter     = ast_node_arguments_iter(node);
+    ast_node          *fun_node = toplevel_get(self, name);
+    assert(fun_node);
+
+    // tl_monotype *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
+    tl_polytype *app     = make_arrow(self, iter.nodes, node);
+    str          app_str = tl_polytype_to_string(self->transient, app);
+    log(self, "application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name), str_ilen(app_str),
+        str_buf(&app_str));
+
+    str inst_name                                 = specialize_fun(self, ctx, fun_node, app->type);
+
+    node->named_application.name->symbol.original = name;
+    node->named_application.name->symbol.name     = inst_name;
+
+    // now infer and specialize the newly specialised fun
+    traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
+    traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
+
     return 0;
 }
 
@@ -1402,25 +1310,9 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
         tl_polytype  wrap        = tl_polytype_wrap(inst_result);
         body->type_v2            = tl_polytype_clone(self->arena, &wrap);
 
-        // // now constrain the arrows
-        // tl_type_v2 *clone_arrow = make_arrow(self, params, body);
-        // tl_polytype_substitute(self->arena, clone_arrow, self->subs);
-
-        // wrap = tl_polytype_wrap(arrow);
-        // if (constrain(self, ctx, clone_arrow, &wrap, generic_node)) fatal("constrain failed");
-
-        // tl_polytype_substitute(self->arena, inst_type, self->subs);
-        // tl_polytype_substitute(self->arena, arrow, self->subs);
-
         // recurse over body and add to toplevel
         log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
         toplevel_add(self, name_inst, generic_node);
-
-        // FIXME
-        // ctx->phase_specialize = 0;
-        // if (infer(self, ctx, body)) fatal("body infer failed");
-        // ctx->phase_specialize = 1;
-        // if (infer(self, ctx, body)) fatal("body specialize infer failed");
     }
 
     return name_inst;
@@ -1572,15 +1464,16 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // add provisional type to environment (for polymorphic recursion)
     if (provisional) {
-        // generalise the type
-        tl_polytype_generalize(provisional, self->env, self->subs);
+        // Note: ensure this is not quantified until after inference
         tl_type_env_insert(self->env, name, provisional);
     }
 
     // run inference
-    infer_ctx *ctx = infer_ctx_create(self->transient);
-    str_hset_insert(&ctx->call_chain, name);
-    if (infer(self, ctx, infer_target)) {
+    traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    infer_ctx    *ctx      = infer_ctx_create(self->transient);
+    traverse->user         = ctx;
+    str_hset_insert(&traverse->call_chain, name);
+    if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) {
         log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
         return 1;
@@ -1618,6 +1511,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         str_buf(&orig_name));
 
     infer_ctx_destroy(self->transient, &ctx);
+    traverse_ctx_destroy(self->transient, &traverse);
     return 0;
 }
 
@@ -1749,16 +1643,19 @@ int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *
     // for the transpiler.
     log(self, "-- specialize phase");
 
-    infer_ctx *ctx        = infer_ctx_create(self->transient);
+    traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    infer_ctx    *ctx      = infer_ctx_create(self->transient);
+    traverse->user         = ctx;
 
-    ctx->phase_specialize = 1;
-    infer(self, ctx, main);
+    // ctx->phase_specialize  = 1;
+    traverse_ast(self, traverse, main, specialize_traverse_cb);
 
-    ctx->phase_specialize = 0;
-    ctx->phase_final      = 1;
-    infer(self, ctx, main);
+    // ctx->phase_specialize = 0;
+    // ctx->phase_final      = 1;
+    // traverse_ast(self, traverse, main, infer_traverse_cb);
 
     infer_ctx_destroy(self->transient, &ctx);
+    traverse_ctx_destroy(self->transient, &traverse);
 
     log(self, "-- toplevels");
     log_toplevels(self);
