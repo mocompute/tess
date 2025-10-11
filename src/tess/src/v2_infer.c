@@ -359,12 +359,13 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void        rename_variables(tl_infer *, ast_node *, hashmap **);
-static str         specialize_fun(tl_infer *, infer_ctx *, ast_node const *, tl_monotype *);
-static int         infer(tl_infer *, infer_ctx *, ast_node *);
-static tl_type_v2 *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static void          rename_variables(tl_infer *, ast_node *, hashmap **);
+static str           specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype *);
+static int           infer(tl_infer *, infer_ctx *, ast_node *);
+static nodiscard int infer_applications(tl_infer *, infer_ctx *, ast_node *);
+static tl_type_v2   *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 
-static int         is_name_instanatiated(tl_infer *self, ast_node *name) {
+static int           is_name_instanatiated(tl_infer *self, ast_node *name) {
     assert(ast_node_is_symbol(name));
     tl_polytype const *poly = tl_type_env_lookup(self->env, name->symbol.name);
     return poly && !poly->quantifiers.size;
@@ -375,8 +376,11 @@ static tl_polytype *callsite_arrow(tl_infer *self, infer_ctx *ctx, ast_node *nod
     // infer the arguments
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *arg;
-    while ((arg = ast_arguments_next(&iter)))
-        if (infer(self, ctx, arg)) return null;
+    while ((arg = ast_arguments_next(&iter))) {
+        if (infer(self, ctx, arg)) {
+            return null;
+        }
+    }
 
     // constrain arrow types: callsite with inferred arguments and the instantiated function being
     // called
@@ -409,7 +413,10 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         while ((param = ast_arguments_next(&iter)))
             str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
 
-        if (infer_applications(self, ctx, node->let.body)) return 1;
+        if (infer_applications(self, ctx, node->let.body)) {
+            return 1;
+        }
+
         map_destroy(&ctx->lex);
         ctx->lex = save;
 
@@ -432,7 +439,9 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
 
         tl_monotype *inst = tl_polytype_instantiate(self->arena, fun, self->subs);
         tl_type_v2  *app  = callsite_arrow(self, ctx, node);
-        if (!app) return 1;
+        if (!app) {
+            return 1;
+        }
 
         // constrain and apply substitutions to determine most specific type before instantiating the
         // generic function: otherwise the inst arrow will just be new typevars and deduplication of
@@ -442,15 +451,23 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         tl_monotype_substitute(self->arena, inst, self->subs, null);
 
         // now infer an *instantiated* function body (or use a prior instantiation)
-        if (is_name_instanatiated(self, node->named_application.name)) return 0;
-        str name_inst = specialize_fun(self, ctx, fun_node, inst);
-        if (str_is_empty(name_inst)) return 1;
+        if (!is_name_instanatiated(self, node->named_application.name) || !toplevel_get(self, name)) {
+            str name_inst = specialize_fun(self, ctx, fun_node, inst);
+            if (str_is_empty(name_inst)) fatal("specialize failed");
 
-        // replace name with instantiated name
-        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
-        node->named_application.name->symbol.name     = name_inst;
+            // replace name with instantiated name
+            node->named_application.name->symbol.original = node->named_application.name->symbol.name;
+            node->named_application.name->symbol.name     = name_inst;
 
-        // FIXME: recurse through call chain?
+            // update local name for the rest of this block
+            name = name_inst;
+        }
+
+        // recurse through call chain? ignore errors FIXME
+        ast_node *special = toplevel_get(self, name);
+        if (special) (void)infer_applications(self, ctx, special);
+        // there may be no toplevel, e.g. for a specialised intrinsic function
+
     } break;
 
     case ast_lambda_function_application: {
@@ -466,6 +483,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         if (constrain(self, ctx, &inst, app, node)) return 1;
         tl_polytype_substitute(self->arena, &inst, self->subs);
 
+        // FIXME: infer vs infer_applications?
         if (infer(self, ctx, node->lambda_application.lambda)) return 1;
 
     } break;
@@ -489,6 +507,7 @@ static nodiscard int infer_applications(tl_infer *self, infer_ctx *ctx, ast_node
         if (infer_applications(self, ctx, node->if_then_else.condition)) return 1;
         if (infer_applications(self, ctx, node->if_then_else.yes)) return 1;
         if (infer_applications(self, ctx, node->if_then_else.no)) return 1;
+
     } break;
 
     case ast_symbol:
@@ -779,7 +798,9 @@ static int infer(tl_infer *self, infer_ctx *ctx, ast_node *node) {
             // through the call chain, in contrast to the recursive type inference algorithm which attempts
             // to infer from the bottom of the call chain upwards.
 
-            if (infer_applications(self, ctx, node)) return 1;
+            // FIXME: ignore errors during this application, which can happen during processing of recursive
+            // functions
+            (void)infer_applications(self, ctx, node);
             return populate_types_down(self, ctx, node);
         }
 
@@ -1225,10 +1246,10 @@ typedef struct {
 
 static str next_instantiation(tl_infer *, str);
 
-static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, tl_monotype *arrow) {
+static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype *arrow) {
     (void)ctx;
     str name = toplevel_name(node);
-    // ast_node *body = ast_node_body((ast_node *)node);
+    // ast_node *body = ast_node_body(node);
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
@@ -1242,9 +1263,12 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node const *node, 
 
     // add to type environment
     tl_type_env_insert_mono(self->env, name_inst, arrow);
+    log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
+    toplevel_add(self, name_inst, node);
 
     // if (body) {
     //     if (infer(self, ctx, body)) return str_empty();
+
     // }
 
     return name_inst;
@@ -1395,6 +1419,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // add provisional type to environment (for polymorphic recursion)
     if (provisional) {
+        // generalise the type
+        tl_polytype_generalize(provisional, self->env, self->subs);
         tl_type_env_insert(self->env, name, provisional);
     }
 
