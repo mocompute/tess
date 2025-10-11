@@ -302,7 +302,7 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
 
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
     if ((*p)->lex) map_destroy(&(*p)->lex);
-    if ((*p)->call_chain) map_destroy(&(*p)->call_chain);
+    if ((*p)->call_chain) hset_destroy(&(*p)->call_chain);
 
     alloc_free(alloc, *p);
     *p = null;
@@ -310,19 +310,19 @@ static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
 
 typedef struct {
     tl_type_v2 *lambda_type; // for inferring lambda_function only
-    int         phase_specialize;
-    int         phase_final;
+    hashmap    *specials;    // str => str
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out        = new (alloc, infer_ctx);
-    out->phase_specialize = 0;
-    out->phase_final      = 0;
+    infer_ctx *out   = new (alloc, infer_ctx);
+    out->lambda_type = null;
+    out->specials    = map_create(alloc, sizeof(str), 16);
 
     return out;
 }
 
 static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
+    if ((*p)->specials) map_destroy(&(*p)->specials);
 
     alloc_free(alloc, *p);
     *p = null;
@@ -581,6 +581,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         str_hset_insert(&ctx->call_chain, name);
         if (traverse_ast(self, ctx, fun_node, cb)) return 1;
+        str_hset_remove(ctx->call_chain, name);
 
     } break;
 
@@ -895,18 +896,30 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     log(self, "application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name), str_ilen(app_str),
         str_buf(&app_str));
 
-    str inst_name                                 = specialize_fun(self, ctx, fun_node, app->type);
+    // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
+    // type, e.g the identity function
 
-    node->named_application.name->symbol.original = name;
-    node->named_application.name->symbol.name     = inst_name;
+    str *existing;
+    if ((existing = str_map_get(ctx->specials, name))) {
 
-    // now infer and specialize the newly specialised fun
-    str_hset_insert(&traverse_ctx->call_chain, inst_name);
+        node->named_application.name->symbol.original = name;
+        node->named_application.name->symbol.name     = *existing;
 
-    // FIXME: recursive calls still cause an infinite loop
-    traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
-    traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
+    } else {
+        str inst_name = specialize_fun(self, ctx, fun_node, app->type);
 
+        str_map_set(&ctx->specials, name, &inst_name);
+
+        node->named_application.name->symbol.original = name;
+        node->named_application.name->symbol.name     = inst_name;
+
+        // now infer and specialize the newly specialised fun
+        str_hset_insert(&traverse_ctx->call_chain, inst_name);
+
+        // FIXME: recursive calls still cause an infinite loop
+        traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
+        traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
+    }
     return 0;
 }
 
