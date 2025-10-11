@@ -902,6 +902,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
     // now infer and specialize the newly specialised fun
     str_hset_insert(&traverse_ctx->call_chain, inst_name);
+
+    // FIXME: recursive calls still cause an infinite loop
     traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
     traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
 
