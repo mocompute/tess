@@ -86,7 +86,8 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 }
 
 void tl_infer_set_verbose(tl_infer *self, int verbose) {
-    self->verbose = verbose;
+    self->verbose      = verbose;
+    self->env->verbose = verbose;
 }
 
 static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
@@ -356,9 +357,9 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
                      ast_node const *node) {
     (void)ctx;
-    log_constraint(self, left, right, node);
 
     if (left == right) return 0;
+    log_constraint(self, left, right, node);
 
     tl_monotype *lhs = null, *rhs = null;
 
@@ -470,6 +471,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_let_in: {
 
+        // process node first, because there may be side effects required before traversing body.
+        if (cb(self, ctx, node)) return 1;
+
         // traverse value first, then set up lexical context and traverse body
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
 
@@ -483,7 +487,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_destroy(&ctx->lex);
         ctx->lex = save;
 
-        if (cb(self, ctx, node)) return 1;
     } break;
 
     case ast_named_function_application: {
@@ -637,6 +640,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_let_in: {
+        ensure_tv(self, null, &node->type_v2);
+        ensure_tv(self, null, &node->let_in.name->type_v2);
+        ensure_tv(self, null, &node->let_in.value->type_v2);
+        ensure_tv(self, null, &node->let_in.body->type_v2);
+
         if (ast_node_is_lambda_function(node->let_in.value)) {
 
             str name = node->let_in.name->symbol.name;
@@ -654,7 +662,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain(self, ctx, node->let_in.name->type_v2, node->let_in.value->type_v2, node))
                 return 1;
 
-            ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
 
             // add_generic will have added generic lambda to the environment, using the
@@ -668,7 +675,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // add value to environment
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, node->let_in.value->type_v2);
 
-            ensure_tv(self, null, &node->type_v2);
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
         }
     } break;
