@@ -1130,10 +1130,9 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
         // if symbol has a type which carries fvs, we also collect those.
         // TODO so many indirections
         if (is_arrow && !tl_polytype_is_scheme(type)) {
-            if (type->type->fvs) {
-                forall(i, *type->type->fvs) {
-                    array_set_insert(*fvs, type->type->fvs->v[i]);
-                }
+            str_sized type_fvs = tl_monotype_fvs(type->type);
+            forall(i, type_fvs) {
+                array_set_insert(*fvs, type_fvs.v[i]);
             }
         }
     } break;
@@ -1246,7 +1245,7 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     }
 
     if (body) {
-        tl_monotype *args = arrow;
+        tl_monotype *args = arrow->list.head;
         forall(i, params) {
             ast_node *param = params.v[i];
             param->type_v2  = tl_polytype_clone_list_element(self->arena, args);
@@ -1351,8 +1350,7 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
     // add free variables to arrow type and put into global environment
     if (fvs.size) {
-        arrow->type->fvs  = new (self->arena, str_sized);
-        *arrow->type->fvs = (str_sized)sized_all(fvs);
+        tl_monotype_absorb_fvs(self->arena, arrow->type, (str_sized)sized_all(fvs));
         tl_monotype_sort_fvs(arrow->type);
     }
 }

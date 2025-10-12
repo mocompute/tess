@@ -31,10 +31,16 @@ typedef struct {
 } tl_type_registry;
 
 typedef struct tl_monotype {
-    struct tl_monotype       *next; // a list/arrow of cons/vars
-    str_sized                *fvs;  // if head of arrow (first element), fvs is a pointer to free variables
-    tl_type_constructor_inst *cons; // if not null, a concrete type
-    tl_type_variable          var;  // else a type variable
+    struct tl_monotype *next;
+    union {
+        tl_type_variable          var;
+        tl_type_constructor_inst *cons;
+        struct {
+            struct tl_monotype *head;
+            str_sized          *fvs;
+        } list;
+    };
+    enum { tl_var, tl_cons, tl_list } tag;
 } tl_monotype;
 
 typedef struct {
@@ -88,6 +94,7 @@ void tl_type_env_log(tl_type_env *);
 // -- monotype --
 
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype *);
 nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype const *, tl_monotype const *);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
@@ -99,6 +106,7 @@ tl_monotype            tl_monotype_wrap_list_el(tl_monotype const *); // extract
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
+void                   tl_monotype_absorb_fvs(allocator *, tl_monotype *, str_sized);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
