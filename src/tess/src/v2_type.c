@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+static void log(tl_type_env const *self, char const *restrict fmt, ...);
+
 // -- type constructor --
 
 tl_type_registry *tl_type_registry_create(allocator *alloc) {
@@ -90,6 +92,7 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
 
 tl_polytype *tl_type_registry_create_type_poly(tl_type_registry *self, str name, tl_monotype *args) {
     tl_monotype *mono = tl_type_registry_create_type(self, name, args);
+    assert(!mono->next); // FIXME tracking down a bug
     return tl_polytype_absorb_mono(self->alloc, mono);
 }
 
@@ -105,6 +108,10 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
 }
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
+    str type_str = tl_polytype_to_string(self->transient, type);
+    log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+        str_buf(&type_str));
+
     tl_polytype *clone = tl_polytype_clone(self->alloc, type);
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
@@ -172,6 +179,12 @@ tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
     tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
     clone->quantifiers = orig->quantifiers;
     clone->type        = tl_monotype_clone(alloc, orig->type);
+    return clone;
+}
+
+tl_polytype *tl_polytype_clone_list_element(allocator *alloc, tl_monotype const *orig) {
+    tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
+    *clone             = (tl_polytype){.type = tl_monotype_clone_list_element(alloc, orig)};
     return clone;
 }
 
@@ -328,6 +341,11 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     }
 
     return clone;
+}
+
+tl_monotype *tl_monotype_clone_list_element(allocator *alloc, tl_monotype const *orig) {
+    tl_monotype wrap = tl_monotype_wrap_list_el(orig);
+    return tl_monotype_clone(alloc, &wrap);
 }
 
 int tl_monotype_is_concrete_no_arrow(tl_monotype const *self) {
@@ -826,4 +844,17 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 
     array_free(equiv_class);
     hset_destroy(&seen);
+}
+
+static void log(tl_type_env const *self, char const *restrict fmt, ...) {
+    (void)self;
+
+    char buf[256];
+
+    snprintf(buf, sizeof buf, "tl_type_env: %s\n", fmt);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, buf, args); // NOLINT
+    va_end(args);
 }
