@@ -47,14 +47,14 @@ tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, 
 typedef struct {
     // Note: key uses reference equality, not structural, so there may be duplication in the hashmap.
     // FIXME: under asan, the static strings get different addresses, so lookup fails.
-    str                name;
+    u64                name_hash;
     tl_monotype const *args;
 } registry_key;
 
 tl_type_constructor_inst *tl_type_registry_instantiate(tl_type_registry *self, str name,
                                                        tl_monotype const *args) {
     tl_type_constructor_inst *inst = null;
-    registry_key              key  = {.name = name, .args = args};
+    registry_key              key  = {.name_hash = str_hash64(name), .args = args};
     if ((inst = map_get_ptr(self->instances, &key, sizeof key))) return inst;
 
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
@@ -71,7 +71,7 @@ tl_type_constructor_inst *tl_type_registry_instantiate(tl_type_registry *self, s
 
 tl_type_constructor_inst *tl_type_registry_get(tl_type_registry *self, str name, tl_monotype const *args) {
     // args may be null for empty list
-    registry_key key = {.name = name, .args = args};
+    registry_key key = {.name_hash = str_hash64(name), .args = args};
     return map_get_ptr(self->instances, &key, sizeof key);
 }
 

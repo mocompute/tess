@@ -5,8 +5,12 @@
 //   let foo = apply afun in
 //   0
 
-let id x = x
+// let id x = x
+// let main () =
+//   let x1 = id 0 in
+//   let x2 = id "hello" in
+//   x1
+
+
 let main () =
-  let x1 = id 0 in
-  let x2 = id "hello" in
-  x1
+    sub (add 1 2) 3
