@@ -510,6 +510,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         if (cb(self, ctx, node)) return 1;
 
+        // reset name because cb may change it
+        name = node->named_application.name->symbol.name;
+
         // continue traversal through the call chain
         ast_node *fun_node = toplevel_get(self, name);
         assert(fun_node);
@@ -850,7 +853,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
         str_hset_remove(traverse_ctx->call_chain, inst_name);
     } else {
-        str inst_name = specialize_fun(self, ctx, fun_node, app->type);
+        str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
+        ast_node *special   = toplevel_get(self, inst_name);
 
         str_map_set(&ctx->specials, name, &inst_name);
 
@@ -859,8 +863,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         // now infer and specialize the newly specialised fun
         str_hset_insert(&traverse_ctx->call_chain, inst_name);
-        traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
-        traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
+        traverse_ast(self, traverse_ctx, special, infer_traverse_cb);
+        traverse_ast(self, traverse_ctx, special, specialize_traverse_cb);
         str_hset_remove(traverse_ctx->call_chain, inst_name);
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
