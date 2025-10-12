@@ -103,6 +103,7 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
     self->alloc       = alloc;
     self->transient   = transient;
     self->map         = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
+    self->verbose     = 0;
 
     return self;
 }
@@ -847,7 +848,7 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 }
 
 static void log(tl_type_env const *self, char const *restrict fmt, ...) {
-    (void)self;
+    if (!self->verbose) return;
 
     char buf[256];
 

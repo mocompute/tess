@@ -49,6 +49,7 @@ typedef struct {
     allocator *alloc;
     allocator *transient;
     hashmap   *map; // str => tl_polytype*
+    int        verbose;
 } tl_type_env;
 
 typedef struct {
