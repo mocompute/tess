@@ -460,9 +460,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
-        str_hset_insert(&ctx->call_chain, node->let.name->symbol.name);
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
-        str_hset_remove(ctx->call_chain, node->let.name->symbol.name);
 
         map_destroy(&ctx->lex);
         ctx->lex = save;
@@ -500,7 +498,10 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         }
 
         // do not process recursive calls
-        if (str_hset_contains(ctx->call_chain, name)) return 0;
+        if (str_hset_contains(ctx->call_chain, name)) {
+            log(self, "detected recursive call to '%.*s'", str_ilen(name), str_buf(&name));
+            return 0;
+        }
 
         // traverse arguments
         ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -509,17 +510,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             if (traverse_ast(self, ctx, arg, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
-
-        // reset name because cb may change it
-        name = node->named_application.name->symbol.name;
-
-        // continue traversal through the call chain
-        ast_node *fun_node = toplevel_get(self, name);
-        assert(fun_node);
-
-        str_hset_insert(&ctx->call_chain, name);
-        if (traverse_ast(self, ctx, fun_node, cb)) return 1;
-        str_hset_remove(ctx->call_chain, name);
 
     } break;
 
@@ -849,9 +839,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         node->named_application.name->symbol.name     = inst_name;
 
         // infer the instance (again), but don't recurse through its applications
-        str_hset_insert(&traverse_ctx->call_chain, inst_name);
         traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
-        str_hset_remove(traverse_ctx->call_chain, inst_name);
     } else {
         str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
         ast_node *special   = toplevel_get(self, inst_name);
@@ -862,10 +850,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         node->named_application.name->symbol.name     = inst_name;
 
         // now infer and specialize the newly specialised fun
-        str_hset_insert(&traverse_ctx->call_chain, inst_name);
         traverse_ast(self, traverse_ctx, special, infer_traverse_cb);
         traverse_ast(self, traverse_ctx, special, specialize_traverse_cb);
-        str_hset_remove(traverse_ctx->call_chain, inst_name);
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
         // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
@@ -1445,7 +1431,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
     traverse->user         = ctx;
-    str_hset_insert(&traverse->call_chain, name);
     if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) {
         log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
