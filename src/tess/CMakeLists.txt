@@ -141,6 +141,7 @@ tesslang_create_v2_test(let_basic)
 tesslang_create_v2_test(let_in_basic)
 tesslang_create_v2_test(let_in_nil)
 tesslang_create_v2_test(polymorphic_identity)
+tesslang_create_v2_test(polymorphic_lambda)
 
 tesslang_create_v2_test(v2_nested_basic)
 
