@@ -536,6 +536,11 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     // unify tails if present
     if (!left->next && !right->next) return 0;
 
+    // case: t1 : t2 -> t3, handled above
+    if (!left->next && !left->cons) return 0;
+    if (!right->next && !right->cons) return 0;
+
+    // arrow on both sides
     if (!left->next || !right->next) {
         if (cb) cb(user, left, right);
         return 1;
