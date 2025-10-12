@@ -208,8 +208,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
 
-        tl_monotype element = tl_monotype_wrap_list_el(hd);
-        str         res     = generate_expr(self, &element, args.v[i]);
+        str res = generate_expr(self, hd, args.v[i]);
         array_push(args_res, res);
         hd = hd->next;
     }
