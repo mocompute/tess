@@ -42,7 +42,7 @@ static str         generate_if_then_else(transpile *, ast_node const *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *);
-static void        generate_prototypes(transpile *);
+static void        generate_prototypes(transpile *, int);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
@@ -77,7 +77,7 @@ static str         arrow_to_c_params(transpile *, tl_type_v2 const *, str_sized)
 
 //
 
-static void generate_prototypes(transpile *self) {
+static void generate_prototypes(transpile *self, int decl_static) {
 
     hashmap_iterator iter = {0};
     ast_node        *node;
@@ -91,6 +91,7 @@ static void generate_prototypes(transpile *self) {
         if (!should_generate(name, type)) continue;
 
         str ret = arrow_rhs_to_c(type);
+        if (decl_static) cat(self, S("static "));
         cat(self, ret);
         cat_sp(self);
         cat(self, mangle_fun(self, name));
@@ -437,7 +438,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
     cat_nl(self);
 
-    generate_prototypes(self);
+    generate_prototypes(self, 1);
     cat_nl(self);
     generate_toplevels(self);
     cat_nl(self);
