@@ -458,6 +458,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         while ((param = ast_arguments_next(&iter))) {
             ensure_tv(self, null, &param->type_v2);
             str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            if (cb(self, ctx, param)) return 1;
         }
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
@@ -479,6 +480,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         ensure_tv(self, null, &node->let_in.name->type_v2);
         str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
+        if (cb(self, ctx, node->let_in.name)) return 1;
 
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
 
@@ -489,13 +491,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_named_function_application: {
 
-        str         name = node->named_application.name->symbol.name;
-        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
-        if (!type) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
-            return 1;
-        }
+        str name = node->named_application.name->symbol.name;
 
         // do not process recursive calls
         if (str_hset_contains(ctx->call_chain, name)) {
@@ -521,6 +517,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         while ((param = ast_arguments_next(&iter))) {
             ensure_tv(self, null, &param->type_v2);
             str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
+            if (cb(self, ctx, param)) return 1;
         }
 
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
@@ -646,9 +643,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (add_generic(self, node)) return 1;
 
             // add let-in node to toplevels (because we need the name and the body)
-            if (!toplevel_get(self, name)) {
-                toplevel_add(self, name, node);
-            }
+            toplevel_add(self, name, node);
 
             // do not infer the node value - add_generic takes care of that
 
