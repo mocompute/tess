@@ -308,16 +308,16 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     if (!head) return null;
 
     // copy list elements
-    tl_monotype *copy = null;
+    tl_monotype *copy     = null;
 
-    copy              = alloc_malloc(alloc, sizeof *copy);
-    memcpy(copy, head, sizeof *copy);
+    copy                  = new (alloc, tl_monotype);
+    *copy                 = *head;
 
-    tl_monotype *hd = copy;
+    tl_monotype const *hd = head;
     while (hd->next) {
-        tl_monotype *next = alloc_malloc(alloc, sizeof *next);
-        memcpy(next, hd->next, sizeof *next);
-        hd = hd->next;
+        copy->next  = new (alloc, tl_monotype);
+        *copy->next = *hd->next;
+        hd          = hd->next;
     }
 
     return copy;
