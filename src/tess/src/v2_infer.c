@@ -777,6 +777,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
         if (constrain(self, ctx, node->if_then_else.yes->type_v2, node->if_then_else.no->type_v2, node))
             return 1;
+        ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, node->if_then_else.yes->type_v2, node)) return 1;
     } break;
 
