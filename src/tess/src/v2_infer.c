@@ -1207,10 +1207,10 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     if (body) {
         tl_monotype *args = arrow->list.head;
         forall(i, params) {
+            assert(args);
             ast_node *param = params.v[i];
             param->type_v2  = tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, args));
             args            = args->next;
-            assert(args);
         }
 
         tl_monotype *inst_result = tl_monotype_list_last(arrow);
