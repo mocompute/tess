@@ -140,6 +140,10 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
         tl_type_v2 *left  = make_type_annotation(self, ann->arrow.left, map);
         tl_type_v2 *right = make_type_annotation(self, ann->arrow.right, map);
 
+        if (!tl_monotype_is_list(left->type)) {
+            left = tl_polytype_absorb_mono(self->arena, tl_monotype_create_list(self->arena, left->type));
+        }
+
         tl_polytype_list_append(self->arena, left, right);
         return left;
     }

@@ -201,7 +201,8 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
-    tl_monotype const *hd = arrow;
+    assert(tl_list == arrow->tag);
+    tl_monotype const *hd = arrow->list.head;
 
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
@@ -404,7 +405,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 }
 
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
-    if (type->next) {
+    if (tl_list == type->tag) {
         // arrow
 
         tl_monotype const *result_type = tl_monotype_list_last((tl_monotype *)type);
@@ -415,7 +416,7 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
 
     }
 
-    else if (type->cons) {
+    else if (tl_cons == type->tag) {
         if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
 
         str typec = type_to_c_mono(type);
@@ -622,6 +623,8 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
     str_build          b     = str_build_init(self->transient, 64);
 
     tl_monotype const *arrow = type->type;
+    if (tl_list != arrow->tag) fatal("logic error");
+    arrow = arrow->list.head;
 
     if (!tl_monotype_is_nil(arrow)) {
         int done = 0;

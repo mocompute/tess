@@ -204,6 +204,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
 
     tl_monotype *list = lhs->type;
     assert(tl_list == list->tag);
+
     tl_monotype *tail = list->list.head;
 
     while (tail->next) tail = tail->next;
@@ -288,27 +289,21 @@ u32 tl_monotype_list_length(tl_monotype const *head) {
 
 tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     if (!head) return null;
-    if (tl_list != head->tag) return null;
 
     // copy list elements
     tl_monotype *copy = null;
-    if (head->list.head) {
 
-        copy = alloc_malloc(alloc, sizeof *copy);
-        memcpy(copy, head->list.head, sizeof *copy);
+    copy              = alloc_malloc(alloc, sizeof *copy);
+    memcpy(copy, head, sizeof *copy);
 
-        tl_monotype *hd = copy;
-        while (hd->next) {
-            tl_monotype *next = alloc_malloc(alloc, sizeof *next);
-            memcpy(next, hd->next, sizeof *next);
-            hd->next = next;
-        }
+    tl_monotype *hd = copy;
+    while (hd->next) {
+        tl_monotype *next = alloc_malloc(alloc, sizeof *next);
+        memcpy(next, hd->next, sizeof *next);
+        hd = hd->next;
     }
 
-    tl_monotype *head_copy = alloc_malloc(alloc, sizeof *head_copy);
-    *head_copy             = (tl_monotype){.tag = tl_list, .list = {.head = copy}};
-
-    return head_copy;
+    return copy;
 }
 
 tl_monotype *tl_monotype_list_last(tl_monotype *self) {
@@ -385,15 +380,19 @@ tl_monotype *tl_monotype_clone_list_element(allocator *alloc, tl_monotype const 
 }
 
 int tl_monotype_is_concrete_no_arrow(tl_monotype const *self) {
-    return self && !self->next && self->cons;
+    return self && tl_cons == self->tag;
 }
 
 int tl_monotype_is_arrow(tl_monotype const *self) {
-    return self && self->next;
+    return self && tl_list == self->tag;
 }
 
 int tl_monotype_is_nil(tl_monotype const *self) {
-    return self && self->cons && str_eq(self->cons->def->name, S("Nil"));
+    return self && tl_cons == self->tag && self->cons && str_eq(self->cons->def->name, S("Nil"));
+}
+
+int tl_monotype_is_list(tl_monotype const *self) {
+    return self && tl_list == self->tag;
 }
 
 int tl_polytype_is_scheme(tl_polytype const *poly) {
