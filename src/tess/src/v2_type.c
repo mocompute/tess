@@ -92,7 +92,6 @@ tl_monotype *tl_type_registry_create_type(tl_type_registry *self, str name, tl_m
 
 tl_polytype *tl_type_registry_create_type_poly(tl_type_registry *self, str name, tl_monotype *args) {
     tl_monotype *mono = tl_type_registry_create_type(self, name, args);
-    assert(!mono->next); // FIXME tracking down a bug
     return tl_polytype_absorb_mono(self->alloc, mono);
 }
 
@@ -323,6 +322,7 @@ tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst 
 
 tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
+    if (!orig) fatal("logic error");
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
     memcpy(clone, orig, sizeof *clone);
     if (orig->cons) {
@@ -479,6 +479,7 @@ int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *r
 static tl_monotype const *resolve_tv(tl_type_subs *subs, tl_monotype const *type, tl_monotype const *left,
                                      tl_monotype const *right, type_error_cb_fun cb, void *user) {
 
+    if (!type) return null;
     if (type->cons) return type;
 
     tl_type_variable root     = uf_find(subs, type->var);

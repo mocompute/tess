@@ -31,7 +31,7 @@ struct tl_infer {
 
     tl_type_registry    *registry;
     tl_type_env         *env;
-    tl_type_subs        *subs; // corresponds to E in algorithm J
+    tl_type_subs        *subs;
 
     hashmap             *toplevels; // str => ast_node*
     hashmap             *instances; // u64 hash => str specialised name in env
@@ -459,7 +459,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
         }
 
+        str_hset_insert(&ctx->call_chain, node->let.name->symbol.name);
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
+        str_hset_remove(ctx->call_chain, node->let.name->symbol.name);
 
         map_destroy(&ctx->lex);
         ctx->lex = save;
@@ -830,7 +832,6 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
     // type, e.g the identity function
-
     str *existing;
     if ((existing = str_map_get(ctx->specials, name))) {
         str inst_name                                 = *existing;
@@ -855,6 +856,10 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
         traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), specialize_traverse_cb);
         str_hset_remove(traverse_ctx->call_chain, inst_name);
+
+        // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
+        // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
+        str_map_erase(ctx->specials, name);
     }
     return 0;
 }
@@ -1605,12 +1610,7 @@ int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
     traverse->user         = ctx;
 
-    // ctx->phase_specialize  = 1;
     traverse_ast(self, traverse, main, specialize_traverse_cb);
-
-    // ctx->phase_specialize = 0;
-    // ctx->phase_final      = 1;
-    // traverse_ast(self, traverse, main, infer_traverse_cb);
 
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
