@@ -134,6 +134,12 @@ function(tesslang_create_v2_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+tesslang_create_v2_test(basic)
+tesslang_create_v2_test(factorial)
+tesslang_create_v2_test(let_basic)
+tesslang_create_v2_test(let_in_basic)
+tesslang_create_v2_test(let_in_nil)
+
 tesslang_create_v2_test(v2_nested_basic)
 
 # FIXME: previously working tests
