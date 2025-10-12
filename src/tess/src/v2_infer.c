@@ -722,12 +722,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         // instantiate generic function type being applied
-        ast_arguments_iter iter     = ast_node_arguments_iter(node);
-        ast_node          *fun_node = toplevel_get(self, name);
-        assert(fun_node);
-        tl_monotype *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
-        tl_polytype *app     = make_arrow(self, iter.nodes, node);
-        str          app_str = tl_polytype_to_string(self->transient, app);
+        ast_arguments_iter iter    = ast_node_arguments_iter(node);
+        tl_monotype       *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
+        tl_polytype       *app     = make_arrow(self, iter.nodes, node);
+        str                app_str = tl_polytype_to_string(self->transient, app);
         log(self, "application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
             str_ilen(app_str), str_buf(&app_str));
         tl_polytype wrap = tl_polytype_wrap(inst);
@@ -1263,6 +1261,13 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
         body->type_v2            = tl_polytype_clone_list_element(self->arena, inst_result);
 
         // recurse over body and add to toplevel
+        log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
+        toplevel_add(self, name_inst, generic_node);
+    }
+
+    else {
+        // even no-body polymorphic toplevels (like intrinsics, which are represented by symbols as forward
+        // decls), need to be added to toplevel with their specialized names.
         log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
         toplevel_add(self, name_inst, generic_node);
     }
