@@ -491,9 +491,9 @@ static tl_monotype const *resolve_tv(tl_type_subs *subs, tl_monotype const *type
         if (cb) cb(user, left, right);
         return null;
     } else if (type->next) {
-        // is a list element, so we must preserve the list
+        // is a list element, so we must preserve the list structure
         resolved       = tl_monotype_clone(subs->alloc, resolved);
-        resolved->next = type->next;
+        resolved->next = tl_monotype_clone(subs->alloc, type->next);
     }
 
     return resolved;
@@ -511,17 +511,34 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     if (!right) return 1;
 
     if (!left->cons && !right->cons) {
+        // unify the heads which are both tvars
         if (tl_type_subs_unify_tv(subs, left->var, right->var, cb, user)) return 1;
+        // tails are unified below
     }
 
     else if (!left->cons) {
-        tl_monotype head = tl_monotype_wrap_list_el(right);
-        if (tl_type_subs_unify(subs, left->var, &head, cb, user)) return 1;
+        if (!left->next) {
+            // case t1 : t2 -> t3
+            return tl_type_subs_unify(subs, left->var, right, cb, user);
+        } else {
+            // case t1 -> t2 : t3 -> t4
+            tl_monotype lhead = tl_monotype_wrap_list_el(left);
+            tl_monotype rhead = tl_monotype_wrap_list_el(right);
+            if (tl_type_subs_unify(subs, lhead.var, &rhead, cb, user)) return 1;
+            // tails are unified below
+        }
     }
 
     else if (!right->cons) {
-        tl_monotype head = tl_monotype_wrap_list_el(left);
-        if (tl_type_subs_unify(subs, right->var, &head, cb, user)) return 1;
+        if (!right->next) {
+            // case t1 -> t2 : t3
+            return (tl_type_subs_unify(subs, right->var, left, cb, user));
+        } else {
+            // case t1 -> t2 : t3 -> t4
+            tl_monotype lhead = tl_monotype_wrap_list_el(left);
+            tl_monotype rhead = tl_monotype_wrap_list_el(right);
+            if (tl_type_subs_unify(subs, rhead.var, &lhead, cb, user)) return 1;
+        }
     }
 
     if (left->cons && right->cons) {
