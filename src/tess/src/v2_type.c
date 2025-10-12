@@ -476,39 +476,10 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
 int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
                void *user);
 
-static tl_monotype const *resolve_tv(tl_type_subs *subs, tl_monotype const *type, tl_monotype const *left,
-                                     tl_monotype const *right, type_error_cb_fun cb, void *user) {
-
-    if (!type) return null;
-    if (type->cons) return type;
-
-    tl_type_variable root     = uf_find(subs, type->var);
-    tl_monotype     *resolved = subs->v[root].type;
-    if (!resolved) return type;
-
-    if (resolved->next && type->next) {
-        // conflict: both the list element and its resolved type are lists
-        if (cb) cb(user, left, right);
-        return null;
-    } else if (type->next) {
-        // is a list element, so we must preserve the list structure
-        resolved       = tl_monotype_clone(subs->alloc, resolved);
-        resolved->next = tl_monotype_clone(subs->alloc, type->next);
-    }
-
-    return resolved;
-}
-
 int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun, void *);
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
                             type_error_cb_fun cb, void *user) {
-
-    // resolve type variables, if possible
-    left = resolve_tv(subs, left, left, right, cb, user);
-    if (!left) return 1;
-    right = resolve_tv(subs, right, left, right, cb, user);
-    if (!right) return 1;
 
     if (!left->cons && !right->cons) {
         // unify the heads which are both tvars
