@@ -1179,8 +1179,8 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     (void)ctx;
     str name = toplevel_name(node);
 
-    // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
-    // vars that have not been inferred yet.
+    // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
+    // because types are frequently cloned.
     name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
