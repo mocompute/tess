@@ -764,7 +764,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     // instantiate generic function type being applied
     ast_arguments_iter iter     = ast_node_arguments_iter(node);
     ast_node          *fun_node = toplevel_get(self, name);
-    assert(fun_node);
+    if (!fun_node) return 0; // too early
 
     tl_polytype *app = make_arrow(self, iter.nodes, node);
 
