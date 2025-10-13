@@ -766,11 +766,18 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     ast_node          *fun_node = toplevel_get(self, name);
     assert(fun_node);
 
-    // tl_monotype *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
-    tl_polytype *app     = make_arrow(self, iter.nodes, node);
-    str          app_str = tl_polytype_to_string(self->transient, app);
+    tl_polytype *app = make_arrow(self, iter.nodes, node);
+
+    // Important: resolve type variables by calling polytype_substitute.
+    tl_polytype_substitute(self->arena, app, self->subs);
+
+    str app_str = tl_polytype_to_string(self->transient, app);
     log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
         str_ilen(app_str), str_buf(&app_str));
+
+    // Important: If type at the callsite is not fully concrete, do not specialise. It must remain
+    // polymorphic until all concrete type information is known.
+    if (!tl_polytype_is_concrete(app)) return 0;
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
     // type, e.g the identity function
@@ -1205,6 +1212,9 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     }
 
     if (body) {
+        // assign concrete types to parameters
+        assert(tl_list == arrow->tag);
+
         tl_monotype *args = arrow->list.head;
         forall(i, params) {
             assert(args);
@@ -1216,7 +1226,7 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
         tl_monotype *inst_result = tl_monotype_list_last(arrow);
         body->type_v2 = tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, inst_result));
 
-        // recurse over body and add to toplevel
+        // add to toplevel
         log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
         toplevel_add(self, name_inst, generic_node);
     }

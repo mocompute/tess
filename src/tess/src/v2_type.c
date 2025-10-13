@@ -400,6 +400,22 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     return clone;
 }
 
+int tl_monotype_is_concrete(tl_monotype const *self) {
+    if (!self) return 0;
+    switch (self->tag) {
+    case tl_var:  return 0;
+    case tl_cons: return 1;
+    case tl_list: {
+        tl_monotype const *hd = self->list.head;
+        while (hd) {
+            if (!tl_monotype_is_concrete(hd)) return 0;
+            hd = hd->next;
+        }
+        return 1;
+    }
+    }
+}
+
 int tl_monotype_is_concrete_no_arrow(tl_monotype const *self) {
     return self && tl_cons == self->tag;
 }
@@ -418,6 +434,10 @@ int tl_monotype_is_list(tl_monotype const *self) {
 
 int tl_polytype_is_scheme(tl_polytype const *poly) {
     return poly->quantifiers.size != 0;
+}
+
+int tl_polytype_is_concrete(tl_polytype const *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(self->type);
 }
 
 void tl_monotype_sort_fvs(tl_monotype *self) {

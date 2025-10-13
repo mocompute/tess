@@ -110,6 +110,7 @@ void                   tl_monotype_absorb_fvs(allocator *, tl_monotype *, str_si
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
 int                    tl_monotype_is_list(tl_monotype const *);
+int                    tl_monotype_is_concrete(tl_monotype const *);
 int                    tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int                    tl_monotype_is_arrow(tl_monotype const *);
 
@@ -131,6 +132,7 @@ tl_polytype            tl_polytype_wrap(tl_monotype *);
 str                    tl_polytype_to_string(allocator *, tl_polytype const *);
 
 int                    tl_polytype_is_scheme(tl_polytype const *);
+int                    tl_polytype_is_concrete(tl_polytype const *);
 
 // -- substitution --
 
