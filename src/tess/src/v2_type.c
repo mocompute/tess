@@ -45,8 +45,6 @@ tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, 
 }
 
 typedef struct {
-    // Note: key uses reference equality, not structural, so there may be duplication in the hashmap.
-    // FIXME: under asan, the static strings get different addresses, so lookup fails.
     u64                name_hash;
     tl_monotype const *args;
 } registry_key;
@@ -118,7 +116,10 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
 }
 
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype const *type) {
-    tl_polytype *clone = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
+    tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
+    str          type_str = tl_polytype_to_string(self->transient, clone);
+    log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+        str_buf(&type_str));
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
 
@@ -266,8 +267,6 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
 
-    // FIXME: should they be fresh type vars?
-
     switch (self->tag) {
     case tl_var:  array_set_insert(*quant, self->var); break;
     case tl_cons: {
@@ -289,14 +288,21 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     }
 }
 
-void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_subs const *subs) {
+void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_subs *subs) {
     tl_polytype_substitute(env->alloc, self, subs);
 
-    tl_type_variable_array quant = {.alloc = env->alloc};
+    tl_type_variable_array quant = {.alloc = env->transient}; // transient
     generalize(self->type, &quant);
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
     // leaks prior array, if any
+
+    // instantiate to get fresh vars, then generalise again using the fresh vars
+    self->type = tl_polytype_instantiate(env->alloc, self, subs);
+    quant      = (tl_type_variable_array){.alloc = env->alloc};
+    generalize(self->type, &quant);
+    self->quantifiers.size = quant.size;
+    self->quantifiers.v    = quant.v;
 }
 
 // -- monotype --

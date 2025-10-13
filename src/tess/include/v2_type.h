@@ -125,7 +125,7 @@ nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype const *) mallo
 void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype *);
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype const *, tl_type_subs *);
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs const *);
-void                   tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs const *);
+void                   tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs *);
 
 tl_polytype            tl_polytype_wrap(tl_monotype *);
 str                    tl_polytype_to_string(allocator *, tl_polytype const *);
