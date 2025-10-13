@@ -209,7 +209,13 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     tl_monotype *tail = list->list.head;
 
     while (tail->next) tail = tail->next;
-    tail->next = rhs->type;
+
+    tl_monotype *right = rhs->type;
+    switch (right->tag) {
+    case tl_var:
+    case tl_cons: tail->next = right; break;
+    case tl_list: tail->next = right->list.head; break;
+    }
 }
 
 static void replace_tv(tl_monotype *self, hashmap *map) {
@@ -308,16 +314,18 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     if (!head) return null;
 
     // copy list elements
-    tl_monotype *copy     = null;
+    tl_monotype *copy          = null;
 
-    copy                  = new (alloc, tl_monotype);
-    *copy                 = *head;
+    copy                       = new (alloc, tl_monotype);
+    *copy                      = *head;
 
-    tl_monotype const *hd = head;
-    while (hd->next) {
-        copy->next  = new (alloc, tl_monotype);
-        *copy->next = *hd->next;
-        hd          = hd->next;
+    tl_monotype const *hd      = head->next;
+    tl_monotype       *copy_hd = copy;
+    while (hd) {
+        copy_hd->next  = new (alloc, tl_monotype);
+        *copy_hd->next = *hd;
+        hd             = hd->next;
+        copy_hd        = copy_hd->next;
     }
 
     return copy;

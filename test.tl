@@ -12,5 +12,8 @@
 //   x1
 
 
+let _tl_add_     : a -> a -> a
+let add l r      : a -> a -> a = _tl_add_ l r
+
 let main () =
-    sub (add 1 2) 3
+    add 1 2

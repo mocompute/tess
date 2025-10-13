@@ -1280,17 +1280,27 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node *res
     }
 
     else {
+
+        // more than 1 arg, we need to create a flat list (not recursive)
         ensure_tv(self, null, &args.v[0]->type_v2);
-        tl_monotype *lhs = tl_monotype_clone(self->arena, args.v[0]->type_v2->type);
-        tl_type_v2  *rhs =
-          make_arrow(self, (ast_node_sized){.size = args.size - 1, .v = &args.v[1]}, result);
-        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs->type);
+        tl_monotype *head = tl_monotype_clone(self->arena, args.v[0]->type_v2->type);
+        tl_monotype *hd   = head;
+        for (u32 i = 1; i < args.size; ++i) {
+            ensure_tv(self, null, &args.v[i]->type_v2);
+            tl_monotype *arg = tl_monotype_clone(self->arena, args.v[i]->type_v2->type);
+            hd->next         = arg;
+            hd               = arg;
+        }
+        hd->next         = result->type_v2->type;
+
+        tl_monotype *out = tl_monotype_create_list(self->arena, head);
         {
-            str str = tl_monotype_to_string(self->transient, arrow);
+            str str = tl_monotype_to_string(self->transient, out);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
-        return tl_polytype_absorb_mono(self->arena, arrow);
+
+        return tl_polytype_absorb_mono(self->arena, out);
     }
 }
 
