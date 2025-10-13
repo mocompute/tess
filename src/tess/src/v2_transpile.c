@@ -255,7 +255,20 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     return res;
 }
 
+static str generate_let_in_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node) {
+
+    // don't declare or assign to name, because it is hoisted to a toplevel.
+
+    str body = generate_expr(self, null, node->let_in.body);
+    str res  = next_res(self);
+    generate_decl(self, res, result_type);
+    generate_assign(self, res, body);
+
+    return res;
+}
+
 static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_node const *node) {
+    if (ast_node_is_let_in_lambda(node)) return generate_let_in_lambda(self, result_type, node);
     assert(ast_node_is_let_in(node));
 
     str                name = ast_node_str(node->let_in.name);
@@ -403,15 +416,16 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     }
 }
 
+static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name);
+
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     if (tl_list == type->tag) {
         // arrow
 
-        tl_monotype const *result_type = tl_monotype_list_last((tl_monotype *)type);
-        str                typec       = type_to_c_mono(result_type);
-        cat(self, typec);
-
-        fatal("not yet implemented");
+        str_build b = str_build_init(self->transient, 80);
+        build_arrow_to_c(&b, type, name);
+        cat(self, str_build_finish(&b));
+        cat_semicolonln(self);
 
     }
 
@@ -560,6 +574,8 @@ static void cat_f64(transpile *self, f64 val) {
 //
 
 static str mangle_fun(transpile *self, str s) {
+    // If name is already mangled, it could be a variable name. Don't mangle it further.
+    if (0 == str_cmp_nc(s, "tl_", 3)) return s;
     str_build b = str_build_init(self->transient, str_len(s) + 7);
     str_build_cat(&b, S("tl_fun_"));
     str_build_cat(&b, s);
@@ -599,7 +615,7 @@ static str type_to_c(tl_type_v2 const *type) {
     }
 
     else if (tl_monotype_is_arrow(mono))
-        fatal("not yet implemented");
+        fatal("logic error");
 
     else fatal("can't render a type variable");
 }
@@ -613,6 +629,27 @@ static str arrow_rhs_to_c(tl_type_v2 const *type) {
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
     tl_monotype const *right = tl_monotype_list_last(type->type);
     return type_to_c_mono(right);
+}
+
+static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name) {
+    if (!tl_monotype_is_arrow(type)) fatal("logic error");
+
+    tl_monotype const *right = tl_monotype_list_last(type);
+    str_build_cat(b, type_to_c_mono(right));
+    str_build_cat(b, S(" (*"));
+    str_build_cat(b, name);
+    str_build_cat(b, S(") ("));
+
+    tl_monotype *hd = type->list.head;
+    while (hd && hd->next) { // skipping last element, which is the result type
+
+        str_build_cat(b, type_to_c_mono(hd));
+
+        if (hd->next && hd->next->next) str_build_cat(b, S(", "));
+        hd = hd->next;
+    }
+
+    str_build_cat(b, S(")"));
 }
 
 static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized param_names) {
@@ -630,10 +667,14 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
         for (u32 idx = 0; !done; ++idx) {
             tl_monotype arg = *arrow;
             arg.next        = null;
-            str_build_cat(&b, type_to_c_mono(&arg));
-            if (idx < param_names.size) {
-                str_build_cat(&b, S(" "));
-                str_build_cat(&b, param_names.v[idx]);
+            if (tl_monotype_is_arrow(&arg)) {
+                build_arrow_to_c(&b, &arg, (idx < param_names.size) ? param_names.v[idx] : str_empty());
+            } else {
+                str_build_cat(&b, type_to_c_mono(&arg));
+                if (idx < param_names.size) {
+                    str_build_cat(&b, S(" "));
+                    str_build_cat(&b, param_names.v[idx]);
+                }
             }
 
             if (arrow->next && arrow->next->next) {
