@@ -122,7 +122,7 @@ void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype const *typ
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
 
-tl_polytype *tl_type_env_lookup(tl_type_env *self, str name) {
+tl_polytype const *tl_type_env_lookup(tl_type_env *self, str name) {
     return str_map_get_ptr(self->map, name);
 }
 
@@ -712,7 +712,6 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
         tl_monotype *resolved = subs->v[root].type;
         if (resolved) {
-            if (self->var == 0) fatal("oops");
 
             // apply substitution, preserving list structure if any
             if (self->next) {
@@ -723,7 +722,6 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
             *self = *resolved;
         } else {
             // update to representative tv
-            if (self->var == 0 && root != 0) fatal("oops");
             self->var = root;
         }
 

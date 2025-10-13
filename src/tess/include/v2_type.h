@@ -84,7 +84,7 @@ tl_polytype                *tl_type_registry_create_type_poly(tl_type_registry *
 nodiscard tl_type_env *tl_type_env_create(allocator *, allocator *) mallocfun;
 void                   tl_type_env_insert(tl_type_env *, str, tl_polytype const *);
 void                   tl_type_env_insert_mono(tl_type_env *, str, tl_monotype const *);
-tl_polytype           *tl_type_env_lookup(tl_type_env *, str);
+tl_polytype const     *tl_type_env_lookup(tl_type_env *, str);
 
 typedef void (*missing_fv_cb)(void *, str fun, str var);
 int  tl_type_env_check_missing_fvs(tl_type_env const *, missing_fv_cb, void *);

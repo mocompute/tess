@@ -83,8 +83,8 @@ static void generate_prototypes(transpile *self, int decl_static) {
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
 
-        str         name = toplevel_name(node);
-        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        str               name = toplevel_name(node);
+        tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
@@ -107,8 +107,8 @@ static void generate_toplevels(transpile *self) {
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
-        str         name = toplevel_name(node);
-        tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+        str               name = toplevel_name(node);
+        tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
@@ -648,7 +648,7 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
 
 tl_monotype *env_lookup(transpile *self, str name) {
     // may return null if type is missing or is a type scheme
-    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+    tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
     if (!type) fatal("type missing");
     if (tl_polytype_is_scheme(type)) return null;
     return type->type;

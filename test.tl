@@ -12,8 +12,8 @@
 //   x1
 
 
-let _tl_add_     : a -> a -> a
-let add l r      : a -> a -> a = _tl_add_ l r
-
 let main () =
-    add 1 2
+  let id = fun x -> x in
+  let x1 = id 0 in
+  let x2 = id "hello" in
+  x1

@@ -103,8 +103,8 @@ static tl_type_v2 *make_type_annotation(tl_infer *self, ast_node *ann, hashmap *
 
     if (ast_symbol == ann->tag) {
         // either a prim or user type, or a generic/quantifier
-        str         ann_str = ann->symbol.name;
-        tl_type_v2 *found   = tl_type_env_lookup(self->env, ann_str);
+        str               ann_str = ann->symbol.name;
+        tl_type_v2 const *found   = tl_type_env_lookup(self->env, ann_str);
         if (found) {
             // If it's an any type, assign it a new quantifier
             // if (type_any == (*found)->tag) return tl_type_context_new_quantifier(self);
@@ -636,22 +636,26 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_symbol: {
-        tl_type_v2  *global = tl_type_env_lookup(self->env, node->symbol.name);
-        tl_type_v2 **found  = null;
+        // Note: due to alpha transformation (rename_variables), we don't need to consider variable
+        // shadowing. Therefore, global types will take precedence. The type_env will have more accurate
+        // types than the lexical map, which uses expression types.
+        tl_type_v2 const *global = tl_type_env_lookup(self->env, node->symbol.name);
+        tl_type_v2      **found  = null;
 
-        if ((found = str_map_get(traverse_ctx->lex, node->symbol.name)) && *found) {
+        if (global) {
+            tl_type_v2 *global_copy = tl_polytype_clone(self->arena, global);
+            if (node->type_v2) {
+                if (constrain(self, ctx, node->type_v2, global_copy, node)) return 1;
+            } else {
+                node->type_v2 = global_copy;
+            }
+        }
+
+        else if ((found = str_map_get(traverse_ctx->lex, node->symbol.name)) && *found) {
             if (node->type_v2) {
                 if (constrain(self, ctx, node->type_v2, *found, node)) return 1;
             } else {
                 node->type_v2 = tl_polytype_clone(self->arena, *found);
-            }
-        }
-
-        else if (global) {
-            if (node->type_v2) {
-                if (constrain(self, ctx, node->type_v2, global, node)) return 1;
-            } else {
-                node->type_v2 = tl_polytype_clone(self->arena, global);
             }
         }
 
@@ -660,7 +664,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         // add to environment
-        tl_type_env_insert(self->env, node->symbol.name, node->type_v2);
+        if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type_v2);
 
     } break;
 
@@ -668,8 +672,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         ensure_tv(self, null, &node->type_v2);
 
-        str         name = node->named_application.name->symbol.name;
-        tl_type_v2 *type = tl_polytype_clone(self->arena, tl_type_env_lookup(self->env, name));
+        str               name = node->named_application.name->symbol.name;
+        tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
         if (!type) {
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
@@ -714,7 +718,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ast_arguments_iter iter = ast_node_arguments_iter(node);
 
         // apply subs before arrow - we inferred body above
-        tl_polytype_substitute(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2, self->subs);
+        // tl_polytype_substitute(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2,
+        // self->subs);
 
         tl_type_v2 *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
 
@@ -763,10 +768,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_nfa(node)) return 0;
 
-    infer_ctx  *ctx  = traverse_ctx->user;
+    infer_ctx        *ctx  = traverse_ctx->user;
 
-    str         name = node->named_application.name->symbol.name;
-    tl_type_v2 *type = tl_type_env_lookup(self->env, name);
+    str               name = node->named_application.name->symbol.name;
+    tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
     if (!type) {
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
@@ -1073,9 +1078,9 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
     } break;
 
     case ast_symbol: {
-        str        *found;
-        tl_type_v2 *type     = tl_type_env_lookup(self->env, node->symbol.name);
-        int         is_arrow = type && tl_monotype_is_arrow(type->type);
+        str              *found;
+        tl_type_v2 const *type     = tl_type_env_lookup(self->env, node->symbol.name);
+        int               is_arrow = type && tl_monotype_is_arrow(type->type);
 
         // Note: arrow types in the environment are global functions and are not free variables. Note that
         // even local let-in-lambda functions are also in the environment, but their names will never clash
@@ -1416,7 +1421,9 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (name_node->symbol.annotation_type_v2) {
         arrow = name_node->symbol.annotation_type_v2;
     } else {
-        arrow = tl_type_env_lookup(self->env, name);
+        tl_polytype const *tmp = tl_type_env_lookup(self->env, name);
+        if (!tmp) fatal("runtime error");
+        arrow = tl_polytype_clone(self->arena, tmp);
     }
     tl_polytype_generalize(arrow, self->env, self->subs);
 
@@ -1456,8 +1463,8 @@ void             remove_generic_toplevels(tl_infer *self) {
     ast_node        *node;
     hashmap_iterator iter = {0};
     while ((node = toplevel_iter(self, &iter))) {
-        str         name;
-        tl_type_v2 *type = null;
+        str               name;
+        tl_type_v2 const *type = null;
         if (ast_node_is_symbol(node)) {
             name = node->symbol.name;
             type = tl_type_env_lookup(self->env, name);
@@ -1500,7 +1507,7 @@ void        tree_shake_toplevels(tl_infer *self, ast_node const *start) {
 static int check_main_function(tl_infer *self, ast_node const *main) {
     // instantiate and infer main
     assert(ast_node_is_let(main));
-    tl_type_v2 *type = tl_type_env_lookup(self->env, S("main"));
+    tl_type_v2 const *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
 
     tl_type_v2 const *body_type = main->let.body->type_v2;
