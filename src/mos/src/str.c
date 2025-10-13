@@ -360,6 +360,15 @@ int str_ilen(str self) {
     return (int)len;
 }
 
+u64 str_array_hash64(u64 seed, str_sized arr) {
+    u64 hash = seed;
+    forall(i, arr) {
+        u64 h = str_hash64(arr.v[i]);
+        hash  = hash64_combine(hash, &h, sizeof h);
+    }
+    return hash;
+}
+
 int str_array_cmp(str_sized lhs, str_sized rhs) {
 
     if (lhs.size < rhs.size) return -1;

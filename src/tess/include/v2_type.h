@@ -106,6 +106,7 @@ void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_typ
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
 void                   tl_monotype_absorb_fvs(allocator *, tl_monotype *, str_sized);
+u64                    tl_monotype_hash64(tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);

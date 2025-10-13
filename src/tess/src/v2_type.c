@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "hash.h"
 #include "hashmap.h"
 #include "str.h"
 #include "util.h"
@@ -457,6 +458,43 @@ void tl_monotype_absorb_fvs(allocator *alloc, tl_monotype *self, str_sized fvs) 
     if (tl_list != self->tag) fatal("logic error");
     self->list.fvs  = new (alloc, str_sized);
     *self->list.fvs = fvs;
+}
+
+u64 tl_type_constructor_def_hash64(tl_type_constructor_def const *self) {
+    u64 hash = str_hash64(self->name);
+    hash     = hash64_combine(hash, &self->arity, sizeof self->arity);
+    return hash;
+}
+
+static u64 combine_list_hash64(u64 seed, tl_monotype const *head) {
+    u64 hash = seed;
+    while (head) {
+        u64 h = tl_monotype_hash64(head);
+        hash  = hash64_combine(hash, &h, sizeof h);
+        head  = head->next;
+    }
+    return hash;
+}
+
+u64 tl_monotype_hash64(tl_monotype const *self) {
+    u64 hash = hash64(&self->tag, sizeof self->tag);
+    switch (self->tag) {
+
+    case tl_var:  hash = hash64_combine(hash, &self->var, sizeof self->var); break;
+
+    case tl_cons: {
+        u64 def_hash = tl_type_constructor_def_hash64(self->cons->def);
+        hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
+        hash         = combine_list_hash64(hash, self->cons->args);
+    } break;
+
+    case tl_list: {
+        hash = combine_list_hash64(hash, self->list.head);
+        if (self->list.fvs) hash = str_array_hash64(hash, *self->list.fvs);
+    } break;
+    }
+
+    return hash;
 }
 
 str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {

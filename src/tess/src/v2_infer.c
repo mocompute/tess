@@ -1169,8 +1169,8 @@ static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex
 }
 
 typedef struct {
-    str          name;
-    tl_monotype *type;
+    u64 name_hash;
+    u64 type_hash;
 } name_and_type;
 
 static str next_instantiation(tl_infer *, str);
@@ -1181,7 +1181,7 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
 
     // de-duplicate instances. Note however that in many cases the arrow type will contain unique type
     // vars that have not been inferred yet.
-    name_and_type key      = {.name = name, .type = arrow};
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
 
