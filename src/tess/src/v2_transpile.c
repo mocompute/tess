@@ -366,8 +366,7 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
 
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
-    // function arguments. We do it this way because type inference now works top down, meaning the type of
-    // an object is held by the object's name, or point of application for unnamed literals.
+    // function arguments. If type is null, then the type is taken from the expression.
 
     if (!type) {
         assert(!node->type_v2->quantifiers.size);

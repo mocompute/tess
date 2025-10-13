@@ -301,6 +301,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 typedef struct {
     hashmap *call_chain; // hset str
+    hashmap *lex;        // hset str (names in local lexical scope)
     void    *user;
 } traverse_ctx;
 
@@ -309,12 +310,14 @@ typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out = new (alloc, traverse_ctx);
     out->call_chain   = hset_create(alloc, 16);
+    out->lex          = hset_create(alloc, 16);
     out->user         = null;
 
     return out;
 }
 
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
+    if ((*p)->lex) hset_destroy(&(*p)->lex);
     if ((*p)->call_chain) hset_destroy(&(*p)->call_chain);
 
     alloc_free(alloc, *p);
@@ -417,18 +420,29 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
     switch (node->tag) {
     case ast_let: {
 
+        hashmap           *save = map_copy(ctx->lex);
+
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
+            assert(ast_node_is_symbol(param));
+            str_hset_insert(&ctx->lex, param->symbol.name);
             ensure_tv(self, null, &param->type_v2);
             if (cb(self, ctx, param)) return 1;
         }
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
     } break;
 
     case ast_let_in: {
+
+        hashmap *save = map_copy(ctx->lex);
+        assert(ast_node_is_symbol(node->let_in.name));
+        str_hset_insert(&ctx->lex, node->let_in.name->symbol.name);
 
         // process node first, because there may be side effects required before traversing body.
         if (cb(self, ctx, node)) return 1;
@@ -441,6 +455,34 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
 
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
 
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
+    } break;
+
+    case ast_let_match_in: {
+
+        hashmap *save = map_copy(ctx->lex);
+
+        // process node first, because there may be side effects required before traversing body.
+        if (cb(self, ctx, node)) return 1;
+
+        ast_node_sized arr = ast_node_sized_from_ast_array(node->let_match_in.lt);
+        forall(i, arr) {
+            ast_node *ass = arr.v[i];
+            assert(ast_node_is_assignment(ass));
+            ast_node *name_node = ass->assignment.name;
+            assert(ast_node_is_symbol(name_node));
+            str_hset_insert(&ctx->lex, name_node->symbol.name);
+
+            ensure_tv(self, null, &name_node->type_v2);
+            if (cb(self, ctx, name_node)) return 1;
+        }
+
+        if (traverse_ast(self, ctx, node->let_match_in.body, cb)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
     } break;
 
     case ast_named_function_application: {
@@ -465,9 +507,13 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
 
     case ast_lambda_function: {
 
+        hashmap           *save = map_copy(ctx->lex);
+
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
+            assert(ast_node_is_symbol(param));
+            str_hset_insert(&ctx->lex, param->symbol.name);
             ensure_tv(self, null, &param->type_v2);
             if (cb(self, ctx, param)) return 1;
         }
@@ -475,6 +521,10 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
+
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+
     } break;
 
     case ast_lambda_function_application: {
@@ -512,7 +562,6 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
     case ast_eof:
     case ast_f64:
     case ast_i64:
-    case ast_let_match_in:
     case ast_string:
     case ast_symbol:
     case ast_u64:
@@ -1005,169 +1054,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     }
 }
 
-static void collect_free_variables(tl_infer *self, ast_node *node, hashmap **lex, str_array *fvs) {
-
-    if (null == node) return;
-
-    switch (node->tag) {
-
-    case ast_address_of:  collect_free_variables(self, node->address_of.target, lex, fvs); break;
-    case ast_dereference: collect_free_variables(self, node->dereference.target, lex, fvs); break;
-
-    case ast_dereference_assign:
-        collect_free_variables(self, node->dereference_assign.target, lex, fvs);
-        collect_free_variables(self, node->dereference_assign.value, lex, fvs);
-        break;
-
-    case ast_if_then_else:
-        collect_free_variables(self, node->if_then_else.condition, lex, fvs);
-        collect_free_variables(self, node->if_then_else.yes, lex, fvs);
-        collect_free_variables(self, node->if_then_else.no, lex, fvs);
-        break;
-
-    case ast_let: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(*lex);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str name = param->symbol.name;
-            str_map_set(lex, name, &name);
-        }
-
-        collect_free_variables(self, node->let.body, lex, fvs);
-
-        map_destroy(lex);
-        *lex = save;
-
-    } break;
-
-    case ast_let_in: {
-
-        // recurse on value prior to adding name to lexical scope
-        collect_free_variables(self, node->let_in.value, lex, fvs);
-
-        str name = node->let_in.name->symbol.name;
-
-        // establish lexical scope of the let-in binding and recurse
-        hashmap *save = map_copy(*lex);
-        str_map_set(lex, name, &name);
-
-        collect_free_variables(self, node->let_in.body, lex, fvs);
-
-        // restore prior scope
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_let_match_in: {
-
-        // recurse on value prior to adding name to lexical scope
-        collect_free_variables(self, node->let_in.value, lex, fvs);
-
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
-            ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
-            assert(ast_node_is_assignment(ass));
-            ast_node *name_node = ass->assignment.name;
-            assert(ast_node_is_symbol(name_node));
-            str name = name_node->symbol.name;
-
-            str_map_set(lex, name, &name);
-        }
-
-        collect_free_variables(self, node->let_match_in.body, lex, fvs);
-
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_symbol: {
-        str              *found;
-        tl_type_v2 const *type     = tl_type_env_lookup(self->env, node->symbol.name);
-        int               is_arrow = type && tl_monotype_is_arrow(type->type);
-
-        // Note: arrow types in the environment are global functions and are not free variables. Note that
-        // even local let-in-lambda functions are also in the environment, but their names will never clash
-        // with function names.
-        if (is_arrow || (found = str_map_get(*lex, node->symbol.name))) {
-            ;
-        } else {
-            // a free variable
-            array_set_insert(*fvs, node->symbol.name);
-        }
-
-        // if symbol has a type which carries fvs, we also collect those.
-        // TODO so many indirections
-        if (is_arrow && !tl_polytype_is_scheme(type)) {
-            str_sized type_fvs = tl_monotype_fvs(type->type);
-            forall(i, type_fvs) {
-                array_set_insert(*fvs, type_fvs.v[i]);
-            }
-        }
-    } break;
-
-    case ast_lambda_function: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(*lex);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str name = param->symbol.name;
-            str_map_set(lex, name, &name);
-        }
-
-        collect_free_variables(self, node->lambda_function.body, lex, fvs);
-
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
-    case ast_begin_end:
-        for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
-            collect_free_variables(self, node->begin_end.expressions[i], lex, fvs);
-        break;
-
-    case ast_lambda_function_application:
-        collect_free_variables(self, node->lambda_application.lambda, lex, fvs);
-        break;
-
-    case ast_named_function_application: {
-        collect_free_variables(self, node->named_application.name, lex, fvs);
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) collect_free_variables(self, arg, lex, fvs);
-
-    } break;
-
-    case ast_user_type_get:        collect_free_variables(self, node->user_type_get.struct_name, lex, fvs); break;
-    case ast_user_type_set:        collect_free_variables(self, node->user_type_set.struct_name, lex, fvs); break;
-
-    case ast_assignment:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_string:
-    case ast_nil:
-    case ast_any:
-    case ast_arrow:
-    case ast_bool:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_user_type:            break;
-    }
-}
-
 typedef struct {
     u64 name_hash;
     u64 type_hash;
@@ -1320,24 +1206,60 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node *res
     }
 }
 
-static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow) {
-    // collect free variables from infer target and add to the generic's arrow type
-    str_array fvs = {.alloc = self->arena};
-    {
-        hashmap *lex = map_create(self->transient, sizeof(str), 16);
-        collect_free_variables(self, node, &lex, &fvs);
-        map_destroy(&lex);
+typedef struct {
+    str_array fvs;
+} collect_free_variables_ctx;
 
-        array_shrink(fvs);
-        log(self, "-- free variables: %u --", fvs.size);
-        forall(i, fvs) {
-            log(self, "%.*s", str_ilen(fvs.v[i]), str_buf(&fvs.v[i]));
+static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    if (!ast_node_is_symbol(node)) return 0;
+
+    collect_free_variables_ctx *ctx      = traverse_ctx->user;
+
+    tl_type_v2 const           *type     = tl_type_env_lookup(self->env, node->symbol.name);
+    int                         is_arrow = type && tl_monotype_is_arrow(type->type);
+
+    // Note: arrow types in the environment are global functions and are not free variables. Note that
+    // even local let-in-lambda functions are also in the environment, but their names will never clash
+    // with function names.
+    if (is_arrow || (str_hset_contains(traverse_ctx->lex, node->symbol.name))) {
+        ;
+    } else {
+        // a free variable
+        array_set_insert(ctx->fvs, node->symbol.name);
+    }
+
+    // if symbol has a type which carries fvs, we also collect those.
+    if (is_arrow && !tl_polytype_is_scheme(type)) {
+        str_sized type_fvs = tl_monotype_fvs(type->type);
+        forall(i, type_fvs) {
+            array_set_insert(ctx->fvs, type_fvs.v[i]);
         }
     }
 
+    return 0;
+}
+
+static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow) {
+    // collect free variables from infer target and add to the generic's arrow type
+
+    collect_free_variables_ctx ctx;
+    ctx.fvs                    = (str_array){.alloc = self->arena};
+
+    traverse_ctx *traverse_ctx = traverse_ctx_create(self->transient);
+    traverse_ctx->user         = &ctx;
+    int res                    = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
+    if (res) fatal("runtime error");
+    traverse_ctx_destroy(self->transient, &traverse_ctx);
+
+    array_shrink(ctx.fvs);
+    log(self, "-- free variables: %u --", ctx.fvs.size);
+    forall(i, ctx.fvs) {
+        log(self, "%.*s", str_ilen(ctx.fvs.v[i]), str_buf(&ctx.fvs.v[i]));
+    }
+
     // add free variables to arrow type and put into global environment
-    if (fvs.size) {
-        tl_monotype_absorb_fvs(self->arena, arrow->type, (str_sized)sized_all(fvs));
+    if (ctx.fvs.size) {
+        tl_monotype_absorb_fvs(self->arena, arrow->type, (str_sized)sized_all(ctx.fvs));
         tl_monotype_sort_fvs(arrow->type);
     }
 }
