@@ -485,7 +485,7 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype const *self) {
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
     tl_type_subs *self = new (alloc, tl_type_subs);
-    self->alloc        = alloc;
+    *self              = (tl_type_subs){.alloc = alloc};
     array_reserve(*self, 1024);
     return self;
 }
