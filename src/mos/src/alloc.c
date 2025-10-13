@@ -84,6 +84,9 @@ void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
     if (!sz) return null;
     void *ptr = alloc->malloc(alloc, sz, file, line);
     if (!ptr) fatal("malloc failed\n");
+#ifndef NDEBUG
+    alloc_invalidate_n(ptr, sz);
+#endif
     return ptr;
 }
 
