@@ -19,5 +19,7 @@
 //   x1
 
 let main () =
-  let val = (fun x -> x) 0 in
-  val
+  let a = 1 in
+  let a = 2 in
+  let a = 0 in
+  a

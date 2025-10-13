@@ -290,7 +290,6 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 // -- inference --
 
 typedef struct {
-    hashmap *lex;        // str => tl_type_v2*
     hashmap *call_chain; // hset str
     void    *user;
 } traverse_ctx;
@@ -299,14 +298,12 @@ typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out = new (alloc, traverse_ctx);
-    out->lex          = map_create(alloc, sizeof(tl_type_v2 *), 16);
     out->call_chain   = hset_create(alloc, 16);
 
     return out;
 }
 
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
-    if ((*p)->lex) map_destroy(&(*p)->lex);
     if ((*p)->call_chain) hset_destroy(&(*p)->call_chain);
 
     alloc_free(alloc, *p);
@@ -408,20 +405,15 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
 
     switch (node->tag) {
     case ast_let: {
-        hashmap           *save = map_copy(ctx->lex);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
             ensure_tv(self, null, &param->type_v2);
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
             if (cb(self, ctx, param)) return 1;
         }
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
 
     } break;
 
@@ -433,16 +425,10 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
         // traverse value first, then set up lexical context and traverse body
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
 
-        hashmap *save = map_copy(ctx->lex);
-
         ensure_tv(self, null, &node->let_in.name->type_v2);
-        str_map_set(&ctx->lex, node->let_in.name->symbol.name, &node->let_in.name->type_v2);
         if (cb(self, ctx, node->let_in.name)) return 1;
 
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
 
     } break;
 
@@ -467,20 +453,15 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
     } break;
 
     case ast_lambda_function: {
-        hashmap           *save = map_copy(ctx->lex);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
             ensure_tv(self, null, &param->type_v2);
-            str_map_set(&ctx->lex, param->symbol.name, &param->type_v2);
             if (cb(self, ctx, param)) return 1;
         }
 
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
 
         if (cb(self, ctx, node)) return 1;
     } break;
@@ -631,11 +612,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_symbol: {
-        // Note: due to alpha transformation (rename_variables), we don't need to consider variable
-        // shadowing. Therefore, global types will take precedence. The type_env will have more accurate
-        // types than the lexical map, which uses expression types.
         tl_type_v2 const *global = tl_type_env_lookup(self->env, node->symbol.name);
-        tl_type_v2      **found  = null;
 
         if (global) {
             tl_type_v2 *global_copy = tl_polytype_clone(self->arena, global);
@@ -643,14 +620,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (constrain(self, ctx, node->type_v2, global_copy, node)) return 1;
             } else {
                 node->type_v2 = global_copy;
-            }
-        }
-
-        else if ((found = str_map_get(traverse_ctx->lex, node->symbol.name)) && *found) {
-            if (node->type_v2) {
-                if (constrain(self, ctx, node->type_v2, *found, node)) return 1;
-            } else {
-                node->type_v2 = tl_polytype_clone(self->arena, *found);
             }
         }
 
