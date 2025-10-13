@@ -337,7 +337,7 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     return copy;
 }
 
-tl_monotype *tl_monotype_list_last(tl_monotype *self) {
+tl_monotype const *tl_monotype_list_last(tl_monotype const *self) {
     if (tl_list != self->tag) return self;
 
     tl_monotype *head = self->list.head;

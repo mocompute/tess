@@ -264,6 +264,16 @@ void do_tree_shake(void *ctx_, ast_node *node) {
 
     if (ast_node_is_nfa(node)) {
         str name = toplevel_name(node);
+
+        // add all symbol arguments because they could be function pointers
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (!ast_node_is_symbol(arg)) continue;
+            if (str_eq(name, arg->symbol.name)) continue;
+            str_hset_insert(&ctx->names, arg->symbol.name);
+        }
+
         if (!str_hset_contains(ctx->names, name)) {
             str_hset_insert(&ctx->names, name);
 
@@ -1223,7 +1233,7 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
             args            = args->next;
         }
 
-        tl_monotype *inst_result = tl_monotype_list_last(arrow);
+        tl_monotype const *inst_result = tl_monotype_list_last(arrow);
         body->type_v2 = tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, inst_result));
 
         // add to toplevel
