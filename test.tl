@@ -18,5 +18,12 @@
 //   let x2 = id "hello" in
 //   x1
 
+let _tl_add_     : a -> a -> a
+let add l r      : a -> a -> a = _tl_add_ l r
+
 let main () =
-  (fun x -> x) 0
+  let f = fun a b -> add a b end in
+  let x1 = f 1 2 in
+  let x2 = f 1.0 0.5 in
+  let res = f 0 0 in
+  res

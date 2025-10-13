@@ -422,7 +422,7 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
         // process node first, because there may be side effects required before traversing body.
         if (cb(self, ctx, node)) return 1;
 
-        // traverse value first, then set up lexical context and traverse body
+        // traverse value first, then traverse body
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
 
         ensure_tv(self, null, &node->let_in.name->type_v2);
@@ -768,8 +768,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     // tl_monotype *inst    = tl_polytype_instantiate(self->arena, type, self->subs);
     tl_polytype *app     = make_arrow(self, iter.nodes, node);
     str          app_str = tl_polytype_to_string(self->transient, app);
-    log(self, "application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name), str_ilen(app_str),
-        str_buf(&app_str));
+    log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
+        str_ilen(app_str), str_buf(&app_str));
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
     // type, e.g the identity function
@@ -782,7 +782,9 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         // infer the instance (again), but don't recurse through its applications
         ast_node *infer_target = get_infer_target(toplevel_get(self, inst_name));
-        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+        if (infer_target) {
+            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+        }
     } else {
         str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
         ast_node *special   = toplevel_get(self, inst_name);
@@ -794,8 +796,10 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         // now infer and specialize the newly specialised fun
         ast_node *infer_target = get_infer_target(special);
-        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-        if (traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb)) return 1;
+        if (infer_target) {
+            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+            if (traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb)) return 1;
+        }
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
         // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
@@ -811,6 +815,9 @@ static str next_variable_name(tl_infer *);
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     if (null == node) return;
+
+    // ensure all types are removed: important for the post-clone rename of functions being specialized.
+    node->type_v2 = null;
 
     switch (node->tag) {
 
@@ -888,6 +895,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
         } else {
             // a free variable
         }
+
+        // ensure renamed symbols do not carry a type
+        node->type_v2 = null;
     } break;
 
     case ast_lambda_function: {
@@ -1332,10 +1342,9 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
 static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
-    ast_node *infer_target = get_infer_target(node);
-    ;
-    ast_node    *name_node   = toplevel_name_node(node);
-    tl_polytype *provisional = null;
+    ast_node    *infer_target = get_infer_target(node);
+    ast_node    *name_node    = toplevel_name_node(node);
+    tl_polytype *provisional  = null;
 
     if (ast_node_is_let(node)) {
         provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
@@ -1359,8 +1368,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     str orig_name = name_node->symbol.original;
 
     // do not process a second time
-    // FIXME: signal an error for duplicate definitions
-    if (tl_type_env_lookup(self->env, name)) return 0;
+    if (tl_type_env_lookup(self->env, name)) fatal("runtime error");
 
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
