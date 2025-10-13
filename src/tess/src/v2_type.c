@@ -392,9 +392,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     case tl_list:
         *clone =
           (tl_monotype){.tag = tl_list, .list = {.head = tl_monotype_list_copy(alloc, orig->list.head)}};
-        if (orig->list.fvs) {
-            // Note: shallow copy by memcpy above
-        }
+        clone->list.fvs = orig->list.fvs; // shallow copy
         break;
     }
 
@@ -523,6 +521,14 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     } break;
 
     case tl_list: {
+        if (self->list.fvs) {
+            str_build_cat(&b, S("["));
+            forall(i, *self->list.fvs) {
+                str_build_cat(&b, self->list.fvs->v[i]);
+                if (i + 1 < self->list.fvs->size) str_build_cat(&b, S(" "));
+            }
+            str_build_cat(&b, S("] "));
+        }
         tl_monotype *hd = self->list.head;
         str_build_cat(&b, S("("));
         while (hd) {
