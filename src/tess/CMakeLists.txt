@@ -134,6 +134,7 @@ function(tesslang_create_v2_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+tesslang_create_v2_test(anon_lambda)
 tesslang_create_v2_test(basic)
 tesslang_create_v2_test(if_then_else)
 tesslang_create_v2_test(factorial)

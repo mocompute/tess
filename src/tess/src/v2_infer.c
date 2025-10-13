@@ -661,19 +661,25 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_lambda_function_application: {
 
-        ensure_tv(self, null, &node->type_v2);
-
-        tl_type_v2 *inst = node->lambda_application.lambda->type_v2;
-        tl_polytype_substitute(self->arena, inst, self->subs);
-        tl_polytype_substitute(self->arena, (tl_type_v2 *)node->type_v2, self->subs);
+        // Instantiate and save type since it will never be generic.
+        tl_monotype *inst =
+          tl_polytype_instantiate(self->arena, node->lambda_application.lambda->type_v2, self->subs);
+        node->lambda_application.lambda->type_v2 = tl_polytype_absorb_mono(self->arena, inst);
 
         // constrain arrow types
-        tl_type_v2 *app = make_arrow(self,
-                                     (ast_node_sized){.size = node->lambda_application.n_arguments,
-                                                      .v    = node->lambda_application.arguments},
-                                     node);
-        tl_polytype_substitute(self->arena, app, self->subs);
-        if (constrain(self, ctx, inst, app, node)) return 1;
+        ast_arguments_iter iter     = ast_node_arguments_iter(node);
+        tl_polytype       *app      = make_arrow(self, iter.nodes, node);
+        tl_polytype        wrap     = tl_polytype_wrap(inst);
+        str                inst_str = tl_monotype_to_string(self->transient, inst);
+        str                app_str  = tl_polytype_to_string(self->transient, app);
+        log(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
+            str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+        if (constrain(self, ctx, &wrap, app, node)) return 1;
+
+        // constain node type to the lambda body type
+        if (constrain(self, ctx, node->type_v2,
+                      node->lambda_application.lambda->lambda_function.body->type_v2, node))
+            return 1;
 
     } break;
 
@@ -741,6 +747,7 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
     if (!ast_node_is_nfa(node)) return 0;
 
     infer_ctx        *ctx  = traverse_ctx->user;

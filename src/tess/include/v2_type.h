@@ -149,49 +149,4 @@ void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
 
 void tl_type_subs_log(allocator *, tl_type_subs *);
 
-// ---------------------
-#if 0
-
-// types are leaky: use an arena
-nodiscard tl_monotype    *tl_monotype_create(allocator *, tl_monotype) mallocfun;
-nodiscard tl_monotype    *tl_monotype_create_nil(allocator *) mallocfun;
-nodiscard tl_monotype    *tl_monotype_create_arrow(allocator *, tl_monotype *, tl_monotype *) mallocfun;
-nodiscard tl_monotype    *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
-
-tl_monotype               tl_monotype_init_nil();
-tl_monotype               tl_monotype_init_tv(tl_type_variable);
-tl_monotype               tl_monotype_init_arrow(tl_type_v2_arrow);
-tl_monotype               tl_monotype_init_constructor_inst(tl_type_constructor_inst);
-int                       tl_monotype_eq(tl_monotype const *, tl_monotype const *);
-int                       tl_monotype_occurs(tl_monotype const *, tl_monotype const *);
-int                       tl_monotype_occurs_tv(tl_type_variable, tl_monotype const *);
-int                       tl_monotype_is_nil(tl_monotype const *);
-int                       tl_monotype_is_monomorphic(tl_monotype const *);
-u64                       tl_monotype_hash64(tl_monotype const *);
-void                      tl_monotype_union_fv(tl_monotype *dst, tl_monotype const *src);
-
-void                      tl_type_v2_arrow_sort_fvs(tl_type_v2_arrow *);
-tl_monotype              *tl_type_v2_arrow_rightmost(tl_monotype *);
-
-nodiscard tl_type_scheme *tl_type_scheme_create(allocator *, tl_type_scheme) mallocfun;
-
-// -- type --
-
-nodiscard tl_type_v2 *tl_type_v2_create(allocator *, tl_type_v2) mallocfun;
-nodiscard tl_type_v2 *tl_type_alloc_mono(allocator *, tl_monotype *) mallocfun;
-nodiscard tl_type_v2 *tl_type_alloc_scheme(allocator *, tl_type_scheme *) mallocfun;
-
-tl_type_v2            tl_type_init_mono(tl_monotype *);
-tl_type_v2            tl_type_init_scheme(tl_type_scheme *);
-tl_type_v2           *tl_type_v2_clone(allocator *, tl_type_v2 const *);
-int                   tl_type_v2_is_arrow(tl_type_v2 const *);
-int                   tl_type_v2_is_scheme(tl_type_v2 const *);
-int                   tl_type_v2_is_mono(tl_type_v2 const *);
-int                   tl_type_v2_is_monomorphic(tl_type_v2 const *);
-str_sized             tl_type_v2_free_variables(tl_type_v2 const *);
-
-#endif
-
-// -- environment --
-
 #endif
