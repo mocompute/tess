@@ -299,6 +299,7 @@ typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out = new (alloc, traverse_ctx);
     out->call_chain   = hset_create(alloc, 16);
+    out->user         = null;
 
     return out;
 }
