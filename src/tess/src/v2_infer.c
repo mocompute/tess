@@ -650,9 +650,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str               name = node->named_application.name->symbol.name;
         tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
         if (!type) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
-            return 1;
+            return 0; // mututal recursion
         }
 
         // instantiate generic function type being applied
@@ -766,9 +764,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     str               name = node->named_application.name->symbol.name;
     tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
     if (!type) {
-        array_push(self->errors,
-                   ((tl_infer_error){.tag = tl_err_function_not_found, .message = name, .node = node}));
-        return 1;
+        return 0; // mutual recursion
     }
 
     // instantiate generic function type being applied

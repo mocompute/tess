@@ -143,6 +143,7 @@ tesslang_create_v2_test(factorial)
 tesslang_create_v2_test(let_basic)
 tesslang_create_v2_test(let_in_basic)
 tesslang_create_v2_test(let_in_nil)
+tesslang_create_v2_test(mutual_recursion)
 tesslang_create_v2_test(polymorphic_identity)
 tesslang_create_v2_test(polymorphic_lambda)
 
