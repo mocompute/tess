@@ -782,7 +782,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         // infer the instance (again), but don't recurse through its applications
         ast_node *infer_target = get_infer_target(toplevel_get(self, inst_name));
-        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
+        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
     } else {
         str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
         ast_node *special   = toplevel_get(self, inst_name);
@@ -794,8 +794,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         // now infer and specialize the newly specialised fun
         ast_node *infer_target = get_infer_target(special);
-        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
-        traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb);
+        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+        if (traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb)) return 1;
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
         // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
