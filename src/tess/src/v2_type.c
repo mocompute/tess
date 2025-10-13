@@ -452,11 +452,13 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
 
     case tl_list: {
         tl_monotype *hd = self->list.head;
+        str_build_cat(&b, S("("));
         while (hd) {
             str_build_cat(&b, tl_monotype_to_string(alloc, hd));
             if (hd->next) str_build_cat(&b, S(" -> "));
             hd = hd->next;
         }
+        str_build_cat(&b, S(")"));
     } break;
     }
 
