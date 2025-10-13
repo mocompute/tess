@@ -314,14 +314,12 @@ static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
 }
 
 typedef struct {
-    tl_type_v2 *lambda_type; // for inferring lambda_function only
-    hashmap    *specials;    // str => str
+    hashmap *specials; // str => str
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out   = new (alloc, infer_ctx);
-    out->lambda_type = null;
-    out->specials    = map_create(alloc, sizeof(str), 16);
+    infer_ctx *out = new (alloc, infer_ctx);
+    out->specials  = map_create(alloc, sizeof(str), 16);
 
     return out;
 }
@@ -604,15 +602,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // add let-in node to toplevels (because we need the name and the body)
             toplevel_add(self, name, node);
 
-            // do not infer the node value - add_generic takes care of that
-
-            if (constrain(self, ctx, node->let_in.name->type_v2, node->let_in.value->type_v2, node))
-                return 1;
+            // Do not infer the node value - add_generic takes care of that.
+            // Instead, trigger runtime problems if the name's type is referenced using the expression type
+            // (rather than the type_env type).
+            node->let_in.name->type_v2 = null;
 
             if (constrain(self, ctx, node->type_v2, node->let_in.body->type_v2, node)) return 1;
-
-            // add_generic will have added generic lambda to the environment, using the
-            // ctx->lambda_type field
 
         } else {
 
@@ -715,20 +710,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_lambda_function: {
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        if (!node->type_v2) {
+            ast_arguments_iter iter  = ast_node_arguments_iter(node);
+            tl_type_v2        *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
+            tl_polytype_generalize(arrow, self->env, self->subs);
+            node->type_v2 = arrow;
+        }
 
-        // apply subs before arrow - we inferred body above
-        // tl_polytype_substitute(self->arena, (tl_type_v2 *)node->lambda_function.body->type_v2,
-        // self->subs);
-
-        tl_type_v2 *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
-
-        ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, arrow, node->type_v2, node)) return 1;
-
-        // apply subs before saving type, to get the constraints
-        tl_polytype_substitute(self->arena, arrow, self->subs);
-        ctx->lambda_type = arrow;
+        // Note: it is an error to set an expression type on the lambda function node when the lambda is
+        // let-in defined.
 
     } break;
 
@@ -765,6 +755,22 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+static ast_node *get_infer_target(ast_node *node) {
+    if (ast_node_is_let(node)) {
+        return node;
+    }
+
+    else if (ast_node_is_let_in_lambda(node)) {
+        return node->let_in.value;
+    }
+
+    else if (ast_node_is_symbol(node)) {
+        return null;
+    }
+
+    return null;
+}
+
 static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -799,7 +805,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         node->named_application.name->symbol.name     = inst_name;
 
         // infer the instance (again), but don't recurse through its applications
-        traverse_ast(self, traverse_ctx, toplevel_get(self, inst_name), infer_traverse_cb);
+        ast_node *infer_target = get_infer_target(toplevel_get(self, inst_name));
+        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
     } else {
         str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
         ast_node *special   = toplevel_get(self, inst_name);
@@ -810,8 +817,9 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         node->named_application.name->symbol.name     = inst_name;
 
         // now infer and specialize the newly specialised fun
-        traverse_ast(self, traverse_ctx, special, infer_traverse_cb);
-        traverse_ast(self, traverse_ctx, special, specialize_traverse_cb);
+        ast_node *infer_target = get_infer_target(special);
+        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
+        traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb);
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
         // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
@@ -1348,25 +1356,23 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
 static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
-    ast_node    *infer_target = null;
-    ast_node    *name_node    = toplevel_name_node(node);
-    tl_polytype *provisional  = null;
+    ast_node *infer_target = get_infer_target(node);
+    ;
+    ast_node    *name_node   = toplevel_name_node(node);
+    tl_polytype *provisional = null;
 
     if (ast_node_is_let(node)) {
-        infer_target = node;
-        provisional  = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
+        provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
     }
 
     else if (ast_node_is_let_in_lambda(node)) {
-        infer_target = node->let_in.value;
-        provisional  = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
-                                  node->let_in.value->lambda_function.body);
+        provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
+                                 node->let_in.value->lambda_function.body);
     }
 
     else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
-        infer_target = null;
     }
 
     else {
@@ -1404,12 +1410,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
         log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
         return 1;
-    }
-
-    if (ast_node_is_lambda_function(infer_target)) {
-        // since the infer target is unnamed, the lambda function could not add itself to the
-        // environment. We must do so here before the quantified variable analysis.
-        tl_type_env_insert(self->env, name, ctx->lambda_type);
     }
 
     // Must apply subs before quantifying, because we want to replace any tvs (that would otherwise be
