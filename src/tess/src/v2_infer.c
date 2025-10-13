@@ -1354,10 +1354,10 @@ static int add_generic(tl_infer *self, ast_node *node) {
     add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 
-    log(self, "-- global env --");
-    log_env(self);
-    log(self, "-- subs");
-    log_subs(self);
+    // log(self, "-- global env --");
+    // log_env(self);
+    // log(self, "-- subs");
+    // log_subs(self);
 
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
@@ -1504,12 +1504,12 @@ int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
 
-    log(self, "-- toplevels");
-    log_toplevels(self);
-    log(self, "-- subs");
-    log_subs(self);
-    log(self, "-- env");
-    log_env(self);
+    // log(self, "-- toplevels");
+    // log_toplevels(self);
+    // log(self, "-- subs");
+    // log_subs(self);
+    // log(self, "-- env");
+    // log_env(self);
 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
