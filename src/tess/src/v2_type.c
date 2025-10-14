@@ -70,10 +70,10 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     return type;
 }
 
-/*FIXME const*/ tl_polytype *tl_type_registry_create_type_poly(tl_type_registry *self, str name,
-                                                               tl_monotype const *args) {
+tl_polytype const *tl_type_registry_create_type_poly(tl_type_registry *self, str name,
+                                                     tl_monotype const *args) {
     tl_monotype const *mono = tl_type_registry_instantiate(self, name, args);
-    return tl_polytype_absorb_mono(self->alloc, (tl_monotype *)mono); // FIXME
+    return tl_polytype_absorb_mono(self->alloc, mono);
 }
 
 // -- type environment --
@@ -93,13 +93,13 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
     log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 
-    tl_polytype *clone = tl_polytype_clone(self->alloc, type);
+    tl_polytype const *clone = tl_polytype_clone(self->alloc, type);
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
 
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype const *type) {
-    tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
-    str          type_str = tl_polytype_to_string(self->transient, clone);
+    tl_polytype const *clone = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
+    str                type_str = tl_polytype_to_string(self->transient, clone);
     log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
@@ -130,14 +130,14 @@ int tl_type_env_check_missing_fvs(tl_type_env const *self, missing_fv_cb cb, voi
 
 // -- polytype --
 
-tl_polytype *tl_polytype_absorb_mono(allocator *alloc, tl_monotype *mono) {
+tl_polytype const *tl_polytype_absorb_mono(allocator *alloc, tl_monotype const *mono) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
     self->quantifiers = (tl_type_variable_sized){0};
     self->type        = mono;
     return self;
 }
 
-tl_polytype *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
+tl_polytype const *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
     self->type        = tl_monotype_create_tv(alloc, qv);
     self->quantifiers =
@@ -146,20 +146,20 @@ tl_polytype *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
     return self;
 }
 
-tl_polytype *tl_polytype_create_tv(allocator *alloc, tl_type_variable tv) {
-    tl_monotype *mono = tl_monotype_create_tv(alloc, tv);
+tl_polytype const *tl_polytype_create_tv(allocator *alloc, tl_type_variable tv) {
+    tl_monotype const *mono = tl_monotype_create_tv(alloc, tv);
     return tl_polytype_absorb_mono(alloc, mono);
 }
 
-tl_polytype *tl_polytype_create_fresh_qv(allocator *alloc, tl_type_subs *subs) {
+tl_polytype const *tl_polytype_create_fresh_qv(allocator *alloc, tl_type_subs *subs) {
     return tl_polytype_create_qv(alloc, tl_type_subs_fresh(subs));
 }
 
-tl_polytype *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
+tl_polytype const *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
     return tl_polytype_create_tv(alloc, tl_type_subs_fresh(subs));
 }
 
-tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
+tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
     tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
     clone->quantifiers = orig->quantifiers;
     clone->type        = tl_monotype_clone(alloc, orig->type);
@@ -172,7 +172,7 @@ tl_polytype *tl_polytype_clone_list_element(allocator *alloc, tl_monotype const 
     return clone;
 }
 
-void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rhs) {
+void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype const *rhs) {
 
     if (rhs->quantifiers.size) {
         tl_type_variable_array arr = {.alloc = alloc};
@@ -186,14 +186,14 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
         // leaks prior quantifiers array
     }
 
-    tl_monotype *list = lhs->type;
+    tl_monotype const *list = lhs->type;
     assert(tl_list == list->tag);
 
-    tl_monotype *tail = list->list.head;
+    tl_monotype *tail = (tl_monotype *)list->list.head; // const cast
 
-    while (tail->next) tail = tail->next;
+    while (tail->next) tail = (tl_monotype *)tail->next; // const cast
 
-    tl_monotype *right = rhs->type;
+    tl_monotype const *right = rhs->type;
     switch (right->tag) {
     case tl_var:
     case tl_weak:
@@ -217,25 +217,25 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
         break;
 
     case tl_cons: {
-        tl_monotype *hd = self->cons->args;
+        tl_monotype *hd = (tl_monotype *)self->cons->args; // const cast
         while (hd) {
             replace_tv(hd, map);
-            hd = hd->next;
+            hd = (tl_monotype *)hd->next; // const cast
         }
     } break;
 
     case tl_list: {
-        tl_monotype *hd = self->list.head;
+        tl_monotype *hd = (tl_monotype *)self->list.head; // const cast
         while (hd) {
             replace_tv(hd, map);
-            hd = hd->next;
+            hd = (tl_monotype *)hd->next; // const cast
         }
     } break;
     }
 }
 
-tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, tl_type_subs *subs) {
-    tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
+tl_monotype const *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, tl_type_subs *subs) {
+    tl_monotype *fresh = (tl_monotype *)tl_monotype_clone(alloc, self->type); // const cast
     if (!self->quantifiers.size) return fresh;
 
     hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
@@ -263,18 +263,18 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
         break;
 
     case tl_cons: {
-        tl_monotype *hd = self->cons->args;
+        tl_monotype *hd = (tl_monotype *)self->cons->args; // const cast
         while (hd) {
             generalize(hd, quant);
-            hd = hd->next;
+            hd = (tl_monotype *)hd->next; // const cast
         }
     } break;
 
     case tl_list: {
-        tl_monotype *hd = self->list.head;
+        tl_monotype *hd = (tl_monotype *)self->list.head; // const cast
         while (hd) {
             generalize(hd, quant);
-            hd = hd->next;
+            hd = (tl_monotype *)hd->next; // const cast
         }
 
     } break;
@@ -285,7 +285,7 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_s
     tl_polytype_substitute(env->alloc, self, subs);
 
     tl_type_variable_array quant = {.alloc = env->transient}; // transient
-    generalize(self->type, &quant);
+    generalize((tl_monotype *)self->type, &quant);            // const cast
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
     // leaks prior array, if any
@@ -293,7 +293,7 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_s
     // instantiate to get fresh vars, then generalise again using the fresh vars
     self->type = tl_polytype_instantiate(env->alloc, self, subs);
     quant      = (tl_type_variable_array){.alloc = env->alloc};
-    generalize(self->type, &quant);
+    generalize((tl_monotype *)self->type, &quant); // const cast
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
 }
@@ -309,7 +309,7 @@ u32 tl_monotype_list_length(tl_monotype const *head) {
     return list_length(head, 0);
 }
 
-tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
+tl_monotype const *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     if (!head) return null;
 
     // copy list elements
@@ -321,10 +321,10 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
     tl_monotype const *hd      = head->next;
     tl_monotype       *copy_hd = copy;
     while (hd) {
-        copy_hd->next  = new (alloc, tl_monotype);
-        *copy_hd->next = *hd;
-        hd             = hd->next;
-        copy_hd        = copy_hd->next;
+        copy_hd->next                 = new (alloc, tl_monotype);
+        *(tl_monotype *)copy_hd->next = *hd; // const cast
+        hd                            = hd->next;
+        copy_hd                       = (tl_monotype *)copy_hd->next; // const cast
     }
 
     return copy;
@@ -333,37 +333,38 @@ tl_monotype *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
 tl_monotype const *tl_monotype_list_last(tl_monotype const *self) {
     if (tl_list != self->tag) return self;
 
-    tl_monotype *head = self->list.head;
+    tl_monotype const *head = self->list.head;
     while (head->next) head = head->next;
     return head;
 }
 
-tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
+tl_monotype const *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_var, .var = tv};
     return self;
 }
 
-tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs, tl_monotype const *rhs) {
-    tl_monotype *head = tl_monotype_clone(alloc, lhs);
+tl_monotype const *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs,
+                                            tl_monotype const *rhs) {
+    tl_monotype *head = (tl_monotype *)tl_monotype_clone(alloc, lhs); // const cast
     head->next        = tl_monotype_clone(alloc, rhs);
     return tl_monotype_create_list(alloc, head);
 }
 
-tl_monotype *tl_monotype_create_list(allocator *alloc, tl_monotype *head) {
+tl_monotype const *tl_monotype_create_list(allocator *alloc, tl_monotype const *head) {
     assert(head);
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_list, .list = {.head = head}};
     return self;
 }
 
-tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst *cons) {
+tl_monotype const *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst const *cons) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_cons, .cons = cons};
     return self;
 }
 
-tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
+tl_monotype const *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
     if (!orig) fatal("logic error");
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
@@ -374,13 +375,14 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
     case tl_cons:
         // copy the tl_type_constructor_inst struct
-        *clone       = (tl_monotype){.tag = tl_cons, .cons = alloc_malloc(alloc, sizeof *clone->cons)};
-        *clone->cons = *orig->cons;
+        *clone = (tl_monotype){.tag = tl_cons, .cons = alloc_malloc(alloc, sizeof *clone->cons)};
+        *(tl_type_constructor_inst *)clone->cons = *orig->cons; // const cast
 
         // the name is shallow copied
 
         // clone the args list
-        clone->cons->args = tl_monotype_list_copy(alloc, orig->cons->args);
+        ((tl_type_constructor_inst *)clone->cons)->args =
+          tl_monotype_list_copy(alloc, orig->cons->args); // const cast
         break;
 
     case tl_list:
@@ -530,7 +532,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
             }
             str_build_cat(&b, S("] "));
         }
-        tl_monotype *hd = self->list.head;
+        tl_monotype const *hd = self->list.head;
         str_build_cat(&b, S("("));
         while (hd) {
             str_build_cat(&b, tl_monotype_to_string(alloc, hd));
@@ -714,7 +716,7 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     case tl_weak: {
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) return 1;
-        tl_monotype *resolved = self->v[root].type;
+        tl_monotype const *resolved = self->v[root].type;
         if (resolved) return tl_type_subs_monotype_occurs(self, tv, resolved);
 
     } break;
@@ -748,8 +750,8 @@ static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_t
     tl_type_variable right_root = uf_find(self, right);
     if (left_root == right_root) return 0; // already in same equivalence class
 
-    tl_monotype *left_type  = self->v[left_root].type;
-    tl_monotype *right_type = self->v[right_root].type;
+    tl_monotype const *left_type  = self->v[left_root].type;
+    tl_monotype const *right_type = self->v[right_root].type;
     if (left_type && right_type) {
         // both are resolved: must unify
         if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user)) {
@@ -828,7 +830,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
     case tl_cons:
     case tl_list: {
         // case 3: tv = concrete type or arrow
-        tl_monotype *tv_type = self->v[tv_root].type;
+        tl_monotype const *tv_type = self->v[tv_root].type;
         if (tv_type) {
             // must unify
             return tl_type_subs_unify_mono(self, tv_type, mono, cb, user);
@@ -857,13 +859,13 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);
         if (exclude && hset_contains(exclude, &root, sizeof root)) return;
 
-        tl_monotype *resolved = subs->v[root].type;
+        tl_monotype const *resolved = subs->v[root].type;
         if (resolved) {
 
             // apply substitution, preserving list structure if any
             if (self->next) {
-                resolved       = tl_monotype_clone(alloc, resolved);
-                resolved->next = self->next;
+                resolved                        = tl_monotype_clone(alloc, resolved);
+                ((tl_monotype *)resolved)->next = self->next; // const cast
             }
 
             *self = *resolved;
@@ -874,12 +876,14 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
     } break;
 
-    case tl_cons: tl_monotype_substitute(alloc, self->cons->args, subs, exclude); break;
+    case tl_cons:
+        tl_monotype_substitute(alloc, (tl_monotype *)self->cons->args, subs, exclude); // const cast
+        break;
 
     case tl_list: {
-        tl_monotype *hd = self->list.head;
+        tl_monotype const *hd = self->list.head;
         while (hd) {
-            tl_monotype_substitute(alloc, hd, subs, exclude);
+            tl_monotype_substitute(alloc, (tl_monotype *)hd, subs, exclude); // const cast
             hd = hd->next;
         }
 
@@ -897,7 +901,7 @@ static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_t
         }
     }
 
-    tl_monotype_substitute(alloc, self->type, subs, exclude ? *exclude : null);
+    tl_monotype_substitute(alloc, (tl_monotype *)self->type, subs, exclude ? *exclude : null); // const cast
 }
 
 void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs const *subs) {
@@ -908,7 +912,7 @@ void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs co
     if (exclude) map_destroy(&exclude);
 }
 
-tl_polytype tl_polytype_wrap(tl_monotype *mono) {
+tl_polytype tl_polytype_wrap(tl_monotype const *mono) {
     return (tl_polytype){.type = mono};
 }
 
@@ -969,7 +973,7 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
         }
         fprintf(stderr, "}");
 
-        tl_monotype *type = self->v[root].type;
+        tl_monotype const *type = self->v[root].type;
         if (type) {
             fprintf(stderr, " = ");
             str s = tl_monotype_to_string(alloc, type);

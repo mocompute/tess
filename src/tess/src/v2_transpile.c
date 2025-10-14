@@ -66,7 +66,7 @@ static void        cat_commentln(transpile *, str);
 static void        cat_i64(transpile *, i64);
 static void        cat_f64(transpile *, f64);
 
-tl_monotype       *env_lookup(transpile *, str); // may be null
+tl_monotype const *env_lookup(transpile *, str); // may be null
 static str         mangle_fun(transpile *, str); // allocates transient
 static int         is_intrinsic(str);
 static int         should_generate(str, tl_type_v2 const *);
@@ -232,7 +232,7 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node);
 
-    tl_monotype *type = env_lookup(self, name);
+    tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // generate arguments: an array of variables will hold their values
@@ -639,7 +639,7 @@ static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name) {
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
 
-    tl_monotype *hd = type->list.head;
+    tl_monotype const *hd = type->list.head;
     while (hd && hd->next) { // skipping last element, which is the result type
 
         str_build_cat(b, type_to_c_mono(hd));
@@ -686,7 +686,7 @@ static str arrow_to_c_params(transpile *self, tl_type_v2 const *type, str_sized 
     return str_build_finish(&b);
 }
 
-tl_monotype *env_lookup(transpile *self, str name) {
+tl_monotype const *env_lookup(transpile *self, str name) {
     // may return null if type is missing or is a type scheme
     tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
     if (!type) fatal("type missing");
@@ -700,9 +700,9 @@ static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
     (void)extra;
 
     assert(ast_node_is_named_application(node));
-    str          name = ast_node_str(node->named_application.name);
+    str                name = ast_node_str(node->named_application.name);
 
-    tl_monotype *type = env_lookup(self, name);
+    tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // generate arguments: an array of variables will hold their values
@@ -720,9 +720,9 @@ static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
 
 static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
     assert(ast_node_is_named_application(node));
-    str          name = ast_node_str(node->named_application.name);
+    str                name = ast_node_str(node->named_application.name);
 
-    tl_monotype *type = env_lookup(self, name);
+    tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // generate arguments: an array of variables will hold their values
@@ -744,9 +744,9 @@ static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
 
 static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
     assert(ast_node_is_named_application(node));
-    str          name = ast_node_str(node->named_application.name);
+    str                name = ast_node_str(node->named_application.name);
 
-    tl_monotype *type = env_lookup(self, name);
+    tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // generate arguments: an array of variables will hold their values

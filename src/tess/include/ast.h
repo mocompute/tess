@@ -29,13 +29,13 @@ typedef struct {
 typedef struct ast_node {
     union {
         struct ast_symbol {
-            str              name;
-            str              original;
-            struct ast_node *annotation;
-            tl_type         *annotation_type;
-            tl_type_v2      *annotation_type_v2;
-            u64              special_hash; // for use during specialisation
-            u8               flags;
+            str               name;
+            str               original;
+            struct ast_node  *annotation;
+            tl_type          *annotation_type;
+            tl_type_v2 const *annotation_type_v2;
+            u64               special_hash; // for use during specialisation
+            u8                flags;
         } symbol;
 
         struct ast_bool {
@@ -192,7 +192,7 @@ typedef struct ast_node {
     char const       *file;
     u32               line;
     tl_type          *type;
-    tl_type_v2       *type_v2;
+    tl_type_v2 const *type_v2;
     ast_tag           tag;
     enum tl_error_tag error;
 } ast_node;
