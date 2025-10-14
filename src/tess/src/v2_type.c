@@ -215,6 +215,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     tl_monotype *right = rhs->type;
     switch (right->tag) {
     case tl_var:
+    case tl_weak:
     case tl_cons: tail->next = right; break;
     case tl_list: tail->next = right->list.head; break;
     }
@@ -228,6 +229,11 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
         tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
     } break;
+
+    case tl_weak:
+        // weak type variables are not generalizable and therefore do
+        // not participate in instantiation
+        break;
 
     case tl_cons: {
         tl_monotype *hd = self->cons->args;
@@ -269,7 +275,12 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
 
     switch (self->tag) {
-    case tl_var:  array_set_insert(*quant, self->var); break;
+    case tl_var: array_set_insert(*quant, self->var); break;
+
+    case tl_weak:
+        // weak type variables are not generalizeable
+        break;
+
     case tl_cons: {
         tl_monotype *hd = self->cons->args;
         while (hd) {
@@ -377,7 +388,9 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
 
     switch (orig->tag) {
-    case tl_var: *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
+    case tl_var:  *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
+    case tl_weak: *clone = (tl_monotype){.tag = tl_weak, .var = orig->var}; return clone;
+
     case tl_cons:
         // copy the tl_type_constructor_inst struct
         *clone       = (tl_monotype){.tag = tl_cons, .cons = alloc_malloc(alloc, sizeof *clone->cons)};
@@ -402,7 +415,8 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 int tl_monotype_is_concrete(tl_monotype const *self) {
     if (!self) return 0;
     switch (self->tag) {
-    case tl_var:  return 0;
+    case tl_var:
+    case tl_weak: return 0;
     case tl_cons: return 1;
     case tl_list: {
         tl_monotype const *hd = self->list.head;
@@ -477,8 +491,8 @@ static u64 combine_list_hash64(u64 seed, tl_monotype const *head) {
 u64 tl_monotype_hash64(tl_monotype const *self) {
     u64 hash = hash64(&self->tag, sizeof self->tag);
     switch (self->tag) {
-
-    case tl_var:  hash = hash64_combine(hash, &self->var, sizeof self->var); break;
+    case tl_var:
+    case tl_weak: hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_cons: {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons->def);
@@ -504,6 +518,12 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     case tl_var: {
         char buf[64];
         snprintf(buf, sizeof buf, "t%u", self->var);
+        str_build_cat(&b, str_init(alloc, buf));
+    } break;
+
+    case tl_weak: {
+        char buf[64];
+        snprintf(buf, sizeof buf, "w%u", self->var);
         str_build_cat(&b, str_init(alloc, buf));
     } break;
 
@@ -610,10 +630,15 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
 int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
                void *user);
 
-int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun, void *);
+static int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
+                                 void *);
+static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype const *,
+                                      type_error_cb_fun, void *);
+static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype const *weak, tl_monotype const *,
+                                   type_error_cb_fun, void *);
 
-int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
-                            type_error_cb_fun cb, void *user) {
+int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
+                                   type_error_cb_fun cb, void *user) {
 
     if (!left || !right) return 1;
 
@@ -623,6 +648,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
         switch (right->tag) {
 
         case tl_var:  return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user);
+        case tl_weak: return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user);
 
         case tl_cons:
 
@@ -630,10 +656,25 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
         }
         break;
 
+    case tl_weak:
+        switch (right->tag) {
+
+        case tl_var: return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user);
+
+        case tl_weak:
+            // unify two weak variables: put them in same equivalence class
+            return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user);
+
+        case tl_cons:
+        case tl_list: return tl_type_subs_unify_weak(subs, left, right, cb, user);
+        }
+        break;
+
     case tl_cons:
         switch (right->tag) {
 
-        case tl_var: return tl_type_subs_unify(subs, right->var, left, cb, user);
+        case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
+        case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
         case tl_cons:
             if (left->cons->def != right->cons->def) {
@@ -651,7 +692,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     case tl_list:
         switch (right->tag) {
 
-        case tl_var: return tl_type_subs_unify(subs, right->var, left, cb, user);
+        case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
+        case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
         case tl_cons:
             if (cb) cb(user, left, right);
@@ -687,7 +729,8 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     if (!mono) return 0;
 
     switch (mono->tag) {
-    case tl_var: {
+    case tl_var:
+    case tl_weak: {
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) return 1;
         tl_monotype *resolved = self->v[root].type;
@@ -715,8 +758,8 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     return 0;
 }
 
-int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
-                          type_error_cb_fun cb, void *user) {
+static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
+                                 type_error_cb_fun cb, void *user) {
 
     if (left == right) return 0;
 
@@ -742,6 +785,50 @@ int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_var
     return 0;
 }
 
+static int tl_type_subs_unify_tv_weak(tl_type_subs *self, tl_type_variable left, tl_monotype const *right,
+                                      type_error_cb_fun cb, void *user) {
+
+    if (tl_weak != right->tag) fatal("logic error");
+
+    tl_type_variable   left_root  = uf_find(self, left);
+
+    tl_monotype const *left_type  = self->v[left_root].type;
+    tl_monotype const *right_type = right;
+    if (left_type && right_type) {
+        // both are resolved: must unify
+        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user)) {
+            return 1;
+        }
+    }
+
+    // store the weak type at the root
+    self->v[left_root].type = tl_monotype_clone(self->alloc, right);
+
+    return 0;
+}
+
+static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype const *weak, tl_monotype const *right,
+                                   type_error_cb_fun cb, void *user) {
+
+    if (tl_weak != weak->tag) fatal("logic error");
+
+    tl_type_variable   weak_root  = uf_find(self, weak->var);
+
+    tl_monotype const *weak_type  = self->v[weak_root].type;
+    tl_monotype const *right_type = right;
+    if (weak_type && right_type) {
+        // both are resolved: must unify
+        if (tl_type_subs_unify_mono(self, weak_type, right_type, cb, user)) {
+            return 1;
+        }
+    }
+
+    // store the weak type at the root
+    self->v[weak_root].type = tl_monotype_clone(self->alloc, right);
+
+    return 0;
+}
+
 int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype const *mono,
                        type_error_cb_fun cb, void *user) {
 
@@ -749,11 +836,17 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 
     tl_type_variable tv_root = uf_find(self, tv);
 
-    if (tl_var == mono->tag) {
+    switch (mono->tag) {
+    case tl_var:
         // case 1: both are tvs
         return tl_type_subs_unify_tv(self, tv, mono->var, cb, user);
-    } else {
-        // case 2: tv = concrete type or arrow
+    case tl_weak:
+        // case 2: one is weak type variable
+        return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user);
+
+    case tl_cons:
+    case tl_list: {
+        // case 3: tv = concrete type or arrow
         tl_monotype *tv_type = self->v[tv_root].type;
         if (tv_type) {
             // must unify
@@ -762,6 +855,8 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
 
         // store the type at the root
         self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
+
+    } break;
     }
 
     return 0;
@@ -774,7 +869,8 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
     switch (self->tag) {
 
-    case tl_var: {
+    case tl_var:
+    case tl_weak: {
 
         if (exclude && hset_contains(exclude, &self->var, sizeof self->var)) return;
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);

@@ -1285,29 +1285,24 @@ static int add_generic(tl_infer *self, ast_node *node) {
     ast_node    *name_node    = toplevel_name_node(node);
     tl_polytype *provisional  = null;
 
-    if (ast_node_is_let(node)) {
-        provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
-    }
-
-    else if (ast_node_is_let_in_lambda(node)) {
-        provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
-                                 node->let_in.value->lambda_function.body);
-    }
-
-    else if (ast_node_is_symbol(node)) {
-        // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
-        // take precedence to any later declarations, so let's be careful
-    }
-
-    else {
-        fatal("logic error");
-    }
-
-    str name      = name_node->symbol.name;
-    str orig_name = name_node->symbol.original;
+    str          name         = name_node->symbol.name;
+    str          orig_name    = name_node->symbol.original;
 
     // do not process a second time
     if (tl_type_env_lookup(self->env, name)) fatal("runtime error");
+
+    // calculate provisional type, for recursive functions
+    if (ast_node_is_let(node)) {
+        provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
+    } else if (ast_node_is_let_in_lambda(node)) {
+        provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
+                                 node->let_in.value->lambda_function.body);
+    } else if (ast_node_is_symbol(node)) {
+        // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
+        // take precedence to any later declarations, so let's be careful
+    } else {
+        fatal("logic error");
+    }
 
     log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
@@ -1399,6 +1394,7 @@ void             remove_generic_toplevels(tl_infer *self) {
             type = tl_type_env_lookup(self->env, name);
         } else fatal("logic error");
         if (str_eq(S("main"), name)) continue;
+
         if (tl_polytype_is_scheme(type)) array_push(names, name);
     }
 

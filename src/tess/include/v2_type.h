@@ -40,7 +40,7 @@ typedef struct tl_monotype {
             str_sized          *fvs;
         } list;
     };
-    enum { tl_var, tl_cons, tl_list } tag;
+    enum { tl_var, tl_weak, tl_cons, tl_list } tag;
 } tl_monotype;
 
 typedef struct {
