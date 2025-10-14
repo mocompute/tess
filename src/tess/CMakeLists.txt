@@ -148,6 +148,7 @@ tesslang_create_v2_test(polymorphic_identity)
 tesslang_create_v2_test(polymorphic_lambda)
 tesslang_create_v2_test(pointer_basic)
 tesslang_create_v2_test(tuple)
+# tesslang_create_v2_test(tuple_direct)
 
 tesslang_create_v2_test(v2_nested_basic)
 
