@@ -92,7 +92,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
-        return tl_type_registry_create_type_poly(self->registry, S("Nil"), null);
+        return tl_polytype_absorb_mono(self->arena, tl_type_registry_nil(self->registry));
     }
 
     // if (ast_ellipsis == ann->tag) {
@@ -385,6 +385,13 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl
     return constrain_mono(self, lhs, rhs, node);
 }
 
+static int constrain_pm(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl_monotype const *right,
+                        ast_node const *node) {
+
+    tl_polytype wrap = tl_polytype_wrap(right);
+    return constrain(self, ctx, left, &wrap, node);
+}
+
 static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type) {
     if (!type) return;
     if (*type) return;
@@ -598,34 +605,33 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_address_of: fatal("FIXME: pointer types");
 
     case ast_string:     {
-        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("String"), null);
+        tl_monotype const *ty = tl_type_registry_string(self->registry);
         ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
+        if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_f64: {
-        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Float"), null);
+        tl_monotype const *ty = tl_type_registry_float(self->registry);
         ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
+        if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_i64: {
-        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Int"), null);
+        tl_monotype const *ty = tl_type_registry_int(self->registry);
         ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
+        if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_u64: {
-        tl_polytype const *ty =
-          tl_type_registry_create_type_poly(self->registry, S("Int"), null); // FIXME unsigned
+        tl_monotype const *ty = tl_type_registry_int(self->registry); // FIXME unsigned
         ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
+        if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_bool: {
-        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
+        tl_monotype const *ty = tl_type_registry_bool(self->registry);
         ensure_tv(self, null, &node->type_v2);
-        if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
+        if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_let_in: {
@@ -758,8 +764,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_if_then_else: {
 
-        tl_polytype const *bool_type = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
-        if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
+        tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
+        if (constrain_pm(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
         if (constrain(self, ctx, node->if_then_else.yes->type_v2, node->if_then_else.no->type_v2, node))
             return 1;
         ensure_tv(self, null, &node->type_v2);
@@ -1151,7 +1157,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
     ensure_tv(self, null, &result->type_v2);
 
     if (args.size == 0) {
-        tl_monotype const *lhs   = tl_type_registry_instantiate(self->registry, S("Nil"), null);
+        tl_monotype const *lhs   = tl_type_registry_nil(self->registry);
         tl_monotype const *rhs   = tl_monotype_clone(self->arena, result->type_v2->type);
         tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
@@ -1166,7 +1172,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
     else if (args.size == 1) {
         // nil type
         if (ast_node_is_nil(args.v[0])) {
-            tl_monotype const *mono = tl_type_registry_instantiate(self->registry, S("Nil"), null);
+            tl_monotype const *mono = tl_type_registry_nil(self->registry);
             if (!mono) fatal("runtime error");
             args.v[0]->type_v2 = tl_polytype_absorb_mono(self->arena, (tl_monotype *)mono); // FIXME const
         } else ensure_tv(self, null, &args.v[0]->type_v2);

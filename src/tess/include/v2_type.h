@@ -73,7 +73,11 @@ nodiscard tl_type_registry *tl_type_registry_create(allocator *) mallocfun;
 tl_type_constructor_def    *tl_type_constructor_def_create(tl_type_registry *, str, u32) mallocfun;
 tl_monotype const          *tl_type_registry_instantiate(tl_type_registry *, str, tl_monotype const *);
 tl_type_constructor_inst   *tl_type_registry_get(tl_type_registry *, str, tl_monotype const *);
-tl_polytype const          *tl_type_registry_create_type_poly(tl_type_registry *, str, tl_monotype const *);
+tl_monotype const          *tl_type_registry_nil(tl_type_registry *);
+tl_monotype const          *tl_type_registry_int(tl_type_registry *);
+tl_monotype const          *tl_type_registry_float(tl_type_registry *);
+tl_monotype const          *tl_type_registry_bool(tl_type_registry *);
+tl_monotype const          *tl_type_registry_string(tl_type_registry *);
 
 // -- type environment --
 

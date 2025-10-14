@@ -70,10 +70,20 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     return type;
 }
 
-tl_polytype const *tl_type_registry_create_type_poly(tl_type_registry *self, str name,
-                                                     tl_monotype const *args) {
-    tl_monotype const *mono = tl_type_registry_instantiate(self, name, args);
-    return tl_polytype_absorb_mono(self->alloc, mono);
+tl_monotype const *tl_type_registry_nil(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("Nil"), null);
+}
+tl_monotype const *tl_type_registry_int(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("Int"), null);
+}
+tl_monotype const *tl_type_registry_float(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("Float"), null);
+}
+tl_monotype const *tl_type_registry_bool(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("Bool"), null);
+}
+tl_monotype const *tl_type_registry_string(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("String"), null);
 }
 
 // -- type environment --
