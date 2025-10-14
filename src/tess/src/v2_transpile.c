@@ -632,6 +632,8 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     else if (tl_monotype_is_arrow(mono))
         fatal("logic error");
 
+    else if (tl_monotype_is_tuple(mono)) fatal("can't render a tuple");
+
     else fatal("can't render a type variable");
 }
 static str type_to_c_mono(transpile *self, tl_monotype const *type) {
