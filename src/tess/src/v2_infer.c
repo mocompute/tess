@@ -90,7 +90,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
-static tl_type_v2 const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
+static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
         return tl_type_registry_create_type_poly(self->registry, S("Nil"), null);
     }
@@ -103,8 +103,8 @@ static tl_type_v2 const *make_type_annotation(tl_infer *self, ast_node *ann, has
 
     if (ast_symbol == ann->tag) {
         // either a prim or user type, or a generic/quantifier
-        str               ann_str = ann->symbol.name;
-        tl_type_v2 const *found   = tl_type_env_lookup(self->env, ann_str);
+        str                ann_str = ann->symbol.name;
+        tl_polytype const *found   = tl_type_env_lookup(self->env, ann_str);
         if (found) {
             // If it's an any type, assign it a new quantifier
             // if (type_any == (*found)->tag) return tl_type_context_new_quantifier(self);
@@ -113,12 +113,12 @@ static tl_type_v2 const *make_type_annotation(tl_infer *self, ast_node *ann, has
 
         // previously seen in the annotation? then assign same type
         {
-            tl_type_v2 **map_found = str_map_get(*map, ann_str);
+            tl_polytype **map_found = str_map_get(*map, ann_str);
             if (map_found) return tl_polytype_clone(self->arena, *map_found);
         }
 
         // unknown symbol, consider it as a quantifier
-        tl_type_v2 const *out = tl_polytype_create_fresh_qv(self->arena, self->subs);
+        tl_polytype const *out = tl_polytype_create_fresh_qv(self->arena, self->subs);
         str_map_set(map, ann_str, &out);
         return out;
     }
@@ -137,8 +137,8 @@ static tl_type_v2 const *make_type_annotation(tl_infer *self, ast_node *ann, has
     // }
 
     if (ast_arrow == ann->tag) {
-        tl_type_v2 const *left  = make_type_annotation(self, ann->arrow.left, map);
-        tl_type_v2 const *right = make_type_annotation(self, ann->arrow.right, map);
+        tl_polytype const *left  = make_type_annotation(self, ann->arrow.left, map);
+        tl_polytype const *right = make_type_annotation(self, ann->arrow.right, map);
 
         if (!tl_monotype_is_list(left->type)) {
             left = tl_polytype_absorb_mono(self->arena, tl_monotype_create_list(self->arena, left->type));
@@ -164,8 +164,8 @@ static void process_annotation(tl_infer *self, ast_node *node) {
 
     if (!name->symbol.annotation) return;
 
-    hashmap          *map           = map_create(self->transient, sizeof(tl_type_v2 *), 8);
-    tl_type_v2 const *ann           = make_type_annotation(self, name->symbol.annotation, &map);
+    hashmap           *map          = map_create(self->transient, sizeof(tl_polytype *), 8);
+    tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
     node->symbol.annotation_type_v2 = ann;
 
     map_destroy(&map);
@@ -347,8 +347,8 @@ static int type_error(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
-static void log_constraint(tl_infer *, tl_type_v2 const *, tl_type_v2 const *, ast_node const *);
-static void log_type_error(tl_infer *, tl_type_v2 const *, tl_type_v2 const *);
+static void log_constraint(tl_infer *, tl_polytype const *, tl_polytype const *, ast_node const *);
+static void log_type_error(tl_infer *, tl_polytype const *, tl_polytype const *);
 static void log_type_error_mm(tl_infer *, tl_monotype const *, tl_monotype const *);
 
 typedef struct {
@@ -368,7 +368,7 @@ static int constrain_mono(tl_infer *self, tl_monotype const *left, tl_monotype c
     return tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx);
 }
 
-static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
+static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl_polytype const *right,
                      ast_node const *node) {
     (void)ctx;
 
@@ -385,7 +385,7 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_
     return constrain_mono(self, lhs, rhs, node);
 }
 
-static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) {
+static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type) {
     if (!type) return;
     if (*type) return;
     if (name) *type = tl_polytype_clone(self->arena, (tl_type_env_lookup(self->env, *name)));
@@ -394,11 +394,11 @@ static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) 
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void              rename_variables(tl_infer *, ast_node *, hashmap **);
-static str               specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
-static tl_type_v2 const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static void               rename_variables(tl_infer *, ast_node *, hashmap **);
+static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
+static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 
-static int               is_name_instanatiated(tl_infer *self, ast_node *name) {
+static int                is_name_instanatiated(tl_infer *self, ast_node *name) {
     assert(ast_node_is_symbol(name));
     tl_polytype const *poly = tl_type_env_lookup(self->env, name->symbol.name);
     return poly && !poly->quantifiers.size;
@@ -598,32 +598,32 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_address_of: fatal("FIXME: pointer types");
 
     case ast_string:     {
-        tl_type_v2 const *ty = tl_type_registry_create_type_poly(self->registry, S("String"), null);
+        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("String"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_f64: {
-        tl_type_v2 const *ty = tl_type_registry_create_type_poly(self->registry, S("Float"), null);
+        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Float"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_i64: {
-        tl_type_v2 const *ty = tl_type_registry_create_type_poly(self->registry, S("Int"), null);
+        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Int"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_u64: {
-        tl_type_v2 const *ty =
+        tl_polytype const *ty =
           tl_type_registry_create_type_poly(self->registry, S("Int"), null); // FIXME unsigned
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
 
     case ast_bool: {
-        tl_type_v2 const *ty = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
+        tl_polytype const *ty = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
         ensure_tv(self, null, &node->type_v2);
         if (constrain(self, ctx, node->type_v2, ty, node)) return 1;
     } break;
@@ -666,17 +666,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_let: {
 
         ast_arguments_iter iter  = ast_node_arguments_iter(node);
-        tl_type_v2 const  *arrow = make_arrow(self, iter.nodes, node->let.body);
+        tl_polytype const *arrow = make_arrow(self, iter.nodes, node->let.body);
         tl_polytype_substitute(self->arena, (tl_polytype *)arrow, self->subs); // const cast
         tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
 
     } break;
 
     case ast_symbol: {
-        tl_type_v2 const *global = tl_type_env_lookup(self->env, node->symbol.name);
+        tl_polytype const *global = tl_type_env_lookup(self->env, node->symbol.name);
 
         if (global) {
-            tl_type_v2 const *global_copy = tl_polytype_clone(self->arena, global);
+            tl_polytype const *global_copy = tl_polytype_clone(self->arena, global);
             if (node->type_v2) {
                 if (constrain(self, ctx, node->type_v2, global_copy, node)) return 1;
             } else {
@@ -697,8 +697,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         ensure_tv(self, null, &node->type_v2);
 
-        str               name = node->named_application.name->symbol.name;
-        tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
+        str                name = node->named_application.name->symbol.name;
+        tl_polytype const *type = tl_type_env_lookup(self->env, name);
         if (!type) {
             return 0; // mututal recursion
         }
@@ -746,7 +746,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         if (!node->type_v2) {
             ast_arguments_iter iter  = ast_node_arguments_iter(node);
-            tl_type_v2 const  *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
+            tl_polytype const *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
             tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
             node->type_v2 = arrow;
         }
@@ -758,7 +758,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_if_then_else: {
 
-        tl_type_v2 const *bool_type = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
+        tl_polytype const *bool_type = tl_type_registry_create_type_poly(self->registry, S("Bool"), null);
         if (constrain(self, ctx, node->if_then_else.condition->type_v2, bool_type, node)) return 1;
         if (constrain(self, ctx, node->if_then_else.yes->type_v2, node->if_then_else.no->type_v2, node))
             return 1;
@@ -809,10 +809,10 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    infer_ctx        *ctx  = traverse_ctx->user;
+    infer_ctx         *ctx  = traverse_ctx->user;
 
-    str               name = node->named_application.name->symbol.name;
-    tl_type_v2 const *type = tl_type_env_lookup(self->env, name);
+    str                name = node->named_application.name->symbol.name;
+    tl_polytype const *type = tl_type_env_lookup(self->env, name);
     if (!type) {
         return 0; // mutual recursion
     }
@@ -1146,7 +1146,7 @@ static str next_instantiation(tl_infer *self, str name) {
     return str_init(self->arena, buf);
 }
 
-static tl_type_v2 const *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
+static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
 
     ensure_tv(self, null, &result->type_v2);
 
@@ -1216,7 +1216,7 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
 
     collect_free_variables_ctx *ctx      = traverse_ctx->user;
 
-    tl_type_v2 const           *type     = tl_type_env_lookup(self->env, node->symbol.name);
+    tl_polytype const          *type     = tl_type_env_lookup(self->env, node->symbol.name);
     int                         is_arrow = type && tl_monotype_is_arrow(type->type);
 
     // Note: arrow types in the environment are global functions and are not free variables. Note that
@@ -1338,7 +1338,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     tl_type_subs_apply(self->subs, self->env);
 
     // get the arrow type from the annotation, or else from the result of inference
-    tl_type_v2 const *arrow = null;
+    tl_polytype const *arrow = null;
     if (name_node->symbol.annotation_type_v2) {
         arrow = name_node->symbol.annotation_type_v2;
     } else {
@@ -1384,8 +1384,8 @@ void             remove_generic_toplevels(tl_infer *self) {
     ast_node        *node;
     hashmap_iterator iter = {0};
     while ((node = toplevel_iter(self, &iter))) {
-        str               name;
-        tl_type_v2 const *type = null;
+        str                name;
+        tl_polytype const *type = null;
         if (ast_node_is_symbol(node)) {
             name = node->symbol.name;
             type = tl_type_env_lookup(self->env, name);
@@ -1429,10 +1429,10 @@ void        tree_shake_toplevels(tl_infer *self, ast_node const *start) {
 static int check_main_function(tl_infer *self, ast_node const *main) {
     // instantiate and infer main
     assert(ast_node_is_let(main));
-    tl_type_v2 const *type = tl_type_env_lookup(self->env, S("main"));
+    tl_polytype const *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
 
-    tl_type_v2 const *body_type = main->let.body->type_v2;
+    tl_polytype const *body_type = main->let.body->type_v2;
     if (!body_type || tl_polytype_is_scheme(body_type)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
         return 1;
@@ -1723,7 +1723,7 @@ static str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 static void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
     if (node->type_v2) {
-        tl_polytype_substitute(self->arena, (tl_type_v2 *)node->type_v2, self->subs); // const_cast
+        tl_polytype_substitute(self->arena, (tl_polytype *)node->type_v2, self->subs); // const_cast
     }
 }
 
@@ -1768,7 +1768,7 @@ str toplevel_name(ast_node const *node) {
 
 //
 
-static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right,
+static void log_constraint(tl_infer *self, tl_polytype const *left, tl_polytype const *right,
                            ast_node const *node) {
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
@@ -1778,7 +1778,7 @@ static void log_constraint(tl_infer *self, tl_type_v2 const *left, tl_type_v2 co
         str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
 }
 
-static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 const *right) {
+static void log_type_error(tl_infer *self, tl_polytype const *left, tl_polytype const *right) {
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
@@ -1786,7 +1786,7 @@ static void log_type_error(tl_infer *self, tl_type_v2 const *left, tl_type_v2 co
         str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
 }
 static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
-    tl_type_v2 l = tl_polytype_wrap((tl_monotype *)left), r = tl_polytype_wrap((tl_monotype *)right);
+    tl_polytype l = tl_polytype_wrap((tl_monotype *)left), r = tl_polytype_wrap((tl_monotype *)right);
     return log_type_error(self, &l, &r);
 }
 

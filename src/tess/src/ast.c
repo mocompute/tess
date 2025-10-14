@@ -139,7 +139,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation_type    = tl_type_clone_shallow(alloc, vorig->annotation_type);
         vclone->annotation_type_v2 = null;
         if (vorig->annotation_type_v2) {
-            vclone->annotation_type_v2 = new (alloc, tl_type_v2);
+            vclone->annotation_type_v2 = new (alloc, tl_polytype);
             vclone->annotation_type_v2 = tl_polytype_clone(alloc, vorig->annotation_type_v2);
         }
         vclone->special_hash = vorig->special_hash;

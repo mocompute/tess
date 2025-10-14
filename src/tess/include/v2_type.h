@@ -48,8 +48,6 @@ typedef struct {
     tl_monotype const     *type;
 } tl_polytype;
 
-typedef tl_polytype tl_type_v2;
-
 typedef struct {
     // A map of name : type assignments. Manages lifetimes of its elements.
     allocator *alloc;
