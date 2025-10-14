@@ -367,7 +367,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
     return tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx);
 }
 
-static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v2 *right,
+static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 const *left, tl_type_v2 const *right,
                      ast_node const *node) {
     (void)ctx;
 
@@ -384,7 +384,7 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_type_v2 *left, tl_type_v
     return constrain_mono(self, lhs, rhs, node);
 }
 
-static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 **type) {
+static void ensure_tv(tl_infer *self, str const *name, tl_type_v2 const **type) {
     if (!type) return;
     if (*type) return;
     if (name) *type = tl_polytype_clone(self->arena, (tl_type_env_lookup(self->env, *name)));
@@ -1150,9 +1150,9 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node *res
     ensure_tv(self, null, &result->type_v2);
 
     if (args.size == 0) {
-        tl_monotype *lhs   = tl_type_registry_create_type(self->registry, S("Nil"), null);
-        tl_monotype *rhs   = tl_monotype_clone(self->arena, result->type_v2->type);
-        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
+        tl_monotype const *lhs   = tl_type_registry_instantiate(self->registry, S("Nil"), null);
+        tl_monotype       *rhs   = tl_monotype_clone(self->arena, result->type_v2->type);
+        tl_monotype       *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
             str str = tl_monotype_to_string(self->transient, arrow);
@@ -1165,9 +1165,9 @@ static tl_type_v2 *make_arrow(tl_infer *self, ast_node_sized args, ast_node *res
     else if (args.size == 1) {
         // nil type
         if (ast_node_is_nil(args.v[0])) {
-            tl_monotype *mono = tl_type_registry_create_type(self->registry, S("Nil"), null);
+            tl_monotype const *mono = tl_type_registry_instantiate(self->registry, S("Nil"), null);
             if (!mono) fatal("runtime error");
-            args.v[0]->type_v2 = tl_polytype_absorb_mono(self->arena, mono);
+            args.v[0]->type_v2 = tl_polytype_absorb_mono(self->arena, (tl_monotype *)mono); // FIXME const
         } else ensure_tv(self, null, &args.v[0]->type_v2);
 
         tl_monotype *lhs   = tl_monotype_clone(self->arena, args.v[0]->type_v2->type);

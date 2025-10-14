@@ -73,11 +73,9 @@ typedef struct {
 
 nodiscard tl_type_registry *tl_type_registry_create(allocator *) mallocfun;
 tl_type_constructor_def    *tl_type_constructor_def_create(tl_type_registry *, str, u32) mallocfun;
-tl_type_constructor_inst   *tl_type_registry_instantiate(tl_type_registry *, str,
-                                                         tl_monotype const *) mallocfun;
+tl_monotype const          *tl_type_registry_instantiate(tl_type_registry *, str, tl_monotype const *);
 tl_type_constructor_inst   *tl_type_registry_get(tl_type_registry *, str, tl_monotype const *);
-tl_monotype                *tl_type_registry_create_type(tl_type_registry *, str, tl_monotype *);
-tl_polytype                *tl_type_registry_create_type_poly(tl_type_registry *, str, tl_monotype *);
+tl_polytype                *tl_type_registry_create_type_poly(tl_type_registry *, str, tl_monotype const *);
 
 // -- type environment --
 
@@ -107,6 +105,7 @@ void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
 void                   tl_monotype_absorb_fvs(allocator *, tl_monotype *, str_sized);
 u64                    tl_monotype_hash64(tl_monotype const *);
+u64                    tl_monotype_list_hash64(u64, tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
