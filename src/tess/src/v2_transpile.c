@@ -48,11 +48,13 @@ static void        generate_structs(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
+static void        generate_assign_field(transpile *, str, str, str);
 
 static void        cat(transpile *, str);
 static void        cat_nl(transpile *);
 static void        cat_sp(transpile *);
 static void        cat_assign(transpile *);
+static void        cat_dot(transpile *);
 static void        cat_double_slash(transpile *);
 static void        cat_open_round(transpile *);
 static void        cat_close_round(transpile *);
@@ -111,6 +113,25 @@ static str make_struct_name(allocator *alloc, tl_monotype const *type) {
     char buf[128];
     snprintf(buf, sizeof buf, "tl_struct_%" PRIu64, hash);
     return str_init(alloc, buf);
+}
+
+static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node) {
+    char buf[64];
+    str  res = next_res(self);
+    generate_decl(self, res, type);
+
+    tl_monotype const *hd = type->list.head;
+    for (u32 i = 0; hd; hd = hd->next, ++i) {
+        snprintf(buf, sizeof buf, "x%u", i);
+        str field = str_init_small(buf);
+
+        // evaluate tuple element
+        str value = generate_expr(self, hd, node->tuple.elements[i]);
+
+        // assign to field
+        generate_assign_field(self, res, field, value);
+    }
+    return res;
 }
 
 static void generate_struct(transpile *self, tl_monotype const *type) {
@@ -227,6 +248,15 @@ static void generate_assign_lhs(transpile *self, str var) {
 
 static void generate_assign(transpile *self, str lhs, str rhs) {
     cat(self, lhs);
+    cat_assign(self);
+    cat(self, rhs);
+    cat_semicolonln(self);
+}
+
+static void generate_assign_field(transpile *self, str lhs, str field, str rhs) {
+    cat(self, lhs);
+    cat_dot(self);
+    cat(self, field);
     cat_assign(self);
     cat(self, rhs);
     cat_semicolonln(self);
@@ -411,7 +441,8 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
 
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
-    // function arguments. If type is null, then the type is taken from the expression.
+    // function arguments. If type is null, then the type is taken from the expression. The str returned is
+    // the name of the variable which holds the evaluated value.
 
     if (!type) {
         assert(!node->type_v2->quantifiers.size);
@@ -445,6 +476,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
         return str_cat(self->transient, S("*"), generate_expr(self, deref_ty, node->dereference.target));
     } break;
 
+    case ast_tuple: return generate_tuple(self, type, node);
+
     case ast_arrow:
     case ast_assignment:
     case ast_dereference_assign:
@@ -460,7 +493,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_let:
-    case ast_tuple:
     case ast_user_type:
         cat_commentln(self, S("FIXME: generate_expr"));
         return str_copy(self->transient, S("FIXME_generate_expr"));
@@ -581,6 +613,9 @@ static void cat_sp(transpile *self) {
 static void cat_assign(transpile *self) {
     cat(self, S(" = "));
 }
+static void cat_dot(transpile *self) {
+    cat(self, S("."));
+}
 static void cat_double_slash(transpile *self) {
     cat(self, S("// "));
 }
@@ -686,7 +721,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
 
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono);
-        return str_cat(self->transient, struct_name, S("*"));
+        return struct_name;
     }
 
     else
