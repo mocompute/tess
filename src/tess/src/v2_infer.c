@@ -622,6 +622,22 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         }
     } break;
+    case ast_dereference: {
+        ensure_tv(self, null, &node->type_v2);
+        ast_node *target = node->dereference.target;
+        if (ast_node_is_symbol(target)) {
+            tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
+            if (target_ty && tl_polytype_is_concrete(target_ty) && tl_monotype_is_ptr(target_ty->type)) {
+                // ptr to concrete type
+                tl_monotype const *deref = target_ty->type->cons->args;
+                if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
+            } else if (target_ty && tl_monotype_is_ptr(target_ty->type)) {
+                tl_monotype const *deref = target_ty->type->cons->args;
+                if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
+            }
+        }
+
+    } break;
 
     case ast_string: {
         tl_monotype const *ty = tl_type_registry_string(self->registry);
@@ -793,7 +809,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_arrow:
     case ast_assignment:
-    case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:

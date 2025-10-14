@@ -396,7 +396,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
         return str_cat(self->transient, S("&"), generate_expr(self, target_ty, node->address_of.target));
     } break;
     case ast_dereference: {
-
+        tl_monotype const *deref_ty = type;
+        return str_cat(self->transient, S("*"), generate_expr(self, deref_ty, node->dereference.target));
     } break;
 
     case ast_arrow:
