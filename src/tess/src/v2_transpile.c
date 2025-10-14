@@ -4,6 +4,7 @@
 #include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
+#include "dbg.h"
 #include "hashmap.h"
 #include "str.h"
 #include "v2_infer.h"
@@ -43,6 +44,7 @@ static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *);
 static void        generate_prototypes(transpile *, int);
+static void        generate_structs(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
@@ -100,6 +102,49 @@ static void generate_prototypes(transpile *self, int decl_static) {
         cat_close_round(self);
         cat_semicolon(self);
         cat_nl(self);
+    }
+}
+
+static str make_struct_name(allocator *alloc, tl_monotype const *type) {
+    u64  hash = tl_monotype_hash64(type);
+
+    char buf[128];
+    snprintf(buf, sizeof buf, "tl_struct_%" PRIu64, hash);
+    return str_init(alloc, buf);
+}
+
+static void generate_struct(transpile *self, tl_monotype const *type) {
+    char buf[64];
+    str  struct_name = make_struct_name(self->transient, type);
+
+    if (tl_monotype_is_tuple(type)) {
+        cat(self, S("struct "));
+        cat(self, struct_name);
+        catln(self, S(" {"));
+
+        tl_monotype const *hd = type->list.head;
+        for (u32 i = 0; hd; hd = hd->next, ++i) {
+            snprintf(buf, sizeof buf, "x%u", i);
+            str field = str_init_small(buf);
+            generate_decl(self, field, hd);
+        }
+
+        catln(self, S("};"));
+    }
+}
+
+static void generate_structs(transpile *self) {
+    hashmap_iterator iter = {0};
+    while (map_iter(self->env->map, &iter)) {
+        // TODO abstract this iteration over env's internal map
+        // str                key  = str_init_allocated_n((char *)iter.key_ptr, iter.key_size);
+        tl_polytype const *type = *(tl_polytype const **)iter.data;
+
+        if (type->type->tag == tl_tuple) {
+            if (tl_polytype_is_scheme(type)) fatal("type is scheme");
+            if (!tl_polytype_is_concrete(type)) continue;
+            generate_struct(self, type->type);
+        }
     }
 }
 
@@ -447,7 +492,13 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     }
 
     else if (tl_tuple == type->tag) {
-        fatal("got a tuple");
+
+        str typec = type_to_c_mono(self, type);
+        cat(self, typec);
+        cat_sp(self);
+        cat(self, name);
+        cat_semicolonln(self);
+
     }
 
     else {
@@ -463,6 +514,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
     cat_nl(self);
 
+    generate_structs(self);
     generate_prototypes(self, 1);
     cat_nl(self);
     generate_toplevels(self);
@@ -632,9 +684,13 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     else if (tl_monotype_is_arrow(mono))
         fatal("logic error");
 
-    else if (tl_monotype_is_tuple(mono)) fatal("can't render a tuple");
+    else if (tl_monotype_is_tuple(mono)) {
+        str struct_name = make_struct_name(self->transient, mono);
+        return str_cat(self->transient, struct_name, S("*"));
+    }
 
-    else fatal("can't render a type variable");
+    else
+        fatal("can't render a type variable");
 }
 static str type_to_c_mono(transpile *self, tl_monotype const *type) {
     tl_polytype wrap = tl_polytype_wrap((tl_monotype *)type);
