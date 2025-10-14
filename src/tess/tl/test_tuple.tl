@@ -1,2 +1,3 @@
+let id x = x
 let main () =
-    let tup = (1, 2) in 0 end
+  _tl_first_ (id (0, 1, 2))

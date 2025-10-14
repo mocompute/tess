@@ -23,6 +23,7 @@ struct transpile {
 
     tl_type_env *env;
     hashmap     *toplevels; // str => ast_node*
+    hashmap     *structs;   // u64 set
 
     str_build    build;
 
@@ -107,11 +108,12 @@ static void generate_prototypes(transpile *self, int decl_static) {
     }
 }
 
-static str make_struct_name(allocator *alloc, tl_monotype const *type) {
+static str make_struct_name(allocator *alloc, tl_monotype const *type, u64 *out_hash) {
     u64  hash = tl_monotype_hash64(type);
 
     char buf[128];
     snprintf(buf, sizeof buf, "tl_struct_%" PRIu64, hash);
+    if (out_hash) *out_hash = hash;
     return str_init(alloc, buf);
 }
 
@@ -136,10 +138,14 @@ static str generate_tuple(transpile *self, tl_monotype const *type, ast_node con
 
 static void generate_struct(transpile *self, tl_monotype const *type) {
     char buf[64];
-    str  struct_name = make_struct_name(self->transient, type);
 
     if (tl_monotype_is_tuple(type)) {
-        cat(self, S("struct "));
+        u64 hash;
+        str struct_name = make_struct_name(self->transient, type, &hash);
+        if (hset_contains(self->structs, &hash, sizeof hash)) return;
+        hset_insert(&self->structs, &hash, sizeof hash);
+
+        cat(self, S("typedef struct "));
         cat(self, struct_name);
         catln(self, S(" {"));
 
@@ -150,7 +156,9 @@ static void generate_struct(transpile *self, tl_monotype const *type) {
             generate_decl(self, field, hd);
         }
 
-        catln(self, S("};"));
+        cat(self, S("} "));
+        cat(self, struct_name);
+        cat_semicolonln(self);
     }
 }
 
@@ -571,6 +579,8 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->env       = opts->infer_result.env;
     self->toplevels = opts->infer_result.toplevels;
 
+    self->structs   = hset_create(self->arena, 64);
+
     self->next_res  = 0;
 
     self->verbose   = !!opts->verbose;
@@ -720,7 +730,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
         fatal("logic error");
 
     else if (tl_monotype_is_tuple(mono)) {
-        str struct_name = make_struct_name(self->transient, mono);
+        str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
     }
 
