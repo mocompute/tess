@@ -40,7 +40,7 @@ typedef struct tl_monotype {
             str_sized                *fvs;
         } list;
     };
-    enum { tl_var, tl_weak, tl_cons, tl_list } tag;
+    enum { tl_var, tl_weak, tl_cons, tl_list, tl_tuple } tag;
 } tl_monotype;
 
 typedef struct {
@@ -98,6 +98,7 @@ nodiscard tl_monotype const *tl_monotype_create_tv(allocator *, tl_type_variable
 nodiscard tl_monotype const *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype const *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
 nodiscard tl_monotype const *tl_monotype_create_list(allocator *, tl_monotype const *);
+nodiscard tl_monotype const *tl_monotype_create_tuple(allocator *, tl_monotype const *);
 nodiscard tl_monotype const *tl_monotype_create_arrow(allocator *, tl_monotype const *,
                                                       tl_monotype const *);
 nodiscard tl_monotype const *tl_monotype_create_cons(allocator *,
@@ -106,6 +107,7 @@ nodiscard tl_monotype const *tl_monotype_clone(allocator *, tl_monotype const *)
 u32                          tl_monotype_list_length(tl_monotype const *);
 tl_monotype const           *tl_monotype_list_copy(allocator *, tl_monotype const *);
 tl_monotype const           *tl_monotype_list_last(tl_monotype const *);
+void                         tl_monotype_list_concat(tl_monotype *, tl_monotype const *);
 
 void      tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
 void      tl_monotype_sort_fvs(tl_monotype *);
@@ -117,6 +119,7 @@ u64       tl_monotype_list_hash64(u64, tl_monotype const *);
 str       tl_monotype_to_string(allocator *, tl_monotype const *);
 int       tl_monotype_is_nil(tl_monotype const *);
 int       tl_monotype_is_list(tl_monotype const *);
+int       tl_monotype_is_tuple(tl_monotype const *);
 int       tl_monotype_is_concrete(tl_monotype const *);
 int       tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int       tl_monotype_is_arrow(tl_monotype const *);

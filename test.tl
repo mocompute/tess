@@ -1,7 +1,3 @@
-let f () =
-  let val = 1 in
-  &val
-
 let main () =
-  let ptr = f () in
-  ptr.*
+  let tup = (1, 2, 3) in
+  0

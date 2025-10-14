@@ -556,6 +556,14 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
         if (cb(self, ctx, node)) return 1;
     } break;
 
+    case ast_tuple: {
+        ast_node_sized arr = ast_node_sized_from_ast_array(node);
+        forall(i, arr) {
+            if (traverse_ast(self, ctx, arr.v[i], cb)) return 1;
+        }
+        if (cb(self, ctx, node)) return 1;
+    } break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -580,7 +588,6 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
     case ast_function_declaration:
     case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_tuple:
     case ast_user_type:
 
         // operate on the leaf node
@@ -807,6 +814,23 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain(self, ctx, node->type_v2, node->if_then_else.yes->type_v2, node)) return 1;
     } break;
 
+    case ast_tuple: {
+        ensure_tv(self, null, &node->type_v2);
+        ast_node_sized arr = ast_node_sized_from_ast_array(node);
+        assert(arr.size > 0);
+        if (tl_polytype_is_scheme(arr.v[0]->type_v2)) fatal("generic type");
+        tl_monotype const *head = arr.v[0]->type_v2->type;
+        for (u32 i = 1; i < arr.size; ++i) {
+            if (tl_polytype_is_scheme(arr.v[i]->type_v2)) fatal("generic type");
+            tl_monotype_list_concat((tl_monotype *)head, arr.v[i]->type_v2->type); // const cast
+        }
+        if (constrain(self, ctx, node->type_v2,
+                      tl_polytype_absorb_mono(self->arena, tl_monotype_create_tuple(self->arena, head)),
+                      node))
+            return 1;
+
+    } break;
+
     case ast_arrow:
     case ast_assignment:
     case ast_dereference_assign:
@@ -820,7 +844,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_function_declaration:
     case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_tuple:
     case ast_user_type:            break;
     }
 
@@ -1072,12 +1095,16 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     } break;
 
-    case ast_user_type_get:        rename_variables(self, node->user_type_get.struct_name, lex); break;
-    case ast_user_type_set:        rename_variables(self, node->user_type_set.struct_name, lex); break;
+    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex); break;
+    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex); break;
+
+    case ast_tuple:         {
+        ast_node_sized arr = ast_node_sized_from_ast_array(node);
+        forall(i, arr) rename_variables(self, arr.v[i], lex);
+    } break;
 
     case ast_assignment:
     case ast_labelled_tuple:
-    case ast_tuple:
     case ast_string:
     case ast_nil:
     case ast_any:

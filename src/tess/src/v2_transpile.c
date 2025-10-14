@@ -446,6 +446,10 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
         cat_semicolonln(self);
     }
 
+    else if (tl_tuple == type->tag) {
+        fatal("got a tuple");
+    }
+
     else {
         fatal("got a type variable");
     }
