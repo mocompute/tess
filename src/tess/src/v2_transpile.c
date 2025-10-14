@@ -70,9 +70,9 @@ tl_monotype const *env_lookup(transpile *, str); // may be null
 static str         mangle_fun(transpile *, str); // allocates transient
 static int         is_intrinsic(str);
 static int         should_generate(str, tl_polytype const *);
-static str         type_to_c(tl_polytype const *);
-static str         type_to_c_mono(tl_monotype const *);
-static str         arrow_rhs_to_c(tl_polytype const *);
+static str         type_to_c(transpile *, tl_polytype const *);
+static str         type_to_c_mono(transpile *, tl_monotype const *);
+static str         arrow_rhs_to_c(transpile *, tl_polytype const *);
 static str         arrow_to_c_params(transpile *, tl_polytype const *, str_sized); // allocates transient
 
 //
@@ -90,7 +90,7 @@ static void generate_prototypes(transpile *self, int decl_static) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
 
-        str ret = arrow_rhs_to_c(type);
+        str ret = arrow_rhs_to_c(self, type);
         if (decl_static) cat(self, S("static "));
         cat(self, ret);
         cat_sp(self);
@@ -130,7 +130,7 @@ static void generate_toplevels(transpile *self) {
             array_push(params_str, param->symbol.name);
         }
 
-        str ret         = arrow_rhs_to_c(type);
+        str ret         = arrow_rhs_to_c(self, type);
         int res_is_void = str_eq(ret, S("void"));
         str res         = str_empty();
         if (!res_is_void) {
@@ -390,10 +390,17 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_nil:          fatal("cannot generate nil");
     case ast_any:          fatal("cannot generate any");
 
-    case ast_address_of:
+    case ast_address_of:   {
+        if (!tl_monotype_is_ptr(type)) fatal("runtime error");
+        tl_monotype const *target_ty = type->cons->args;
+        return str_cat(self->transient, S("&"), generate_expr(self, target_ty, node->address_of.target));
+    } break;
+    case ast_dereference: {
+
+    } break;
+
     case ast_arrow:
     case ast_assignment:
-    case ast_dereference:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
@@ -415,14 +422,14 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     }
 }
 
-static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name);
+static void build_arrow_to_c(transpile *, str_build *b, tl_monotype const *type, str name);
 
 static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     if (tl_list == type->tag) {
         // arrow
 
         str_build b = str_build_init(self->transient, 80);
-        build_arrow_to_c(&b, type, name);
+        build_arrow_to_c(self, &b, type, name);
         cat(self, str_build_finish(&b));
         cat_semicolonln(self);
 
@@ -431,7 +438,7 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     else if (tl_cons == type->tag) {
         if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
 
-        str typec = type_to_c_mono(type);
+        str typec = type_to_c_mono(self, type);
         cat(self, typec);
         cat_sp(self);
         cat(self, name);
@@ -596,20 +603,24 @@ static int should_generate(str name, tl_polytype const *type) {
     return 1;
 }
 
-static str type_to_c(tl_polytype const *type) {
+static str type_to_c(transpile *self, tl_polytype const *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype const *mono = type->type;
     if (tl_monotype_is_concrete_no_arrow(mono)) {
-        if (str_eq(S("Int"), mono->cons->def->name)) {
+        str cons_name = mono->cons->def->name;
+        if (str_eq(S("Int"), cons_name)) {
             return S("int64_t");
-        } else if (str_eq(S("Float"), mono->cons->def->name)) {
+        } else if (str_eq(S("Float"), cons_name)) {
             return S("double");
-        } else if (str_eq(S("Bool"), mono->cons->def->name)) {
+        } else if (str_eq(S("Bool"), cons_name)) {
             return S("/*bool*/int");
-        } else if (str_eq(S("String"), mono->cons->def->name)) {
+        } else if (str_eq(S("String"), cons_name)) {
             return S("char const*");
-        } else if (str_eq(S("Nil"), mono->cons->def->name)) {
+        } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
+        } else if (str_eq(S("Ptr"), cons_name)) {
+            tl_polytype wrap = tl_polytype_wrap(mono->cons->args); // 1 element
+            return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
         } else fatal("unknown type constructor");
     }
 
@@ -618,23 +629,23 @@ static str type_to_c(tl_polytype const *type) {
 
     else fatal("can't render a type variable");
 }
-static str type_to_c_mono(tl_monotype const *type) {
+static str type_to_c_mono(transpile *self, tl_monotype const *type) {
     tl_polytype wrap = tl_polytype_wrap((tl_monotype *)type);
-    return type_to_c(&wrap);
+    return type_to_c(self, &wrap);
 }
 
-static str arrow_rhs_to_c(tl_polytype const *type) {
+static str arrow_rhs_to_c(transpile *self, tl_polytype const *type) {
     if (tl_polytype_is_scheme(type)) fatal("type scheme");
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
     tl_monotype const *right = tl_monotype_list_last(type->type);
-    return type_to_c_mono(right);
+    return type_to_c_mono(self, right);
 }
 
-static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name) {
+static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *type, str name) {
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
     tl_monotype const *right = tl_monotype_list_last(type);
-    str_build_cat(b, type_to_c_mono(right));
+    str_build_cat(b, type_to_c_mono(self, right));
     str_build_cat(b, S(" (*"));
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
@@ -642,7 +653,7 @@ static void build_arrow_to_c(str_build *b, tl_monotype const *type, str name) {
     tl_monotype const *hd = type->list.head;
     while (hd && hd->next) { // skipping last element, which is the result type
 
-        str_build_cat(b, type_to_c_mono(hd));
+        str_build_cat(b, type_to_c_mono(self, hd));
 
         if (hd->next && hd->next->next) str_build_cat(b, S(", "));
         hd = hd->next;
@@ -667,9 +678,10 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
             tl_monotype arg = *arrow;
             arg.next        = null;
             if (tl_monotype_is_arrow(&arg)) {
-                build_arrow_to_c(&b, &arg, (idx < param_names.size) ? param_names.v[idx] : str_empty());
+                build_arrow_to_c(self, &b, &arg,
+                                 (idx < param_names.size) ? param_names.v[idx] : str_empty());
             } else {
-                str_build_cat(&b, type_to_c_mono(&arg));
+                str_build_cat(&b, type_to_c_mono(self, &arg));
                 if (idx < param_names.size) {
                     str_build_cat(&b, S(" "));
                     str_build_cat(&b, param_names.v[idx]);

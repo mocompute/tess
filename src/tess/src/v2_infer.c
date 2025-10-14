@@ -602,9 +602,28 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     switch (node->tag) {
     case ast_nil:
     case ast_any:        break;
-    case ast_address_of: fatal("FIXME: pointer types");
+    case ast_address_of: {
 
-    case ast_string:     {
+        // address-of operator only accept symbols (lvalues)
+        ensure_tv(self, null, &node->type_v2);
+        ast_node *target = node->address_of.target;
+        if (ast_node_is_symbol(target)) {
+            tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
+            if (target_ty && tl_polytype_is_concrete(target_ty)) {
+                // ptr to concrete type
+                tl_monotype const *ptr = tl_type_registry_ptr(self->registry, target_ty->type);
+                if (constrain_pm(self, ctx, node->type_v2, ptr, node)) return 1;
+            } else if (target_ty) {
+                // ptr to weak type variable, constrained to the type of the target
+                tl_monotype const *wv  = tl_monotype_create_fresh_weak(self->subs);
+                tl_monotype const *ptr = tl_type_registry_ptr(self->registry, wv);
+                if (constrain_pm(self, ctx, node->type_v2, ptr, node)) return 1;
+                if (constrain_pm(self, ctx, target_ty, wv, node)) return 1;
+            }
+        }
+    } break;
+
+    case ast_string: {
         tl_monotype const *ty = tl_type_registry_string(self->registry);
         ensure_tv(self, null, &node->type_v2);
         if (constrain_pm(self, ctx, node->type_v2, ty, node)) return 1;

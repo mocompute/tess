@@ -78,6 +78,7 @@ tl_monotype const          *tl_type_registry_int(tl_type_registry *);
 tl_monotype const          *tl_type_registry_float(tl_type_registry *);
 tl_monotype const          *tl_type_registry_bool(tl_type_registry *);
 tl_monotype const          *tl_type_registry_string(tl_type_registry *);
+tl_monotype const          *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
 
 // -- type environment --
 
@@ -94,6 +95,8 @@ void tl_type_env_log(tl_type_env *);
 // -- monotype --
 
 nodiscard tl_monotype const *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype const *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype const *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
 nodiscard tl_monotype const *tl_monotype_create_list(allocator *, tl_monotype const *);
 nodiscard tl_monotype const *tl_monotype_create_arrow(allocator *, tl_monotype const *,
                                                       tl_monotype const *);
@@ -103,7 +106,7 @@ nodiscard tl_monotype const *tl_monotype_clone(allocator *, tl_monotype const *)
 u32                          tl_monotype_list_length(tl_monotype const *);
 tl_monotype const           *tl_monotype_list_copy(allocator *, tl_monotype const *);
 tl_monotype const           *tl_monotype_list_last(tl_monotype const *);
-tl_monotype                  tl_monotype_wrap_list_el(tl_monotype const *); // extracted element from list
+
 void      tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
 void      tl_monotype_sort_fvs(tl_monotype *);
 str_sized tl_monotype_fvs(tl_monotype const *);
@@ -117,6 +120,7 @@ int       tl_monotype_is_list(tl_monotype const *);
 int       tl_monotype_is_concrete(tl_monotype const *);
 int       tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int       tl_monotype_is_arrow(tl_monotype const *);
+int       tl_monotype_is_ptr(tl_monotype const *);
 
 // -- polytype --
 
@@ -124,6 +128,7 @@ nodiscard tl_polytype const *tl_polytype_absorb_mono(allocator *,
                                                      tl_monotype const *) mallocfun; // no clone
 nodiscard tl_polytype const *tl_polytype_create_qv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_tv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_polytype const *tl_polytype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
