@@ -876,6 +876,27 @@ static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
     return str_build_finish(&b);
 }
 
+static str tl_first(transpile *self, ast_node const *node, void *_) {
+    assert(ast_node_is_named_application(node));
+    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
+    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    return str_cat(self->transient, arg, S(".x0"));
+}
+
+static str tl_second(transpile *self, ast_node const *node, void *_) {
+    assert(ast_node_is_named_application(node));
+    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
+    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    return str_cat(self->transient, arg, S(".x1"));
+}
+
+static str tl_third(transpile *self, ast_node const *node, void *_) {
+    assert(ast_node_is_named_application(node));
+    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
+    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    return str_cat(self->transient, arg, S(".x2"));
+}
+
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
@@ -914,6 +935,10 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
       {"_tl_bsr_", tl_binary_op, ">>"},
 
       {"_tl_bcomp_", tl_unary_op, "~"},
+
+      {"_tl_first_", tl_first, null},
+      {"_tl_second_", tl_second, null},
+      {"_tl_third_", tl_third, null},
 
       {"", null, null},
     };
