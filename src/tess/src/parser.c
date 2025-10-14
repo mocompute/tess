@@ -7,7 +7,6 @@
 #include "error.h"
 #include "file.h"
 #include "hashmap.h"
-#include "string_t.h"
 #include "token.h"
 #include "tokenizer.h"
 #include "util.h"
@@ -920,6 +919,10 @@ static int a_value(parser *self) {
     if (0 == a_try(self, lambda_function_application)) return 0;
     if (!self->in_function_application && 0 == a_try(self, function_application)) return 0;
     if (0 == a_try(self, lambda_function)) return 0;
+
+    if (0 == a_try(self, a_labelled_tuple)) return 0;
+    if (0 == a_try(self, tuple_expression)) return 0;
+
     if (0 == a_try(self, a_field_pointer_setter)) return 0; // before field_access
     if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
     if (0 == a_try(self, a_field_pointer_access)) return 0;
