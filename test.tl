@@ -1,4 +1,7 @@
+let f () =
+  let val = 1 in
+  &val
+
 let main () =
-  let val = 0 in
-  let ptr = &val in
+  let ptr = f () in
   ptr.*
