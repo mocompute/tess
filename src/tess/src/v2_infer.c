@@ -115,18 +115,18 @@ tl_monotype const *tl_type_constructor_from_user_type(tl_infer *self, ast_node c
     assert(ast_user_type_definition == node->tag);
     str           cons_name = tl_type_constructor_def_from_user_type(self, node);
     u32           arity     = node->user_type_def.n_fields;
-    tl_polytype **types     = node->user_type_def.field_types_v2;
+    tl_monotype **types     = node->user_type_def.field_types_v2;
 
     // field name types must be concrete
     for (u32 i = 0; i < arity; ++i) {
-        if (!tl_polytype_is_concrete(types[i])) fatal("not concrete");
+        if (!tl_monotype_is_concrete(types[i])) fatal("not concrete");
     }
 
     // construct a linked list of monotypes
     assert(arity > 0);
-    tl_monotype *head = (tl_monotype *)types[0]->type; // const cast
+    tl_monotype *head = (tl_monotype *)types[0]; // const cast
     for (u32 i = 1; i < arity; ++i) {
-        head->next = types[i]->type;
+        head->next = types[i];
         head       = (tl_monotype *)head->next; // const cast
     }
 
