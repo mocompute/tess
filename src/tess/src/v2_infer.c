@@ -90,6 +90,48 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
+static str tl_type_constructor_def_from_user_type(tl_infer *self, ast_node const *node) {
+    assert(ast_user_type_definition == node->tag);
+    str              name        = node->user_type_def.name->symbol.name;
+    u32              arity       = node->user_type_def.n_fields;
+    ast_node *const *fields      = node->user_type_def.field_names;
+
+    str_array        field_names = {.alloc = self->arena};
+    array_reserve(field_names, node->user_type_def.n_fields);
+
+    for (u32 i = 0; i < arity; ++i) {
+        assert(ast_node_is_symbol(fields[i]));
+        array_push(field_names, fields[i]->symbol.name);
+    }
+    array_shrink(field_names);
+
+    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(field_names), arity);
+    return name;
+}
+
+tl_monotype const *tl_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
+    assert(ast_user_type_definition == node->tag);
+    str           cons_name = tl_type_constructor_def_from_user_type(self, node);
+    u32           arity     = node->user_type_def.n_fields;
+    tl_polytype **types     = node->user_type_def.field_types_v2;
+
+    // field name types must be concrete
+    for (u32 i = 0; i < arity; ++i) {
+        if (!tl_polytype_is_concrete(types[i])) fatal("not concrete");
+    }
+
+    // construct a linked list of monotypes
+    assert(arity > 0);
+    tl_monotype *head = (tl_monotype *)types[0]->type; // const cast
+    for (u32 i = 1; i < arity; ++i) {
+        head->next = types[i]->type;
+        head       = (tl_monotype *)head->next; // const cast
+    }
+
+    // TODO this should probably be cached somewhere
+    return tl_type_registry_instantiate(self->registry, cons_name, head);
+}
+
 static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
     if (ast_nil == ann->tag) {
         return tl_polytype_absorb_mono(self->arena, tl_type_registry_nil(self->registry));

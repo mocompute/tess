@@ -22,4 +22,6 @@ void                tl_infer_report_errors(tl_infer *);
 str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
+tl_monotype const  *tl_type_constructor_from_user_type(tl_infer *, ast_node const *node);
+
 #endif

@@ -38,8 +38,8 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
     return self;
 }
 
-tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                                        str_sized field_names, u32 arity) {
+tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *self, str name,
+                                                              str_sized field_names, u32 arity) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
     def->field_names             = field_names;

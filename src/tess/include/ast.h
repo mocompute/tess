@@ -185,6 +185,7 @@ typedef struct ast_node {
             struct ast_node **field_annotations;
             struct ast_node **field_names;
             tl_type         **field_types;
+            tl_polytype     **field_types_v2;
             u8                n_fields;
         } user_type_def;
     };
