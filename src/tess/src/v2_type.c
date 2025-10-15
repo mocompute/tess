@@ -9,7 +9,6 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 
 static void log(tl_type_env const *self, char const *restrict fmt, ...);
 
@@ -21,12 +20,14 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
     self->definitions      = map_create(self->alloc, sizeof(tl_type_constructor_def *), 64); // key: str
     self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
 
-    tl_type_constructor_def_create(self, S("Nil"), 0);
-    tl_type_constructor_def_create(self, S("Int"), 0);
-    tl_type_constructor_def_create(self, S("Bool"), 0);
-    tl_type_constructor_def_create(self, S("Float"), 0);
-    tl_type_constructor_def_create(self, S("String"), 0);
-    tl_type_constructor_def_create(self, S("Ptr"), 1);
+    str_sized empty        = {0};
+
+    tl_type_constructor_def_create(self, S("Nil"), empty, 0);
+    tl_type_constructor_def_create(self, S("Int"), empty, 0);
+    tl_type_constructor_def_create(self, S("Bool"), empty, 0);
+    tl_type_constructor_def_create(self, S("Float"), empty, 0);
+    tl_type_constructor_def_create(self, S("String"), empty, 0);
+    tl_type_constructor_def_create(self, S("Ptr"), empty, 1);
 
     tl_type_registry_instantiate(self, S("Nil"), null);
     tl_type_registry_instantiate(self, S("Int"), null);
@@ -37,9 +38,11 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
     return self;
 }
 
-tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, str name, u32 arity) {
+tl_type_constructor_def *tl_type_constructor_def_create(tl_type_registry *self, str name,
+                                                        str_sized field_names, u32 arity) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
+    def->field_names             = field_names;
     def->arity                   = arity;
     str_map_set_ptr(&self->definitions, def->name, def);
     return def;
