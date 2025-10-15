@@ -17,19 +17,21 @@
 #define TRANSPILE_BUILD_SIZE     32 * 1024
 
 struct transpile {
-    allocator   *parent;
-    allocator   *arena;
-    allocator   *transient;
+    allocator        *parent;
+    allocator        *arena;
+    allocator        *transient;
 
-    tl_type_env *env;
-    hashmap     *toplevels; // str => ast_node*
-    hashmap     *structs;   // u64 set
+    tl_type_registry *registry;
+    ast_node_sized    nodes;
+    tl_type_env      *env;
+    hashmap          *toplevels; // str => ast_node*
+    hashmap          *structs;   // u64 set
 
-    str_build    build;
+    str_build         build;
 
-    u32          next_res;
+    u32               next_res;
 
-    int          verbose;
+    int               verbose;
 };
 
 extern char const *embed_std_c;
@@ -87,6 +89,8 @@ static void generate_prototypes(transpile *self, int decl_static) {
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+
+        if (ast_node_is_utd(node)) continue;
 
         str                name = toplevel_name(node);
         tl_polytype const *type = tl_type_env_lookup(self->env, name);
@@ -178,10 +182,39 @@ static void generate_structs(transpile *self) {
     }
 }
 
+static void generate_user_types(transpile *self) {
+
+    forall(idx, self->nodes) {
+        ast_node const *node = self->nodes.v[idx];
+        if (!ast_node_is_utd(node)) continue;
+        str                            name = toplevel_name(node);
+        tl_type_constructor_def const *def  = tl_type_registry_get_def(self->registry, name);
+        if (!def) fatal("missing type def");
+
+        cat(self, S("typedef struct "));
+        cat(self, name);
+        catln(self, S(" {"));
+
+        tl_monotype const *hd = def->field_types;
+        forall(i, def->field_names) {
+            generate_decl(self, def->field_names.v[i], hd);
+            hd = hd->next;
+        }
+
+        cat(self, S("} "));
+        cat(self, name);
+        cat_semicolonln(self);
+        cat_nl(self);
+    }
+
+    cat_nl(self);
+}
+
 static void generate_toplevels(transpile *self) {
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        if (ast_node_is_utd(node)) continue;
         str                name = toplevel_name(node);
         tl_polytype const *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
@@ -555,6 +588,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
     cat_nl(self);
 
+    generate_user_types(self);
     generate_structs(self);
     generate_prototypes(self, 1);
     cat_nl(self);
@@ -577,6 +611,8 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->arena     = arena_create(alloc, TRANSPILE_ARENA_SIZE);
     self->transient = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
 
+    self->nodes     = opts->infer_result.nodes;
+    self->registry  = opts->infer_result.registry;
     self->env       = opts->infer_result.env;
     self->toplevels = opts->infer_result.toplevels;
 
@@ -724,7 +760,9 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
         } else if (str_eq(S("Ptr"), cons_name)) {
             tl_polytype wrap = tl_polytype_wrap(mono->cons->args); // 1 element
             return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
-        } else fatal("unknown type constructor");
+        } else {
+            return cons_name;
+        }
     }
 
     else if (tl_monotype_is_arrow(mono))

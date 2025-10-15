@@ -8,8 +8,10 @@
 typedef struct tl_infer tl_infer;
 
 typedef struct {
-    tl_type_env *env;
-    hashmap     *toplevels; // str => ast_node*
+    tl_type_registry *registry;
+    tl_type_env      *env;
+    hashmap          *toplevels; // str => ast_node*
+    ast_node_sized    nodes;     // full ast (to get utds)
 } tl_infer_result;
 
 nodiscard tl_infer *tl_infer_create(allocator *) mallocfun;

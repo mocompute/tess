@@ -1578,6 +1578,7 @@ void        tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     hashmap_iterator iter   = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue;
         str name = toplevel_name(node);
         if (!str_hset_contains(used, name)) array_push(remove, name);
     }
@@ -1693,8 +1694,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     if (out_result) {
+        out_result->registry  = self->registry;
         out_result->env       = self->env;
         out_result->toplevels = self->toplevels;
+        out_result->nodes     = nodes;
     }
     return 0;
 }
