@@ -27,8 +27,8 @@ typedef struct {
 
 typedef struct {
     allocator *alloc;       // manages lifetime of all type constructors
-    hashmap   *definitions; // map str => tl_type_constructor_def*
-    hashmap   *instances;   // map tl_type_constructor_def => tl_type_constructor_inst*
+    hashmap   *definitions; // str => tl_type_constructor_def*
+    hashmap   *instances;   // tl_type_constructor_def => tl_type_constructor_inst*
 } tl_type_registry;
 
 typedef struct tl_monotype {
@@ -74,7 +74,7 @@ nodiscard tl_type_registry    *tl_type_registry_create(allocator *) mallocfun;
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *, str, str_sized,
                                                               u32) mallocfun;
 tl_monotype const             *tl_type_registry_instantiate(tl_type_registry *, str, tl_monotype const *);
-tl_type_constructor_inst      *tl_type_registry_get(tl_type_registry *, str, tl_monotype const *);
+tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *, str);
 tl_monotype const             *tl_type_registry_nil(tl_type_registry *);
 tl_monotype const             *tl_type_registry_int(tl_type_registry *);
 tl_monotype const             *tl_type_registry_float(tl_type_registry *);

@@ -181,12 +181,12 @@ typedef struct ast_node {
         } user_type_set;
 
         struct ast_user_type_def {
-            struct ast_node  *name;
-            struct ast_node **field_annotations;
-            struct ast_node **field_names;
-            tl_type         **field_types;
-            tl_monotype     **field_types_v2;
-            u8                n_fields;
+            struct ast_node    *name;
+            struct ast_node   **field_annotations;
+            struct ast_node   **field_names;
+            tl_type           **field_types;
+            tl_monotype const **field_types_v2;
+            u8                  n_fields;
         } user_type_def;
     };
 

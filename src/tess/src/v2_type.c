@@ -73,6 +73,10 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     return type;
 }
 
+tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *self, str name) {
+    return str_map_get_ptr(self->definitions, name);
+}
+
 tl_monotype const *tl_type_registry_nil(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Nil"), null);
 }

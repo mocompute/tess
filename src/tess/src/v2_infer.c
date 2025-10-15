@@ -113,9 +113,9 @@ static str tl_type_constructor_def_from_user_type(tl_infer *self, ast_node const
 
 tl_monotype const *tl_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_user_type_definition == node->tag);
-    str           cons_name = tl_type_constructor_def_from_user_type(self, node);
-    u32           arity     = node->user_type_def.n_fields;
-    tl_monotype **types     = node->user_type_def.field_types_v2;
+    str                 cons_name = tl_type_constructor_def_from_user_type(self, node);
+    u32                 arity     = node->user_type_def.n_fields;
+    tl_monotype const **types     = node->user_type_def.field_types_v2;
 
     // field name types must be concrete
     for (u32 i = 0; i < arity; ++i) {
@@ -130,8 +130,40 @@ tl_monotype const *tl_type_constructor_from_user_type(tl_infer *self, ast_node c
         head       = (tl_monotype *)head->next; // const cast
     }
 
-    // TODO this should probably be cached somewhere
+    // TODO this should probably be cached somewhere.
     return tl_type_registry_instantiate(self->registry, cons_name, head);
+}
+
+void load_user_type(tl_infer *self, ast_node *node) {
+    if (!ast_node_is_utd(node)) return;
+    str name = ast_node_str(node->user_type_def.name);
+    if (tl_type_registry_get_def(self->registry, name)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+        return;
+    }
+
+    tl_type_constructor_def_from_user_type(self, node);
+
+    u32 arity                          = node->user_type_def.n_fields;
+
+    node->user_type_def.field_types_v2 = alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
+
+    ast_node **annotations             = node->user_type_def.field_annotations;
+    for (u32 i = 0; i < arity; ++i) {
+        str                            ann = ast_node_str(annotations[i]);
+        tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
+        if (!def) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
+            return;
+        }
+
+        // TODO support type constructor arguments
+        // FIXME: we are trying to use type constructors for user types and it's not a great match.
+        // We need to be able to look up a user type by name, regardless of arity, and without type
+        // arguments.
+        node->user_type_def.field_types_v2[i] = tl_type_registry_instantiate(self->registry, ann, null);
+    }
 }
 
 static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
@@ -1422,6 +1454,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
+    } else if (ast_node_is_utd(node)) {
+        return 0;
     } else {
         fatal("logic error");
     }
@@ -1514,6 +1548,8 @@ void             remove_generic_toplevels(tl_infer *self) {
         } else if (ast_node_is_let(node)) {
             name = node->let.name->symbol.name;
             type = tl_type_env_lookup(self->env, name);
+        } else if (ast_node_is_utd(node)) {
+            continue;
         } else fatal("logic error");
         if (str_eq(S("main"), name)) continue;
 
@@ -1565,17 +1601,18 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
 
-    if (self->errors.size) {
-        return 1;
-    }
+    if (self->errors.size) return 1;
+
+    // create user defined types
+    forall(i, nodes) load_user_type(self, nodes.v[i]);
+    if (self->errors.size) return 1;
 
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
     // preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
         hashmap *lex = map_create(self->transient, sizeof(str), 16);
-        forall(i, nodes) {
-            rename_variables(self, nodes.v[i], &lex);
-        }
+        forall(i, nodes) rename_variables(self, nodes.v[i], &lex);
+
         map_destroy(&lex);
     }
 
