@@ -712,7 +712,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     if (tl_monotype_is_concrete_no_arrow(mono)) {
         str cons_name = mono->cons->def->name;
         if (str_eq(S("Int"), cons_name)) {
-            return S("int64_t");
+            return S("long long");
         } else if (str_eq(S("Float"), cons_name)) {
             return S("double");
         } else if (str_eq(S("Bool"), cons_name)) {
