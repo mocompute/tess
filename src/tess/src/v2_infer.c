@@ -92,7 +92,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
-static str tl_type_constructor_def_from_user_type(tl_infer *self, ast_node const *node) {
+static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_user_type_definition == node->tag);
     str              name        = node->user_type_def.name->symbol.name;
     u32              arity       = node->user_type_def.n_fields;
@@ -101,37 +101,64 @@ static str tl_type_constructor_def_from_user_type(tl_infer *self, ast_node const
     str_array        field_names = {.alloc = self->arena};
     array_reserve(field_names, node->user_type_def.n_fields);
 
+    ast_node         **annotations = node->user_type_def.field_annotations;
+    tl_monotype const *field_types = null;
+    tl_monotype const *head        = null;
     for (u32 i = 0; i < arity; ++i) {
+        // field name
         assert(ast_node_is_symbol(fields[i]));
         array_push(field_names, fields[i]->symbol.name);
+
+        // field type
+        str                            ann = ast_node_str(annotations[i]);
+        tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
+        if (!def) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
+            return;
+        }
+
+        // TODO support type constructor arguments
+        tl_monotype const *field =
+          tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
+        ((tl_monotype *)field)->next = null;
+
+        if (!field_types) {
+            field_types = field;
+            head        = field;
+        } else {
+            ((tl_monotype *)head)->next = field; // const cast
+            head                        = head->next;
+        }
     }
     array_shrink(field_names);
 
-    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(field_names), arity);
-    return name;
+    // NOTE: zero arity, TODO support user types with type args
+    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(field_names), field_types, 0);
 }
 
-tl_monotype const *tl_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
+tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_user_type_definition == node->tag);
-    str                 cons_name = tl_type_constructor_def_from_user_type(self, node);
-    u32                 arity     = node->user_type_def.n_fields;
-    tl_monotype const **types     = node->user_type_def.field_types_v2;
+    str                 name     = ast_node_str(node->user_type_def.name);
+    u32                 n_fields = node->user_type_def.n_fields;
+    tl_monotype const **types    = node->user_type_def.field_types_v2;
 
     // field name types must be concrete
-    for (u32 i = 0; i < arity; ++i) {
+    for (u32 i = 0; i < n_fields; ++i) {
         if (!tl_monotype_is_concrete(types[i])) fatal("not concrete");
     }
 
     // construct a linked list of monotypes
-    assert(arity > 0);
+    assert(n_fields > 0);
     tl_monotype *head = (tl_monotype *)types[0]; // const cast
-    for (u32 i = 1; i < arity; ++i) {
+    for (u32 i = 1; i < n_fields; ++i) {
         head->next = types[i];
         head       = (tl_monotype *)head->next; // const cast
     }
 
     // TODO this should probably be cached somewhere.
-    return tl_type_registry_instantiate(self->registry, cons_name, head);
+    // TODO support type arguments for user types
+    return tl_type_registry_instantiate(self->registry, name, null);
 }
 
 void load_user_type(tl_infer *self, ast_node *node) {
@@ -142,28 +169,7 @@ void load_user_type(tl_infer *self, ast_node *node) {
         return;
     }
 
-    tl_type_constructor_def_from_user_type(self, node);
-
-    u32 arity                          = node->user_type_def.n_fields;
-
-    node->user_type_def.field_types_v2 = alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
-
-    ast_node **annotations             = node->user_type_def.field_annotations;
-    for (u32 i = 0; i < arity; ++i) {
-        str                            ann = ast_node_str(annotations[i]);
-        tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
-        if (!def) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
-            return;
-        }
-
-        // TODO support type constructor arguments
-        // FIXME: we are trying to use type constructors for user types and it's not a great match.
-        // We need to be able to look up a user type by name, regardless of arity, and without type
-        // arguments.
-        node->user_type_def.field_types_v2[i] = tl_type_registry_instantiate(self->registry, ann, null);
-    }
+    create_type_constructor_from_user_type(self, node);
 }
 
 static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {

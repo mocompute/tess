@@ -22,12 +22,12 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
 
     str_sized empty        = {0};
 
-    tl_type_constructor_def_create(self, S("Nil"), empty, 0);
-    tl_type_constructor_def_create(self, S("Int"), empty, 0);
-    tl_type_constructor_def_create(self, S("Bool"), empty, 0);
-    tl_type_constructor_def_create(self, S("Float"), empty, 0);
-    tl_type_constructor_def_create(self, S("String"), empty, 0);
-    tl_type_constructor_def_create(self, S("Ptr"), empty, 1);
+    tl_type_constructor_def_create(self, S("Nil"), empty, null, 0);
+    tl_type_constructor_def_create(self, S("Int"), empty, null, 0);
+    tl_type_constructor_def_create(self, S("Bool"), empty, null, 0);
+    tl_type_constructor_def_create(self, S("Float"), empty, null, 0);
+    tl_type_constructor_def_create(self, S("String"), empty, null, 0);
+    tl_type_constructor_def_create(self, S("Ptr"), empty, null, 1);
 
     tl_type_registry_instantiate(self, S("Nil"), null);
     tl_type_registry_instantiate(self, S("Int"), null);
@@ -39,10 +39,12 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
 }
 
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                                              str_sized field_names, u32 arity) {
+                                                              str_sized          field_names,
+                                                              tl_monotype const *field_types, u32 arity) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
     def->field_names             = field_names;
+    def->field_types             = field_types;
     def->arity                   = arity;
     str_map_set_ptr(&self->definitions, def->name, def);
     return def;
@@ -65,6 +67,11 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
     *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(self->alloc, args)};
+    if (def->field_types) {
+        tl_monotype const *def_types_copy = tl_monotype_list_copy(self->alloc, def->field_types);
+        if (!inst->args) inst->args = def_types_copy;
+        else tl_monotype_list_concat((tl_monotype *)inst->args, def_types_copy); // const cast
+    }
 
     type  = new (self->alloc, tl_monotype);
     *type = (tl_monotype){.tag = tl_cons, .cons = inst};
