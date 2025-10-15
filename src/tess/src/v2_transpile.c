@@ -117,15 +117,20 @@ static str make_struct_name(allocator *alloc, tl_monotype const *type, u64 *out_
     return str_init(alloc, buf);
 }
 
-static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str make_tuple_field_name(u32 i) {
     char buf[64];
-    str  res = next_res(self);
+    snprintf(buf, sizeof buf, "x%u", i);
+    return str_init_small(buf);
+}
+
+static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node) {
+
+    str res = next_res(self);
     generate_decl(self, res, type);
 
     tl_monotype const *hd = type->list.head;
     for (u32 i = 0; hd; hd = hd->next, ++i) {
-        snprintf(buf, sizeof buf, "x%u", i);
-        str field = str_init_small(buf);
+        str field = make_tuple_field_name(i);
 
         // evaluate tuple element
         str value = generate_expr(self, hd, node->tuple.elements[i]);
@@ -137,7 +142,6 @@ static str generate_tuple(transpile *self, tl_monotype const *type, ast_node con
 }
 
 static void generate_struct(transpile *self, tl_monotype const *type) {
-    char buf[64];
 
     if (tl_monotype_is_tuple(type)) {
         u64 hash;
@@ -151,8 +155,7 @@ static void generate_struct(transpile *self, tl_monotype const *type) {
 
         tl_monotype const *hd = type->list.head;
         for (u32 i = 0; hd; hd = hd->next, ++i) {
-            snprintf(buf, sizeof buf, "x%u", i);
-            str field = str_init_small(buf);
+            str field = make_tuple_field_name(i);
             generate_decl(self, field, hd);
         }
 
@@ -165,8 +168,6 @@ static void generate_struct(transpile *self, tl_monotype const *type) {
 static void generate_structs(transpile *self) {
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
-        // TODO abstract this iteration over env's internal map
-        // str                key  = str_init_allocated_n((char *)iter.key_ptr, iter.key_size);
         tl_polytype const *type = *(tl_polytype const **)iter.data;
 
         if (type->type->tag == tl_tuple) {
