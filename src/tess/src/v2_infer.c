@@ -94,33 +94,57 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_user_type_definition == node->tag);
-    str              name        = node->user_type_def.name->symbol.name;
-    u32              arity       = node->user_type_def.n_fields;
-    ast_node *const *fields      = node->user_type_def.field_names;
+    str                    name                = node->user_type_def.name->symbol.name;
+    u32                    n_type_arguments    = node->user_type_def.n_type_arguments;
+    u32                    n_fields            = node->user_type_def.n_fields;
+    ast_node             **type_arguments      = node->user_type_def.type_arguments;
+    ast_node             **fields              = node->user_type_def.field_names;
 
-    str_array        field_names = {.alloc = self->arena};
+    hashmap               *type_argument_map   = map_create(self->transient, sizeof(tl_type_variable), 8);
+    str_array              type_argument_names = {.alloc = self->arena};
+    tl_type_variable_array type_argument_tvs   = {.alloc = self->arena};
+    for (u32 i = 0; i < n_type_arguments; ++i) {
+        ast_node const *ta = type_arguments[i];
+        assert(ast_node_is_symbol(ta));
+        str              ta_name = ast_node_str(ta);
+        tl_type_variable fresh   = tl_type_subs_fresh(self->subs);
+        str_map_set(&type_argument_map, ta_name, &fresh);
+
+        array_push(type_argument_names, ta_name);
+        array_push(type_argument_tvs, fresh);
+    }
+
+    str_array field_names = {.alloc = self->arena};
     array_reserve(field_names, node->user_type_def.n_fields);
 
     ast_node         **annotations = node->user_type_def.field_annotations;
     tl_monotype const *field_types = null;
     tl_monotype const *head        = null;
-    for (u32 i = 0; i < arity; ++i) {
+    for (u32 i = 0; i < n_fields; ++i) {
         // field name
         assert(ast_node_is_symbol(fields[i]));
         array_push(field_names, fields[i]->symbol.name);
 
-        // field type
-        str                            ann = ast_node_str(annotations[i]);
-        tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
-        if (!def) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
-            return;
-        }
+        // field type, could be type argument
+        str                ann   = ast_node_str(annotations[i]);
+        tl_monotype const *field = null;
 
-        // TODO support type constructor arguments
-        tl_monotype const *field =
-          tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
+        if (str_map_contains(type_argument_map, ann)) {
+            // field type is a type argument
+            tl_type_variable const *var = str_map_get(type_argument_map, ann);
+            assert(var);
+            field = tl_monotype_create_tv(self->arena, *var);
+        } else {
+            // field type is an existing type
+            tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
+            if (!def) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
+                return;
+            }
+
+            field = tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
+        }
         ((tl_monotype *)field)->next = null;
 
         if (!field_types) {
@@ -131,10 +155,12 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
             head                        = head->next;
         }
     }
-    array_shrink(field_names);
 
-    // NOTE: zero arity, TODO support user types with type args
-    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(field_names), field_types, 0);
+    array_shrink(field_names);
+    array_shrink(type_argument_names);
+    array_shrink(type_argument_tvs);
+    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(type_argument_names),
+                                   type_argument_tvs.v, (str_sized)sized_all(field_names), field_types);
 }
 
 tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {

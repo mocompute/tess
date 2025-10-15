@@ -21,13 +21,16 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
     self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
 
     str_sized empty        = {0};
+    str_sized unary        = {.size = 1, .v = alloc_malloc(alloc, sizeof(str))};
+    unary.v[0]             = str_init_small("a");
 
-    tl_type_constructor_def_create(self, S("Nil"), empty, null, 0);
-    tl_type_constructor_def_create(self, S("Int"), empty, null, 0);
-    tl_type_constructor_def_create(self, S("Bool"), empty, null, 0);
-    tl_type_constructor_def_create(self, S("Float"), empty, null, 0);
-    tl_type_constructor_def_create(self, S("String"), empty, null, 0);
-    tl_type_constructor_def_create(self, S("Ptr"), empty, null, 1);
+    tl_type_constructor_def_create(self, S("Nil"), empty, null, empty, null);
+    tl_type_constructor_def_create(self, S("Int"), empty, null, empty, null);
+    tl_type_constructor_def_create(self, S("Bool"), empty, null, empty, null);
+    tl_type_constructor_def_create(self, S("Float"), empty, null, empty, null);
+    tl_type_constructor_def_create(self, S("String"), empty, null, empty, null);
+
+    tl_type_constructor_def_create(self, S("Ptr"), unary, null, empty, null);
 
     tl_type_registry_instantiate(self, S("Nil"), null);
     tl_type_registry_instantiate(self, S("Int"), null);
@@ -39,13 +42,17 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
 }
 
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                                              str_sized          field_names,
-                                                              tl_monotype const *field_types, u32 arity) {
+                                                              str_sized               type_variable_names,
+                                                              tl_type_variable const *type_variables,
+                                                              str_sized               field_names,
+                                                              tl_monotype const      *field_types) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
+    def->type_variable_names     = type_variable_names;
+    def->type_variables          = type_variables;
     def->field_names             = field_names;
     def->field_types             = field_types;
-    def->arity                   = arity;
+
     str_map_set_ptr(&self->definitions, def->name, def);
     return def;
 }
@@ -63,7 +70,7 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
 
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
-    if (tl_monotype_list_length(args) != def->arity) return null;
+    if (tl_monotype_list_length(args) != def->type_variable_names.size) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
     *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(self->alloc, args)};
@@ -522,7 +529,7 @@ void tl_monotype_absorb_fvs(allocator *alloc, tl_monotype *self, str_sized fvs) 
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def const *self) {
     u64 hash = str_hash64(self->name);
-    hash     = hash64_combine(hash, &self->arity, sizeof self->arity);
+    hash     = hash64_combine(hash, &self->type_variable_names.size, sizeof self->type_variable_names.size);
     return hash;
 }
 

@@ -1153,10 +1153,20 @@ static int struct_declaration(parser *self) {
         goto error;
     }
 
-    ast_node      *name        = self->result;
+    ast_node      *name           = self->result;
 
-    ast_node_array field_names = {.alloc = self->ast_arena};
-    ast_node_array field_types = {.alloc = self->ast_arena};
+    ast_node_array field_names    = {.alloc = self->ast_arena};
+    ast_node_array field_types    = {.alloc = self->ast_arena};
+    ast_node_array type_arguments = {.alloc = self->ast_arena};
+
+    // optional type arguments
+    while (1) {
+        if (0 == a_try(self, a_identifier)) {
+            array_push(type_arguments, self->result);
+        } else {
+            break;
+        }
+    }
 
     if (a_try(self, a_equal_sign)) {
         self->error.tag = tl_err_expected_equal_sign;
@@ -1167,10 +1177,13 @@ static int struct_declaration(parser *self) {
     if (0 == a_try_special(self, a_end_of_block)) {
         ast_node *node                        = ast_node_create(self->ast_arena, ast_user_type_definition);
         node->user_type_def.name              = name;
+        node->user_type_def.type_arguments    = null;
         node->user_type_def.field_annotations = null;
         node->user_type_def.field_names       = null;
         node->user_type_def.field_types       = null;
+        node->user_type_def.field_types_v2    = null;
         node->user_type_def.n_fields          = 0;
+        node->user_type_def.n_type_arguments  = 0;
         result_ast_node(self, node);
         goto success;
     }
@@ -1211,27 +1224,34 @@ static int struct_declaration(parser *self) {
         if (0 == a_try_special(self, a_end_of_block)) {
 
         end_of_block: {
-            ast_node *node           = ast_node_create(self->ast_arena, ast_user_type_definition);
-            node->user_type_def.name = null;
+            ast_node *node                     = ast_node_create(self->ast_arena, ast_user_type_definition);
+            node->user_type_def.name           = null;
+            node->user_type_def.type_arguments = null;
             node->user_type_def.field_annotations = null;
             node->user_type_def.field_names       = null;
             node->user_type_def.field_types       = null;
+            node->user_type_def.field_types_v2    = null;
             node->user_type_def.n_fields          = 0;
+            node->user_type_def.n_type_arguments  = 0;
 
             node->user_type_def.name              = name;
 
             array_shrink(field_names);
             node->user_type_def.field_names = field_names.v;
 
-            if (field_names.size > 0xff) {
+            if (field_names.size > 0xff || type_arguments.size > 0xff) {
                 too_many_arguments(self);
                 goto error;
             }
 
-            node->user_type_def.n_fields = (u8)field_names.size;
+            node->user_type_def.n_fields         = (u8)field_names.size;
+            node->user_type_def.n_type_arguments = (u8)type_arguments.size;
 
             array_shrink(field_types);
             node->user_type_def.field_annotations = field_types.v;
+
+            array_shrink(type_arguments);
+            node->user_type_def.type_arguments = type_arguments.v;
 
             result_ast_node(self, node);
             goto success;
