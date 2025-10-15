@@ -93,7 +93,7 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 }
 
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
-    assert(ast_user_type_definition == node->tag);
+    assert(ast_node_is_utd(node));
     str                    name                = node->user_type_def.name->symbol.name;
     u32                    n_type_arguments    = node->user_type_def.n_type_arguments;
     u32                    n_fields            = node->user_type_def.n_fields;
@@ -161,10 +161,13 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
     array_shrink(type_argument_tvs);
     tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(type_argument_names),
                                    type_argument_tvs.v, (str_sized)sized_all(field_names), field_types);
+
+    // FIXME: add something to the type environment. For generic structs, what do we add? What is the
+    // analogue to a generic function? A constructor_inst with null arguments? Or a separate tl_tag?
 }
 
 tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
-    assert(ast_user_type_definition == node->tag);
+    assert(ast_node_is_utd(node));
     str                 name     = ast_node_str(node->user_type_def.name);
     u32                 n_fields = node->user_type_def.n_fields;
     tl_monotype const **types    = node->user_type_def.field_types_v2;
