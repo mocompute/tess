@@ -46,6 +46,8 @@ struct tl_infer {
 
 //
 
+static void apply_subs_to_ast(tl_infer *);
+
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
 static void log_env(tl_infer const *);
@@ -1146,7 +1148,15 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     } break;
 
     case ast_assignment:
+        rename_variables(self, node->assignment.name, lex);
+        rename_variables(self, node->assignment.value, lex);
+        break;
+
     case ast_labelled_tuple:
+        for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i)
+            rename_variables(self, node->labelled_tuple.assignments[i], lex);
+        break;
+
     case ast_string:
     case ast_nil:
     case ast_any:
@@ -1550,9 +1560,7 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
-static void apply_subs_to_ast(tl_infer *);
-
-int         tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
+int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
