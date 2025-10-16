@@ -1038,6 +1038,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     utd->user_type_def.name->symbol.name     = name_inst;
     utd->type_v2                             = tl_polytype_absorb_mono(self->arena, inst);
     toplevel_add(self, name_inst, utd);
+    tl_type_env_insert(self->env, name_inst, utd->type_v2);
 
     node->named_application.name->symbol.original = node->named_application.name->symbol.name;
     node->named_application.name->symbol.name     = name_inst;
@@ -1662,7 +1663,8 @@ void             remove_generic_toplevels(tl_infer *self) {
             name = node->let.name->symbol.name;
             type = tl_type_env_lookup(self->env, name);
         } else if (ast_node_is_utd(node)) {
-            continue;
+            name = node->user_type_def.name->symbol.name;
+            type = tl_type_env_lookup(self->env, name);
         } else fatal("logic error");
         if (str_eq(S("main"), name)) continue;
 
