@@ -883,19 +883,26 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         case tl_poly_def: {
             // a type constructor
 
-            ast_arguments_iter iter    = ast_node_arguments_iter(node);
+            tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, name);
+            if (!def) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+                return 1;
+            }
 
-            tl_polytype const *app     = make_arrow(self, iter.nodes, null);
-            str                app_str = tl_polytype_to_string(self->transient, app);
-            log(self, "type constructor application: callsite '%.*s' arrow: %.*s", str_ilen(name),
-                str_buf(&name), str_ilen(app_str), str_buf(&app_str));
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            if (tl_monotype_list_length(def->field_types) != iter.count) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+                return 1;
+            }
 
-            // FIXME: not sure how to organize the type variables and the field initialisers
-            assert(!tl_polytype_is_scheme(app) && tl_monotype_is_arrow(app->type));
-            tl_monotype const *inst =
-              tl_type_registry_instantiate(self->registry, name, app->type->list.head);
+            tl_monotype const *inst = tl_type_constructor_instantiate(self->arena, def, self->subs);
 
-            if (constrain_mono(self, app->type, inst, node)) return 1;
+            tl_monotype const *hd   = inst->cons_inst->args;
+            ast_node          *arg;
+            while ((arg = ast_arguments_next(&iter))) {
+                if (constrain_pm(self, ctx, arg->type_v2, hd, node)) return 1;
+                hd = hd->next;
+            }
 
         } break;
         }

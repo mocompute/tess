@@ -88,6 +88,9 @@ tl_monotype const             *tl_type_registry_bool(tl_type_registry *);
 tl_monotype const             *tl_type_registry_string(tl_type_registry *);
 tl_monotype const             *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
 
+nodiscard tl_monotype const   *tl_type_constructor_instantiate(allocator *, tl_type_constructor_def const *,
+                                                               tl_type_subs *);
+
 // -- type environment --
 
 nodiscard tl_type_env *tl_type_env_create(allocator *, allocator *) mallocfun;

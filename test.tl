@@ -4,4 +4,4 @@ struct Point a = x : a, y : a end
 let id x = x
 
 let main () =
-  Point 1 2
+  Point 1 2 3

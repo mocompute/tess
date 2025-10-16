@@ -31,7 +31,8 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
 
     tl_type_variable_sized unary = {.size = 1, .v = alloc_malloc(alloc, sizeof(tl_type_variable))};
     unary.v[0]                   = tl_type_subs_fresh(subs);
-    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, null);
+    tl_monotype const *tv_type   = tl_monotype_create_tv(alloc, unary.v[0]);
+    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, tv_type);
 
     tl_type_registry_instantiate(self, S("Nil"), null);
     tl_type_registry_instantiate(self, S("Int"), null);
@@ -70,7 +71,7 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
 
-    u32 arity = def->type_variables.size + tl_monotype_list_length(def->field_types);
+    u32 arity = tl_monotype_list_length(def->field_types);
     if (tl_monotype_list_length(args) != arity) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
@@ -81,6 +82,31 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     map_set_ptr(&self->instances, &key, sizeof key, type);
 
     return type;
+}
+
+static void        replace_tv(tl_monotype *, hashmap *);
+
+tl_monotype const *tl_type_constructor_instantiate(allocator *alloc, tl_type_constructor_def const *def,
+                                                   tl_type_subs *subs) {
+
+    tl_type_constructor_inst *inst = new (alloc, tl_type_constructor_inst);
+    *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(alloc, def->field_types)};
+
+    tl_monotype *fresh = new (alloc, tl_monotype);
+    *fresh             = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
+
+    hashmap *q_to_t    = map_create(alloc, sizeof(tl_type_variable), 8);
+
+    forall(i, def->type_variables) {
+        // make a fresh variable for each quantified type variable
+        tl_type_variable tv = tl_type_subs_fresh(subs);
+        map_set(&q_to_t, &def->type_variables.v[i], sizeof(tl_type_variable), &tv);
+    }
+
+    replace_tv(fresh, q_to_t);
+
+    map_destroy(&q_to_t);
+    return fresh;
 }
 
 tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *self, str name) {
