@@ -159,11 +159,13 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
     array_shrink(field_names);
     array_shrink(type_argument_names);
     array_shrink(type_argument_tvs);
-    tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(type_argument_names),
-                                   type_argument_tvs.v, (str_sized)sized_all(field_names), field_types);
 
-    // FIXME: add something to the type environment. For generic structs, what do we add? What is the
-    // analogue to a generic function? A constructor_inst with null arguments? Or a separate tl_tag?
+    tl_type_constructor_def const *def =
+      tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(type_argument_names),
+                                     type_argument_tvs.v, (str_sized)sized_all(field_names), field_types);
+
+    tl_polytype const *poly = tl_polytype_create_def(self->arena, def);
+    tl_type_env_insert(self->env, name, poly);
 }
 
 tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
@@ -1490,6 +1492,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
     } else if (ast_node_is_utd(node)) {
+        load_user_type(self, node);
         return 0;
     } else {
         fatal("logic error");
@@ -1637,10 +1640,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
 
-    if (self->errors.size) return 1;
-
-    // create user defined types
-    forall(i, nodes) load_user_type(self, nodes.v[i]);
     if (self->errors.size) return 1;
 
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while

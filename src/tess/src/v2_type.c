@@ -183,6 +183,14 @@ tl_polytype const *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) 
     return self;
 }
 
+tl_polytype const *tl_polytype_create_def(allocator *alloc, tl_type_constructor_def const *def) {
+    tl_polytype *self = alloc_malloc(alloc, sizeof *self);
+    self->tag         = tl_poly_def;
+    self->quantifiers = (tl_type_variable_sized){0};
+    self->def         = def;
+    return self;
+}
+
 tl_polytype const *tl_polytype_create_tv(allocator *alloc, tl_type_variable tv) {
     tl_monotype const *mono = tl_monotype_create_tv(alloc, tv);
     return tl_polytype_absorb_mono(alloc, mono);

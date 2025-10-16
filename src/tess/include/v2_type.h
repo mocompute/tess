@@ -142,6 +142,7 @@ nodiscard tl_polytype const *tl_polytype_absorb_mono(allocator *,
 nodiscard tl_polytype const *tl_polytype_create_qv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_weak(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_polytype const *tl_polytype_create_def(allocator *, tl_type_constructor_def const *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
