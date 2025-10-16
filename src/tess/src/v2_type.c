@@ -564,6 +564,10 @@ int tl_monotype_is_list(tl_monotype const *self) {
     return self && tl_list == self->tag;
 }
 
+int tl_monotype_is_inst(tl_monotype const *self) {
+    return self && tl_cons_inst == self->tag;
+}
+
 int tl_monotype_is_tuple(tl_monotype const *self) {
     return self && tl_tuple == self->tag;
 }

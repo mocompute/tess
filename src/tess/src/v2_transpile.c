@@ -184,18 +184,24 @@ static void generate_structs(transpile *self) {
 
 static void generate_user_types(transpile *self) {
 
-    forall(idx, self->nodes) {
-        ast_node const *node = self->nodes.v[idx];
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+
         if (!ast_node_is_utd(node)) continue;
-        str                            name = toplevel_name(node);
-        tl_type_constructor_def const *def  = tl_type_registry_get_def(self->registry, name);
+        str                name = toplevel_name(node);
+        tl_polytype const *type = node->type_v2;
+        if (!tl_polytype_is_concrete(type)) fatal("type scheme");
+        if (!tl_monotype_is_inst(type->type)) fatal("not a type constructor instance");
+
+        tl_type_constructor_def const *def = type->type->cons_inst->def;
         if (!def) fatal("missing type def");
 
         cat(self, S("typedef struct "));
         cat(self, name);
         catln(self, S(" {"));
 
-        tl_monotype const *hd = def->field_types;
+        tl_monotype const *hd = type->type->cons_inst->args;
         forall(i, def->field_names) {
             generate_decl(self, def->field_names.v[i], hd);
             hd = hd->next;
@@ -314,12 +320,15 @@ static void generate_funcall_head(transpile *self, tl_monotype const *type, str 
 }
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype const *arrow) {
-    // generate args to match arrow type
+    // generate args to match arrow type or type constructor
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
-    assert(tl_list == arrow->tag);
-    tl_monotype const *hd = arrow->list.head;
+    tl_monotype const *hd = null;
+
+    if (tl_list == arrow->tag) hd = arrow->list.head;
+    else if (tl_cons_inst == arrow->tag) hd = arrow->cons_inst->args;
+    else fatal("runtime error");
 
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");

@@ -1040,6 +1040,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     toplevel_add(self, name_inst, utd);
     tl_type_env_insert(self->env, name_inst, utd->type_v2);
 
+    // update callsite
     node->named_application.name->symbol.original = node->named_application.name->symbol.name;
     node->named_application.name->symbol.name     = name_inst;
 

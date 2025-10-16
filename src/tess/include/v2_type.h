@@ -135,6 +135,7 @@ u64       tl_monotype_list_hash64(u64, tl_monotype const *);
 str       tl_monotype_to_string(allocator *, tl_monotype const *);
 int       tl_monotype_is_nil(tl_monotype const *);
 int       tl_monotype_is_list(tl_monotype const *);
+int       tl_monotype_is_inst(tl_monotype const *);
 int       tl_monotype_is_tuple(tl_monotype const *);
 int       tl_monotype_is_concrete(tl_monotype const *);
 int       tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
