@@ -43,6 +43,7 @@
     X(tl_err_expected_addressable, "expected_addressable")                                                 \
     X(tl_err_expected_dereferenceable, "expected_dereferenceable")                                         \
     X(tl_err_expected_identifier, "expected_identifier")                                                   \
+    X(tl_err_expected_identifier_or_nil, "expected_identifier_or_nil")                                     \
     X(tl_err_expected_type, "expected_type")                                                               \
     X(tl_err_expected_literal, "expected_literal")                                                         \
     X(tl_err_expected_number, "expected_number")                                                           \

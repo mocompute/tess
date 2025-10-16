@@ -116,6 +116,7 @@ static int           a_field_setter(parser *);
 static int           a_field_pointer_access(parser *);
 static int           a_field_pointer_setter(parser *);
 static int           a_identifier(parser *);
+static int           a_identifier_or_nil(parser *);
 static int           a_identifier_typed(parser *);
 static int           a_labelled_tuple(parser *);
 static int           a_value(parser *);
@@ -628,38 +629,18 @@ error:
     return 1;
 }
 
+static int a_identifier_or_nil(parser *p) {
+    if (0 == a_try(p, a_identifier)) return 0;
+    if (0 == a_try(p, a_nil)) return 0;
+    p->error.tag = tl_err_expected_identifier_or_nil;
+    return 1;
+}
+
 static int a_type_identifier(parser *self) {
     // TODO rename this because it's no longer just an identifier
 
-    // TODO so much duplication in this function...
-
     // * int -> int ==> (*int) -> int, not *(int -> int)
     // * has higher precedence than ->
-
-    if (0 == a_try(self, a_nil)) {
-        ast_node *nil = self->result;
-
-        // followed by arrow?
-        if (0 == a_try(self, a_arrow)) {
-            ast_node *right = null;
-
-            log(self, "begin arrow type");
-            if (a_try(self, a_type_identifier)) {
-                self->error.tag = tl_err_expected_type;
-                return 1;
-            }
-            right             = self->result;
-
-            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
-
-            node->arrow.left  = nil;
-            node->arrow.right = right;
-
-            return result_ast_node(self, node);
-        }
-
-        return 0;
-    }
 
     int is_pointer = 0;
     if (0 == a_try(self, a_star)) {
@@ -667,7 +648,17 @@ static int a_type_identifier(parser *self) {
         log(self, "begin pointer type");
     }
 
-    if (0 == a_try(self, a_identifier)) {
+    if (0 == a_try(self, function_application)) {
+        // a type constructor with arguments
+        if (is_pointer) {
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ptr->address_of.target = self->result;
+            return result_ast_node(self, ptr);
+        }
+        return 0;
+    }
+
+    if (0 == a_try(self, a_identifier_or_nil)) {
         // FIXME for now we treat ellipsis as a textual identifier
         ast_node *left  = self->result;
         ast_node *right = null;
