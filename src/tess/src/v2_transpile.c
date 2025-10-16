@@ -510,7 +510,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     case ast_address_of:   {
         if (!tl_monotype_is_ptr(type)) fatal("runtime error");
-        tl_monotype const *target_ty = type->cons->args;
+        tl_monotype const *target_ty = type->cons_inst->args;
         return str_cat(self->transient, S("&"), generate_expr(self, target_ty, node->address_of.target));
     } break;
     case ast_dereference: {
@@ -746,7 +746,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype const *mono = type->type;
     if (tl_monotype_is_concrete_no_arrow(mono)) {
-        str cons_name = mono->cons->def->name;
+        str cons_name = mono->cons_inst->def->name;
         if (str_eq(S("Int"), cons_name)) {
             return S("long long");
         } else if (str_eq(S("Float"), cons_name)) {
@@ -758,7 +758,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
         } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
         } else if (str_eq(S("Ptr"), cons_name)) {
-            tl_polytype wrap = tl_polytype_wrap(mono->cons->args); // 1 element
+            tl_polytype wrap = tl_polytype_wrap(mono->cons_inst->args); // 1 element
             return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
         } else {
             return cons_name;

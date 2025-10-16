@@ -747,10 +747,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
             if (target_ty && tl_polytype_is_concrete(target_ty) && tl_monotype_is_ptr(target_ty->type)) {
                 // ptr to concrete type
-                tl_monotype const *deref = target_ty->type->cons->args;
+                tl_monotype const *deref = target_ty->type->cons_inst->args;
                 if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
             } else if (target_ty && tl_monotype_is_ptr(target_ty->type)) {
-                tl_monotype const *deref = target_ty->type->cons->args;
+                tl_monotype const *deref = target_ty->type->cons_inst->args;
                 if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
             }
         }

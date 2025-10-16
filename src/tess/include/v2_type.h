@@ -37,7 +37,7 @@ typedef struct tl_monotype {
     struct tl_monotype const *next;
     union {
         tl_type_variable                var;
-        tl_type_constructor_inst const *cons;
+        tl_type_constructor_inst const *cons_inst;
         struct {
             struct tl_monotype const *head;
             str_sized                *fvs;
