@@ -93,6 +93,30 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
+static tl_polytype const *node_to_type(tl_infer *self, ast_node const *node) {
+    // Int => concrete type
+    // Point a => generic type
+    if (ast_node_is_symbol(node)) {
+        str                name = ast_node_str(node);
+        tl_monotype const *ty   = tl_type_registry_instantiate(self->registry, name, null);
+        if (!ty) return null;
+        return tl_polytype_absorb_mono(self->arena, ty);
+    }
+
+    if (ast_node_is_nfa(node)) {
+        str               name = ast_node_str(node->named_application.name);
+        tl_monotype_array arr  = {.alloc = self->transient};
+        array_reserve(arr, node->named_application.n_arguments);
+
+        for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
+            tl_polytype const *ty = node_to_type(self, node->named_application.arguments[i]);
+            if (!ty || !tl_polytype_is_concrete(ty)) fatal("runtime error");
+
+            // FIXME: finish design of generic types
+        }
+    }
+}
+
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_node_is_utd(node));
     str                    name              = node->user_type_def.name->symbol.name;
@@ -124,26 +148,36 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
         assert(ast_node_is_symbol(fields[i]));
         array_push(field_names, fields[i]->symbol.name);
 
-        // field type, could be type argument
-        str                ann   = ast_node_str(annotations[i]);
+        // field type, could be type argument, or type constructor
         tl_monotype const *field = null;
+        if (ast_node_is_symbol(annotations[i])) {
+            str ann = ast_node_str(annotations[i]);
 
-        if (str_map_contains(type_argument_map, ann)) {
-            // field type is a type argument
-            tl_type_variable const *var = str_map_get(type_argument_map, ann);
-            assert(var);
-            field = tl_monotype_create_tv(self->arena, *var);
-        } else {
-            // field type is an existing type
-            tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
-            if (!def) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
-                return;
+            if (str_map_contains(type_argument_map, ann)) {
+                // field type is a type argument
+                tl_type_variable const *var = str_map_get(type_argument_map, ann);
+                assert(var);
+                field = tl_monotype_create_tv(self->arena, *var);
+            } else {
+                // field type is an existing type
+                tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
+                if (!def) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
+                    return;
+                }
+
+                field =
+                  tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
             }
+        } else if (ast_node_is_nfa(annotations[i])) {
+            ast_node const *nfa = annotations[i];
 
-            field = tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
+            field               = tl_type_registry_instantiate_ext(
+              self->registry, ast_node_str(nfa->named_application.name), nfa->named_application.arguments,
+              nfa->named_application.n_arguments);
         }
+
         ((tl_monotype *)field)->next = null;
 
         if (!field_types) {
