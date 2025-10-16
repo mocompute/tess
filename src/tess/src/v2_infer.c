@@ -47,6 +47,7 @@ struct tl_infer {
 //
 
 static void apply_subs_to_ast(tl_infer *);
+static str  next_instantiation(tl_infer *, str);
 
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
@@ -995,6 +996,55 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+typedef struct {
+    u64 name_hash;
+    u64 type_hash;
+} name_and_type;
+
+static int specialize_user_type(tl_infer *self, ast_node *node) {
+    str                name = node->named_application.name->symbol.name;
+
+    tl_monotype_array  arr  = {.alloc = self->transient};
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *arg;
+    while ((arg = ast_arguments_next(&iter))) {
+        tl_polytype const *poly = arg->type_v2;
+        assert(tl_polytype_is_concrete(poly));
+        array_push(arr, poly->type);
+    }
+    forall(i, arr) {
+        if (i + i < arr.size) {
+            arr.v[i]->next = arr.v[i + 1];
+        }
+    }
+
+    tl_monotype const *inst     = tl_type_registry_instantiate(self->registry, name, arr.v[0]);
+
+    name_and_type      key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    str               *existing = map_get(self->instances, &key, sizeof key);
+    if (existing) {
+        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
+        node->named_application.name->symbol.name     = *existing;
+        return 0;
+    }
+
+    str name_inst = next_instantiation(self, name);
+    map_set(&self->instances, &key, sizeof key, &name_inst);
+
+    ast_node *utd = toplevel_get(self, name);
+    assert(utd);
+    utd                                      = ast_node_clone(self->arena, utd);
+    utd->user_type_def.name->symbol.original = utd->user_type_def.name->symbol.name;
+    utd->user_type_def.name->symbol.name     = name_inst;
+    utd->type_v2                             = tl_polytype_absorb_mono(self->arena, inst);
+    toplevel_add(self, name_inst, utd);
+
+    node->named_application.name->symbol.original = node->named_application.name->symbol.name;
+    node->named_application.name->symbol.name     = name_inst;
+
+    return 0;
+}
+
 static ast_node *get_infer_target(ast_node *node) {
     if (ast_node_is_let(node)) {
         return node;
@@ -1022,6 +1072,8 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     if (!type) {
         return 0; // mutual recursion
     }
+
+    if (tl_poly_def == type->tag) return specialize_user_type(self, node);
 
     // instantiate generic function type being applied
     ast_arguments_iter iter     = ast_node_arguments_iter(node);
@@ -1272,13 +1324,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     case ast_user_type:            break;
     }
 }
-
-typedef struct {
-    u64 name_hash;
-    u64 type_hash;
-} name_and_type;
-
-static str next_instantiation(tl_infer *, str);
 
 static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype const *arrow) {
     (void)ctx;

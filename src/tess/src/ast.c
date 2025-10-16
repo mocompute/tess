@@ -222,16 +222,21 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
-        vclone->name        = ast_node_clone(alloc, vorig->name);
+        vclone->name             = ast_node_clone(alloc, vorig->name);
+        vclone->n_fields         = vorig->n_fields;
+        vclone->n_type_arguments = vorig->n_type_arguments;
 
-        vclone->n_fields    = vorig->n_fields;
-        vclone->field_types = vorig->field_types; // always in arena, never clone types
-        // FIXME: need to shallow clone types?
+        vclone->field_types      = vorig->field_types; // always in arena, never clone types
+                                                       // FIXME: need to shallow clone types?
+
+        vclone->field_annotations = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
+        vclone->field_names       = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
 
         for (u32 i = 0; i < vclone->n_fields; ++i) {
             vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
             vclone->field_names[i]       = ast_node_clone(alloc, vorig->field_names[i]);
         }
+
     } break;
     }
 

@@ -73,6 +73,11 @@ typedef struct {
     tl_type_uf_node *v;
 } tl_type_subs;
 
+typedef struct {
+    array_header;
+    tl_monotype **v;
+} tl_monotype_array;
+
 // -- type constructor and registry --
 
 nodiscard tl_type_registry    *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
