@@ -17,9 +17,9 @@ typedef struct {array_sized;  tl_type_variable *v;} tl_type_variable_sized;
 typedef struct {
     str                       name;
     str_sized                 type_variable_names; // quantified
-    tl_type_variable const   *type_variables;      // array
+    tl_type_variable const   *type_variables;      // array, n = type_variable_names.size
     str_sized                 field_names;         // user types
-    struct tl_monotype const *field_types;
+    struct tl_monotype const *field_types;         // linked list, field_names.size
 } tl_type_constructor_def;
 
 typedef struct {
@@ -48,7 +48,11 @@ typedef struct tl_monotype {
 
 typedef struct {
     tl_type_variable_sized quantifiers;
-    tl_monotype const     *type;
+    union {
+        tl_monotype const             *type;
+        tl_type_constructor_def const *def;
+    };
+    enum { tl_poly_mono, tl_poly_def } tag;
 } tl_polytype;
 
 typedef struct {
@@ -111,7 +115,7 @@ nodiscard tl_monotype const *tl_monotype_create_cons(allocator *,
                                                      tl_type_constructor_inst const *) mallocfun;
 nodiscard tl_monotype const *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
 u32                          tl_monotype_list_length(tl_monotype const *);
-tl_monotype const           *tl_monotype_list_copy(allocator *, tl_monotype const *);
+nodiscard tl_monotype const *tl_monotype_list_copy(allocator *, tl_monotype const *);
 tl_monotype const           *tl_monotype_list_last(tl_monotype const *);
 void                         tl_monotype_list_concat(tl_monotype *, tl_monotype const *);
 

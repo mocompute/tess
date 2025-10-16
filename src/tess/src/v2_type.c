@@ -167,6 +167,7 @@ int tl_type_env_check_missing_fvs(tl_type_env const *self, missing_fv_cb cb, voi
 
 tl_polytype const *tl_polytype_absorb_mono(allocator *alloc, tl_monotype const *mono) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
+    self->tag         = tl_poly_mono;
     self->quantifiers = (tl_type_variable_sized){0};
     self->type        = mono;
     return self;
@@ -174,6 +175,7 @@ tl_polytype const *tl_polytype_absorb_mono(allocator *alloc, tl_monotype const *
 
 tl_polytype const *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
+    self->tag         = tl_poly_mono;
     self->type        = tl_monotype_create_tv(alloc, qv);
     self->quantifiers =
       (tl_type_variable_sized){.size = 1, .v = alloc_malloc(alloc, sizeof(tl_type_variable))};
@@ -201,8 +203,26 @@ tl_polytype const *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *s
 
 tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
     tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
+    clone->tag         = orig->tag;
     clone->quantifiers = orig->quantifiers;
-    clone->type        = tl_monotype_clone(alloc, orig->type);
+
+    switch (orig->tag) {
+    case tl_poly_mono: clone->type = tl_monotype_clone(alloc, orig->type); break;
+
+    case tl_poly_def:
+        clone->def                             = alloc_malloc(alloc, sizeof *clone->def);
+        *(tl_type_constructor_def *)clone->def = *orig->def; // const cast
+        // strings are shallow copied
+
+        ((tl_type_constructor_def *)clone->def)->type_variables = alloc_malloc(
+          alloc, sizeof(tl_type_variable) * clone->def->type_variable_names.size); // const cast
+
+        memcpy((void *)clone->def->type_variables, orig->def->type_variables,
+               sizeof(tl_type_variable) * clone->def->type_variable_names.size);
+
+        ((tl_type_constructor_def *)clone->def)->field_types =
+          tl_monotype_list_copy(alloc, orig->def->field_types);
+    }
     return clone;
 }
 
@@ -256,6 +276,8 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
     case tl_weak:
         // weak type variables are not generalizable and therefore do
         // not participate in instantiation
+        break;
+
         break;
 
     case tl_cons_inst: {
@@ -440,8 +462,6 @@ tl_monotype const *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) 
         *clone =
           (tl_monotype){.tag = tl_cons_inst, .cons_inst = alloc_malloc(alloc, sizeof *clone->cons_inst)};
         *(tl_type_constructor_inst *)clone->cons_inst = *orig->cons_inst; // const cast
-
-        // the name is shallow copied
 
         // clone the args list
         ((tl_type_constructor_inst *)clone->cons_inst)->args =
@@ -637,18 +657,45 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
 str tl_polytype_to_string(allocator *alloc, tl_polytype const *self) {
     str_build b = str_build_init(alloc, 64);
 
-    if (self->quantifiers.size) {
-        str_build_cat(&b, S("forall"));
-        forall(i, self->quantifiers) {
-            char buf[64];
-            snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
-            str_build_cat(&b, S(" "));
-            str_build_cat(&b, str_init(alloc, buf));
-        }
-        str_build_cat(&b, S(". "));
-    }
+    switch (self->tag) {
 
-    str_build_cat(&b, tl_monotype_to_string(alloc, self->type));
+    case tl_poly_mono:
+        if (self->quantifiers.size) {
+            str_build_cat(&b, S("forall"));
+            forall(i, self->quantifiers) {
+                char buf[64];
+                snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
+                str_build_cat(&b, S(" "));
+                str_build_cat(&b, str_init(alloc, buf));
+            }
+            str_build_cat(&b, S(". "));
+        }
+
+        str_build_cat(&b, tl_monotype_to_string(alloc, self->type));
+        break;
+
+    case tl_poly_def: {
+
+        if (self->def->type_variable_names.size) {
+            str_build_cat(&b, S("forall"));
+            forall(i, self->def->type_variable_names) {
+                str_build_cat(&b, S(" "));
+                str_build_cat(&b, self->def->type_variable_names.v[i]);
+            }
+            str_build_cat(&b, S(". "));
+        }
+
+        str_build_cat(&b, self->def->name);
+
+        if (self->def->type_variable_names.size) {
+            forall(i, self->def->type_variable_names) {
+                str_build_cat(&b, S(" "));
+                str_build_cat(&b, self->def->type_variable_names.v[i]);
+            }
+        }
+
+    } break;
+    }
     return str_build_finish(&b);
 }
 
@@ -758,6 +805,7 @@ int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, 
 
         case tl_list:
         case tl_tuple:
+
             if (cb) cb(user, left, right);
             return 1;
         }
