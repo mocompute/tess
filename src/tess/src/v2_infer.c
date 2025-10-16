@@ -883,6 +883,20 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         case tl_poly_def: {
             // a type constructor
 
+            ast_arguments_iter iter    = ast_node_arguments_iter(node);
+
+            tl_polytype const *app     = make_arrow(self, iter.nodes, null);
+            str                app_str = tl_polytype_to_string(self->transient, app);
+            log(self, "type constructor application: callsite '%.*s' arrow: %.*s", str_ilen(name),
+                str_buf(&name), str_ilen(app_str), str_buf(&app_str));
+
+            // FIXME: not sure how to organize the type variables and the field initialisers
+            assert(!tl_polytype_is_scheme(app) && tl_monotype_is_arrow(app->type));
+            tl_monotype const *inst =
+              tl_type_registry_instantiate(self->registry, name, app->type->list.head);
+
+            if (constrain_mono(self, app->type, inst, node)) return 1;
+
         } break;
         }
 
@@ -1345,11 +1359,11 @@ static str next_instantiation(tl_infer *self, str name) {
 
 static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
 
-    ensure_tv(self, null, &result->type_v2);
+    if (result) ensure_tv(self, null, &result->type_v2);
 
     if (args.size == 0) {
         tl_monotype const *lhs   = tl_type_registry_nil(self->registry);
-        tl_monotype const *rhs   = tl_monotype_clone(self->arena, result->type_v2->type);
+        tl_monotype const *rhs   = result ? tl_monotype_clone(self->arena, result->type_v2->type) : null;
         tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
@@ -1369,7 +1383,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
         } else ensure_tv(self, null, &args.v[0]->type_v2);
 
         tl_monotype const *lhs   = tl_monotype_clone(self->arena, args.v[0]->type_v2->type);
-        tl_monotype const *rhs   = tl_monotype_clone(self->arena, result->type_v2->type);
+        tl_monotype const *rhs   = result ? tl_monotype_clone(self->arena, result->type_v2->type) : null;
         tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
         {
             str str = tl_monotype_to_string(self->transient, arrow);
@@ -1391,7 +1405,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
             ((tl_monotype *)hd)->next = arg; // const cast
             hd                        = arg;
         }
-        ((tl_monotype *)hd)->next = result->type_v2->type; // const cast
+        ((tl_monotype *)hd)->next = result ? result->type_v2->type : null; // const cast
 
         tl_monotype const *out    = tl_monotype_create_list(self->arena, head);
         {

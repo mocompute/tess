@@ -69,15 +69,12 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
 
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
-    if (tl_monotype_list_length(args) != def->type_variables.size) return null;
+
+    u32 arity = def->type_variables.size + tl_monotype_list_length(def->field_types);
+    if (tl_monotype_list_length(args) != arity) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
     *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(self->alloc, args)};
-    if (def->field_types) {
-        tl_monotype const *def_types_copy = tl_monotype_list_copy(self->alloc, def->field_types);
-        if (!inst->args) inst->args = def_types_copy;
-        else tl_monotype_list_concat((tl_monotype *)inst->args, def_types_copy); // const cast
-    }
 
     type  = new (self->alloc, tl_monotype);
     *type = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
@@ -107,7 +104,9 @@ tl_monotype const *tl_type_registry_string(tl_type_registry *self) {
 }
 
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *self, tl_monotype const *arg) {
-    return tl_type_registry_instantiate(self, S("Ptr"), arg);
+    tl_monotype const *out = tl_type_registry_instantiate(self, S("Ptr"), arg);
+    assert(out);
+    return out;
 }
 
 // -- type environment --
@@ -316,21 +315,30 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
 }
 
 tl_monotype const *tl_polytype_instantiate(allocator *alloc, tl_polytype const *self, tl_type_subs *subs) {
-    tl_monotype *fresh = (tl_monotype *)tl_monotype_clone(alloc, self->type); // const cast
-    if (!self->quantifiers.size) return fresh;
 
-    hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
+    switch (self->tag) {
 
-    forall(i, self->quantifiers) {
-        // make a fresh variable for each quantified type variable
-        tl_type_variable tv = tl_type_subs_fresh(subs);
-        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
+    case tl_poly_mono: {
+
+        tl_monotype *fresh = (tl_monotype *)tl_monotype_clone(alloc, self->type); // const cast
+        if (!self->quantifiers.size) return fresh;
+
+        hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
+
+        forall(i, self->quantifiers) {
+            // make a fresh variable for each quantified type variable
+            tl_type_variable tv = tl_type_subs_fresh(subs);
+            map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
+        }
+
+        replace_tv(fresh, q_to_t);
+
+        map_destroy(&q_to_t);
+        return fresh;
     }
 
-    replace_tv(fresh, q_to_t);
-
-    map_destroy(&q_to_t);
-    return fresh;
+    case tl_poly_def: fatal("logic error");
+    }
 }
 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
@@ -466,7 +474,7 @@ tl_monotype const *tl_monotype_create_cons(allocator *alloc, tl_type_constructor
 
 tl_monotype const *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
-    if (!orig) fatal("logic error");
+    if (!orig) return null;
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
 
     switch (orig->tag) {
