@@ -16,10 +16,9 @@ typedef struct {array_sized;  tl_type_variable *v;} tl_type_variable_sized;
 
 typedef struct {
     str                       name;
-    str_sized                 type_variable_names; // quantified
-    tl_type_variable const   *type_variables;      // array, n = type_variable_names.size
-    str_sized                 field_names;         // user types
-    struct tl_monotype const *field_types;         // linked list, field_names.size
+    tl_type_variable_sized    type_variables;
+    str_sized                 field_names; // user types
+    struct tl_monotype const *field_types; // linked list, field_names.size
 } tl_type_constructor_def;
 
 typedef struct {
@@ -76,10 +75,9 @@ typedef struct {
 
 // -- type constructor and registry --
 
-nodiscard tl_type_registry    *tl_type_registry_create(allocator *) mallocfun;
+nodiscard tl_type_registry    *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *, str name,
-                                                              str_sized               tv_names,
-                                                              tl_type_variable const *tvs, str_sized fields,
+                                                              tl_type_variable_sized tvs, str_sized fields,
                                                               tl_monotype const *) mallocfun;
 tl_monotype const             *tl_type_registry_instantiate(tl_type_registry *, str, tl_monotype const *);
 tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *, str);

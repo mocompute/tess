@@ -60,9 +60,9 @@ tl_infer *tl_infer_create(allocator *alloc) {
 
     self->transient          = arena_create(alloc, 4096);
     self->arena              = arena_create(alloc, 16 * 1024);
-    self->registry           = tl_type_registry_create(self->arena);
     self->env                = tl_type_env_create(self->arena, self->transient);
     self->subs               = tl_type_subs_create(self->arena);
+    self->registry           = tl_type_registry_create(self->arena, self->subs);
     self->toplevels          = null;
     self->instances          = map_create(self->arena, sizeof(str), 512);
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
@@ -94,15 +94,14 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
     assert(ast_node_is_utd(node));
-    str                    name                = node->user_type_def.name->symbol.name;
-    u32                    n_type_arguments    = node->user_type_def.n_type_arguments;
-    u32                    n_fields            = node->user_type_def.n_fields;
-    ast_node             **type_arguments      = node->user_type_def.type_arguments;
-    ast_node             **fields              = node->user_type_def.field_names;
+    str                    name              = node->user_type_def.name->symbol.name;
+    u32                    n_type_arguments  = node->user_type_def.n_type_arguments;
+    u32                    n_fields          = node->user_type_def.n_fields;
+    ast_node             **type_arguments    = node->user_type_def.type_arguments;
+    ast_node             **fields            = node->user_type_def.field_names;
 
-    hashmap               *type_argument_map   = map_create(self->transient, sizeof(tl_type_variable), 8);
-    str_array              type_argument_names = {.alloc = self->arena};
-    tl_type_variable_array type_argument_tvs   = {.alloc = self->arena};
+    hashmap               *type_argument_map = map_create(self->transient, sizeof(tl_type_variable), 8);
+    tl_type_variable_array type_argument_tvs = {.alloc = self->arena};
     for (u32 i = 0; i < n_type_arguments; ++i) {
         ast_node const *ta = type_arguments[i];
         assert(ast_node_is_symbol(ta));
@@ -110,7 +109,6 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
         tl_type_variable fresh   = tl_type_subs_fresh(self->subs);
         str_map_set(&type_argument_map, ta_name, &fresh);
 
-        array_push(type_argument_names, ta_name);
         array_push(type_argument_tvs, fresh);
     }
 
@@ -157,12 +155,11 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
     }
 
     array_shrink(field_names);
-    array_shrink(type_argument_names);
     array_shrink(type_argument_tvs);
 
-    tl_type_constructor_def const *def =
-      tl_type_constructor_def_create(self->registry, name, (str_sized)sized_all(type_argument_names),
-                                     type_argument_tvs.v, (str_sized)sized_all(field_names), field_types);
+    tl_type_constructor_def const *def = tl_type_constructor_def_create(
+      self->registry, name, (tl_type_variable_sized)sized_all(type_argument_tvs),
+      (str_sized)sized_all(field_names), field_types);
 
     tl_polytype const *poly = tl_polytype_create_def(self->arena, def);
     tl_type_env_insert(self->env, name, poly);
@@ -864,18 +861,30 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             return 0; // mututal recursion
         }
 
-        // instantiate generic function type being applied
-        ast_arguments_iter iter     = ast_node_arguments_iter(node);
-        tl_monotype const *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
-        str                inst_str = tl_monotype_to_string(self->transient, inst);
-        tl_polytype const *app      = make_arrow(self, iter.nodes, node);
-        str                app_str  = tl_polytype_to_string(self->transient, app);
-        log(self, "application: callsite '%.*s' (%.*s) arrow: %.*s", str_ilen(name), str_buf(&name),
-            str_ilen(inst_str), str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
-        tl_polytype wrap = tl_polytype_wrap(inst);
+        switch (type->tag) {
 
-        // and constrain it with the callsite types (arguments -> result)
-        if (constrain(self, ctx, &wrap, app, node)) return 1;
+        case tl_poly_mono: {
+            // a function type
+
+            // instantiate generic function type being applied
+            ast_arguments_iter iter     = ast_node_arguments_iter(node);
+            tl_monotype const *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
+            str                inst_str = tl_monotype_to_string(self->transient, inst);
+            tl_polytype const *app      = make_arrow(self, iter.nodes, node);
+            str                app_str  = tl_polytype_to_string(self->transient, app);
+            log(self, "application: callsite '%.*s' (%.*s) arrow: %.*s", str_ilen(name), str_buf(&name),
+                str_ilen(inst_str), str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+            tl_polytype wrap = tl_polytype_wrap(inst);
+
+            // and constrain it with the callsite types (arguments -> result)
+            if (constrain(self, ctx, &wrap, app, node)) return 1;
+        } break;
+
+        case tl_poly_def: {
+            // a type constructor
+
+        } break;
+        }
 
     } break;
 

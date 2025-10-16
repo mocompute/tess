@@ -14,23 +14,24 @@ static void log(tl_type_env const *self, char const *restrict fmt, ...);
 
 // -- type constructor --
 
-tl_type_registry *tl_type_registry_create(allocator *alloc) {
+tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
     self->alloc            = alloc;
     self->definitions      = map_create(self->alloc, sizeof(tl_type_constructor_def *), 64); // key: str
     self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
 
-    str_sized empty        = {0};
-    str_sized unary        = {.size = 1, .v = alloc_malloc(alloc, sizeof(str))};
-    unary.v[0]             = str_init_small("a");
+    str_sized              empty    = {0};
+    tl_type_variable_sized empty_tv = {0};
 
-    tl_type_constructor_def_create(self, S("Nil"), empty, null, empty, null);
-    tl_type_constructor_def_create(self, S("Int"), empty, null, empty, null);
-    tl_type_constructor_def_create(self, S("Bool"), empty, null, empty, null);
-    tl_type_constructor_def_create(self, S("Float"), empty, null, empty, null);
-    tl_type_constructor_def_create(self, S("String"), empty, null, empty, null);
+    tl_type_constructor_def_create(self, S("Nil"), empty_tv, empty, null);
+    tl_type_constructor_def_create(self, S("Int"), empty_tv, empty, null);
+    tl_type_constructor_def_create(self, S("Bool"), empty_tv, empty, null);
+    tl_type_constructor_def_create(self, S("Float"), empty_tv, empty, null);
+    tl_type_constructor_def_create(self, S("String"), empty_tv, empty, null);
 
-    tl_type_constructor_def_create(self, S("Ptr"), unary, null, empty, null);
+    tl_type_variable_sized unary = {.size = 1, .v = alloc_malloc(alloc, sizeof(tl_type_variable))};
+    unary.v[0]                   = tl_type_subs_fresh(subs);
+    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, null);
 
     tl_type_registry_instantiate(self, S("Nil"), null);
     tl_type_registry_instantiate(self, S("Int"), null);
@@ -42,13 +43,11 @@ tl_type_registry *tl_type_registry_create(allocator *alloc) {
 }
 
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                                              str_sized               type_variable_names,
-                                                              tl_type_variable const *type_variables,
-                                                              str_sized               field_names,
-                                                              tl_monotype const      *field_types) {
+                                                              tl_type_variable_sized type_variables,
+                                                              str_sized              field_names,
+                                                              tl_monotype const     *field_types) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
-    def->type_variable_names     = type_variable_names;
     def->type_variables          = type_variables;
     def->field_names             = field_names;
     def->field_types             = field_types;
@@ -70,7 +69,7 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
 
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
-    if (tl_monotype_list_length(args) != def->type_variable_names.size) return null;
+    if (tl_monotype_list_length(args) != def->type_variables.size) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
     *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(self->alloc, args)};
@@ -186,7 +185,7 @@ tl_polytype const *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) 
 tl_polytype const *tl_polytype_create_def(allocator *alloc, tl_type_constructor_def const *def) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
     self->tag         = tl_poly_def;
-    self->quantifiers = (tl_type_variable_sized){0};
+    self->quantifiers = def->type_variables;
     self->def         = def;
     return self;
 }
@@ -217,19 +216,28 @@ tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) 
     switch (orig->tag) {
     case tl_poly_mono: clone->type = tl_monotype_clone(alloc, orig->type); break;
 
-    case tl_poly_def:
-        clone->def                             = alloc_malloc(alloc, sizeof *clone->def);
-        *(tl_type_constructor_def *)clone->def = *orig->def; // const cast
-        // strings are shallow copied
+    case tl_poly_def:  {
+        tl_type_constructor_def *def = alloc_malloc(alloc, sizeof *def);
+        def->name                    = str_copy(alloc, orig->def->name);
+        def->field_types             = tl_monotype_list_copy(alloc, orig->def->field_types);
 
-        ((tl_type_constructor_def *)clone->def)->type_variables = alloc_malloc(
-          alloc, sizeof(tl_type_variable) * clone->def->type_variable_names.size); // const cast
+        {
+            tl_type_variable_array arr = {.alloc = alloc};
+            array_push_many(arr, orig->def->type_variables.v, orig->def->type_variables.size);
+            array_shrink(arr);
+            def->type_variables = (tl_type_variable_sized)sized_all(arr);
+        }
+        {
+            str_array arr = {.alloc = alloc};
+            array_push_many(arr, orig->def->field_names.v, orig->def->field_names.size);
+            array_shrink(arr);
+            def->field_names                                  = (str_sized)sized_all(arr);
+            forall(i, def->field_names) def->field_names.v[i] = str_copy(alloc, def->field_names.v[i]);
+        }
 
-        memcpy((void *)clone->def->type_variables, orig->def->type_variables,
-               sizeof(tl_type_variable) * clone->def->type_variable_names.size);
+        clone->def = def;
 
-        ((tl_type_constructor_def *)clone->def)->field_types =
-          tl_monotype_list_copy(alloc, orig->def->field_types);
+    } break;
     }
     return clone;
 }
@@ -560,7 +568,7 @@ void tl_monotype_absorb_fvs(allocator *alloc, tl_monotype *self, str_sized fvs) 
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def const *self) {
     u64 hash = str_hash64(self->name);
-    hash     = hash64_combine(hash, &self->type_variable_names.size, sizeof self->type_variable_names.size);
+    hash     = hash64_combine(hash, &self->type_variables.size, sizeof self->type_variables.size);
     return hash;
 }
 
@@ -684,21 +692,25 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype const *self) {
 
     case tl_poly_def: {
 
-        if (self->def->type_variable_names.size) {
+        if (self->def->type_variables.size) {
             str_build_cat(&b, S("forall"));
-            forall(i, self->def->type_variable_names) {
+            forall(i, self->def->type_variables) {
+                char buf[64];
+                snprintf(buf, sizeof buf, "t%u", self->def->type_variables.v[i]);
                 str_build_cat(&b, S(" "));
-                str_build_cat(&b, self->def->type_variable_names.v[i]);
+                str_build_cat(&b, str_init(alloc, buf));
             }
             str_build_cat(&b, S(". "));
         }
 
         str_build_cat(&b, self->def->name);
 
-        if (self->def->type_variable_names.size) {
-            forall(i, self->def->type_variable_names) {
+        if (self->def->type_variables.size) {
+            forall(i, self->def->type_variables) {
+                char buf[64];
+                snprintf(buf, sizeof buf, "t%u", self->def->type_variables.v[i]);
                 str_build_cat(&b, S(" "));
-                str_build_cat(&b, self->def->type_variable_names.v[i]);
+                str_build_cat(&b, str_init(alloc, buf));
             }
         }
 
