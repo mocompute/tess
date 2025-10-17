@@ -743,11 +743,6 @@ static void one_specialization_requirement(void *ctx_, ast_node *const node, has
             map_set(&self->requirements, &hash, sizeof hash, &rec);
 
         node->named_application.name->symbol.special_hash = hash;
-
-        // log(self, "one_specialization_requirement: %-24" PRIu64 " '%s' (%s) %s from source: %s", hash,
-        // name,
-        //     string_t_str(&node->named_application.name->symbol.original),
-        //     tl_type_to_string(self->transient, type), ast_node_to_string(self->transient, node));
     }
 
     else if (ast_node_is_let_in_lambda(node)) {

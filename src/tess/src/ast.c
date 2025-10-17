@@ -5,7 +5,6 @@
 #include "hash.h"
 #include "hashmap.h"
 #include "sexp.h"
-#include "string_t.h"
 #include "type.h"
 #include "util.h"
 #include "v2_type.h"
