@@ -247,7 +247,7 @@ static int result_ast_str(parser *p, ast_tag tag, char const *s) {
 static int result_ast_node(parser *p, ast_node *node) {
     p->result = node;
     set_result_file(p);
-    log(p, "result: %s", ast_node_to_string(p->transient, node));
+    log(p, "result: %s", v1_ast_node_to_string(p->transient, node));
     return 0;
 }
 
@@ -732,7 +732,7 @@ static int a_type_annotation(parser *self) {
         log(self, "begin type annotation");
         int res = a_try(self, a_type_identifier);
         if (0 == res) {
-            log(self, "got type annotation: %s", ast_node_to_string(self->transient, self->result));
+            log(self, "got type annotation: %s", v1_ast_node_to_string(self->transient, self->result));
         }
         return res;
     }
@@ -1181,7 +1181,7 @@ static int struct_declaration(parser *self) {
 
         if (0 == a_try(self, a_identifier)) {
             ast_node *field_name = self->result;
-            log(self, "struct_declaration: field %s", ast_node_to_string(self->transient, field_name));
+            log(self, "struct_declaration: field %s", v1_ast_node_to_string(self->transient, field_name));
 
             if (a_try(self, a_colon)) {
                 self->error.tag = tl_err_expected_colon;
@@ -1193,7 +1193,7 @@ static int struct_declaration(parser *self) {
                 goto error;
             }
             ast_node *type = self->result;
-            log(self, "struct_declaration: type %s", ast_node_to_string(self->transient, type));
+            log(self, "struct_declaration: type %s", v1_ast_node_to_string(self->transient, type));
 
             array_push(field_names, field_name);
             array_push(field_types, type);
@@ -1327,7 +1327,7 @@ static int function_declaration(parser *self) {
             assert(ast_symbol == name->tag);
             name->symbol.annotation = annotation;
 
-            log(self, "function_declaration: returning %s", ast_node_to_string(self->transient, node));
+            log(self, "function_declaration: returning %s", v1_ast_node_to_string(self->transient, node));
             return result_ast_node(self, node);
         } else if (require_equal_sign) {
             self->error.tag = tl_err_expected_equal_sign;
@@ -1421,7 +1421,7 @@ static int function_application(parser *self) {
                 goto error;
             }
 
-            log(self, "function_application: got %s", ast_node_to_string(self->transient, node));
+            log(self, "function_application: got %s", v1_ast_node_to_string(self->transient, node));
             result_ast_node(self, node);
             goto success;
         }
@@ -2100,7 +2100,7 @@ int parser_parse_all(parser *p, ast_node_array *out) {
         ast_node *node;
 
         parser_result(p, &node);
-        log(p, "parse_all: parsed node %s", ast_node_to_string(p->transient, node));
+        log(p, "parse_all: parsed node %s", v1_ast_node_to_string(p->transient, node));
 
         array_push(*out, node);
     }

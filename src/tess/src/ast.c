@@ -903,15 +903,124 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
     return 1;
 }
 
-char *ast_node_to_string(allocator *alloc, ast_node const *node) {
-    sexp  expr = ast_node_to_sexp(alloc, node);
-    char *out  = sexp_to_string(alloc, expr);
-    sexp_deinit(alloc, &expr);
-    return out;
+str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
+    char buf[64];
+
+    str  ty_str = node->type_v2 ? tl_polytype_to_string(alloc, node->type_v2) : str_empty();
+
+    switch (node->tag) {
+    case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
+    case ast_i64:
+        snprintf(buf, sizeof buf, "(%" PRIi64 " : %.*s)", node->i64.val, str_ilen(ty_str),
+                 str_buf(&ty_str));
+        return str_init(alloc, buf);
+
+    case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
+    case ast_string: return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
+    case ast_bool:   return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
+    case ast_nil:    return S("()");
+    case ast_any:    return S("any");
+
+    case ast_symbol: {
+        str out = node->symbol.name;
+        if (node->symbol.annotation_type_v2) {
+            out = str_cat_4(alloc, out, S(" (v2: "),
+                            tl_polytype_to_string(alloc, node->symbol.annotation_type_v2), S(")"));
+        } else if (node->symbol.annotation) {
+            out =
+              str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
+        }
+        if (node->type_v2)
+            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type_v2));
+        return out;
+    }
+
+    case ast_let: {
+        str out               = str_copy(alloc, S("let "));
+        out                   = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let.name));
+
+        ast_node_sized params = ast_node_sized_from_ast_array((ast_node *)node);
+        forall(i, params) {
+            if (ast_nil == params.v[i]->tag) {
+                out = str_cat(alloc, out, S(" ()"));
+                break;
+            } else {
+                out = str_cat_3(alloc, out, S(" "), params.v[i]->symbol.name);
+            }
+        }
+
+        if (node->type_v2)
+            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type_v2));
+        out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
+        return out;
+    }
+
+    case ast_let_in: {
+        str out = str_copy(alloc, S("let "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.name));
+        out     = str_cat(alloc, out, S(" = "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.value));
+        out     = str_cat(alloc, out, S(" in "));
+        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
+        return out;
+
+    } break;
+
+    case ast_named_function_application: {
+        str out = str_copy(alloc, node->named_application.name->symbol.name);
+        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
+            out = str_cat_3(alloc, out, S(" "),
+                            v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
+        }
+
+        return out;
+    } break;
+
+    case ast_arrow: {
+        str out = str_cat_3(alloc, v2_ast_node_to_string(alloc, node->arrow.left), S(" -> "),
+                            v2_ast_node_to_string(alloc, node->arrow.right));
+        return out;
+    } break;
+
+    case ast_lambda_function: {
+        str out = str_copy(alloc, S("fun"));
+
+        // here we want to include the nil value
+        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
+            out = str_cat_3(alloc, out, S(" "),
+                            v2_ast_node_to_string(alloc, node->lambda_function.parameters[i]));
+        }
+        out = str_cat(alloc, out, S(" -> "));
+        out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->lambda_function.body));
+        return out;
+
+    } break;
+
+    case ast_ellipsis:                    return str_copy(alloc, S("..."));
+
+    case ast_address_of:
+    case ast_assignment:
+    case ast_dereference:
+    case ast_dereference_assign:
+    case ast_eof:
+
+    case ast_if_then_else:
+    case ast_let_match_in:
+    case ast_user_type_definition:
+    case ast_user_type_get:
+    case ast_user_type_set:
+    case ast_begin_end:
+    case ast_function_declaration:
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_lambda_function_application:
+    case ast_tuple:
+    case ast_user_type:                   return str_copy(alloc, S("[not implemented]"));
+    }
 }
 
-char *ast_node_to_string_for_error(allocator *alloc, ast_node const *node) {
-    sexp  expr = ast_node_to_sexp_for_error(alloc, node);
+char *v1_ast_node_to_string(allocator *alloc, ast_node const *node) {
+    sexp  expr = ast_node_to_sexp(alloc, node);
     char *out  = sexp_to_string(alloc, expr);
     sexp_deinit(alloc, &expr);
     return out;
