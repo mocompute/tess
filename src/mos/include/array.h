@@ -7,119 +7,60 @@
 #include <assert.h>
 #include <stdalign.h>
 
-typedef struct {
-    allocator *alloc;
-    u32        size;
-    u32        capacity;
-} array_header_t;
+#define defarray(NAME, T)                                                                                  \
+    typedef struct {                                                                                       \
+        T         *v;                                                                                      \
+        allocator *alloc;                                                                                  \
+        u32        size;                                                                                   \
+        u32        capacity;                                                                               \
+    } NAME;
 
-#define array_header                                                                                       \
-    allocator *alloc;                                                                                      \
-    u32        size;                                                                                       \
-    u32        capacity
+#define defsized(NAME, T)                                                                                  \
+    typedef struct {                                                                                       \
+        T  *v;                                                                                             \
+        u32 size;                                                                                          \
+    } NAME;
 
-typedef struct {
-    array_header;
-    void *v;
-} array_tmpl;
+#define defslice(NAME, T)                                                                                  \
+    typedef struct {                                                                                       \
+        T  *v;                                                                                             \
+        u32 begin;                                                                                         \
+        u32 end;                                                                                           \
+    } NAME;
 
-typedef struct {
-    u32 begin;
-    u32 end;
-} array_slice_t;
+defarray(array_t, void);
 
-#define array_slice                                                                                        \
-    u32 begin;                                                                                             \
-    u32 end
-
-typedef struct {
-    u32 size;
-} array_sized_t;
-
-#define array_sized u32 size
-
-typedef struct {
-    array_header;
-    byte *v;
-} byte_array;
-
-typedef struct {
-    array_header;
-    char *v;
-} char_array;
-
-typedef struct {
-    array_header;
-    char const *v;
-} char_carray;
-
-typedef struct {
-    array_sized;
-    char *v;
-} char_sized;
-
-typedef struct {
-    array_sized;
-    char const *v;
-} char_csized;
-
-typedef struct {
-    array_slice;
-    char *v;
-} char_slice;
-
-typedef struct {
-    array_slice;
-    char const *v;
-} char_cslice;
-
-typedef struct {
-    array_header;
-    char **v;
-} c_string_array;
-
-typedef struct {
-    array_header;
-    char const **v;
-} c_string_carray;
-
-typedef struct {
-    array_sized;
-    char **v;
-} c_string_sized;
-
-typedef struct {
-    array_sized;
-    char const **v;
-} c_string_csized;
-
-typedef struct {
-    array_slice;
-    char **v;
-} c_string_slice;
-
-typedef struct {
-    array_slice;
-    char const **v;
-} c_string_cslice;
+defarray(byte_array, byte);
+defarray(char_array, char);
+defarray(char_carray, char const);
+defsized(char_sized, char);
+defsized(char_csized, char const);
+defslice(char_slice, char);
+defslice(char_cslice, char const);
+defarray(c_string_array, char *);
+defarray(c_string_carray, char const *);
+defsized(c_string_sized, char *);
+defsized(c_string_csized, char const *);
+defslice(c_string_slice, char *);
+defslice(c_string_cslice, char const *);
 
 // -- interface --
 
 #define array_reserve(p, n)                                                                                \
     do {                                                                                                   \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_reserve_impl((array_header_t *)&(p), (p).v, (n), sizeof(p).v[0], alignof((p).v[0])); \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_reserve_impl((array_t *)&(p), (p).v, (n), sizeof(p).v[0], alignof((p).v[0]));        \
     } while (0)
 
 #define array_push(p, x)                                                                                   \
     do {                                                                                                   \
         static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_push_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x))); \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_push_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)));        \
     } while (0)
 
 #define array_contains(p, x)                                                                               \
-    array_contains_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)))
+    array_contains_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)))
 
 #define array_push_val(p, x)                                                                               \
     do {                                                                                                   \
@@ -129,70 +70,70 @@ typedef struct {
 
 #define array_free(p)                                                                                      \
     do {                                                                                                   \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        array_free_impl((array_header_t *)&(p), (p).v);                                                    \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        array_free_impl((array_t *)&(p), (p).v);                                                           \
     } while (0)
 
 #define array_copy(p, s)                                                                                   \
     do {                                                                                                   \
         static_assert(sizeof((s).v[0]) == sizeof((p).v[0]), "size mismatch");                              \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        static_assert(sizeof(s) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),     \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        static_assert(sizeof(s) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),            \
                                      (void *)(s).v, (s).size);                                             \
     } while (0)
 
 #define array_push_many(p, xs, n)                                                                          \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),     \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),            \
                                      (void *)(xs), (u32)(n));                                              \
     } while (0)
 
 #define array_push_many_(p, ty, xs, n)                                                                     \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof(ty), "size mismatch");                                     \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_push_many_impl((array_header_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), \
-                                     (u32)(n));                                                            \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v =                                                                                            \
+          array_push_many_impl((array_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), (u32)(n));   \
     } while (0)
 
 // TODO: this doesn't do what you think it does
 #define array_move(p, xs, n)                                                                               \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_move_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),          \
-                                (void *)(xs), (u32)(n));                                                   \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_move_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (void *)(xs),   \
+                                (u32)(n));                                                                 \
     } while (0)
 
 #define array_insert(p, i, xs, n)                                                                          \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_insert_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]),   \
-                                  (xs), (n));                                                              \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v =                                                                                            \
+          array_insert_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]), (xs), (n));    \
     } while (0)
 
 #define array_insert_sorted(p, x, cmp)                                                                     \
     do {                                                                                                   \
         static_assert(sizeof((x)[0]) == sizeof((p).v[0]), "size mismatch");                                \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_insert_sorted_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), \
-                                         (x), (cmp));                                                      \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v =                                                                                            \
+          array_insert_sorted_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x), (cmp)); \
     } while (0)
 
 #define array_erase(p, i)                                                                                  \
     do {                                                                                                   \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        array_erase_impl((array_header_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));           \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        array_erase_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));                  \
     } while (0)
 
 #define array_shrink(p)                                                                                    \
     do {                                                                                                   \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v = array_shrink_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]));       \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]));              \
     } while (0)
 
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
@@ -221,65 +162,62 @@ typedef struct {
 #define array_set_insert(p, x)                                                                             \
     do {                                                                                                   \
         static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_tmpl), "not an array");                                    \
-        (p).v =                                                                                            \
-          array_set_insert_impl((array_header_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));   \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        (p).v = array_set_insert_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));    \
     } while (0)
 
 // each array is restrict - must not alias
 #define array_set_difference(res, lhs, rhs)                                                                \
     do {                                                                                                   \
-        static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \
-        static_assert(sizeof(lhs) >= sizeof(array_tmpl), "not an array");                                  \
-        static_assert(sizeof(rhs) >= sizeof(array_tmpl), "not an array");                                  \
-        (res).v = array_set_difference_impl((array_header_t *)&(res), (res).v, (array_header_t *)&(lhs),   \
-                                            (lhs).v, (array_header_t *)&(rhs), (rhs).v, sizeof(lhs).v[0],  \
-                                            alignof((lhs).v[0]));                                          \
+        static_assert(sizeof(res) >= sizeof(array_t), "not an array");                                     \
+        static_assert(sizeof(lhs) >= sizeof(array_t), "not an array");                                     \
+        static_assert(sizeof(rhs) >= sizeof(array_t), "not an array");                                     \
+        (res).v =                                                                                          \
+          array_set_difference_impl((array_t *)&(res), (res).v, (array_t *)&(lhs), (lhs).v,                \
+                                    (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0]));    \
     } while (0)
 
 // each array is restrict - must not alias
 #define array_set_union(res, lhs, rhs)                                                                     \
     do {                                                                                                   \
-        static_assert(sizeof(res) >= sizeof(array_tmpl), "not an array");                                  \
-        static_assert(sizeof(lhs) >= sizeof(array_tmpl), "not an array");                                  \
-        static_assert(sizeof(rhs) >= sizeof(array_tmpl), "not an array");                                  \
-        (res).v =                                                                                          \
-          array_set_union_impl((array_header_t *)&(res), (res).v, (array_header_t *)&(lhs), (lhs).v,       \
-                               (array_header_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0]));  \
+        static_assert(sizeof(res) >= sizeof(array_t), "not an array");                                     \
+        static_assert(sizeof(lhs) >= sizeof(array_t), "not an array");                                     \
+        static_assert(sizeof(rhs) >= sizeof(array_t), "not an array");                                     \
+        (res).v = array_set_union_impl((array_t *)&(res), (res).v, (array_t *)&(lhs), (lhs).v,             \
+                                       (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0])); \
     } while (0)
 
 char_cslice char_cslice_from(char const *, u32);
 
 // -- implementation --
 
-nodiscard void *array_alloc_impl(array_header_t *, u32, u32, u16) mallocfun;
-nodiscard void *array_reserve_impl(array_header_t *, void *, u32, u32, u16);
-nodiscard void *array_push_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict);
-nodiscard void *array_push_many_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict,
-                                     u32);
-nodiscard void *array_move_impl(array_header_t *h, void *, u32, u16, void *, u32);
-nodiscard void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32, u16,
-                                  void const *restrict, u32);
+nodiscard void *array_alloc_impl(array_t *, u32, u32, u16) mallocfun;
+nodiscard void *array_reserve_impl(array_t *, void *, u32, u32, u16);
+nodiscard void *array_push_impl(array_t *h, void *restrict, u32, u16, void const *restrict);
+nodiscard void *array_push_many_impl(array_t *h, void *restrict, u32, u16, void const *restrict, u32);
+nodiscard void *array_move_impl(array_t *h, void *, u32, u16, void *, u32);
+nodiscard void *array_insert_impl(array_t *h, void *restrict ptr, u32 index, u32, u16, void const *restrict,
+                                  u32);
 
 typedef int (*array_cmp_fun)(void const *lhs, void const *rhs);
-nodiscard void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32, u16,
-                                         void const *restrict, array_cmp_fun);
+nodiscard void *array_insert_sorted_impl(array_t *h, void *restrict ptr, u32, u16, void const *restrict,
+                                         array_cmp_fun);
 
-int             array_contains_impl(array_header_t *, void *restrict, u32, u16, void const *restrict);
-nodiscard void *array_shrink_impl(array_header_t *h, void *, u32, u16);
+int             array_contains_impl(array_t *, void *restrict, u32, u16, void const *restrict);
+nodiscard void *array_shrink_impl(array_t *h, void *, u32, u16);
 
-void            array_erase_impl(array_header_t *h, void *ptr, u32 index, u32, u16);
-void            array_free_impl(array_header_t *, void *);
+void            array_erase_impl(array_t *h, void *ptr, u32 index, u32, u16);
+void            array_free_impl(array_t *, void *);
 
 // -- array set operations --
 
-nodiscard void *array_set_insert_impl(array_header_t *h, void *restrict, u32, u16, void const *restrict);
+nodiscard void *array_set_insert_impl(array_t *h, void *restrict, u32, u16, void const *restrict);
 
-nodiscard void *array_set_difference_impl(array_header_t *res, void *restrict, array_header_t *lhs,
-                                          void *restrict, array_header_t *rhs, void *restrict, u32, u16);
+nodiscard void *array_set_difference_impl(array_t *res, void *restrict, array_t *lhs, void *restrict,
+                                          array_t *rhs, void *restrict, u32, u16);
 
-nodiscard void *array_set_union_impl(array_header_t *res, void *restrict, array_header_t *lhs,
-                                     void *restrict, array_header_t *rhs, void *restrict, u32, u16);
+nodiscard void *array_set_union_impl(array_t *res, void *restrict, array_t *lhs, void *restrict,
+                                     array_t *rhs, void *restrict, u32, u16);
 
 // -- utilities --
 

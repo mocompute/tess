@@ -20,10 +20,7 @@ typedef struct {
     str               message;
 } tl_infer_error;
 
-typedef struct {
-    array_header;
-    tl_infer_error *v;
-} tl_infer_error_array;
+defarray(tl_infer_error_array, tl_infer_error);
 
 struct tl_infer {
     allocator           *transient;

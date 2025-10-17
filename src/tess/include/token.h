@@ -41,10 +41,7 @@ typedef struct token {
 
 } token;
 
-typedef struct {
-    array_header;
-    struct token *v;
-} token_array;
+defarray(token_array, struct token);
 
 // -- allocation and deallocation --
 

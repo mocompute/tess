@@ -5,10 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-typedef struct {
-    array_header;
-    int *v;
-} int_array;
+defarray(int_array, int);
 
 static int test_array(void) {
     int       error = 0;

@@ -95,10 +95,7 @@ static int test_big_map(void) {
         int right;
     } pair_t;
 
-    typedef struct {
-        array_header;
-        pair_t *v;
-    } pair_array;
+    defarray(pair_array, pair_t);
 
     allocator *alloc = default_allocator();
 

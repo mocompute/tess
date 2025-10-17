@@ -34,15 +34,8 @@ typedef struct sexp {
     };
 } sexp;
 
-typedef struct {
-    array_header;
-    struct sexp *v;
-} sexp_array;
-
-typedef struct {
-    array_sized;
-    struct sexp *v;
-} sexp_sized;
+defarray(sexp_array, struct sexp);
+defsized(sexp_sized, struct sexp);
 
 typedef struct sexp_box {
     union {

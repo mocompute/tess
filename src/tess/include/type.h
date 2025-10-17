@@ -28,10 +28,7 @@
 
 typedef enum { TL_TYPE_TAGS(MOS_TAG_NAME) } tl_type_tag;
 
-typedef struct {
-    array_sized;
-    struct tl_type **v;
-} tl_type_sized;
+defsized(tl_type_sized, struct tl_type *);
 
 typedef struct {
     str             name;
@@ -39,15 +36,8 @@ typedef struct {
     u64             special_hash; // used during specialisation
 } tl_free_variable;
 
-typedef struct {
-    array_header;
-    tl_free_variable *v;
-} tl_free_variable_array;
-
-typedef struct {
-    array_sized;
-    tl_free_variable *v;
-} tl_free_variable_sized;
+defarray(tl_free_variable_array, tl_free_variable);
+defsized(tl_free_variable_sized, tl_free_variable);
 
 typedef struct tl_type {
     union {
@@ -87,10 +77,7 @@ typedef struct tl_type {
     tl_type_tag tag;
 } tl_type;
 
-typedef struct {
-    array_header;
-    struct tl_type **v;
-} tl_type_array;
+defarray(tl_type_array, struct tl_type *);
 
 typedef u32 (*tl_make_typevar_fun)(void *);
 

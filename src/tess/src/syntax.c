@@ -27,10 +27,7 @@ struct syntax_error {
     // error code is in ast_node
 };
 
-typedef struct {
-    array_header;
-    struct syntax_error *v;
-} syntax_error_array;
+defarray(syntax_error_array, struct syntax_error);
 
 struct syntax_checker {
     allocator         *alloc;

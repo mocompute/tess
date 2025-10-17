@@ -22,15 +22,8 @@ typedef struct {
     };
 } string_t;
 
-typedef struct {
-    array_header;
-    string_t *v;
-} string_array;
-
-typedef struct {
-    array_sized;
-    string_t *v;
-} string_sized;
+defarray(string_array, string_t);
+defsized(string_sized, string_t);
 
 // -- allocation and deallocation --
 

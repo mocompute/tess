@@ -28,25 +28,15 @@ typedef struct constraint {
     int         line;
 } constraint;
 
-typedef struct {
-    array_header;
-    constraint *v;
-} constraint_array;
-
-typedef struct {
-    array_sized;
-    constraint *v;
-} constraint_sized;
+defarray(constraint_array, constraint);
+defsized(constraint_sized, constraint);
 
 typedef struct {
     enum tl_error_tag tag;
     ast_node const   *node;
 } ti_error;
 
-typedef struct {
-    array_header;
-    ti_error *v;
-} ti_error_array;
+defarray(ti_error_array, ti_error);
 
 struct ti_inferer {
     allocator       *type_arena;

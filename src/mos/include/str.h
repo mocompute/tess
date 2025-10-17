@@ -25,15 +25,8 @@ typedef struct {
     };
 } str;
 
-typedef struct {
-    array_header;
-    str *v;
-} str_array;
-
-typedef struct {
-    array_sized;
-    str *v;
-} str_sized;
+defarray(str_array, str);
+defsized(str_sized, str);
 
 typedef struct {
     int   len; // for use with C lib

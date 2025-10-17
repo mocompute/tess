@@ -4,25 +4,25 @@
 #include <assert.h>
 #include <string.h>
 
-void *array_alloc_impl(array_header_t *h, u32 num, u32 width, u16 align) {
+void *array_alloc_impl(array_t *h, u32 num, u32 width, u16 align) {
     assert(h->alloc);
     width = (u32)alloc_align(width, align);
     return alloc_malloc(h->alloc, num * width);
 }
 
-void array_free_impl(array_header_t *h, void *ptr) {
+void array_free_impl(array_t *h, void *ptr) {
     if (!h || !ptr) return;
     assert(h->alloc);
     alloc_free(h->alloc, ptr);
 }
 
-void *array_realloc(array_header_t *h, void *ptr, u32 num, u32 width, u16 align) {
+void *array_realloc(array_t *h, void *ptr, u32 num, u32 width, u16 align) {
     assert(h->alloc);
     width = (u32)alloc_align(width, align);
     return alloc_realloc(h->alloc, ptr, num * width);
 }
 
-void *array_reserve_impl(array_header_t *h, void *ptr, u32 num, u32 width, u16 align) {
+void *array_reserve_impl(array_t *h, void *ptr, u32 num, u32 width, u16 align) {
     assert(h->alloc);
     width = (u32)alloc_align(width, align);
     if (num > h->capacity) {
@@ -35,8 +35,7 @@ void *array_reserve_impl(array_header_t *h, void *ptr, u32 num, u32 width, u16 a
     return ptr;
 }
 
-void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
-                      void const *restrict data) {
+void *array_push_impl(array_t *h, void *restrict ptr, u32 width, u16 align, void const *restrict data) {
     assert(h->alloc);
     if (h->size == h->capacity) {
         u32 new_cap = h->capacity ? h->capacity * 2 : 8;
@@ -47,8 +46,7 @@ void *array_push_impl(array_header_t *h, void *restrict ptr, u32 width, u16 alig
     return ptr;
 }
 
-int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
-                        void const *restrict data) {
+int array_contains_impl(array_t *h, void *restrict ptr, u32 width, u16 align, void const *restrict data) {
 
     if (0 == h->size) return 0;
     u32 actual_align = alloc_align(width, align);
@@ -59,8 +57,8 @@ int array_contains_impl(array_header_t *h, void *restrict ptr, u32 width, u16 al
     return 0;
 }
 
-void *array_push_many_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
-                           void const *restrict data, u32 num) {
+void *array_push_many_impl(array_t *h, void *restrict ptr, u32 width, u16 align, void const *restrict data,
+                           u32 num) {
     if (!data || !num) return ptr;
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
@@ -69,7 +67,7 @@ void *array_push_many_impl(array_header_t *h, void *restrict ptr, u32 width, u16
     return ptr;
 }
 
-void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *data, u32 num) {
+void *array_move_impl(array_t *h, void *ptr, u32 width, u16 align, void *data, u32 num) {
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
     memmove(&ptr[h->size * alloc_align(width, align)], data, num * width);
@@ -77,7 +75,7 @@ void *array_move_impl(array_header_t *h, void *ptr, u32 width, u16 align, void *
     return ptr;
 }
 
-void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32 width, u16 align,
+void *array_insert_impl(array_t *h, void *restrict ptr, u32 index, u32 width, u16 align,
                         void const *restrict data, u32 num) {
     assert(index < h->size);
 
@@ -92,7 +90,7 @@ void *array_insert_impl(array_header_t *h, void *restrict ptr, u32 index, u32 wi
     return ptr;
 }
 
-void array_erase_impl(array_header_t *h, void *ptr, u32 index, u32 width, u16 align) {
+void array_erase_impl(array_t *h, void *ptr, u32 index, u32 width, u16 align) {
     assert(index < h->size);
 
     size_t aligned = alloc_align(width, align);
@@ -102,7 +100,7 @@ void array_erase_impl(array_header_t *h, void *ptr, u32 index, u32 width, u16 al
     h->size--;
 }
 
-void *array_shrink_impl(array_header_t *h, void *ptr, u32 width, u16 align) {
+void *array_shrink_impl(array_t *h, void *ptr, u32 width, u16 align) {
     assert(h->alloc);
     if (h->capacity == h->size) return ptr;
 
@@ -115,7 +113,7 @@ char_cslice char_cslice_from(char const *str, u32 len) {
     return (char_cslice){.v = str, .end = len};
 }
 
-void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+void *array_insert_sorted_impl(array_t *h, void *restrict ptr, u32 width, u16 align,
                                void const *restrict data, array_cmp_fun cmp) {
 
     size_t aligned = alloc_align(width, align);
@@ -140,7 +138,7 @@ void *array_insert_sorted_impl(array_header_t *h, void *restrict ptr, u32 width,
     return ptr;
 }
 
-void *array_set_insert_impl(array_header_t *h, void *restrict ptr, u32 width, u16 align,
+void *array_set_insert_impl(array_t *h, void *restrict ptr, u32 width, u16 align,
                             void const *restrict data) {
     assert(h->alloc);
 
@@ -154,9 +152,8 @@ void *array_set_insert_impl(array_header_t *h, void *restrict ptr, u32 width, u1
     return array_push_impl(h, ptr, width, align, data);
 }
 
-void *array_set_difference_impl(array_header_t *res, void *restrict res_ptr, array_header_t *lhs,
-                                void *restrict lhs_ptr, array_header_t *rhs, void *restrict rhs_ptr,
-                                u32 width, u16 align) {
+void *array_set_difference_impl(array_t *res, void *restrict res_ptr, array_t *lhs, void *restrict lhs_ptr,
+                                array_t *rhs, void *restrict rhs_ptr, u32 width, u16 align) {
 
     // res = left - right
     size_t aligned = alloc_align(width, align);
@@ -180,9 +177,8 @@ void *array_set_difference_impl(array_header_t *res, void *restrict res_ptr, arr
     return res_ptr;
 }
 
-void *array_set_union_impl(array_header_t *res, void *restrict res_ptr, array_header_t *lhs,
-                           void *restrict lhs_ptr, array_header_t *rhs, void *restrict rhs_ptr, u32 width,
-                           u16 align) {
+void *array_set_union_impl(array_t *res, void *restrict res_ptr, array_t *lhs, void *restrict lhs_ptr,
+                           array_t *rhs, void *restrict rhs_ptr, u32 width, u16 align) {
 
     // res = left U right, left dominates any conflict
     size_t aligned = alloc_align(width, align);

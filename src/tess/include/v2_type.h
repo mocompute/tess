@@ -9,14 +9,12 @@
 
 typedef u32 tl_type_variable; // t0, t1, etc
 
-// clang-format off
-typedef struct {array_header; tl_type_variable *v;} tl_type_variable_array;
-typedef struct {array_sized;  tl_type_variable *v;} tl_type_variable_sized;
-typedef struct {array_header; struct tl_monotype const **v;} tl_monotype_array;
-typedef struct {array_sized;  struct tl_monotype const**v;} tl_monotype_sized;
-typedef struct {array_header; struct tl_polytype **v;} tl_polytype_array;
-typedef struct {array_sized;  struct tl_polytype const**v;} tl_polytype_sized;
-// clang-format on
+defarray(tl_type_variable_array, tl_type_variable);
+defsized(tl_type_variable_sized, tl_type_variable);
+defarray(tl_monotype_array, struct tl_monotype const *);
+defsized(tl_monotype_sized, struct tl_monotype const *);
+defarray(tl_polytype_array, struct tl_polytype const *);
+defsized(tl_polytype_sized, struct tl_polytype const *);
 
 typedef struct {
     str                    name;
@@ -72,10 +70,7 @@ typedef struct {
     u32                rank;
 } tl_type_uf_node;
 
-typedef struct {
-    array_header;
-    tl_type_uf_node *v;
-} tl_type_subs;
+defarray(tl_type_subs, tl_type_uf_node);
 
 // -- type constructor and registry --
 

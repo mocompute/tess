@@ -24,10 +24,7 @@ typedef struct {
     str struct_name;
 } free_variable_context_name;
 
-typedef struct {
-    array_header;
-    free_variable_context_name *v;
-} free_variable_context_name_array;
+defarray(free_variable_context_name_array, free_variable_context_name);
 
 struct transpiler {
     allocator     *alloc;
