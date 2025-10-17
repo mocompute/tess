@@ -140,9 +140,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
     str_array field_names = {.alloc = self->arena};
     array_reserve(field_names, node->user_type_def.n_fields);
 
-    ast_node         **annotations = node->user_type_def.field_annotations;
-    tl_monotype const *field_types = null;
-    tl_monotype const *head        = null;
+    ast_node        **annotations = node->user_type_def.field_annotations;
+    tl_monotype_array field_types = {.alloc = self->arena};
     for (u32 i = 0; i < n_fields; ++i) {
         // field name
         assert(ast_node_is_symbol(fields[i]));
@@ -167,8 +166,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
                     return;
                 }
 
-                field =
-                  tl_monotype_clone(self->arena, tl_type_registry_instantiate(self->registry, ann, null));
+                field = tl_monotype_clone(
+                  self->arena, tl_type_registry_instantiate(self->registry, ann, (tl_monotype_sized){0}));
             }
         } else if (ast_node_is_nfa(annotations[i])) {
             fatal("not yet implemented");
@@ -179,51 +178,44 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
             //   nfa->named_application.arguments, nfa->named_application.n_arguments);
         }
 
-        ((tl_monotype *)field)->next = null;
-
-        if (!field_types) {
-            field_types = field;
-            head        = field;
-        } else {
-            ((tl_monotype *)head)->next = field; // const cast
-            head                        = head->next;
-        }
+        array_push(field_types, field);
     }
 
+    array_shrink(field_types);
     array_shrink(field_names);
     array_shrink(type_argument_tvs);
 
     tl_type_constructor_def const *def = tl_type_constructor_def_create(
       self->registry, name, (tl_type_variable_sized)sized_all(type_argument_tvs),
-      (str_sized)sized_all(field_names), field_types);
+      (str_sized)sized_all(field_names), (tl_monotype_sized)sized_all(field_types));
 
     tl_polytype const *poly = tl_polytype_create_def(self->arena, def);
     tl_type_env_insert(self->env, name, poly);
 }
 
-tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
-    assert(ast_node_is_utd(node));
-    str                 name     = ast_node_str(node->user_type_def.name);
-    u32                 n_fields = node->user_type_def.n_fields;
-    tl_monotype const **types    = node->user_type_def.field_types_v2;
+// tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
+//     assert(ast_node_is_utd(node));
+//     str                 name     = ast_node_str(node->user_type_def.name);
+//     u32                 n_fields = node->user_type_def.n_fields;
+//     tl_monotype const **types    = node->user_type_def.field_types_v2;
 
-    // field name types must be concrete
-    for (u32 i = 0; i < n_fields; ++i) {
-        if (!tl_monotype_is_concrete(types[i])) fatal("not concrete");
-    }
+//     // field name types must be concrete
+//     for (u32 i = 0; i < n_fields; ++i) {
+//         if (!tl_monotype_is_concrete(types[i])) fatal("not concrete");
+//     }
 
-    // construct a linked list of monotypes
-    assert(n_fields > 0);
-    tl_monotype *head = (tl_monotype *)types[0]; // const cast
-    for (u32 i = 1; i < n_fields; ++i) {
-        head->next = types[i];
-        head       = (tl_monotype *)head->next; // const cast
-    }
+//     // // construct a linked list of monotypes
+//     // assert(n_fields > 0);
+//     // tl_monotype *head = (tl_monotype *)types[0]; // const cast
+//     // for (u32 i = 1; i < n_fields; ++i) {
+//     //     head->next = types[i];
+//     //     head       = (tl_monotype *)head->next; // const cast
+//     // }
 
-    // TODO this should probably be cached somewhere.
-    // TODO support type arguments for user types
-    return tl_type_registry_instantiate(self->registry, name, null);
-}
+//     // TODO this should probably be cached somewhere.
+//     // TODO support type arguments for user types
+//     return tl_type_registry_instantiate(self->registry, name, null);
+// }
 
 void load_user_type(tl_infer *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
@@ -286,8 +278,13 @@ static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, ha
         tl_polytype const *left  = make_type_annotation(self, ann->arrow.left, map);
         tl_polytype const *right = make_type_annotation(self, ann->arrow.right, map);
 
+        // FIXME: seems this whole function is borked.
         if (!tl_monotype_is_list(left->type)) {
-            left = tl_polytype_absorb_mono(self->arena, tl_monotype_create_list(self->arena, left->type));
+            tl_monotype_array arr = {.alloc = self->arena};
+            array_push(arr, left->type);
+            array_shrink(arr);
+            left = tl_polytype_absorb_mono(
+              self->arena, tl_monotype_create_list(self->arena, (tl_monotype_sized)sized_all(arr)));
         }
 
         tl_polytype_list_append(self->arena, (tl_polytype *)left, right); // const cast
@@ -782,10 +779,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
             if (target_ty && tl_polytype_is_concrete(target_ty) && tl_monotype_is_ptr(target_ty->type)) {
                 // ptr to concrete type
-                tl_monotype const *deref = target_ty->type->cons_inst->args;
+                assert(target_ty->type->cons_inst->args.size == 1);
+                tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
                 if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
             } else if (target_ty && tl_monotype_is_ptr(target_ty->type)) {
-                tl_monotype const *deref = target_ty->type->cons_inst->args;
+                assert(target_ty->type->cons_inst->args.size == 1);
+                tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
                 if (constrain_pm(self, ctx, node->type_v2, deref, node)) return 1;
             }
         }
@@ -926,18 +925,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
 
             ast_arguments_iter iter = ast_node_arguments_iter(node);
-            if (tl_monotype_list_length(def->field_types) != iter.count) {
+            if (def->field_types.size != iter.count) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
                 return 1;
             }
 
             tl_monotype const *inst = tl_type_constructor_instantiate(self->arena, def, self->subs);
-
-            tl_monotype const *hd   = inst->cons_inst->args;
-            ast_node          *arg;
+            assert(inst->cons_inst->args.size == iter.count);
+            ast_node *arg;
+            u32       i = 0;
             while ((arg = ast_arguments_next(&iter))) {
-                if (constrain_pm(self, ctx, arg->type_v2, hd, node)) return 1;
-                hd = hd->next;
+                if (constrain_pm(self, ctx, arg->type_v2, inst->cons_inst->args.v[i], node)) return 1;
+                ++i;
             }
 
         } break;
@@ -997,14 +996,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->type_v2);
         ast_node_sized arr = ast_node_sized_from_ast_array(node);
         assert(arr.size > 0);
-        if (tl_polytype_is_scheme(arr.v[0]->type_v2)) fatal("generic type");
-        tl_monotype const *head = arr.v[0]->type_v2->type;
-        for (u32 i = 1; i < arr.size; ++i) {
+
+        tl_monotype_array tup_types = {.alloc = self->arena};
+        array_reserve(tup_types, arr.size);
+        forall(i, arr) {
             if (tl_polytype_is_scheme(arr.v[i]->type_v2)) fatal("generic type");
-            tl_monotype_list_concat((tl_monotype *)head, arr.v[i]->type_v2->type); // const cast
+            array_push(tup_types, arr.v[0]->type_v2->type);
         }
+
         if (constrain(self, ctx, node->type_v2,
-                      tl_polytype_absorb_mono(self->arena, tl_monotype_create_tuple(self->arena, head)),
+                      tl_polytype_absorb_mono(
+                        self->arena,
+                        tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types))),
                       node))
             return 1;
 
@@ -1047,16 +1050,13 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
         assert(tl_polytype_is_concrete(poly));
         array_push(arr, poly->type);
     }
-    forall(i, arr) {
-        if (i + i < arr.size) {
-            arr.v[i]->next = arr.v[i + 1];
-        }
-    }
+    array_shrink(arr);
 
-    tl_monotype const *inst     = tl_type_registry_instantiate(self->registry, name, arr.v[0]);
+    tl_monotype const *inst =
+      tl_type_registry_instantiate(self->registry, name, (tl_monotype_sized)sized_all(arr));
 
-    name_and_type      key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
-    str               *existing = map_get(self->instances, &key, sizeof key);
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
         node->named_application.name->symbol.name     = *existing;
@@ -1408,15 +1408,14 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
         // assign concrete types to parameters
         assert(tl_list == arrow->tag);
 
-        tl_monotype const *args = arrow->list.head;
+        assert(arrow->list.xs.size == params.size + 1);
         forall(i, params) {
-            assert(args);
             ast_node *param = params.v[i];
-            param->type_v2  = tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, args));
-            args            = args->next;
+            param->type_v2 =
+              tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, arrow->list.xs.v[i]));
         }
 
-        tl_monotype const *inst_result = tl_monotype_list_last(arrow);
+        tl_monotype const *inst_result = tl_monotype_sized_last(arrow->list.xs);
         body->type_v2 = tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, inst_result));
 
         // add to toplevel
@@ -1484,19 +1483,23 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
 
     else {
 
-        // more than 1 arg, we need to create a flat list (not recursive)
-        ensure_tv(self, null, &args.v[0]->type_v2);
-        tl_monotype const *head = tl_monotype_clone(self->arena, args.v[0]->type_v2->type);
-        tl_monotype const *hd   = head;
-        for (u32 i = 1; i < args.size; ++i) {
+        tl_monotype_array clone = {.alloc = self->arena};
+        array_reserve(clone, args.size);
+        forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type_v2);
-            tl_monotype const *arg    = tl_monotype_clone(self->arena, args.v[i]->type_v2->type);
-            ((tl_monotype *)hd)->next = arg; // const cast
-            hd                        = arg;
+            if (tl_polytype_is_scheme(args.v[i]->type_v2)) fatal("type scheme");
+            tl_monotype const *ty = tl_monotype_clone(self->arena, args.v[i]->type_v2->type);
+            array_push(clone, ty);
         }
-        ((tl_monotype *)hd)->next = result ? result->type_v2->type : null; // const cast
 
-        tl_monotype const *out    = tl_monotype_create_list(self->arena, head);
+        if (result) {
+            tl_monotype const *res_ty = tl_monotype_clone(self->arena, result->type_v2->type);
+            array_push(clone, res_ty);
+        }
+
+        array_shrink(clone);
+
+        tl_monotype const *out = tl_monotype_create_list(self->arena, (tl_monotype_sized)sized_all(clone));
         {
             str str = tl_monotype_to_string(self->transient, out);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
@@ -1560,7 +1563,7 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
     // add free variables to arrow type and put into global environment
     if (ctx.fvs.size) {
-        tl_monotype_absorb_fvs(self->arena, (tl_monotype *)arrow->type,
+        tl_monotype_absorb_fvs((tl_monotype *)arrow->type,
                                (str_sized)sized_all(ctx.fvs)); // const cast
         tl_monotype_sort_fvs((tl_monotype *)arrow->type);      // const cast
     }

@@ -22,23 +22,25 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
 
     str_sized              empty    = {0};
     tl_type_variable_sized empty_tv = {0};
+    tl_monotype_sized      empty_mt = {0};
 
-    tl_type_constructor_def_create(self, S("Nil"), empty_tv, empty, null);
-    tl_type_constructor_def_create(self, S("Int"), empty_tv, empty, null);
-    tl_type_constructor_def_create(self, S("Bool"), empty_tv, empty, null);
-    tl_type_constructor_def_create(self, S("Float"), empty_tv, empty, null);
-    tl_type_constructor_def_create(self, S("String"), empty_tv, empty, null);
+    tl_type_constructor_def_create(self, S("Nil"), empty_tv, empty, empty_mt);
+    tl_type_constructor_def_create(self, S("Int"), empty_tv, empty, empty_mt);
+    tl_type_constructor_def_create(self, S("Bool"), empty_tv, empty, empty_mt);
+    tl_type_constructor_def_create(self, S("Float"), empty_tv, empty, empty_mt);
+    tl_type_constructor_def_create(self, S("String"), empty_tv, empty, empty_mt);
 
     tl_type_variable_sized unary = {.size = 1, .v = alloc_malloc(alloc, sizeof(tl_type_variable))};
     unary.v[0]                   = tl_type_subs_fresh(subs);
     tl_monotype const *tv_type   = tl_monotype_create_tv(alloc, unary.v[0]);
-    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, tv_type);
+    tl_monotype_sized  mt_arr    = {.size = 1, .v = &tv_type};
+    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, mt_arr);
 
-    tl_type_registry_instantiate(self, S("Nil"), null);
-    tl_type_registry_instantiate(self, S("Int"), null);
-    tl_type_registry_instantiate(self, S("Bool"), null);
-    tl_type_registry_instantiate(self, S("Float"), null);
-    tl_type_registry_instantiate(self, S("String"), null);
+    tl_type_registry_instantiate(self, S("Nil"), empty_mt);
+    tl_type_registry_instantiate(self, S("Int"), empty_mt);
+    tl_type_registry_instantiate(self, S("Bool"), empty_mt);
+    tl_type_registry_instantiate(self, S("Float"), empty_mt);
+    tl_type_registry_instantiate(self, S("String"), empty_mt);
 
     return self;
 }
@@ -46,7 +48,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
 tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *self, str name,
                                                               tl_type_variable_sized type_variables,
                                                               str_sized              field_names,
-                                                              tl_monotype const     *field_types) {
+                                                              tl_monotype_sized      field_types) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
     def->type_variables          = type_variables;
@@ -63,19 +65,19 @@ typedef struct {
 
 } registry_key;
 
-tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name, tl_monotype const *args) {
+tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name, tl_monotype_sized args) {
     tl_monotype *type = null;
-    registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_list_hash64(0, args)};
+    registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     if ((type = map_get_ptr(self->instances, &key, sizeof key))) return type;
 
     tl_type_constructor_def *def = str_map_get_ptr(self->definitions, name);
     if (!def) fatal("type cons name not found");
 
-    u32 arity = tl_monotype_list_length(def->field_types);
-    if (tl_monotype_list_length(args) != arity) return null;
+    u32 arity = def->field_types.size;
+    if (args.size != arity) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
-    *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(self->alloc, args)};
+    *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_sized_clone(self->alloc, args)};
 
     type  = new (self->alloc, tl_monotype);
     *type = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
@@ -90,7 +92,8 @@ tl_monotype const *tl_type_constructor_instantiate(allocator *alloc, tl_type_con
                                                    tl_type_subs *subs) {
 
     tl_type_constructor_inst *inst = new (alloc, tl_type_constructor_inst);
-    *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_list_copy(alloc, def->field_types)};
+    *inst =
+      (tl_type_constructor_inst){.def = def, .args = tl_monotype_sized_clone(alloc, def->field_types)};
 
     tl_monotype *fresh = new (alloc, tl_monotype);
     *fresh             = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
@@ -114,23 +117,24 @@ tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *self, 
 }
 
 tl_monotype const *tl_type_registry_nil(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Nil"), null);
+    return tl_type_registry_instantiate(self, S("Nil"), (tl_monotype_sized){0});
 }
 tl_monotype const *tl_type_registry_int(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Int"), null);
+    return tl_type_registry_instantiate(self, S("Int"), (tl_monotype_sized){0});
 }
 tl_monotype const *tl_type_registry_float(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Float"), null);
+    return tl_type_registry_instantiate(self, S("Float"), (tl_monotype_sized){0});
 }
 tl_monotype const *tl_type_registry_bool(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Bool"), null);
+    return tl_type_registry_instantiate(self, S("Bool"), (tl_monotype_sized){0});
 }
 tl_monotype const *tl_type_registry_string(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("String"), null);
+    return tl_type_registry_instantiate(self, S("String"), (tl_monotype_sized){0});
 }
 
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *self, tl_monotype const *arg) {
-    tl_monotype const *out = tl_type_registry_instantiate(self, S("Ptr"), arg);
+    tl_monotype const *out =
+      tl_type_registry_instantiate(self, S("Ptr"), (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
@@ -244,7 +248,7 @@ tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) 
     case tl_poly_def:  {
         tl_type_constructor_def *def = alloc_malloc(alloc, sizeof *def);
         def->name                    = str_copy(alloc, orig->def->name);
-        def->field_types             = tl_monotype_list_copy(alloc, orig->def->field_types);
+        def->field_types             = tl_monotype_sized_clone(alloc, orig->def->field_types);
 
         {
             tl_type_variable_array arr = {.alloc = alloc};
@@ -267,23 +271,23 @@ tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) 
     return clone;
 }
 
-void tl_monotype_list_concat(tl_monotype *list, tl_monotype const *tail) {
-    tl_monotype const *head = list;
-    while (head->next) head = head->next;
+// void tl_monotype_list_concat(tl_monotype *list, tl_monotype const *tail) {
+//     tl_monotype const *head = list;
+//     while (head->next) head = head->next;
 
-    tl_monotype const *right = tail;
-    switch (right->tag) {
-    case tl_var:
-    case tl_weak:
-    case tl_cons_inst:
-        ((tl_monotype *)head)->next = right; // const cast
-        break;
-    case tl_list:
-    case tl_tuple:
-        ((tl_monotype *)head)->next = right->list.head; // const cast
-        break;
-    }
-}
+//     tl_monotype const *right = tail;
+//     switch (right->tag) {
+//     case tl_var:
+//     case tl_weak:
+//     case tl_cons_inst:
+//         ((tl_monotype *)head)->next = right; // const cast
+//         break;
+//     case tl_list:
+//     case tl_tuple:
+//         ((tl_monotype *)head)->next = right->list.head; // const cast
+//         break;
+//     }
+// }
 
 void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype const *rhs) {
 
@@ -294,15 +298,46 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype con
 
         // merge rhs quants into lhs
         forall(i, rhs->quantifiers) array_set_insert(arr, rhs->quantifiers.v[i]);
+        alloc_free(alloc, lhs->quantifiers.v);
         lhs->quantifiers.size = arr.size;
         lhs->quantifiers.v    = arr.v;
-        // leaks prior quantifiers array
     }
 
-    tl_monotype const *list = lhs->type;
-    assert(tl_list == list->tag);
+    tl_monotype       *left  = (tl_monotype *)lhs->type; // const cast
+    tl_monotype const *right = rhs->type;
+    assert(tl_list == left->tag);
 
-    tl_monotype_list_concat((tl_monotype *)list->list.head, rhs->type); // const cast
+    tl_monotype_array arr = {.alloc = alloc};
+    array_reserve(arr, left->list.xs.size);
+    array_push_many(arr, left->list.xs.v, left->list.xs.size);
+
+    switch (right->tag) {
+    case tl_var:
+    case tl_weak:
+    case tl_cons_inst: array_push(arr, right); break;
+    case tl_list:
+    case tl_tuple:     array_push_many(arr, right->list.xs.v, right->list.xs.size); break;
+    }
+
+    array_shrink(arr);
+    alloc_free(alloc, left->list.xs.v);
+    left->list.xs = (tl_monotype_sized)sized_all(arr);
+}
+
+void tl_polytype_merge_quantifiers(allocator *alloc, tl_polytype *self, tl_polytype const *in) {
+    if (in->quantifiers.size) {
+        tl_type_variable_array arr = {.alloc = alloc};
+        array_reserve(arr, self->quantifiers.size + in->quantifiers.size);
+        array_push_many(arr, self->quantifiers.v, self->quantifiers.size);
+
+        // merge rhs quants into lhs
+        forall(i, in->quantifiers) array_set_insert(arr, in->quantifiers.v[i]);
+        array_shrink(arr);
+
+        alloc_free(alloc, self->quantifiers.v);
+        self->quantifiers.size = arr.size;
+        self->quantifiers.v    = arr.v;
+    }
 }
 
 static void replace_tv(tl_monotype *self, hashmap *map) {
@@ -321,21 +356,13 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
 
         break;
 
-    case tl_cons_inst: {
-        tl_monotype *hd = (tl_monotype *)self->cons_inst->args; // const cast
-        while (hd) {
-            replace_tv(hd, map);
-            hd = (tl_monotype *)hd->next; // const cast
-        }
-    } break;
-
+    case tl_cons_inst:
     case tl_list:
-    case tl_tuple: {
-        tl_monotype *hd = (tl_monotype *)self->list.head; // const cast
-        while (hd) {
-            replace_tv(hd, map);
-            hd = (tl_monotype *)hd->next; // const cast
-        }
+    case tl_tuple:     {
+        tl_monotype_sized arr;
+        if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
+        else arr = self->list.xs;
+        forall(i, arr) replace_tv((tl_monotype *)arr.v[i], map); // const cast
     } break;
     }
 }
@@ -377,21 +404,13 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
         // weak type variables are not generalizeable
         break;
 
-    case tl_cons_inst: {
-        tl_monotype *hd = (tl_monotype *)self->cons_inst->args; // const cast
-        while (hd) {
-            generalize(hd, quant);
-            hd = (tl_monotype *)hd->next; // const cast
-        }
-    } break;
-
+    case tl_cons_inst:
     case tl_list:
-    case tl_tuple: {
-        tl_monotype *hd = (tl_monotype *)self->list.head; // const cast
-        while (hd) {
-            generalize(hd, quant);
-            hd = (tl_monotype *)hd->next; // const cast
-        }
+    case tl_tuple:     {
+        tl_monotype_sized arr;
+        if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
+        else arr = self->list.xs;
+        forall(i, arr) generalize((tl_monotype *)arr.v[i], quant); // const cast
 
     } break;
     }
@@ -416,89 +435,52 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_s
 
 // -- monotype --
 
-static u32 list_length(tl_monotype const *head, u32 count) {
-    if (!head) return count;
-    return list_length(head->next, count + 1);
-}
-
-u32 tl_monotype_list_length(tl_monotype const *head) {
-    return list_length(head, 0);
-}
-
-tl_monotype const *tl_monotype_list_copy(allocator *alloc, tl_monotype const *head) {
-    if (!head) return null;
-
-    // copy list elements
-    tl_monotype *copy          = null;
-
-    copy                       = new (alloc, tl_monotype);
-    *copy                      = *head;
-
-    tl_monotype const *hd      = head->next;
-    tl_monotype       *copy_hd = copy;
-    while (hd) {
-        copy_hd->next                 = new (alloc, tl_monotype);
-        *(tl_monotype *)copy_hd->next = *hd; // const cast
-        hd                            = hd->next;
-        copy_hd                       = (tl_monotype *)copy_hd->next; // const cast
-    }
-
-    return copy;
-}
-
-tl_monotype const *tl_monotype_list_last(tl_monotype const *self) {
-    if (tl_list != self->tag) return self;
-
-    tl_monotype const *head = self->list.head;
-    while (head->next) head = head->next;
-    return head;
-}
-
-tl_monotype const *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
+tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_var, .var = tv};
     return self;
 }
 
-tl_monotype const *tl_monotype_create_weak(allocator *alloc, tl_type_variable tv) {
+tl_monotype *tl_monotype_create_weak(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_weak, .var = tv};
     return self;
 }
 
-nodiscard tl_monotype const *tl_monotype_create_fresh_weak(tl_type_subs *self) {
+nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *self) {
     tl_type_variable tv = tl_type_subs_fresh(self);
     return tl_monotype_create_weak(self->alloc, tv);
 }
 
-tl_monotype const *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs,
-                                            tl_monotype const *rhs) {
-    tl_monotype *head = (tl_monotype *)tl_monotype_clone(alloc, lhs); // const cast
-    head->next        = tl_monotype_clone(alloc, rhs);
-    return tl_monotype_create_list(alloc, head);
+tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs, tl_monotype const *rhs) {
+    tl_monotype const *left  = tl_monotype_clone(alloc, lhs);
+    tl_monotype const *right = tl_monotype_clone(alloc, rhs);
+    tl_monotype_array  arr   = {.alloc = alloc};
+    array_reserve(arr, 2);
+    array_push(arr, left);
+    array_push(arr, right);
+    return tl_monotype_create_list(alloc, (tl_monotype_sized)sized_all(arr));
 }
 
-tl_monotype const *tl_monotype_create_list(allocator *alloc, tl_monotype const *head) {
-    assert(head);
+tl_monotype *tl_monotype_create_list(allocator *alloc, tl_monotype_sized xs) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_list, .list = {.head = head}};
+    *self             = (tl_monotype){.tag = tl_list, .list = {.xs = xs}};
     return self;
 }
 
-tl_monotype const *tl_monotype_create_tuple(allocator *alloc, tl_monotype const *head) {
-    assert(head);
+tl_monotype *tl_monotype_create_tuple(allocator *alloc, tl_monotype_sized xs) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_tuple, .list = {.head = head}};
+    *self             = (tl_monotype){.tag = tl_tuple, .list = {.xs = xs}};
     return self;
 }
 
-tl_monotype const *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst const *cons) {
+tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst const *cons) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_cons_inst, .cons_inst = cons};
     return self;
 }
 
-tl_monotype const *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
+tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
 
     if (!orig) return null;
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
@@ -515,13 +497,14 @@ tl_monotype const *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) 
 
         // clone the args list
         ((tl_type_constructor_inst *)clone->cons_inst)->args =
-          tl_monotype_list_copy(alloc, orig->cons_inst->args); // const cast
+          tl_monotype_sized_clone(alloc, orig->cons_inst->args);
+
         break;
 
     case tl_list:
     case tl_tuple:
         *clone =
-          (tl_monotype){.tag = orig->tag, .list = {.head = tl_monotype_list_copy(alloc, orig->list.head)}};
+          (tl_monotype){.tag = orig->tag, .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs)}};
         clone->list.fvs = orig->list.fvs; // shallow copy
         break;
     }
@@ -537,11 +520,7 @@ int tl_monotype_is_concrete(tl_monotype const *self) {
     case tl_cons_inst: return 1;
     case tl_list:
     case tl_tuple:     {
-        tl_monotype const *hd = self->list.head;
-        while (hd) {
-            if (!tl_monotype_is_concrete(hd)) return 0;
-            hd = hd->next;
-        }
+        forall(i, self->list.xs) if (!tl_monotype_is_concrete(self->list.xs.v[i])) return 0;
         return 1;
     }
     }
@@ -587,36 +566,23 @@ int tl_polytype_is_concrete(tl_polytype const *self) {
 
 void tl_monotype_sort_fvs(tl_monotype *self) {
     if (tl_list != self->tag) return;
-    if (!self->list.fvs) return;
-    if (!self->list.fvs->size) return;
-    qsort(self->list.fvs->v, self->list.fvs->size, sizeof self->list.fvs->v[0], str_cmp_v);
+    if (!self->list.fvs.size) return;
+    qsort(self->list.fvs.v, self->list.fvs.size, sizeof self->list.fvs.v[0], str_cmp_v);
 }
 
 str_sized tl_monotype_fvs(tl_monotype const *self) {
     if (tl_list != self->tag) return (str_sized){0};
-    if (self->list.fvs) return *self->list.fvs;
-    return (str_sized){0};
+    return self->list.fvs;
 }
 
-void tl_monotype_absorb_fvs(allocator *alloc, tl_monotype *self, str_sized fvs) {
+void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
     if (tl_list != self->tag) fatal("logic error");
-    self->list.fvs  = new (alloc, str_sized);
-    *self->list.fvs = fvs;
+    self->list.fvs = fvs;
 }
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def const *self) {
     u64 hash = str_hash64(self->name);
     hash     = hash64_combine(hash, &self->type_variables.size, sizeof self->type_variables.size);
-    return hash;
-}
-
-u64 tl_monotype_list_hash64(u64 seed, tl_monotype const *head) {
-    u64 hash = seed;
-    while (head) {
-        u64 h = tl_monotype_hash64(head);
-        hash  = hash64_combine(hash, &h, sizeof h);
-        head  = head->next;
-    }
     return hash;
 }
 
@@ -629,13 +595,13 @@ u64 tl_monotype_hash64(tl_monotype const *self) {
     case tl_cons_inst: {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
-        hash         = tl_monotype_list_hash64(hash, self->cons_inst->args);
+        hash         = tl_monotype_sized_hash64(hash, self->cons_inst->args);
     } break;
 
     case tl_list:
     case tl_tuple: {
-        hash = tl_monotype_list_hash64(hash, self->list.head);
-        if (tl_list == self->tag && self->list.fvs) hash = str_array_hash64(hash, *self->list.fvs);
+        hash = tl_monotype_sized_hash64(hash, self->list.xs);
+        if (tl_list == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
 
@@ -662,43 +628,37 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
 
     case tl_cons_inst: {
         str_build_cat(&b, self->cons_inst->def->name);
-        tl_monotype const *arg = self->cons_inst->args;
-        if (arg) {
+        if (self->cons_inst->args.size) {
             str_build_cat(&b, S(" "));
-            while (arg) {
-                str_build_cat(&b, tl_monotype_to_string(alloc, arg));
-                if (arg->next) str_build_cat(&b, S(" -> "));
-                arg = arg->next;
+            forall(i, self->cons_inst->args) {
+                str_build_cat(&b, tl_monotype_to_string(alloc, self->cons_inst->args.v[i]));
+                if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(" -> "));
             }
         }
     } break;
 
     case tl_list: {
-        if (self->list.fvs) {
+        if (self->list.fvs.size) {
             str_build_cat(&b, S("["));
-            forall(i, *self->list.fvs) {
-                str_build_cat(&b, self->list.fvs->v[i]);
-                if (i + 1 < self->list.fvs->size) str_build_cat(&b, S(" "));
+            forall(i, self->list.fvs) {
+                str_build_cat(&b, self->list.fvs.v[i]);
+                if (i + 1 < self->list.fvs.size) str_build_cat(&b, S(" "));
             }
             str_build_cat(&b, S("] "));
         }
-        tl_monotype const *hd = self->list.head;
         str_build_cat(&b, S("("));
-        while (hd) {
-            str_build_cat(&b, tl_monotype_to_string(alloc, hd));
-            if (hd->next) str_build_cat(&b, S(" -> "));
-            hd = hd->next;
+        forall(i, self->list.xs) {
+            str_build_cat(&b, tl_monotype_to_string(alloc, self->list.xs.v[i]));
+            if (i + 1 < self->list.xs.size) str_build_cat(&b, S(" -> "));
         }
         str_build_cat(&b, S(")"));
     } break;
 
     case tl_tuple: {
-        tl_monotype const *hd = self->list.head;
         str_build_cat(&b, S("("));
-        while (hd) {
-            str_build_cat(&b, tl_monotype_to_string(alloc, hd));
-            if (hd->next) str_build_cat(&b, S(", "));
-            hd = hd->next;
+        forall(i, self->list.xs) {
+            str_build_cat(&b, tl_monotype_to_string(alloc, self->list.xs.v[i]));
+            if (i + 1 < self->list.xs.size) str_build_cat(&b, S(", "));
         }
         str_build_cat(&b, S(")"));
 
@@ -803,9 +763,8 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
     if (self->v[x].rank == self->v[y].rank) self->v[x].rank++;
 }
 
-int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
-               void *user);
-
+static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right,
+                      tl_monotype const *lhs, tl_monotype const *rhs, type_error_cb_fun cb, void *user);
 static int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
                                  void *);
 static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype const *,
@@ -859,7 +818,7 @@ int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, 
                 if (cb) cb(user, left, right);
                 return 1;
             }
-            return unify_list(subs, left->cons_inst->args, right->cons_inst->args, cb, user);
+            return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
 
         case tl_list:
         case tl_tuple:
@@ -880,7 +839,7 @@ int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, 
             if (cb) cb(user, left, right);
             return 1;
 
-        case tl_list: return unify_list(subs, left->list.head, right->list.head, cb, user);
+        case tl_list: return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user);
         }
 
         break;
@@ -896,29 +855,28 @@ int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, 
             if (cb) cb(user, left, right);
             return 1;
 
-        case tl_tuple: return unify_list(subs, left->list.head, right->list.head, cb, user);
+        case tl_tuple: return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user);
         }
 
         break;
     }
 }
 
-int unify_list(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right, type_error_cb_fun cb,
-               void *user) {
+int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype const *lhs,
+               tl_monotype const *rhs, type_error_cb_fun cb, void *user) {
 
-    while (left || right) {
-        if (!left || !right) {
-            if (cb) cb(user, left, right);
-            return 1;
-        }
-        if (tl_type_subs_unify_mono(subs, left, right, cb, user)) {
-            if (cb) cb(user, left, right);
-            return 1;
-        }
-
-        left  = left->next;
-        right = right->next;
+    if (left.size != right.size) {
+        if (cb) cb(user, lhs, rhs);
+        return 1;
     }
+
+    forall(i, left) {
+        if (tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user)) {
+            if (cb) cb(user, lhs, rhs);
+            return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -935,20 +893,14 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
 
     } break;
 
-    case tl_cons_inst: {
-        tl_monotype const *hd = mono->cons_inst->args;
-        while (hd) {
-            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1;
-            hd = hd->next;
-        }
-    } break;
-
+    case tl_cons_inst:
     case tl_list:
-    case tl_tuple: {
-        tl_monotype const *hd = mono->list.head;
-        while (hd) {
-            if (tl_type_subs_monotype_occurs(self, tv, hd)) return 1;
-            hd = hd->next;
+    case tl_tuple:     {
+        tl_monotype_sized arr;
+        if (tl_cons_inst == mono->tag) arr = mono->cons_inst->args;
+        else arr = mono->list.xs;
+        forall(i, arr) {
+            if (tl_type_subs_monotype_occurs(self, tv, arr.v[i])) return 1;
         }
     } break;
     }
@@ -1077,13 +1029,6 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
         tl_monotype const *resolved = subs->v[root].type;
         if (resolved) {
-
-            // apply substitution, preserving list structure if any
-            if (self->next) {
-                resolved                        = tl_monotype_clone(alloc, resolved);
-                ((tl_monotype *)resolved)->next = self->next; // const cast
-            }
-
             *self = *resolved;
         } else {
             // update to representative tv
@@ -1093,15 +1038,13 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
     } break;
 
     case tl_cons_inst:
-        tl_monotype_substitute(alloc, (tl_monotype *)self->cons_inst->args, subs, exclude); // const cast
-        break;
-
     case tl_list:
-    case tl_tuple: {
-        tl_monotype const *hd = self->list.head;
-        while (hd) {
-            tl_monotype_substitute(alloc, (tl_monotype *)hd, subs, exclude); // const cast
-            hd = hd->next;
+    case tl_tuple:     {
+        tl_monotype_sized arr;
+        if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
+        else arr = self->list.xs;
+        forall(i, arr) {
+            tl_monotype_substitute(alloc, (tl_monotype *)arr.v[i], subs, exclude); // const cast
         }
 
     } break;
@@ -1202,6 +1145,33 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 
     array_free(equiv_class);
     hset_destroy(&seen);
+}
+
+//
+
+u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
+    u64 hash = seed;
+    forall(i, arr) {
+        u64 h = tl_monotype_hash64(arr.v[i]);
+        hash  = hash64_combine(hash, &h, sizeof h);
+    }
+    return hash;
+}
+
+tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in) {
+    tl_monotype_array arr = {.alloc = alloc};
+    array_reserve(arr, in.size);
+    forall(i, in) {
+        tl_monotype *ty = tl_monotype_clone(alloc, in.v[i]);
+        array_push(arr, ty);
+    }
+    array_shrink(arr);
+    return (tl_monotype_sized)sized_all(arr);
+}
+
+tl_monotype const *tl_monotype_sized_last(tl_monotype_sized arr) {
+    if (!arr.size) return null;
+    return arr.v[arr.size - 1];
 }
 
 static void log(tl_type_env const *self, char const *restrict fmt, ...) {

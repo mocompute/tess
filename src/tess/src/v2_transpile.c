@@ -132,12 +132,11 @@ static str generate_tuple(transpile *self, tl_monotype const *type, ast_node con
     str res = next_res(self);
     generate_decl(self, res, type);
 
-    tl_monotype const *hd = type->list.head;
-    for (u32 i = 0; hd; hd = hd->next, ++i) {
+    forall(i, type->list.xs) {
         str field = make_tuple_field_name(i);
 
         // evaluate tuple element
-        str value = generate_expr(self, hd, node->tuple.elements[i]);
+        str value = generate_expr(self, type->list.xs.v[i], node->tuple.elements[i]);
 
         // assign to field
         generate_assign_field(self, res, field, value);
@@ -157,10 +156,9 @@ static void generate_struct(transpile *self, tl_monotype const *type) {
         cat(self, struct_name);
         catln(self, S(" {"));
 
-        tl_monotype const *hd = type->list.head;
-        for (u32 i = 0; hd; hd = hd->next, ++i) {
+        forall(i, type->list.xs) {
             str field = make_tuple_field_name(i);
-            generate_decl(self, field, hd);
+            generate_decl(self, field, type->list.xs.v[i]);
         }
 
         cat(self, S("} "));
@@ -201,10 +199,9 @@ static void generate_user_types(transpile *self) {
         cat(self, name);
         catln(self, S(" {"));
 
-        tl_monotype const *hd = type->type->cons_inst->args;
+        assert(def->field_names.size == type->type->cons_inst->args.size);
         forall(i, def->field_names) {
-            generate_decl(self, def->field_names.v[i], hd);
-            hd = hd->next;
+            generate_decl(self, def->field_names.v[i], type->type->cons_inst->args.v[i]);
         }
 
         cat(self, S("} "));
@@ -228,7 +225,8 @@ static void generate_toplevels(transpile *self) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, type)) continue;
 
-        tl_monotype const *return_type = tl_monotype_list_last(type->type);
+        assert(type->type->list.xs.size > 0);
+        tl_monotype const *return_type = tl_monotype_sized_last(type->type->list.xs);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
@@ -324,30 +322,30 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
-    tl_monotype const *hd = null;
-
-    if (tl_list == arrow->tag) hd = arrow->list.head;
-    else if (tl_cons_inst == arrow->tag) hd = arrow->cons_inst->args;
+    tl_monotype_sized arr;
+    if (tl_list == arrow->tag) arr = arrow->list.xs;
+    else if (tl_cons_inst == arrow->tag) arr = arrow->cons_inst->args;
     else fatal("runtime error");
 
+    assert(arr.size >= args.size);
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
 
-        str res = generate_expr(self, hd, args.v[i]);
+        str res = generate_expr(self, arr.v[i], args.v[i]);
         array_push(args_res, res);
-        hd = hd->next;
     }
     return args_res;
 }
 
 static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
-    tl_monotype const *funcall_result_type = tl_monotype_list_last((tl_monotype *)type);
+    assert(tl_monotype_is_list(type));
+    tl_monotype const *funcall_result_type = tl_monotype_sized_last(type->list.xs);
     str                res                 = str_empty(); // empty signals void result
 
     if (!tl_monotype_is_nil(funcall_result_type)) {
         res = next_res(self);
-        generate_decl(self, res, tl_monotype_list_last((tl_monotype *)type));
+        generate_decl(self, res, funcall_result_type);
         if (do_assign_lhs) generate_assign_lhs(self, res);
     }
     return res;
@@ -519,7 +517,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     case ast_address_of:   {
         if (!tl_monotype_is_ptr(type)) fatal("runtime error");
-        tl_monotype const *target_ty = type->cons_inst->args;
+        assert(1 == type->cons_inst->args.size);
+        tl_monotype const *target_ty = type->cons_inst->args.v[0];
         return str_cat(self->transient, S("&"), generate_expr(self, target_ty, node->address_of.target));
     } break;
     case ast_dereference: {
@@ -767,7 +766,8 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
         } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
         } else if (str_eq(S("Ptr"), cons_name)) {
-            tl_polytype wrap = tl_polytype_wrap(mono->cons_inst->args); // 1 element
+            assert(1 == mono->cons_inst->args.size);
+            tl_polytype wrap = tl_polytype_wrap(mono->cons_inst->args.v[0]);
             return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
         } else {
             return cons_name;
@@ -793,32 +793,33 @@ static str type_to_c_mono(transpile *self, tl_monotype const *type) {
 static str arrow_rhs_to_c(transpile *self, tl_polytype const *type) {
     if (tl_polytype_is_scheme(type)) fatal("type scheme");
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
-    tl_monotype const *right = tl_monotype_list_last(type->type);
+    tl_monotype const *right = tl_monotype_sized_last(type->type->list.xs);
     return type_to_c_mono(self, right);
 }
 
 static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *type, str name) {
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
-    tl_monotype const *right = tl_monotype_list_last(type);
+    if (!tl_monotype_is_arrow(type)) fatal("expected arrow");
+    tl_monotype const *right = tl_monotype_sized_last(type->list.xs);
     str_build_cat(b, type_to_c_mono(self, right));
     str_build_cat(b, S(" (*"));
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
 
-    tl_monotype const *hd = type->list.head;
-    while (hd && hd->next) { // skipping last element, which is the result type
+    assert(type->list.xs.size > 1);
+    for (u32 i = 0, n = type->list.xs.size - 1; i < n;
+         ++i) { // skipping last element, which is the result type
 
-        str_build_cat(b, type_to_c_mono(self, hd));
-
-        if (hd->next && hd->next->next) str_build_cat(b, S(", "));
-        hd = hd->next;
+        str_build_cat(b, type_to_c_mono(self, type->list.xs.v[i]));
+        if (i + 1 < n) str_build_cat(b, S(", "));
     }
 
     str_build_cat(b, S(")"));
 }
 
 static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized param_names) {
+    // param_names may be empty, e.g. when printing a prototype with no param names.
     if (tl_polytype_is_scheme(type)) fatal("type scheme");
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
 
@@ -826,28 +827,25 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
 
     tl_monotype const *arrow = type->type;
     if (tl_list != arrow->tag) fatal("logic error");
-    arrow = arrow->list.head;
+    assert(arrow->list.xs.size > 0);
 
-    if (!tl_monotype_is_nil(arrow)) {
-        int done = 0;
-        for (u32 idx = 0; !done; ++idx) {
-            tl_monotype arg = *arrow;
-            arg.next        = null;
-            if (tl_monotype_is_arrow(&arg)) {
-                build_arrow_to_c(self, &b, &arg,
-                                 (idx < param_names.size) ? param_names.v[idx] : str_empty());
+    if (!tl_monotype_is_nil(arrow->list.xs.v[0])) {
+        // first element is not nil, we have at least one argument
+
+        for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
+            // skip last element, the result type
+            tl_monotype const *arg = arrow->list.xs.v[i];
+            if (tl_monotype_is_arrow(arg)) {
+                build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
             } else {
-                str_build_cat(&b, type_to_c_mono(self, &arg));
-                if (idx < param_names.size) {
+                str_build_cat(&b, type_to_c_mono(self, arg));
+                if (i < param_names.size) {
                     str_build_cat(&b, S(" "));
-                    str_build_cat(&b, param_names.v[idx]);
+                    str_build_cat(&b, param_names.v[i]);
                 }
             }
 
-            if (arrow->next && arrow->next->next) {
-                str_build_cat(&b, S(", "));
-                arrow = arrow->next;
-            } else done = 1;
+            if (i + 1 < n) str_build_cat(&b, S(", "));
         }
     }
 
