@@ -188,20 +188,20 @@ static void generate_user_types(transpile *self) {
 
         if (!ast_node_is_utd(node)) continue;
         str                name = toplevel_name(node);
-        tl_polytype const *type = node->type_v2;
-        if (!tl_polytype_is_concrete(type)) fatal("type scheme");
-        if (!tl_monotype_is_inst(type->type)) fatal("not a type constructor instance");
+        tl_polytype const *poly = node->type_v2;
+        if (!tl_polytype_is_concrete(poly)) fatal("type scheme");
+        if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
 
-        tl_type_constructor_def const *def = type->type->cons_inst->def;
+        tl_type_constructor_def const *def = poly->type->cons_inst->def;
         if (!def) fatal("missing type def");
 
         cat(self, S("typedef struct "));
         cat(self, name);
         catln(self, S(" {"));
 
-        assert(def->field_names.size == type->type->cons_inst->args.size);
+        assert(def->field_names.size == poly->type->cons_inst->args.size);
         forall(i, def->field_names) {
-            generate_decl(self, def->field_names.v[i], type->type->cons_inst->args.v[i]);
+            generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
         }
 
         cat(self, S("} "));

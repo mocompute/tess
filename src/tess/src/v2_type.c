@@ -36,6 +36,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     tl_monotype_sized  mt_arr    = {.size = 1, .v = &tv_type};
     tl_type_constructor_def_create(self, S("Ptr"), unary, empty, mt_arr);
 
+    empty_mt = (tl_monotype_sized){0};
     tl_type_registry_instantiate(self, S("Nil"), empty_mt);
     tl_type_registry_instantiate(self, S("Int"), empty_mt);
     tl_type_registry_instantiate(self, S("Bool"), empty_mt);
@@ -77,7 +78,10 @@ tl_monotype const *tl_type_registry_instantiate(tl_type_registry *self, str name
     if (args.size != arity) return null;
 
     tl_type_constructor_inst *inst = new (self->alloc, tl_type_constructor_inst);
-    *inst = (tl_type_constructor_inst){.def = def, .args = tl_monotype_sized_clone(self->alloc, args)};
+    *inst                          = (tl_type_constructor_inst){
+                               .def  = def,
+                               .args = tl_monotype_sized_clone(self->alloc, args),
+    };
 
     type  = new (self->alloc, tl_monotype);
     *type = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
@@ -91,6 +95,8 @@ static void        replace_tv(tl_monotype *, hashmap *);
 tl_monotype const *tl_type_constructor_instantiate(allocator *alloc, tl_type_constructor_def const *def,
                                                    tl_type_subs *subs) {
 
+    // field_types are monotypes that may include type variables.
+
     tl_type_constructor_inst *inst = new (alloc, tl_type_constructor_inst);
     *inst =
       (tl_type_constructor_inst){.def = def, .args = tl_monotype_sized_clone(alloc, def->field_types)};
@@ -98,7 +104,9 @@ tl_monotype const *tl_type_constructor_instantiate(allocator *alloc, tl_type_con
     tl_monotype *fresh = new (alloc, tl_monotype);
     *fresh             = (tl_monotype){.tag = tl_cons_inst, .cons_inst = inst};
 
-    hashmap *q_to_t    = map_create(alloc, sizeof(tl_type_variable), 8);
+    // instantiate quantified type variables to fresh variables
+
+    hashmap *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
 
     forall(i, def->type_variables) {
         // make a fresh variable for each quantified type variable
@@ -431,6 +439,11 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env const *env, tl_type_s
     generalize((tl_monotype *)self->type, &quant); // const cast
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
+}
+
+tl_monotype const *tl_polytype_concrete(tl_polytype const *self) {
+    if (!tl_polytype_is_concrete(self)) fatal("runtime error");
+    return self->type;
 }
 
 // -- monotype --
@@ -1169,9 +1182,42 @@ tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in
     return (tl_monotype_sized)sized_all(arr);
 }
 
+tl_polytype_sized tl_polytype_sized_clone(allocator *alloc, tl_polytype_sized polys) {
+    tl_polytype_array arr = {.alloc = alloc};
+    array_reserve(arr, polys.size);
+    forall(i, polys) {
+        tl_polytype const *clone = tl_polytype_clone(alloc, polys.v[i]);
+        array_push(arr, clone);
+    }
+    array_shrink(arr);
+    return (tl_polytype_sized)sized_all(arr);
+}
+
 tl_monotype const *tl_monotype_sized_last(tl_monotype_sized arr) {
     if (!arr.size) return null;
     return arr.v[arr.size - 1];
+}
+
+tl_polytype_sized tl_monotype_sized_clone_poly(allocator *alloc, tl_monotype_sized monos) {
+    tl_polytype_array arr = {.alloc = alloc};
+    array_reserve(arr, monos.size);
+    forall(i, monos) {
+        tl_polytype const *poly = tl_polytype_absorb_mono(alloc, tl_monotype_clone(alloc, monos.v[i]));
+        array_push(arr, poly);
+    }
+    array_shrink(arr);
+    return (tl_polytype_sized)sized_all(arr);
+}
+
+tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized polys) {
+    tl_monotype_array arr = {.alloc = alloc};
+    array_reserve(arr, polys.size);
+    forall(i, polys) {
+        tl_monotype const *mono = tl_polytype_concrete(polys.v[i]);
+        array_push(arr, mono);
+    }
+    array_shrink(arr);
+    return (tl_monotype_sized)sized_all(arr);
 }
 
 static void log(tl_type_env const *self, char const *restrict fmt, ...) {

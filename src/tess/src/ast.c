@@ -911,8 +911,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     switch (node->tag) {
     case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
     case ast_i64:
-        snprintf(buf, sizeof buf, "(%" PRIi64 " : %.*s)", node->i64.val, str_ilen(ty_str),
-                 str_buf(&ty_str));
+        snprintf(buf, sizeof buf, "(%" PRIi64 " : %s)", node->i64.val, str_cstr(&ty_str));
         return str_init(alloc, buf);
 
     case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);

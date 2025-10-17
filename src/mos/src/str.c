@@ -11,7 +11,7 @@
 #define STR_SMALL 1
 
 str str_empty() {
-    return (str){.small.tag = 1, .small.len = 0};
+    return (str){.small.tag = STR_SMALL, .small.len = 0};
 }
 
 str str_move(str *orig) {
@@ -65,7 +65,8 @@ str str_init_n(allocator *alloc, char const *in, size_t len) {
         return out;
     }
 
-    str out = {.big = {.len = len, .buf = alloc_malloc(alloc, len)}};
+    // always allocate space for a terminating null to support str_cstr
+    str out = {.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
     memcpy(&out.big.buf[0], in, len);
     return out;
 }
@@ -91,7 +92,7 @@ str str_copy(allocator *alloc, str in) {
         return out;
     }
 
-    str out = (str){.big = {.len = s.len, .buf = alloc_malloc(alloc, s.len)}};
+    str out = (str){.big = {.len = s.len, .buf = alloc_malloc(alloc, s.len + 1)}};
     memcpy(&out.big.buf[0], &s.buf[0], s.len);
     return out;
 }
@@ -124,7 +125,7 @@ str str_fmt(allocator *alloc, char const *restrict fmt, ...) {
     if (len < 0) fatal("str_fmt error");
 
     // .len must not include terminating null character
-    str out = {.big = {.len = len - 1, .buf = alloc_malloc(alloc, len)}};
+    str out = {.big = {.len = len - 1, .buf = alloc_malloc(alloc, len + 1)}};
 
     va_start(args2, fmt);
     vsnprintf(out.big.buf, len, fmt, args2);
@@ -140,7 +141,7 @@ str str_cat(allocator *alloc, str left, str right) {
 
     str    out;
     if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
-    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len)}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
     span out_span = str_span(&out);
 
     memcpy(&out_span.buf[0], &left_span.buf[0], left_span.len);
@@ -234,13 +235,13 @@ void str_resize(allocator *alloc, str *self, size_t len) {
         char buf[MOS_STR_MAX_SMALL];
         assert(old.len <= MOS_STR_MAX_SMALL);
         memcpy(buf, old.buf, old.len);
-        self->big.buf = alloc_malloc(alloc, len);
+        self->big.buf = alloc_malloc(alloc, len + 1);
         memcpy(&self->big.buf[0], buf, old.len);
         self->big.len = len;
         return;
     }
 
-    self->big.buf = alloc_realloc(alloc, self->big.buf, len);
+    self->big.buf = alloc_realloc(alloc, self->big.buf, len + 1);
     self->big.len = len;
 }
 
@@ -502,4 +503,20 @@ str str_build_finish(str_build *p) {
     if (p->v) array_free(*p);
     alloc_invalidate(p);
     return out;
+}
+
+//
+
+char const *str_cstr(str *self) {
+    if (is_small(*self)) {
+        unsigned len = self->small.len;
+        if (self->small.buf[len] != '\0') self->small.buf[len] = '\0';
+        return self->small.buf;
+    } else {
+        size_t len = self->big.len;
+
+        // all buf allocations include an extra byte
+        if (self->big.buf[len] != '\0') self->big.buf[len] = '\0';
+        return self->big.buf;
+    }
 }

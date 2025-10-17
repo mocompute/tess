@@ -5,7 +5,7 @@
 #include "array.h"
 #include "types.h"
 
-#define MOS_STR_MAX_SMALL (sizeof(size_t) + sizeof(char *) - 1)
+#define MOS_STR_MAX_SMALL (sizeof(size_t) + sizeof(char *) - 2)
 
 typedef struct {
     size_t len;
@@ -17,7 +17,7 @@ typedef struct {
     union {
         span big;
         struct {
-            char         buf[MOS_STR_MAX_SMALL];
+            char         buf[MOS_STR_MAX_SMALL + 1]; // room for \0
             unsigned int len : 4;
             unsigned int tag : 4;
             // 1 if small, anything else if allocated (because it's the low bits of big.buf
@@ -104,12 +104,14 @@ int         str_array_contains(str_sized hay, str_sized need);
 
 // -- utilities --
 
-int str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
-int str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
+int         str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
+int         str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
 
-str str_init_i64(allocator *, i64);
-str str_init_u64(allocator *, u64);
-str str_init_f64(allocator *, f64);
+str         str_init_i64(allocator *, i64);
+str         str_init_u64(allocator *, u64);
+str         str_init_f64(allocator *, f64);
+
+char const *str_cstr(str *);
 
 // -- string builder --
 

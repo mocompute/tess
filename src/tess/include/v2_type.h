@@ -25,7 +25,7 @@ typedef struct {
 
 typedef struct {
     tl_type_constructor_def const *def;
-    tl_monotype_sized              args; // FIXME: what about polytype args?
+    tl_monotype_sized              args;
 } tl_type_constructor_inst;
 
 typedef struct {
@@ -46,7 +46,7 @@ typedef struct tl_monotype {
     enum { tl_var, tl_weak, tl_cons_inst, tl_list, tl_tuple } tag;
 } tl_monotype;
 
-typedef struct {
+typedef struct tl_polytype {
     tl_type_variable_sized quantifiers;
     union {
         tl_monotype const             *type;
@@ -150,6 +150,8 @@ nodiscard tl_monotype const *tl_polytype_instantiate(allocator *, tl_polytype co
 void                         tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs const *);
 void                         tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs *);
 
+tl_monotype const           *tl_polytype_concrete(tl_polytype const *);
+
 // Warning: must use same allocator as that which created self's array.
 void        tl_polytype_merge_quantifiers(allocator *, tl_polytype *, tl_polytype const *);
 
@@ -178,6 +180,9 @@ void tl_type_subs_log(allocator *, tl_type_subs *);
 
 u64                tl_monotype_sized_hash64(u64, tl_monotype_sized);
 tl_monotype_sized  tl_monotype_sized_clone(allocator *, tl_monotype_sized);
+tl_polytype_sized  tl_monotype_sized_clone_poly(allocator *, tl_monotype_sized);
 tl_monotype const *tl_monotype_sized_last(tl_monotype_sized);
+tl_monotype_sized  tl_polytype_sized_concrete(allocator *, tl_polytype_sized);
+tl_polytype_sized  tl_polytype_sized_clone(allocator *, tl_polytype_sized);
 
 #endif

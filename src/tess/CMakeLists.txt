@@ -107,7 +107,7 @@ function(tesslang_create_v2_test NAME)
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
     COMMAND tess_exe
-      cv2
+      c
       -o ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
       ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
     DEPENDS

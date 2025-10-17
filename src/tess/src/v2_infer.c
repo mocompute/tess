@@ -95,9 +95,8 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 //     // Point a => generic type
 //     if (ast_node_is_symbol(node)) {
 //         str                name = ast_node_str(node);
-//         tl_monotype const *ty   = tl_type_registry_instantiate(self->registry, name, null);
-//         if (!ty) return null;
-//         return tl_polytype_absorb_mono(self->arena, ty);
+//         tl_monotype const *ty = tl_type_registry_instantiate(self->registry, name,
+//         (tl_monotype_sized){0}); if (!ty) return null; return tl_polytype_absorb_mono(self->arena, ty);
 //     }
 
 //     if (ast_node_is_nfa(node)) {
@@ -639,7 +638,7 @@ static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trav
 
         // do not process recursive calls
         if (str_hset_contains(ctx->call_chain, name)) {
-            log(self, "detected recursive call to '%.*s'", str_ilen(name), str_buf(&name));
+            log(self, "detected recursive call to '%s'", str_cstr(&name));
             return 0;
         }
 
@@ -904,8 +903,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             str                inst_str = tl_monotype_to_string(self->transient, inst);
             tl_polytype const *app      = make_arrow(self, iter.nodes, node);
             str                app_str  = tl_polytype_to_string(self->transient, app);
-            log(self, "application: callsite '%.*s' (%.*s) arrow: %.*s", str_ilen(name), str_buf(&name),
-                str_ilen(inst_str), str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+            log(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
+                str_cstr(&app_str));
             tl_polytype wrap = tl_polytype_wrap(inst);
 
             // and constrain it with the callsite types (arguments -> result)
@@ -1960,16 +1959,15 @@ static void log_constraint(tl_infer *self, tl_polytype const *left, tl_polytype 
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
     str node_str  = v2_ast_node_to_string(self->transient, node);
-    log(self, "constrain: %.*s : %.*s from %.*s", str_ilen(left_str), str_buf(&left_str),
-        str_ilen(right_str), str_buf(&right_str), str_ilen(node_str), str_buf(&node_str));
+    log(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
 
 static void log_type_error(tl_infer *self, tl_polytype const *left, tl_polytype const *right) {
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
-    log(self, "error: constraints are not compatible:  %.*s versus %.*s", str_ilen(left_str),
-        str_buf(&left_str), str_ilen(right_str), str_buf(&right_str));
+    log(self, "error: constraints are not compatible:  %s versus %s", str_cstr(&left_str),
+        str_cstr(&right_str));
 }
 static void log_type_error_mm(tl_infer *self, tl_monotype const *left, tl_monotype const *right) {
     tl_polytype l = tl_polytype_wrap((tl_monotype *)left), r = tl_polytype_wrap((tl_monotype *)right);
