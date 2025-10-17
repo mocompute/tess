@@ -1,12 +1,9 @@
 #include "ast.h"
 #include "alloc.h"
 #include "ast_tags.h"
-#include "dbg.h"
 #include "hash.h"
 #include "hashmap.h"
 #include "sexp.h"
-#include "type.h"
-#include "util.h"
 #include "v2_type.h"
 
 #include <assert.h>
