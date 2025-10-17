@@ -104,7 +104,7 @@ static void register_user_type(void *ctx, ast_node *node) {
     struct syntax_checker *self = ctx;
 
     if (ast_user_type_definition != node->tag) return;
-    if (node->user_type_def.field_types) return;
+    if (node->user_type_def.field_types_v1) return;
     struct ast_user_type_def *v         = ast_node_utd(node);
 
     str                       type_name = ast_node_str(v->name);
@@ -121,10 +121,11 @@ static void register_user_type(void *ctx, ast_node *node) {
 
         // convert symbol annotations to actual types
 
-        node->user_type_def.field_types = alloc_calloc(self->arena, n_fields, sizeof v->field_types[0]);
+        node->user_type_def.field_types_v1 =
+          alloc_calloc(self->arena, n_fields, sizeof v->field_types_v1[0]);
 
-        tl_type  **field_types          = v->field_types;
-        ast_node **annotations          = v->field_annotations;
+        tl_type  **field_types = v->field_types_v1;
+        ast_node **annotations = v->field_annotations;
 
         for (u32 i = 0; i < n_fields; ++i) {
             str       str  = ast_node_str(annotations[i]);
@@ -141,9 +142,9 @@ static void register_user_type(void *ctx, ast_node *node) {
     }
 
     // make the user type and register it
-    tl_type *lt =
-      tl_type_create_labelled_tuple(self->arena, (tl_type_sized){.v = v->field_types, .size = v->n_fields},
-                                    (str_sized)sized_all(field_names));
+    tl_type *lt = tl_type_create_labelled_tuple(
+      self->arena, (tl_type_sized){.v = v->field_types_v1, .size = v->n_fields},
+      (str_sized)sized_all(field_names));
 
     tl_type *user_type = tl_type_create_user_type(self->arena, type_name, lt);
 

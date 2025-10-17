@@ -763,7 +763,7 @@ static int a_identifier_typed(parser *self) {
     node->symbol.original = str_empty();
     if (annotation) node->symbol.annotation = annotation;
     else node->symbol.annotation = null;
-    node->symbol.annotation_type = null;
+    node->symbol.annotation_type_v1 = null;
     return result_ast_node(self, node);
 }
 
@@ -774,11 +774,11 @@ static int forward_declaration(parser *self) {
     ast_node *sym = self->result;
 
     if (a_try(self, a_type_annotation)) return 1;
-    ast_node *ann               = self->result;
+    ast_node *ann                  = self->result;
 
-    sym->symbol.original        = str_empty();
-    sym->symbol.annotation      = ann;
-    sym->symbol.annotation_type = null;
+    sym->symbol.original           = str_empty();
+    sym->symbol.annotation         = ann;
+    sym->symbol.annotation_type_v1 = null;
     return result_ast_node(self, sym);
 }
 
@@ -1171,7 +1171,7 @@ static int struct_declaration(parser *self) {
         node->user_type_def.type_arguments    = null;
         node->user_type_def.field_annotations = null;
         node->user_type_def.field_names       = null;
-        node->user_type_def.field_types       = null;
+        node->user_type_def.field_types_v1    = null;
         node->user_type_def.field_types_v2    = null;
         node->user_type_def.n_fields          = 0;
         node->user_type_def.n_type_arguments  = 0;
@@ -1220,7 +1220,7 @@ static int struct_declaration(parser *self) {
             node->user_type_def.type_arguments = null;
             node->user_type_def.field_annotations = null;
             node->user_type_def.field_names       = null;
-            node->user_type_def.field_types       = null;
+            node->user_type_def.field_types_v1    = null;
             node->user_type_def.field_types_v2    = null;
             node->user_type_def.n_fields          = 0;
             node->user_type_def.n_type_arguments  = 0;
@@ -1416,11 +1416,11 @@ static int function_application(parser *self) {
             int       is_intrinsic = (0 == str_cmp_nc(name_str, "_tl_", 4));
 
             ast_node *node         = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments     = null;
-            node->named_application.n_arguments   = 0;
-            node->named_application.flags         = 0;
-            node->named_application.function_type = null;
-            node->named_application.name          = name;
+            node->named_application.arguments        = null;
+            node->named_application.n_arguments      = 0;
+            node->named_application.flags            = 0;
+            node->named_application.function_type_v1 = null;
+            node->named_application.name             = name;
             if (is_intrinsic) BIT_SET(node->named_application.flags, AST_NAMED_APP_INTRINSIC);
 
             array_shrink(arguments);

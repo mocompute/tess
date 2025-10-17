@@ -99,8 +99,8 @@ tl_type *type_registry_ast_node_tuple(type_registry *self, ast_node const *node)
     array_reserve(elements, v->n_elements);
 
     for (u32 i = 0; i < v->n_elements; ++i) {
-        assert(v->elements[i]->type);
-        array_push(elements, v->elements[i]->type);
+        assert(v->elements[i]->type_v1);
+        array_push(elements, v->elements[i]->type_v1);
     }
 
     tl_type  *out      = tl_type_create_tuple(self->alloc, (tl_type_sized)sized_all(elements));
@@ -125,8 +125,8 @@ tl_type *type_registry_ast_node_labelled_tuple(type_registry *self, ast_node con
     array_reserve(names, v->n_assignments);
 
     for (u32 i = 0; i < v->n_assignments; ++i) {
-        assert(v->assignments[i]->assignment.value->type);
-        array_push(elements, v->assignments[i]->assignment.value->type);
+        assert(v->assignments[i]->assignment.value->type_v1);
+        array_push(elements, v->assignments[i]->assignment.value->type_v1);
 
         str name = ast_node_str(v->assignments[i]->assignment.name);
         array_push(names, name);

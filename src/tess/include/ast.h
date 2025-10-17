@@ -32,7 +32,7 @@ typedef struct ast_node {
             str                name;
             str                original;
             struct ast_node   *annotation;
-            tl_type           *annotation_type;
+            tl_type           *annotation_type_v1;
             tl_polytype const *annotation_type_v2;
             u64                special_hash; // for use during specialisation
             u8                 flags;
@@ -113,7 +113,7 @@ typedef struct ast_node {
             u8                n_arguments;
             u8                flags;
             struct ast_node  *name;
-            tl_type          *function_type;
+            tl_type          *function_type_v1;
         } named_application;
 
         struct ast_labelled_tuple {
@@ -185,7 +185,7 @@ typedef struct ast_node {
             struct ast_node   **type_arguments;
             struct ast_node   **field_annotations;
             struct ast_node   **field_names;
-            tl_type           **field_types;
+            tl_type           **field_types_v1;
             tl_monotype const **field_types_v2;
             u8                  n_fields;
             u8                  n_type_arguments;
@@ -194,7 +194,7 @@ typedef struct ast_node {
 
     char const        *file;
     u32                line;
-    tl_type           *type;
+    tl_type           *type_v1;
     tl_polytype const *type_v2;
     ast_tag            tag;
     enum tl_error_tag  error;

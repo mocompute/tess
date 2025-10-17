@@ -251,25 +251,25 @@ static void emit_thunk_struct_init(transpiler *self, str struct_name, str var_na
     out_put_start_fmt(self, "struct %.*s %.*s = {\n", s_struct.len, s_struct.buf, s_var.len, s_var.buf);
     self->indent_level++;
     {
-        ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
-        ptr->address_of.target    = null;
-        ptr->type                 = tl_type_create(self->transient, type_pointer);
-        ptr->type->pointer.target = null;
+        ast_node *ptr                = ast_node_create(self->transient, ast_address_of);
+        ptr->address_of.target       = null;
+        ptr->type_v1                 = tl_type_create(self->transient, type_pointer);
+        ptr->type_v1->pointer.target = null;
 
-        hashmap *seen             = hset_create(self->transient, 256);
+        hashmap *seen                = hset_create(self->transient, 256);
 
         for (u32 i = 0; i < variables.size; ++i) {
             str name_str = variables.v[i].name;
             if (str_hset_contains(seen, name_str)) continue;
             str_hset_insert(&seen, name_str);
 
-            ptr->address_of.target       = ast_node_create_sym(self->transient, variables.v[i].name);
+            ptr->address_of.target          = ast_node_create_sym(self->transient, variables.v[i].name);
 
-            ptr->address_of.target->type = variables.v[i].type;
-            ptr->type->pointer.target    = variables.v[i].type;
+            ptr->address_of.target->type_v1 = variables.v[i].type;
+            ptr->type_v1->pointer.target    = variables.v[i].type;
 
-            str   target_str             = emit_symbol_use(self, ptr->address_of.target);
-            ispan s_target               = str_ispan(&target_str);
+            str   target_str                = emit_symbol_use(self, ptr->address_of.target);
+            ispan s_target                  = str_ispan(&target_str);
             out_put_start_fmt(self, ".%.*s = &(%.*s),\n", str_ilen(name_str), str_buf(&name_str),
                               s_target.len, s_target.buf);
         }
@@ -288,24 +288,24 @@ static void emit_thunk_struct(transpiler *self, str name, tl_free_variable_sized
     out_put_start_fmt(self, "struct %.*s {\n", str_ilen(name), str_buf(&name));
     self->indent_level++;
     {
-        ast_node *ptr             = ast_node_create(self->transient, ast_address_of);
-        ptr->address_of.target    = null;
-        ptr->type                 = tl_type_create(self->transient, type_pointer);
-        ptr->type->pointer.target = null;
+        ast_node *ptr                = ast_node_create(self->transient, ast_address_of);
+        ptr->address_of.target       = null;
+        ptr->type_v1                 = tl_type_create(self->transient, type_pointer);
+        ptr->type_v1->pointer.target = null;
 
-        hashmap *seen             = hset_create(self->transient, 256);
+        hashmap *seen                = hset_create(self->transient, 256);
         for (u32 i = 0; i < variables.size; ++i) {
             str name_str = variables.v[i].name;
             if (str_hset_contains(seen, name_str)) continue;
             str_hset_insert(&seen, name_str);
 
-            ptr->address_of.target       = ast_node_create_sym(self->transient, variables.v[i].name);
+            ptr->address_of.target          = ast_node_create_sym(self->transient, variables.v[i].name);
 
-            ptr->address_of.target->type = variables.v[i].type;
-            ptr->type->pointer.target    = variables.v[i].type;
+            ptr->address_of.target->type_v1 = variables.v[i].type;
+            ptr->type_v1->pointer.target    = variables.v[i].type;
 
             out_put_start(self, "");
-            out_put_str(self, emit_type_declaration(self, ptr->type, name_str, 0));
+            out_put_str(self, emit_type_declaration(self, ptr->type_v1, name_str, 0));
             out_put(self, ";\n");
         }
         if (!variables.size) out_put_start(self, "char empty;\n");
@@ -533,7 +533,7 @@ static int a_user_type_definition(transpiler *self, ast_node const *node) {
 
     self->indent_level++;
     for (u32 i = 0; i < n_fields; ++i) {
-        tl_type *ty         = node->user_type_def.field_types[i];
+        tl_type *ty         = node->user_type_def.field_types_v1[i];
         str      field_name = ast_node_str(node->user_type_def.field_names[i]);
 
         out_put_start(self, "");
@@ -679,7 +679,7 @@ static int a_field_access(transpiler *self, ast_node const *node) {
     str struct_name = emit_symbol_use(self, v->struct_name);
     str field_name  = ast_node_str(v->field_name);
 
-    if (type_pointer == v->struct_name->type->tag)
+    if (type_pointer == v->struct_name->type_v1->tag)
         out_put_start_fmt(self, " = %.*s->%.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
                           str_ilen(field_name), str_buf(&field_name));
     else
@@ -706,7 +706,7 @@ static int a_field_setter(transpiler *self, ast_node const *node) {
     out_put_start_fmt(self, " = %.*s;\n", str_ilen(value), str_buf(&value));
 
     // assign to struct field
-    if (type_pointer == v->struct_name->type->tag)
+    if (type_pointer == v->struct_name->type_v1->tag)
         out_put_start_fmt(self, "%.*s->%.*s = %.*s;\n", str_ilen(struct_name), str_buf(&struct_name),
                           str_ilen(field_name), str_buf(&field_name), str_ilen(var), str_buf(&var));
     else
@@ -729,7 +729,7 @@ static str emit_symbol_use(transpiler *self, ast_node const *node) {
     str name = ast_node_str(node);
     str res  = str_empty();
 
-    if (tl_type_get_arrow(node->type)) {
+    if (tl_type_get_arrow(node->type_v1)) {
         if (ti_is_c_function_name(name)) {
             res = str_copy_span(self->strings, str_slice_left(&name, 2));
         }
@@ -901,7 +901,7 @@ static str emit_type_declaration(transpiler *self, tl_type *type, str var, int i
 
 static str emit_symbol_declaration(transpiler *self, ast_node const *node, str var, int is_void_ok) {
     // emit a declaration for variable var using the type of node
-    tl_type *type      = node->type;
+    tl_type *type      = node->type_v1;
     str      void_decl = is_void_ok ? S("void") : S("/* void */ int");
 
     if (is_arrow_or_pointer_to_arrow(type)) {
@@ -920,7 +920,7 @@ static str emit_symbol_declaration(transpiler *self, ast_node const *node, str v
 
 static int a_eval(transpiler *self, ast_node const *node) {
 
-    if (!node || !node->type) fatal("a_eval: node or type is null");
+    if (!node || !node->type_v1) fatal("a_eval: node or type is null");
 
     // eval node and grab its result variable name into `result`. `pre_result` may be used for additional
     // output prior to assigning value to result. Note: the case for user_type is handled separately because
@@ -1091,7 +1091,7 @@ static int a_eval(transpiler *self, ast_node const *node) {
         out_put_str(self, emit_symbol_declaration(self, node, var, 0));
         out_put(self, ";\n");
 
-        if (!is_nil_result(node->type)) {
+        if (!is_nil_result(node->type_v1)) {
             out_put_str(self, str_cat_4(self->strings, var, S(" = "), result, S(";\n")));
         }
     }
@@ -1226,7 +1226,7 @@ static int tl_sizeoft(transpiler *self, ast_node const *node, void *extra) {
     // Emit the type of the argument
     out_put_start(self, "");
     out_put_str(self, str_cat(self->transient, var, S(" = (sizeof (")));
-    a_result_type_of(self, v->arguments[0]->type);
+    a_result_type_of(self, v->arguments[0]->type_v1);
     out_put(self, "));\n");
     return 0;
 }
@@ -1370,14 +1370,14 @@ static int a_fun_apply(transpiler *self, ast_node const *node) {
             if (a_eval(self, node->array.nodes[i])) return 1;
 
     // function call
-    tl_type               *fun_type       = type_holder->type;
+    tl_type               *fun_type       = type_holder->type_v1;
     tl_free_variable_sized free_variables = {0};
 
     assert(type_arrow == fun_type->tag);
     free_variables  = fun_type->arrow.free_variables;
 
     str struct_name = str_empty();
-    if (free_variables.size) struct_name = make_context_struct_name(self->transient, type_holder->type);
+    if (free_variables.size) struct_name = make_context_struct_name(self->transient, type_holder->type_v1);
 
     // prepare the function call context, if any
     out_put_start(self, "{\n");
@@ -1416,7 +1416,7 @@ static int a_tuple_init(transpiler *self, ast_node const *node) {
     struct ast_tuple const *v      = ast_node_tuple((ast_node *)node);
     i32 const               n_args = v->n_elements;
 
-    u64                     hash   = transpiler_type_hash(node->type);
+    u64                     hash   = transpiler_type_hash(node->type_v1);
     str                     name   = make_tuple_struct_name(self->alloc, hash);
 
     if (n_args)
@@ -1450,7 +1450,7 @@ static int a_labelled_tuple_init(transpiler *self, ast_node const *node) {
     // assigning to the result variable
     struct ast_labelled_tuple const *v      = ast_node_lt((ast_node *)node);
     i32 const                        n_args = v->n_assignments;
-    u64                              hash   = transpiler_type_hash(node->type);
+    u64                              hash   = transpiler_type_hash(node->type_v1);
     str                              name   = make_tuple_struct_name(self->alloc, hash);
 
     if (n_args)
@@ -1486,7 +1486,7 @@ static int a_tuple_cons(transpiler *self, ast_node const *node) {
         return a_labelled_tuple_init(self, node);
     }
 
-    str name = make_tuple_struct_constructor_name(self->alloc, transpiler_type_hash(node->type));
+    str name = make_tuple_struct_constructor_name(self->alloc, transpiler_type_hash(node->type_v1));
     str var  = next_variable(self);
 
     // eval arguments in reverse order, then generate function call,
@@ -1768,23 +1768,23 @@ static void generate_one_toplevel_context(void *ctx_, ast_node *node) {
 
         struct ast_let const *v = ast_node_let(node);
 
-        assert(type_arrow == v->name->type->tag);
-        free_variables = v->name->type->arrow.free_variables;
-        struct_name    = make_context_struct_name(self->strings, v->name->type);
+        assert(type_arrow == v->name->type_v1->tag);
+        free_variables = v->name->type_v1->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, v->name->type_v1);
     }
 
     else if (ast_node_is_let_in_lambda(node)) {
         struct ast_let_in const *v = ast_node_let_in(node);
-        assert(type_arrow == v->name->type->tag);
-        free_variables = v->name->type->arrow.free_variables;
-        struct_name    = make_context_struct_name(self->strings, v->name->type);
+        assert(type_arrow == v->name->type_v1->tag);
+        free_variables = v->name->type_v1->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, v->name->type_v1);
     }
 
     else if (ast_lambda_function == node->tag) {
 
-        assert(type_arrow == node->type->tag);
-        free_variables = node->type->arrow.free_variables;
-        struct_name    = make_context_struct_name(self->strings, node->type);
+        assert(type_arrow == node->type_v1->tag);
+        free_variables = node->type_v1->arrow.free_variables;
+        struct_name    = make_context_struct_name(self->strings, node->type_v1);
     }
 
     if (free_variables.size) {
@@ -1815,19 +1815,19 @@ static void generate_one_toplevel_lambda(void *ctx, ast_node *node) {
 
     // determine if a free variable context is required. If so, output
     // the context struct definition.
-    assert(type_arrow == node->type->tag);
-    tl_free_variable_sized free_variables = node->type->arrow.free_variables;
+    assert(type_arrow == node->type_v1->tag);
+    tl_free_variable_sized free_variables = node->type_v1->arrow.free_variables;
 
     str                    struct_name    = str_empty();
     if (free_variables.size) {
-        struct_name = make_context_struct_name(self->strings, node->type);
+        struct_name = make_context_struct_name(self->strings, node->type_v1);
     }
 
     // return type and name
     if (self->verbose) out_put_start_fmt(self, "/* %s */\n", ast_node_to_string(self->transient, node));
     out_put_start(self, "static ");
 
-    out_put_str(self, emit_type_declaration(self, node->type->arrow.right, fun_name, 1));
+    out_put_str(self, emit_type_declaration(self, node->type_v1->arrow.right, fun_name, 1));
     out_put(self, " ");
 
     // params
@@ -1904,12 +1904,12 @@ static int generate_one_toplevel_prototype(transpiler *self, ast_node const *nod
 
     // determine if a free variable context is required. If so, output
     // the context struct definition.
-    assert(type_arrow == v->name->type->tag);
-    tl_free_variable_sized free_variables = v->name->type->arrow.free_variables;
-    assert(free_variables.size == v->name->type->arrow.free_variables.size);
+    assert(type_arrow == v->name->type_v1->tag);
+    tl_free_variable_sized free_variables = v->name->type_v1->arrow.free_variables;
+    assert(free_variables.size == v->name->type_v1->arrow.free_variables.size);
     str struct_name = str_empty();
     if (free_variables.size) {
-        struct_name = make_context_struct_name(self->strings, v->name->type);
+        struct_name = make_context_struct_name(self->strings, v->name->type_v1);
     }
 
     // function declaration
@@ -1961,12 +1961,12 @@ static int a_let(transpiler *self, ast_node const *node) {
 
     struct ast_let const *v        = ast_node_let((ast_node *)node);
     str                   name     = v->name->symbol.name;
-    tl_type              *fun_type = v->name->type;
+    tl_type              *fun_type = v->name->type_v1;
     assert(type_arrow == fun_type->tag);
 
     tl_free_variable_sized free_variables = fun_type->arrow.free_variables;
     str                    struct_name    = str_empty();
-    if (free_variables.size) struct_name = make_context_struct_name(self->strings, v->name->type);
+    if (free_variables.size) struct_name = make_context_struct_name(self->strings, v->name->type_v1);
 
     if (is_generic_function(self, node))
         fatal("cannot process generic function '%.*s' ", str_ilen(v->name->symbol.name),
@@ -2118,7 +2118,7 @@ static void collect_function_records(transpiler *self, ast_node **nodes, u32 n) 
         ast_node *node = nodes[i];
         if (ast_let == node->tag) {
             ti_function_record rec = {
-              .name = ast_node_str(node->let.name), .node = node, .type = node->let.name->type};
+              .name = ast_node_str(node->let.name), .node = node, .type = node->let.name->type_v1};
             str_map_set(&self->functions, rec.name, &rec);
             log(self, "%s", ast_node_to_string(self->transient, node));
         }
