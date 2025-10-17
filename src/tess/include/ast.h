@@ -11,11 +11,6 @@
 #include "type.h"
 #include "v2_type.h"
 
-// typedef struct {
-//     array_header;
-//     struct ast_node **v;
-// } ast_node_array;
-
 defarray(ast_node_array, struct ast_node *);
 defsized(ast_node_sized, struct ast_node *);
 defslice(ast_node_slice, struct ast_node *);

@@ -18,15 +18,14 @@ defsized(tl_polytype_sized, struct tl_polytype const *);
 
 typedef struct {
     str                    name;
-    tl_type_variable_sized type_variables; // FIXME: move these into polytype
-    str_sized              field_names;    // user types
-    tl_monotype_sized      field_types;    // array, size = field_names.size
+    tl_type_variable_sized type_variables;
+    str_sized              field_names; // user types
+    tl_monotype_sized      field_types; // array, size = field_names.size
 } tl_type_constructor_def;
 
 typedef struct {
     tl_type_constructor_def const *def;
     tl_monotype_sized              args; // FIXME: what about polytype args?
-
 } tl_type_constructor_inst;
 
 typedef struct {
