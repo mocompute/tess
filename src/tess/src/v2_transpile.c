@@ -829,24 +829,20 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     if (tl_list != arrow->tag) fatal("logic error");
     assert(arrow->list.xs.size > 0);
 
-    if (!tl_monotype_is_nil(arrow->list.xs.v[0])) {
-        // first element is not nil, we have at least one argument
-
-        for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
-            // skip last element, the result type
-            tl_monotype const *arg = arrow->list.xs.v[i];
-            if (tl_monotype_is_arrow(arg)) {
-                build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
-            } else {
-                str_build_cat(&b, type_to_c_mono(self, arg));
-                if (i < param_names.size) {
-                    str_build_cat(&b, S(" "));
-                    str_build_cat(&b, param_names.v[i]);
-                }
+    for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
+        // skip last element, the result type
+        tl_monotype const *arg = arrow->list.xs.v[i];
+        if (tl_monotype_is_arrow(arg)) {
+            build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
+        } else {
+            str_build_cat(&b, type_to_c_mono(self, arg));
+            if (i < param_names.size) {
+                str_build_cat(&b, S(" "));
+                str_build_cat(&b, param_names.v[i]);
             }
-
-            if (i + 1 < n) str_build_cat(&b, S(", "));
         }
+
+        if (i + 1 < n) str_build_cat(&b, S(", "));
     }
 
     return str_build_finish(&b);
