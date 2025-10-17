@@ -137,40 +137,6 @@ static int test_tokenizer_terminal_static_string(void) {
     return error;
 }
 
-static int test_parser_node_to_string(void) {
-    int        error = 0;
-
-    allocator *alloc = leak_detector_create();
-    if (!alloc) return error + 1;
-
-    //
-    {
-        char const *input = "(a, b)";
-        parser     *p     = parser_create_simple(alloc, input, strlen(input));
-        if (null == p) return error + 1;
-
-        if (parser_next(p)) {
-            parser_report_errors(p);
-            dbg("failed input = '%s'\n", input);
-            return error + 1;
-        }
-        ast_node *node;
-        parser_result(p, &node);
-
-        error += ast_tuple == node->tag ? 0 : 1;
-
-        char *str = ast_node_to_string(alloc, node);
-        dbg("str 2 = %s\n", str);
-        error += 0 == strcmp("(tuple ((symbol a 0 [null]) (symbol b 0 [null])) [null])", str) ? 0 : 1;
-        alloc_free(alloc, str);
-        parser_destroy(&p);
-    }
-
-    leak_detector_destroy(&alloc);
-
-    return error;
-}
-
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -191,7 +157,6 @@ int main(void) {
     T(test_tokenizer_basic);
     T(test_tokenizer_string);
     T(test_tokenizer_terminal_static_string);
-    T(test_parser_node_to_string);
 
     return error;
 }

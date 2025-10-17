@@ -20,7 +20,6 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 
     self->file     = "";
     self->line     = -1;
-    self->type_v1  = null;
     self->type_v2  = null;
     self->error    = tl_err_ok;
 
@@ -34,7 +33,6 @@ ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     self->symbol.name               = str_init(alloc, str);
     self->symbol.original           = str_empty();
     self->symbol.annotation         = null;
-    self->symbol.annotation_type_v1 = null;
     self->symbol.annotation_type_v2 = null;
     self->symbol.special_hash       = 0;
     self->symbol.flags              = 0;
@@ -46,7 +44,6 @@ ast_node *ast_node_create_sym(allocator *alloc, str str) {
     self->symbol.name               = str_copy(alloc, str);
     self->symbol.original           = str_empty();
     self->symbol.annotation         = null;
-    self->symbol.annotation_type_v1 = null;
     self->symbol.annotation_type_v2 = null;
     self->symbol.special_hash       = 0;
     self->symbol.flags              = 0;
@@ -66,8 +63,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     clone->file     = orig->file;
     clone->line     = orig->line;
-
-    clone->type_v1  = orig->type_v1 ? tl_type_clone_shallow(alloc, orig->type_v1) : null;
 
     if (orig->type_v2) {
         clone->type_v2 = tl_polytype_clone(alloc, orig->type_v2);
@@ -135,7 +130,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->name               = str_copy(alloc, vorig->name);
         vclone->original           = str_copy(alloc, vorig->original);
         vclone->annotation         = ast_node_clone(alloc, vorig->annotation);
-        vclone->annotation_type_v1 = tl_type_clone_shallow(alloc, vorig->annotation_type_v1);
         vclone->annotation_type_v2 = null;
         if (vorig->annotation_type_v2) {
             vclone->annotation_type_v2 = new (alloc, tl_polytype);
@@ -197,7 +191,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
-        vclone->function_type_v1             = tl_type_clone_shallow(alloc, vorig->function_type_v1);
     } break;
 
     case ast_user_type: {
@@ -221,12 +214,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
-        vclone->name             = ast_node_clone(alloc, vorig->name);
-        vclone->n_fields         = vorig->n_fields;
-        vclone->n_type_arguments = vorig->n_type_arguments;
-
-        vclone->field_types_v1   = vorig->field_types_v1; // always in arena, never clone types
-                                                          // FIXME: need to shallow clone types?
+        vclone->name              = ast_node_clone(alloc, vorig->name);
+        vclone->n_fields          = vorig->n_fields;
+        vclone->n_type_arguments  = vorig->n_type_arguments;
 
         vclone->field_annotations = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
         vclone->field_names       = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
@@ -275,36 +265,20 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
 sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
-    sexp type;
-    {
-        int   len = tl_type_snprint(null, 0, node->type_v1) + 1;
-        char *buf = alloc_malloc(alloc, len);
-        tl_type_snprint(buf, len, node->type_v1);
-        type = sexp_init_sym_c(alloc, buf);
-        alloc_free(alloc, buf);
-    }
-    return sexp_init_list_quad(alloc, sexp_init_sym_c(alloc, "symbol"),
-                               sexp_init_sym(alloc, ast_node_str(node)),
-                               sexp_init_u64(alloc, node->symbol.special_hash), type);
+    return sexp_init_list_triple(alloc, sexp_init_sym_c(alloc, "symbol"),
+                                 sexp_init_sym(alloc, ast_node_str(node)),
+                                 sexp_init_u64(alloc, node->symbol.special_hash));
 }
 
 sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
     assert(node->tag == ast_symbol);
-    sexp type;
-    {
-        int   len = tl_type_snprint(null, 0, node->type_v1) + 1;
-        char *buf = alloc_malloc(alloc, len);
-        tl_type_snprint(buf, len, node->type_v1);
-        type = sexp_init_sym_c(alloc, buf);
-        alloc_free(alloc, buf);
-    }
 
     if (!str_is_empty(node->symbol.original))
-        return sexp_init_list_triple(alloc, sexp_init_sym_c(alloc, "symbol"),
-                                     sexp_init_sym(alloc, node->symbol.original), type);
+        return sexp_init_list_pair(alloc, sexp_init_sym_c(alloc, "symbol"),
+                                   sexp_init_sym(alloc, node->symbol.original));
     else
-        return sexp_init_list_triple(alloc, sexp_init_sym_c(alloc, "symbol"),
-                                     sexp_init_sym(alloc, node->symbol.name), type);
+        return sexp_init_list_pair(alloc, sexp_init_sym_c(alloc, "symbol"),
+                                   sexp_init_sym(alloc, node->symbol.name));
 }
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
@@ -320,15 +294,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
 
     if (null == node) return sexp_init_boxed(alloc);
 
-    sexp type;
-    if (node->tag != ast_symbol) // symbols are delegated to symbol_fun
-    {
-        int   len = tl_type_snprint(null, 0, node->type_v1) + 1;
-        char *buf = alloc_malloc(alloc, len);
-        tl_type_snprint(buf, len, node->type_v1);
-        type = sexp_init_sym_c(alloc, buf);
-        alloc_free(alloc, buf);
-    }
+    sexp type = sexp_init_sym_c(alloc, "[null]"); // FIXME
 
     switch (node->tag) {
 
@@ -478,20 +444,6 @@ sexp ast_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
 
 void map_ast_node_to_sexp(void *alloc, void *out, void const *node_ptr) {
     *(sexp *)out = ast_node_to_sexp(alloc, (ast_node const *)node_ptr);
-}
-
-sexp ast_node_to_sexp_with_type(allocator *alloc, ast_node const *node) {
-
-    sexp  expr = ast_node_to_sexp(alloc, node);
-
-    int   len  = tl_type_snprint(null, 0, node->type_v1) + 1;
-    char *buf  = alloc_malloc(alloc, len);
-    tl_type_snprint(buf, len, node->type_v1);
-
-    sexp list = sexp_init_list_pair(alloc, expr, sexp_init_sym_c(alloc, buf));
-    alloc_free(alloc, buf);
-
-    return list;
 }
 
 // -- pool operations --
@@ -746,62 +698,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
             v->field_names[i]       = fun(ctx, v->field_names[i]);
         }
 
-    } break;
-    }
-}
-
-void ast_node_each_type(void *ctx, ast_node_each_type_fun fun, ast_node *node) {
-    // FIXME: unused function
-
-    if (!node) return;
-
-    switch (node->tag) {
-    case ast_address_of:
-    case ast_arrow:
-    case ast_assignment:
-    case ast_dereference:
-    case ast_dereference_assign:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_nil:
-    case ast_any:
-    case ast_bool:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_labelled_tuple:
-    case ast_tuple:
-    case ast_let:
-    case ast_let_in:
-    case ast_let_match_in:
-    case ast_if_then_else:
-    case ast_lambda_function:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
-    case ast_lambda_function_application: break;
-
-    case ast_named_function_application:
-        if (node->named_application.function_type_v1) fun(ctx, node->named_application.function_type_v1);
-        break;
-
-    case ast_begin_end:
-    case ast_user_type:
-    case ast_user_type_get:
-    case ast_user_type_set:
-        //
-        break;
-
-    case ast_symbol:
-        //
-        if (node->symbol.annotation_type_v1) fun(ctx, node->symbol.annotation_type_v1);
-        break;
-
-        break;
-
-    case ast_user_type_definition: {
-        struct ast_user_type_def *v = ast_node_utd(node);
-        for (u32 i = 0; i < v->n_fields; ++i) fun(ctx, v->field_types_v1[i]);
     } break;
     }
 }
@@ -1173,33 +1069,6 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 
 //
 
-int ast_node_is_specialized(ast_node const *node) {
-    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_SPECIALIZED)) ||
-           (ast_lambda_function == node->tag &&
-            BIT_TEST(node->lambda_function.flags, AST_LAMBDA_FLAG_SPECIALIZED));
-}
-
-int ast_node_is_tuple_constructor(ast_node const *node) {
-    return (ast_let == node->tag && BIT_TEST(node->let.flags, AST_LET_FLAG_TUPLE_CONS));
-}
-
-void ast_node_set_is_specialized(ast_node *node) {
-    if (ast_let == node->tag) BIT_SET(node->let.flags, AST_LET_FLAG_SPECIALIZED);
-    else if (ast_lambda_function == node->tag)
-        BIT_SET(node->lambda_function.flags, AST_LAMBDA_FLAG_SPECIALIZED);
-    else if (ast_named_function_application == node->tag)
-        BIT_SET(node->named_application.flags, AST_NAMED_APP_SPECIALIZED);
-}
-
-void ast_node_set_is_tuple_constructor(ast_node *node) {
-    assert(ast_let == node->tag);
-    BIT_SET(node->let.flags, AST_LET_FLAG_TUPLE_CONS);
-}
-
-tl_type *ast_node_annotation(ast_node const *node) {
-    return (ast_symbol == node->tag) ? node->symbol.annotation_type_v1 : null;
-}
-
 //
 
 ast_node **ast_node_assignment_names(allocator *alloc, ast_node const *node) {
@@ -1354,7 +1223,6 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_named_function_application:
         combine_node(self->named_application.name);
-        hash = hash64_combine(hash, (byte *)&self->named_application.function_type_v1, sizeof(tl_type *));
         hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
         break;
 
@@ -1404,27 +1272,6 @@ int ast_node_is_lambda_application(ast_node const *self) {
 }
 int ast_node_is_assignment(ast_node const *self) {
     return ast_assignment == self->tag;
-}
-
-tl_type *ast_node_get_arrow(ast_node const *self) {
-
-    if (ast_named_function_application == self->tag) {
-        return tl_type_get_arrow(self->named_application.name->type_v1);
-    }
-
-    else if (ast_lambda_function_application == self->tag) {
-        return tl_type_get_arrow(self->lambda_application.lambda->type_v1);
-    }
-
-    else if (ast_address_of == self->tag) {
-        return tl_type_get_arrow(self->address_of.target->type_v1);
-    }
-
-    else {
-        return tl_type_get_arrow(self->type_v1);
-    }
-
-    return null;
 }
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {

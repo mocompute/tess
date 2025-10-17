@@ -21,16 +21,11 @@ add_library(tess)
 set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast_tags.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/transpiler.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/syntax.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/type_inference.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
 
   ${PROJECT_SOURCE_DIR}/src/tess/include/v2_infer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/v2_transpile.h
@@ -39,16 +34,11 @@ set(HEADERS
 
 set(SOURCES
   src/ast.c
-  src/transpiler.c
   src/error.c
   src/parser.c
-  src/syntax.c
   src/tess.c
-  src/type.c
   src/token.c
   src/tokenizer.c
-  src/type_inference.c
-  src/type_registry.c
 
   src/v2_infer.c
   src/v2_transpile.c

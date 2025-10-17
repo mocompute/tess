@@ -8,7 +8,6 @@
 #include "hashmap.h"
 #include "nodiscard.h"
 #include "str.h"
-#include "type.h"
 #include "v2_type.h"
 
 defarray(ast_node_array, struct ast_node *);
@@ -21,7 +20,6 @@ typedef struct ast_node {
             str                name;
             str                original;
             struct ast_node   *annotation;
-            tl_type           *annotation_type_v1;
             tl_polytype const *annotation_type_v2;
             u64                special_hash; // for use during specialisation
             u8                 flags;
@@ -102,7 +100,6 @@ typedef struct ast_node {
             u8                n_arguments;
             u8                flags;
             struct ast_node  *name;
-            tl_type          *function_type_v1;
         } named_application;
 
         struct ast_labelled_tuple {
@@ -174,7 +171,6 @@ typedef struct ast_node {
             struct ast_node   **type_arguments;
             struct ast_node   **field_annotations;
             struct ast_node   **field_names;
-            tl_type           **field_types_v1;
             tl_monotype const **field_types_v2;
             u8                  n_fields;
             u8                  n_type_arguments;
@@ -183,25 +179,10 @@ typedef struct ast_node {
 
     char const        *file;
     u32                line;
-    tl_type           *type_v1;
     tl_polytype const *type_v2;
     ast_tag            tag;
     enum tl_error_tag  error;
 } ast_node;
-
-#define AST_SYMBOL_FLAG_PATCHED     0
-
-#define AST_LET_FLAG_SPECIALIZED    0
-#define AST_LET_FLAG_TUPLE_CONS     1
-#define AST_LET_FLAG_INTRINSIC      2
-
-#define AST_LAMBDA_FLAG_SPECIALIZED 0
-#define AST_LAMBDA_FLAG_NAMED       1
-
-#define AST_TUPLE_FLAG_INIT         0
-
-#define AST_NAMED_APP_INTRINSIC     0
-#define AST_NAMED_APP_SPECIALIZED   1
 
 // -- iterator functions --
 
@@ -250,17 +231,13 @@ void                ast_node_move(ast_node *dst, ast_node *src);
 str                 ast_node_str(ast_node const *);
 str                 ast_node_name_original(ast_node const *);
 
-tl_type            *ast_node_annotation(ast_node const *);
-
 // -- traversal --
 
 typedef void (*ast_node_each_node_fun)(void *ctx, ast_node *);
 typedef ast_node *(*ast_node_map_node_fun)(void *ctx, ast_node *);
-typedef void (*ast_node_each_type_fun)(void *ctx, tl_type *);
 
 void ast_node_each_node(void *, ast_node_each_node_fun, ast_node *);
 void ast_node_map_node(void *, ast_node_map_node_fun, ast_node *);
-void ast_node_each_type(void *, ast_node_each_type_fun, ast_node *);
 
 // -- arguments
 
@@ -290,11 +267,6 @@ void           ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
 void           ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
 ast_node      *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
 
-int            ast_node_is_specialized(ast_node const *);
-int            ast_node_is_tuple_constructor(ast_node const *);
-void           ast_node_set_is_specialized(ast_node *);
-void           ast_node_set_is_tuple_constructor(ast_node *);
-
 ast_node     **ast_node_assignment_names(allocator *, ast_node const *);
 
 u64            ast_node_hash(ast_node const *);
@@ -310,8 +282,6 @@ int            ast_node_is_lambda_function(ast_node const *);
 int            ast_node_is_lambda_application(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_nfa(ast_node const *);
-
-tl_type       *ast_node_get_arrow(ast_node const *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
 

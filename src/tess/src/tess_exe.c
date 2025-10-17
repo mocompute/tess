@@ -3,15 +3,10 @@
 #include "file.h"
 #include "parser.h"
 #include "str.h"
-#include "syntax.h"
-#include "transpiler.h"
-#include "type_inference.h"
-#include "type_registry.h"
 #include "types.h"
 #include "v2_infer.h"
 #include "v2_transpile.h"
 
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
@@ -133,92 +128,6 @@ int repl(state *self) {
 int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
-    int        error    = 0;
-
-    char_array preamble = {.alloc = default_allocator()};
-    array_reserve(preamble, 32 * 1024);
-
-    // embed std_tl header
-    if (!self->no_preamble) array_push_many(preamble, embed_std_tl, strlen(embed_std_tl));
-
-    parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
-                                   (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
-    if (!parser) fatal("could not create parser");
-
-    allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
-    ast_node_array nodes       = {.alloc = nodes_alloc};
-
-    if (self->verbose_parse) {
-        if (parser_parse_all_verbose(parser, &nodes)) {
-            parser_report_errors(parser);
-            ++error;
-            goto cleanup_parser;
-        }
-    } else {
-        if (parser_parse_all(parser, &nodes)) {
-            parser_report_errors(parser);
-            ++error;
-            goto cleanup_parser;
-        }
-    }
-
-    syntax_checker *syntax = syntax_checker_create(default_allocator(), (ast_node_slice)slice_all(nodes));
-
-    if (syntax_checker_run(syntax)) {
-        syntax_checker_report_errors(syntax);
-        error = 1;
-        goto cleanup_syntax;
-    }
-
-    type_registry *tr = syntax_checker_type_registry(syntax);
-
-    ti_inferer    *ti = ti_inferer_create(default_allocator(), &nodes, tr);
-    ti_inferer_set_verbose(ti, self->verbose);
-    if (ti_inferer_run(ti)) {
-        ti_inferer_report_errors(ti);
-        error = 1;
-        goto cleanup_ti;
-    }
-
-    ast_node_sized program           = ti_inferer_get_program(ti);
-
-    allocator     *transpile_alloc   = arena_create(default_allocator(), 64 * 1024);
-    char_array     transpiler_output = {.alloc = transpile_alloc};
-
-    transpiler    *transpiler        = transpiler_create(default_allocator(), &transpiler_output, tr, ti);
-    transpiler_set_verbose(transpiler, self->verbose);
-    if (transpiler_compile(transpiler, program.v, program.size)) fatal("error while transpiling");
-
-    if (self->out_path) {
-        FILE *f = fopen(self->out_path, "wb");
-        if (!f) fatal("could not open output file: '%s'", self->out_path);
-
-        fprintf(f, "%s", transpiler_output.v);
-
-        fclose(f);
-    } else {
-        puts(transpiler_output.v);
-    }
-
-    transpiler_destroy(&transpiler);
-    arena_destroy(default_allocator(), &transpile_alloc);
-
-cleanup_ti:
-    ti_inferer_destroy(default_allocator(), &ti);
-
-cleanup_syntax:
-    syntax_checker_destroy(&syntax);
-    parser_destroy(&parser);
-    arena_destroy(default_allocator(), &nodes_alloc);
-
-cleanup_parser:
-    array_free(preamble);
-    return error;
-}
-
-int compile_v2(state *self) {
-    if (self->words.size < 2) usage(1, self->argv0);
-
     int error = 0;
 
     // embed std_tl header
@@ -305,10 +214,6 @@ int main(int argc, char *argv[]) {
 
     if (0 == strcmp("c", self.words.v[0])) {
         result = compile(&self);
-    }
-
-    else if (0 == strcmp("cv2", self.words.v[0])) {
-        result = compile_v2(&self);
     }
 
     else if (0 == strcmp("repl", self.words.v[0])) {
