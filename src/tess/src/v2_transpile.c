@@ -828,6 +828,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     tl_monotype const *arrow = type->type;
     if (tl_list != arrow->tag) fatal("logic error");
     assert(arrow->list.xs.size > 0);
+    assert(!param_names.size || param_names.size >= arrow->list.xs.size - 1);
 
     for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
         // skip last element, the result type
