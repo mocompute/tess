@@ -17,22 +17,14 @@ defarray(tl_polytype_array, struct tl_polytype const *);
 defsized(tl_polytype_sized, struct tl_polytype const *);
 
 typedef struct {
-    str                    name;
-    tl_type_variable_sized type_variables;
-    str_sized              field_names; // user types
-    tl_monotype_sized      field_types; // array, size = field_names.size
+    str       name;
+    str_sized field_names; // user types
 } tl_type_constructor_def;
 
 typedef struct {
     tl_type_constructor_def const *def;
     tl_monotype_sized              args;
 } tl_type_constructor_inst;
-
-typedef struct {
-    allocator *alloc;       // manages lifetime of all type constructors
-    hashmap   *definitions; // str => tl_type_constructor_def*
-    hashmap   *instances;   // tl_type_constructor_def => tl_type_constructor_inst*
-} tl_type_registry;
 
 typedef struct tl_monotype {
     union {
@@ -48,11 +40,7 @@ typedef struct tl_monotype {
 
 typedef struct tl_polytype {
     tl_type_variable_sized quantifiers;
-    union {
-        tl_monotype const             *type;
-        tl_type_constructor_def const *def;
-    };
-    enum { tl_poly_mono, tl_poly_def } tag;
+    tl_monotype const     *type;
 } tl_polytype;
 
 typedef struct {
@@ -71,23 +59,29 @@ typedef struct {
 
 defarray(tl_type_subs, tl_type_uf_node);
 
+typedef struct {
+    allocator    *alloc;       // manages lifetime of all type constructors
+    tl_type_subs *subs;        // needed for instantiation
+    hashmap      *definitions; // str => tl_polytype*
+    hashmap      *instances;   // key => tl_type_constructor_inst*
+} tl_type_registry;
+
 // -- type constructor and registry --
 
-nodiscard tl_type_registry    *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
-tl_type_constructor_def const *tl_type_constructor_def_create(tl_type_registry *, str name,
-                                                              tl_type_variable_sized tvs, str_sized fields,
-                                                              tl_monotype_sized) mallocfun;
-tl_monotype const             *tl_type_registry_instantiate(tl_type_registry *, str, tl_monotype_sized);
-tl_type_constructor_def const *tl_type_registry_get_def(tl_type_registry *, str);
-tl_monotype const             *tl_type_registry_nil(tl_type_registry *);
-tl_monotype const             *tl_type_registry_int(tl_type_registry *);
-tl_monotype const             *tl_type_registry_float(tl_type_registry *);
-tl_monotype const             *tl_type_registry_bool(tl_type_registry *);
-tl_monotype const             *tl_type_registry_string(tl_type_registry *);
-tl_monotype const             *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
+nodiscard tl_type_registry *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
+tl_polytype const *tl_type_constructor_def_create(tl_type_registry *, str name, tl_type_variable_sized tvs,
+                                                  str_sized fields, tl_monotype_sized) mallocfun;
+tl_monotype const *tl_type_registry_instantiate(tl_type_registry *, str);
+tl_monotype const *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
+tl_monotype const *tl_type_registry_specialize(tl_type_registry *, str, tl_monotype_sized);
 
-nodiscard tl_monotype const   *tl_type_constructor_instantiate(allocator *, tl_type_constructor_def const *,
-                                                               tl_type_subs *);
+tl_monotype const *tl_type_registry_nil(tl_type_registry *);
+tl_monotype const *tl_type_registry_int(tl_type_registry *);
+tl_monotype const *tl_type_registry_float(tl_type_registry *);
+tl_monotype const *tl_type_registry_bool(tl_type_registry *);
+tl_monotype const *tl_type_registry_string(tl_type_registry *);
+tl_monotype const *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
+int                tl_type_registry_exists(tl_type_registry *, str);
 
 // -- type environment --
 
@@ -111,42 +105,39 @@ nodiscard tl_monotype *tl_monotype_create_tuple(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype const *, tl_monotype const *);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst const *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
-// u32                          tl_monotype_list_length(tl_monotype const *);
-// nodiscard tl_monotype const *tl_monotype_list_copy(allocator *, tl_monotype const *);
-// tl_monotype const           *tl_monotype_list_last(tl_monotype const *);
-// void                         tl_monotype_list_concat(tl_monotype *, tl_monotype const *);
 
-void      tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
-void      tl_monotype_sort_fvs(tl_monotype *);
-str_sized tl_monotype_fvs(tl_monotype const *);
-void      tl_monotype_absorb_fvs(tl_monotype *, str_sized);
-u64       tl_monotype_hash64(tl_monotype const *);
-// u64       tl_monotype_list_hash64(u64, tl_monotype const *);
+void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
+void                   tl_monotype_sort_fvs(tl_monotype *);
+str_sized              tl_monotype_fvs(tl_monotype const *);
+void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
+u64                    tl_monotype_hash64(tl_monotype const *);
 
-str tl_monotype_to_string(allocator *, tl_monotype const *);
-int tl_monotype_is_nil(tl_monotype const *);
-int tl_monotype_is_list(tl_monotype const *);
-int tl_monotype_is_inst(tl_monotype const *);
-int tl_monotype_is_tuple(tl_monotype const *);
-int tl_monotype_is_concrete(tl_monotype const *);
-int tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
-int tl_monotype_is_arrow(tl_monotype const *);
-int tl_monotype_is_ptr(tl_monotype const *);
+str                    tl_monotype_to_string(allocator *, tl_monotype const *);
+int                    tl_monotype_is_nil(tl_monotype const *);
+int                    tl_monotype_is_list(tl_monotype const *);
+int                    tl_monotype_is_inst(tl_monotype const *);
+int                    tl_monotype_is_tuple(tl_monotype const *);
+int                    tl_monotype_is_concrete(tl_monotype const *);
+int                    tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
+int                    tl_monotype_is_arrow(tl_monotype const *);
+int                    tl_monotype_is_ptr(tl_monotype const *);
 
 // -- polytype --
 
-nodiscard tl_polytype const *tl_polytype_absorb_mono(allocator *,
+nodiscard tl_polytype       *tl_polytype_absorb_mono(allocator *,
                                                      tl_monotype const *) mallocfun; // no clone
 nodiscard tl_polytype const *tl_polytype_create_qv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_weak(allocator *, tl_type_variable) mallocfun;
-nodiscard tl_polytype const *tl_polytype_create_def(allocator *, tl_type_constructor_def const *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
 
 void                         tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype const *);
 nodiscard tl_monotype const *tl_polytype_instantiate(allocator *, tl_polytype const *, tl_type_subs *);
+nodiscard tl_monotype const *tl_polytype_instantiate_with(allocator *, tl_polytype const *,
+                                                          tl_monotype_sized);
+nodiscard tl_monotype const *tl_polytype_specialize(allocator *, tl_polytype const *, tl_monotype_sized);
 void                         tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs const *);
 void                         tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs *);
 
@@ -160,6 +151,7 @@ str         tl_polytype_to_string(allocator *, tl_polytype const *);
 
 int         tl_polytype_is_scheme(tl_polytype const *);
 int         tl_polytype_is_concrete(tl_polytype const *);
+int         tl_polytype_is_type_constructor(tl_polytype const *);
 
 // -- substitution --
 

@@ -4,6 +4,7 @@
 #include "hash.h"
 #include "hashmap.h"
 #include "sexp.h"
+#include "str.h"
 #include "v2_type.h"
 
 #include <assert.h>
@@ -995,6 +996,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     } break;
 
+    case ast_user_type_definition: {
+        str out = str_copy(alloc, S("[user_type_definition: "));
+        str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
+        str_dcat(alloc, &out, S("]"));
+        return out;
+    } break;
+
     case ast_ellipsis:                    return str_copy(alloc, S("..."));
 
     case ast_address_of:
@@ -1005,7 +1013,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_if_then_else:
     case ast_let_match_in:
-    case ast_user_type_definition:
     case ast_user_type_get:
     case ast_user_type_set:
     case ast_begin_end:

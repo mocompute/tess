@@ -359,6 +359,9 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
+    // type constructor?
+    if (tl_monotype_is_inst(type)) fatal("not yet implemented");
+
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
     str_array      args_res = generate_args(self, args, type);

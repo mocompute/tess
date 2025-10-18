@@ -101,19 +101,76 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 //     if (ast_node_is_nfa(node)) {
 //         str               name = ast_node_str(node->named_application.name);
+//         hashmap          *tvs  = map_create(self->transient, sizeof(tl_type_variable), 8); // str => tv
+
 //         tl_monotype_array arr  = {.alloc = self->transient};
 //         array_reserve(arr, node->named_application.n_arguments);
 
+//         // each argument may be either an existing type or a type variable identifier (e.g. 'a', 'b').
+
 //         for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
 //             tl_polytype const *ty = node_to_type(self, node->named_application.arguments[i]);
-//             if (!ty || !tl_polytype_is_concrete(ty)) fatal("runtime error");
+//             if (!ty) {
+//                 // treat it as a type variable
+//                 if (!ast_node_is_symbol(node->named_application.arguments[i])) fatal("runtime error");
+//                 str arg = ast_node_str(node->named_application.arguments[i]);
+//                 if (!str_map_contains(tvs, arg)) {
+//                     tl_type_variable tv = tl_type_subs_fresh(self->subs);
+//                     str_map_set(&tvs, arg, &tv);
+//                 }
+//             } else if (!tl_polytype_is_concrete(ty)) {
+//                 // merge quantified type variables
+//             }
 
 //             // FIXME: finish design of generic types
 //         }
 //     }
 // }
 
-static void create_type_constructor_from_user_type(tl_infer *self, ast_node const *node) {
+static tl_type_variable get_tv_or_fresh(str name, hashmap **map, tl_type_subs *subs) {
+    tl_type_variable  tv;
+    tl_type_variable *found = str_map_get(*map, name);
+    if (found) {
+        tv = *found;
+    } else {
+        tv = tl_type_subs_fresh(subs);
+        str_map_set(map, name, &tv);
+    }
+    return tv;
+}
+
+tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry *self,
+                                          ast_node const *node, tl_type_subs *subs, hashmap **map) {
+    if (ast_node_is_symbol(node)) {
+        return tl_type_registry_instantiate(self, ast_node_str(node));
+    }
+
+    if (ast_node_is_nfa(node)) {
+        ast_node_sized    args      = {.v    = node->named_application.arguments,
+                                       .size = node->named_application.n_arguments};
+
+        tl_monotype_array args_mono = {.alloc = self->alloc};
+        array_reserve(args_mono, args.size);
+        forall(i, args) {
+            tl_monotype const *mono = tl_type_registry_parse(transient, self, args.v[i], subs, map);
+            if (!mono) {
+                // a type variable
+                if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
+                tl_type_variable tv = get_tv_or_fresh(ast_node_str(args.v[i]), map, subs);
+                mono                = tl_monotype_create_tv(self->alloc, tv);
+            }
+            array_push(args_mono, mono);
+        }
+        array_shrink(args_mono);
+
+        return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
+                                                 (tl_monotype_sized)sized_all(args_mono));
+    }
+
+    fatal("logic error");
+}
+
+static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
     str                    name              = node->user_type_def.name->symbol.name;
     u32                    n_type_arguments  = node->user_type_def.n_type_arguments;
@@ -144,34 +201,21 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
         array_push(field_names, fields[i]->symbol.name);
 
         // field type, could be type argument, or type constructor
-        tl_monotype const *field = null;
-        if (ast_node_is_symbol(annotations[i])) {
-            str ann = ast_node_str(annotations[i]);
-
-            if (str_map_contains(type_argument_map, ann)) {
-                // field type is a type argument
-                tl_type_variable const *var = str_map_get(type_argument_map, ann);
-                assert(var);
-                field = tl_monotype_create_tv(self->arena, *var);
-            } else {
-                // field type is an existing type
-                tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, ann);
-                if (!def) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_expected_type, .node = annotations[i]}));
-                    return;
-                }
-
-                field = tl_monotype_clone(
-                  self->arena, tl_type_registry_instantiate(self->registry, ann, (tl_monotype_sized){0}));
-            }
-        } else if (ast_node_is_nfa(annotations[i])) {
-            fatal("not yet implemented");
-            // ast_node const *nfa = annotations[i];
-
-            // field               = tl_type_registry_instantiate_ext(
-            //   self->registry, ast_node_str(nfa->named_application.name),
-            //   nfa->named_application.arguments, nfa->named_application.n_arguments);
+        tl_monotype const *field           = null;
+        ast_node const    *field_type_node = annotations[i];
+        if (ast_node_is_symbol(field_type_node)) {
+            tl_type_variable *found = str_map_get(type_argument_map, ast_node_str(field_type_node));
+            if (found) field = tl_monotype_create_tv(self->arena, *found);
+            else
+                field = tl_type_registry_parse(self->transient, self->registry, field_type_node, self->subs,
+                                               &type_argument_map);
+        } else {
+            field = tl_type_registry_parse(self->transient, self->registry, field_type_node, self->subs,
+                                           &type_argument_map);
+        }
+        if (!field) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+            return;
         }
 
         array_push(field_types, field);
@@ -181,12 +225,12 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
     array_shrink(field_names);
     array_shrink(type_argument_tvs);
 
-    tl_type_constructor_def const *def = tl_type_constructor_def_create(
+    tl_polytype const *poly = tl_type_constructor_def_create(
       self->registry, name, (tl_type_variable_sized)sized_all(type_argument_tvs),
       (str_sized)sized_all(field_names), (tl_monotype_sized)sized_all(field_types));
 
-    tl_polytype const *poly = tl_polytype_create_def(self->arena, def);
     tl_type_env_insert(self->env, name, poly);
+    node->type_v2 = poly;
 }
 
 // tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
@@ -216,7 +260,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node cons
 void load_user_type(tl_infer *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
     str name = ast_node_str(node->user_type_def.name);
-    if (tl_type_registry_get_def(self->registry, name)) {
+    if (tl_type_registry_exists(self->registry, name)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
         return;
     }
@@ -892,9 +936,43 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             return 0; // mututal recursion
         }
 
-        switch (type->tag) {
+        if (tl_polytype_is_type_constructor(type)) {
+            // a type constructor
 
-        case tl_poly_mono: {
+            tl_monotype_array  args = {.alloc = self->arena};
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            ast_node          *arg;
+            while ((arg = ast_arguments_next(&iter))) {
+                ensure_tv(self, null, &arg->type_v2);
+                assert(!tl_polytype_is_scheme(arg->type_v2));
+                array_push(args, arg->type_v2->type);
+            }
+            array_shrink(args);
+
+            tl_monotype const *inst = tl_type_registry_instantiate(self->registry, name);
+            if (!inst) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+                return 1;
+            }
+
+            {
+                str                inst_str = tl_monotype_to_string(self->transient, inst);
+                tl_polytype const *app      = make_arrow(self, iter.nodes, null);
+                str                app_str  = tl_polytype_to_string(self->transient, app);
+                log(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                    str_cstr(&inst_str), str_cstr(&app_str));
+            }
+
+            iter  = ast_node_arguments_iter(node);
+            u32 i = 0;
+            while ((arg = ast_arguments_next(&iter))) {
+                if (i >= inst->cons_inst->args.size) fatal("runtime error");
+                if (constrain_pm(self, ctx, arg->type_v2, inst->cons_inst->args.v[i], node)) return 1;
+            }
+
+            if (constrain_pm(self, ctx, node->type_v2, inst, node)) return 1;
+
+        } else {
             // a function type
 
             // instantiate generic function type being applied
@@ -909,33 +987,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             // and constrain it with the callsite types (arguments -> result)
             if (constrain(self, ctx, &wrap, app, node)) return 1;
-        } break;
-
-        case tl_poly_def: {
-            // a type constructor
-
-            tl_type_constructor_def const *def = tl_type_registry_get_def(self->registry, name);
-            if (!def) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
-                return 1;
-            }
-
-            ast_arguments_iter iter = ast_node_arguments_iter(node);
-            if (def->field_types.size != iter.count) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
-                return 1;
-            }
-
-            tl_monotype const *inst = tl_type_constructor_instantiate(self->arena, def, self->subs);
-            assert(inst->cons_inst->args.size == iter.count);
-            ast_node *arg;
-            u32       i = 0;
-            while ((arg = ast_arguments_next(&iter))) {
-                if (constrain_pm(self, ctx, arg->type_v2, inst->cons_inst->args.v[i], node)) return 1;
-                ++i;
-            }
-
-        } break;
         }
 
     } break;
@@ -1049,7 +1100,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     array_shrink(arr);
 
     tl_monotype const *inst =
-      tl_type_registry_instantiate(self->registry, name, (tl_monotype_sized)sized_all(arr));
+      tl_type_registry_specialize(self->registry, name, (tl_monotype_sized)sized_all(arr));
 
     name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
     str          *existing = map_get(self->instances, &key, sizeof key);
@@ -1106,7 +1157,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         return 0; // mutual recursion
     }
 
-    if (tl_poly_def == type->tag) return specialize_user_type(self, node);
+    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
 
     // instantiate generic function type being applied
     ast_arguments_iter iter     = ast_node_arguments_iter(node);
@@ -1702,6 +1753,8 @@ void             remove_generic_toplevels(tl_infer *self) {
             type = tl_type_env_lookup(self->env, name);
         } else fatal("logic error");
         if (str_eq(S("main"), name)) continue;
+
+        if (!type) fatal("runtime error");
 
         if (tl_polytype_is_scheme(type)) array_push(names, name);
     }

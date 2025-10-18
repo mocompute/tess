@@ -441,8 +441,8 @@ void map_reset(hashmap *map) {
 
 //
 
-hashmap *hset_create(allocator *alloc, u32 n) {
-    return map_create(alloc, sizeof(int), n);
+hashmap *hset_create(allocator *alloc, u32 n_buckets) {
+    return map_create(alloc, sizeof(int), n_buckets);
 }
 
 void hset_destroy(hashmap **self) {
