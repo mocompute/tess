@@ -90,43 +90,6 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
-// static tl_polytype const *node_to_type(tl_infer *self, ast_node const *node) {
-//     // Int => concrete type
-//     // Point a => generic type
-//     if (ast_node_is_symbol(node)) {
-//         str                name = ast_node_str(node);
-//         tl_monotype const *ty = tl_type_registry_instantiate(self->registry, name,
-//         (tl_monotype_sized){0}); if (!ty) return null; return tl_polytype_absorb_mono(self->arena, ty);
-//     }
-
-//     if (ast_node_is_nfa(node)) {
-//         str               name = ast_node_str(node->named_application.name);
-//         hashmap          *tvs  = map_create(self->transient, sizeof(tl_type_variable), 8); // str => tv
-
-//         tl_monotype_array arr  = {.alloc = self->transient};
-//         array_reserve(arr, node->named_application.n_arguments);
-
-//         // each argument may be either an existing type or a type variable identifier (e.g. 'a', 'b').
-
-//         for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
-//             tl_polytype const *ty = node_to_type(self, node->named_application.arguments[i]);
-//             if (!ty) {
-//                 // treat it as a type variable
-//                 if (!ast_node_is_symbol(node->named_application.arguments[i])) fatal("runtime error");
-//                 str arg = ast_node_str(node->named_application.arguments[i]);
-//                 if (!str_map_contains(tvs, arg)) {
-//                     tl_type_variable tv = tl_type_subs_fresh(self->subs);
-//                     str_map_set(&tvs, arg, &tv);
-//                 }
-//             } else if (!tl_polytype_is_concrete(ty)) {
-//                 // merge quantified type variables
-//             }
-
-//             // FIXME: finish design of generic types
-//         }
-//     }
-// }
-
 static tl_type_variable get_tv_or_fresh(str name, hashmap **map, tl_type_subs *subs) {
     tl_type_variable  tv;
     tl_type_variable *found = str_map_get(*map, name);
@@ -232,30 +195,6 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     tl_type_env_insert(self->env, name, poly);
     node->type_v2 = poly;
 }
-
-// tl_monotype const *tl_monotype_from_user_type(tl_infer *self, ast_node const *node) {
-//     assert(ast_node_is_utd(node));
-//     str                 name     = ast_node_str(node->user_type_def.name);
-//     u32                 n_fields = node->user_type_def.n_fields;
-//     tl_monotype const **types    = node->user_type_def.field_types_v2;
-
-//     // field name types must be concrete
-//     for (u32 i = 0; i < n_fields; ++i) {
-//         if (!tl_monotype_is_concrete(types[i])) fatal("not concrete");
-//     }
-
-//     // // construct a linked list of monotypes
-//     // assert(n_fields > 0);
-//     // tl_monotype *head = (tl_monotype *)types[0]; // const cast
-//     // for (u32 i = 1; i < n_fields; ++i) {
-//     //     head->next = types[i];
-//     //     head       = (tl_monotype *)head->next; // const cast
-//     // }
-
-//     // TODO this should probably be cached somewhere.
-//     // TODO support type arguments for user types
-//     return tl_type_registry_instantiate(self->registry, name, null);
-// }
 
 void load_user_type(tl_infer *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
