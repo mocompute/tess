@@ -25,8 +25,9 @@ struct transpile {
     ast_node_sized    nodes;
     ast_node_sized    synthesized_nodes;
     tl_type_env      *env;
-    hashmap          *toplevels; // str => ast_node*
-    hashmap          *structs;   // u64 set
+    hashmap          *toplevels;         // str => ast_node*
+    hashmap          *structs;           // u64 set
+    hashmap          *context_generated; // str set
 
     str_build         build;
 
@@ -58,6 +59,7 @@ static void        cat(transpile *, str);
 static void        cat_nl(transpile *);
 static void        cat_sp(transpile *);
 static void        cat_assign(transpile *);
+static void        cat_commasp(transpile *);
 static void        cat_dot(transpile *);
 static void        cat_double_slash(transpile *);
 static void        cat_open_round(transpile *);
@@ -67,6 +69,7 @@ static void        cat_open_curlyln(transpile *);
 static void        cat_close_curly(transpile *);
 static void        cat_semicolon(transpile *);
 static void        cat_semicolonln(transpile *);
+static void        cat_star(transpile *);
 static void        cat_return(transpile *, str);
 static void        catln(transpile *, str);
 static void        cat_comment(transpile *, str);
@@ -210,6 +213,58 @@ static void generate_user_types(transpile *self) {
         cat_nl(self);
     }
 
+    cat_nl(self);
+}
+
+static str context_name(transpile *self, str_sized fvs) {
+    // generate struct name using hash of fvs
+    u64  hash = str_array_hash64(0, fvs);
+    char buf[64];
+    snprintf(buf, sizeof buf, "tl_ctx_%" PRIu64, hash);
+    return str_init(self->transient, buf);
+}
+
+static void generate_context_struct(transpile *self, str_sized fvs) {
+    str name = context_name(self, fvs);
+    if (str_hset_contains(self->context_generated, name)) return;
+    str_hset_insert(&self->context_generated, name);
+
+    // check types we don't want to emit because they are not concrete
+    forall(i, fvs) {
+        str                field      = fvs.v[i];
+        tl_polytype const *field_type = tl_type_env_lookup(self->env, field);
+        if (!field_type) return;
+        if (!tl_polytype_is_concrete(field_type)) return;
+    }
+
+    cat(self, S("typedef struct "));
+    cat(self, name);
+    cat_sp(self);
+    cat_open_curlyln(self);
+
+    forall(i, fvs) {
+        str                field      = fvs.v[i];
+        tl_polytype const *field_type = tl_type_env_lookup(self->env, field);
+        generate_decl(self, field, field_type->type);
+        if (i + 1 < fvs.size) cat_nl(self);
+    }
+
+    cat_close_curly(self);
+    cat_sp(self);
+    cat(self, name);
+    cat_semicolonln(self);
+}
+
+static void generate_toplevel_contexts(transpile *self) {
+
+    hashmap_iterator iter = {0};
+    while (map_iter(self->env->map, &iter)) {
+        tl_polytype const *type = *(tl_polytype const **)iter.data;
+
+        if (type->type->tag == tl_list && type->type->list.fvs.size) {
+            generate_context_struct(self, type->type->list.fvs);
+        }
+    }
     cat_nl(self);
 }
 
@@ -658,6 +713,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
 
     generate_user_types(self);
     generate_structs(self);
+    generate_toplevel_contexts(self);
+
     generate_prototypes(self, 1);
     cat_nl(self);
     generate_toplevels(self);
@@ -686,6 +743,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->toplevels         = opts->infer_result.toplevels;
 
     self->structs           = hset_create(self->arena, 64);
+    self->context_generated = hset_create(self->arena, 64);
 
     self->next_res          = 0;
 
@@ -729,6 +787,9 @@ static void cat_sp(transpile *self) {
 static void cat_assign(transpile *self) {
     cat(self, S(" = "));
 }
+static void cat_commasp(transpile *self) {
+    cat(self, S(", "));
+}
 static void cat_dot(transpile *self) {
     cat(self, S("."));
 }
@@ -755,6 +816,9 @@ static void cat_semicolon(transpile *self) {
 }
 static void cat_semicolonln(transpile *self) {
     cat(self, S(";\n"));
+}
+static void cat_star(transpile *self) {
+    cat(self, S("*"));
 }
 static void cat_return(transpile *self, str s) {
     cat(self, S("return "));
@@ -891,6 +955,14 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     if (tl_list != arrow->tag) fatal("logic error");
     assert(arrow->list.xs.size > 0);
     assert(!param_names.size || param_names.size >= arrow->list.xs.size - 1);
+
+    // FIXME: generate lambda context argument for free variables
+    if (arrow->list.fvs.size) {
+        str ctx_name = context_name(self, arrow->list.fvs);
+        cat(self, ctx_name);
+        cat_star(self);
+        if (arrow->list.xs.size) cat_commasp(self);
+    }
 
     for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
         // skip last element, the result type
