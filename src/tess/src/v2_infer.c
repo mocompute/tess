@@ -1026,9 +1026,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_user_type_get: {
-        // because we run two passes, and we need to unify widh specialized user types in pass two. If we
-        // don't null this, the node will retain a generic user type.
-        node->type_v2 = null;
         ensure_tv(self, null, &node->type_v2);
 
         tl_polytype const *struct_type =
@@ -1798,6 +1795,40 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
+static void update_specialized_types(tl_infer *self) {
+    hashmap         *updates = new_map(self->transient, str, tl_polytype *, 64);
+
+    hashmap_iterator iter    = {0};
+    while (map_iter(self->env->map, &iter)) {
+        tl_polytype const *type = *(tl_polytype const **)iter.data;
+        if (!tl_polytype_is_type_constructor(type)) continue;
+
+        // already specialized?
+        if (!str_is_empty(type->type->cons_inst->special_name)) continue;
+
+        str                var_name  = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+        str                type_name = type->type->cons_inst->def->name;
+        tl_monotype_sized  type_args = type->type->cons_inst->args;
+
+        tl_monotype const *mono =
+          tl_type_registry_get_cached_instance(self->registry, type_name, type_args);
+
+        if (!mono) continue;
+
+        tl_polytype const *replace =
+          tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, mono));
+        str_map_set(&updates, var_name, &replace);
+    }
+
+    iter = (hashmap_iterator){0};
+    while (map_iter(updates, &iter)) {
+        tl_polytype const *type     = *(tl_polytype const **)iter.data;
+        str                var_name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+
+        str_map_set(&self->env->map, var_name, &type);
+    }
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
@@ -1856,9 +1887,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     traverse->user         = ctx;
 
     traverse_ast(self, traverse, main, specialize_traverse_cb);
-    // add another infer after specialise pass, to ensure that newly-created specialized types are available
-    // to the transpiler.
-    traverse_ast(self, traverse, main, infer_traverse_cb);
 
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
@@ -1875,6 +1903,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
     arena_reset(self->transient);
+
+    // update type specialisations: replace generic constructors with specialised constructors.
+    update_specialized_types(self);
 
     // ensure main function has the correct type
     if (check_main_function(self, main)) return 1;
