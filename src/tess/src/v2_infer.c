@@ -45,14 +45,18 @@ struct tl_infer {
 
 //
 
-static void apply_subs_to_ast(tl_infer *);
-static str  next_instantiation(tl_infer *, str);
-static void cancel_last_instantiation(tl_infer *);
+static void      apply_subs_to_ast(tl_infer *);
+static str       next_instantiation(tl_infer *, str);
+static void      cancel_last_instantiation(tl_infer *);
 
-static void log(tl_infer const *self, char const *restrict fmt, ...);
-static void log_toplevels(tl_infer const *);
-static void log_env(tl_infer const *);
-static void log_subs(tl_infer *);
+static void      toplevel_add(tl_infer *, str, ast_node *);
+static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
+static void      toplevel_del(tl_infer *self, str name);
+
+static void      log(tl_infer const *self, char const *restrict fmt, ...);
+static void      log_toplevels(tl_infer const *);
+static void      log_env(tl_infer const *);
+static void      log_subs(tl_infer *);
 
 //
 
@@ -136,6 +140,7 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
                                                  (tl_monotype_sized)sized_all(args_mono));
     }
 
+    arena_reset(transient);
     fatal("logic error");
 }
 
@@ -211,6 +216,7 @@ void load_user_type(tl_infer *self, ast_node *node) {
     }
 
     create_type_constructor_from_user_type(self, node);
+    arena_reset(self->transient);
 }
 
 static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
@@ -375,6 +381,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
     }
 
     *out_errors = errors;
+    arena_reset(self->transient);
     return tops;
 }
 
@@ -548,9 +555,7 @@ static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
     return clone;
 }
 
-static void toplevel_add(tl_infer *, str, ast_node *);
-
-static int  traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
 
     switch (node->tag) {
@@ -1376,7 +1381,7 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     tl_type_env_insert_mono(self->env, name_inst, arrow);
 
     // clone function source ast and rename variables
-    ast_node *generic_node = clone_generic(self->transient, toplevel_get(self, name));
+    ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
     hashmap  *rename_lex   = map_create(self->transient, sizeof(str), 16);
     rename_variables(self, generic_node, &rename_lex);
     map_destroy(&rename_lex);
@@ -1682,9 +1687,7 @@ int check_missing_free_variables(tl_infer *self) {
     return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, self);
 }
 
-static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
-
-void             remove_generic_toplevels(tl_infer *self) {
+void remove_generic_toplevels(tl_infer *self) {
     str_array        names = {.alloc = self->transient};
 
     ast_node        *node;
@@ -1718,9 +1721,7 @@ void             remove_generic_toplevels(tl_infer *self) {
     array_free(names);
 }
 
-static void toplevel_del(tl_infer *self, str name);
-
-void        tree_shake_toplevels(tl_infer *self, ast_node const *start) {
+void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     hashmap         *used   = tree_shake(self, start);
 
     str_array        remove = {.alloc = self->transient};
@@ -1757,6 +1758,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log(self, "-- start inference --");
 
     self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
+    arena_reset(self->transient);
 
     if (self->errors.size) return 1;
 
@@ -1766,20 +1768,23 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         hashmap *lex = map_create(self->transient, sizeof(str), 16);
         forall(i, nodes) rename_variables(self, nodes.v[i], &lex);
 
-        map_destroy(&lex);
+        arena_reset(self->transient);
     }
 
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
     // inside the iteration because infer will add lambda functions to the toplevel.
     forall(i, nodes) add_generic(self, nodes.v[i]);
+    arena_reset(self->transient);
 
     if (self->errors.size) return 1;
 
     // check if free variables are present
     if (check_missing_free_variables(self)) return 1;
+    arena_reset(self->transient);
 
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
+    arena_reset(self->transient);
 
     log(self, "-- inference complete --");
     log(self, "-- toplevels");
@@ -1788,6 +1793,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_subs(self);
     log(self, "-- env");
     log_env(self);
+    arena_reset(self->transient);
 
     ast_node **found_main = str_map_get(self->toplevels, S("main"));
     if (!found_main) {
@@ -1809,6 +1815,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
+    arena_reset(self->transient);
 
     // log(self, "-- toplevels");
     // log_toplevels(self);
@@ -1820,20 +1827,26 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
+    arena_reset(self->transient);
 
     // ensure main function has the correct type
     if (check_main_function(self, main)) return 1;
+    arena_reset(self->transient);
 
     log(self, "-- final subs");
     log_subs(self);
     log(self, "-- final env --");
     log_env(self);
+    arena_reset(self->transient);
 
     remove_generic_toplevels(self);
+    arena_reset(self->transient);
     tree_shake_toplevels(self, main);
+    arena_reset(self->transient);
 
     log(self, "-- final toplevels");
     log_toplevels(self);
+    arena_reset(self->transient);
 
     if (self->errors.size) {
         return 1;
@@ -1846,6 +1859,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         out_result->nodes             = nodes;
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
     }
+    arena_reset(self->transient);
     return 0;
 }
 
