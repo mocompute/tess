@@ -603,6 +603,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
 
+        // process node again: for specialised types, typing the name depends on typing the value.
+        if (cb(self, ctx, node)) return 1;
+
         map_destroy(&ctx->lex);
         ctx->lex = save;
 
@@ -1140,9 +1143,6 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-
-    // FIXME: let-in nodes need to update type env after type specialisation for their variables to get new
-    // types.
 
     if (!ast_node_is_nfa(node)) return 0;
 
