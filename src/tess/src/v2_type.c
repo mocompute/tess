@@ -39,12 +39,13 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     array_push(mt_arr, tv_type);
     tl_type_constructor_def_create(self, S("Ptr"), unary, empty, (tl_monotype_sized)sized_all(mt_arr));
 
-    empty_mt = (tl_monotype_sized){0};
-    tl_type_registry_instantiate(self, S("Nil"));
-    tl_type_registry_instantiate(self, S("Int"));
-    tl_type_registry_instantiate(self, S("Bool"));
-    tl_type_registry_instantiate(self, S("Float"));
-    tl_type_registry_instantiate(self, S("String"));
+    empty_mt  = (tl_monotype_sized){0};
+    str blank = str_empty();
+    tl_type_registry_specialize(self, S("Nil"), blank, empty_mt);
+    tl_type_registry_specialize(self, S("Int"), blank, empty_mt);
+    tl_type_registry_specialize(self, S("Bool"), blank, empty_mt);
+    tl_type_registry_specialize(self, S("Float"), blank, empty_mt);
+    tl_type_registry_specialize(self, S("String"), blank, empty_mt);
 
     return self;
 }
@@ -60,6 +61,7 @@ tl_polytype const *tl_type_constructor_def_create(tl_type_registry *self, str na
     tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
     inst->def                      = def;
     inst->args                     = field_types;
+    inst->special_name             = str_empty();
 
     tl_monotype *mono              = tl_monotype_create_cons(self->alloc, inst);
     tl_polytype *poly              = tl_polytype_absorb_mono(self->alloc, mono);
@@ -101,7 +103,14 @@ tl_monotype const *tl_type_registry_instantiate_with(tl_type_registry *self, str
     return type;
 }
 
-tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name, tl_monotype_sized args) {
+tl_monotype const *tl_type_registry_get_cached_instance(tl_type_registry *self, str name,
+                                                        tl_monotype_sized args) {
+    registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
+    return map_get_ptr(self->instances, &key, sizeof key);
+}
+
+tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
+                                               tl_monotype_sized args) {
     tl_monotype const *type = null;
     registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     if ((type = map_get_ptr(self->instances, &key, sizeof key))) return type;
@@ -112,7 +121,7 @@ tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name,
     u32 arity = poly->type->cons_inst->args.size;
     if (args.size != arity) return null;
 
-    type = tl_polytype_specialize(self->alloc, poly, args);
+    type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
     map_set_ptr(&self->instances, &key, sizeof key, type);
 
     return type;
@@ -391,6 +400,35 @@ tl_monotype const *tl_polytype_specialize(allocator *alloc, tl_polytype const *s
     return fresh;
 }
 
+tl_monotype const *tl_polytype_specialize_cons(allocator *alloc, tl_polytype const *self,
+                                               tl_monotype_sized args, tl_type_registry *registry,
+                                               str special_name) {
+    tl_monotype *fresh = (tl_monotype *)tl_monotype_clone(alloc, self->type); // const cast
+
+    // ignores quantifiers
+    if (tl_cons_inst == fresh->tag) {
+        tl_monotype_sized const *inst = &fresh->cons_inst->args;
+        if (args.size != inst->size) fatal("logic error");
+
+        // specialise cons arguments using registry
+        forall(i, args) {
+            if (tl_monotype_is_inst(args.v[i])) {
+                str                name      = args.v[i]->cons_inst->def->name;
+                tl_monotype_sized  inst_args = args.v[i]->cons_inst->args;
+                tl_monotype const *replace =
+                  tl_type_registry_get_cached_instance(registry, name, inst_args);
+                if (!replace) return null;
+                args.v[i] = replace;
+            }
+        }
+
+        forall(i, *inst) inst->v[i]    = args.v[i];
+        fresh->cons_inst->special_name = str_copy(alloc, special_name);
+    }
+
+    return fresh;
+}
+
 static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
 
@@ -476,7 +514,7 @@ tl_monotype *tl_monotype_create_tuple(allocator *alloc, tl_monotype_sized xs) {
     return self;
 }
 
-tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst const *cons) {
+tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst *cons) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_cons_inst, .cons_inst = cons};
     return self;
@@ -495,11 +533,11 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
         // copy the tl_type_constructor_inst struct
         *clone =
           (tl_monotype){.tag = tl_cons_inst, .cons_inst = alloc_malloc(alloc, sizeof *clone->cons_inst)};
-        *(tl_type_constructor_inst *)clone->cons_inst = *orig->cons_inst; // const cast
+        *clone->cons_inst = *orig->cons_inst; // const cast
 
         // clone the args list
-        ((tl_type_constructor_inst *)clone->cons_inst)->args =
-          tl_monotype_sized_clone(alloc, orig->cons_inst->args);
+        clone->cons_inst->args         = tl_monotype_sized_clone(alloc, orig->cons_inst->args);
+        clone->cons_inst->special_name = str_copy(alloc, orig->cons_inst->special_name);
 
         break;
 
@@ -602,6 +640,8 @@ u64 tl_monotype_hash64(tl_monotype const *self) {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
         hash         = tl_monotype_sized_hash64(hash, self->cons_inst->args);
+        // Important: do not include special_name as part of hash, because specialize_user_type uses
+        // unspecialised name + hash to de-duplicate
     } break;
 
     case tl_list:

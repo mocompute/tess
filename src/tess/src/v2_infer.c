@@ -30,6 +30,8 @@ struct tl_infer {
     tl_type_env         *env;
     tl_type_subs        *subs;
 
+    ast_node_array       synthesized_nodes;
+
     hashmap             *toplevels; // str => ast_node*
     hashmap             *instances; // u64 hash => str specialised name in env
     tl_infer_error_array errors;
@@ -45,6 +47,7 @@ struct tl_infer {
 
 static void apply_subs_to_ast(tl_infer *);
 static str  next_instantiation(tl_infer *, str);
+static void cancel_last_instantiation(tl_infer *);
 
 static void log(tl_infer const *self, char const *restrict fmt, ...);
 static void log_toplevels(tl_infer const *);
@@ -61,6 +64,9 @@ tl_infer *tl_infer_create(allocator *alloc) {
     self->env                = tl_type_env_create(self->arena, self->transient);
     self->subs               = tl_type_subs_create(self->arena);
     self->registry           = tl_type_registry_create(self->arena, self->subs);
+
+    self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
+
     self->toplevels          = null;
     self->instances          = map_create(self->arena, sizeof(str), 512);
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
@@ -1032,24 +1038,26 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *arg;
     while ((arg = ast_arguments_next(&iter))) {
-        tl_polytype const *poly = arg->type_v2;
+        tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type_v2);
         assert(tl_polytype_is_concrete(poly));
+        tl_polytype_substitute(self->arena, poly, self->subs);
         array_push(arr, poly->type);
     }
     array_shrink(arr);
 
+    str                name_inst = next_instantiation(self, name);
     tl_monotype const *inst =
-      tl_type_registry_specialize(self->registry, name, (tl_monotype_sized)sized_all(arr));
+      tl_type_registry_specialize(self->registry, name, name_inst, (tl_monotype_sized)sized_all(arr));
 
     name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
         node->named_application.name->symbol.original = node->named_application.name->symbol.name;
         node->named_application.name->symbol.name     = *existing;
+
+        cancel_last_instantiation(self);
         return 0;
     }
-
-    str name_inst = next_instantiation(self, name);
     map_set(&self->instances, &key, sizeof key, &name_inst);
 
     ast_node *utd = toplevel_get(self, name);
@@ -1060,6 +1068,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     utd->type_v2                             = tl_polytype_absorb_mono(self->arena, inst);
     toplevel_add(self, name_inst, utd);
     tl_type_env_insert(self->env, name_inst, utd->type_v2);
+    array_push(self->synthesized_nodes, utd);
 
     // update callsite
     node->named_application.name->symbol.original = node->named_application.name->symbol.name;
@@ -1429,6 +1438,10 @@ static str next_instantiation(tl_infer *self, str name) {
     char buf[128];
     snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
     return str_init(self->arena, buf);
+}
+
+static void cancel_last_instantiation(tl_infer *self) {
+    self->next_instantiation--;
 }
 
 static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
@@ -1826,10 +1839,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     if (out_result) {
-        out_result->registry  = self->registry;
-        out_result->env       = self->env;
-        out_result->toplevels = self->toplevels;
-        out_result->nodes     = nodes;
+        out_result->registry          = self->registry;
+        out_result->env               = self->env;
+        out_result->toplevels         = self->toplevels;
+        out_result->nodes             = nodes;
+        out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
     }
     return 0;
 }

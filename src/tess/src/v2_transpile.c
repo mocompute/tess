@@ -23,6 +23,7 @@ struct transpile {
 
     tl_type_registry *registry;
     ast_node_sized    nodes;
+    ast_node_sized    synthesized_nodes;
     tl_type_env      *env;
     hashmap          *toplevels; // str => ast_node*
     hashmap          *structs;   // u64 set
@@ -182,9 +183,8 @@ static void generate_structs(transpile *self) {
 
 static void generate_user_types(transpile *self) {
 
-    hashmap_iterator iter = {0};
-    ast_node        *node;
-    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+    forall(i, self->synthesized_nodes) {
+        ast_node *node = self->synthesized_nodes.v[i];
 
         if (!ast_node_is_utd(node)) continue;
         str                name = toplevel_name(node);
@@ -351,6 +351,35 @@ static str generate_funcall_result(transpile *self, tl_monotype const *type, int
     return res;
 }
 
+static str generate_type_constructor(transpile *self, ast_node const *node) {
+    assert(ast_node_is_named_application(node));
+    str                name = ast_node_str(node->named_application.name);
+    tl_monotype const *type = env_lookup(self, name);
+    assert(tl_monotype_is_inst(type));
+
+    str                            res = next_res(self);
+    tl_type_constructor_def const *def = type->cons_inst->def;
+
+    assert(def->field_names.size == node->named_application.n_arguments);
+    assert(def->field_names.size == type->cons_inst->args.size);
+
+    generate_decl(self, res, type);
+
+    forall(i, def->field_names) {
+        str arg_value =
+          generate_expr(self, type->cons_inst->args.v[i], node->named_application.arguments[i]);
+
+        cat(self, res);
+        cat_dot(self);
+        cat(self, def->field_names.v[i]);
+        cat_assign(self);
+        cat(self, arg_value);
+        cat_semicolonln(self);
+    }
+
+    return res;
+}
+
 static str generate_funcall(transpile *self, ast_node const *node) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
@@ -360,7 +389,7 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     if (!type) fatal("funcall with null type");
 
     // type constructor?
-    if (tl_monotype_is_inst(type)) fatal("not yet implemented");
+    if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node);
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
@@ -616,22 +645,23 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self = new (alloc, transpile);
+    transpile *self         = new (alloc, transpile);
 
-    self->parent    = alloc;
-    self->arena     = arena_create(alloc, TRANSPILE_ARENA_SIZE);
-    self->transient = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
+    self->parent            = alloc;
+    self->arena             = arena_create(alloc, TRANSPILE_ARENA_SIZE);
+    self->transient         = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
 
-    self->nodes     = opts->infer_result.nodes;
-    self->registry  = opts->infer_result.registry;
-    self->env       = opts->infer_result.env;
-    self->toplevels = opts->infer_result.toplevels;
+    self->nodes             = opts->infer_result.nodes;
+    self->synthesized_nodes = opts->infer_result.synthesized_nodes;
+    self->registry          = opts->infer_result.registry;
+    self->env               = opts->infer_result.env;
+    self->toplevels         = opts->infer_result.toplevels;
 
-    self->structs   = hset_create(self->arena, 64);
+    self->structs           = hset_create(self->arena, 64);
 
-    self->next_res  = 0;
+    self->next_res          = 0;
 
-    self->verbose   = !!opts->verbose;
+    self->verbose           = !!opts->verbose;
 
     return self;
 }
@@ -773,6 +803,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
             tl_polytype wrap = tl_polytype_wrap(mono->cons_inst->args.v[0]);
             return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
         } else {
+            if (!str_is_empty(mono->cons_inst->special_name)) return mono->cons_inst->special_name;
             return cons_name;
         }
     }
