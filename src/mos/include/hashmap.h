@@ -37,6 +37,7 @@ typedef struct {
 // -- allocation and deallocation --
 
 nodiscard hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) mallocfun;
+nodiscard hashmap *map_create_ptr(allocator *alloc, u32 n_buckets) mallocfun;
 void               map_destroy(hashmap **);
 nodiscard hashmap *map_copy(hashmap const *) mallocfun;
 
@@ -84,5 +85,8 @@ size_t hset_size(hashmap const *);
 // -- utilities --
 int map_iter(hashmap const *, hashmap_iterator *);
 int hset_iter(hashmap const *, hashmap_iterator *);
+
+// To document key and value types at create callsite
+#define new_map(A, K, V, N) map_create((A), sizeof(V), N)
 
 #endif

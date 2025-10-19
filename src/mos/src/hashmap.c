@@ -258,6 +258,10 @@ hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     return map;
 }
 
+hashmap *map_create_ptr(allocator *alloc, u32 n_buckets) {
+    return map_create(alloc, sizeof(void *), n_buckets);
+}
+
 void map_destroy(hashmap **map) {
     if (!map || !*map) return;
 
