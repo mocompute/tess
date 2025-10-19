@@ -713,6 +713,13 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_user_type_set:
+        if (traverse_ast(self, ctx, node->user_type_set.struct_name, cb)) return 1;
+        if (traverse_ast(self, ctx, node->user_type_set.field_name, cb)) return 1;
+        if (traverse_ast(self, ctx, node->user_type_set.value, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -731,7 +738,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:
-    case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
     case ast_labelled_tuple:
@@ -1050,6 +1056,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         assert(found < struct_type->type->cons_inst->args.size);
         tl_monotype const *field_type = struct_type->type->cons_inst->args.v[found];
         if (constrain_pm(self, ctx, node->type_v2, field_type, node)) return 1;
+    } break;
+
+    case ast_user_type_set: {
+        ensure_tv(self, null, &node->type_v2);
+        if (constrain(self, ctx, node->type_v2, node->user_type_set.value->type_v2, node)) return 1;
     }
 
     break;
@@ -1063,7 +1074,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_ellipsis:
     case ast_eof:
     case ast_let_match_in:
-    case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
     case ast_labelled_tuple:

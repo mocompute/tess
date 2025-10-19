@@ -533,6 +533,20 @@ static str generate_type_get(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
+static str generate_type_set(transpile *self, tl_monotype const *type, ast_node const *node) {
+    assert(ast_user_type_set == node->tag);
+
+    str value = generate_expr(self, type, node->user_type_set.value);
+
+    generate_assign_field(self, ast_node_str(node->user_type_set.struct_name),
+                          ast_node_str(node->user_type_get.field_name), value);
+
+    str res = next_res(self);
+    generate_decl(self, res, type);
+    generate_assign(self, res, value);
+    return res;
+}
+
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
@@ -574,6 +588,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_tuple:         return generate_tuple(self, type, node);
 
     case ast_user_type_get: return generate_type_get(self, type, node);
+    case ast_user_type_set: return generate_type_set(self, type, node);
 
     case ast_arrow:
     case ast_assignment:
@@ -582,7 +597,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_eof:
     case ast_let_match_in:
     case ast_user_type_definition:
-    case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
     case ast_labelled_tuple:

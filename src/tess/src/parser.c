@@ -1100,7 +1100,6 @@ static int a_field_setter(parser *self) {
     v->struct_name                  = vget->struct_name;
     v->field_name                   = vget->field_name;
     v->value                        = value;
-    v->flags                        = 0;
     return result_ast_node(self, node);
 }
 
@@ -1122,7 +1121,6 @@ static int a_field_pointer_setter(parser *self) {
     v->struct_name                  = vget->struct_name;
     v->field_name                   = vget->field_name;
     v->value                        = value;
-    v->flags                        = 0;
     return result_ast_node(self, node);
 }
 

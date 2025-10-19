@@ -162,7 +162,6 @@ typedef struct ast_node {
             struct ast_node *struct_name;
             struct ast_node *field_name;
             struct ast_node *value;
-            u8               flags;
         } user_type_set;
 
         struct ast_user_type_def {
