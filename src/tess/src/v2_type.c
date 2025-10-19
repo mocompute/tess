@@ -510,9 +510,15 @@ tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype const *lhs, 
     tl_monotype const *left  = tl_monotype_clone(alloc, lhs);
     tl_monotype const *right = tl_monotype_clone(alloc, rhs);
     tl_monotype_array  arr   = {.alloc = alloc};
-    array_reserve(arr, 2);
-    array_push(arr, left);
-    array_push(arr, right);
+    assert(left);
+    if (right) {
+        array_reserve(arr, 2);
+        array_push(arr, left);
+        array_push(arr, right);
+    } else {
+        array_push(arr, left);
+    }
+    array_shrink(arr);
     return tl_monotype_create_list(alloc, (tl_monotype_sized)sized_all(arr));
 }
 
