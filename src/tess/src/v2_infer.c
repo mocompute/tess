@@ -1073,6 +1073,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // update callsite
     node->named_application.name->symbol.original = node->named_application.name->symbol.name;
     node->named_application.name->symbol.name     = name_inst;
+    node->type_v2                                 = utd->type_v2; // Note: this helps the transpiler
 
     return 0;
 }

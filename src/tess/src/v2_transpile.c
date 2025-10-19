@@ -431,6 +431,11 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     tl_monotype const *type = env_lookup(self, name); // may be null
 
     if (type) {
+        // FIXME: this is a hack at the moment, because specialising type constructor applications during
+        // (after) inferencing does not update the type environment, so the name will still point to a
+        // generic type.
+        if (tl_monotype_is_inst(type)) type = node->let_in.value->type_v2->type;
+
         str value = generate_expr(self, type, node->let_in.value);
 
         generate_decl(self, name, type);
