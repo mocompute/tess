@@ -1827,6 +1827,8 @@ static void update_specialized_types(tl_infer *self) {
 
         str_map_set(&self->env->map, var_name, &type);
     }
+
+    arena_reset(self->transient);
 }
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
