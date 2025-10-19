@@ -1030,7 +1030,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         tl_polytype const *struct_type =
           tl_type_env_lookup(self->env, ast_node_str(node->user_type_get.struct_name));
-        assert(tl_polytype_is_type_constructor(struct_type));
+        tl_polytype_substitute(self->arena, (tl_polytype *)struct_type, self->subs);
+        if (!tl_polytype_is_type_constructor(struct_type)) return 0; // too early
+
         tl_type_constructor_def const *def        = struct_type->type->cons_inst->def;
 
         str                            field_name = ast_node_str(node->user_type_get.field_name);
@@ -1138,6 +1140,9 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    // FIXME: let-in nodes need to update type env after type specialisation for their variables to get new
+    // types.
 
     if (!ast_node_is_nfa(node)) return 0;
 

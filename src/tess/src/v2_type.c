@@ -182,7 +182,7 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
     str type_str = tl_polytype_to_string(self->transient, type);
-    log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+    log(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 
     tl_polytype const *clone = tl_polytype_clone(self->alloc, type);
@@ -192,7 +192,7 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype const *type) {
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype const *type) {
     tl_polytype const *clone = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
     str                type_str = tl_polytype_to_string(self->transient, clone);
-    log(self, "tl_type_env_insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+    log(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
