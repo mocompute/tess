@@ -1060,7 +1060,6 @@ static int a_field_access(parser *self) {
     struct ast_user_type_get *v     = ast_node_utg(node);
     v->struct_name                  = variable;
     v->field_name                   = field;
-    v->flags                        = 0;
     return result_ast_node(self, node);
 }
 
@@ -1081,7 +1080,6 @@ static int a_field_pointer_access(parser *self) {
     struct ast_user_type_get *v     = ast_node_utg(node);
     v->struct_name                  = variable;
     v->field_name                   = field;
-    v->flags                        = 0;
     return result_ast_node(self, node);
 }
 

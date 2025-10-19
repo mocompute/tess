@@ -156,7 +156,6 @@ typedef struct ast_node {
         struct ast_user_type_get {
             struct ast_node *struct_name;
             struct ast_node *field_name;
-            u8               flags;
         } user_type_get;
 
         struct ast_user_type_set {

@@ -18,6 +18,7 @@ defsized(tl_polytype_sized, struct tl_polytype const *);
 
 typedef struct {
     str       name;
+    str       generic_name;
     str_sized field_names; // user types
 } tl_type_constructor_def;
 
@@ -75,6 +76,7 @@ tl_polytype const *tl_type_constructor_def_create(tl_type_registry *, str name, 
 tl_monotype const *tl_type_registry_instantiate(tl_type_registry *, str);
 tl_monotype const *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
 tl_monotype const *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
+tl_monotype const *tl_type_registry_get_cached_instance(tl_type_registry *, str, tl_monotype_sized);
 
 tl_monotype const *tl_type_registry_nil(tl_type_registry *);
 tl_monotype const *tl_type_registry_int(tl_type_registry *);

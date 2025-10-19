@@ -50,12 +50,14 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     return self;
 }
 
-tl_polytype const *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                                  tl_type_variable_sized type_variables,
-                                                  str_sized field_names, tl_monotype_sized field_types) {
+tl_polytype const *tl_type_constructor_def_create_ext(tl_type_registry *self, str name, str generic_name,
+                                                      tl_type_variable_sized type_variables,
+                                                      str_sized              field_names,
+                                                      tl_monotype_sized      field_types) {
 
     tl_type_constructor_def *def   = alloc_malloc(self->alloc, sizeof *def);
     def->name                      = str_copy(self->alloc, name);
+    def->generic_name              = str_copy(self->alloc, generic_name);
     def->field_names               = field_names;
 
     tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
@@ -69,6 +71,13 @@ tl_polytype const *tl_type_constructor_def_create(tl_type_registry *self, str na
 
     str_map_set_ptr(&self->definitions, def->name, poly);
     return poly;
+}
+
+tl_polytype const *tl_type_constructor_def_create(tl_type_registry *self, str name,
+                                                  tl_type_variable_sized type_variables,
+                                                  str_sized field_names, tl_monotype_sized field_types) {
+
+    return tl_type_constructor_def_create_ext(self, name, name, type_variables, field_names, field_types);
 }
 
 typedef struct {
@@ -123,6 +132,11 @@ tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name,
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
     map_set_ptr(&self->instances, &key, sizeof key, type);
+
+    if (!str_is_empty(special_name)) {
+        tl_type_constructor_def_create_ext(self, special_name, name, (tl_type_variable_sized){0},
+                                           type->cons_inst->def->field_names, type->cons_inst->args);
+    }
 
     return type;
 }
@@ -673,7 +687,8 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
     } break;
 
     case tl_cons_inst: {
-        str_build_cat(&b, self->cons_inst->def->name);
+        if (!str_is_empty(self->cons_inst->special_name)) str_build_cat(&b, self->cons_inst->special_name);
+        else str_build_cat(&b, self->cons_inst->def->name);
         if (self->cons_inst->args.size) {
             str_build_cat(&b, S(" "));
             forall(i, self->cons_inst->args) {
@@ -788,8 +803,16 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monot
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype const *weak, tl_monotype const *,
                                    type_error_cb_fun, void *);
 
-int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
-                                   type_error_cb_fun cb, void *user) {
+static int unify_type_constructor_def(tl_type_constructor_def const *lhs,
+                                      tl_type_constructor_def const *rhs) {
+    if (lhs == rhs) return 0;
+    if (str_eq(lhs->name, rhs->name)) return 0;
+    if (str_eq(lhs->generic_name, rhs->generic_name)) return 0;
+    return 1;
+}
+
+int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
+                            type_error_cb_fun cb, void *user) {
 
     if (!left || !right) return 1;
 
@@ -830,7 +853,7 @@ int        tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, 
         case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
         case tl_cons_inst:
-            if (left->cons_inst->def != right->cons_inst->def) {
+            if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
                 if (cb) cb(user, left, right);
                 return 1;
             }

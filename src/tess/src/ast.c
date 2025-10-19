@@ -922,7 +922,11 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_any:    return S("any");
 
     case ast_symbol: {
-        str out = node->symbol.name;
+        str out = str_empty();
+        if (node->type_v2) out = str_copy(alloc, S("(")); // wrap in () if type exists
+
+        out = str_cat(alloc, out, node->symbol.name);
+
         if (node->symbol.annotation_type_v2) {
             out = str_cat_4(alloc, out, S(" (v2: "),
                             tl_polytype_to_string(alloc, node->symbol.annotation_type_v2), S(")"));
@@ -930,8 +934,10 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             out =
               str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
         }
-        if (node->type_v2)
+        if (node->type_v2) {
             out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type_v2));
+            out = str_cat(alloc, out, S(")"));
+        }
         return out;
     }
 
@@ -1003,7 +1009,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return out;
     } break;
 
-    case ast_ellipsis:                    return str_copy(alloc, S("..."));
+    case ast_ellipsis:      return str_copy(alloc, S("..."));
+
+    case ast_user_type_get: {
+        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->user_type_get.struct_name), S("."),
+                         v2_ast_node_to_string(alloc, node->user_type_get.field_name));
+
+    } break;
 
     case ast_address_of:
     case ast_assignment:
@@ -1013,7 +1025,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_if_then_else:
     case ast_let_match_in:
-    case ast_user_type_get:
     case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
@@ -1289,7 +1300,6 @@ u64 ast_node_hash(ast_node const *self) {
         //
         combine_node(self->user_type_get.struct_name);
         combine_node(self->user_type_get.field_name);
-        hash = hash64_combine(hash, (byte *)&self->user_type_get.flags, sizeof(self->user_type_get.flags));
         break;
 
     case ast_user_type_set:
@@ -1297,7 +1307,6 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->user_type_set.struct_name);
         combine_node(self->user_type_set.field_name);
         combine_node(self->user_type_set.value);
-        hash = hash64_combine(hash, (byte *)&self->user_type_get.flags, sizeof(self->user_type_get.flags));
         break;
 
     case ast_begin_end:

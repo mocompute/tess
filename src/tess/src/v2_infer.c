@@ -12,6 +12,7 @@
 #include "types.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef struct {
@@ -42,6 +43,11 @@ struct tl_infer {
     int                  verbose;
     int                  indent_level;
 };
+
+typedef struct {
+    u64 name_hash;
+    u64 type_hash;
+} name_and_type;
 
 //
 
@@ -530,6 +536,7 @@ static int constrain_pm(tl_infer *self, infer_ctx *ctx, tl_polytype const *left,
 static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type) {
     if (!type) return;
     if (*type) return;
+
     if (name) *type = tl_polytype_clone(self->arena, (tl_type_env_lookup(self->env, *name)));
     if (*type) return;
 
@@ -697,6 +704,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
     } break;
 
+    case ast_user_type_get:
+        if (traverse_ast(self, ctx, node->user_type_get.struct_name, cb)) return 1;
+        if (traverse_ast(self, ctx, node->user_type_get.field_name, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -715,7 +728,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:
-    case ast_user_type_get:
     case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
@@ -868,7 +880,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         else {
-            ensure_tv(self, &node->symbol.name, &node->type_v2);
+            ensure_tv(self, null, &node->type_v2);
         }
 
         // add to environment
@@ -1010,14 +1022,45 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     } break;
 
+    case ast_user_type_get: {
+        // because we run two passes, and we need to unify widh specialized user types in pass two. If we
+        // don't null this, the node will retain a generic user type.
+        node->type_v2 = null;
+        ensure_tv(self, null, &node->type_v2);
+
+        tl_polytype const *struct_type =
+          tl_type_env_lookup(self->env, ast_node_str(node->user_type_get.struct_name));
+        assert(tl_polytype_is_type_constructor(struct_type));
+        tl_type_constructor_def const *def        = struct_type->type->cons_inst->def;
+
+        str                            field_name = ast_node_str(node->user_type_get.field_name);
+        u32                            found      = INT32_MAX;
+        forall(i, def->field_names) {
+            if (str_eq(def->field_names.v[i], field_name)) {
+                found = i;
+                break;
+            }
+        }
+        if (INT32_MAX == found) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = node}));
+            return 1;
+        }
+        assert(found < struct_type->type->cons_inst->args.size);
+        tl_monotype const *field_type = struct_type->type->cons_inst->args.v[found];
+        if (constrain_pm(self, ctx, node->type_v2, field_type, node)) return 1;
+    }
+
+    break;
+
+    case ast_user_type_definition: {
+    } break;
+
     case ast_arrow:
     case ast_assignment:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
     case ast_let_match_in:
-    case ast_user_type_definition:
-    case ast_user_type_get:
     case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
@@ -1030,11 +1073,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     tl_type_subs_apply(self->subs, self->env);
     return 0;
 }
-
-typedef struct {
-    u64 name_hash;
-    u64 type_hash;
-} name_and_type;
 
 static int specialize_user_type(tl_infer *self, ast_node *node) {
     str                name = node->named_application.name->symbol.name;
@@ -1600,7 +1638,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
     str                orig_name    = name_node->symbol.original;
 
     // do not process a second time
-    if (tl_type_env_lookup(self->env, name)) fatal("runtime error");
+    if (tl_type_env_lookup(self->env, name)) return 0;
+    // fatal("runtime error");
 
     // calculate provisional type, for recursive functions
     if (ast_node_is_let(node)) {
@@ -1812,6 +1851,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     traverse->user         = ctx;
 
     traverse_ast(self, traverse, main, specialize_traverse_cb);
+    // add another infer after specialise pass, to ensure that newly-created specialized types are available
+    // to the transpiler.
+    traverse_ast(self, traverse, main, infer_traverse_cb);
 
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
