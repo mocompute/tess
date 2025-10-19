@@ -525,6 +525,19 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     return res;
 }
 
+static str generate_type_get(transpile *self, tl_monotype const *type, ast_node const *node) {
+    assert(ast_user_type_get == node->tag);
+
+    str res = next_res(self);
+    generate_decl(self, res, type);
+    generate_assign_lhs(self, res);
+    cat(self, ast_node_str(node->user_type_get.struct_name));
+    cat_dot(self);
+    cat(self, ast_node_str(node->user_type_get.field_name));
+    cat_semicolonln(self);
+    return res;
+}
+
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
@@ -563,7 +576,9 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
         return str_cat(self->transient, S("*"), generate_expr(self, deref_ty, node->dereference.target));
     } break;
 
-    case ast_tuple: return generate_tuple(self, type, node);
+    case ast_tuple:         return generate_tuple(self, type, node);
+
+    case ast_user_type_get: return generate_type_get(self, type, node);
 
     case ast_arrow:
     case ast_assignment:
@@ -572,7 +587,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_eof:
     case ast_let_match_in:
     case ast_user_type_definition:
-    case ast_user_type_get:
     case ast_user_type_set:
     case ast_begin_end:
     case ast_function_declaration:
