@@ -546,6 +546,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type)
 static void               rename_variables(tl_infer *, ast_node *, hashmap **);
 static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
 static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static tl_polytype const *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
 
 static int                is_name_instanatiated(tl_infer *self, ast_node *name) {
     assert(ast_node_is_symbol(name));
@@ -1168,7 +1169,9 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     ast_node          *fun_node = toplevel_get(self, name);
     if (!fun_node) return 0; // too early
 
-    tl_polytype const *app = make_arrow(self, iter.nodes, node);
+    // Important: use _with variant to copy free variables info to the arrow, which is added to the
+    // environment further down.
+    tl_polytype const *app = make_arrow_with(self, iter.nodes, node, type);
 
     // Important: resolve type variables by calling polytype_substitute.
     tl_polytype_substitute(self->arena, (tl_polytype *)app, self->subs); // const cast
@@ -1563,6 +1566,15 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
 
         return tl_polytype_absorb_mono(self->arena, out);
     }
+}
+
+static tl_polytype const *make_arrow_with(tl_infer *self, ast_node_sized args, ast_node *result,
+                                          tl_polytype const *type) {
+    tl_polytype const *out = make_arrow(self, args, result);
+    if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
+        ((tl_monotype *)out->type)->list.fvs = type->type->list.fvs; // const cast
+    }
+    return out;
 }
 
 typedef struct {
