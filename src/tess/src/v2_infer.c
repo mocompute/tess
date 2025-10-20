@@ -265,7 +265,7 @@ static void process_annotation(tl_infer *self, ast_node *node) {
     tl_monotype const *ann =
       tl_type_registry_parse(self->transient, self->registry, name->symbol.annotation, self->subs, &map);
 
-    node->symbol.annotation_type_v2 = tl_polytype_absorb_mono(self->arena, ann);
+    node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, ann);
 
     map_destroy(&map);
 }
@@ -522,8 +522,8 @@ static ast_node          *clone_generic(allocator *alloc, ast_node const *node) 
     ast_node *clone = ast_node_clone(alloc, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
-    name->symbol.annotation_type_v2 = null;
-    name->symbol.annotation         = null;
+    name->symbol.annotation_type = null;
+    name->symbol.annotation      = null;
     return clone;
 }
 
@@ -1628,16 +1628,16 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
 static int generic_declaration(tl_infer *self, str name, ast_node const *name_node, ast_node *node) {
     // no function body, so let's treat this as a type declaration
-    if (!name_node->symbol.annotation_type_v2) {
+    if (!name_node->symbol.annotation_type) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
         return 1;
     }
 
     // must quantify arrow types
-    if (tl_monotype_is_arrow(node->symbol.annotation_type_v2->type))
-        tl_polytype_generalize((tl_polytype *)node->symbol.annotation_type_v2, self->env,
+    if (tl_monotype_is_arrow(node->symbol.annotation_type->type))
+        tl_polytype_generalize((tl_polytype *)node->symbol.annotation_type, self->env,
                                self->subs); // const cast
-    tl_type_env_insert(self->env, name, node->symbol.annotation_type_v2);
+    tl_type_env_insert(self->env, name, node->symbol.annotation_type);
     return 0;
 }
 
@@ -1702,8 +1702,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // get the arrow type from the annotation, or else from the result of inference
     tl_polytype const *arrow = null;
-    if (name_node->symbol.annotation_type_v2) {
-        arrow = name_node->symbol.annotation_type_v2;
+    if (name_node->symbol.annotation_type) {
+        arrow = name_node->symbol.annotation_type;
     } else {
         tl_polytype const *tmp = tl_type_env_lookup(self->env, name);
         if (!tmp) fatal("runtime error");

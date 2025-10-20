@@ -27,24 +27,24 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 }
 
 ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
-    ast_node *self                  = ast_node_create(alloc, ast_symbol);
-    self->symbol.name               = str_init(alloc, str);
-    self->symbol.original           = str_empty();
-    self->symbol.annotation         = null;
-    self->symbol.annotation_type_v2 = null;
-    self->symbol.special_hash       = 0;
-    self->symbol.flags              = 0;
+    ast_node *self               = ast_node_create(alloc, ast_symbol);
+    self->symbol.name            = str_init(alloc, str);
+    self->symbol.original        = str_empty();
+    self->symbol.annotation      = null;
+    self->symbol.annotation_type = null;
+    self->symbol.special_hash    = 0;
+    self->symbol.flags           = 0;
     return self;
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, str str) {
-    ast_node *self                  = ast_node_create(alloc, ast_symbol);
-    self->symbol.name               = str_copy(alloc, str);
-    self->symbol.original           = str_empty();
-    self->symbol.annotation         = null;
-    self->symbol.annotation_type_v2 = null;
-    self->symbol.special_hash       = 0;
-    self->symbol.flags              = 0;
+    ast_node *self               = ast_node_create(alloc, ast_symbol);
+    self->symbol.name            = str_copy(alloc, str);
+    self->symbol.original        = str_empty();
+    self->symbol.annotation      = null;
+    self->symbol.annotation_type = null;
+    self->symbol.special_hash    = 0;
+    self->symbol.flags           = 0;
     return self;
 }
 
@@ -125,13 +125,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_symbol:
     case ast_string: {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
-        vclone->name               = str_copy(alloc, vorig->name);
-        vclone->original           = str_copy(alloc, vorig->original);
-        vclone->annotation         = ast_node_clone(alloc, vorig->annotation);
-        vclone->annotation_type_v2 = null;
-        if (vorig->annotation_type_v2) {
-            vclone->annotation_type_v2 = new (alloc, tl_polytype);
-            vclone->annotation_type_v2 = tl_polytype_clone(alloc, vorig->annotation_type_v2);
+        vclone->name            = str_copy(alloc, vorig->name);
+        vclone->original        = str_copy(alloc, vorig->original);
+        vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
+        vclone->annotation_type = null;
+        if (vorig->annotation_type) {
+            vclone->annotation_type = new (alloc, tl_polytype);
+            vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         }
         vclone->special_hash = vorig->special_hash;
         vclone->flags        = vorig->flags;
@@ -933,9 +933,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
         out = str_cat(alloc, out, node->symbol.name);
 
-        if (node->symbol.annotation_type_v2) {
+        if (node->symbol.annotation_type) {
             out = str_cat_4(alloc, out, S(" (v2: "),
-                            tl_polytype_to_string(alloc, node->symbol.annotation_type_v2), S(")"));
+                            tl_polytype_to_string(alloc, node->symbol.annotation_type), S(")"));
         } else if (node->symbol.annotation) {
             out =
               str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
