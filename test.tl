@@ -1,8 +1,9 @@
-let apply f = f ()
-let apply2 f = apply f
+// let add1 x = incr x
+
+let add1 : Int -> Int
+
+let add1 x = x
+let foo f y = f y
 
 let main () =
-  let val = true in
-  let afun = fun () -> val end in
-  let foo = apply2 afun in
-  0
+    foo add1 -1

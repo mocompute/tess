@@ -120,8 +120,25 @@ static tl_type_variable get_tv_or_fresh(str name, hashmap **map, tl_type_subs *s
 
 tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry *self,
                                           ast_node const *node, tl_type_subs *subs, hashmap **map) {
+
+    // map : map_new(self->transient, str, tl_type_variable, 8);
+
+    if (ast_node_is_nil(node)) {
+        return tl_type_registry_nil(self);
+    }
+
     if (ast_node_is_symbol(node)) {
-        return tl_type_registry_instantiate(self, ast_node_str(node));
+        tl_monotype const *out = tl_type_registry_instantiate(self, ast_node_str(node));
+        if (out) return out;
+
+        str               name = ast_node_str(node);
+
+        tl_type_variable *tv   = str_map_get(*map, name);
+        if (tv) return tl_monotype_create_tv(self->alloc, *tv);
+
+        tl_type_variable fresh = tl_type_subs_fresh(subs);
+        str_map_set(map, name, &fresh);
+        return tl_monotype_create_tv(self->alloc, fresh);
     }
 
     if (ast_node_is_nfa(node)) {
@@ -144,6 +161,19 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
 
         return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
                                                  (tl_monotype_sized)sized_all(args_mono));
+    }
+
+    if (ast_node_is_arrow(node)) {
+        tl_monotype const *left  = tl_type_registry_parse(transient, self, node->arrow.left, subs, map);
+        tl_monotype const *right = tl_type_registry_parse(transient, self, node->arrow.right, subs, map);
+        tl_monotype_array  arr   = {.alloc = self->alloc};
+        // flatten lists:
+        if (tl_monotype_is_list(left)) forall(i, left->list.xs) array_push(arr, left->list.xs.v[i]);
+        else array_push(arr, left);
+        if (tl_monotype_is_list(right)) forall(i, right->list.xs) array_push(arr, right->list.xs.v[i]);
+        else array_push(arr, right);
+        array_shrink(arr);
+        return tl_monotype_create_list(transient, (tl_monotype_sized)sized_all(arr));
     }
 
     arena_reset(transient);
@@ -225,88 +255,17 @@ void load_user_type(tl_infer *self, ast_node *node) {
     arena_reset(self->transient);
 }
 
-static tl_polytype const *make_type_annotation(tl_infer *self, ast_node *ann, hashmap **map) {
-    if (ast_nil == ann->tag) {
-        return tl_polytype_absorb_mono(self->arena, tl_type_registry_nil(self->registry));
-    }
-
-    // if (ast_ellipsis == ann->tag) {
-    //     tl_type **found = type_registry_find_name(self->type_registry, S("ellipsis"));
-    //     if (found) return *found;
-    //     fatal("ellipsis type not found");
-    // }
-
-    if (ast_symbol == ann->tag) {
-        // either a prim or user type, or a generic/quantifier
-        str                ann_str = ann->symbol.name;
-        tl_polytype const *found   = tl_type_env_lookup(self->env, ann_str);
-        if (found) {
-            // If it's an any type, assign it a new quantifier
-            // if (type_any == (*found)->tag) return tl_type_context_new_quantifier(self);
-            return tl_polytype_clone(self->arena, found);
-        }
-
-        // previously seen in the annotation? then assign same type
-        {
-            tl_polytype *map_found = str_map_get_ptr(*map, ann_str);
-            if (map_found) return tl_polytype_clone(self->arena, map_found);
-        }
-
-        // unknown symbol, consider it as a quantifier
-        tl_polytype const *out = tl_polytype_create_fresh_qv(self->arena, self->subs);
-        str_map_set(map, ann_str, &out);
-        return out;
-    }
-
-    // if (ast_tuple == ann->tag) {
-    //     struct ast_tuple *v        = ast_node_tuple(ann);
-    //     tl_type_array     elements = {.alloc = self->type_arena};
-    //     array_reserve(elements, v->n_elements);
-
-    //     for (u32 i = 0; i < v->n_elements; ++i) {
-    //         tl_type *res = make_type_annotation(self, v->elements[i], map);
-    //         array_push(elements, res);
-    //     }
-
-    //     return tl_type_create_tuple(self->type_arena, (tl_type_sized)sized_all(elements));
-    // }
-
-    if (ast_arrow == ann->tag) {
-        tl_polytype const *left  = make_type_annotation(self, ann->arrow.left, map);
-        tl_polytype const *right = make_type_annotation(self, ann->arrow.right, map);
-
-        // FIXME: seems this whole function is borked.
-        if (!tl_monotype_is_list(left->type)) {
-            tl_monotype_array arr = {.alloc = self->arena};
-            array_push(arr, left->type);
-            array_shrink(arr);
-            left = tl_polytype_absorb_mono(
-              self->arena, tl_monotype_create_list(self->arena, (tl_monotype_sized)sized_all(arr)));
-        }
-
-        tl_polytype_list_append(self->arena, (tl_polytype *)left, right); // const cast
-        return left;
-    }
-
-    // if (ast_address_of == ann->tag) {
-    //     tl_type *target     = make_type_annotation(self, ann->address_of.target, map);
-    //     tl_type *ptr        = tl_type_create(self->type_arena, type_pointer);
-    //     ptr->pointer.target = target;
-    //     return ptr;
-    // }
-
-    // fatal("unknown annotation type: '%s'", ast_tag_to_string(ann->tag));
-    return null; // FIXME
-}
-
 static void process_annotation(tl_infer *self, ast_node *node) {
     ast_node const *name = toplevel_name_node(node);
 
     if (!name->symbol.annotation) return;
 
-    hashmap           *map          = map_new(self->transient, str, tl_polytype *, 8);
-    tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
-    node->symbol.annotation_type_v2 = ann;
+    hashmap *map = map_new(self->transient, str, tl_type_variable, 8);
+    // tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
+    tl_monotype const *ann =
+      tl_type_registry_parse(self->transient, self->registry, name->symbol.annotation, self->subs, &map);
+
+    node->symbol.annotation_type_v2 = tl_polytype_absorb_mono(self->arena, ann);
 
     map_destroy(&map);
 }
@@ -355,11 +314,11 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
                 // ignore prior type annotation if the current symbol is annotated: later
                 // declaration overrides
-                if (node->let.name->symbol.annotation) continue;
-
-                // apply annotation
-                node->let.name->symbol.annotation = (*p)->symbol.annotation;
-                process_annotation(self, node->let.name);
+                if (!node->let.name->symbol.annotation) {
+                    // apply annotation
+                    node->let.name->symbol.annotation = (*p)->symbol.annotation;
+                    process_annotation(self, node->let.name);
+                }
 
                 // replace prior symbol entry with let node
                 *p = node;
@@ -1546,7 +1505,9 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
         array_reserve(clone, args.size);
         forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type_v2);
+
             if (tl_polytype_is_scheme(args.v[i]->type_v2)) fatal("type scheme");
+
             tl_monotype const *ty = tl_monotype_clone(self->arena, args.v[i]->type_v2->type);
             array_push(clone, ty);
         }
