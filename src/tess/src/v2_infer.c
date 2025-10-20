@@ -1114,7 +1114,7 @@ static ast_node *get_infer_target(ast_node *node) {
     return null;
 }
 
-static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -1168,7 +1168,21 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
         ast_node *infer_target = get_infer_target(special);
         if (infer_target) {
             if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-            if (traverse_ast(self, traverse_ctx, infer_target, specialize_traverse_cb)) return 1;
+            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
+        }
+
+        // and recurse over any arguments which are toplevel functions
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (!ast_node_is_symbol(arg)) continue;
+            str       arg_name = ast_node_str(arg);
+            ast_node *top      = toplevel_get(self, arg_name);
+            if (!top) continue;
+
+            if (traverse_ast(self, traverse_ctx, top, infer_traverse_cb)) return 1;
+            if (traverse_ast(self, traverse_ctx, top, specialize_applications_cb)) return 1;
         }
 
         // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
@@ -1880,7 +1894,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
     traverse->user         = ctx;
 
-    traverse_ast(self, traverse, main, specialize_traverse_cb);
+    traverse_ast(self, traverse, main, specialize_applications_cb);
 
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
