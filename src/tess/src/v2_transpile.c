@@ -36,18 +36,23 @@ struct transpile {
     int               verbose;
 };
 
+typedef struct {
+    str_sized free_variables;
+} eval_ctx;
+
 extern char const *embed_std_c;
 
 static str         next_res(transpile *);
 
 static void        generate_decl(transpile *, str, tl_monotype const *);
-static str         generate_expr(transpile *, tl_monotype const *, ast_node const *);
-static str         generate_inline_lambda(transpile *, tl_monotype const *, ast_node const *);
-static str         generate_let_in(transpile *, tl_monotype const *, ast_node const *);
-static str         generate_if_then_else(transpile *, ast_node const *);
+static void        generate_decl_pointer(transpile *, str, tl_monotype const *);
+static str         generate_expr(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
+static str         generate_inline_lambda(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
+static str         generate_let_in(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
+static str         generate_if_then_else(transpile *, ast_node const *, eval_ctx *);
 static void        generate_main(transpile *);
-static str         generate_funcall(transpile *, ast_node const *);
-static str         generate_funcall_intrinsic(transpile *, ast_node const *);
+static str         generate_funcall(transpile *, ast_node const *, eval_ctx *);
+static str         generate_funcall_intrinsic(transpile *, ast_node const *, eval_ctx *);
 static void        generate_prototypes(transpile *, int);
 static void        generate_structs(transpile *);
 static void        generate_toplevels(transpile *);
@@ -58,6 +63,7 @@ static void        generate_assign_field(transpile *, str, str, str);
 static void        cat(transpile *, str);
 static void        cat_nl(transpile *);
 static void        cat_sp(transpile *);
+static void        cat_ampersign(transpile *);
 static void        cat_assign(transpile *);
 static void        cat_commasp(transpile *);
 static void        cat_dot(transpile *);
@@ -67,6 +73,7 @@ static void        cat_close_round(transpile *);
 static void        cat_open_curly(transpile *);
 static void        cat_open_curlyln(transpile *);
 static void        cat_close_curly(transpile *);
+static void        cat_close_curlyln(transpile *);
 static void        cat_semicolon(transpile *);
 static void        cat_semicolonln(transpile *);
 static void        cat_star(transpile *);
@@ -131,7 +138,7 @@ static str make_tuple_field_name(u32 i) {
     return str_init_small(buf);
 }
 
-static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
 
     str res = next_res(self);
     generate_decl(self, res, type);
@@ -140,7 +147,7 @@ static str generate_tuple(transpile *self, tl_monotype const *type, ast_node con
         str field = make_tuple_field_name(i);
 
         // evaluate tuple element
-        str value = generate_expr(self, type->list.xs.v[i], node->tuple.elements[i]);
+        str value = generate_expr(self, type->list.xs.v[i], node->tuple.elements[i], ctx);
 
         // assign to field
         generate_assign_field(self, res, field, value);
@@ -245,13 +252,37 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
     forall(i, fvs) {
         str                field      = fvs.v[i];
         tl_polytype const *field_type = tl_type_env_lookup(self->env, field);
-        generate_decl(self, field, field_type->type);
+        generate_decl_pointer(self, field, field_type->type);
         if (i + 1 < fvs.size) cat_nl(self);
     }
 
     cat_close_curly(self);
     cat_sp(self);
     cat(self, name);
+    cat_semicolonln(self);
+}
+
+static void generate_context(transpile *self, str_sized fvs) {
+    if (!fvs.size) return;
+    str name = context_name(self, fvs);
+
+    cat(self, name);
+    cat_sp(self);
+    cat(self, S("tl_ctx"));
+    cat_assign(self);
+    cat_open_curly(self);
+
+    forall(i, fvs) {
+        cat_dot(self);
+        cat(self, fvs.v[i]);
+        cat_assign(self);
+        cat_ampersign(self);
+        cat(self, fvs.v[i]);
+
+        if (i + 1 < fvs.size) cat_commasp(self);
+    }
+
+    cat_close_curly(self);
     cat_semicolonln(self);
 }
 
@@ -314,7 +345,9 @@ static void generate_toplevels(transpile *self) {
 
         cat_open_curlyln(self); // body
 
-        str body_res = generate_expr(self, return_type, body);
+        assert(tl_monotype_is_list(type->type));
+        eval_ctx ctx      = {.free_variables = type->type->list.fvs};
+        str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void) {
             generate_decl(self, res, return_type);
             generate_assign(self, res, body_res);
@@ -335,7 +368,8 @@ static void generate_main(transpile *self) {
     cat(self, S("int main(void) {"));
     cat_nl(self);
 
-    str res = generate_expr(self, null, body);
+    eval_ctx ctx = {0};
+    str      res = generate_expr(self, null, body, &ctx);
     cat_return(self, res);
 
     cat_close_curly(self);
@@ -363,16 +397,21 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
     cat_semicolonln(self);
 }
 
-static void generate_funcall_head(transpile *self, tl_monotype const *type, str name) {
-    // TODO: function call context goes here
+static void generate_funcall_head(transpile *self, tl_monotype const *type, str name, u32 n_args) {
 
-    (void)type;
+    assert(tl_monotype_is_list(type));
 
     cat(self, mangle_fun(self, name));
     cat_open_round(self);
+
+    if (type->list.fvs.size) {
+        cat(self, S("&tl_ctx"));
+        if (n_args) cat_commasp(self);
+    }
 }
 
-static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype const *arrow) {
+static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype const *arrow,
+                               eval_ctx *ctx) {
     // generate args to match arrow type or type constructor
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
@@ -387,7 +426,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
         if (!arrow) fatal("ran out of arrow");
         if (ast_node_is_nil(args.v[i])) break;
 
-        str res = generate_expr(self, arr.v[i], args.v[i]);
+        str res = generate_expr(self, arr.v[i], args.v[i], ctx);
         array_push(args_res, res);
     }
     return args_res;
@@ -406,7 +445,7 @@ static str generate_funcall_result(transpile *self, tl_monotype const *type, int
     return res;
 }
 
-static str generate_type_constructor(transpile *self, ast_node const *node) {
+static str generate_type_constructor(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
     str                name = ast_node_str(node->named_application.name);
     tl_monotype const *type = env_lookup(self, name);
@@ -422,7 +461,7 @@ static str generate_type_constructor(transpile *self, ast_node const *node) {
 
     forall(i, def->field_names) {
         str arg_value =
-          generate_expr(self, type->cons_inst->args.v[i], node->named_application.arguments[i]);
+          generate_expr(self, type->cons_inst->args.v[i], node->named_application.arguments[i], ctx);
 
         cat(self, res);
         cat_dot(self);
@@ -435,26 +474,33 @@ static str generate_type_constructor(transpile *self, ast_node const *node) {
     return res;
 }
 
-static str generate_funcall(transpile *self, ast_node const *node) {
+static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
-    if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node);
+    if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
 
     tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // type constructor?
-    if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node);
+    if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type);
+    str_array      args_res = generate_args(self, args, type, ctx);
 
     // declare variable to hold funcall result if it's not nil
-    str res = generate_funcall_result(self, type, 1);
+    str res = generate_funcall_result(self, type, 0);
+
+    assert(tl_monotype_is_list(type));
+    if (type->list.fvs.size) {
+        cat_open_curlyln(self); // open c block
+        generate_context(self, type->list.fvs);
+    }
 
     // function call
-    generate_funcall_head(self, type, name);
+    generate_assign_lhs(self, res);
+    generate_funcall_head(self, type, name, args_res.size);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -463,14 +509,19 @@ static str generate_funcall(transpile *self, ast_node const *node) {
     cat_close_round(self);
     cat_semicolonln(self);
 
+    if (type->list.fvs.size) {
+        cat_close_curlyln(self); // close c block
+    }
+
     return res;
 }
 
-static str generate_let_in_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node) {
+static str generate_let_in_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node,
+                                  eval_ctx *ctx) {
 
     // don't declare or assign to name, because it is hoisted to a toplevel.
 
-    str body = generate_expr(self, null, node->let_in.body);
+    str body = generate_expr(self, null, node->let_in.body, ctx);
     str res  = next_res(self);
     generate_decl(self, res, result_type);
     generate_assign(self, res, body);
@@ -478,21 +529,22 @@ static str generate_let_in_lambda(transpile *self, tl_monotype const *result_typ
     return res;
 }
 
-static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_node const *node) {
-    if (ast_node_is_let_in_lambda(node)) return generate_let_in_lambda(self, result_type, node);
+static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_node const *node,
+                           eval_ctx *ctx) {
+    if (ast_node_is_let_in_lambda(node)) return generate_let_in_lambda(self, result_type, node, ctx);
     assert(ast_node_is_let_in(node));
 
     str                name = ast_node_str(node->let_in.name);
     tl_monotype const *type = env_lookup(self, name); // may be null
 
     if (type) {
-        str value = generate_expr(self, type, node->let_in.value);
+        str value = generate_expr(self, type, node->let_in.value, ctx);
 
         generate_decl(self, name, type);
         generate_assign(self, name, value);
     }
 
-    str body = generate_expr(self, null, node->let_in.body);
+    str body = generate_expr(self, null, node->let_in.body, ctx);
     str res  = next_res(self);
     generate_decl(self, res, result_type);
     generate_assign(self, res, body);
@@ -500,14 +552,14 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     return res;
 }
 
-static str generate_if_then_else(transpile *self, ast_node const *node) {
+static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_if_then_else == node->tag);
     ast_node const    *cond        = node->if_then_else.condition;
     ast_node const    *yes         = node->if_then_else.yes;
     ast_node const    *no          = node->if_then_else.no;
     tl_monotype const *result_type = yes->type_v2->type;
 
-    str                cond_str    = generate_expr(self, null, cond);
+    str                cond_str    = generate_expr(self, null, cond, ctx);
     str                res         = next_res(self);
 
     generate_decl(self, res, result_type);
@@ -515,19 +567,20 @@ static str generate_if_then_else(transpile *self, ast_node const *node) {
     cat(self, cond_str);
     cat(self, S(") {\n"));
 
-    str yes_str = generate_expr(self, null, yes);
+    str yes_str = generate_expr(self, null, yes, ctx);
     generate_assign(self, res, yes_str);
     cat(self, S("}\n"));
 
     cat(self, S("else {\n"));
-    str no_str = generate_expr(self, null, no);
+    str no_str = generate_expr(self, null, no, ctx);
     generate_assign(self, res, no_str);
     cat(self, S("}\n"));
 
     return res;
 }
 
-static str generate_inline_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node) {
+static str generate_inline_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node,
+                                  eval_ctx *ctx) {
     assert(ast_node_is_lambda_application(node));
 
     ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
@@ -537,7 +590,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     if (node->lambda_application.lambda->type_v2->quantifiers.size) fatal("type scheme");
     tl_monotype const *arrow    = node->lambda_application.lambda->type_v2->type;
 
-    str_array          args_res = generate_args(self, args, arrow);
+    str_array          args_res = generate_args(self, args, arrow, ctx);
     assert(args_res.size == params.size);
 
     // initialise parameters
@@ -558,7 +611,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
 
     // generate lambda body
     str lambda_res =
-      generate_expr(self, result_type, node->lambda_application.lambda->lambda_function.body);
+      generate_expr(self, result_type, node->lambda_application.lambda->lambda_function.body, ctx);
     generate_assign_lhs(self, res);
     cat(self, lambda_res);
     cat_semicolonln(self);
@@ -575,7 +628,9 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     return res;
 }
 
-static str generate_type_get(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str generate_type_get(transpile *self, tl_monotype const *type, ast_node const *node,
+                             eval_ctx *ctx) {
+    (void)ctx;
     assert(ast_user_type_get == node->tag);
 
     str res = next_res(self);
@@ -588,10 +643,11 @@ static str generate_type_get(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
-static str generate_type_set(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str generate_type_set(transpile *self, tl_monotype const *type, ast_node const *node,
+                             eval_ctx *ctx) {
     assert(ast_user_type_set == node->tag);
 
-    str value = generate_expr(self, type, node->user_type_set.value);
+    str value = generate_expr(self, type, node->user_type_set.value, ctx);
 
     generate_assign_field(self, ast_node_str(node->user_type_set.struct_name),
                           ast_node_str(node->user_type_get.field_name), value);
@@ -602,7 +658,7 @@ static str generate_type_set(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
-static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node) {
+static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
     // the name of the variable which holds the evaluated value.
@@ -613,18 +669,26 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     }
 
     switch (node->tag) {
-    case ast_named_function_application:  return generate_funcall(self, node);
-    case ast_lambda_function_application: return generate_inline_lambda(self, type, node);
-    case ast_let_in:                      return generate_let_in(self, type, node);
+    case ast_named_function_application:  return generate_funcall(self, node, ctx);
+    case ast_lambda_function_application: return generate_inline_lambda(self, type, node, ctx);
+    case ast_let_in:                      return generate_let_in(self, type, node, ctx);
     case ast_i64:                         return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
     case ast_u64:                         return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
     case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
-    case ast_symbol:       return node->symbol.name;
 
-    case ast_if_then_else: return generate_if_then_else(self, node);
+    case ast_symbol: {
+        if (str_array_contains_one(ctx->free_variables, node->symbol.name)) {
+            // generate reference through context
+            return str_cat(self->transient, S("*tl_ctx->"), node->symbol.name);
+        } else {
+            return node->symbol.name;
+        }
+    }
+
+    case ast_if_then_else: return generate_if_then_else(self, node, ctx);
 
     case ast_nil:          fatal("cannot generate nil");
     case ast_any:          fatal("cannot generate any");
@@ -633,17 +697,19 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
         if (!tl_monotype_is_ptr(type)) fatal("runtime error");
         assert(1 == type->cons_inst->args.size);
         tl_monotype const *target_ty = type->cons_inst->args.v[0];
-        return str_cat(self->transient, S("&"), generate_expr(self, target_ty, node->address_of.target));
+        return str_cat(self->transient, S("&"),
+                       generate_expr(self, target_ty, node->address_of.target, ctx));
     } break;
     case ast_dereference: {
         tl_monotype const *deref_ty = type;
-        return str_cat(self->transient, S("*"), generate_expr(self, deref_ty, node->dereference.target));
+        return str_cat(self->transient, S("*"),
+                       generate_expr(self, deref_ty, node->dereference.target, ctx));
     } break;
 
-    case ast_tuple:         return generate_tuple(self, type, node);
+    case ast_tuple:         return generate_tuple(self, type, node, ctx);
 
-    case ast_user_type_get: return generate_type_get(self, type, node);
-    case ast_user_type_set: return generate_type_set(self, type, node);
+    case ast_user_type_get: return generate_type_get(self, type, node, ctx);
+    case ast_user_type_set: return generate_type_set(self, type, node, ctx);
 
     case ast_arrow:
     case ast_assignment:
@@ -692,6 +758,44 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
 
         str typec = type_to_c_mono(self, type);
         cat(self, typec);
+        cat_sp(self);
+        cat(self, name);
+        cat_semicolonln(self);
+
+    }
+
+    else {
+        fatal("got a type variable");
+    }
+}
+
+static void generate_decl_pointer(transpile *self, str name, tl_monotype const *type) {
+    if (tl_list == type->tag) {
+        // arrow
+
+        str_build b = str_build_init(self->transient, 80);
+        build_arrow_to_c(self, &b, type, name);
+        cat(self, str_build_finish(&b));
+        cat_semicolonln(self);
+
+    }
+
+    else if (tl_cons_inst == type->tag) {
+        if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
+
+        str typec = type_to_c_mono(self, type);
+        cat(self, typec);
+        cat_star(self);
+        cat_sp(self);
+        cat(self, name);
+        cat_semicolonln(self);
+    }
+
+    else if (tl_tuple == type->tag) {
+
+        str typec = type_to_c_mono(self, type);
+        cat(self, typec);
+        cat_star(self);
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
@@ -784,6 +888,9 @@ static void cat_nl(transpile *self) {
 static void cat_sp(transpile *self) {
     cat(self, S(" "));
 }
+static void cat_ampersign(transpile *self) {
+    cat(self, S("&"));
+}
 static void cat_assign(transpile *self) {
     cat(self, S(" = "));
 }
@@ -810,6 +917,9 @@ static void cat_open_curlyln(transpile *self) {
 }
 static void cat_close_curly(transpile *self) {
     cat(self, S("}"));
+}
+static void cat_close_curlyln(transpile *self) {
+    cat(self, S("}\n"));
 }
 static void cat_semicolon(transpile *self) {
     cat(self, S(";"));
@@ -961,6 +1071,10 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
         str ctx_name = context_name(self, arrow->list.fvs);
         cat(self, ctx_name);
         cat_star(self);
+
+        // always output a name for the context parameter, because we might be in a function definition.
+        cat_sp(self);
+        cat(self, S("tl_ctx"));
         if (arrow->list.xs.size) cat_commasp(self);
     }
 
@@ -993,7 +1107,7 @@ tl_monotype const *env_lookup(transpile *self, str name) {
 
 //
 
-static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
+static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
     (void)extra;
 
     assert(ast_node_is_named_application(node));
@@ -1004,7 +1118,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type);
+    str_array      args_res = generate_args(self, args, type, ctx);
 
     str_build      b        = str_build_init(self->transient, 80);
 
@@ -1015,7 +1129,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, void *extra) {
     return str_build_finish(&b);
 }
 
-static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
+static str tl_unary_op(transpile *self, ast_node const *node, eval_ctx *ctx, void *op) {
     assert(ast_node_is_named_application(node));
     str                name = ast_node_str(node->named_application.name);
 
@@ -1024,7 +1138,7 @@ static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type);
+    str_array      args_res = generate_args(self, args, type, ctx);
 
     str_build      b        = str_build_init(self->transient, 80);
     str            op_str   = str_init_small(op);
@@ -1039,7 +1153,7 @@ static str tl_unary_op(transpile *self, ast_node const *node, void *op) {
     return str_build_finish(&b);
 }
 
-static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
+static str tl_binary_op(transpile *self, ast_node const *node, eval_ctx *ctx, void *op) {
     assert(ast_node_is_named_application(node));
     str                name = ast_node_str(node->named_application.name);
 
@@ -1048,7 +1162,7 @@ static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type);
+    str_array      args_res = generate_args(self, args, type, ctx);
 
     // args list: join with operator
     str_build b = str_build_init(self->transient, 128);
@@ -1063,34 +1177,34 @@ static str tl_binary_op(transpile *self, ast_node const *node, void *op) {
     return str_build_finish(&b);
 }
 
-static str tl_first(transpile *self, ast_node const *node, void *_) {
+static str tl_first(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
     assert(ast_node_is_named_application(node));
     if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
     return str_cat(self->transient, arg, S(".x0"));
 }
 
-static str tl_second(transpile *self, ast_node const *node, void *_) {
+static str tl_second(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
     assert(ast_node_is_named_application(node));
     if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
     return str_cat(self->transient, arg, S(".x1"));
 }
 
-static str tl_third(transpile *self, ast_node const *node, void *_) {
+static str tl_third(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
     assert(ast_node_is_named_application(node));
     if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0]);
+    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
     return str_cat(self->transient, arg, S(".x2"));
 }
 
-static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
+static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
 
     struct dispatch {
         char const *name;
-        str (*fun)(transpile *, ast_node const *, void *extra);
+        str (*fun)(transpile *, ast_node const *, eval_ctx *, void *extra);
         void *extra;
     };
 
@@ -1134,7 +1248,7 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node) {
     // replace applications with phantom specialised names, which have a numeric suffix.
     struct dispatch const *p = table;
     for (; p && p->name[0]; ++p)
-        if (0 == str_cmp_nc(name, p->name, strlen(p->name))) return p->fun(self, node, p->extra);
+        if (0 == str_cmp_nc(name, p->name, strlen(p->name))) return p->fun(self, node, ctx, p->extra);
 
     return str_empty();
 }

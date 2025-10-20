@@ -392,6 +392,10 @@ int str_array_contains(str_sized hay, str_sized need) {
     return 1; // finished outer loop without error
 }
 
+int str_array_contains_one(str_sized hay, str need) {
+    return str_array_contains(hay, (str_sized){.size = 1, .v = &need});
+}
+
 int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0: error, 1: i64, 2: u64, 3: f64.
     // Unlike C functions, input string must not have garbage after valid number.

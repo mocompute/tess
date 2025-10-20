@@ -101,6 +101,7 @@ int         str_ilen(str); // for use with C lib; exits program on int overflow
 u64         str_array_hash64(u64 seed, str_sized);
 int         str_array_cmp(str_sized, str_sized);
 int         str_array_contains(str_sized hay, str_sized need);
+int         str_array_contains_one(str_sized hay, str need);
 
 // -- utilities --
 
