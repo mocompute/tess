@@ -6,10 +6,8 @@
 #include "ast_tags.h"
 #include "error.h"
 #include "file.h"
-#include "hashmap.h"
 #include "token.h"
 #include "tokenizer.h"
-#include "util.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -18,7 +16,6 @@
 #include <string.h>
 
 #define PARSER_ARENA_SIZE 1024
-#define FORWARDS_MAP_SIZE 1024
 
 struct parser {
     allocator             *parent_alloc;
@@ -34,7 +31,6 @@ struct parser {
     char_csized            current_file_data;
 
     ast_node              *result;
-    hashmap               *forwards;
     token_array            tokens;
 
     struct parser_error    error;
@@ -157,8 +153,6 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->indent_level            = 0;
     self->in_function_application = 0;
 
-    self->forwards                = map_create(alloc, sizeof(ast_node *), FORWARDS_MAP_SIZE);
-
     self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
 
@@ -176,8 +170,6 @@ parser *parser_create_simple(allocator *alloc, char const *in, u32 len) {
 void parser_destroy(parser **self) {
     // error token: arena
     // tokens: arena
-
-    map_destroy(&(*self)->forwards);
 
     // tokenizer
     if ((*self)->tokenizer) tokenizer_destroy(&(*self)->tokenizer);
@@ -1274,22 +1266,15 @@ static int function_declaration(parser *self) {
 
     if (a_try(self, a_identifier)) return 1;
 
-    ast_node *const name       = self->result; // function name
-    str             name_str   = ast_node_str(name);
+    ast_node *const name = self->result; // function name
+    // str             name_str   = ast_node_str(name);
 
-    ast_node_array  parameters = {.alloc = self->ast_arena};
-    ast_node       *annotation = null;
+    ast_node_array parameters = {.alloc = self->ast_arena};
+    ast_node      *annotation = null;
 
     // must have at least one parameter
     if (a_try(self, a_identifier_typed)) return 1;
     array_push(parameters, self->result);
-
-    // check forward declarations.
-    ast_node **forward = str_map_get(self->forwards, name_str);
-    if (forward) {
-        assert(ast_symbol == (*forward)->tag);
-        annotation = (*forward)->symbol.annotation;
-    }
 
     int require_equal_sign = 0;
 
@@ -1301,11 +1286,11 @@ static int function_declaration(parser *self) {
         }
 
         if (0 == a_try(self, a_type_annotation)) {
-            if (annotation) {
-                // error, cannot provide inline annotation to a forward declared function
-                self->error.tag = tl_err_unexpected_inline_annotation;
-                return 1;
-            }
+            // if (annotation) {
+            //     // error, cannot provide inline annotation to a forward declared function
+            //     self->error.tag = tl_err_unexpected_inline_annotation;
+            //     return 1;
+            // }
             annotation         = self->result;
             require_equal_sign = 1;
         }
@@ -1990,7 +1975,6 @@ static int toplevel_let(parser *self) {
     if (0 == a_try(self, forward_declaration)) {
         ast_node *sym = self->result;
         assert(ast_symbol == sym->tag);
-        str_map_set_v(&self->forwards, sym->symbol.name, sym);
 
         // TODO error on duplicate declaration
 
