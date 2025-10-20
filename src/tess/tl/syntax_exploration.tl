@@ -219,6 +219,11 @@ let points = Point_array_create 10 in
   Point_aget points 3
 
 
+// 
+// Conditional
+//
+
+
 
 
 
@@ -253,6 +258,11 @@ let res =
     do it ()
     end
 
+let res =
+  with it = initval
+  do step1 it
+  do step2 it
+  end
 
 // equivalent to
 let res = initval in
