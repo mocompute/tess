@@ -1655,7 +1655,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // do not process a second time
     if (tl_type_env_lookup(self->env, name)) return 0;
-    // fatal("runtime error");
 
     // calculate provisional type, for recursive functions
     if (ast_node_is_let(node)) {
@@ -1748,24 +1747,11 @@ void remove_generic_toplevels(tl_infer *self) {
     ast_node        *node;
     hashmap_iterator iter = {0};
     while ((node = toplevel_iter(self, &iter))) {
-        str                name;
-        tl_polytype const *type = null;
-        // FIXME: repetitive
-        if (ast_node_is_symbol(node)) {
-            name = node->symbol.name;
-            type = tl_type_env_lookup(self->env, name);
-        } else if (ast_node_is_let_in_lambda(node)) {
-            name = node->let_in.name->symbol.name;
-            type = tl_type_env_lookup(self->env, name);
-        } else if (ast_node_is_let(node)) {
-            name = node->let.name->symbol.name;
-            type = tl_type_env_lookup(self->env, name);
-        } else if (ast_node_is_utd(node)) {
-            name = node->user_type_def.name->symbol.name;
-            type = tl_type_env_lookup(self->env, name);
-        } else fatal("logic error");
+
+        str name = ast_node_str(toplevel_name_node(node));
         if (str_eq(S("main"), name)) continue;
 
+        tl_polytype const *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
         if (tl_polytype_is_scheme(type)) array_push(names, name);
