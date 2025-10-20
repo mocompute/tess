@@ -1156,12 +1156,6 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         ast_node_name_replace(node->named_application.name, inst_name);
 
-        // infer the instance (again), but don't recurse through its applications
-        ast_node *infer_target = get_infer_target(toplevel_get(self, inst_name));
-        if (infer_target) {
-            // FIXME: may not be needed
-            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-        }
     } else {
         str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
         ast_node *special   = toplevel_get(self, inst_name);
