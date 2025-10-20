@@ -63,7 +63,7 @@ static void        generate_assign_field(transpile *, str, str, str);
 static void        cat(transpile *, str);
 static void        cat_nl(transpile *);
 static void        cat_sp(transpile *);
-static void        cat_ampersign(transpile *);
+static void        cat_ampersand(transpile *);
 static void        cat_assign(transpile *);
 static void        cat_commasp(transpile *);
 static void        cat_dot(transpile *);
@@ -262,13 +262,21 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
     cat_semicolonln(self);
 }
 
-static void generate_context(transpile *self, str_sized fvs) {
-    if (!fvs.size) return;
+static str generate_ctx_var(transpile *self) {
+    char buf[80];
+    snprintf(buf, sizeof buf, "tl_ctx_var_%u", self->next_res++);
+    str out = str_init(self->transient, buf);
+    cat(self, out);
+    return out;
+}
+
+static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
+    if (!fvs.size) return str_empty();
     str name = context_name(self, fvs);
 
     cat(self, name);
     cat_sp(self);
-    cat(self, S("tl_ctx"));
+    str ctx_var = generate_ctx_var(self);
     cat_assign(self);
     cat_open_curly(self);
 
@@ -276,14 +284,26 @@ static void generate_context(transpile *self, str_sized fvs) {
         cat_dot(self);
         cat(self, fvs.v[i]);
         cat_assign(self);
-        cat_ampersign(self);
-        cat(self, fvs.v[i]);
+        cat_ampersand(self);
+        cat_open_round(self);
+
+        // TODO: share this with generate_expr logic for ast_symbol:
+        if (str_array_contains_one(ctx->free_variables, fvs.v[i])) {
+            // generate reference through context
+            cat(self, S("*tl_ctx->"));
+            cat(self, fvs.v[i]);
+        } else {
+            cat(self, fvs.v[i]);
+        }
+        cat_close_round(self);
 
         if (i + 1 < fvs.size) cat_commasp(self);
     }
 
     cat_close_curly(self);
     cat_semicolonln(self);
+
+    return ctx_var;
 }
 
 static void generate_toplevel_contexts(transpile *self) {
@@ -397,15 +417,17 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
     cat_semicolonln(self);
 }
 
-static void generate_funcall_head(transpile *self, tl_monotype const *type, str name, u32 n_args) {
+static void generate_funcall_head(transpile *self, tl_monotype const *type, str name, str ctx_var,
+                                  u32 n_args) {
 
     assert(tl_monotype_is_list(type));
 
     cat(self, mangle_fun(self, name));
     cat_open_round(self);
 
-    if (type->list.fvs.size) {
-        cat(self, S("&tl_ctx"));
+    if (!str_is_empty(ctx_var)) {
+        cat_ampersand(self);
+        cat(self, ctx_var);
         if (n_args) cat_commasp(self);
     }
 }
@@ -493,14 +515,14 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     str res = generate_funcall_result(self, type, 0);
 
     assert(tl_monotype_is_list(type));
+    str ctx_var = str_empty();
     if (type->list.fvs.size) {
-        cat_open_curlyln(self); // open c block
-        generate_context(self, type->list.fvs);
+        ctx_var = generate_context(self, type->list.fvs, ctx);
     }
 
     // function call
     generate_assign_lhs(self, res);
-    generate_funcall_head(self, type, name, args_res.size);
+    generate_funcall_head(self, type, name, ctx_var, args_res.size);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -508,10 +530,6 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     cat(self, str_build_finish(&b));
     cat_close_round(self);
     cat_semicolonln(self);
-
-    if (type->list.fvs.size) {
-        cat_close_curlyln(self); // close c block
-    }
 
     return res;
 }
@@ -888,7 +906,7 @@ static void cat_nl(transpile *self) {
 static void cat_sp(transpile *self) {
     cat(self, S(" "));
 }
-static void cat_ampersign(transpile *self) {
+static void cat_ampersand(transpile *self) {
     cat(self, S("&"));
 }
 static void cat_assign(transpile *self) {
@@ -1043,9 +1061,23 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
 
+    int first_arg_is_nil = type->list.xs.size && tl_monotype_is_nil(type->list.xs.v[0]);
+
+    // generate lambda context argument for free variables
+    if (type->list.fvs.size) {
+        str ctx_name = context_name(self, type->list.fvs);
+        str_build_cat(b, ctx_name);
+        str_build_cat(b, S("*"));
+        if (type->list.xs.size && !first_arg_is_nil) str_build_cat(b, S(", "));
+    }
+
     assert(type->list.xs.size > 1);
     for (u32 i = 0, n = type->list.xs.size - 1; i < n;
          ++i) { // skipping last element, which is the result type
+
+        // special case: if only arg is nil and we declared a context arg, suppress emitting a 'void'
+        // parameter.
+        if (first_arg_is_nil && type->list.fvs.size) continue;
 
         str_build_cat(b, type_to_c_mono(self, type->list.xs.v[i]));
         if (i + 1 < n) str_build_cat(b, S(", "));
