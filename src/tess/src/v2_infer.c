@@ -1831,9 +1831,8 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
 }
 
 static void update_specialized_types(tl_infer *self) {
-    hashmap         *updates = new_map(self->transient, str, tl_polytype *, 64);
 
-    hashmap_iterator iter    = {0};
+    hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
         tl_polytype const *type = *(tl_polytype const **)iter.data;
         if (!tl_polytype_is_type_constructor(type)) continue;
@@ -1841,7 +1840,6 @@ static void update_specialized_types(tl_infer *self) {
         // already specialized?
         if (!str_is_empty(type->type->cons_inst->special_name)) continue;
 
-        str                var_name  = str_init_n(self->transient, iter.key_ptr, iter.key_size);
         str                type_name = type->type->cons_inst->def->name;
         tl_monotype_sized  type_args = type->type->cons_inst->args;
 
@@ -1852,15 +1850,9 @@ static void update_specialized_types(tl_infer *self) {
 
         tl_polytype const *replace =
           tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, mono));
-        str_map_set(&updates, var_name, &replace);
-    }
 
-    iter = (hashmap_iterator){0};
-    while (map_iter(updates, &iter)) {
-        tl_polytype const *type     = *(tl_polytype const **)iter.data;
-        str                var_name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
-
-        str_map_set(&self->env->map, var_name, &type);
+        // update map in place
+        *(tl_polytype const **)iter.data = replace;
     }
 
     arena_reset(self->transient);
@@ -1928,13 +1920,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);
-
-    // log(self, "-- toplevels");
-    // log_toplevels(self);
-    // log(self, "-- subs");
-    // log_subs(self);
-    // log(self, "-- env");
-    // log_env(self);
 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
