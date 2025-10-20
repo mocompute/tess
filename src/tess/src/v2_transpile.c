@@ -270,6 +270,19 @@ static str generate_ctx_var(transpile *self) {
     return out;
 }
 
+static str generate_expr_symbol(transpile *self, tl_monotype const *type, str symbol_name, eval_ctx *ctx) {
+    str name = symbol_name;
+    if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
+
+    if (str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
+    {
+        // generate reference through context
+        return str_cat(self->transient, S("*tl_ctx->"), name);
+    } else {
+        return name;
+    }
+}
+
 static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
     if (!fvs.size) return str_empty();
     str name = context_name(self, fvs);
@@ -287,14 +300,12 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
         cat_ampersand(self);
         cat_open_round(self);
 
-        // TODO: share this with generate_expr logic for ast_symbol:
-        if (str_array_contains_one(ctx->free_variables, fvs.v[i])) {
-            // generate reference through context
-            cat(self, S("*tl_ctx->"));
-            cat(self, fvs.v[i]);
-        } else {
-            cat(self, fvs.v[i]);
-        }
+        str                name = fvs.v[i];
+        tl_polytype const *type = tl_type_env_lookup(self->env, name);
+        if (!type) fatal("runtime error");
+        name = generate_expr_symbol(self, type->type, name, ctx);
+        cat(self, name);
+
         cat_close_round(self);
 
         if (i + 1 < fvs.size) cat_commasp(self);
@@ -697,14 +708,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
-    case ast_symbol: {
-        if (str_array_contains_one(ctx->free_variables, node->symbol.name)) {
-            // generate reference through context
-            return str_cat(self->transient, S("*tl_ctx->"), node->symbol.name);
-        } else {
-            return node->symbol.name;
-        }
-    }
+    case ast_symbol:       return generate_expr_symbol(self, type, ast_node_str(node), ctx);
 
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
 
