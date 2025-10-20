@@ -1617,6 +1617,13 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     return 0;
 }
 
+static void promote_free_variables(str_array *out, tl_monotype const *in) {
+    if (tl_monotype_is_list(in)) {
+        forall(i, in->list.xs) promote_free_variables(out, in->list.xs.v[i]);
+        forall(i, in->list.fvs) array_push(*out, in->list.fvs.v[i]);
+    }
+}
+
 static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow) {
     // collect free variables from infer target and add to the generic's arrow type
 
@@ -1635,11 +1642,16 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
         log(self, "%.*s", str_ilen(ctx.fvs.v[i]), str_buf(&ctx.fvs.v[i]));
     }
 
-    // add free variables to arrow type and put into global environment
+    // find any sublists with free variables and bring them to the top
+    promote_free_variables(&ctx.fvs, arrow->type);
+
+    // add free variables to arrow type
     if (ctx.fvs.size) {
         tl_monotype_absorb_fvs((tl_monotype *)arrow->type,
                                (str_sized)sized_all(ctx.fvs)); // const cast
-        tl_monotype_sort_fvs((tl_monotype *)arrow->type);      // const cast
+
+        // sort free variables
+        tl_monotype_sort_fvs((tl_monotype *)arrow->type); // const cast
     }
 }
 
