@@ -67,13 +67,11 @@ static void        cat_ampersand(transpile *);
 static void        cat_assign(transpile *);
 static void        cat_commasp(transpile *);
 static void        cat_dot(transpile *);
-static void        cat_double_slash(transpile *);
 static void        cat_open_round(transpile *);
 static void        cat_close_round(transpile *);
 static void        cat_open_curly(transpile *);
 static void        cat_open_curlyln(transpile *);
 static void        cat_close_curly(transpile *);
-static void        cat_close_curlyln(transpile *);
 static void        cat_semicolon(transpile *);
 static void        cat_semicolonln(transpile *);
 static void        cat_star(transpile *);
@@ -81,8 +79,10 @@ static void        cat_return(transpile *, str);
 static void        catln(transpile *, str);
 static void        cat_comment(transpile *, str);
 static void        cat_commentln(transpile *, str);
-static void        cat_i64(transpile *, i64);
-static void        cat_f64(transpile *, f64);
+// static void        cat_double_slash(transpile *);
+// static void        cat_close_curlyln(transpile *);
+// static void        cat_i64(transpile *, i64);
+// static void        cat_f64(transpile *, f64);
 
 tl_monotype const *env_lookup(transpile *, str); // may be null
 static str         mangle_fun(transpile *, str); // allocates transient
@@ -918,9 +918,9 @@ static void cat_commasp(transpile *self) {
 static void cat_dot(transpile *self) {
     cat(self, S("."));
 }
-static void cat_double_slash(transpile *self) {
-    cat(self, S("// "));
-}
+// static void cat_double_slash(transpile *self) {
+//     cat(self, S("// "));
+// }
 static void cat_open_round(transpile *self) {
     cat(self, S("("));
 }
@@ -936,9 +936,9 @@ static void cat_open_curlyln(transpile *self) {
 static void cat_close_curly(transpile *self) {
     cat(self, S("}"));
 }
-static void cat_close_curlyln(transpile *self) {
-    cat(self, S("}\n"));
-}
+// static void cat_close_curlyln(transpile *self) {
+//     cat(self, S("}\n"));
+// }
 static void cat_semicolon(transpile *self) {
     cat(self, S(";"));
 }
@@ -966,16 +966,16 @@ static void cat_commentln(transpile *self, str s) {
     cat_comment(self, s);
     cat_nl(self);
 }
-static void cat_i64(transpile *self, i64 val) {
-    str s = str_init_i64(self->transient, val);
-    cat(self, s);
-    str_deinit(self->transient, &s);
-}
-static void cat_f64(transpile *self, f64 val) {
-    str s = str_init_f64(self->transient, val);
-    cat(self, s);
-    str_deinit(self->transient, &s);
-}
+// static void cat_i64(transpile *self, i64 val) {
+//     str s = str_init_i64(self->transient, val);
+//     cat(self, s);
+//     str_deinit(self->transient, &s);
+// }
+// static void cat_f64(transpile *self, f64 val) {
+//     str s = str_init_f64(self->transient, val);
+//     cat(self, s);
+//     str_deinit(self->transient, &s);
+// }
 
 //
 

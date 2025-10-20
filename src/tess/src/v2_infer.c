@@ -548,13 +548,7 @@ static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl
 static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 static tl_polytype const *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
 
-static int                is_name_instanatiated(tl_infer *self, ast_node *name) {
-    assert(ast_node_is_symbol(name));
-    tl_polytype const *poly = tl_type_env_lookup(self->env, name->symbol.name);
-    return poly && !poly->quantifiers.size;
-}
-
-static ast_node *clone_generic(allocator *alloc, ast_node const *node) {
+static ast_node          *clone_generic(allocator *alloc, ast_node const *node) {
     ast_node *clone = ast_node_clone(alloc, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));

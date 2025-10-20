@@ -60,7 +60,7 @@ else()
     -Wno-gnu-alignof-expression
 
     # FIXME
-    -Wno-unused-function
+    # -Wno-unused-function
   )
 
 endif()
