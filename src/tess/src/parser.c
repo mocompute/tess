@@ -1157,7 +1157,7 @@ static int struct_declaration(parser *self) {
         node->user_type_def.type_arguments    = null;
         node->user_type_def.field_annotations = null;
         node->user_type_def.field_names       = null;
-        node->user_type_def.field_types_v2    = null;
+        node->user_type_def.field_types       = null;
         node->user_type_def.n_fields          = 0;
         node->user_type_def.n_type_arguments  = 0;
         result_ast_node(self, node);
@@ -1205,7 +1205,7 @@ static int struct_declaration(parser *self) {
             node->user_type_def.type_arguments = null;
             node->user_type_def.field_annotations = null;
             node->user_type_def.field_names       = null;
-            node->user_type_def.field_types_v2    = null;
+            node->user_type_def.field_types       = null;
             node->user_type_def.n_fields          = 0;
             node->user_type_def.n_type_arguments  = 0;
 

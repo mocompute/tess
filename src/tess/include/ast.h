@@ -169,7 +169,7 @@ typedef struct ast_node {
             struct ast_node   **type_arguments;
             struct ast_node   **field_annotations;
             struct ast_node   **field_names;
-            tl_monotype const **field_types_v2;
+            tl_monotype const **field_types;
             u8                  n_fields;
             u8                  n_type_arguments;
         } user_type_def;
