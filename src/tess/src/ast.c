@@ -241,6 +241,12 @@ str ast_node_name_original(ast_node const *node) {
     else return node->symbol.original;
 }
 
+void ast_node_name_replace(ast_node *node, str replace) {
+    if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
+    node->symbol.original = node->symbol.name;
+    node->symbol.name     = replace;
+}
+
 char const *ast_operator_to_string(ast_operator);
 
 //

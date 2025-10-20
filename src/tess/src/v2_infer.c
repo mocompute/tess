@@ -1149,17 +1149,17 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
     if (!tl_polytype_is_concrete(app)) return 0;
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
-    // type, e.g the identity function
+    // type, e.g consider the identity function
     str *existing;
     if ((existing = str_map_get(ctx->specials, name))) {
-        str inst_name                                 = *existing;
+        str inst_name = *existing;
 
-        node->named_application.name->symbol.original = name;
-        node->named_application.name->symbol.name     = inst_name;
+        ast_node_name_replace(node->named_application.name, inst_name);
 
         // infer the instance (again), but don't recurse through its applications
         ast_node *infer_target = get_infer_target(toplevel_get(self, inst_name));
         if (infer_target) {
+            // FIXME: may not be needed
             if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
         }
     } else {
@@ -1168,8 +1168,7 @@ static int specialize_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, as
 
         str_map_set(&ctx->specials, name, &inst_name);
 
-        node->named_application.name->symbol.original = name;
-        node->named_application.name->symbol.name     = inst_name;
+        ast_node_name_replace(node->named_application.name, inst_name);
 
         // now infer and specialize the newly specialised fun
         ast_node *infer_target = get_infer_target(special);
