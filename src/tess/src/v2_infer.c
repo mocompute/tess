@@ -841,6 +841,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         ast_arguments_iter iter  = ast_node_arguments_iter(node);
         tl_polytype const *arrow = make_arrow(self, iter.nodes, node->let.body);
+        if (!arrow) return 1;
         tl_polytype_substitute(self->arena, (tl_polytype *)arrow, self->subs); // const cast
         tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
 
@@ -899,7 +900,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             {
                 str                inst_str = tl_monotype_to_string(self->transient, inst);
                 tl_polytype const *app      = make_arrow(self, iter.nodes, null);
-                str                app_str  = tl_polytype_to_string(self->transient, app);
+                if (!app) return 1;
+                str app_str = tl_polytype_to_string(self->transient, app);
                 log(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
                     str_cstr(&inst_str), str_cstr(&app_str));
             }
@@ -921,7 +923,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype const *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
             str                inst_str = tl_monotype_to_string(self->transient, inst);
             tl_polytype const *app      = make_arrow(self, iter.nodes, node);
-            str                app_str  = tl_polytype_to_string(self->transient, app);
+            if (!app) return 1;
+            str app_str = tl_polytype_to_string(self->transient, app);
             log(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
                 str_cstr(&app_str));
             tl_polytype wrap = tl_polytype_wrap(inst);
@@ -940,11 +943,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         node->lambda_application.lambda->type = tl_polytype_absorb_mono(self->arena, inst);
 
         // constrain arrow types
-        ast_arguments_iter iter     = ast_node_arguments_iter(node);
-        tl_polytype const *app      = make_arrow(self, iter.nodes, node);
-        tl_polytype        wrap     = tl_polytype_wrap(inst);
-        str                inst_str = tl_monotype_to_string(self->transient, inst);
-        str                app_str  = tl_polytype_to_string(self->transient, app);
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        tl_polytype const *app  = make_arrow(self, iter.nodes, node);
+        if (!app) return 1;
+        tl_polytype wrap     = tl_polytype_wrap(inst);
+        str         inst_str = tl_monotype_to_string(self->transient, inst);
+        str         app_str  = tl_polytype_to_string(self->transient, app);
         log(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
             str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
         if (constrain(self, ctx, &wrap, app, node)) return 1;
@@ -961,6 +965,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (!node->type) {
             ast_arguments_iter iter  = ast_node_arguments_iter(node);
             tl_polytype const *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
+            if (!arrow) return 1;
             tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
             node->type = arrow;
         }
@@ -1140,6 +1145,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     // Important: use _with variant to copy free variables info to the arrow, which is added to the
     // environment further down.
     tl_polytype const *app = make_arrow_with(self, iter.nodes, node, type);
+    if (!app) return 1;
 
     // Important: resolve type variables by calling polytype_substitute.
     tl_polytype_substitute(self->arena, (tl_polytype *)app, self->subs); // const cast
@@ -1510,6 +1516,13 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
             args.v[0]->type = tl_polytype_absorb_mono(self->arena, (tl_monotype *)mono); // FIXME const
         } else ensure_tv(self, null, &args.v[0]->type);
 
+        if (tl_polytype_is_scheme(args.v[0]->type)) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_polymorphic_function_argument, .node = args.v[0]}));
+            // Note: add a type annotation to the function definition to eliminate this error
+            return null;
+        }
+
         tl_monotype const *lhs   = tl_monotype_clone(self->arena, args.v[0]->type->type);
         tl_monotype const *rhs   = result ? tl_monotype_clone(self->arena, result->type->type) : null;
         tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
@@ -1528,7 +1541,12 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
         forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type);
 
-            if (tl_polytype_is_scheme(args.v[i]->type)) fatal("type scheme");
+            if (tl_polytype_is_scheme(args.v[i]->type)) {
+                array_push(self->errors, ((tl_infer_error){.tag  = tl_err_polymorphic_function_argument,
+                                                           .node = args.v[i]}));
+                // Note: add a type annotation to the function definition to eliminate this error
+                return null;
+            }
 
             tl_monotype const *ty = tl_monotype_clone(self->arena, args.v[i]->type->type);
             array_push(clone, ty);
@@ -1555,6 +1573,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
 static tl_polytype const *make_arrow_with(tl_infer *self, ast_node_sized args, ast_node *result,
                                           tl_polytype const *type) {
     tl_polytype const *out = make_arrow(self, args, result);
+    if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
         ((tl_monotype *)out->type)->list.fvs = type->type->list.fvs; // const cast
     }
