@@ -32,7 +32,6 @@ ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     self->symbol.original        = str_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
-    self->symbol.flags           = 0;
     return self;
 }
 
@@ -42,7 +41,6 @@ ast_node *ast_node_create_sym(allocator *alloc, str str) {
     self->symbol.original        = str_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
-    self->symbol.flags           = 0;
     return self;
 }
 
@@ -68,7 +66,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     if (TL_AST_HAS_ARRAY(clone->tag)) {
         struct ast_array *vclone = ast_node_arr(clone), *vorig = ast_node_arr((ast_node *)orig);
         vclone->n     = vorig->n;
-        vclone->flags = vorig->flags;
         vclone->nodes = alloc_malloc(alloc, vorig->n * sizeof vclone->nodes[0]);
         for (u32 i = 0; i < vclone->n; ++i) vclone->nodes[i] = ast_node_clone(alloc, vorig->nodes[i]);
     }
@@ -131,7 +128,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             vclone->annotation_type = new (alloc, tl_polytype);
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         }
-        vclone->flags = vorig->flags;
     } break;
 
     case ast_let_in: {
@@ -151,9 +147,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
-        vclone->flags = vorig->flags;
-        vclone->name  = ast_node_clone(alloc, vorig->name);
-        vclone->body  = ast_node_clone(alloc, vorig->body);
+        vclone->name = ast_node_clone(alloc, vorig->name);
+        vclone->body = ast_node_clone(alloc, vorig->body);
     } break;
 
     case ast_if_then_else: {
@@ -166,8 +161,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_lambda_function: {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
-        vclone->flags = vorig->flags;
-        vclone->body  = ast_node_clone(alloc, vorig->body);
+        vclone->body = ast_node_clone(alloc, vorig->body);
     } break;
 
     case ast_function_declaration: {
@@ -1319,12 +1313,6 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->function_declaration.name);
         break;
 
-    case ast_labelled_tuple:
-        hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
-        break;
-
-    case ast_lambda_declaration: break;
-
     case ast_lambda_function:
         // for lambdas and let functions, its type is part of the hash
         combine_node(self->lambda_function.body);
@@ -1338,21 +1326,17 @@ u64 ast_node_hash(ast_node const *self) {
         // for lambdas and let functions, its type is part of the hash
         combine_node(self->let.name);
         combine_node(self->let.body);
-        hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
         // hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
         // FIXME
         break;
 
-    case ast_named_function_application:
-        combine_node(self->named_application.name);
-        hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
-        break;
+    case ast_named_function_application: combine_node(self->named_application.name); break;
 
-    case ast_tuple:
-        hash = hash64_combine(hash, (byte *)&self->array.flags, sizeof(self->array.flags));
-        break;
+    case ast_user_type:                  combine_node(self->user_type.name); break;
 
-    case ast_user_type: combine_node(self->user_type.name); break;
+    case ast_labelled_tuple:
+    case ast_lambda_declaration:
+    case ast_tuple:                      break;
     }
 
     return hash;

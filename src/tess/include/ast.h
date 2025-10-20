@@ -21,7 +21,6 @@ typedef struct ast_node {
             str                original;
             struct ast_node   *annotation;
             tl_polytype const *annotation_type;
-            u8                 flags;
         } symbol;
 
         struct ast_bool {
@@ -54,7 +53,6 @@ typedef struct ast_node {
             // all variants with arrays must use this layout
             struct ast_node **nodes;
             u8                n;
-            u8                flags;
         } array;
 
         struct ast_begin_end {
@@ -65,7 +63,6 @@ typedef struct ast_node {
         struct ast_lambda_function {
             struct ast_node **parameters;
             u8                n_parameters;
-            u8                flags;
             struct ast_node  *body;
         } lambda_function;
 
@@ -83,7 +80,6 @@ typedef struct ast_node {
         struct ast_let {
             struct ast_node **parameters;
             u8                n_parameters;
-            u8                flags;
             struct ast_node  *name;
             struct ast_node  *body;
         } let;
@@ -97,20 +93,17 @@ typedef struct ast_node {
         struct ast_named_application {
             struct ast_node **arguments;
             u8                n_arguments;
-            u8                flags;
             struct ast_node  *name;
         } named_application;
 
         struct ast_labelled_tuple {
             struct ast_node **assignments;
             u8                n_assignments;
-            u8                flags;
         } labelled_tuple;
 
         struct ast_tuple {
             struct ast_node **elements;
             u8                n_elements;
-            u8                flags;
         } tuple;
 
         struct ast_user_type {

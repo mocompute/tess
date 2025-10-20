@@ -871,9 +871,8 @@ static int a_labelled_tuple(parser *self) {
             ast_node *node = ast_node_create(self->ast_arena, ast_labelled_tuple);
             array_shrink(assignments);
 
-            node->array.n              = (u8)assignments.size;
-            node->array.nodes          = assignments.v;
-            node->labelled_tuple.flags = 0;
+            node->array.n     = (u8)assignments.size;
+            node->array.nodes = assignments.v;
 
             return result_ast_node(self, node);
         }
@@ -1391,7 +1390,6 @@ static int function_application(parser *self) {
             ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
             node->named_application.arguments   = null;
             node->named_application.n_arguments = 0;
-            node->named_application.flags       = 0;
             node->named_application.name        = name;
 
             array_shrink(arguments);
@@ -1533,7 +1531,6 @@ static int lambda_function(parser *self) {
     ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
     node->lambda_function.parameters   = null;
     node->lambda_function.n_parameters = 0;
-    node->lambda_function.flags        = 0;
     node->lambda_function.body         = defn;
 
     // move the vector from the function_declaration node to the new ast node
@@ -1704,7 +1701,6 @@ static int tuple_expression(parser *self) {
             ast_node *node    = ast_node_create(self->ast_arena, ast_tuple);
             node->array.n     = 0;
             node->array.nodes = null;
-            node->tuple.flags = 0;
 
             array_shrink(elements);
             node->array.n     = (u8)elements.size;
@@ -1949,7 +1945,6 @@ static int toplevel_let(parser *self) {
         ast_node *node         = ast_node_create(self->ast_arena, ast_let);
         node->let.parameters   = null;
         node->let.n_parameters = 0;
-        node->let.flags        = 0;
         node->let.name         = null;
         node->let.body         = null;
 
