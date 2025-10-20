@@ -1359,6 +1359,10 @@ u64 ast_node_hash(ast_node const *self) {
 
 //
 
+int ast_node_is_arrow(ast_node const *self) {
+    return ast_arrow == self->tag;
+}
+
 int ast_node_is_let_in_lambda(ast_node const *self) {
     return ast_let_in == self->tag && ast_lambda_function == self->let_in.value->tag;
 }
