@@ -1,5 +1,5 @@
 struct foo =
-    x : int,
+    x : Int,
 end
 
 let main () =
