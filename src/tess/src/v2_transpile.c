@@ -198,7 +198,7 @@ static void generate_user_types(transpile *self) {
 
         if (!ast_node_is_utd(node)) continue;
         str                name = toplevel_name(node);
-        tl_polytype const *poly = node->type_v2;
+        tl_polytype const *poly = node->type;
         if (!tl_polytype_is_concrete(poly)) fatal("type scheme");
         if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
 
@@ -587,7 +587,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     ast_node const    *cond        = node->if_then_else.condition;
     ast_node const    *yes         = node->if_then_else.yes;
     ast_node const    *no          = node->if_then_else.no;
-    tl_monotype const *result_type = yes->type_v2->type;
+    tl_monotype const *result_type = yes->type->type;
 
     str                cond_str    = generate_expr(self, null, cond, ctx);
     str                res         = next_res(self);
@@ -617,8 +617,8 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
     assert(params.size == args.size);
 
-    if (node->lambda_application.lambda->type_v2->quantifiers.size) fatal("type scheme");
-    tl_monotype const *arrow    = node->lambda_application.lambda->type_v2->type;
+    if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
+    tl_monotype const *arrow    = node->lambda_application.lambda->type->type;
 
     str_array          args_res = generate_args(self, args, arrow, ctx);
     assert(args_res.size == params.size);
@@ -628,9 +628,9 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
         ast_node const *param = params.v[i];
         if (ast_node_is_nil(param)) break;
         assert(ast_node_is_symbol(param));
-        assert(!param->type_v2->quantifiers.size);
+        assert(!param->type->quantifiers.size);
 
-        generate_decl(self, param->symbol.name, param->type_v2->type);
+        generate_decl(self, param->symbol.name, param->type->type);
         generate_assign_lhs(self, param->symbol.name);
         cat(self, args_res.v[i]);
         cat_semicolonln(self);
@@ -694,8 +694,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // the name of the variable which holds the evaluated value.
 
     if (!type) {
-        assert(!node->type_v2->quantifiers.size);
-        type = node->type_v2->type;
+        assert(!node->type->quantifiers.size);
+        type = node->type->type;
     }
 
     switch (node->tag) {

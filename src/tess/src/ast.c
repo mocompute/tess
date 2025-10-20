@@ -18,7 +18,7 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
 
     self->file     = "";
     self->line     = -1;
-    self->type_v2  = null;
+    self->type     = null;
     self->error    = tl_err_ok;
 
     self->tag      = tag;
@@ -62,9 +62,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     clone->file     = orig->file;
     clone->line     = orig->line;
 
-    if (orig->type_v2) {
-        clone->type_v2 = tl_polytype_clone(alloc, orig->type_v2);
-    } else clone->type_v2 = null;
+    if (orig->type) {
+        clone->type = tl_polytype_clone(alloc, orig->type);
+    } else clone->type = null;
 
     // clone common array for some tags
     if (TL_AST_HAS_ARRAY(clone->tag)) {
@@ -913,7 +913,7 @@ int string_to_ast_operator(char const *const s, ast_operator *out) {
 str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     char buf[64];
 
-    str  ty_str = node->type_v2 ? tl_polytype_to_string(alloc, node->type_v2) : str_empty();
+    str  ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
     switch (node->tag) {
     case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
@@ -929,7 +929,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_symbol: {
         str out = str_empty();
-        if (node->type_v2) out = str_copy(alloc, S("(")); // wrap in () if type exists
+        if (node->type) out = str_copy(alloc, S("(")); // wrap in () if type exists
 
         out = str_cat(alloc, out, node->symbol.name);
 
@@ -940,8 +940,8 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             out =
               str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
         }
-        if (node->type_v2) {
-            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type_v2));
+        if (node->type) {
+            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type));
             out = str_cat(alloc, out, S(")"));
         }
         return out;
@@ -961,8 +961,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             }
         }
 
-        if (node->type_v2)
-            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type_v2));
+        if (node->type) out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type));
         out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
         return out;
     }
