@@ -428,11 +428,7 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
     cat_semicolonln(self);
 }
 
-static void generate_funcall_head(transpile *self, tl_monotype const *type, str name, str ctx_var,
-                                  u32 n_args) {
-
-    (void)type;
-    assert(tl_monotype_is_list(type));
+static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
 
     cat(self, mangle_fun(self, name));
     cat_open_round(self);
@@ -508,10 +504,44 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     return res;
 }
 
+static str generate_funcall_std(transpile *self, ast_node const *node, eval_ctx *ctx) {
+
+    // a funcall to a std function is fundamentally different: we don't have type information on the
+    // function or the arguments.
+
+    // generate untyped arguments
+    str            name     = ast_node_str(node->named_application.name);
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    str_array      args_res = {.alloc = self->transient};
+    array_reserve(args_res, args.size);
+
+    forall(i, args) {
+        if (ast_node_is_nil(args.v[i])) break;
+        str res = generate_expr(self, null, args.v[i], ctx);
+        array_push(args_res, res);
+    }
+
+    // Note: all std_ functions have nil result
+
+    // function call
+    generate_funcall_head(self, name, str_empty(), args_res.size);
+
+    // args list
+    str_build b = str_build_init(self->transient, 128);
+    str_build_join_array(&b, S(", "), args_res);
+    cat(self, str_build_finish(&b));
+    cat_close_round(self);
+    cat_semicolonln(self);
+
+    return str_empty();
+}
+
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
+
+    if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
 
     tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
@@ -533,8 +563,8 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     }
 
     // function call
-    generate_assign_lhs(self, res);
-    generate_funcall_head(self, type, name, ctx_var, args_res.size);
+    if (!str_is_empty(res)) generate_assign_lhs(self, res);
+    generate_funcall_head(self, name, ctx_var, args_res.size);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -570,8 +600,10 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     if (type) {
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
-        generate_decl(self, name, type);
-        generate_assign(self, name, value);
+        if (!tl_monotype_is_nil(type)) {
+            generate_decl(self, name, type);
+            generate_assign(self, name, value);
+        }
     }
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
@@ -987,6 +1019,7 @@ static void cat_commentln(transpile *self, str s) {
 static str mangle_fun(transpile *self, str s) {
     // If name is already mangled, it could be a variable name. Don't mangle it further.
     if (0 == str_cmp_nc(s, "tl_", 3)) return s;
+    if (0 == str_cmp_nc(s, "std_", 4)) return s;
     str_build b = str_build_init(self->transient, str_len(s) + 7);
     str_build_cat(&b, S("tl_fun_"));
     str_build_cat(&b, s);

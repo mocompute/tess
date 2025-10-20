@@ -1,7 +1,5 @@
-let add1 : Int -> Int
-let add1 x = incr x
-
-let foo f y = f y
+// let std_dbg : ... -> Int
 
 let main () =
-    foo add1 -1
+  let _ = std_dbg "hello, world: the answer is %i" 42 in
+  0

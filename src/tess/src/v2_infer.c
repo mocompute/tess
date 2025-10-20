@@ -822,6 +822,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         } else {
 
+            if (ast_node_is_std_application(node->let_in.value)) {
+                // Note: special case std_ functions and give them all a Nil return type
+                tl_monotype const *nil   = tl_type_registry_nil(self->registry);
+                node->let_in.value->type = tl_polytype_absorb_mono(self->arena, nil);
+            }
+
             if (constrain(self, ctx, node->let_in.name->type, node->let_in.value->type, node)) return 1;
 
             // add value to environment

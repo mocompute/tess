@@ -1384,6 +1384,11 @@ int ast_node_is_assignment(ast_node const *self) {
     return ast_assignment == self->tag;
 }
 
+int ast_node_is_std_application(ast_node const *self) {
+    if (!ast_node_is_named_application(self)) return 0;
+    return (0 == str_cmp_nc(ast_node_str(self->named_application.name), "std_", 4));
+}
+
 ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {
     return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
 }
