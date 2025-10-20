@@ -1750,6 +1750,7 @@ void remove_generic_toplevels(tl_infer *self) {
     while ((node = toplevel_iter(self, &iter))) {
         str                name;
         tl_polytype const *type = null;
+        // FIXME: repetitive
         if (ast_node_is_symbol(node)) {
             name = node->symbol.name;
             type = tl_type_env_lookup(self->env, name);
