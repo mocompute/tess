@@ -78,7 +78,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
     self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
 
     self->toplevels          = null;
-    self->instances          = new_map(self->arena, name_and_type, str, 512);
+    self->instances          = map_new(self->arena, name_and_type, str, 512);
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
     self->next_var_name      = 0;
@@ -158,7 +158,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     ast_node             **type_arguments    = node->user_type_def.type_arguments;
     ast_node             **fields            = node->user_type_def.field_names;
 
-    hashmap               *type_argument_map = new_map(self->transient, str, tl_type_variable, 8);
+    hashmap               *type_argument_map = map_new(self->transient, str, tl_type_variable, 8);
     tl_type_variable_array type_argument_tvs = {.alloc = self->arena};
     for (u32 i = 0; i < n_type_arguments; ++i) {
         ast_node const *ta = type_arguments[i];
@@ -304,7 +304,7 @@ static void process_annotation(tl_infer *self, ast_node *node) {
 
     if (!name->symbol.annotation) return;
 
-    hashmap           *map          = new_map(self->transient, str, tl_polytype *, 8);
+    hashmap           *map          = map_new(self->transient, str, tl_polytype *, 8);
     tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
     node->symbol.annotation_type_v2 = ann;
 
@@ -471,7 +471,7 @@ typedef struct {
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
     infer_ctx *out = new (alloc, infer_ctx);
-    out->specials  = new_map(alloc, str, str, 16);
+    out->specials  = map_new(alloc, str, str, 16);
 
     return out;
 }
@@ -1428,7 +1428,7 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
 
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
-    hashmap  *rename_lex   = new_map(self->transient, str, str, 16);
+    hashmap  *rename_lex   = map_new(self->transient, str, str, 16);
     rename_variables(self, generic_node, &rename_lex);
     map_destroy(&rename_lex);
 
@@ -1869,7 +1869,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
     // preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
-        hashmap *lex = new_map(self->transient, str, str, 16);
+        hashmap *lex = map_new(self->transient, str, str, 16);
         forall(i, nodes) rename_variables(self, nodes.v[i], &lex);
 
         arena_reset(self->transient);

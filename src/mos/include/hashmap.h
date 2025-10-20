@@ -87,6 +87,6 @@ int map_iter(hashmap const *, hashmap_iterator *);
 int hset_iter(hashmap const *, hashmap_iterator *);
 
 // To document key and value types at create callsite
-#define new_map(A, K, V, N) map_create((A), sizeof(V), N)
+#define map_new(A, K, V, N) map_create((A), sizeof(V), N)
 
 #endif
