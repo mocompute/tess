@@ -1416,7 +1416,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
     }
 }
 
-static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype const *arrow) {
+static void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
+
+static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype const *arrow) {
     (void)ctx;
     str name = toplevel_name(node);
 
@@ -1430,14 +1432,19 @@ static str specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mon
     str name_inst = next_instantiation(self, name);
     map_set(&self->instances, &key, sizeof key, &name_inst);
 
-    // add to type environment
-    tl_type_env_insert_mono(self->env, name_inst, arrow);
-
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
     hashmap  *rename_lex   = new_map(self->transient, str, str, 16);
     rename_variables(self, generic_node, &rename_lex);
     map_destroy(&rename_lex);
+
+    // recalculate free variables, because symbol names have been renamed
+    tl_polytype wrap                      = tl_polytype_wrap(arrow);
+    ((tl_monotype *)arrow)->list.fvs.size = 0; // const cast
+    add_free_variables_to_arrow(self, generic_node, &wrap);
+
+    // add to type environment
+    tl_type_env_insert_mono(self->env, name_inst, arrow);
 
     ast_node      *body   = null;
     ast_node_sized params = {0};

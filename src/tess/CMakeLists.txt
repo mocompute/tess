@@ -139,6 +139,7 @@ tesslang_create_v2_test(mutual_recursion)
 tesslang_create_v2_test(polymorphic_identity)
 tesslang_create_v2_test(polymorphic_lambda)
 tesslang_create_v2_test(pointer_basic)
+tesslang_create_v2_test(stack_lambda)
 tesslang_create_v2_test(tuple)
 # tesslang_create_v2_test(tuple_direct)
 

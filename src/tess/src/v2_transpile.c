@@ -1066,7 +1066,9 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     assert(arrow->list.xs.size > 0);
     assert(!param_names.size || param_names.size >= arrow->list.xs.size - 1);
 
-    // FIXME: generate lambda context argument for free variables
+    int first_arg_is_nil = arrow->list.xs.size && tl_monotype_is_nil(arrow->list.xs.v[0]);
+
+    // generate lambda context argument for free variables
     if (arrow->list.fvs.size) {
         str ctx_name = context_name(self, arrow->list.fvs);
         cat(self, ctx_name);
@@ -1075,7 +1077,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
         // always output a name for the context parameter, because we might be in a function definition.
         cat_sp(self);
         cat(self, S("tl_ctx"));
-        if (arrow->list.xs.size) cat_commasp(self);
+        if (arrow->list.xs.size && !first_arg_is_nil) cat_commasp(self);
     }
 
     for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
@@ -1084,6 +1086,10 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
         } else {
+            // special case: if only arg is nil and we declared a context arg, suppress emitting a 'void'
+            // parameter.
+            if (first_arg_is_nil && arrow->list.fvs.size) continue;
+
             str_build_cat(&b, type_to_c_mono(self, arg));
             if (i < param_names.size) {
                 str_build_cat(&b, S(" "));
