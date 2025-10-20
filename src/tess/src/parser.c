@@ -1974,6 +1974,7 @@ static int toplevel_let(parser *self) {
 
     if (0 == a_try(self, forward_declaration)) {
         ast_node *sym = self->result;
+        (void)sym;
         assert(ast_symbol == sym->tag);
 
         // TODO error on duplicate declaration

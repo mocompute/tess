@@ -431,6 +431,7 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
 static void generate_funcall_head(transpile *self, tl_monotype const *type, str name, str ctx_var,
                                   u32 n_args) {
 
+    (void)type;
     assert(tl_monotype_is_list(type));
 
     cat(self, mangle_fun(self, name));
