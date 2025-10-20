@@ -2,7 +2,7 @@ let expect_true  f = if f () then true else false
 let expect_false f = if f () then false else true
 let to_int val     = if val  then 1 else 0
 
-struct Ctx = sentinel : int end
+struct Ctx = sentinel : Int end
 
 let main () =
   let ctx = Ctx 0 in
