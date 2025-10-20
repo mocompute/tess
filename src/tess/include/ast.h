@@ -21,7 +21,6 @@ typedef struct ast_node {
             str                original;
             struct ast_node   *annotation;
             tl_polytype const *annotation_type;
-            u64                special_hash; // for use during specialisation
             u8                 flags;
         } symbol;
 
