@@ -1,8 +1,6 @@
-// let add1 x = incr x
-
 let add1 : Int -> Int
+let add1 x = incr x
 
-let add1 x = x
 let foo f y = f y
 
 let main () =

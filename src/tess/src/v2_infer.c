@@ -359,8 +359,11 @@ typedef struct {
     hashmap  *names; // str set
 } tree_shake_ctx;
 
-void do_tree_shake(void *ctx_, ast_node *node) {
-    tree_shake_ctx *ctx = ctx_;
+hashmap *tree_shake(tl_infer *, ast_node const *);
+
+void     do_tree_shake(void *ctx_, ast_node *node) {
+    tree_shake_ctx *ctx  = ctx_;
+    tl_infer       *self = ctx->self;
 
     if (ast_node_is_nfa(node)) {
         str name = toplevel_name(node);
@@ -371,7 +374,15 @@ void do_tree_shake(void *ctx_, ast_node *node) {
         while ((arg = ast_arguments_next(&iter))) {
             if (!ast_node_is_symbol(arg)) continue;
             if (str_eq(name, arg->symbol.name)) continue;
-            str_hset_insert(&ctx->names, arg->symbol.name);
+            if (!str_hset_contains(ctx->names, arg->symbol.name)) {
+                str_hset_insert(&ctx->names, arg->symbol.name);
+
+                // if it is a toplevel, recurse through it
+                ast_node *next = toplevel_get(self, arg->symbol.name);
+                if (next) {
+                    ast_node_dfs(ctx, next, do_tree_shake);
+                }
+            }
         }
 
         if (!str_hset_contains(ctx->names, name)) {
