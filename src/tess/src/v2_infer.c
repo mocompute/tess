@@ -807,7 +807,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &node->let_in.name->type);
         ensure_tv(self, null, &node->let_in.value->type);
-        ensure_tv(self, null, &node->let_in.body->type);
+        if (node->let_in.body) ensure_tv(self, null, &node->let_in.body->type);
 
         if (ast_node_is_lambda_function(node->let_in.value)) {
 
@@ -824,7 +824,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // (rather than the type_env type).
             node->let_in.name->type = null;
 
-            if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
+            if (node->let_in.body)
+                if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
 
         } else {
 
@@ -839,7 +840,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // add value to environment
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, node->let_in.value->type);
 
-            if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
+            if (node->let_in.body)
+                if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
         }
     } break;
 

@@ -435,6 +435,7 @@ static void generate_main(transpile *self) {
 
     cat(self, S("int main(void) {"));
     cat_nl(self);
+    cat(self, S("tl_init();\n"));
 
     eval_ctx ctx = {0};
     str      res = generate_expr(self, null, body, &ctx);
