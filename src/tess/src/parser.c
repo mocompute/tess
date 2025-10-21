@@ -480,12 +480,19 @@ static int a_end_of_expression(parser *p) {
         }
         return 0;
 
+    case tok_arrow:
+        // accept -> to separate terms in type annotations, eg let foo : Ptr a -> Int
+        if (p->in_function_application) {
+            p->in_function_application = 0;
+            return 2;
+        }
+        return 0;
+
     case tok_dot:
     case tok_colon:
     case tok_colon_equal:
     case tok_ampersand:
     case tok_star:
-    case tok_arrow:
     case tok_ellipsis:
     case tok_open_round:
     case tok_equal_sign:
@@ -640,17 +647,7 @@ static int a_type_identifier(parser *self) {
         log(self, "begin pointer type");
     }
 
-    if (0 == a_try(self, function_application)) {
-        // a type constructor with arguments
-        if (is_pointer) {
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
-            ptr->address_of.target = self->result;
-            return result_ast_node(self, ptr);
-        }
-        return 0;
-    }
-
-    if (0 == a_try(self, a_identifier_or_nil)) {
+    if (0 == a_try(self, function_application) || 0 == a_try(self, a_identifier_or_nil)) {
         // FIXME for now we treat ellipsis as a textual identifier
         ast_node *left  = self->result;
         ast_node *right = null;
