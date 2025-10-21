@@ -28,35 +28,35 @@ let _tl_bsr_     : a -> Int -> a
 
 // -- c stdlib function types --
 
-// let c_malloc     : Int -> *a
-// let c_free       : *a -> ()
+let c_malloc     : Int -> Ptr a
+let c_free       : Ptr a -> ()
 
 // let std_dbg      : (..., ) -> Int
 
 // -- tl lib short-named function implementations --
 
-let sizeof x     : a -> Int    = _tl_sizeof_ x
+let sizeof x      = _tl_sizeof_ x
 
-let add l r      : a -> a -> a = _tl_add_ l r
-let sub l r      : a -> a -> a = _tl_sub_ l r
-let mod l r      : a -> a -> a = _tl_mod_ l r
-let mul l r      : a -> a -> a = _tl_mul_ l r
-let div l r      : a -> a -> a = _tl_div_ l r
+let add l r       = _tl_add_ l r
+let sub l r       = _tl_sub_ l r
+let mod l r       = _tl_mod_ l r
+let mul l r       = _tl_mul_ l r
+let div l r       = _tl_div_ l r
 
-let lt  l r      : a -> a -> Bool = _tl_lt_  l r
-let lte l r      : a -> a -> Bool = _tl_lte_ l r
-let eq  l r      : a -> a -> Bool = _tl_eq_  l r
-let neq l r      : a -> a -> Bool = _tl_neq_ l r
-let gte l r      : a -> a -> Bool = _tl_gte_ l r
-let gt  l r      : a -> a -> Bool = _tl_gt_  l r
+let lt  l r       = _tl_lt_  l r
+let lte l r       = _tl_lte_ l r
+let eq  l r       = _tl_eq_  l r
+let neq l r       = _tl_neq_ l r
+let gte l r       = _tl_gte_ l r
+let gt  l r       = _tl_gt_  l r
 
-let band l r     : a -> a -> a = _tl_band_ l r
-let bor  l r     : a -> a -> a = _tl_bor_  l r
-let bxor l r     : a -> a -> a = _tl_bxor_ l r
-let bcomp x      : a -> a      = _tl_bcomp_ x
+let band l r      = _tl_band_ l r
+let bor  l r      = _tl_bor_  l r
+let bxor l r      = _tl_bxor_ l r
+let bcomp x       = _tl_bcomp_ x
 
-let bsl arg n    : a -> Int -> a = _tl_bsl_ arg n
-let bsr arg n    : a -> Int -> a = _tl_bsr_ arg n
+let bsl arg n     = _tl_bsl_ arg n
+let bsr arg n     = _tl_bsr_ arg n
 
-let decr x       : Int -> Int = sub x 1
-let incr x       : Int -> Int = add x 1
+let decr x        = sub x 1
+let incr x        = add x 1
