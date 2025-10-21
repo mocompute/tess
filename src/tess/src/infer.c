@@ -118,8 +118,8 @@ static tl_type_variable get_tv_or_fresh(str name, hashmap **map, tl_type_subs *s
     return tv;
 }
 
-tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry *self,
-                                          ast_node const *node, tl_type_subs *subs, hashmap **map) {
+tl_monotype const *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
+                                          hashmap **map) {
 
     // map : map_new(self->transient, str, tl_type_variable, 8);
 
@@ -148,7 +148,7 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
         tl_monotype_array args_mono = {.alloc = self->alloc};
         array_reserve(args_mono, args.size);
         forall(i, args) {
-            tl_monotype const *mono = tl_type_registry_parse(transient, self, args.v[i], subs, map);
+            tl_monotype const *mono = tl_type_registry_parse(self, args.v[i], subs, map);
             if (!mono) {
                 // a type variable
                 if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
@@ -164,8 +164,8 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
     }
 
     if (ast_node_is_arrow(node)) {
-        tl_monotype const *left  = tl_type_registry_parse(transient, self, node->arrow.left, subs, map);
-        tl_monotype const *right = tl_type_registry_parse(transient, self, node->arrow.right, subs, map);
+        tl_monotype const *left  = tl_type_registry_parse(self, node->arrow.left, subs, map);
+        tl_monotype const *right = tl_type_registry_parse(self, node->arrow.right, subs, map);
         tl_monotype_array  arr   = {.alloc = self->alloc};
         // flatten lists and concatenate
         if (tl_monotype_is_list(left)) forall(i, left->list.xs) array_push(arr, left->list.xs.v[i]);
@@ -173,10 +173,9 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
         if (tl_monotype_is_list(right)) forall(i, right->list.xs) array_push(arr, right->list.xs.v[i]);
         else array_push(arr, right);
         array_shrink(arr);
-        return tl_monotype_create_list(transient, (tl_monotype_sized)sized_all(arr));
+        return tl_monotype_create_list(self->alloc, (tl_monotype_sized)sized_all(arr));
     }
 
-    arena_reset(transient);
     fatal("logic error");
 }
 
@@ -217,11 +216,10 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
             tl_type_variable *found = str_map_get(type_argument_map, ast_node_str(field_type_node));
             if (found) field = tl_monotype_create_tv(self->arena, *found);
             else
-                field = tl_type_registry_parse(self->transient, self->registry, field_type_node, self->subs,
-                                               &type_argument_map);
+                field =
+                  tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
         } else {
-            field = tl_type_registry_parse(self->transient, self->registry, field_type_node, self->subs,
-                                           &type_argument_map);
+            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
         }
         if (!field) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
@@ -259,11 +257,12 @@ static void process_annotation(tl_infer *self, ast_node *node) {
     ast_node const *name = toplevel_name_node(node);
 
     if (!name->symbol.annotation) return;
+    if (name->symbol.annotation_type) return;
 
     hashmap *map = map_new(self->transient, str, tl_type_variable, 8);
     // tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
     tl_monotype const *ann =
-      tl_type_registry_parse(self->transient, self->registry, name->symbol.annotation, self->subs, &map);
+      tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
 
     node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, ann);
 

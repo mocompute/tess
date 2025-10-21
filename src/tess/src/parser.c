@@ -722,11 +722,11 @@ static int a_identifier_typed(parser *self) {
 
     if (a_try(self, a_close_round)) return 1;
 
-    ast_node *node        = ast_node_create_sym_c(self->ast_arena, "");
-    node->symbol.name     = name->symbol.name;
-    node->symbol.original = str_empty();
-    if (annotation) node->symbol.annotation = annotation;
-    else node->symbol.annotation = null;
+    ast_node *node               = ast_node_create_sym_c(self->ast_arena, "");
+    node->symbol.name            = name->symbol.name;
+    node->symbol.original        = str_empty();
+    node->symbol.annotation      = annotation;
+    node->symbol.annotation_type = null;
     return result_ast_node(self, node);
 }
 
@@ -737,10 +737,11 @@ static int forward_declaration(parser *self) {
     ast_node *sym = self->result;
 
     if (a_try(self, a_type_annotation)) return 1;
-    ast_node *ann          = self->result;
+    ast_node *ann               = self->result;
 
-    sym->symbol.original   = str_empty();
-    sym->symbol.annotation = ann;
+    sym->symbol.original        = str_empty();
+    sym->symbol.annotation      = ann;
+    sym->symbol.annotation_type = null;
     return result_ast_node(self, sym);
 }
 
