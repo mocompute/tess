@@ -396,6 +396,10 @@ int str_array_contains_one(str_sized hay, str need) {
     return str_array_contains(hay, (str_sized){.size = 1, .v = &need});
 }
 
+void str_array_set_insert(str_array *arr, str str) {
+    if (!str_array_contains_one((str_sized)sized_all(*arr), str)) array_push(*arr, str);
+}
+
 int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0: error, 1: i64, 2: u64, 3: f64.
     // Unlike C functions, input string must not have garbage after valid number.

@@ -1964,7 +1964,20 @@ static int toplevel_let(parser *self) {
 
     if (0 == a_try(self, simple_declaration)) {
         ast_node *sym_or_nil = self->result;
-        return continue_let_in(self, sym_or_nil);
+
+        // a top-level value declaration, with no body (implies rest of program is in the body)
+
+        if (0 == a_try(self, expression)) {
+            ast_node *defn     = self->result;
+
+            ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
+            node->let_in.name  = sym_or_nil;
+            node->let_in.value = defn;
+            node->let_in.body  = null;
+
+            result_ast_node(self, node);
+            goto success;
+        }
     }
 
     if (0 == a_try(self, forward_declaration)) {

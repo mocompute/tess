@@ -102,6 +102,7 @@ u64         str_array_hash64(u64 seed, str_sized);
 int         str_array_cmp(str_sized, str_sized);
 int         str_array_contains(str_sized hay, str_sized need);
 int         str_array_contains_one(str_sized hay, str need);
+void        str_array_set_insert(str_array *, str); // insert if not present
 
 // -- utilities --
 

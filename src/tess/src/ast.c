@@ -962,7 +962,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         out     = str_cat(alloc, out, S(" = "));
         out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.value));
         out     = str_cat(alloc, out, S(" in "));
-        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
+        if (node->let_in.body) out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
         return out;
 
     } break;

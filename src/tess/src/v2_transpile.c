@@ -55,6 +55,7 @@ static str         generate_funcall(transpile *, ast_node const *, eval_ctx *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *, eval_ctx *);
 static void        generate_prototypes(transpile *, int);
 static void        generate_structs(transpile *);
+static void        generate_toplevel_values(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
@@ -327,6 +328,42 @@ static void generate_toplevel_contexts(transpile *self) {
             generate_context_struct(self, type->type->list.fvs);
         }
     }
+    cat_nl(self);
+}
+
+static void generate_toplevel_values(transpile *self) {
+
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
+        if (!ast_node_is_let_in(node)) continue;
+        str                name = ast_node_str(node->let_in.name);
+        tl_polytype const *type = node->let_in.value->type;
+        if (!tl_polytype_is_concrete(type)) continue;
+
+        generate_decl(self, name, type->type);
+    }
+    cat_nl(self);
+
+    // tl_init function
+
+    cat(self, S("static void tl_init(void) {\n"));
+    iter = (hashmap_iterator){0};
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
+        if (!ast_node_is_let_in(node)) continue;
+        str                name = ast_node_str(node->let_in.name);
+        tl_polytype const *type = node->let_in.value->type;
+        if (!tl_polytype_is_concrete(type)) continue;
+
+        str value = generate_expr(self, type->type, node->let_in.value, null);
+        generate_assign_lhs(self, name);
+        cat(self, value);
+        cat_semicolonln(self);
+    }
+
+    cat_close_curly(self);
     cat_nl(self);
 }
 
@@ -876,8 +913,13 @@ int transpile_compile(transpile *self, str_build *out_build) {
 
     generate_prototypes(self, 1);
     cat_nl(self);
+
+    generate_toplevel_values(self);
+    cat_nl(self);
+
     generate_toplevels(self);
     cat_nl(self);
+
     generate_main(self);
 
     if (out_build) {

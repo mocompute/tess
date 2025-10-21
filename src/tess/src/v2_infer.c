@@ -339,6 +339,12 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             }
         }
 
+        else if (ast_node_is_let_in(node)) {
+            str name_str = node->let_in.name->symbol.name;
+            str_map_set(&tops, name_str, &node);
+            process_annotation(self, node);
+        }
+
         else {
             array_push(errors, ((tl_infer_error){.tag = tl_err_invalid_toplevel, .node = node}));
             continue;
@@ -513,7 +519,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type)
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void               rename_variables(tl_infer *, ast_node *, hashmap **);
+static void               rename_variables(tl_infer *, ast_node *, hashmap **, int);
 static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
 static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 static tl_polytype const *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
@@ -1112,7 +1118,7 @@ static ast_node *get_infer_target(ast_node *node) {
         return node;
     }
 
-    else if (ast_node_is_let_in_lambda(node)) {
+    else if (ast_node_is_let_in(node)) {
         return node->let_in.value;
     }
 
@@ -1206,7 +1212,22 @@ static str next_variable_name(tl_infer *);
 
 // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
 // preserving lexical scope. This simplifies later passes by removing name collision concerns.
-static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
+
+static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
+    // For toplevel definitions, rename them and keep them in lexical scope.
+    if (!ast_node_is_let_in(node)) return;
+
+    str name   = node->let_in.name->symbol.name;
+    str newvar = next_variable_name(self);
+    ast_node_name_replace(node->let_in.name, newvar);
+    log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
+        str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
+        str_buf(&node->let_in.name->symbol.name));
+
+    str_map_set(lex, name, &newvar);
+}
+
+static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int level) {
 
     if (null == node) return;
 
@@ -1215,48 +1236,53 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     switch (node->tag) {
 
-    case ast_address_of:  rename_variables(self, node->address_of.target, lex); break;
-    case ast_dereference: rename_variables(self, node->dereference.target, lex); break;
+    case ast_address_of:  rename_variables(self, node->address_of.target, lex, level + 1); break;
+    case ast_dereference: rename_variables(self, node->dereference.target, lex, level + 1); break;
 
     case ast_dereference_assign:
-        rename_variables(self, node->dereference_assign.target, lex);
-        rename_variables(self, node->dereference_assign.value, lex);
+        rename_variables(self, node->dereference_assign.target, lex, level + 1);
+        rename_variables(self, node->dereference_assign.value, lex, level + 1);
         break;
 
     case ast_if_then_else:
-        rename_variables(self, node->if_then_else.condition, lex);
-        rename_variables(self, node->if_then_else.yes, lex);
-        rename_variables(self, node->if_then_else.no, lex);
+        rename_variables(self, node->if_then_else.condition, lex, level + 1);
+        rename_variables(self, node->if_then_else.yes, lex, level + 1);
+        rename_variables(self, node->if_then_else.no, lex, level + 1);
         break;
 
     case ast_let_in: {
 
         // recurse on value prior to adding name to lexical scope
-        rename_variables(self, node->let_in.value, lex);
+        rename_variables(self, node->let_in.value, lex, level + 1);
 
-        str name                           = node->let_in.name->symbol.name;
-        str newvar                         = next_variable_name(self);
-        node->let_in.name->symbol.original = node->let_in.name->symbol.name;
-        node->let_in.name->symbol.name     = newvar;
-        log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
-            str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
-            str_buf(&node->let_in.name->symbol.name));
+        hashmap *save = null;
+        str      name = node->let_in.name->symbol.name;
+        if (level) {
+            // do not rename toplevel symbols again (see rename_let_in)
+            str newvar = next_variable_name(self);
+            ast_node_name_replace(node->let_in.name, newvar);
+            log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
+                str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
+                str_buf(&node->let_in.name->symbol.name));
 
-        // establish lexical scope of the let-in binding and recurse
-        hashmap *save = map_copy(*lex);
-        str_map_set(lex, name, &newvar);
+            // establish lexical scope of the let-in binding and recurse
+            save = map_copy(*lex);
+            str_map_set(lex, name, &newvar);
+        }
 
-        rename_variables(self, node->let_in.body, lex);
+        rename_variables(self, node->let_in.body, lex, level + 1);
 
         // restore prior scope
-        map_destroy(lex);
-        *lex = save;
+        if (save) {
+            map_destroy(lex);
+            *lex = save;
+        }
     } break;
 
     case ast_let_match_in: {
 
         // recurse on value prior to adding name to lexical scope
-        rename_variables(self, node->let_in.value, lex);
+        rename_variables(self, node->let_in.value, lex, level + 1);
 
         hashmap *save = map_copy(*lex);
 
@@ -1273,7 +1299,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             str_map_set(lex, name, &newvar);
         }
 
-        rename_variables(self, node->let_match_in.body, lex);
+        rename_variables(self, node->let_match_in.body, lex, level + 1);
 
         map_destroy(lex);
         *lex = save;
@@ -1307,10 +1333,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             param->symbol.original = param->symbol.name;
             param->symbol.name     = newvar;
             str_map_set(lex, name, &newvar);
-            rename_variables(self, param, lex);
+            rename_variables(self, param, lex, level + 1);
         }
 
-        rename_variables(self, node->lambda_function.body, lex);
+        rename_variables(self, node->lambda_function.body, lex, level + 1);
 
         map_destroy(lex);
         *lex = save;
@@ -1329,10 +1355,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
             param->symbol.original = param->symbol.name;
             param->symbol.name     = newvar;
             str_map_set(lex, name, &newvar);
-            rename_variables(self, param, lex);
+            rename_variables(self, param, lex, level + 1);
         }
 
-        rename_variables(self, node->let.body, lex);
+        rename_variables(self, node->let.body, lex, level + 1);
 
         map_destroy(lex);
         *lex = save;
@@ -1341,43 +1367,43 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex) {
 
     case ast_begin_end:
         for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
-            rename_variables(self, node->begin_end.expressions[i], lex);
+            rename_variables(self, node->begin_end.expressions[i], lex, level + 1);
         break;
 
     case ast_lambda_function_application: {
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex);
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex, level + 1);
 
         // establishes scope for lambda body
-        rename_variables(self, node->lambda_application.lambda, lex);
+        rename_variables(self, node->lambda_application.lambda, lex, level + 1);
     } break;
 
     case ast_named_function_application: {
-        rename_variables(self, node->named_application.name, lex);
+        rename_variables(self, node->named_application.name, lex, level + 1);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex);
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex, level + 1);
 
     } break;
 
-    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex); break;
-    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex); break;
+    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex, level + 1); break;
+    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex, level + 1); break;
 
     case ast_tuple:         {
         ast_node_sized arr = ast_node_sized_from_ast_array(node);
-        forall(i, arr) rename_variables(self, arr.v[i], lex);
+        forall(i, arr) rename_variables(self, arr.v[i], lex, level + 1);
     } break;
 
     case ast_assignment:
-        rename_variables(self, node->assignment.name, lex);
-        rename_variables(self, node->assignment.value, lex);
+        rename_variables(self, node->assignment.name, lex, level + 1);
+        rename_variables(self, node->assignment.value, lex, level + 1);
         break;
 
     case ast_labelled_tuple:
         for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i)
-            rename_variables(self, node->labelled_tuple.assignments[i], lex);
+            rename_variables(self, node->labelled_tuple.assignments[i], lex, level + 1);
         break;
 
     case ast_string:
@@ -1416,7 +1442,7 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     // clone function source ast and rename variables
     ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
     hashmap  *rename_lex   = map_new(self->transient, str, str, 16);
-    rename_variables(self, generic_node, &rename_lex);
+    rename_variables(self, generic_node, &rename_lex, 0);
     map_destroy(&rename_lex);
 
     // recalculate free variables, because symbol names have been renamed
@@ -1599,14 +1625,14 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
         ;
     } else {
         // a free variable
-        array_set_insert(ctx->fvs, node->symbol.name);
+        str_array_set_insert(&ctx->fvs, node->symbol.name);
     }
 
     // if symbol has a type which carries fvs, we also collect those.
     if (is_arrow && !tl_polytype_is_scheme(type)) {
         str_sized type_fvs = tl_monotype_fvs(type->type);
         forall(i, type_fvs) {
-            array_set_insert(ctx->fvs, type_fvs.v[i]);
+            str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
         }
     }
 
@@ -1616,7 +1642,7 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
 static void promote_free_variables(str_array *out, tl_monotype const *in) {
     if (tl_monotype_is_list(in)) {
         forall(i, in->list.xs) promote_free_variables(out, in->list.xs.v[i]);
-        forall(i, in->list.fvs) array_push(*out, in->list.fvs.v[i]);
+        forall(i, in->list.fvs) str_array_set_insert(out, in->list.fvs.v[i]);
     }
 }
 
@@ -1666,6 +1692,16 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
     return 0;
 }
 
+static int infer_one(tl_infer *self, ast_node *infer_target) {
+    traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    infer_ctx    *ctx      = infer_ctx_create(self->transient);
+    traverse->user         = ctx;
+    if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
+    infer_ctx_destroy(self->transient, &ctx);
+    traverse_ctx_destroy(self->transient, &traverse);
+    return 0;
+}
+
 static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
@@ -1691,6 +1727,16 @@ static int add_generic(tl_infer *self, ast_node *node) {
     } else if (ast_node_is_utd(node)) {
         load_user_type(self, node);
         return 0;
+    } else if (ast_node_is_let_in(node)) {
+        if (infer_one(self, infer_target)) {
+            log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+                str_ilen(orig_name), str_buf(&orig_name));
+        }
+
+        assert(node->let_in.value->type);
+        tl_type_env_insert(self->env, name, node->let_in.value->type);
+        return 0;
+
     } else {
         fatal("logic error");
     }
@@ -1712,10 +1758,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // run inference
-    traverse_ctx *traverse = traverse_ctx_create(self->transient);
-    infer_ctx    *ctx      = infer_ctx_create(self->transient);
-    traverse->user         = ctx;
-    if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) {
+    if (infer_one(self, infer_target)) {
         log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
         return 1;
@@ -1748,8 +1791,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
-    infer_ctx_destroy(self->transient, &ctx);
-    traverse_ctx_destroy(self->transient, &traverse);
     return 0;
 }
 
@@ -1795,6 +1836,11 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
+
+        // preserve value let-ins, but not unused let-in-lambdas (including the latter causes a test
+        // failure)
+        if (ast_node_is_let_in(node) && !ast_node_is_let_in_lambda(node)) continue;
+
         str name = toplevel_name(node);
         if (!str_hset_contains(used, name)) array_push(remove, name);
     }
@@ -1850,19 +1896,22 @@ static void update_specialized_types(tl_infer *self) {
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     log(self, "-- start inference --");
 
-    self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
-    arena_reset(self->transient);
-
-    if (self->errors.size) return 1;
-
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
     // preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
         hashmap *lex = map_new(self->transient, str, str, 16);
-        forall(i, nodes) rename_variables(self, nodes.v[i], &lex);
+        // rename toplevel let-in symbols and keep them in global lexical scope
+        forall(i, nodes) rename_let_in(self, nodes.v[i], &lex);
 
+        // rename the rest
+        forall(i, nodes) rename_variables(self, nodes.v[i], &lex, 0);
         arena_reset(self->transient);
     }
+
+    // Load all top level forms.
+    self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
+    arena_reset(self->transient);
+    if (self->errors.size) return 1;
 
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
     // inside the iteration because infer will add lambda functions to the toplevel.
@@ -2050,7 +2099,7 @@ static ast_node *toplevel_iter(tl_infer *self, hashmap_iterator *iter) {
 
 ast_node *toplevel_name_node(ast_node *node) {
     if (ast_node_is_let(node)) return node->let.name;
-    else if (ast_node_is_let_in_lambda(node)) return node->let_in.name;
+    else if (ast_node_is_let_in(node)) return node->let_in.name;
     else if (ast_node_is_symbol(node)) return node;
     else if (ast_node_is_utd(node)) return node->user_type_def.name;
     else if (ast_node_is_nfa(node)) return node->named_application.name;
