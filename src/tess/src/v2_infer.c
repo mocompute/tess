@@ -167,7 +167,7 @@ tl_monotype const *tl_type_registry_parse(allocator *transient, tl_type_registry
         tl_monotype const *left  = tl_type_registry_parse(transient, self, node->arrow.left, subs, map);
         tl_monotype const *right = tl_type_registry_parse(transient, self, node->arrow.right, subs, map);
         tl_monotype_array  arr   = {.alloc = self->alloc};
-        // flatten lists:
+        // flatten lists and concatenate
         if (tl_monotype_is_list(left)) forall(i, left->list.xs) array_push(arr, left->list.xs.v[i]);
         else array_push(arr, left);
         if (tl_monotype_is_list(right)) forall(i, right->list.xs) array_push(arr, right->list.xs.v[i]);
