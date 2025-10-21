@@ -219,7 +219,7 @@ let points = Point_array_create 10 in
   Point_aget points 3
 
 
-// 
+//
 // Conditional
 //
 
@@ -271,3 +271,35 @@ let res = step2 extra in
 let res = step3 flip res in
 let res = res ()
 in  res
+
+
+//
+// Some alternative syntax ideas
+//
+
+// Tuple notation instead of curried
+
+let add : a * a -> a
+let add (l, r) = l + r
+
+// inline type annotation is unambiguous this way
+let add (l, r) : a * a -> a = l + r
+let foo () = 42
+let unary(x) = 1
+let main () = add (1, 2) ; foo() ; unary(3)
+
+vs
+let main () = add 1 2
+
+
+// also visually more obvious that it's a function, since we use the same let keyword
+
+let val = 123
+let foo x = 123
+
+vs
+
+let val = 123
+let foo (x) = 123
+
+let lam = fun (x, y) -> x + y

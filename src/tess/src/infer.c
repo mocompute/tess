@@ -168,6 +168,7 @@ tl_monotype const *tl_type_registry_parse(tl_type_registry *self, ast_node const
         tl_monotype const *right = tl_type_registry_parse(self, node->arrow.right, subs, map);
         tl_monotype_array  arr   = {.alloc = self->alloc};
         // flatten lists and concatenate
+        // TODO: library function
         if (tl_monotype_is_list(left)) forall(i, left->list.xs) array_push(arr, left->list.xs.v[i]);
         else array_push(arr, left);
         if (tl_monotype_is_list(right)) forall(i, right->list.xs) array_push(arr, right->list.xs.v[i]);
@@ -215,12 +216,11 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         if (ast_node_is_symbol(field_type_node)) {
             tl_type_variable *found = str_map_get(type_argument_map, ast_node_str(field_type_node));
             if (found) field = tl_monotype_create_tv(self->arena, *found);
-            else
-                field =
-                  tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
-        } else {
-            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
         }
+
+        if (!field)
+            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
+
         if (!field) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
             return;
@@ -760,16 +760,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ast_node *target = node->dereference.target;
         if (ast_node_is_symbol(target)) {
             tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
-            if (target_ty && tl_polytype_is_concrete(target_ty) && tl_monotype_is_ptr(target_ty->type)) {
-                // ptr to concrete type
-                assert(target_ty->type->cons_inst->args.size == 1);
-                tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
-                if (constrain_pm(self, ctx, node->type, deref, node)) return 1;
-            } else if (target_ty && tl_monotype_is_ptr(target_ty->type)) {
-                assert(target_ty->type->cons_inst->args.size == 1);
-                tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
-                if (constrain_pm(self, ctx, node->type, deref, node)) return 1;
-            }
+            if (!target_ty) return 0;
+            assert(target_ty->type->cons_inst->args.size == 1);
+            tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
+            if (constrain_pm(self, ctx, node->type, deref, node)) return 1;
         }
 
     } break;
@@ -874,8 +868,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // if symbol has a type annotation, constrain it
         if (node->symbol.annotation) {
-            // str ann_str = v2_ast_node_to_string(self->transient, node->symbol.annotation);
-            // log(self, "symbol '%s' annotation: '%s'", str_cstr(&node->symbol.name), str_cstr(&ann_str));
             process_annotation(self, node);
             if (constrain(self, ctx, node->symbol.annotation_type, node->type, node)) return 1;
         }
@@ -986,9 +978,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
             node->type = arrow;
         }
-
-        // Note: it is an error to set an expression type on the lambda function node when the lambda is
-        // let-in defined.
 
     } break;
 
@@ -1239,6 +1228,8 @@ static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
 }
 
 static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int level) {
+    // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
+    // that must remain in lexical scope throughout the program.
 
     if (null == node) return;
 
@@ -1303,10 +1294,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             assert(ast_node_is_assignment(ass));
             ast_node *name_node = ass->assignment.name;
             assert(ast_node_is_symbol(name_node));
-            str name                   = name_node->symbol.name;
-            str newvar                 = next_variable_name(self);
-            name_node->symbol.original = name_node->symbol.name;
-            name_node->symbol.name     = newvar;
+            str name   = name_node->symbol.name;
+            str newvar = next_variable_name(self);
+            ast_node_name_replace(name_node, newvar);
 
             str_map_set(lex, name, &newvar);
         }
@@ -1340,10 +1330,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
-            str name               = param->symbol.name;
-            str newvar             = next_variable_name(self);
-            param->symbol.original = param->symbol.name;
-            param->symbol.name     = newvar;
+            str name   = param->symbol.name;
+            str newvar = next_variable_name(self);
+            ast_node_name_replace(param, newvar);
             str_map_set(lex, name, &newvar);
             rename_variables(self, param, lex, level + 1);
         }
@@ -1362,10 +1351,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
-            str name               = param->symbol.name;
-            str newvar             = next_variable_name(self);
-            param->symbol.original = param->symbol.name;
-            param->symbol.name     = newvar;
+            str name   = param->symbol.name;
+            str newvar = next_variable_name(self);
+            ast_node_name_replace(param, newvar);
             str_map_set(lex, name, &newvar);
             rename_variables(self, param, lex, level + 1);
         }
@@ -1468,15 +1456,13 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     ast_node      *body   = null;
     ast_node_sized params = {0};
     if (ast_node_is_let(generic_node)) {
-        body                                    = generic_node->let.body;
-        params                                  = ast_node_sized_from_ast_array(generic_node);
-        generic_node->let.name->symbol.original = generic_node->let.name->symbol.name;
-        generic_node->let.name->symbol.name     = name_inst;
+        body   = generic_node->let.body;
+        params = ast_node_sized_from_ast_array(generic_node);
+        ast_node_name_replace(generic_node->let.name, name_inst);
     } else if (ast_node_is_let_in_lambda(generic_node)) {
         body   = generic_node->let_in.value->lambda_function.body;
         params = ast_node_sized_from_ast_array(generic_node->let_in.value);
-        generic_node->let_in.name->symbol.original = generic_node->let_in.name->symbol.name;
-        generic_node->let_in.name->symbol.name     = name_inst;
+        ast_node_name_replace(generic_node->let_in.name, name_inst);
     } else if (ast_node_is_symbol(generic_node)) {
         // no body
         ;
@@ -1881,14 +1867,14 @@ static void update_specialized_types(tl_infer *self) {
 
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
-        tl_polytype const *type = *(tl_polytype const **)iter.data;
-        if (!tl_polytype_is_type_constructor(type)) continue;
+        tl_polytype const *poly = *(tl_polytype const **)iter.data;
+        if (!tl_polytype_is_type_constructor(poly)) continue;
 
         // already specialized?
-        if (!str_is_empty(type->type->cons_inst->special_name)) continue;
+        if (!str_is_empty(poly->type->cons_inst->special_name)) continue;
 
-        str                type_name = type->type->cons_inst->def->name;
-        tl_monotype_sized  type_args = type->type->cons_inst->args;
+        str                type_name = poly->type->cons_inst->def->name;
+        tl_monotype_sized  type_args = poly->type->cons_inst->args;
 
         tl_monotype const *mono =
           tl_type_registry_get_cached_instance(self->registry, type_name, type_args);
