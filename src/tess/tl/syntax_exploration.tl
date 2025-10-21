@@ -313,7 +313,7 @@ let lam = fun (x, y) -> x + y
 
 
 
-// 
+//
 // even crazier, completely different, block style, no let
 //
 
@@ -338,15 +338,44 @@ let foo x =
 
  disallow internal lexical scope, to retain ml-style semantics?
  or allow it, easy enough to compile to C?
- 
+
  Statement :: Assignment | Funcall
  Assignment :: Ident '=' Value
  Value :: Literal | Funcall
  Funcall :: Ident '(' Argument* ','? ')'
- 
+
  Toplevel :: Assignment | Defun
  Defun :: Ident '(' Parameters ')' '{' Statement* '}'
- Parameter :: Ident [':' Type]  
+ Parameter :: Ident [':' Type]
  Parameters ::= Parameter (',' Parameter)* | ε
- 
- 
+
+ EBNF
+ definition   =
+ concat       ,
+ termination  ;
+ alternation  |
+ optional     [ ... ] none or once
+ repetition   { ... } none or more
+ grouping     ( ... )
+ terminal     " ... "
+ comment      (* ... *)
+ special      ? ... ?
+ exception    -
+
+program       = { toplevel } ;
+toplevel      = { assignment | defun } ;
+assignment    = ident "=" value ;
+
+ident         = ident-start, { alphanumeric } ;
+ident-start   = alphabetic | "_" ;
+alphanumeric  = alphametic | numeric | "_" ;
+alphabetic    = ? "a" ... "z" | "A" ... "Z" ? ;
+numeric       = ? "0" ... "9" ;
+
+value         = literal | funcall ;
+literal       = integer | float | string ;
+funcall       = ident, "(", [ argument-list ], ")" ;
+
+FIXME
+argument-list = value | value
+argument      = value ;
