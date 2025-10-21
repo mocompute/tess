@@ -223,6 +223,13 @@ let points = Point_array_create 10 in
 // Conditional
 //
 
+let res =
+  cond
+  | eq val 0 -> ...
+  | eq val 1 -> ...
+  | lt val 10 -> ...
+  | else -> ...
+  end
 
 
 
