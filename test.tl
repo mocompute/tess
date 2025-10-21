@@ -1,2 +1,2 @@
-let magic   = 123
-let main () = sub magic 123
+let c_malloc     : Int -> *a
+let c_free       : *a -> ()

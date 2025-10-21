@@ -86,7 +86,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_u64:                clone->u64.val = orig->u64.val; break;
     case ast_f64:                clone->f64.val = orig->f64.val; break;
 
-    case ast_address_of:         {
+    case ast_address_of:
+    case ast_pointer_to:         {
         struct ast_address_of *vclone = ast_node_address_of(clone),
                               *vorig  = ast_node_address_of((ast_node *)orig);
         vclone->target                = ast_node_clone(alloc, vorig->target);
@@ -307,6 +308,7 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
     case ast_string:      return triple(alloc, sym("string"), symstr(ast_node_str(node)), type);
 
     case ast_address_of:  return triple(alloc, sym("&"), recur(node->address_of.target), type);
+    case ast_pointer_to:  return triple(alloc, sym("*"), recur(node->address_of.target), type);
     case ast_arrow:       return quad(alloc, recur(node->arrow.left), sym("->"), recur(node->arrow.right), type);
     case ast_dereference: return triple(alloc, sym("*"), recur(node->dereference.target), type);
     case ast_dereference_assign:
@@ -471,6 +473,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         return;
 
     case ast_address_of:
+    case ast_pointer_to:
         //
         fun(ctx, node->address_of.target);
         break;
@@ -599,6 +602,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         return;
 
     case ast_address_of:
+    case ast_pointer_to:
         //
         node->address_of.target = fun(ctx, node->address_of.target);
         break;
@@ -1013,6 +1017,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_address_of:
+    case ast_pointer_to:
     case ast_assignment:
     case ast_dereference:
     case ast_dereference_assign:
@@ -1217,6 +1222,7 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_eof:      break;
 
     case ast_address_of:
+    case ast_pointer_to:
         //
         combine_node(self->address_of.target);
         break;

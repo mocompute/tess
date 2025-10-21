@@ -793,6 +793,14 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
         return str_cat(self->transient, S("&"),
                        generate_expr(self, target_ty, node->address_of.target, ctx));
     } break;
+    case ast_pointer_to: {
+        if (!tl_monotype_is_ptr(type)) fatal("runtime error");
+        assert(1 == type->cons_inst->args.size);
+        tl_monotype const *target_ty = type->cons_inst->args.v[0];
+        return str_cat(self->transient, generate_expr(self, target_ty, node->address_of.target, ctx),
+                       S("*"));
+    } break;
+
     case ast_dereference: {
         tl_monotype const *deref_ty = type;
         return str_cat(self->transient, S("*"),

@@ -116,7 +116,7 @@ typedef struct ast_node {
 
         struct ast_address_of {
             struct ast_node *target;
-        } address_of;
+        } address_of; // shares with tag ast_pointer_to
 
         struct ast_dereference {
             struct ast_node *target;

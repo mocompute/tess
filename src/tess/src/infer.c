@@ -696,6 +696,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_nil:
     case ast_any:
     case ast_address_of:
+    case ast_pointer_to:
     case ast_arrow:
     case ast_assignment:
     case ast_bool:
@@ -734,7 +735,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     switch (node->tag) {
     case ast_nil:
     case ast_any:        break;
-    case ast_address_of: {
+    case ast_address_of:
+    case ast_pointer_to: {
 
         // address-of operator only accept symbols (lvalues)
         ensure_tv(self, null, &node->type);
@@ -1238,7 +1240,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     switch (node->tag) {
 
-    case ast_address_of:  rename_variables(self, node->address_of.target, lex, level + 1); break;
+    case ast_address_of:
+    case ast_pointer_to:  rename_variables(self, node->address_of.target, lex, level + 1); break;
     case ast_dereference: rename_variables(self, node->dereference.target, lex, level + 1); break;
 
     case ast_dereference_assign:

@@ -28,8 +28,8 @@ let _tl_bsr_     : a -> Int -> a
 
 // -- c stdlib function types --
 
-// let c_malloc     : Int -> *any
-// let c_free       : *any -> ()
+// let c_malloc     : Int -> *a
+// let c_free       : *a -> ()
 
 // let std_dbg      : (..., ) -> Int
 

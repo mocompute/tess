@@ -643,7 +643,7 @@ static int a_type_identifier(parser *self) {
     if (0 == a_try(self, function_application)) {
         // a type constructor with arguments
         if (is_pointer) {
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
             ptr->address_of.target = self->result;
             return result_ast_node(self, ptr);
         }
@@ -658,7 +658,7 @@ static int a_type_identifier(parser *self) {
         if (is_pointer) {
             // star precedence is higher than arrow
             // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
             ptr->address_of.target = left;
             left                   = ptr;
         }
@@ -690,7 +690,7 @@ static int a_type_identifier(parser *self) {
         if (is_pointer) {
             // star precedence is higher than arrow
             // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_address_of);
+            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
             ptr->address_of.target = left;
             left                   = ptr;
         }
