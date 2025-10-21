@@ -638,27 +638,10 @@ static int a_identifier_or_nil(parser *p) {
 static int a_type_identifier(parser *self) {
     // TODO rename this because it's no longer just an identifier
 
-    // * int -> int ==> (*int) -> int, not *(int -> int)
-    // * has higher precedence than ->
-
-    int is_pointer = 0;
-    if (0 == a_try(self, a_star)) {
-        is_pointer = 1;
-        log(self, "begin pointer type");
-    }
-
     if (0 == a_try(self, function_application) || 0 == a_try(self, a_identifier_or_nil)) {
         // FIXME for now we treat ellipsis as a textual identifier
         ast_node *left  = self->result;
         ast_node *right = null;
-
-        if (is_pointer) {
-            // star precedence is higher than arrow
-            // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
-            ptr->address_of.target = left;
-            left                   = ptr;
-        }
 
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
@@ -683,14 +666,6 @@ static int a_type_identifier(parser *self) {
     if (0 == a_try(self, tuple_expression)) {
         ast_node *left  = self->result;
         ast_node *right = null;
-
-        if (is_pointer) {
-            // star precedence is higher than arrow
-            // TODO reusing this ast type to mean something different
-            ast_node *ptr          = ast_node_create(self->ast_arena, ast_pointer_to);
-            ptr->address_of.target = left;
-            left                   = ptr;
-        }
 
         // followed by arrow?
         if (0 == a_try(self, a_arrow)) {
