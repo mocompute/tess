@@ -310,3 +310,43 @@ let val = 123
 let foo (x) = 123
 
 let lam = fun (x, y) -> x + y
+
+
+
+// 
+// even crazier, completely different, block style, no let
+//
+
+foo(x) {
+  a = 1 b = 2
+  c = add(a, b)
+  do_something()
+  l() { a }
+  if l() { ... } else if { ... } else { ... }
+  l()
+}
+
+vs
+
+let foo x =
+ let a = 1 in
+ let b = 2 in
+ let c = add a b in
+ let _ = do_something ()
+ let l = fun () -> a in
+ l ()
+
+ disallow internal lexical scope, to retain ml-style semantics?
+ or allow it, easy enough to compile to C?
+ 
+ Statement :: Assignment | Funcall
+ Assignment :: Ident '=' Value
+ Value :: Literal | Funcall
+ Funcall :: Ident '(' Argument* ','? ')'
+ 
+ Toplevel :: Assignment | Defun
+ Defun :: Ident '(' Parameters ')' '{' Statement* '}'
+ Parameter :: Ident [':' Type]  
+ Parameters ::= Parameter (',' Parameter)* | ε
+ 
+ 
