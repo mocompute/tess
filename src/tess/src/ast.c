@@ -126,7 +126,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = null;
         if (vorig->annotation_type) {
-            vclone->annotation_type = new (alloc, tl_polytype);
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         }
     } break;

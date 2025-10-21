@@ -872,6 +872,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ensure_tv(self, null, &node->type);
         }
 
+        // if symbol has a type annotation, constrain it
+        if (node->symbol.annotation) {
+            // str ann_str = v2_ast_node_to_string(self->transient, node->symbol.annotation);
+            // log(self, "symbol '%s' annotation: '%s'", str_cstr(&node->symbol.name), str_cstr(&ann_str));
+            process_annotation(self, node);
+            if (constrain(self, ctx, node->symbol.annotation_type, node->type, node)) return 1;
+        }
+
         // add to environment
         if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
 
