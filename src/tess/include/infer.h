@@ -3,7 +3,7 @@
 
 #include "alloc.h"
 #include "ast.h"
-#include "v2_type.h"
+#include "type.h"
 
 typedef struct tl_infer tl_infer;
 

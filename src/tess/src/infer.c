@@ -1,10 +1,10 @@
-#include "v2_infer.h"
+#include "infer.h"
 #include "alloc.h"
 #include "array.h"
 #include "ast_tags.h"
 #include "error.h"
 #include "str.h"
-#include "v2_type.h"
+#include "type.h"
 
 #include "ast.h"
 #include "hashmap.h"

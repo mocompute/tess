@@ -1,4 +1,4 @@
-#include "v2_type.h"
+#include "type.h"
 
 #include "alloc.h"
 #include "array.h"

@@ -2,7 +2,7 @@
 #define TESS_TRANSPILE_V2_H
 
 #include "alloc.h"
-#include "v2_infer.h"
+#include "infer.h"
 
 typedef struct transpile transpile;
 

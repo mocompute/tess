@@ -1,4 +1,4 @@
-#include "v2_transpile.h"
+#include "transpile.h"
 
 #include "alloc.h"
 #include "array.h"
@@ -6,9 +6,9 @@
 #include "ast_tags.h"
 #include "dbg.h"
 #include "hashmap.h"
+#include "infer.h"
 #include "str.h"
-#include "v2_infer.h"
-#include "v2_type.h"
+#include "type.h"
 
 #include <stdio.h>
 

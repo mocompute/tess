@@ -8,7 +8,7 @@
 #include "hashmap.h"
 #include "nodiscard.h"
 #include "str.h"
-#include "v2_type.h"
+#include "type.h"
 
 defarray(ast_node_array, struct ast_node *);
 defsized(ast_node_sized, struct ast_node *);

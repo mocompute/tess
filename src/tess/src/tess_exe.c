@@ -1,11 +1,11 @@
 #include "alloc.h"
 #include "array.h"
 #include "file.h"
+#include "infer.h"
 #include "parser.h"
 #include "str.h"
+#include "transpile.h"
 #include "types.h"
-#include "v2_infer.h"
-#include "v2_transpile.h"
 
 #include <stdio.h>
 #include <stdlib.h>

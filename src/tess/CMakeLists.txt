@@ -27,9 +27,9 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
 
-  ${PROJECT_SOURCE_DIR}/src/tess/include/v2_infer.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/v2_transpile.h
-  ${PROJECT_SOURCE_DIR}/src/tess/include/v2_type.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/infer.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/transpile.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
 )
 
 set(SOURCES
@@ -40,9 +40,9 @@ set(SOURCES
   src/token.c
   src/tokenizer.c
 
-  src/v2_infer.c
-  src/v2_transpile.c
-  src/v2_type.c
+  src/infer.c
+  src/transpile.c
+  src/type.c
 
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
   )

@@ -1,7 +1,7 @@
 #include "alloc.h"
 #include "dbg.h"
 #include "str.h"
-#include "v2_type.h"
+#include "type.h"
 
 #include <stdio.h>
 

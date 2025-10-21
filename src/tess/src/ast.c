@@ -5,7 +5,7 @@
 #include "hashmap.h"
 #include "sexp.h"
 #include "str.h"
-#include "v2_type.h"
+#include "type.h"
 
 #include <assert.h>
 #include <stdio.h>
