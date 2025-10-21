@@ -875,7 +875,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str                name = node->named_application.name->symbol.name;
         tl_polytype const *type = tl_type_env_lookup(self->env, name);
         if (!type) {
-            return 0; // mututal recursion
+            return 0; // mututal recursion, undeclared std_* functions, etc
         }
 
         if (tl_polytype_is_type_constructor(type)) {

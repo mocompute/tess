@@ -25,7 +25,7 @@ typedef struct {
 typedef struct {
     tl_type_constructor_def const *def;
     tl_monotype_sized              args;
-    str                            special_name;
+    str special_name; // name of specialized instance, e.g. Point a => Point_0 Int
 } tl_type_constructor_inst;
 
 typedef struct tl_monotype {

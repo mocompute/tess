@@ -35,7 +35,7 @@ let _tl_bsr_     : a -> Int -> a
 
 // -- tl lib short-named function implementations --
 
-let sizeof x     : any -> Int = _tl_sizeof_ x
+let sizeof x     : a -> Int    = _tl_sizeof_ x
 
 let add l r      : a -> a -> a = _tl_add_ l r
 let sub l r      : a -> a -> a = _tl_sub_ l r
