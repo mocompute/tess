@@ -314,8 +314,13 @@ let lam = fun (x, y) -> x + y
 
 
 //
-// even crazier, completely different, block style, no let
+// even crazier, completely different, imperative block style, no let
 //
+
+- everything is an expression: has a value
+- early return using 'return' and 'break'
+- conditional control flow: cond
+- looping control flow: for
 
 foo(x) {
   a = 1 b = 2
@@ -323,7 +328,17 @@ foo(x) {
   do_something()
   l() { a }
   if l() { ... } else if { ... } else { ... }
+  while ( ...) { ... }
+  for ( ... ) { ... }
   l()
+
+ // sugar for if-elseif-else:
+ cond {
+  (expr) { ... }
+  (expr) { ... }
+  ()     { ... }
+  }
+
 }
 
 vs
@@ -336,18 +351,6 @@ let foo x =
  let l = fun () -> a in
  l ()
 
- disallow internal lexical scope, to retain ml-style semantics?
- or allow it, easy enough to compile to C?
-
- Statement :: Assignment | Funcall
- Assignment :: Ident '=' Value
- Value :: Literal | Funcall
- Funcall :: Ident '(' Argument* ','? ')'
-
- Toplevel :: Assignment | Defun
- Defun :: Ident '(' Parameters ')' '{' Statement* '}'
- Parameter :: Ident [':' Type]
- Parameters ::= Parameter (',' Parameter)* | ε
 
  EBNF
  definition   =
@@ -362,20 +365,68 @@ let foo x =
  special      ? ... ?
  exception    -
 
+(* all concatenations with may include arbitrary separating whitespace *)
 program       = { toplevel } ;
-toplevel      = { assignment | defun } ;
-assignment    = ident "=" value ;
+toplevel      = assignment | defun ;
 
-ident         = ident-start, { alphanumeric } ;
-ident-start   = alphabetic | "_" ;
-alphanumeric  = alphametic | numeric | "_" ;
-alphabetic    = ? "a" ... "z" | "A" ... "Z" ? ;
-numeric       = ? "0" ... "9" ;
+(* note: an assignment is not an expression *)
+assignment    = ident "=" expression ;
 
-value         = literal | funcall ;
+ident         = ident_start { alphanumeric } ;
+ident_start   = alphabetic | "_" ;
+alphanumeric  = alphabetic | numeric | "_" ;
+alphabetic    = "a" .. "z" | "A" .. "Z"  ;
+numeric       = "0" .. "9" ;
+
+value         = literal | ident | funcall ;
 literal       = integer | float | string ;
-funcall       = ident, "(", [ argument-list ], ")" ;
+funcall       = ident "(" [ argument_list ] ")" ;
+argument_list = expression { "," expression } ;
 
-FIXME
-argument-list = value | value
-argument      = value ;
+integer       = [ "+" | "-" ] numeric { numeric } ;
+float         = integer "." numeric { numeric } [ ( "e" | "E" ) integer ] ;
+string        = '"' { ? any character except quote ? } '"' ;
+
+defun         = ident "(" [ param_list ] ")" fun_body;
+param_list    = param { "," param } ;
+param         = ident [ ":" type ] ;
+type          = ident { " " ident } ;
+fun_body      = "{" { statement | expression } "}" ;
+statement     = assignment | for_stmt | return_stmt ;
+
+expression    = base_expr { binary_op base_expr } ;
+base_expr     = [ unary_op ] ( value | "(" expression ")" | if_expr | cond_expr );
+if_expr       = "if" expression "{" body_expr "}" { "else" if_expr } [ else_case ]  ;
+else_case     = "else" "{" body_expr "}" ;
+body_expr     = statement | break_stmt ;
+
+cond_expr     = "cond" "{" { cond_arm } cond_else "}" ;
+cond_arm      = "(" expression ")" "{" { body_expr } "}" ;
+cond_else     = "()" "{" { body_expr } "}" ;
+
+return_stmt   = "return" expression ;
+
+(* break: similar to return_stmt but at the block level: sets the value of the block and exits *)
+break_stmt    = "break" expression ;
+
+for_stmt      = "for" "(" [ for_assign ] ";" [ expression ] ";" [ for_update ] ")" "{" { for_body } "}";
+for_assign    = assignment { "," assignment } ;
+for_body      = body_expr | continue_stmt ;
+for_update    = for_upd_item { "," for_upd_item } ;
+for_upd_item  = assignment | expression ;
+continue_stmt = "continue" ;
+
+binary_op     = "+" | "-" | "*" | "/" | rel_op | logical_op ;
+rel_op        = "==" | "!=" | "<=" | "<" | ">=" | ">" ;
+logical_op    = "&&" | "||" ;
+unary_op      = "-" | "!" ;
+
+(*
+
+Notes:
+
+- An expression generates a value. A statement does not generate a value (or generates a nil value for type checking purposes).
+- An assignment is not an expression; it is a statement with nil value. This prevents errors like "if (a = 5)" when
+  "if (a == 5)" was intended.
+
+*)
