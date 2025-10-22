@@ -189,10 +189,6 @@ void parser_destroy(parser **self) {
 
 // -- parser --
 
-// result_* functions construct a new ast_node and add it to the pool.
-// The parser then no longer has a valid copy of the actual ast_node,
-// it being replaced by a handle to an entry in the pool.
-
 static void set_result_file(parser *p) {
     p->result->file = p->token.file;
     p->result->line = p->token.line;
@@ -2233,6 +2229,7 @@ static int b_assignment(parser *self) {
 }
 
 static int b_statement(parser *self) {
+	// FIXME make a let-in node
     if (0 == a_try(self, b_assignment)) return 0;
 
     // FIXME: for_stmt, return_stmt;
