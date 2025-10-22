@@ -326,9 +326,8 @@ foo(x) {
   a = 1 b = 2
   c = add(a, b)
   do_something()
-  l() { a }
+  l = () { a }
   if l() { ... } else if { ... } else { ... }
-  while ( ...) { ... }
   for ( ... ) { ... }
   l()
 
@@ -338,6 +337,12 @@ foo(x) {
   (expr) { ... }
   ()     { ... }
   }
+
+  // lambda functions
+  f = (...) { ... }
+
+
+
 
 }
 

@@ -21,6 +21,8 @@
     X(tok_ellipsis, "ellipsis")                                                                            \
     X(tok_open_round, "open_round")                                                                        \
     X(tok_close_round, "close_round")                                                                      \
+    X(tok_open_curly, "open_curly")                                                                        \
+    X(tok_close_curly, "close_curly")                                                                      \
     X(tok_equal_sign, "equal_sign")                                                                        \
     X(tok_invalid, "invalid")                                                                              \
     X(tok_number, "number")                                                                                \

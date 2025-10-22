@@ -114,6 +114,10 @@ typedef struct ast_node {
 
         // below have no array
 
+        struct ast_body {
+            ast_node_sized expressions;
+        } body;
+
         struct ast_address_of {
             struct ast_node *target;
         } address_of; // shares with tag ast_pointer_to
@@ -132,6 +136,12 @@ typedef struct ast_node {
             struct ast_node *yes;
             struct ast_node *no;
         } if_then_else;
+
+        struct ast_infix {
+            struct ast_node *left;
+            struct ast_node *right;
+            struct ast_node *op;
+        } infix;
 
         struct ast_let_in {
             struct ast_node *name;

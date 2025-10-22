@@ -185,8 +185,18 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
 
+            case '{':
+                replace_token(self->strings, &res, tok_open_curly);
+                state = stop;
+                break;
+
             case ')':
                 replace_token(self->strings, &res, tok_close_round);
+                state = stop;
+                break;
+
+            case '}':
+                replace_token(self->strings, &res, tok_close_curly);
                 state = stop;
                 break;
 

@@ -6,6 +6,7 @@
 #include "ast_tags.h"
 #include "error.h"
 #include "file.h"
+#include "str.h"
 #include "token.h"
 #include "tokenizer.h"
 
@@ -81,6 +82,7 @@ static int           result_ast_u64(parser *, u64);
 static int           is_arithmetic_operator(char const *);
 static int           is_eof(parser *);
 static int           is_relational_operator(char const *);
+static int           is_logical_operator(char const *);
 static int           is_reserved(char const *);
 static int           is_start_of_expression(char const *);
 
@@ -279,9 +281,17 @@ static int is_arithmetic_operator(char const *s) {
 
 static int is_relational_operator(char const *s) {
     static char const *strings[] = {
-      "<", "<=", "==", "<>", ">=", ">", null,
+      "<", "<=", "==", "!=", ">=", ">", null,
     };
     char const **it = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
+}
+
+static int is_logical_operator(char const *s) {
+    static char const *strings[] = {"&&", "||", null};
+    char const       **it        = strings;
     while (*it != null)
         if (0 == strcmp(*it++, s)) return 1;
     return 0;
@@ -443,6 +453,20 @@ static int a_close_round(parser *p) {
     return 1;
 }
 
+static int a_open_curly(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_open_curly == p->token.tag) return result_ast_str(p, ast_symbol, "{");
+    p->error.tag = tl_err_expected_open_curly;
+    return 1;
+}
+
+static int a_close_curly(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_close_curly == p->token.tag) return result_ast_str(p, ast_symbol, "}");
+    p->error.tag = tl_err_expected_close_curly;
+    return 1;
+}
+
 static int a_end_of_expression(parser *p) {
 
     if (next_token(p)) {
@@ -470,6 +494,7 @@ static int a_end_of_expression(parser *p) {
         if (is_start_of_expression(p->token.s)) goto next_expression;
         if (is_arithmetic_operator(p->token.s)) goto next_expression;
         if (is_relational_operator(p->token.s)) goto next_expression;
+        if (is_logical_operator(p->token.s)) goto next_expression;
         break;
 
     case tok_comma:
@@ -508,6 +533,20 @@ static int a_end_of_expression(parser *p) {
 next_expression:
     log(p, "end_of_expression found start of next expression");
     return 2;
+}
+
+static int a_binary_operator(parser *self) {
+    if (next_token(self)) {
+        if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
+        return 1;
+    }
+
+    if (tok_symbol == self->token.tag)
+        if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
+            is_relational_operator(self->token.s))
+            return 0;
+
+    return 1;
 }
 
 static int a_address_of(parser *self) {
@@ -1975,6 +2014,101 @@ error:
     return 1;
 }
 
+// ---
+
+static int a_param(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *ident = self->result;
+    ast_node *ann   = null;
+    if (0 == a_try(self, a_colon) && 0 == a_try(self, a_type_annotation)) {
+        ann = self->result;
+    }
+
+    assert(ast_node_is_symbol(ident));
+    ident->symbol.annotation = ann;
+    return 0;
+}
+
+static i16 operator_precedence(char const *op, int is_prefix) {
+
+    struct item {
+        char const *op;
+        i16         p;
+    };
+    static struct item const infix[] = {
+      {"||", 10}, {"&&", 20}, {"==", 30}, {"!=", 30}, {"<", 40}, {"<=", 40}, {">=", 40},
+      {">", 40},  {"+", 50},  {"-", 50},  {"*", 60},  {"/", 60}, {null, 0},
+    };
+
+    static struct item const prefix[] = {
+      {"-", 70},
+      {"!", 70},
+      {null, 0},
+    };
+
+    for (struct item const *search = is_prefix ? prefix : infix; search; ++search) {
+        if (0 == strcmp(op, search->op)) return search->p;
+    }
+    return INT_MIN;
+}
+
+static ast_node *parse_base_expression(parser *self) {
+}
+
+static ast_node *parse_expression(parser *self, i16 min_preced) {
+
+    ast_node *left = parse_base_expression(self);
+    while (1) {
+        if (0 == a_try(self, a_binary_operator)) {
+            ast_node *op   = ast_node_create_sym_c(self->ast_arena, self->token.s);
+
+            i16       prec = operator_precedence(self->token.s, 0);
+            if (prec < min_preced) break;
+            ast_node *right = parse_expression(self, prec + 1);
+        }
+    }
+
+    return result_ast_node(self, left);
+}
+
+static int b_expression(parser *self) {
+}
+
+static int toplevel_defun(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node      *name   = self->result;
+    ast_node_array params = {.alloc = self->ast_arena};
+
+    if (a_try(self, a_open_round)) return 1;
+    if (0 == a_try(self, a_close_round)) goto decl_done;
+    if (0 == a_try(self, a_param)) array_push(params, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_round)) goto decl_done;
+        if (a_try(self, a_comma)) return 1;
+        if (0 == a_try(self, a_param)) array_push(params, self->result);
+    }
+
+decl_done:
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array body = {.alloc = self->ast_arena};
+
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (0 == a_try(self, b_expression)) array_push(body, self->result);
+    }
+
+    array_shrink(body);
+    ast_node *node         = ast_node_create(self->ast_arena, ast_body);
+    node->body.expressions = (ast_node_sized)sized_all(body);
+
+    result_ast_node(self, node);
+
+    return 0;
+}
+
 static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
@@ -1982,11 +2116,11 @@ static int toplevel(parser *self) {
     if (0 == a_try(self, struct_declaration)) return 0;
     if (has_error(self)) return 1;
 
-    if (0 == a_try(self, toplevel_let)) return 0;
+    if (0 == a_try(self, toplevel_defun)) return 0;
     if (has_error(self)) return 1;
 
-    if (0 == a_try(self, expression)) return 0;
-    if (has_error(self)) return 1;
+    // if (0 == a_try(self, expression)) return 0;
+    // if (has_error(self)) return 1;
 
     return 1;
 }

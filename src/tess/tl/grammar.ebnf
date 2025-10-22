@@ -13,7 +13,7 @@ alphanumeric  = alphabetic | numeric | "_" ;
 alphabetic    = "a" .. "z" | "A" .. "Z"  ;
 numeric       = "0" .. "9" ;
 
-value         = literal | postfix_expr ;
+value         = literal | lambda | postfix_expr ;
 postfix_expr  = ident { postfix_op };
 postfix_op    = "(" [ argument_list ] ")" | "." ident ;
 literal       = integer | float | string ;
@@ -23,7 +23,8 @@ integer       = [ "+" | "-" ] numeric { numeric } ;
 float         = integer "." numeric { numeric } [ ( "e" | "E" ) integer ] ;
 string        = '"' { ? any character except quote ? } '"' ;
 
-defun         = ident "(" [ param_list ] ")" fun_body;
+defun         = ident "(" [ param_list ] ")" fun_body ;
+lambda        = "(" [ param_list ] ")" fun_body ;
 param_list    = param { "," param } ;
 param         = ident [ ":" type ] ;
 fun_body      = "{" { statement | expression } "}" ;  (* value of last expression is return value, unless set by return_stmt *)
