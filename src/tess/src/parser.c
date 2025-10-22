@@ -2222,14 +2222,17 @@ static int b_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
-    a->assignment.name  = lval;
-    a->assignment.value = val;
+    ast_node *body = parse_expression(self, INT_MIN);
+    if (!body) return 1;
+
+    ast_node *a     = ast_node_create(self->ast_arena, ast_let_in);
+    a->let_in.name  = lval;
+    a->let_in.value = val;
+    a->let_in.body  = body;
     return result_ast_node(self, a);
 }
 
 static int b_statement(parser *self) {
-	// FIXME make a let-in node
     if (0 == a_try(self, b_assignment)) return 0;
 
     // FIXME: for_stmt, return_stmt;
