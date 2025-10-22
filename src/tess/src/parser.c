@@ -2039,15 +2039,7 @@ error:
 
 // ---
 
-static int b_value(parser *self) {
-    if (0 == a_try(self, a_number)) return 0;
-    if (0 == a_try(self, a_string)) return 0;
-    // if (0 == a_try(self, b_lambda_function)) return 0;
-    // if (0 == a_try(self, b_funcall)) return 0;
-    // if (0 == a_try(self, b_field)) return 0;
-
-    return 1;
-}
+static int b_expression(parser *self);
 
 static int a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
@@ -2060,6 +2052,84 @@ static int a_param(parser *self) {
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
     return 0;
+}
+
+static int b_funcall(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+
+    if (a_try(self, a_open_round)) return 1;
+
+    ast_node_array args = {.alloc = self->ast_arena};
+    if (0 == a_try(self, a_close_round)) goto done;
+    if (0 == a_try(self, b_expression)) array_push(args, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_round)) goto done;
+        if (a_try(self, a_comma)) return 1;
+        if (a_try(self, b_expression)) return 1;
+        array_push(args, self->result);
+    }
+
+done:
+
+    array_shrink(args);
+    ast_node *node                      = ast_node_create(self->ast_arena, ast_named_function_application);
+    node->named_application.arguments   = args.v;
+    node->named_application.n_arguments = args.size;
+    node->named_application.name        = name;
+    return result_ast_node(self, node);
+}
+
+static int b_lambda_function(parser *self) {
+    ast_node_array params = {.alloc = self->ast_arena};
+
+    if (a_try(self, a_open_round)) return 1;
+    if (0 == a_try(self, a_close_round)) goto decl_done;
+    if (0 == a_try(self, a_param)) array_push(params, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_round)) goto decl_done;
+        if (a_try(self, a_comma)) return 1;
+        if (a_try(self, a_param)) return 1;
+        array_push(params, self->result);
+    }
+
+decl_done:
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array exprs = {.alloc = self->ast_arena};
+
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (a_try(self, b_expression)) return 1;
+        array_push(exprs, self->result);
+    }
+
+    array_shrink(exprs);
+    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
+    body->body.expressions = (ast_node_sized)sized_all(exprs);
+
+    array_shrink(params);
+    ast_node *l                     = ast_node_create(self->ast_arena, ast_lambda_function);
+    l->lambda_function.parameters   = params.v;
+    l->lambda_function.n_parameters = params.size;
+    l->lambda_function.body         = body;
+    result_ast_node(self, l);
+
+    return 0;
+}
+
+static int b_value(parser *self) {
+    if (0 == a_try(self, b_funcall)) return 0;
+    if (0 == a_try(self, b_lambda_function)) return 0;
+    if (0 == a_try(self, a_number)) return 0;
+    if (0 == a_try(self, a_string)) return 0;
+    if (0 == a_try(self, a_identifier)) return 0;
+    // if (0 == a_try(self, b_field)) return 0;
+
+    return 1;
 }
 
 static int operator_precedence(char const *op, int is_prefix) {
@@ -2141,6 +2211,34 @@ static int b_expression(parser *self) {
     return result_ast_node(self, res);
 }
 
+static ast_node *parse_lvalue(parser *self) {
+    // FIXME deref and dot field access
+    if (0 == a_try(self, a_identifier)) return self->result;
+    return null;
+}
+
+static int b_assignment(parser *self) {
+    ast_node *lval = parse_lvalue(self);
+    if (!lval) return 1;
+
+    if (a_try(self, a_equal_sign)) return 1;
+
+    ast_node *val = parse_expression(self, INT_MIN);
+    if (!val) return 1;
+
+    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
+    a->assignment.name  = lval;
+    a->assignment.value = val;
+    return result_ast_node(self, a);
+}
+
+static int b_statement(parser *self) {
+    if (0 == a_try(self, b_assignment)) return 0;
+
+    // FIXME: for_stmt, return_stmt;
+    return 1;
+}
+
 static int toplevel_defun(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node      *name   = self->result;
@@ -2165,8 +2263,11 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, b_expression)) return 1;
-        array_push(exprs, self->result);
+
+        // Note: statement before expression, because assignment and ident are ambiguous
+        if (0 == a_try(self, b_statement)) array_push(exprs, self->result);
+        else if (0 == a_try(self, b_expression)) array_push(exprs, self->result);
+        else return 1;
     }
 
     array_shrink(exprs);

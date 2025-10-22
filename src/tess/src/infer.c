@@ -710,6 +710,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_assignment:
+        if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
+        if (traverse_ast(self, ctx, node->assignment.value, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -717,7 +723,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_address_of:
     case ast_pointer_to:
     case ast_arrow:
-    case ast_assignment:
     case ast_bool:
     case ast_dereference:
     case ast_dereference_assign:
@@ -1091,8 +1096,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_user_type_definition: {
     } break;
 
-    case ast_arrow:
     case ast_assignment:
+        ensure_tv(self, null, &node->type);
+        if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
+        if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
+        break;
+
+    case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:

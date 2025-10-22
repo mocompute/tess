@@ -767,6 +767,24 @@ static str generate_body(transpile *self, tl_monotype const *type, ast_node cons
     }
     return out;
 }
+static str generate_assignment(transpile *self, ast_node const *node, eval_ctx *ctx) {
+
+    str                name = ast_node_str(node->let_in.name);
+    tl_monotype const *type = env_lookup(self, name); // may be null
+
+    if (type) {
+        str value = generate_expr(self, type, node->assignment.value, ctx);
+
+        if (!tl_monotype_is_nil(type)) {
+            generate_decl(self, name, type);
+            generate_assign(self, name, value);
+            return value;
+        }
+    }
+    return str_empty();
+
+    // FIXME: this breaks let-in semantics
+}
 
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
@@ -774,7 +792,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // the name of the variable which holds the evaluated value.
 
     if (!type) {
-        assert(!node->type->quantifiers.size);
+        assert(node->type && !node->type->quantifiers.size);
         type = node->type->type;
     }
 
@@ -823,12 +841,12 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_user_type_set: return generate_type_set(self, type, node, ctx);
 
     case ast_body:          return generate_body(self, type, node, ctx);
+    case ast_assignment:    return generate_assignment(self, node, ctx);
 
     case ast_binary_op:
     case ast_unary_op:
 
     case ast_arrow:
-    case ast_assignment:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:

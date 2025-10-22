@@ -973,6 +973,15 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     str  ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
     switch (node->tag) {
+    case ast_body: {
+        str_build b = str_build_init(alloc, 128);
+        forall(i, node->body.expressions) {
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->body.expressions.v[i]));
+            str_build_cat(&b, S(" "));
+        }
+        return str_build_finish(&b);
+    } break;
+
     case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
     case ast_i64:
         snprintf(buf, sizeof buf, "(%" PRIi64 " : %s)", node->i64.val, str_cstr(&ty_str));
@@ -1080,7 +1089,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_binary_op:
-    case ast_body:
     case ast_unary_op:
 
     case ast_address_of:

@@ -1,1 +1,6 @@
-main() { 0 1 2 "hello, world" 0}
+id(x) { x }
+
+main() {
+  a = 1
+  id (0)
+}
