@@ -100,60 +100,35 @@ function(tesslang_create_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
-function(tesslang_create_v2_test NAME)
-  set(TEST_NAME test-tl-${NAME})
-
-  # transpile to C
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
-    COMMAND tess_exe
-      c
-      -o ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
-      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
-    DEPENDS
-      $<TARGET_FILE:tess_exe>
-      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Compiling test_${NAME}.tl to test_${NAME}.c"
-  )
-
-  add_executable(${TEST_NAME} "${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c")
-  target_link_libraries(${TEST_NAME} PRIVATE tess)
-  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_ASAN} -Wno-format-security)
-  target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_ASAN})
-  add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
-endfunction()
-
-tesslang_create_v2_test(apply_lambda)
-tesslang_create_v2_test(anon_lambda)
-tesslang_create_v2_test(basic)
-tesslang_create_v2_test(closure_polymorphism)
-# tesslang_create_v2_test(enclosing_context)
-tesslang_create_v2_test(generic_lambda)
-tesslang_create_v2_test(generic_type)
-tesslang_create_v2_test(generic_type_assign)
-tesslang_create_v2_test(if_then_else)
-# tesslang_create_v2_test(if_then_closure)
-tesslang_create_v2_test(factorial)
-tesslang_create_v2_test(function_pointer_argument)
-tesslang_create_v2_test(let_basic)
-tesslang_create_v2_test(let_in_basic)
-tesslang_create_v2_test(let_in_nil)
-tesslang_create_v2_test(mutual_recursion)
-tesslang_create_v2_test(nested_lambda_context)
-tesslang_create_v2_test(nested_lambda_context_2)
-tesslang_create_v2_test(polymorphic_identity)
-tesslang_create_v2_test(polymorphic_lambda)
-tesslang_create_v2_test(pointer_basic)
-tesslang_create_v2_test(stack_lambda)
-tesslang_create_v2_test(static_value_init)
-tesslang_create_v2_test(struct)
-tesslang_create_v2_test(struct_get)
-tesslang_create_v2_test(struct_set)
-tesslang_create_v2_test(tuple)
-tesslang_create_v2_test(tuple_direct)
-
-tesslang_create_v2_test(v2_nested_basic)
+tesslang_create_test(apply_lambda)
+tesslang_create_test(anon_lambda)
+tesslang_create_test(basic)
+tesslang_create_test(closure_polymorphism)
+# tesslang_create_test(enclosing_context)
+tesslang_create_test(generic_lambda)
+tesslang_create_test(generic_type)
+tesslang_create_test(generic_type_assign)
+tesslang_create_test(if_then_else)
+# tesslang_create_test(if_then_closure)
+tesslang_create_test(factorial)
+tesslang_create_test(function_pointer_argument)
+tesslang_create_test(let_basic)
+tesslang_create_test(let_in_basic)
+tesslang_create_test(let_in_nil)
+tesslang_create_test(mutual_recursion)
+tesslang_create_test(nested_lambda_context)
+tesslang_create_test(nested_lambda_context_2)
+tesslang_create_test(polymorphic_identity)
+tesslang_create_test(polymorphic_lambda)
+tesslang_create_test(pointer_basic)
+tesslang_create_test(stack_lambda)
+tesslang_create_test(static_value_init)
+tesslang_create_test(struct)
+tesslang_create_test(struct_get)
+tesslang_create_test(struct_set)
+tesslang_create_test(tuple)
+tesslang_create_test(tuple_direct)
+tesslang_create_test(v2_nested_basic)
 
 
 # FIXME: v2 disable all tests
