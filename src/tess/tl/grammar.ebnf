@@ -1,9 +1,11 @@
-(* all concatenations with may include arbitrary separating whitespace *)
 program       = { toplevel } ;
 toplevel      = assignment | defun | defstruct ;
 
 (* note: an assignment is not an expression *)
-assignment    = ident "=" expression ;
+assignment    = lvalue "=" expression ;
+lvalue        = lvalue_base | deref ;
+lvalue_base   = ident { "." ident } ;
+deref         = "*" ( lvalue_base | "(" expression  ")" ) ;
 
 ident         = ident_start { alphanumeric } ;
 ident_start   = alphabetic | "_" ;
@@ -11,9 +13,10 @@ alphanumeric  = alphabetic | numeric | "_" ;
 alphabetic    = "a" .. "z" | "A" .. "Z"  ;
 numeric       = "0" .. "9" ;
 
-value         = literal | ident | funcall ;
+value         = literal | postfix_expr ;
+postfix_expr  = ident { postfix_op };
+postfix_op    = "(" [ argument_list ] ")" | "." ident ;
 literal       = integer | float | string ;
-funcall       = ident "(" [ argument_list ] ")" ;
 argument_list = expression { "," expression } ;
 
 integer       = [ "+" | "-" ] numeric { numeric } ;
@@ -23,40 +26,46 @@ string        = '"' { ? any character except quote ? } '"' ;
 defun         = ident "(" [ param_list ] ")" fun_body;
 param_list    = param { "," param } ;
 param         = ident [ ":" type ] ;
-type          = ident { " " ident } ;
-fun_body      = "{" { statement | expression } "}" ;
+fun_body      = "{" { statement | expression } "}" ;  (* value of last expression is return value, unless set by return_stmt *)
 statement     = assignment | for_stmt | return_stmt ;
 
 expression    = base_expr { binary_op base_expr } ;
 base_expr     = [ unary_op ] ( value | "(" expression ")" | if_expr | cond_expr );
-if_expr       = "if" expression "{" body_expr "}" { "else" if_expr } [ else_case ]  ;
-else_case     = "else" "{" body_expr "}" ;
-body_expr     = statement | break_stmt ;
+
+if_expr       = "if" expression body_expr { "else" if_expr } [ else_case ]  ;
+else_case     = "else" body_expr ;
 
 cond_expr     = "cond" "{" { cond_arm } cond_else "}" ;
-cond_arm      = "(" expression ")" "{" { body_expr } "}" ;
-cond_else     = "()" "{" { body_expr } "}" ;
+cond_arm      = "(" expression ")" body_expr ;
+cond_else     = "()" body_expr ;
+
+body_expr     = "{" { statement | expression | break_stmt } "}" ;
 
 return_stmt   = "return" expression ;
 
-(* break: similar to return_stmt but at the block level: sets the value of the block and exits *)
+(* break: similar to return_stmt but at the block level: sets the value of the outer expression and exits current control flow *)
 break_stmt    = "break" expression ;
 
-for_stmt      = "for" "(" [ for_assign ] ";" [ expression ] ";" [ for_update ] ")" "{" { for_body } "}";
+for_stmt      = "for" "(" [ for_assign ] ";" [ expression ] ";" [ for_update ] ")" for_body;
 for_assign    = assignment { "," assignment } ;
-for_body      = body_expr | continue_stmt ;
+for_body      = "{" { statement | expression | break_stmt | continue_stmt } "}" ;
 for_update    = for_upd_item { "," for_upd_item } ;
 for_upd_item  = assignment | expression ;
-continue_stmt = "continue" ;
+continue_stmt = "continue" ; (* skip rest of block and proceed to for_update and loop *)
 
 binary_op     = "+" | "-" | "*" | "/" | rel_op | logical_op ;
 rel_op        = "==" | "!=" | "<=" | "<" | ">=" | ">" ;
 logical_op    = "&&" | "||" ;
-unary_op      = "-" | "!" ;
+unary_op      = "-" | "!" | "&" | "*" ;
 
-defstruct     = "struct" type "{" { field_list }  "}" ;
+defstruct     = "struct" type "{" [ field_list ] "}" ;
 field_list    = field { "," field } ;
 field         = ident ":" type ;
+
+type          = type_base [ "->" type ] | tuple ;            (* right associative arrows *)
+tuple         = "(" type "," type { "," type } ")" ;         (* tuple requires two or more elements *)
+type_base     = ident [ "(" type_args ")" ] | "(" type ")" ;
+type_args     = type { "," type } ;
 
 (*
 
