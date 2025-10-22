@@ -2041,6 +2041,11 @@ error:
 
 static int b_value(parser *self) {
     if (0 == a_try(self, a_number)) return 0;
+    if (0 == a_try(self, a_string)) return 0;
+    // if (0 == a_try(self, b_lambda_function)) return 0;
+    // if (0 == a_try(self, b_funcall)) return 0;
+    // if (0 == a_try(self, b_field)) return 0;
+
     return 1;
 }
 
@@ -2048,7 +2053,7 @@ static int a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
     ast_node *ann   = null;
-    if (0 == a_try(self, a_colon) && 0 == a_try(self, a_type_annotation)) {
+    if (0 == a_try(self, a_type_annotation)) {
         ann = self->result;
     }
 

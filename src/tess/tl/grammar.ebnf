@@ -45,6 +45,7 @@ body_expr     = "{" { statement | expression | break_stmt } "}" ;
 return_stmt   = "return" expression ;
 
 (* break: similar to return_stmt but at the block level: sets the value of the outer expression and exits current control flow *)
+(* first saw this in zig lang *)
 break_stmt    = "break" expression ;
 
 for_stmt      = "for" "(" [ for_assign ] ";" [ expression ] ";" [ for_update ] ")" for_body;

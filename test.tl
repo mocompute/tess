@@ -1,1 +1,1 @@
-main() { 0 }
+main() { 0 1 2 "hello, world" 0}

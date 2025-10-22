@@ -366,6 +366,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '_': continue;
             case ' ':
             case ')':
+            case '}':
             case ',':
             case ':':
             case ';':
@@ -423,6 +424,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '(':
             case ')':
+            case '{':
+            case '}':
             case ' ':
             case '"':
             case ':':
