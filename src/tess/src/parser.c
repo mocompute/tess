@@ -2098,7 +2098,6 @@ static ast_node *parse_base_expression(parser *self) {
         return expr;
     }
 
-    // FIXME: parse value
     if (0 == a_try(self, b_value)) {
         return self->result;
     }

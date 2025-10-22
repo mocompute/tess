@@ -758,6 +758,16 @@ static str generate_type_set(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
+static str generate_body(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+
+    str out = str_empty();
+    forall(i, node->body.expressions) {
+        out = generate_expr(self, null, node->body.expressions.v[i], ctx);
+    }
+    return out;
+}
+
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
@@ -812,8 +822,9 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_user_type_get: return generate_type_get(self, type, node, ctx);
     case ast_user_type_set: return generate_type_set(self, type, node, ctx);
 
+    case ast_body:          return generate_body(self, type, node, ctx);
+
     case ast_binary_op:
-    case ast_body:
     case ast_unary_op:
 
     case ast_arrow:
