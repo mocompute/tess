@@ -83,6 +83,7 @@ static int           is_arithmetic_operator(char const *);
 static int           is_eof(parser *);
 static int           is_relational_operator(char const *);
 static int           is_logical_operator(char const *);
+static int           is_unary_operator(char const *);
 static int           is_reserved(char const *);
 static int           is_start_of_expression(char const *);
 
@@ -297,6 +298,14 @@ static int is_logical_operator(char const *s) {
     return 0;
 }
 
+static int is_unary_operator(char const *s) {
+    static char const *strings[] = {"!", "*", "&", null};
+    char const       **it        = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
+}
+
 static int is_eof(parser *p) {
     return p->error.tag == tl_err_eof || p->tokenizer_error.tag == tl_err_eof;
 }
@@ -485,6 +494,7 @@ static int a_end_of_expression(parser *p) {
         return 0;
 
     case tok_close_round:
+    case tok_close_curly:
         // signal special failure so the token gets put back, but use a magic
         // error code so that consumers of end_of_expression can treat it as a success
         goto next_expression;
@@ -520,6 +530,7 @@ static int a_end_of_expression(parser *p) {
     case tok_star:
     case tok_ellipsis:
     case tok_open_round:
+    case tok_open_curly:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
@@ -545,6 +556,18 @@ static int a_binary_operator(parser *self) {
         if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
             is_relational_operator(self->token.s))
             return 0;
+
+    return 1;
+}
+
+static int a_unary_operator(parser *self) {
+    if (next_token(self)) {
+        if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
+        return 1;
+    }
+
+    if (tok_symbol == self->token.tag)
+        if (is_unary_operator(self->token.s)) return 0;
 
     return 1;
 }
@@ -2016,6 +2039,11 @@ error:
 
 // ---
 
+static int b_value(parser *self) {
+    if (0 == a_try(self, a_number)) return 0;
+    return 1;
+}
+
 static int a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
@@ -2029,11 +2057,11 @@ static int a_param(parser *self) {
     return 0;
 }
 
-static i16 operator_precedence(char const *op, int is_prefix) {
+static int operator_precedence(char const *op, int is_prefix) {
 
     struct item {
         char const *op;
-        i16         p;
+        int         p;
     };
     static struct item const infix[] = {
       {"||", 10}, {"&&", 20}, {"==", 30}, {"!=", 30}, {"<", 40}, {"<=", 40}, {">=", 40},
@@ -2041,9 +2069,7 @@ static i16 operator_precedence(char const *op, int is_prefix) {
     };
 
     static struct item const prefix[] = {
-      {"-", 70},
-      {"!", 70},
-      {null, 0},
+      {"-", 70}, {"!", 70}, {"*", 70}, {"&", 70}, {null, 0},
     };
 
     for (struct item const *search = is_prefix ? prefix : infix; search; ++search) {
@@ -2052,26 +2078,63 @@ static i16 operator_precedence(char const *op, int is_prefix) {
     return INT_MIN;
 }
 
+static ast_node *parse_expression(parser *self, int min_preced);
+
 static ast_node *parse_base_expression(parser *self) {
+
+    if (0 == a_try(self, a_unary_operator)) {
+        ast_node *op            = ast_node_create_sym_c(self->ast_arena, self->token.s);
+        int       prec          = operator_precedence(self->token.s, 1);
+        ast_node *expr          = parse_expression(self, prec);
+        ast_node *unary         = ast_node_create(self->ast_arena, ast_unary_op);
+        unary->unary_op.operand = expr;
+        unary->unary_op.op      = op;
+        return unary;
+    }
+
+    if (0 == a_try(self, a_open_round)) {
+        ast_node *expr = parse_expression(self, INT_MIN);
+        if (a_try(self, a_close_round)) return null;
+        return expr;
+    }
+
+    // FIXME: parse value
+    if (0 == a_try(self, b_value)) {
+        return self->result;
+    }
+
+    // FIXME: if_expr, cond_expr
+
+    return null;
 }
 
-static ast_node *parse_expression(parser *self, i16 min_preced) {
+static ast_node *parse_expression(parser *self, int min_preced) {
 
     ast_node *left = parse_base_expression(self);
+    if (!left) return null;
     while (1) {
         if (0 == a_try(self, a_binary_operator)) {
             ast_node *op   = ast_node_create_sym_c(self->ast_arena, self->token.s);
 
-            i16       prec = operator_precedence(self->token.s, 0);
+            int       prec = operator_precedence(self->token.s, 0);
             if (prec < min_preced) break;
-            ast_node *right = parse_expression(self, prec + 1);
-        }
+            ast_node *right        = parse_expression(self, prec + 1);
+
+            ast_node *binop        = ast_node_create(self->ast_arena, ast_binary_op);
+            binop->binary_op.left  = left;
+            binop->binary_op.right = right;
+            binop->binary_op.op    = op;
+            left                   = binop;
+        } else break;
     }
 
-    return result_ast_node(self, left);
+    return left;
 }
 
 static int b_expression(parser *self) {
+    ast_node *res = parse_expression(self, INT_MIN);
+    if (!res) return 1;
+    return result_ast_node(self, res);
 }
 
 static int toplevel_defun(parser *self) {
@@ -2086,25 +2149,34 @@ static int toplevel_defun(parser *self) {
     while (1) {
         if (0 == a_try(self, a_close_round)) goto decl_done;
         if (a_try(self, a_comma)) return 1;
-        if (0 == a_try(self, a_param)) array_push(params, self->result);
+        if (a_try(self, a_param)) return 1;
+        array_push(params, self->result);
     }
 
 decl_done:
 
     if (a_try(self, a_open_curly)) return 1;
 
-    ast_node_array body = {.alloc = self->ast_arena};
+    ast_node_array exprs = {.alloc = self->ast_arena};
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (0 == a_try(self, b_expression)) array_push(body, self->result);
+        if (a_try(self, b_expression)) return 1;
+        array_push(exprs, self->result);
     }
 
-    array_shrink(body);
-    ast_node *node         = ast_node_create(self->ast_arena, ast_body);
-    node->body.expressions = (ast_node_sized)sized_all(body);
+    array_shrink(exprs);
+    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
+    body->body.expressions = (ast_node_sized)sized_all(exprs);
 
-    result_ast_node(self, node);
+    array_shrink(params);
+    ast_node *let         = ast_node_create(self->ast_arena, ast_let);
+    let->let.parameters   = params.v;
+    let->let.n_parameters = params.size;
+    let->let.name         = name;
+    let->let.body         = body;
+
+    result_ast_node(self, let);
 
     return 0;
 }

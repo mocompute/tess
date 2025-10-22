@@ -812,6 +812,10 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_user_type_get: return generate_type_get(self, type, node, ctx);
     case ast_user_type_set: return generate_type_set(self, type, node, ctx);
 
+    case ast_binary_op:
+    case ast_body:
+    case ast_unary_op:
+
     case ast_arrow:
     case ast_assignment:
     case ast_dereference_assign:

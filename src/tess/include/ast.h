@@ -137,11 +137,16 @@ typedef struct ast_node {
             struct ast_node *no;
         } if_then_else;
 
-        struct ast_infix {
+        struct ast_binary_op {
             struct ast_node *left;
             struct ast_node *right;
             struct ast_node *op;
-        } infix;
+        } binary_op;
+
+        struct ast_unary_op {
+            struct ast_node *operand;
+            struct ast_node *op;
+        } unary_op;
 
         struct ast_let_in {
             struct ast_node *name;

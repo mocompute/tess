@@ -690,6 +690,26 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_body:
+        forall(i, node->body.expressions) {
+            if (traverse_ast(self, ctx, node->body.expressions.v[i], cb)) return 1;
+        }
+        if (cb(self, ctx, node)) return 1;
+        break;
+
+    case ast_binary_op:
+        // don't traverse op, it's just an operator
+        if (traverse_ast(self, ctx, node->binary_op.left, cb)) return 1;
+        if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
+    case ast_unary_op:
+        // don't traverse op, it's just an operator
+        if (traverse_ast(self, ctx, node->unary_op.operand, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -755,6 +775,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         }
     } break;
+
     case ast_dereference: {
         ensure_tv(self, null, &node->type);
         ast_node *target = node->dereference.target;
@@ -796,6 +817,30 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_monotype const *ty = tl_type_registry_bool(self->registry);
         ensure_tv(self, null, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+    } break;
+
+    case ast_body: {
+        if (node->body.expressions.size) {
+            u32       sz   = node->body.expressions.size;
+            ast_node *last = node->body.expressions.v[sz - 1];
+            ensure_tv(self, null, &node->type);
+            ensure_tv(self, null, &last->type);
+            if (constrain(self, ctx, node->type, last->type, node)) return 1;
+        }
+    } break;
+
+    case ast_binary_op: {
+        ast_node *left = node->binary_op.left, *right = node->binary_op.right;
+        ensure_tv(self, null, &left->type);
+        ensure_tv(self, null, &right->type);
+        if (constrain(self, ctx, node->type, left->type, node)) return 1;
+        if (constrain(self, ctx, left->type, right->type, node)) return 1;
+    } break;
+
+    case ast_unary_op: {
+        ast_node *operand = node->unary_op.operand;
+        ensure_tv(self, null, &operand->type);
+        if (constrain(self, ctx, node->type, operand->type, node)) return 1;
     } break;
 
     case ast_let_in: {
@@ -1041,9 +1086,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_user_type_set: {
         ensure_tv(self, null, &node->type);
         if (constrain(self, ctx, node->type, node->user_type_set.value->type, node)) return 1;
-    }
-
-    break;
+    } break;
 
     case ast_user_type_definition: {
     } break;
@@ -1405,6 +1448,20 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_labelled_tuple:
         for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i)
             rename_variables(self, node->labelled_tuple.assignments[i], lex, level + 1);
+        break;
+
+    case ast_binary_op:
+        rename_variables(self, node->binary_op.left, lex, level + 1);
+        rename_variables(self, node->binary_op.right, lex, level + 1);
+        break;
+
+    case ast_unary_op: rename_variables(self, node->unary_op.operand, lex, level + 1); break;
+
+    case ast_body:
+        //
+        forall(i, node->body.expressions) {
+            rename_variables(self, node->body.expressions.v[i], lex, level + 1);
+        }
         break;
 
     case ast_string:

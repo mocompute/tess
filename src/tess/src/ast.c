@@ -216,6 +216,24 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         }
 
     } break;
+
+    case ast_binary_op: {
+        clone->binary_op.left  = ast_node_clone(alloc, orig->binary_op.left);
+        clone->binary_op.op    = ast_node_clone(alloc, orig->binary_op.op);
+        clone->binary_op.right = ast_node_clone(alloc, orig->binary_op.right);
+    } break;
+
+    case ast_body: {
+        clone->body.expressions.v = alloc_malloc(alloc, orig->body.expressions.size * sizeof(ast_node *));
+        clone->body.expressions.size = orig->body.expressions.size;
+        memcpy(clone->body.expressions.v, orig->body.expressions.v,
+               clone->body.expressions.size * sizeof(ast_node *));
+    } break;
+
+    case ast_unary_op: {
+        clone->unary_op.operand = ast_node_clone(alloc, orig->unary_op.operand);
+        clone->unary_op.op      = ast_node_clone(alloc, orig->unary_op.op);
+    } break;
     }
 
     return clone;
@@ -418,6 +436,16 @@ sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
         return penta(alloc, sym("def-user-type"), recur(node->user_type_def.name), names_list,
                      annotations_list, type);
     }
+
+    case ast_binary_op:
+        return penta(alloc, sym("binary_op"), recur(node->binary_op.op), recur(node->binary_op.left),
+                     recur(node->binary_op.right), type);
+
+    case ast_unary_op:
+        return quad(alloc, sym("unary_op"), recur(node->unary_op.op), recur(node->unary_op.operand), type);
+
+    case ast_body:
+        return triple(alloc, sym("body"), sexp_init_i64(alloc, node->body.expressions.size), type);
     }
 
 #undef pair
@@ -567,6 +595,24 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         }
 
     } break;
+
+    case ast_body:
+        //
+        forall(i, node->body.expressions) {
+            fun(ctx, node->body.expressions.v[i]);
+        }
+        break;
+
+    case ast_binary_op:
+        fun(ctx, node->binary_op.op);
+        fun(ctx, node->binary_op.left);
+        fun(ctx, node->binary_op.right);
+        break;
+
+    case ast_unary_op:
+        fun(ctx, node->unary_op.op);
+        fun(ctx, node->unary_op.operand);
+        break;
     }
 }
 
@@ -696,6 +742,24 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         }
 
     } break;
+
+    case ast_body:
+        //
+        forall(i, node->body.expressions) {
+            fun(ctx, node->body.expressions.v[i]);
+        }
+        break;
+
+    case ast_binary_op:
+        fun(ctx, node->binary_op.op);
+        fun(ctx, node->binary_op.left);
+        fun(ctx, node->binary_op.right);
+        break;
+
+    case ast_unary_op:
+        fun(ctx, node->unary_op.op);
+        fun(ctx, node->unary_op.operand);
+        break;
     }
 }
 
@@ -1014,6 +1078,10 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
                          v2_ast_node_to_string(alloc, node->user_type_get.field_name));
 
     } break;
+
+    case ast_binary_op:
+    case ast_body:
+    case ast_unary_op:
 
     case ast_address_of:
     case ast_pointer_to:
@@ -1339,9 +1407,27 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_user_type:                  combine_node(self->user_type.name); break;
 
+    case ast_body:
+        //
+        forall(i, self->body.expressions) {
+            combine_node(self->body.expressions.v[i]);
+        }
+        break;
+
+    case ast_binary_op:
+        combine_node(self->binary_op.op);
+        combine_node(self->binary_op.left);
+        combine_node(self->binary_op.right);
+        break;
+
+    case ast_unary_op:
+        combine_node(self->unary_op.op);
+        combine_node(self->unary_op.operand);
+        break;
+
     case ast_labelled_tuple:
     case ast_lambda_declaration:
-    case ast_tuple:                      break;
+    case ast_tuple:              break;
     }
 
     return hash;
