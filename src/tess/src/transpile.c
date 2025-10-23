@@ -485,9 +485,13 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     array_reserve(args_res, args.size);
 
     tl_monotype_sized arr;
-    if (tl_list == arrow->tag) arr = arrow->list.xs;
-    else if (tl_cons_inst == arrow->tag) arr = arrow->cons_inst->args;
-    else fatal("runtime error");
+    if (tl_list == arrow->tag) {
+        assert(2 == arrow->list.xs.size);
+        assert(tl_tuple == arrow->list.xs.v[0]->tag);
+        arr = arrow->list.xs.v[0]->list.xs;
+    } else if (tl_cons_inst == arrow->tag) {
+        arr = arrow->cons_inst->args;
+    } else fatal("runtime error");
 
     assert(arr.size >= args.size);
     forall(i, args) {

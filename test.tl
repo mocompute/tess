@@ -1,6 +1,5 @@
-_tl_sizeof_ (x : a) -> Int
+add(l, r) { l + r }
 
 main() {
-  x : Float = 1.0
-  _tl_sizeof_(x) - _tl_sizeof_(x)
+  add(-1, 1)
 }
