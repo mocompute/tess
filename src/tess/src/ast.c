@@ -1489,6 +1489,9 @@ int ast_node_is_nil(ast_node const *self) {
 int ast_node_is_symbol(ast_node const *self) {
     return ast_symbol == self->tag;
 }
+int ast_node_is_tuple(ast_node const *self) {
+    return ast_tuple == self->tag;
+}
 int ast_node_is_let(ast_node const *self) {
     return ast_let == self->tag;
 }

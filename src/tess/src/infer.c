@@ -121,8 +121,10 @@ static tl_type_variable get_tv_or_fresh(str name, hashmap **map, tl_type_subs *s
 
 tl_monotype const *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
                                           hashmap **map) {
-
     // map : map_new(self->transient, str, tl_type_variable, 8);
+
+    // TODO: it's weird that this is here, but it depends on type_registry, which does not exist until the
+    // inference stage.
 
     if (ast_node_is_nil(node)) {
         return tl_type_registry_nil(self);
@@ -165,17 +167,19 @@ tl_monotype const *tl_type_registry_parse(tl_type_registry *self, ast_node const
     }
 
     if (ast_node_is_arrow(node)) {
-        tl_monotype const *left  = tl_type_registry_parse(self, node->arrow.left, subs, map);
-        tl_monotype const *right = tl_type_registry_parse(self, node->arrow.right, subs, map);
-        tl_monotype_array  arr   = {.alloc = self->alloc};
-        // flatten lists and concatenate
-        // TODO: library function
-        if (tl_monotype_is_list(left)) forall(i, left->list.xs) array_push(arr, left->list.xs.v[i]);
-        else array_push(arr, left);
-        if (tl_monotype_is_list(right)) forall(i, right->list.xs) array_push(arr, right->list.xs.v[i]);
-        else array_push(arr, right);
+        // arrow types are always ([{ a }]) -> b
+        ast_node const *tup = node->arrow.left;
+        assert(ast_node_is_tuple(tup));
+        ast_node_sized    tuple = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
+        tl_monotype_array arr   = {.alloc = self->alloc};
+        forall(i, tuple) {
+            tl_monotype const *t = tl_type_registry_parse(self, tuple.v[i], subs, map);
+            array_push(arr, t);
+        }
         array_shrink(arr);
-        return tl_monotype_create_list(self->alloc, (tl_monotype_sized)sized_all(arr));
+        tl_monotype const *left  = tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)sized_all(arr));
+        tl_monotype const *right = tl_type_registry_parse(self, node->arrow.right, subs, map);
+        return tl_monotype_create_arrow(self->alloc, left, right);
     }
 
     fatal("logic error");

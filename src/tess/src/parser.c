@@ -2126,7 +2126,7 @@ static int       a_param(parser *self) {
 
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
-    return 0;
+    return result_ast_node(self, ident);
 }
 
 static int b_funcall(parser *self) {
@@ -2485,15 +2485,63 @@ static int toplevel_assign(parser *self) {
     return result_ast_node(self, n);
 }
 
+static int toplevel_forward(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node      *name   = self->result;
+    ast_node_array params = {.alloc = self->ast_arena};
+
+    if (a_try(self, a_open_round)) return 1;
+    if (0 == a_try(self, a_close_round)) goto decl_done;
+    if (0 == a_try(self, a_param)) array_push(params, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_round)) goto decl_done;
+        if (a_try(self, a_comma)) return 1;
+        if (a_try(self, a_param)) return 1;
+        array_push(params, self->result);
+    }
+
+decl_done:
+
+    if (a_try(self, a_arrow)) return 1;
+
+    if (a_try(self, a_type_identifier)) return 1;
+    ast_node *ann = self->result;
+
+    // convert param type annotations into an ast tuple so we can make an ast arrow
+    forall(i, params) {
+        assert(ast_node_is_symbol(params.v[i]));
+        assert(params.v[i]->symbol.annotation);
+
+        // replace param with its annotation
+        params.v[i] = params.v[i]->symbol.annotation;
+    }
+
+    // make tuple
+    array_shrink(params);
+    ast_node *tup         = ast_node_create(self->ast_arena, ast_tuple);
+    tup->tuple.elements   = params.v;
+    tup->tuple.n_elements = params.size;
+
+    // make arrow
+    ast_node *arrow    = ast_node_create(self->ast_arena, ast_arrow);
+    arrow->arrow.left  = tup;
+    arrow->arrow.right = ann;
+
+    // attach to name
+    name->symbol.annotation = arrow;
+
+    return result_ast_node(self, name);
+}
+
 static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
     if (0 == a_try(self, struct_declaration)) return 0;
-
     if (0 == a_try(self, toplevel_defun)) return 0;
-
     if (0 == a_try(self, toplevel_assign)) return 0;
+    if (0 == a_try(self, toplevel_forward)) return 0;
 
     self->error.tag = tl_err_expected_toplevel;
     return 1;
