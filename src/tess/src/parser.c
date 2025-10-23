@@ -2116,11 +2116,30 @@ static ast_node *parse_cond_expr(parser *);
 static ast_node *parse_lvalue(parser *);
 static int       toplevel_defun(parser *);
 
-static int       a_param(parser *self) {
+static int       b_type_identifier(parser *self) {
+
+    if (0 == a_try(self, b_funcall)) return 0;
+    if (0 == a_try(self, a_identifier)) return 0;
+
+    return 1;
+}
+
+static int b_type_annotation(parser *self) {
+    if (0 == a_try(self, a_colon)) {
+        log(self, "begin type annotation");
+        int res = a_try(self, b_type_identifier);
+        return res;
+    }
+
+    self->error.tag = tl_err_expected_colon;
+    return 1;
+}
+
+static int a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
     ast_node *ann   = null;
-    if (0 == a_try(self, a_type_annotation)) {
+    if (0 == a_try(self, b_type_annotation)) {
         ann = self->result;
     }
 
@@ -2389,7 +2408,7 @@ static ast_node *parse_lvalue(parser *self) {
     if (a_try(self, a_identifier)) return null;
     ast_node *ident = self->result;
     ast_node *ann   = null;
-    if (0 == a_try(self, a_type_annotation)) {
+    if (0 == a_try(self, b_type_annotation)) {
         ann = self->result;
     }
 
@@ -2513,7 +2532,7 @@ decl_done:
 
     if (a_try(self, a_arrow)) return 1;
 
-    if (a_try(self, a_type_identifier)) return 1;
+    if (a_try(self, b_type_identifier)) return 1;
     ast_node *ann = self->result;
 
     // convert param type annotations into an ast tuple so we can make an ast arrow
