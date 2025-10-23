@@ -1,7 +1,14 @@
+// main() {
+//   cond {
+//     false { 9 }
+//     false { 8 }
+//     ()    { 0 }
+//   }
+// }
+
+
 main() {
-  cond {
-    false { 9 }
-    false { 8 }
-    ()    { 0 }
-  }
+  a = 0
+  l = () { a }
+  l()
 }
