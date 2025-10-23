@@ -126,13 +126,14 @@ function(tesslang_create_test_no_preamble NAME)
 endfunction()
 
 tesslang_create_test_no_preamble(v3_binop)
-tesslang_create_test_no_preamble(v3_let_in_basic)
-tesslang_create_test_no_preamble(v3_if_basic)
 tesslang_create_test_no_preamble(v3_cond_basic)
+tesslang_create_test_no_preamble(v3_if_basic)
+tesslang_create_test_no_preamble(v3_global_variables)
 tesslang_create_test_no_preamble(v3_lambda_basic)
 tesslang_create_test_no_preamble(v3_lambda_apply)
+tesslang_create_test_no_preamble(v3_let_in_basic)
 tesslang_create_test_no_preamble(v3_relational_basic)
-tesslang_create_test_no_preamble(v3_global_variables)
+tesslang_create_test_no_preamble(v3_sizeof)
 
 # FIXME: v2-parser: disable all tests
 
