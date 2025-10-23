@@ -570,12 +570,11 @@ static int a_binary_operator(parser *self, int min_prec) {
     }
 
     char const *op = null;
-
     if (tok_symbol == self->token.tag) {
         if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
             is_relational_operator(self->token.s)) {
             op = self->token.s;
-        }
+        } else return 1;
     } else if (tok_star == self->token.tag || tok_dot == self->token.tag) {
         if (tok_star == self->token.tag) op = "*";
         else op = ".";
@@ -2253,6 +2252,8 @@ static ast_node *parse_lvalue(parser *self) {
     return null;
 }
 
+static int b_body_element(parser *self);
+
 static int b_assignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
@@ -2262,8 +2263,8 @@ static int b_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *body = parse_expression(self, INT_MIN);
-    if (!body) return 1;
+    if (b_body_element(self)) return 1;
+    ast_node *body  = self->result;
 
     ast_node *a     = ast_node_create(self->ast_arena, ast_let_in);
     a->let_in.name  = lval;
@@ -2277,6 +2278,12 @@ static int b_statement(parser *self) {
 
     // FIXME: for_stmt, return_stmt;
     return 1;
+}
+
+static int b_body_element(parser *self) {
+    // Note: statement before expression, because assignment and ident are ambiguous
+    if (0 == a_try(self, b_statement) || 0 == a_try(self, b_expression)) return 0;
+    else return 1;
 }
 
 static int toplevel_defun(parser *self) {
@@ -2304,10 +2311,8 @@ decl_done:
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
 
-        // Note: statement before expression, because assignment and ident are ambiguous
-        if (0 == a_try(self, b_statement)) array_push(exprs, self->result);
-        else if (0 == a_try(self, b_expression)) array_push(exprs, self->result);
-        else return 1;
+        if (b_body_element(self)) return 1;
+        array_push(exprs, self->result);
     }
 
     array_shrink(exprs);
