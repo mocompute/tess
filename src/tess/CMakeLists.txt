@@ -130,6 +130,7 @@ tesslang_create_test_no_preamble(v3_let_in_basic)
 tesslang_create_test_no_preamble(v3_if_basic)
 tesslang_create_test_no_preamble(v3_cond_basic)
 tesslang_create_test_no_preamble(v3_lambda_basic)
+tesslang_create_test_no_preamble(v3_lambda_apply)
 
 # FIXME: v2-parser: disable all tests
 
