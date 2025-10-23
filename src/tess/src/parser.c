@@ -50,27 +50,7 @@ typedef int (*parse_fun_int)(parser *, int);
 
 // -- overview --
 
-static int           begin_end_expression(parser *);
-static int           expression(parser *);
-static int           expression_let(parser *);
-static int           forward_declaration(parser *);
-static int           function_application(parser *);
-static int           function_argument(parser *);
-static int           function_declaration(parser *);
-static int           function_definition(parser *);
-static int           grouped_expression(parser *);
-static int           if_then_else(parser *);
-static int           lambda_declaration(parser *);
-static int           lambda_function(parser *);
-static int           lambda_function_application(parser *);
-static int           match_declaration(parser *);
-static int           simple_declaration(parser *);
-static int           struct_declaration(parser *);
 static int           toplevel(parser *);
-static int           toplevel_let(parser *);
-static int           tuple_expression(parser *);
-
-static int           continue_let_in(parser *, ast_node *);
 
 static int           result_ast(parser *, ast_tag);
 static int           result_ast_bool(parser *, int);
@@ -83,56 +63,33 @@ static int           result_ast_u64(parser *, u64);
 static int           is_eof(parser *);
 static int           is_unary_operator(char const *);
 static int           is_reserved(char const *);
-static int           is_start_of_expression(char const *);
 
 nodiscard static int a_try(parser *, parse_fun);
 nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
-nodiscard static int a_try_special(parser *, parse_fun);
-nodiscard static int a_try_special_ext(parser *, parse_fun);
+// nodiscard static int a_try_special(parser *, parse_fun);
+// nodiscard static int a_try_special_ext(parser *, parse_fun);
 
-static int           eat_comments(parser *);
-static int           next_token(parser *);
+static int  eat_comments(parser *);
+static int  next_token(parser *);
 
-static int           a_address_of(parser *);
-static int           a_ampersand(parser *);
-static int           a_arrow(parser *);
-static int           a_assignment(parser *);
-static int           a_bool(parser *);
-static int           a_close_round(parser *);
-static int           a_colon(parser *);
-static int           a_colon_equal(parser *);
-static int           a_comma(parser *);
-static int           a_dereference(parser *);
-static int           a_dot(parser *);
-static int           a_ellipsis(parser *);
-static int           a_end_of_block(parser *);
-static int           a_end_of_expression(parser *);
-static int           a_equal_sign(parser *);
-static int           a_field_access(parser *);
-static int           a_field_setter(parser *);
-static int           a_field_pointer_access(parser *);
-static int           a_field_pointer_setter(parser *);
-static int           a_identifier(parser *);
-static int           a_identifier_or_nil(parser *);
-static int           a_identifier_typed(parser *);
-static int           a_labelled_tuple(parser *);
-static int           a_value(parser *);
-static int           a_nil(parser *);
-static int           a_number(parser *);
-static int           a_open_round(parser *);
-static int           a_star(parser *);
-static int           a_string(parser *);
-static int           a_type_annotation(parser *);
-static int           a_type_identifier(parser *);
-static int           the_symbol(parser *, char const *const);
+static int  a_arrow(parser *);
+static int  a_bool(parser *);
+static int  a_close_round(parser *);
+static int  a_colon(parser *);
+static int  a_comma(parser *);
+static int  a_equal_sign(parser *);
+static int  a_identifier(parser *);
+static int  a_nil(parser *);
+static int  a_number(parser *);
+static int  a_open_round(parser *);
+static int  a_string(parser *);
+static int  the_symbol(parser *, char const *const);
 
-static char         *make_nil_name(parser *);
-static int           string_to_number(parser *, char const *const);
+static int  string_to_number(parser *, char const *const);
 
-static int           has_error(parser *);
-static void          tokens_push_back(struct parser *, struct token *);
-static void          tokens_shrink(struct parser *, u32);
-static int           too_many_arguments(parser *);
+static void tokens_push_back(struct parser *, struct token *);
+static void tokens_shrink(struct parser *, u32);
+static int  too_many_arguments(parser *);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -244,19 +201,6 @@ static int result_ast_node(parser *p, ast_node *node) {
 static int is_reserved(char const *s) {
     static char const *strings[] = {
       "beg", "begin", "else", "end", "false", "fun", "if", "in", "let", "then", "struct", "true", null,
-    };
-    char const **it = strings;
-    while (*it != null)
-        if (0 == strcmp(*it++, s)) return 1;
-
-    return 0;
-}
-
-static int is_start_of_expression(char const *s) {
-    // these keywords always begina new expression
-
-    static char const *strings[] = {
-      "beg", "begin", "else", "fun", "if", "in", "let", "then", "struct", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -414,34 +358,6 @@ nodiscard static int a_try_int(parser *p, parse_fun_int fun, int arg) {
     return 0;
 }
 
-nodiscard static int a_try_special(parser *p, parse_fun fun) {
-    // if fun returns 2, tokens are restored as in the failure case,
-    // but this function returns success.
-    int const res = a_try_special_ext(p, fun);
-    return (res == 0 || res == 2) ? 0 : 1;
-}
-
-nodiscard static int a_try_special_ext(parser *p, parse_fun fun) {
-    // if fun returns 2, tokens are restored as in the failure case,
-    // but this function returns success.
-    u32 const save_toks = p->tokens.size;
-    int const res       = fun(p);
-    if (res) {
-        if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            alloc_free(p->transient, str);
-
-            tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
-            tokens_shrink(p, save_toks);
-        }
-        return res;
-    }
-
-    // do not reset tokens on success, because calls to a_try may be
-    // nested.
-    return 0;
-}
-
 static int a_comma(parser *p) {
     if (next_token(p)) return 1;
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
@@ -449,20 +365,20 @@ static int a_comma(parser *p) {
     return 1;
 }
 
-static int a_dot(parser *p) {
-    if (next_token(p)) return 1;
-    if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
-    p->error.tag = tl_err_expected_dot;
-    return 1;
-}
+// static int a_dot(parser *p) {
+//     if (next_token(p)) return 1;
+//     if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
+//     p->error.tag = tl_err_expected_dot;
+//     return 1;
+// }
 
-static int a_ellipsis(parser *p) {
-    if (next_token(p)) return 1;
-    if (tok_ellipsis == p->token.tag)
-        return result_ast_node(p, ast_node_create(p->ast_arena, ast_ellipsis));
-    p->error.tag = tl_err_expected_ellipsis;
-    return 1;
-}
+// static int a_ellipsis(parser *p) {
+//     if (next_token(p)) return 1;
+//     if (tok_ellipsis == p->token.tag)
+//         return result_ast_node(p, ast_node_create(p->ast_arena, ast_ellipsis));
+//     p->error.tag = tl_err_expected_ellipsis;
+//     return 1;
+// }
 
 static int a_open_round(parser *p) {
     if (next_token(p)) return 1;
@@ -490,78 +406,6 @@ static int a_close_curly(parser *p) {
     if (tok_close_curly == p->token.tag) return result_ast_str(p, ast_symbol, "}");
     p->error.tag = tl_err_expected_close_curly;
     return 1;
-}
-
-static int a_end_of_expression(parser *p) {
-
-    if (next_token(p)) {
-        if (is_eof(p)) return result_ast_str(p, ast_symbol, ";");
-        return 1;
-    }
-
-    switch (p->token.tag) {
-    case tok_semicolon:
-        // ; stops function application, but needs to be put back if
-        // ; we're in a chained expression. Otherwise we eat the token
-        if (p->in_function_application) {
-            p->in_function_application = 0;
-            return 2;
-        }
-        return 0;
-
-    case tok_close_round:
-    case tok_close_curly:
-        // signal special failure so the token gets put back, but use a magic
-        // error code so that consumers of end_of_expression can treat it as a success
-        goto next_expression;
-
-    case tok_symbol:
-        if (0 == strcmp("end", p->token.s)) goto next_expression;
-        if (is_start_of_expression(p->token.s)) goto next_expression;
-        if (is_arithmetic_operator(p->token.s)) goto next_expression;
-        if (is_relational_operator(p->token.s)) goto next_expression;
-        if (is_logical_operator(p->token.s)) goto next_expression;
-        break;
-
-    case tok_comma:
-        // accept , to separate expressions (fields) inside struct definitions
-        if (p->in_function_application) {
-            p->in_function_application = 0;
-            return 2;
-        }
-        return 0;
-
-    case tok_arrow:
-        // accept -> to separate terms in type annotations, eg let foo : Ptr a -> Int
-        if (p->in_function_application) {
-            p->in_function_application = 0;
-            return 2;
-        }
-        return 0;
-
-    case tok_dot:
-    case tok_colon:
-    case tok_colon_equal:
-    case tok_ampersand:
-    case tok_logical_and:
-    case tok_star:
-    case tok_ellipsis:
-    case tok_open_round:
-    case tok_open_curly:
-    case tok_equal_sign:
-    case tok_equal_equal:
-    case tok_invalid:
-    case tok_number:
-    case tok_string:
-    case tok_comment:     break;
-    }
-
-    p->error.tag = tl_err_unfinished_expression;
-    return 1;
-
-next_expression:
-    log(p, "end_of_expression found start of next expression");
-    return 2;
 }
 
 static int operator_precedence(char const *op, int is_prefix);
@@ -632,94 +476,6 @@ static int a_unary_operator(parser *self) {
     return 1;
 }
 
-static int a_address_of(parser *self) {
-
-    if (a_try(self, a_ampersand)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin address_of");
-
-    if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_addressable;
-        return 1;
-    }
-
-    ast_node *target        = self->result;
-
-    ast_node *node          = ast_node_create(self->ast_arena, ast_address_of);
-    node->address_of.target = target;
-    return result_ast_node(self, node);
-}
-
-static int a_dereference(parser *self) {
-
-    // FIXME for now only address of an identifier
-
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    ast_node *target = self->result;
-
-    if (a_try(self, a_dot)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    if (a_try(self, a_star)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin dereference");
-
-    ast_node *node           = ast_node_create(self->ast_arena, ast_dereference);
-    node->dereference.target = target;
-    return result_ast_node(self, node);
-}
-
-static int a_dereference_assign(parser *self) {
-    // FIXME for now only address of an identifier
-
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    ast_node *target = self->result;
-
-    if (a_try(self, a_dot)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    if (a_try(self, a_star)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    if (a_try(self, a_colon_equal)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin dereference assign");
-
-    if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_dereference_assign_value;
-        return 1;
-    }
-    ast_node *value                 = self->result;
-
-    ast_node *node                  = ast_node_create(self->ast_arena, ast_dereference_assign);
-    node->dereference_assign.target = target;
-    node->dereference_assign.value  = value;
-    return result_ast_node(self, node);
-}
-
 static int a_identifier(parser *p) {
     if (next_token(p)) return 1;
 
@@ -750,123 +506,6 @@ error:
     return 1;
 }
 
-static int a_identifier_or_nil(parser *p) {
-    if (0 == a_try(p, a_identifier)) return 0;
-    if (0 == a_try(p, a_nil)) return 0;
-    p->error.tag = tl_err_expected_identifier_or_nil;
-    return 1;
-}
-
-static int a_type_identifier(parser *self) {
-    // TODO rename this because it's no longer just an identifier
-
-    if (0 == a_try(self, function_application) || 0 == a_try(self, a_identifier_or_nil)) {
-        // FIXME for now we treat ellipsis as a textual identifier
-        ast_node *left  = self->result;
-        ast_node *right = null;
-
-        // followed by arrow?
-        if (0 == a_try(self, a_arrow)) {
-            log(self, "begin arrow type");
-            if (a_try(self, a_type_identifier)) {
-                self->error.tag = tl_err_expected_type;
-                return 1;
-            }
-            right             = self->result;
-
-            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
-            node->arrow.left  = left;
-            node->arrow.right = right;
-
-            return result_ast_node(self, node);
-        }
-
-        self->result = left;
-        return 0;
-    }
-
-    if (0 == a_try(self, tuple_expression)) {
-        ast_node *left  = self->result;
-        ast_node *right = null;
-
-        // followed by arrow?
-        if (0 == a_try(self, a_arrow)) {
-            if (a_try(self, a_type_identifier)) {
-                self->error.tag = tl_err_expected_type;
-                return 1;
-            }
-            right = self->result;
-        }
-
-        if (right) {
-            ast_node *node    = ast_node_create(self->ast_arena, ast_arrow);
-            node->arrow.left  = left;
-            node->arrow.right = right;
-
-            return result_ast_node(self, node);
-        }
-
-        self->result = left;
-        return 0;
-    }
-
-    return 1;
-}
-
-static int a_type_annotation(parser *self) {
-    if (0 == a_try(self, a_colon)) {
-        log(self, "begin type annotation");
-        int res = a_try(self, a_type_identifier);
-        if (0 == res) {
-            log(self, "got type annotation: %s", v1_ast_node_to_string(self->transient, self->result));
-        }
-        return res;
-    }
-
-    self->error.tag = tl_err_expected_colon;
-    return 1;
-}
-
-static int a_identifier_typed(parser *self) {
-    // either an identifier or a group: (a : int)
-
-    if (0 == a_try(self, a_nil)) return 0; // nil is never annotated
-
-    if (0 == a_try(self, a_identifier)) return 0;
-
-    if (a_try(self, a_open_round)) return 1;
-
-    if (a_try(self, a_identifier)) return 1;
-    ast_node *name       = self->result;
-
-    ast_node *annotation = null;
-    if (0 == a_try(self, a_type_annotation)) annotation = self->result;
-
-    if (a_try(self, a_close_round)) return 1;
-
-    ast_node *node               = ast_node_create_sym_c(self->ast_arena, "");
-    node->symbol.name            = name->symbol.name;
-    node->symbol.original        = str_empty();
-    node->symbol.annotation      = annotation;
-    node->symbol.annotation_type = null;
-    return result_ast_node(self, node);
-}
-
-static int forward_declaration(parser *self) {
-    // sym : type
-
-    if (a_try(self, a_identifier)) return 1;
-    ast_node *sym = self->result;
-
-    if (a_try(self, a_type_annotation)) return 1;
-    ast_node *ann               = self->result;
-
-    sym->symbol.original        = str_empty();
-    sym->symbol.annotation      = ann;
-    sym->symbol.annotation_type = null;
-    return result_ast_node(self, sym);
-}
-
 static int the_symbol(parser *p, char const *const want) {
     if (next_token(p)) return 1;
 
@@ -878,14 +517,14 @@ static int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-static int a_star(parser *p) {
-    if (next_token(p)) return 1;
+// static int a_star(parser *p) {
+//     if (next_token(p)) return 1;
 
-    if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
+//     if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
 
-    p->error.tag = tl_err_expected_star;
-    return 1;
-}
+//     p->error.tag = tl_err_expected_star;
+//     return 1;
+// }
 
 static int a_string(parser *p) {
     if (next_token(p)) return 1;
@@ -936,86 +575,6 @@ static int a_bool(parser *p) {
     return 1;
 }
 
-static int a_labelled_tuple(parser *self) {
-    // (label1 = expr1, ...)
-    if (a_try(self, a_open_round)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    ast_node_array assignments = {.alloc = self->ast_arena};
-
-    if (a_try(self, a_assignment)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin labelled tuple");
-
-    array_push(assignments, self->result);
-
-    while (1) {
-
-        if (0 == a_try(self, a_close_round)) {
-
-            if (assignments.size > 0xff) {
-                too_many_arguments(self);
-                goto error;
-            }
-
-            ast_node *node = ast_node_create(self->ast_arena, ast_labelled_tuple);
-            array_shrink(assignments);
-
-            node->array.n     = (u8)assignments.size;
-            node->array.nodes = assignments.v;
-
-            return result_ast_node(self, node);
-        }
-
-        if (a_try(self, a_comma)) {
-            self->error.tag = tl_err_expected_comma;
-            goto error;
-        }
-
-        // next assignment expression
-        if (0 == a_try(self, a_assignment)) array_push(assignments, self->result);
-
-        // loop to check for close round
-    }
-
-error:
-    array_free(assignments);
-    return 1;
-}
-
-static int a_value(parser *self) {
-    if (0 == a_try(self, a_nil)) return 0;
-    if (is_eof(self)) return 1;
-    if (0 == a_try(self, lambda_function_application)) return 0;
-    if (!self->in_function_application && 0 == a_try(self, function_application)) return 0;
-    if (0 == a_try(self, lambda_function)) return 0;
-
-    if (0 == a_try(self, a_labelled_tuple)) return 0;
-    if (0 == a_try(self, tuple_expression)) return 0;
-
-    if (0 == a_try(self, a_field_pointer_setter)) return 0; // before field_access
-    if (0 == a_try(self, a_field_setter)) return 0;         // before field_access
-    if (0 == a_try(self, a_field_pointer_access)) return 0;
-    if (0 == a_try(self, a_field_access)) return 0;
-    if (0 == a_try(self, a_dereference_assign)) return 0; // before dereference
-    if (0 == a_try(self, a_dereference)) return 0;        // before identifier
-    if (0 == a_try(self, a_identifier)) return 0;
-    if (0 == a_try(self, a_address_of)) return 0;
-    if (0 == a_try(self, a_number)) return 0;
-    if (0 == a_try(self, a_string)) return 0;
-    if (0 == a_try(self, a_bool)) return 0;
-    if (0 == a_try(self, a_nil)) return 0;
-    if (0 == a_try(self, a_ellipsis)) return 0;
-
-    self->error.tag = tl_err_expected_value;
-    return 1;
-}
-
 static int a_equal_sign(parser *p) {
     if (next_token(p)) return 1;
 
@@ -1034,23 +593,23 @@ static int a_colon(parser *p) {
     return 1;
 }
 
-static int a_colon_equal(parser *p) {
-    if (next_token(p)) return 1;
+// static int a_colon_equal(parser *p) {
+//     if (next_token(p)) return 1;
 
-    if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
+//     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
-    p->error.tag = tl_err_expected_colon_equal;
-    return 1;
-}
+//     p->error.tag = tl_err_expected_colon_equal;
+//     return 1;
+// }
 
-static int a_ampersand(parser *p) {
-    if (next_token(p)) return 1;
+// static int a_ampersand(parser *p) {
+//     if (next_token(p)) return 1;
 
-    if (tok_ampersand == p->token.tag) return result_ast_str(p, ast_symbol, "&");
+//     if (tok_ampersand == p->token.tag) return result_ast_str(p, ast_symbol, "&");
 
-    p->error.tag = tl_err_expected_ampersand;
-    return 1;
-}
+//     p->error.tag = tl_err_expected_ampersand;
+//     return 1;
+// }
 
 static int a_arrow(parser *p) {
     if (next_token(p)) return 1;
@@ -1061,283 +620,11 @@ static int a_arrow(parser *p) {
     return 1;
 }
 
-static int a_assignment(parser *self) {
-    // ident1 = expr1
-
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    ast_node *name = self->result;
-
-    if (a_try(self, a_equal_sign)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    if (a_try(self, expression)) {
-        self->error.tag = tl_err_expected_assignment_value;
-        return 1;
-    }
-    ast_node *value       = self->result;
-
-    ast_node *node        = ast_node_create(self->ast_arena, ast_assignment);
-    node->assignment.name = name;
-    assert(ast_symbol == node->assignment.name->tag);
-    node->assignment.value = value;
-    return result_ast_node(self, node);
-}
-
 static int a_nil(parser *self) {
 
     if ((0 == a_open_round(self)) && (0 == a_close_round(self))) return result_ast(self, ast_nil);
 
     self->error.tag = tl_err_expected_nil;
-    return 1;
-}
-
-static int a_end_of_block(parser *self) {
-
-    if (next_token(self)) {
-        if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
-        log(self, "end_of_block: other error");
-        return 1;
-    }
-    if (tok_symbol == self->token.tag) {
-        if (0 == strcmp("end", self->token.s)) return result_ast_str(self, ast_symbol, "end");
-        if (is_start_of_expression(self->token.s)) return 2;
-    }
-
-    self->error.tag = tl_err_expected_end_of_block;
-    return 1;
-}
-
-static int a_end_of_block_or_close_round(parser *self) {
-
-    if (next_token(self)) {
-        if (is_eof(self)) return result_ast_str(self, ast_symbol, "end");
-        log(self, "end_of_block: other error");
-        return 1;
-    }
-
-    if (tok_close_round == self->token.tag) return 2;
-
-    if (tok_symbol == self->token.tag) {
-        if (0 == strcmp("end", self->token.s)) return result_ast_str(self, ast_symbol, "end");
-        if (is_start_of_expression(self->token.s)) return 2;
-    }
-
-    self->error.tag = tl_err_expected_end_of_block;
-    return 1;
-}
-
-static int a_field_access(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
-    ast_node *variable = self->result;
-
-    if (a_try(self, a_dot)) return 1;
-
-    log(self, "begin field access");
-
-    if (a_try(self, a_identifier)) return 1;
-    ast_node                 *field = self->result;
-
-    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_get);
-    struct ast_user_type_get *v     = ast_node_utg(node);
-    v->struct_name                  = variable;
-    v->field_name                   = field;
-    return result_ast_node(self, node);
-}
-
-static int a_field_pointer_access(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
-    ast_node *variable = self->result;
-
-    if (a_try(self, a_dot)) return 1;
-    if (a_try(self, a_star)) return 1;
-    if (a_try(self, a_dot)) return 1;
-
-    log(self, "begin field pointer access");
-
-    if (a_try(self, a_identifier)) return 1;
-    ast_node                 *field = self->result;
-
-    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_get);
-    struct ast_user_type_get *v     = ast_node_utg(node);
-    v->struct_name                  = variable;
-    v->field_name                   = field;
-    return result_ast_node(self, node);
-}
-
-static int a_field_setter(parser *self) {
-    if (a_try(self, a_field_access)) return 1;
-
-    ast_node *user_field = self->result;
-    if (a_try(self, a_colon_equal)) return 1;
-
-    log(self, "begin field setter");
-
-    if (a_try(self, expression)) return 1;
-    ast_node                 *value = self->result;
-
-    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_set);
-    struct ast_user_type_set *v     = ast_node_uts(node);
-    struct ast_user_type_get *vget  = ast_node_utg(user_field);
-    v->struct_name                  = vget->struct_name;
-    v->field_name                   = vget->field_name;
-    v->value                        = value;
-    return result_ast_node(self, node);
-}
-
-static int a_field_pointer_setter(parser *self) {
-    if (a_try(self, a_field_pointer_access)) return 1;
-    ast_node *user_field = self->result;
-    log(self, "field pointer setter got an access");
-
-    if (a_try(self, a_colon_equal)) return 1;
-
-    log(self, "begin field pointer setter");
-
-    if (a_try(self, expression)) return 1;
-    ast_node                 *value = self->result;
-
-    ast_node                 *node  = ast_node_create(self->ast_arena, ast_user_type_set);
-    struct ast_user_type_set *v     = ast_node_uts(node);
-    struct ast_user_type_get *vget  = ast_node_utg(user_field);
-    v->struct_name                  = vget->struct_name;
-    v->field_name                   = vget->field_name;
-    v->value                        = value;
-    return result_ast_node(self, node);
-}
-
-static int struct_declaration(parser *self) {
-    //     struct name = ... end
-    if (a_try_s(self, the_symbol, "struct")) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    log(self, "struct begin");
-    self->indent_level++;
-
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_expected_struct_name;
-        goto error;
-    }
-
-    ast_node      *name           = self->result;
-
-    ast_node_array field_names    = {.alloc = self->ast_arena};
-    ast_node_array field_types    = {.alloc = self->ast_arena};
-    ast_node_array type_arguments = {.alloc = self->ast_arena};
-
-    // optional type arguments
-    while (1) {
-        if (0 == a_try(self, a_identifier)) {
-            array_push(type_arguments, self->result);
-        } else {
-            break;
-        }
-    }
-
-    if (a_try(self, a_equal_sign)) {
-        self->error.tag = tl_err_expected_equal_sign;
-        goto error;
-    }
-
-    // check for empty struct
-    if (0 == a_try_special(self, a_end_of_block)) {
-        ast_node *node                        = ast_node_create(self->ast_arena, ast_user_type_definition);
-        node->user_type_def.name              = name;
-        node->user_type_def.type_arguments    = null;
-        node->user_type_def.field_annotations = null;
-        node->user_type_def.field_names       = null;
-        node->user_type_def.field_types       = null;
-        node->user_type_def.n_fields          = 0;
-        node->user_type_def.n_type_arguments  = 0;
-        result_ast_node(self, node);
-        goto success;
-    }
-
-    // accumulate names and types until end of block is seen
-    while (1) {
-
-        if (0 == a_try(self, a_identifier)) {
-            ast_node *field_name = self->result;
-            log(self, "struct_declaration: field %s", v1_ast_node_to_string(self->transient, field_name));
-
-            if (a_try(self, a_colon)) {
-                self->error.tag = tl_err_expected_colon;
-                goto error;
-            }
-
-            if (a_try(self, a_type_identifier)) {
-                self->error.tag = tl_err_expected_type;
-                goto error;
-            }
-            ast_node *type = self->result;
-            log(self, "struct_declaration: type %s", v1_ast_node_to_string(self->transient, type));
-
-            array_push(field_names, field_name);
-            array_push(field_types, type);
-
-            if (a_try_special(self, a_end_of_expression)) {
-                // accept an 'end' instead of final semicolon
-                if (0 == a_try_special(self, a_end_of_block)) goto end_of_block;
-
-                self->error.tag = tl_err_expected_end_of_expression;
-                goto error; // expect ; after field
-            }
-
-            continue;
-        }
-
-        if (0 == a_try_special(self, a_end_of_block)) {
-
-        end_of_block: {
-            ast_node *node                     = ast_node_create(self->ast_arena, ast_user_type_definition);
-            node->user_type_def.name           = null;
-            node->user_type_def.type_arguments = null;
-            node->user_type_def.field_annotations = null;
-            node->user_type_def.field_names       = null;
-            node->user_type_def.field_types       = null;
-            node->user_type_def.n_fields          = 0;
-            node->user_type_def.n_type_arguments  = 0;
-
-            node->user_type_def.name              = name;
-
-            array_shrink(field_names);
-            node->user_type_def.field_names = field_names.v;
-
-            if (field_names.size > 0xff || type_arguments.size > 0xff) {
-                too_many_arguments(self);
-                goto error;
-            }
-
-            node->user_type_def.n_fields         = (u8)field_names.size;
-            node->user_type_def.n_type_arguments = (u8)type_arguments.size;
-
-            array_shrink(field_types);
-            node->user_type_def.field_annotations = field_types.v;
-
-            array_shrink(type_arguments);
-            node->user_type_def.type_arguments = type_arguments.v;
-
-            result_ast_node(self, node);
-            goto success;
-        }
-        }
-
-        // anything else is an error
-        self->error.tag = tl_err_expected_end_of_block;
-        return 1;
-    }
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
     return 1;
 }
 
@@ -1353,403 +640,7 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     return 0;
 }
 
-static int function_declaration(parser *self) {
-    // f a b c... = : only symbols allowed, terminated by = or : for a function type annotation
-
-    // annotated: f a b c : (int,int,int) -> int = ...
-
-    if (a_try(self, a_identifier)) return 1;
-
-    ast_node *const name = self->result; // function name
-    // str             name_str   = ast_node_str(name);
-
-    ast_node_array parameters = {.alloc = self->ast_arena};
-    ast_node      *annotation = null;
-
-    // must have at least one parameter
-    if (a_try(self, a_identifier_typed)) return 1;
-    array_push(parameters, self->result);
-
-    int require_equal_sign = 0;
-
-    // accumulate identifiers as parameters until equal sign is seen
-    while (1) {
-        if (0 == a_try(self, a_identifier_typed)) {
-            array_push(parameters, self->result);
-            continue;
-        }
-
-        if (0 == a_try(self, a_type_annotation)) {
-            // if (annotation) {
-            //     // error, cannot provide inline annotation to a forward declared function
-            //     self->error.tag = tl_err_unexpected_inline_annotation;
-            //     return 1;
-            // }
-            annotation         = self->result;
-            require_equal_sign = 1;
-        }
-
-        if (0 == a_try(self, a_equal_sign)) {
-
-            ast_node *node                  = ast_node_create(self->ast_arena, ast_function_declaration);
-            node->function_declaration.name = name;
-            node->function_declaration.n_parameters = 0;
-            node->function_declaration.parameters   = null;
-
-            if (set_node_parameters(self, node, &parameters)) return 1;
-
-            // attach annotation to function name
-            assert(ast_symbol == name->tag);
-            name->symbol.annotation = annotation;
-
-            log(self, "function_declaration: returning %s", v1_ast_node_to_string(self->transient, node));
-            return result_ast_node(self, node);
-        } else if (require_equal_sign) {
-            self->error.tag = tl_err_expected_equal_sign;
-            return 1;
-        }
-
-        // anything else is an error
-        self->error.tag = tl_err_expected_argument;
-        return 1;
-    }
-}
-
-static int lambda_declaration(parser *self) {
-    // a b c... -> : only symbols allowed, terminated by ->
-
-    ast_node_array parameters = {.alloc = self->ast_arena};
-
-    // accumulate identifiers as parameters until an arrow is seen
-    while (1) {
-        if (0 == a_try(self, a_identifier_typed)) {
-            array_push(parameters, self->result);
-            continue;
-        }
-
-        if (0 == a_try(self, a_arrow)) {
-            ast_node *node = ast_node_create(self->ast_arena, ast_lambda_declaration);
-            node->lambda_declaration.n_parameters = 0;
-            node->lambda_declaration.parameters   = null;
-
-            if (set_node_parameters(self, node, &parameters)) return 1;
-
-            return result_ast_node(self, node);
-        }
-
-        // anything else is an error
-        self->error.tag = tl_err_unfinished_lambda_declaration;
-        return 1;
-    }
-}
-
-static int function_definition(parser *self) {
-    return expression(self);
-}
-
-static int function_application(parser *self) {
-    // f a b c ...
-
-    if (a_try(self, a_identifier)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    ast_node *const name = self->result;
-    assert(ast_symbol == name->tag);
-
-    ast_node_array arguments = {.alloc = self->ast_arena};
-
-    // must have at least one argument
-    self->in_function_application = 1;
-    if (a_try(self, function_argument)) {
-        self->error.tag               = tl_err_ok;
-        self->in_function_application = 0;
-        return 1;
-    }
-
-    log(self, "begin function application");
-    self->indent_level++;
-
-    array_push(arguments, self->result);
-
-    while (1) {
-        self->in_function_application = 1;
-        if (0 == a_try(self, function_argument)) {
-            array_push(arguments, self->result);
-            continue;
-        }
-
-        if (0 == a_try_special(self, a_end_of_expression)) {
-
-            ast_node *node = ast_node_create(self->ast_arena, ast_named_function_application);
-            node->named_application.arguments   = null;
-            node->named_application.n_arguments = 0;
-            node->named_application.name        = name;
-
-            array_shrink(arguments);
-            node->array.n     = (u8)arguments.size;
-            node->array.nodes = arguments.v;
-            if (arguments.size > 0xff) {
-                too_many_arguments(self);
-                goto error;
-            }
-
-            log(self, "function_application: got %s", v1_ast_node_to_string(self->transient, node));
-            result_ast_node(self, node);
-            goto success;
-        }
-
-        self->error.tag = tl_err_expected_function_application_argument;
-        goto error;
-    }
-
-success:
-    self->indent_level--;
-    self->in_function_application = 0;
-    return 0;
-error:
-    self->indent_level--;
-    self->in_function_application = 0;
-    return 1;
-}
-
 //
-
-static int function_argument(parser *p) {
-
-    p->indent_level++;
-    log(p, "try function_argument");
-
-    p->indent_level++;
-    if (0 == a_try(p, a_value)) goto cleanup;
-    if (is_eof(p)) goto error;
-    if (0 == a_try(p, grouped_expression)) goto cleanup;
-
-error:
-    p->indent_level--;
-    p->indent_level--;
-    return 1;
-
-cleanup:
-    p->indent_level -= 2;
-    return 0;
-}
-
-static int if_then_else(parser *self) {
-
-    ast_node *cond, *yes, *no;
-
-    if (a_try_s(self, the_symbol, "if")) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin if-then-else");
-    self->indent_level++;
-
-    if (expression(self)) {
-        self->error.tag = tl_err_expected_if_condition;
-        goto error;
-    }
-    cond = self->result;
-
-    if (a_try_s(self, the_symbol, "then")) {
-        self->error.tag = tl_err_expected_keyword_then;
-        goto error;
-    }
-
-    if (expression(self)) {
-        self->error.tag = tl_err_expected_if_then_arm;
-        goto error;
-    }
-    yes = self->result;
-
-    if (a_try_s(self, the_symbol, "else")) {
-        self->error.tag = tl_err_expected_keyword_else;
-        goto error;
-    }
-
-    if (expression(self)) {
-        self->error.tag = tl_err_expected_if_else_arm;
-        goto error;
-    }
-    no                           = self->result;
-
-    ast_node *node               = ast_node_create(self->ast_arena, ast_if_then_else);
-    node->if_then_else.condition = cond;
-    node->if_then_else.yes       = yes;
-    node->if_then_else.no        = no;
-    result_ast_node(self, node);
-    goto success;
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
-
-static int lambda_function(parser *self) {
-    // fun a b c... -> rhs
-
-    (void)a_try(self, a_open_round); // optional
-
-    if (a_try_s(self, the_symbol, "fun")) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin lambda function");
-    self->indent_level++;
-
-    if (a_try(self, lambda_declaration)) {
-        self->error.tag = tl_err_expected_lambda;
-        goto error;
-    }
-    ast_node *decl = self->result;
-
-    if (a_try(self, function_definition)) {
-        if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
-        goto error;
-    }
-    ast_node *defn = self->result;
-
-    if (a_try_special(self, a_end_of_block_or_close_round)) {
-        self->error.tag = tl_err_expected_end_of_block;
-        goto error;
-    }
-    (void)a_try(self, a_close_round); // optional
-
-    ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function);
-    node->lambda_function.parameters   = null;
-    node->lambda_function.n_parameters = 0;
-    node->lambda_function.body         = defn;
-
-    // move the vector from the function_declaration node to the new ast node
-    node->array.nodes = decl->array.nodes;
-    node->array.n     = decl->array.n;
-    decl->array.nodes = null;
-    decl->array.n     = 0;
-
-    result_ast_node(self, node);
-    goto success;
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
-
-static int lambda_function_application(parser *self) {
-
-    if (a_try(self, lambda_function)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    ast_node *lambda = self->result;
-
-    // there must be at least one argument
-    ast_node_array arguments      = {.alloc = self->ast_arena};
-
-    self->in_function_application = 1;
-    if (a_try(self, function_argument)) {
-        self->error.tag               = tl_err_ok;
-        self->in_function_application = 0;
-        return 1;
-    }
-
-    log(self, "begin lambda function application");
-    self->indent_level++;
-
-    array_push(arguments, self->result);
-
-    while (1) {
-        self->in_function_application = 1;
-        if (0 == a_try(self, function_argument)) {
-            array_push(arguments, self->result);
-            continue;
-        }
-
-        if (0 == a_try_special(self, a_end_of_expression)) {
-            ast_node *node = ast_node_create(self->ast_arena, ast_lambda_function_application);
-            node->lambda_application.arguments   = null;
-            node->lambda_application.n_arguments = 0;
-            node->lambda_application.lambda      = lambda;
-
-            array_shrink(arguments);
-            node->array.n     = (u8)arguments.size;
-            node->array.nodes = arguments.v;
-            if (arguments.size > 0xff) {
-                too_many_arguments(self);
-                goto error;
-            }
-
-            result_ast_node(self, node);
-            goto success;
-        }
-
-        // anything else is an error
-        self->error.tag = tl_err_expected_lambda_function_application_argument;
-        goto error;
-    }
-
-success:
-    self->indent_level--;
-    self->in_function_application = 0;
-    return 0;
-error:
-    self->indent_level--;
-    self->in_function_application = 0;
-    return 1;
-}
-
-static char *make_nil_name(parser *p) {
-#define fmt "_gen_nil_%u_"
-    int len = snprintf(null, 0, fmt, p->next_nil_name) + 1;
-    if (len < 0) fatal("make_nil_name");
-    char *out = alloc_malloc(p->ast_arena, (u32)len);
-    snprintf(out, (u32)len, fmt, p->next_nil_name++);
-    return out;
-#undef fmt
-}
-
-static int match_declaration(parser *self) {
-    // (a = x, ...) = ...
-
-    if (a_try(self, a_labelled_tuple)) return 1;
-
-    ast_node *lt = self->result;
-
-    if (a_try(self, a_equal_sign)) return 1;
-
-    return result_ast_node(self, lt);
-}
-
-static int simple_declaration(parser *p) {
-    // a = ... a single identifier or nil, optionally typed, followed by an
-    // equal sign
-    if (0 == a_try(p, a_nil)) {
-        // need to match the equal sign too
-        if (a_try(p, a_equal_sign)) return 1;
-
-        int res = result_ast_str(p, ast_symbol, make_nil_name(p));
-        return res;
-    }
-
-    if (a_try(p, a_identifier_typed)) return 1;
-    ast_node *sym = p->result;
-
-    if (a_try(p, a_equal_sign)) return 1;
-
-    int res = result_ast_node(p, sym);
-    return res;
-}
 
 // -- public read-only portion of struct --
 // FIXME put this elsewhere
@@ -1760,342 +651,6 @@ struct tokenizer {
     size_t      input_len;
     size_t      pos;
 };
-
-static int tuple_expression(parser *self) {
-
-    if (a_try(self, a_open_round)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    ast_node_array elements = {.alloc = self->ast_arena}; // will be moved to node on success
-
-    // first, expect an expression, which must be followed by a comma
-    // then, zero or more expressions before a close round. So (expr,)
-    // is a valid tuple.
-    if (a_try(self, expression)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    array_push(elements, self->result);
-
-    if (a_try(self, a_comma)) goto cleanup;
-
-    log(self, "begin tuple");
-
-    int count = 0;
-    while (1) {
-
-        if (0 == a_try(self, a_close_round)) {
-            if (elements.size > 0xff) {
-                too_many_arguments(self);
-                goto cleanup;
-            }
-
-            ast_node *node    = ast_node_create(self->ast_arena, ast_tuple);
-            node->array.n     = 0;
-            node->array.nodes = null;
-
-            array_shrink(elements);
-            node->array.n     = (u8)elements.size;
-            node->array.nodes = elements.v;
-
-            return result_ast_node(self, node);
-        }
-
-        // comma required if this is not the first time through the loop
-        if (count++ > 0)
-            if (a_try(self, a_comma)) {
-                self->error.tag = tl_err_expected_comma;
-                goto cleanup;
-            }
-
-        // expression
-        if (0 == a_try(self, expression)) array_push(elements, self->result);
-
-        // loop to check for close round
-    }
-
-cleanup:
-    array_free(elements);
-    return 1;
-}
-
-static int begin_end_expression(parser *self) {
-    if (a_try_s(self, the_symbol, "begin")) {
-        if (a_try_s(self, the_symbol, "beg")) {
-            self->error.tag = tl_err_ok;
-            return 1;
-        }
-    }
-
-    log(self, "begin begin...end expression");
-    self->indent_level++;
-    ast_node_array exprs = {.alloc = self->ast_arena}; // will be moved to node on success
-
-    // detect empty begin end block and reject
-    if (0 == a_try_s(self, the_symbol, "end")) {
-        self->error.tag = tl_err_unfinished_begin_end;
-        goto error;
-    }
-
-    while (1) {
-        int done = 0;
-        if (a_try(self, expression)) {
-            if (is_eof(self)) {
-                done = 1;
-                goto done;
-            } else {
-                // propagate error
-                goto error;
-            }
-        }
-
-        array_push(exprs, self->result);
-
-        // some expressions eat the end_of_expression (e.g. function
-        // application), but some don't (e.g. numbers)
-        (void)a_try_special(self, a_end_of_expression);
-
-    done:
-        if (done || 0 == a_try_s(self, the_symbol, "end")) {
-            ast_node *node                = ast_node_create(self->ast_arena, ast_begin_end);
-            node->begin_end.expressions   = null;
-            node->begin_end.n_expressions = 0;
-
-            array_shrink(exprs);
-            node->array.n     = (u8)exprs.size;
-            node->array.nodes = exprs.v;
-            if (exprs.size > 0xff) {
-                self->error.tag = tl_err_too_many_expressions;
-                goto error;
-            }
-
-            result_ast_node(self, node);
-            goto success;
-        }
-    }
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    array_free(exprs);
-    self->indent_level--;
-    return 1;
-}
-
-static int grouped_expression(parser *self) {
-    log(self, "enter grouped expression");
-
-    if (a_try(self, a_open_round)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-
-    log(self, "begin grouped expression");
-
-    if (a_try(self, expression)) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    ast_node *const out = self->result;
-
-    if (a_try(self, a_close_round)) {
-        self->error.tag = tl_err_expected_close_round;
-        return 1;
-    }
-
-    // replace parser result with expression node
-    self->result = out;
-    return 0;
-}
-
-static int expression(parser *self) {
-
-    self->indent_level++;
-
-    // this must appear before grouped_expression, since we wish to accept the syntax:
-    // `(fun a b -> add a b end) 1 2` as a lambda function application
-    if (0 == a_try(self, lambda_function_application)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, grouped_expression)) goto success;
-    // ignore grouped_expression failure because it could be a tuple
-
-    if (0 == a_try(self, expression_let)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, a_labelled_tuple)) goto success; // TODO naming is odd
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, tuple_expression)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, if_then_else)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, function_application)) goto success;
-    if (has_error(self)) goto error;
-
-    if (0 == a_try(self, begin_end_expression)) goto success;
-    if (has_error(self)) goto error;
-
-    // the rest of the cases are standalone values
-
-    self->in_function_application = 0;
-    if (0 == a_try(self, a_value)) goto success;
-
-    if (!is_eof(self)) self->error.tag = tl_err_expected_expression;
-
-    goto error;
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
-
-static int continue_let_in(parser *self, ast_node *name_or_nil_or_lt) {
-    // assumes caller has incremented indent_level
-
-    log(self, "begin let-in declaration line %i", self->token.line);
-
-    if (a_try(self, expression)) {
-        // self->error.tag = tl_err_expected_let_in_value;
-        goto error;
-    }
-    ast_node *defn = self->result;
-
-    // eat the optional 'in' token if it's present
-    (void)a_try_s(self, the_symbol, "in");
-
-    if (a_try(self, expression)) {
-        // let the error propagate
-        goto error;
-    }
-    ast_node *body = self->result;
-
-    // FIXME: end-of-block here seems wrong
-    if (a_try_special(self, a_end_of_block)) {
-        self->error.tag = tl_err_expected_end_of_block;
-        goto error;
-    }
-
-    if (ast_labelled_tuple == name_or_nil_or_lt->tag) {
-
-        // let-match-in
-        ast_node *node           = ast_node_create(self->ast_arena, ast_let_match_in);
-        node->let_match_in.lt    = name_or_nil_or_lt;
-        node->let_match_in.value = defn;
-        node->let_match_in.body  = body;
-
-        result_ast_node(self, node);
-
-    } else {
-
-        ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
-        node->let_in.name  = name_or_nil_or_lt;
-        node->let_in.value = defn;
-        node->let_in.body  = body;
-
-        result_ast_node(self, node);
-    }
-
-    log(self, "end let-in declaration line %i", self->token.line);
-    goto success;
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
-
-static int toplevel_let(parser *self) {
-    if (a_try_s(self, the_symbol, "let")) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    log(self, "begin let");
-
-    self->indent_level++;
-
-    if (0 == a_try(self, function_declaration)) {
-        ast_node *decl = self->result;
-        log(self, "begin let function declaration");
-
-        if (a_try(self, function_definition)) {
-            if (self->error.tag == tl_err_ok) self->error.tag = tl_err_expected_function_definition;
-            goto error;
-        }
-        ast_node *defn         = self->result;
-        ast_node *node         = ast_node_create(self->ast_arena, ast_let);
-        node->let.parameters   = null;
-        node->let.n_parameters = 0;
-        node->let.name         = null;
-        node->let.body         = null;
-
-        // move declaration into new node
-        node->let.name = decl->function_declaration.name;
-        node->let.body = defn;
-
-        // move the vector from the function_declaration node to the new ast node
-        node->array.nodes = decl->array.nodes;
-        node->array.n     = decl->array.n;
-        decl->array.nodes = null;
-        decl->array.n     = 0;
-
-        result_ast_node(self, node);
-        goto success;
-    }
-
-    if (0 == a_try(self, simple_declaration)) {
-        ast_node *sym_or_nil = self->result;
-
-        // a top-level value declaration, with no body (implies rest of program is in the body)
-
-        if (0 == a_try(self, expression)) {
-            ast_node *defn     = self->result;
-
-            ast_node *node     = ast_node_create(self->ast_arena, ast_let_in);
-            node->let_in.name  = sym_or_nil;
-            node->let_in.value = defn;
-            node->let_in.body  = null;
-
-            result_ast_node(self, node);
-            goto success;
-        }
-    }
-
-    if (0 == a_try(self, forward_declaration)) {
-        ast_node *sym = self->result;
-        (void)sym;
-        assert(ast_symbol == sym->tag);
-
-        // TODO error on duplicate declaration
-
-        goto success;
-    }
-
-    self->error.tag = tl_err_expected_declaration;
-    goto error;
-
-success:
-    self->indent_level--;
-    return 0;
-
-error:
-    self->indent_level--;
-    return 1;
-}
 
 // ---
 
@@ -2205,11 +760,9 @@ decl_done:
     ast_node *body         = ast_node_create(self->ast_arena, ast_body);
     body->body.expressions = (ast_node_sized)sized_all(exprs);
 
-    array_shrink(params);
-    ast_node *l                     = ast_node_create(self->ast_arena, ast_lambda_function);
-    l->lambda_function.parameters   = params.v;
-    l->lambda_function.n_parameters = params.size;
-    l->lambda_function.body         = body;
+    ast_node *l            = ast_node_create(self->ast_arena, ast_lambda_function);
+    set_node_parameters(self, l, &params);
+    l->lambda_function.body = body;
     return result_ast_node(self, l);
 }
 
@@ -2514,12 +1067,10 @@ decl_done:
 
     ast_node *body = create_body(self, exprs);
 
-    array_shrink(params);
-    ast_node *let         = ast_node_create(self->ast_arena, ast_let);
-    let->let.parameters   = params.v;
-    let->let.n_parameters = params.size;
-    let->let.name         = name;
-    let->let.body         = body;
+    ast_node *let  = ast_node_create(self->ast_arena, ast_let);
+    set_node_parameters(self, let, &params);
+    let->let.name = name;
+    let->let.body = body;
 
     result_ast_node(self, let);
 
@@ -2593,7 +1144,6 @@ static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
-    if (0 == a_try(self, struct_declaration)) return 0;
     if (0 == a_try(self, toplevel_defun)) return 0;
     if (0 == a_try(self, toplevel_assign)) return 0;
     if (0 == a_try(self, toplevel_forward)) return 0;
@@ -2603,28 +1153,6 @@ static int toplevel(parser *self) {
 }
 
 // -----------------------
-
-static int expression_let(parser *self) {
-    // allows let-in but not let expressions
-    if (a_try_s(self, the_symbol, "let")) {
-        self->error.tag = tl_err_ok;
-        return 1;
-    }
-    log(self, "begin let expression");
-
-    self->indent_level++;
-
-    if (0 == a_try(self, simple_declaration)) {
-        return continue_let_in(self, self->result);
-    }
-
-    if (0 == a_try(self, match_declaration)) {
-        return continue_let_in(self, self->result);
-    }
-
-    self->indent_level--;
-    return 1;
-}
 
 int parser_next(parser *self) {
     if (!self->tokenizer) {
@@ -2722,9 +1250,9 @@ static int too_many_arguments(parser *self) {
     return 1;
 }
 
-static int has_error(parser *self) {
-    return self->error.tag != tl_err_ok;
-}
+// static int has_error(parser *self) {
+//     return self->error.tag != tl_err_ok;
+// }
 
 void log(struct parser *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
