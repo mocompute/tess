@@ -228,6 +228,7 @@ struct ast_user_type_def        *ast_node_utd(ast_node *);
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
+nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;

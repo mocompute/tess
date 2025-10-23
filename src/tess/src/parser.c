@@ -2085,6 +2085,8 @@ static ast_node *create_body(parser *self, ast_node_array exprs);
 static int       operator_precedence(char const *op, int is_prefix);
 static ast_node *parse_base_expression(parser *);
 static ast_node *parse_expression(parser *, int min_preced);
+static ast_node *parse_if_expr(parser *);
+static ast_node *parse_cond_expr(parser *);
 static ast_node *parse_lvalue(parser *);
 static int       toplevel_defun(parser *);
 
@@ -2174,6 +2176,7 @@ static int b_value(parser *self) {
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
+    if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_identifier)) return 0;
     // if (0 == a_try(self, b_field)) return 0;
 
@@ -2200,6 +2203,8 @@ static int operator_precedence(char const *op, int is_prefix) {
     }
     return INT_MIN;
 }
+
+// -- if expression --
 
 static ast_node *parse_if_continue(parser *self) {
     // the "if" token has been seen
@@ -2245,6 +2250,54 @@ static ast_node *parse_if_expr(parser *self) {
     return parse_if_continue(self);
 }
 
+// -- cond expression
+
+static ast_node *parse_cond_arm(parser *self) {
+
+    ast_node *cond = parse_expression(self, INT_MIN);
+    if (!cond) return null;
+
+    // if cond is nil, rewrite to a bool true node
+    if (ast_node_is_nil(cond)) cond = ast_node_create_bool(self->ast_arena, 1);
+
+    if (a_try(self, a_open_curly)) return null;
+
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (a_try(self, b_body_element)) return null;
+        array_push(exprs, self->result);
+        if (0 == a_try(self, a_close_curly)) break;
+    }
+
+    ast_node *yes = create_body(self, exprs);
+
+    if (0 == a_try(self, a_close_curly)) {
+        // close the cond expr with no else case
+        ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
+        n->if_then_else.condition = cond;
+        n->if_then_else.yes       = yes;
+        n->if_then_else.no        = ast_node_create(self->ast_arena, ast_nil);
+        return n;
+    }
+
+    ast_node *no = parse_cond_arm(self);
+    if (!no) return null;
+
+    ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
+    n->if_then_else.condition = cond;
+    n->if_then_else.yes       = yes;
+    n->if_then_else.no        = no;
+    return n;
+}
+
+static ast_node *parse_cond_expr(parser *self) {
+    if (a_try_s(self, the_symbol, "cond")) return null;
+    if (a_try(self, a_open_curly)) return null;
+    return parse_cond_arm(self);
+}
+
+//
+
 static ast_node *parse_base_expression(parser *self) {
 
     if (0 == a_try(self, a_unary_operator)) {
@@ -2257,21 +2310,21 @@ static ast_node *parse_base_expression(parser *self) {
         return unary;
     }
 
+    if (0 == a_try(self, a_nil)) return self->result; // parse () before (...)
+
     if (0 == a_try(self, a_open_round)) {
         ast_node *expr = parse_expression(self, INT_MIN);
         if (a_try(self, a_close_round)) return null;
         return expr;
     }
 
-    ast_node *node = parse_if_expr(self);
+    ast_node *node;
+    node = parse_if_expr(self);
+    if (node) return node;
+    node = parse_cond_expr(self);
     if (node) return node;
 
-    if (0 == a_try(self, b_value)) {
-        return self->result;
-    }
-
-    // FIXME: cond_expr
-
+    if (0 == a_try(self, b_value)) return self->result;
     return null;
 }
 

@@ -26,6 +26,12 @@ ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     return self;
 }
 
+ast_node *ast_node_create_bool(allocator *alloc, int val) {
+    ast_node *out  = ast_node_create(alloc, ast_bool);
+    out->bool_.val = val;
+    return out;
+}
+
 ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     ast_node *self               = ast_node_create(alloc, ast_symbol);
     self->symbol.name            = str_init(alloc, str);

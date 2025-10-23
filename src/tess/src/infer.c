@@ -758,7 +758,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     switch (node->tag) {
     case ast_nil:
-    case ast_any:        break;
+    case ast_any:        ensure_tv(self, null, &node->type); break;
     case ast_address_of:
     case ast_pointer_to: {
 
