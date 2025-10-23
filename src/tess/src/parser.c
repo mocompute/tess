@@ -543,6 +543,7 @@ static int a_end_of_expression(parser *p) {
     case tok_colon:
     case tok_colon_equal:
     case tok_ampersand:
+    case tok_logical_and:
     case tok_star:
     case tok_ellipsis:
     case tok_open_round:
@@ -572,17 +573,38 @@ static int a_binary_operator(parser *self, int min_prec) {
     }
 
     char const *op = null;
-    if (tok_symbol == self->token.tag) {
+    switch (self->token.tag) {
+    case tok_symbol:
         if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
             is_relational_operator(self->token.s)) {
             op = self->token.s;
         } else return 1;
-    } else if (tok_star == self->token.tag || tok_dot == self->token.tag ||
-               tok_equal_equal == self->token.tag) {
-        if (tok_star == self->token.tag) op = "*";
-        else if (tok_equal_equal == self->token.tag) op = "==";
-        else op = ".";
-    } else return 1;
+        break;
+
+    case tok_star:        op = "*"; break;
+    case tok_dot:         op = "."; break;
+    case tok_equal_equal: op = "=="; break;
+    case tok_logical_and: op = "&&"; break;
+
+    case tok_comma:
+    case tok_colon:
+    case tok_colon_equal:
+    case tok_semicolon:
+    case tok_ampersand:
+    case tok_arrow:
+    case tok_ellipsis:
+    case tok_open_round:
+    case tok_close_round:
+    case tok_open_curly:
+    case tok_close_curly:
+    case tok_equal_sign:
+    case tok_invalid:
+    case tok_number:
+    case tok_string:
+    case tok_comment:     return 1;
+    }
+
+    if (!op) return 1;
 
     int prec = operator_precedence(op, 0);
     if (prec < min_prec) return 1;

@@ -119,6 +119,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_colon,
         in_dot,
         in_dot_2,
+        in_ampersand,
 
         forward_slash,
 
@@ -167,7 +168,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             switch (c) {
             case '=': state = in_equal; break;
-
+            case '&': state = in_ampersand; break;
             case '-': state = in_minus; break;
 
             case '+':
@@ -190,11 +191,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case ',':
                 replace_token(self->strings, &res, tok_comma);
-                state = stop;
-                break;
-
-            case '&':
-                replace_token(self->strings, &res, tok_ampersand);
                 state = stop;
                 break;
 
@@ -345,6 +341,31 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         } break;
 
+        case in_ampersand: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_ampersand);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            if (' ' == c || '\n' == c) {
+                replace_token(self->strings, &res, tok_ampersand);
+                state = stop;
+                if ('\n' == c) advance_line(self);
+                goto finish;
+            } else if ('&' == c) {
+                // &&
+                replace_token(self->strings, &res, tok_logical_and);
+                state = stop;
+                goto finish;
+            }
+
+            reverse_pos(self);
+            reverse_pos(self); // minus 2
+            state = start_symbol;
+
+        } break;
+
         case forward_slash: {
             if (self->pos == end) {
                 replace_token_s(self->strings, &res, tok_symbol, "/");
@@ -460,13 +481,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ' ':
             case '"':
             case ':':
-            case '=':
             case ';':
             case ',':
             case '.':
             case '&':
             case '*':
                 // these tokens break a symbol TODO there should be more
+                // '=' does not break a symbol so we can support relations eg '>='
                 reverse_pos(self);
                 state = stop_symbol;
                 break;
