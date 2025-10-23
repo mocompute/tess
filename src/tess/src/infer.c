@@ -3,6 +3,7 @@
 #include "array.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "parser.h"
 #include "str.h"
 #include "type.h"
 
@@ -839,8 +840,19 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &left->type);
         ensure_tv(self, null, &right->type);
-        if (constrain(self, ctx, node->type, left->type, node)) return 1;
-        if (constrain(self, ctx, left->type, right->type, node)) return 1;
+        // for relational ops, the type is Bool
+        // for arithmetic ops, the type is the type of an operand
+        // in all cases, the types of the operands must be the same
+
+        if (is_arithmetic_operator(str_cstr(&node->binary_op.op->symbol.name))) {
+            if (constrain(self, ctx, node->type, left->type, node)) return 1;
+            if (constrain(self, ctx, left->type, right->type, node)) return 1;
+        } else {
+            tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
+            if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
+            if (constrain(self, ctx, left->type, right->type, node)) return 1;
+        }
+
     } break;
 
     case ast_unary_op: {

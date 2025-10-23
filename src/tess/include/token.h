@@ -24,6 +24,7 @@
     X(tok_open_curly, "open_curly")                                                                        \
     X(tok_close_curly, "close_curly")                                                                      \
     X(tok_equal_sign, "equal_sign")                                                                        \
+    X(tok_equal_equal, "equal_equal")                                                                      \
     X(tok_invalid, "invalid")                                                                              \
     X(tok_number, "number")                                                                                \
     X(tok_symbol, "symbol")                                                                                \

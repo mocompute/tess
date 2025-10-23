@@ -1103,6 +1103,21 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     } break;
 
+    case ast_if_then_else: {
+        str_build b = str_build_init(alloc, 80);
+        str_build_cat(&b, S("if "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.condition));
+        str_build_cat(&b, S(" { "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.yes));
+        str_build_cat(&b, S("}"));
+        str_build_cat(&b, S(" else { "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.no));
+        str_build_cat(&b, S("}"));
+        return str_build_finish(&b);
+    }
+
+    break;
+
     case ast_unary_op:
 
     case ast_address_of:
@@ -1112,7 +1127,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_dereference_assign:
     case ast_eof:
 
-    case ast_if_then_else:
     case ast_let_match_in:
     case ast_user_type_set:
     case ast_begin_end:

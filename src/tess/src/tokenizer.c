@@ -332,6 +332,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 if ('\n' == c) advance_line(self);
                 goto finish;
+            } else if ('=' == c) {
+                // ==
+                replace_token(self->strings, &res, tok_equal_equal);
+                state = stop;
+                goto finish;
             }
 
             reverse_pos(self);

@@ -62,6 +62,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_open_curly:
     case tok_close_curly:
     case tok_equal_sign:
+    case tok_equal_equal:
     case tok_invalid:     break;
     case tok_number:
     case tok_symbol:
@@ -99,6 +100,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_open_curly:
     case tok_close_curly:
     case tok_equal_sign:
+    case tok_equal_equal:
     case tok_invalid:     sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
 
     case tok_number:

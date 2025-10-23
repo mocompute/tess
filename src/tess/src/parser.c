@@ -80,10 +80,7 @@ static int           result_ast_node(parser *, ast_node *);
 static int           result_ast_str(parser *, ast_tag, char const *s);
 static int           result_ast_u64(parser *, u64);
 
-static int           is_arithmetic_operator(char const *);
 static int           is_eof(parser *);
-static int           is_relational_operator(char const *);
-static int           is_logical_operator(char const *);
 static int           is_unary_operator(char const *);
 static int           is_reserved(char const *);
 static int           is_start_of_expression(char const *);
@@ -268,7 +265,7 @@ static int is_start_of_expression(char const *s) {
     return 0;
 }
 
-static int is_arithmetic_operator(char const *s) {
+int is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
       "+", "-", "*", "/", null,
     };
@@ -278,7 +275,7 @@ static int is_arithmetic_operator(char const *s) {
     return 0;
 }
 
-static int is_relational_operator(char const *s) {
+int is_relational_operator(char const *s) {
     static char const *strings[] = {
       "<", "<=", "==", "!=", ">=", ">", null,
     };
@@ -288,7 +285,7 @@ static int is_relational_operator(char const *s) {
     return 0;
 }
 
-static int is_logical_operator(char const *s) {
+int is_logical_operator(char const *s) {
     static char const *strings[] = {"&&", "||", null};
     char const       **it        = strings;
     while (*it != null)
@@ -551,6 +548,7 @@ static int a_end_of_expression(parser *p) {
     case tok_open_round:
     case tok_open_curly:
     case tok_equal_sign:
+    case tok_equal_equal:
     case tok_invalid:
     case tok_number:
     case tok_string:
@@ -579,8 +577,10 @@ static int a_binary_operator(parser *self, int min_prec) {
             is_relational_operator(self->token.s)) {
             op = self->token.s;
         } else return 1;
-    } else if (tok_star == self->token.tag || tok_dot == self->token.tag) {
+    } else if (tok_star == self->token.tag || tok_dot == self->token.tag ||
+               tok_equal_equal == self->token.tag) {
         if (tok_star == self->token.tag) op = "*";
+        else if (tok_equal_equal == self->token.tag) op = "==";
         else op = ".";
     } else return 1;
 
@@ -2229,6 +2229,8 @@ static ast_node *parse_if_continue(parser *self) {
     }
 
     ast_node *yes = create_body(self, exprs);
+    exprs         = (ast_node_array){.alloc = self->ast_arena};
+
     ast_node *no  = null;
 
     if (0 == a_try_s(self, the_symbol, "else")) {
@@ -2236,7 +2238,6 @@ static ast_node *parse_if_continue(parser *self) {
             no = parse_if_continue(self);
         } else {
             if (a_try(self, a_open_curly)) return null;
-            exprs.size = 0;
             while (1) {
                 if (a_try(self, b_body_element)) return null;
                 array_push(exprs, self->result);

@@ -36,4 +36,10 @@ int  parser_parse_all(parser *, ast_node_array *out);
 int  parser_parse_all_verbose(parser *, ast_node_array *out);
 void parser_report_errors(parser *);
 
+// -- utilities --
+
+int is_arithmetic_operator(char const *);
+int is_relational_operator(char const *);
+int is_logical_operator(char const *);
+
 #endif
