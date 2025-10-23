@@ -2227,7 +2227,7 @@ static ast_node *parse_expression(parser *self, int min_prec) {
 
             int       prec = operator_precedence(str_cstr(&op->symbol.name), 0);
             assert(prec >= min_prec);
-            ast_node *right = parse_expression(self, prec);
+            ast_node *right = parse_expression(self, prec + 1); // (prec+1): left-associative
             if (!right) return null;
 
             ast_node *binop        = ast_node_create(self->ast_arena, ast_binary_op);
