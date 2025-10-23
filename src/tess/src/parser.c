@@ -2165,9 +2165,7 @@ decl_done:
     l->lambda_function.parameters   = params.v;
     l->lambda_function.n_parameters = params.size;
     l->lambda_function.body         = body;
-    result_ast_node(self, l);
-
-    return 0;
+    return result_ast_node(self, l);
 }
 
 static int b_value(parser *self) {
@@ -2180,6 +2178,7 @@ static int b_value(parser *self) {
     if (0 == a_try(self, a_identifier)) return 0;
     // if (0 == a_try(self, b_field)) return 0;
 
+    self->error.tag = tl_err_expected_value;
     return 1;
 }
 
@@ -2257,9 +2256,6 @@ static ast_node *parse_cond_arm(parser *self) {
     ast_node *cond = parse_expression(self, INT_MIN);
     if (!cond) return null;
 
-    // if cond is nil, rewrite to a bool true node
-    if (ast_node_is_nil(cond)) cond = ast_node_create_bool(self->ast_arena, 1);
-
     if (a_try(self, a_open_curly)) return null;
 
     ast_node_array exprs = {.alloc = self->ast_arena};
@@ -2310,6 +2306,9 @@ static ast_node *parse_base_expression(parser *self) {
         return unary;
     }
 
+    // lambda function is identified by open round, so we need to parse it before nil and grouped
+    // expressions.
+    if (0 == a_try(self, b_lambda_function)) return self->result;
     if (0 == a_try(self, a_nil)) return self->result; // parse () before (...)
 
     if (0 == a_try(self, a_open_round)) {
