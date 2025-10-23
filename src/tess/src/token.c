@@ -9,13 +9,19 @@
 //
 
 void token_init(token *tok, token_tag tag) {
-    tok->tag = tag;
-    tok->s   = 0;
+    tok->tag  = tag;
+    tok->s    = 0;
+    tok->file = null;
+    tok->line = 0;
+    tok->col  = 0;
 }
 
 void token_init_v(token *tok, token_tag tag, u8 val) {
-    tok->tag = tag;
-    tok->val = val;
+    tok->tag  = tag;
+    tok->val  = val;
+    tok->file = null;
+    tok->line = 0;
+    tok->col  = 0;
 }
 
 int token_init_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
@@ -29,8 +35,12 @@ int token_init_s(allocator *alloc, token *tok, token_tag tag, char const *s) {
 
 int token_init_sn(allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
 
-    tok->tag = tag;
-    tok->s   = alloc_strndup(alloc, s, len);
+    tok->file = null;
+    tok->line = 0;
+    tok->col  = 0;
+
+    tok->tag  = tag;
+    tok->s    = alloc_strndup(alloc, s, len);
     if (!tok->s) return 1;
 
     return 0;

@@ -10,6 +10,7 @@ typedef struct tokenizer_error {
     tl_error_tag tag;
     char const  *file;
     u32          line;
+    u16          col;
 } tokenizer_error;
 
 typedef struct tokenizer tokenizer;

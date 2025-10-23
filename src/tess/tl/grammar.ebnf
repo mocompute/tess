@@ -27,7 +27,8 @@ defun         = ident "(" [ param_list ] ")" fun_body ;
 lambda        = "(" [ param_list ] ")" fun_body ;
 param_list    = param { "," param } ;
 param         = ident [ ":" type ] ;
-fun_body      = "{" { statement | expression } "}" ;  (* value of last expression is return value, unless set by return_stmt *)
+fun_body      = "{" { body_element } "}" ;  (* value of last expression is return value, unless set by return_stmt *)
+body_element  = statement | expression ;
 statement     = assignment | for_stmt | return_stmt ;
 
 expression    = base_expr { binary_op base_expr } ;

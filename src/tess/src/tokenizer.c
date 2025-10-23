@@ -17,6 +17,7 @@ struct tokenizer {
     char const *file;
     u32         line;
     u32         pos;
+    u32         col;
 
     token_array backtrack;
     char_array  buf;
@@ -24,10 +25,11 @@ struct tokenizer {
 
 // -- statics --
 
-static void tok_error(tokenizer_error *err, tl_error_tag tag, char const *file, u32 line) {
+static void tok_error(tokenizer *self, tokenizer_error *err, tl_error_tag tag) {
     err->tag  = tag;
-    err->file = file;
-    err->line = line;
+    err->file = self->file;
+    err->line = self->line;
+    err->col  = self->col;
 }
 
 // -- allocation and deallocation --
@@ -41,6 +43,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     self->pos       = 0;
     self->file      = file;
     self->line      = 1;
+    self->col       = 0;
 
     self->buf       = (char_array){.alloc = alloc};
     self->backtrack = (token_array){.alloc = alloc};
@@ -75,6 +78,26 @@ static void replace_token_s(allocator *alloc, token *tok, token_tag tag, char co
 static void replace_token_sn(allocator *alloc, token *tok, token_tag tag, char const *s, size_t len) {
     token_deinit(alloc, tok);
     token_init_sn(alloc, tok, tag, s, len);
+}
+
+static void advance_line(tokenizer *self) {
+    self->line++;
+    self->col = 0;
+}
+
+static void advance_pos(tokenizer *self) {
+    self->col++;
+    self->pos++;
+}
+
+static void reverse_pos(tokenizer *self) {
+    self->col--;
+    self->pos--;
+}
+
+static char next_char(tokenizer *self) {
+    self->col++;
+    return self->input.v[self->pos++];
 }
 
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
@@ -136,11 +159,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case start: {
             if (self->pos >= end) {
-                tok_error(out_err, tl_err_eof, self->file, self->line);
+                tok_error(self, out_err, tl_err_eof);
                 goto finish;
             }
 
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
 
             switch (c) {
             case '=': state = in_equal; break;
@@ -148,13 +171,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '-': state = in_minus; break;
 
             case '+':
-                --self->pos;
+                reverse_pos(self);
                 state = start_number_sign;
                 continue;
 
             case '"':  state = start_string; continue;
 
-            case '\n': self->line++; continue;
+            case '\n': advance_line(self); continue;
 
             case '/':  state = forward_slash; continue;
             case '.':  state = in_dot; continue;
@@ -203,14 +226,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             default:
                 if (c >= '0' && c <= '9') {
                     // any digit starts a number
-                    --self->pos;
+                    reverse_pos(self);
                     state = start_number;
                     continue;
                 }
 
                 if (c > 0x20 && c < 0x7f) {
                     // any other printable character starts a symbol
-                    --self->pos;
+                    reverse_pos(self);
                     state = start_symbol;
                     continue;
                 }
@@ -226,14 +249,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '=':
                 replace_token(self->strings, &res, tok_colon_equal);
                 state = stop;
                 break;
             default:
-                self->pos -= 1;
+                reverse_pos(self);
                 replace_token(self->strings, &res, tok_colon);
                 state = stop;
                 break;
@@ -246,11 +269,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '.': state = in_dot_2; break;
             default:
-                self->pos -= 1;
+                reverse_pos(self);
                 replace_token(self->strings, &res, tok_dot);
                 state = stop;
                 break;
@@ -263,14 +286,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '.':
                 replace_token(self->strings, &res, tok_ellipsis);
                 state = stop;
                 break;
             default:
-                self->pos -= 1;
+                reverse_pos(self);
                 replace_token(self->strings, &res, tok_dot);
                 state = stop;
                 break;
@@ -283,14 +306,15 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '>':
                 replace_token(self->strings, &res, tok_arrow);
                 state = stop;
                 break;
             default:
-                self->pos -= 2;
+                reverse_pos(self);
+                reverse_pos(self); // minus 2
                 state = start_number_sign;
                 break;
             }
@@ -302,15 +326,16 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             if (' ' == c || '\n' == c) {
                 replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
-                if ('\n' == c) self->line++;
+                if ('\n' == c) advance_line(self);
                 goto finish;
             }
 
-            self->pos -= 2;
+            reverse_pos(self);
+            reverse_pos(self); // minus 2
             state = start_symbol;
 
         } break;
@@ -322,11 +347,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 goto finish;
             }
 
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '/': state = start_comment; continue;
             default:
-                self->pos -= 2;
+                reverse_pos(self);
+                reverse_pos(self); // minus 2
                 state = start_symbol;
                 break;
             }
@@ -340,7 +366,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case start_number_sign: {
             start_capture = self->pos;
-            ++self->pos; // capture the +/-
+            advance_pos(self); // capture the +/-
             state = in_number_sign;
         } break;
 
@@ -350,7 +376,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
 
             if (c >= '0' && c <= '9') continue;
             switch (c) {
@@ -370,18 +396,18 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ',':
             case ':':
             case ';':
-                --self->pos;
+                reverse_pos(self);
                 state = stop_number;
                 break;
 
             default:
                 // all invisible and extended characters break a symbol
                 if (c < 0x20) { // c is signed so this catches c > 0x7f
-                    --self->pos;
+                    reverse_pos(self);
                     state = stop_number;
                 } else {
-                    --self->pos;
-                    if (out_err) tok_error(out_err, tl_err_invalid_token, self->file, self->line);
+                    reverse_pos(self);
+                    if (out_err) tok_error(self, out_err, tl_err_invalid_token);
                     return 1;
                 }
             }
@@ -394,7 +420,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             }
 
             // + or - not start of a number
-            char const c = self->input.v[self->pos];
+            char const c = self->input.v[self->pos]; // Note: no increment
             switch (c) {
             case ' ':
             case ')': state = stop_symbol; break;
@@ -420,7 +446,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '(':
             case ')':
@@ -436,13 +462,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '&':
             case '*':
                 // these tokens break a symbol TODO there should be more
-                --self->pos;
+                reverse_pos(self);
                 state = stop_symbol;
                 break;
             default:
                 // all invisible and extended characters break a symbol
                 if (c < 0x20) { // c is signed so this catches c > 0x7f
-                    --self->pos;
+                    reverse_pos(self);
                     state = stop_symbol;
                 }
                 break;
@@ -468,9 +494,9 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_comment;
                 continue;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             if (c == '\n') {
-                --self->pos;
+                reverse_pos(self);
                 state = stop_comment;
             }
         } break;
@@ -492,7 +518,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_string;
                 continue;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
             switch (c) {
             case '\\': state = in_string_backslash; break;
             case '"':  state = stop_string; break;
@@ -507,7 +533,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_string;
                 continue;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
 
             // keep it literal
             char backslash = '\\';
@@ -523,7 +549,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_string;
                 continue;
             }
-            char const c = self->input.v[self->pos++];
+            char const c = next_char(self);
 
             // https://en.cppreference.com/w/cpp/language/escape.html
             // TODO: numeric escapes, octal, hex
@@ -566,13 +592,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 finish:
 
     if (start == state) {
-        if (out_err) tok_error(out_err, tl_err_eof, self->file, self->line);
+        if (out_err) tok_error(self, out_err, tl_err_eof);
         return 1;
     }
 
     else if (stop == state) {
         res.file = self->file;
         res.line = self->line;
+        res.col  = self->col;
         alloc_copy(out, &res);
         return 0;
 

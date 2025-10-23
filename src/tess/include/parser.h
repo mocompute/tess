@@ -16,6 +16,7 @@ typedef struct parser_error {
     tl_error_tag     tag;
     char const      *file;
     u32              line;
+    u32              col;
 } parser_error;
 
 // -- allocation and deallocation --

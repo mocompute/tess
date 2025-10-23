@@ -193,6 +193,7 @@ void parser_destroy(parser **self) {
 static void set_result_file(parser *p) {
     p->result->file = p->token.file;
     p->result->line = p->token.line;
+    p->result->col  = p->token.col;
 }
 
 static int result_ast(parser *p, ast_tag tag) {
@@ -313,6 +314,7 @@ static int eat_comments(parser *p) {
             log(p, "tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
+            p->error.col  = p->tokenizer_error.col;
             p->error.tag  = tl_err_tokenizer_error;
             return 1;
         }
@@ -335,6 +337,7 @@ static int next_token(parser *p) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
+            p->error.col  = p->tokenizer_error.col;
             p->error.tag  = tl_err_tokenizer_error;
             return 1;
         }
@@ -342,6 +345,7 @@ static int next_token(parser *p) {
         // always update file/line
         p->error.file = p->token.file;
         p->error.line = p->token.line;
+        p->error.col  = p->token.col;
 
         if (tok_comment == p->token.tag) continue;
 
@@ -2520,6 +2524,7 @@ int parser_next(parser *self) {
     if (0 == res) {
         self->result->file = self->error.file;
         self->result->line = self->error.line;
+        self->result->col  = self->error.col;
     } else if (is_eof(self)) {
         if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
         self->tokenizer   = null;
@@ -2579,7 +2584,7 @@ static void tokens_shrink(struct parser *p, u32 n) {
 void parser_report_errors(parser *self) {
     if (tl_err_ok == self->error.tag) return;
 
-    fprintf(stderr, "%s:%u: %s\n", self->error.file, self->error.line,
+    fprintf(stderr, "%s:%u:%u: %s\n", self->error.file, self->error.line, self->error.col,
             tl_error_tag_to_string(self->error.tag));
 }
 static int too_many_arguments(parser *self) {
