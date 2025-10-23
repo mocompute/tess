@@ -1,10 +1,6 @@
-add(l : Int, r : Int) -> Int
-
-one = 1
-two = 2
-
-foo() { one + two }
+_tl_sizeof_ (x : a) -> Int
 
 main() {
-  foo () - 3
+  x : Float = 1.0
+  _tl_sizeof_(x) - _tl_sizeof_(x)
 }

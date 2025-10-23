@@ -2386,8 +2386,16 @@ static int b_expression(parser *self) {
 
 static ast_node *parse_lvalue(parser *self) {
     // FIXME deref and dot field access
-    if (0 == a_try(self, a_identifier)) return self->result;
-    return null;
+    if (a_try(self, a_identifier)) return null;
+    ast_node *ident = self->result;
+    ast_node *ann   = null;
+    if (0 == a_try(self, a_type_annotation)) {
+        ann = self->result;
+    }
+
+    assert(ast_node_is_symbol(ident));
+    ident->symbol.annotation = ann;
+    return ident;
 }
 
 static int b_assignment(parser *self) {
