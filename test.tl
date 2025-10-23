@@ -1,5 +1,5 @@
-add(l : Int, r : Int) { l + r }
+c_malloc(sz : Int) -> Ptr(a)
 
 main() {
-  add(-1, 1)
+  c_malloc(64)
 }

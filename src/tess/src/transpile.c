@@ -558,7 +558,42 @@ static str generate_funcall_std(transpile *self, ast_node const *node, eval_ctx 
     array_reserve(args_res, args.size);
 
     forall(i, args) {
-        // if (ast_node_is_nil(args.v[i])) break;
+        str res = generate_expr(self, null, args.v[i], ctx);
+        array_push(args_res, res);
+    }
+
+    // Note: all std_ functions have nil result
+
+    // function call
+    generate_funcall_head(self, name, str_empty(), args_res.size);
+
+    // args list
+    str_build b = str_build_init(self->transient, 128);
+    str_build_join_array(&b, S(", "), args_res);
+    cat(self, str_build_finish(&b));
+    cat_close_round(self);
+    cat_semicolonln(self);
+
+    return str_empty();
+}
+
+static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *ctx) {
+
+    // a funcall to a c function is fundamentally different: we don't have type information on the
+    // function or the arguments.
+
+    // generate untyped arguments
+    str  name = ast_node_str(node->named_application.name);
+    span s    = str_span(&name);
+    s.buf += 2;
+    s.len -= 2;
+    name                    = str_copy_span(self->arena, s);
+
+    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+    str_array      args_res = {.alloc = self->transient};
+    array_reserve(args_res, args.size);
+
+    forall(i, args) {
         str res = generate_expr(self, null, args.v[i], ctx);
         array_push(args_res, res);
     }
@@ -582,8 +617,8 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
-
     if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
+    if (0 == str_cmp_nc(name, "c_", 2)) return generate_funcall_c(self, node, ctx);
 
     tl_monotype const *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
@@ -812,7 +847,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     // the name of the variable which holds the evaluated value.
 
     if (!type) {
-        assert(node->type && !node->type->quantifiers.size);
+        assert(node->type);
         type = node->type->type;
     }
 
