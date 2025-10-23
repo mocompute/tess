@@ -369,3 +369,35 @@ let foo x =
  comment      (* ... *)
  special      ? ... ?
  exception    -
+
+ 
+ // v3 struct
+ // use : to introduce new type
+ 
+ : Empty { }
+ 
+ : Basic { x : Int y : Int }
+ 
+ : Point(a) { x : a y : a }
+ 
+ : Int
+ 
+ a : Int = 0
+ 
+ 
+ main() { 
+ 
+   : Local(a) { foo : a } // local scope, entire function
+   
+   obj = Local(foo = 123)
+   p = Point(x = 1, y = 2)
+   p = Point(3, 4)
+   // named initialisers, but not for funcalls, because that makes param names part of the API
+   
+ }
+ 
+ // v3 array
+ 
+ p[0] = x
+ 
+ // v3 
