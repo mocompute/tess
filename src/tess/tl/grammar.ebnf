@@ -1,5 +1,13 @@
+(*
+
+TODO
+- add funcall and defforward
+- add anon lambda application: (x) { x } (0)
+
+*)
+
 program       = { toplevel } ;
-toplevel      = assignment | defun | defstruct ;
+toplevel      = assignment | defun | defstruct | defforward;
 
 (* note: an assignment is not an expression *)
 assignment    = lvalue "=" expression ;
