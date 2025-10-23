@@ -2073,9 +2073,22 @@ error:
 
 // ---
 
-static int b_expression(parser *self);
+static int       a_param(parser *);
+static int       b_assignment(parser *);
+static int       b_body_element(parser *);
+static int       b_expression(parser *);
+static int       b_funcall(parser *);
+static int       b_lambda_function(parser *);
+static int       b_statement(parser *);
+static int       b_value(parser *);
+static ast_node *create_body(parser *self, ast_node_array exprs);
+static int       operator_precedence(char const *op, int is_prefix);
+static ast_node *parse_base_expression(parser *);
+static ast_node *parse_expression(parser *, int min_preced);
+static ast_node *parse_lvalue(parser *);
+static int       toplevel_defun(parser *);
 
-static int a_param(parser *self) {
+static int       a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
     ast_node *ann   = null;
@@ -2160,6 +2173,7 @@ static int b_value(parser *self) {
     if (0 == a_try(self, b_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
+    if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_identifier)) return 0;
     // if (0 == a_try(self, b_field)) return 0;
 
@@ -2187,7 +2201,49 @@ static int operator_precedence(char const *op, int is_prefix) {
     return INT_MIN;
 }
 
-static ast_node *parse_expression(parser *self, int min_preced);
+static ast_node *parse_if_continue(parser *self) {
+    // the "if" token has been seen
+    ast_node *cond = parse_expression(self, INT_MIN);
+    if (!cond) return null;
+    if (a_try(self, a_open_curly)) return null;
+
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (a_try(self, b_body_element)) return null;
+        array_push(exprs, self->result);
+        if (0 == a_try(self, a_close_curly)) break;
+    }
+
+    ast_node *yes = create_body(self, exprs);
+    ast_node *no  = null;
+
+    if (0 == a_try_s(self, the_symbol, "else")) {
+        if (0 == a_try_s(self, the_symbol, "if")) {
+            no = parse_if_continue(self);
+        } else {
+            if (a_try(self, a_open_curly)) return null;
+            exprs.size = 0;
+            while (1) {
+                if (a_try(self, b_body_element)) return null;
+                array_push(exprs, self->result);
+                if (0 == a_try(self, a_close_curly)) break;
+            }
+            no = create_body(self, exprs);
+        }
+    }
+    if (!no) no = ast_node_create(self->ast_arena, ast_nil);
+
+    ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
+    n->if_then_else.condition = cond;
+    n->if_then_else.yes       = yes;
+    n->if_then_else.no        = no;
+    return n;
+}
+
+static ast_node *parse_if_expr(parser *self) {
+    if (a_try_s(self, the_symbol, "if")) return null;
+    return parse_if_continue(self);
+}
 
 static ast_node *parse_base_expression(parser *self) {
 
@@ -2207,11 +2263,14 @@ static ast_node *parse_base_expression(parser *self) {
         return expr;
     }
 
+    ast_node *node = parse_if_expr(self);
+    if (node) return node;
+
     if (0 == a_try(self, b_value)) {
         return self->result;
     }
 
-    // FIXME: if_expr, cond_expr
+    // FIXME: cond_expr
 
     return null;
 }
@@ -2252,8 +2311,6 @@ static ast_node *parse_lvalue(parser *self) {
     return null;
 }
 
-static int b_body_element(parser *self);
-
 static int b_assignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
@@ -2286,6 +2343,13 @@ static int b_body_element(parser *self) {
     else return 1;
 }
 
+static ast_node *create_body(parser *self, ast_node_array exprs) {
+    array_shrink(exprs);
+    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
+    body->body.expressions = (ast_node_sized)sized_all(exprs);
+    return body;
+}
+
 static int toplevel_defun(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node      *name   = self->result;
@@ -2310,14 +2374,11 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-
         if (b_body_element(self)) return 1;
         array_push(exprs, self->result);
     }
 
-    array_shrink(exprs);
-    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
-    body->body.expressions = (ast_node_sized)sized_all(exprs);
+    ast_node *body = create_body(self, exprs);
 
     array_shrink(params);
     ast_node *let         = ast_node_create(self->ast_arena, ast_let);
@@ -2341,11 +2402,10 @@ static int toplevel(parser *self) {
     if (0 == a_try(self, toplevel_defun)) return 0;
     if (has_error(self)) return 1;
 
-    // if (0 == a_try(self, expression)) return 0;
-    // if (has_error(self)) return 1;
-
     return 1;
 }
+
+// -----------------------
 
 static int expression_let(parser *self) {
     // allows let-in but not let expressions

@@ -127,6 +127,7 @@ endfunction()
 
 tesslang_create_test_no_preamble(v3_binop)
 tesslang_create_test_no_preamble(v3_let_in_basic)
+tesslang_create_test_no_preamble(v3_if_basic)
 
 # FIXME: v2-parser: disable all tests
 
