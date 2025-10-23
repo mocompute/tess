@@ -767,23 +767,37 @@ static str generate_body(transpile *self, tl_monotype const *type, ast_node cons
     }
     return out;
 }
-static str generate_assignment(transpile *self, ast_node const *node, eval_ctx *ctx) {
 
-    str                name = ast_node_str(node->let_in.name);
-    tl_monotype const *type = env_lookup(self, name); // may be null
+static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node const *node,
+                              eval_ctx *ctx) {
+    assert(ast_binary_op == node->tag);
+    str left  = generate_expr(self, type, node->binary_op.left, ctx);
+    str right = generate_expr(self, type, node->binary_op.left, ctx);
+    str op    = ast_node_str(node->binary_op.op);
 
-    if (type) {
-        str value = generate_expr(self, type, node->assignment.value, ctx);
+    str res   = next_res(self);
+    generate_decl(self, res, type);
+    generate_assign_lhs(self, res);
+    cat(self, left);
+    cat(self, op);
+    cat(self, right);
+    cat_semicolonln(self);
+    return res;
+}
 
-        if (!tl_monotype_is_nil(type)) {
-            generate_decl(self, name, type);
-            generate_assign(self, name, value);
-            return value;
-        }
-    }
-    return str_empty();
+static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node const *node,
+                             eval_ctx *ctx) {
+    assert(ast_unary_op == node->tag);
+    str operand = generate_expr(self, type, node->unary_op.operand, ctx);
+    str op      = ast_node_str(node->unary_op.op);
 
-    // FIXME: this breaks let-in semantics
+    str res     = next_res(self);
+    generate_decl(self, res, type);
+    generate_assign_lhs(self, res);
+    cat(self, op);
+    cat(self, operand);
+    cat_semicolonln(self);
+    return res;
 }
 
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
@@ -841,11 +855,11 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_user_type_set: return generate_type_set(self, type, node, ctx);
 
     case ast_body:          return generate_body(self, type, node, ctx);
-    case ast_assignment:    return generate_assignment(self, node, ctx);
 
-    case ast_binary_op:
-    case ast_unary_op:
+    case ast_binary_op:     return generate_binary_op(self, type, node, ctx);
+    case ast_unary_op:      return generate_unary_op(self, type, node, ctx);
 
+    case ast_assignment:
     case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:

@@ -982,6 +982,15 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     } break;
 
+    case ast_binary_op: {
+        str_build b = str_build_init(alloc, 128);
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.left));
+        str_build_cat(&b, node->binary_op.op->symbol.name);
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.right));
+        return str_build_finish(&b);
+
+    } break;
+
     case ast_f64: snprintf(buf, sizeof buf, "%f", node->f64.val); return str_init(alloc, buf);
     case ast_i64:
         snprintf(buf, sizeof buf, "(%" PRIi64 " : %s)", node->i64.val, str_cstr(&ty_str));
@@ -1088,7 +1097,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     } break;
 
-    case ast_binary_op:
     case ast_unary_op:
 
     case ast_address_of:

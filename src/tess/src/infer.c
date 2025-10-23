@@ -836,6 +836,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_binary_op: {
         ast_node *left = node->binary_op.left, *right = node->binary_op.right;
+        ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &left->type);
         ensure_tv(self, null, &right->type);
         if (constrain(self, ctx, node->type, left->type, node)) return 1;

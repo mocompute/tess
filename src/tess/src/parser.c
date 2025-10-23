@@ -46,6 +46,7 @@ struct parser {
 
 typedef int (*parse_fun)(parser *);
 typedef int (*parse_fun_s)(parser *, char const *);
+typedef int (*parse_fun_int)(parser *, int);
 
 // -- overview --
 
@@ -394,6 +395,24 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     return 0;
 }
 
+nodiscard static int a_try_int(parser *p, parse_fun_int fun, int arg) {
+    u32 const save_toks = p->tokens.size;
+    if (fun(p, arg)) {
+        if (p->tokens.size > save_toks) {
+            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
+            alloc_free(p->transient, str);
+
+            tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
+            tokens_shrink(p, save_toks);
+        }
+
+        return 1;
+    }
+    // do not reset tokens on success, because calls to a_try may be
+    // nested.
+    return 0;
+}
+
 nodiscard static int a_try_special(parser *p, parse_fun fun) {
     // if fun returns 2, tokens are restored as in the failure case,
     // but this function returns success.
@@ -542,18 +561,30 @@ next_expression:
     return 2;
 }
 
-static int a_binary_operator(parser *self) {
+static int operator_precedence(char const *op, int is_prefix);
+
+static int a_binary_operator(parser *self, int min_prec) {
     if (next_token(self)) {
         if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
         return 1;
     }
 
-    if (tok_symbol == self->token.tag)
-        if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
-            is_relational_operator(self->token.s))
-            return 0;
+    char const *op = null;
 
-    return 1;
+    if (tok_symbol == self->token.tag) {
+        if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
+            is_relational_operator(self->token.s)) {
+            op = self->token.s;
+        }
+    } else if (tok_star == self->token.tag || tok_dot == self->token.tag) {
+        if (tok_star == self->token.tag) op = "*";
+        else op = ".";
+    } else return 1;
+
+    int prec = operator_precedence(op, 0);
+    if (prec < min_prec) return 1;
+
+    return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
 }
 
 static int a_unary_operator(parser *self) {
@@ -563,7 +594,15 @@ static int a_unary_operator(parser *self) {
     }
 
     if (tok_symbol == self->token.tag)
-        if (is_unary_operator(self->token.s)) return 0;
+        if (is_unary_operator(self->token.s))
+            return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, self->token.s));
+
+    if (tok_star == self->token.tag || tok_ampersand == self->token.tag) {
+        ast_node *sym;
+        if (tok_star == self->token.tag) sym = ast_node_create_sym_c(self->ast_arena, "*");
+        else sym = ast_node_create_sym_c(self->ast_arena, "&");
+        return result_ast_node(self, sym);
+    }
 
     return 1;
 }
@@ -2143,7 +2182,7 @@ static int operator_precedence(char const *op, int is_prefix) {
       {"-", 70}, {"!", 70}, {"*", 70}, {"&", 70}, {null, 0},
     };
 
-    for (struct item const *search = is_prefix ? prefix : infix; search; ++search) {
+    for (struct item const *search = is_prefix ? prefix : infix; search->op; ++search) {
         if (0 == strcmp(op, search->op)) return search->p;
     }
     return INT_MIN;
@@ -2154,8 +2193,8 @@ static ast_node *parse_expression(parser *self, int min_preced);
 static ast_node *parse_base_expression(parser *self) {
 
     if (0 == a_try(self, a_unary_operator)) {
-        ast_node *op            = ast_node_create_sym_c(self->ast_arena, self->token.s);
-        int       prec          = operator_precedence(self->token.s, 1);
+        ast_node *op            = self->result;
+        int       prec          = operator_precedence(str_cstr(&op->symbol.name), 1);
         ast_node *expr          = parse_expression(self, prec);
         ast_node *unary         = ast_node_create(self->ast_arena, ast_unary_op);
         unary->unary_op.operand = expr;
@@ -2178,17 +2217,18 @@ static ast_node *parse_base_expression(parser *self) {
     return null;
 }
 
-static ast_node *parse_expression(parser *self, int min_preced) {
+static ast_node *parse_expression(parser *self, int min_prec) {
 
     ast_node *left = parse_base_expression(self);
     if (!left) return null;
     while (1) {
-        if (0 == a_try(self, a_binary_operator)) {
-            ast_node *op   = ast_node_create_sym_c(self->ast_arena, self->token.s);
+        if (0 == a_try_int(self, a_binary_operator, min_prec)) {
+            ast_node *op   = self->result;
 
-            int       prec = operator_precedence(self->token.s, 0);
-            if (prec < min_preced) break;
-            ast_node *right        = parse_expression(self, prec + 1);
+            int       prec = operator_precedence(str_cstr(&op->symbol.name), 0);
+            assert(prec >= min_prec);
+            ast_node *right = parse_expression(self, prec);
+            if (!right) return null;
 
             ast_node *binop        = ast_node_create(self->ast_arena, ast_binary_op);
             binop->binary_op.left  = left;
