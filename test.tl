@@ -1,14 +1,8 @@
-apply_nil(f) { f() }
+one = 1
+two = 2
+
+foo() { one + two }
 
 main() {
-  a = 0
-  l = () { a }
-  apply_nil(l)
+  foo ()
 }
-
-
-// add(l, r) { l + r }
-
-// main() {
-//   add(-1, 1)
-// }

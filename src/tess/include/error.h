@@ -13,6 +13,7 @@
     X(tl_err_invalid_token, "invalid_token")                                                               \
                                                                                                            \
     /* parser */                                                                                           \
+    X(tl_err_expected_toplevel, "expected_toplevel")                                                       \
     X(tl_err_unfinished_begin_end, "unfinished_begin_end")                                                 \
     X(tl_err_unfinished_expression, "unfinished_expression")                                               \
     X(tl_err_unfinished_struct, "unfinished_struct")                                                       \

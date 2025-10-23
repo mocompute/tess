@@ -2471,16 +2471,31 @@ decl_done:
     return 0;
 }
 
+static int toplevel_assign(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+    if (a_try(self, a_equal_sign)) return 1;
+    ast_node *value = parse_expression(self, INT_MIN);
+    if (!value) return 1;
+
+    ast_node *n     = ast_node_create(self->ast_arena, ast_let_in);
+    n->let_in.body  = null;
+    n->let_in.name  = name;
+    n->let_in.value = value;
+    return result_ast_node(self, n);
+}
+
 static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
     if (0 == a_try(self, struct_declaration)) return 0;
-    if (has_error(self)) return 1;
 
     if (0 == a_try(self, toplevel_defun)) return 0;
-    if (has_error(self)) return 1;
 
+    if (0 == a_try(self, toplevel_assign)) return 0;
+
+    self->error.tag = tl_err_expected_toplevel;
     return 1;
 }
 
