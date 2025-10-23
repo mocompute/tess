@@ -1196,6 +1196,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             str       arg_name = ast_node_str(arg);
             ast_node *top      = toplevel_get(self, arg_name);
             if (!top) continue;
+            if (top->type && !tl_monotype_is_arrow(top->type->type)) continue;
 
             if (traverse_ast(self, traverse_ctx, top, infer_traverse_cb)) return 1;
             if (traverse_ast(self, traverse_ctx, top, specialize_applications_cb)) return 1;
