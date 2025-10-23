@@ -2186,12 +2186,6 @@ decl_done:
     ast_node *body         = ast_node_create(self->ast_arena, ast_body);
     body->body.expressions = (ast_node_sized)sized_all(exprs);
 
-    // add nil parameter if there are zero params
-    if (0 == params.size) {
-        ast_node *nil = ast_node_create(self->ast_arena, ast_nil);
-        array_push(params, nil);
-    }
-
     array_shrink(params);
     ast_node *l                     = ast_node_create(self->ast_arena, ast_lambda_function);
     l->lambda_function.parameters   = params.v;
@@ -2464,11 +2458,6 @@ decl_done:
     }
 
     ast_node *body = create_body(self, exprs);
-
-    if (0 == params.size) {
-        ast_node *nil = ast_node_create(self->ast_arena, ast_nil);
-        array_push(params, nil);
-    }
 
     array_shrink(params);
     ast_node *let         = ast_node_create(self->ast_arena, ast_let);

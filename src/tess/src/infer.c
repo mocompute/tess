@@ -1552,14 +1552,18 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     }
 
     if (body) {
-        // assign concrete types to parameters
+        // assign concrete types to parameters based on callsite arguments
         assert(tl_list == arrow->tag);
 
-        assert(arrow->list.xs.size == params.size + 1);
+        assert(arrow->list.xs.size == 2);
+        assert(tl_tuple == arrow->list.xs.v[0]->tag);
+        tl_monotype_sized callsite_args = arrow->list.xs.v[0]->list.xs;
+        assert(callsite_args.size == params.size);
+
         forall(i, params) {
             ast_node *param = params.v[i];
             param->type =
-              tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, arrow->list.xs.v[i]));
+              tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, callsite_args.v[i]));
         }
 
         tl_monotype const *inst_result = tl_monotype_sized_last(arrow->list.xs);
@@ -1600,8 +1604,9 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
 
     if (result) ensure_tv(self, null, &result->type);
 
-    if (args.size == 0) {
-        tl_monotype const *lhs   = tl_type_registry_nil(self->registry);
+    if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
+        // always use a tuple on the left side of arrow, even if zero elements
+        tl_monotype const *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
         tl_monotype const *rhs   = result ? tl_monotype_clone(self->arena, result->type->type) : null;
         tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
@@ -1614,12 +1619,8 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
     }
 
     else if (args.size == 1) {
-        // nil type
-        if (ast_node_is_nil(args.v[0])) {
-            tl_monotype const *mono = tl_type_registry_nil(self->registry);
-            if (!mono) fatal("runtime error");
-            args.v[0]->type = tl_polytype_absorb_mono(self->arena, (tl_monotype *)mono); // FIXME const
-        } else ensure_tv(self, null, &args.v[0]->type);
+
+        ensure_tv(self, null, &args.v[0]->type);
 
         if (tl_polytype_is_scheme(args.v[0]->type)) {
             array_push(self->errors,
@@ -1628,9 +1629,17 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
             return null;
         }
 
-        tl_monotype const *lhs   = tl_monotype_clone(self->arena, args.v[0]->type->type);
+        tl_monotype_array tuple = {.alloc = self->arena};
+        {
+            tl_monotype const *lhs = tl_monotype_clone(self->arena, args.v[0]->type->type);
+            array_push(tuple, lhs);
+        }
+        array_shrink(tuple);
+        tl_monotype const *left =
+          tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tuple));
+
         tl_monotype const *rhs   = result ? tl_monotype_clone(self->arena, result->type->type) : null;
-        tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
+        tl_monotype const *arrow = tl_monotype_create_arrow(self->arena, left, rhs);
         {
             str str = tl_monotype_to_string(self->transient, arrow);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
@@ -1657,14 +1666,17 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
             array_push(clone, ty);
         }
 
+        tl_monotype const *left =
+          tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(clone));
+        tl_monotype const *right = null;
         if (result) {
-            tl_monotype const *res_ty = tl_monotype_clone(self->arena, result->type->type);
-            array_push(clone, res_ty);
+            right = tl_monotype_clone(self->arena, result->type->type);
+        } else {
+            right = tl_type_registry_nil(self->registry);
         }
 
-        array_shrink(clone);
+        tl_monotype const *out = tl_monotype_create_arrow(self->arena, left, right);
 
-        tl_monotype const *out = tl_monotype_create_list(self->arena, (tl_monotype_sized)sized_all(clone));
         {
             str str = tl_monotype_to_string(self->transient, out);
             log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
@@ -1719,7 +1731,8 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
 }
 
 static void promote_free_variables(str_array *out, tl_monotype const *in) {
-    if (tl_monotype_is_list(in)) {
+    if (tl_monotype_is_list(in) || tl_monotype_is_tuple(in)) {
+        // TODO: clean up tuple args handling
         forall(i, in->list.xs) promote_free_variables(out, in->list.xs.v[i]);
         forall(i, in->list.fvs) str_array_set_insert(out, in->list.fvs.v[i]);
     }

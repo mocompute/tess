@@ -373,14 +373,14 @@ static void generate_toplevels(transpile *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_utd(node)) continue;
         str                name = toplevel_name(node);
-        tl_polytype const *type = tl_type_env_lookup(self->env, name);
-        if (!type) fatal("missing type");
+        tl_polytype const *poly = tl_type_env_lookup(self->env, name);
+        if (!poly) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
-        if (!should_generate(name, type)) continue;
+        if (!should_generate(name, poly)) continue;
 
-        assert(type->type->list.xs.size > 0);
-        tl_monotype const *return_type = tl_monotype_sized_last(type->type->list.xs);
+        assert(poly->type->list.xs.size == 2);
+        tl_monotype const *return_type = tl_monotype_sized_last(poly->type->list.xs);
         ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
@@ -396,7 +396,7 @@ static void generate_toplevels(transpile *self) {
             array_push(params_str, param->symbol.name);
         }
 
-        str ret         = arrow_rhs_to_c(self, type);
+        str ret         = arrow_rhs_to_c(self, poly);
         int res_is_void = str_eq(ret, S("void"));
         str res         = str_empty();
         if (!res_is_void) {
@@ -408,13 +408,13 @@ static void generate_toplevels(transpile *self) {
         cat(self, mangle_fun(self, name)); // fun name
 
         cat_open_round(self); // args
-        cat(self, arrow_to_c_params(self, type, (str_sized)sized_all(params_str)));
+        cat(self, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
         cat_close_round(self);
 
         cat_open_curlyln(self); // body
 
-        assert(tl_monotype_is_list(type->type));
-        eval_ctx ctx      = {.free_variables = type->type->list.fvs};
+        assert(tl_monotype_is_list(poly->type));
+        eval_ctx ctx      = {.free_variables = poly->type->list.fvs};
         str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void) {
             generate_decl(self, res, return_type);
@@ -492,7 +492,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     assert(arr.size >= args.size);
     forall(i, args) {
         if (!arrow) fatal("ran out of arrow");
-        if (ast_node_is_nil(args.v[i])) break;
+        // if (ast_node_is_nil(args.v[i])) break;
 
         str res = generate_expr(self, arr.v[i], args.v[i], ctx);
         array_push(args_res, res);
@@ -554,7 +554,7 @@ static str generate_funcall_std(transpile *self, ast_node const *node, eval_ctx 
     array_reserve(args_res, args.size);
 
     forall(i, args) {
-        if (ast_node_is_nil(args.v[i])) break;
+        // if (ast_node_is_nil(args.v[i])) break;
         str res = generate_expr(self, null, args.v[i], ctx);
         array_push(args_res, res);
     }
@@ -698,7 +698,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     // initialise parameters
     forall(i, params) {
         ast_node const *param = params.v[i];
-        if (ast_node_is_nil(param)) break;
+        // if (ast_node_is_nil(param)) break;
         assert(ast_node_is_symbol(param));
         assert(!param->type->quantifiers.size);
 
@@ -1199,24 +1199,19 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
 
-    int first_arg_is_nil = type->list.xs.size && tl_monotype_is_nil(type->list.xs.v[0]);
+    assert(type->list.xs.size == 2);
+    assert(tl_tuple == type->list.xs.v[0]->tag);
+    tl_monotype_sized params = type->list.xs.v[0]->list.xs;
 
     // generate lambda context argument for free variables
     if (type->list.fvs.size) {
         str ctx_name = context_name(self, type->list.fvs);
         str_build_cat(b, ctx_name);
         str_build_cat(b, S("*"));
-        if (type->list.xs.size && !first_arg_is_nil) str_build_cat(b, S(", "));
+        if (params.size) str_build_cat(b, S(", "));
     }
 
-    assert(type->list.xs.size > 1);
-    for (u32 i = 0, n = type->list.xs.size - 1; i < n;
-         ++i) { // skipping last element, which is the result type
-
-        // special case: if only arg is nil and we declared a context arg, suppress emitting a 'void'
-        // parameter.
-        if (first_arg_is_nil && type->list.fvs.size) continue;
-
+    for (u32 i = 0, n = params.size; i < n; ++i) {
         str_build_cat(b, type_to_c_mono(self, type->list.xs.v[i]));
         if (i + 1 < n) str_build_cat(b, S(", "));
     }
@@ -1233,10 +1228,10 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
 
     tl_monotype const *arrow = type->type;
     if (tl_list != arrow->tag) fatal("logic error");
-    assert(arrow->list.xs.size > 0);
-    assert(!param_names.size || param_names.size >= arrow->list.xs.size - 1);
-
-    int first_arg_is_nil = arrow->list.xs.size && tl_monotype_is_nil(arrow->list.xs.v[0]);
+    assert(arrow->list.xs.size == 2);
+    assert(tl_tuple == arrow->list.xs.v[0]->tag);
+    tl_monotype_sized params = arrow->list.xs.v[0]->list.xs;
+    assert(!param_names.size || param_names.size == params.size);
 
     // generate lambda context argument for free variables
     if (arrow->list.fvs.size) {
@@ -1247,19 +1242,14 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
         // always output a name for the context parameter, because we might be in a function definition.
         cat_sp(self);
         cat(self, S("tl_ctx"));
-        if (arrow->list.xs.size && !first_arg_is_nil) cat_commasp(self);
+        if (params.size) cat_commasp(self);
     }
 
-    for (u32 i = 0, n = arrow->list.xs.size - 1; i < n; ++i) {
-        // skip last element, the result type
-        tl_monotype const *arg = arrow->list.xs.v[i];
+    for (u32 i = 0, n = params.size; i < n; ++i) {
+        tl_monotype const *arg = params.v[i];
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
         } else {
-            // special case: if only arg is nil and we declared a context arg, suppress emitting a 'void'
-            // parameter.
-            if (first_arg_is_nil && arrow->list.fvs.size) continue;
-
             str_build_cat(&b, type_to_c_mono(self, arg));
             if (i < param_names.size) {
                 str_build_cat(&b, S(" "));
