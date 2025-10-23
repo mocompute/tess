@@ -125,6 +125,7 @@ function(tesslang_create_test_no_preamble NAME)
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
 
+tesslang_create_test_no_preamble(v3_anon_lambda)
 tesslang_create_test_no_preamble(v3_binop)
 tesslang_create_test_no_preamble(v3_cond_basic)
 tesslang_create_test_no_preamble(v3_defun_inline_type)

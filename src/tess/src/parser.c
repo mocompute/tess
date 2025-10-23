@@ -2213,6 +2213,33 @@ decl_done:
     return result_ast_node(self, l);
 }
 
+static int b_lambda_funcall(parser *self) {
+    if (a_try(self, b_lambda_function)) return 1;
+    ast_node *lambda = self->result;
+
+    if (a_try(self, a_open_round)) return 1;
+
+    ast_node_array args = {.alloc = self->ast_arena};
+    if (0 == a_try(self, a_close_round)) goto done;
+    if (0 == a_try(self, b_expression)) array_push(args, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_round)) goto done;
+        if (a_try(self, a_comma)) return 1;
+        if (a_try(self, b_expression)) return 1;
+        array_push(args, self->result);
+    }
+
+done:
+
+    array_shrink(args);
+    ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function_application);
+    node->lambda_application.lambda    = lambda;
+    node->lambda_application.arguments = args.v;
+    node->lambda_application.n_arguments = args.size;
+    return result_ast_node(self, node);
+}
+
 static int b_value(parser *self) {
     if (0 == a_try(self, b_funcall)) return 0;
     if (0 == a_try(self, b_lambda_function)) return 0;
@@ -2354,6 +2381,7 @@ static ast_node *parse_base_expression(parser *self) {
 
     // lambda function is identified by open round, so we need to parse it before nil and grouped
     // expressions.
+    if (0 == a_try(self, b_lambda_funcall)) return self->result;
     if (0 == a_try(self, b_lambda_function)) return self->result;
     if (0 == a_try(self, a_nil)) return self->result; // parse () before (...)
 
