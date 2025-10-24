@@ -466,9 +466,10 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
     cat_semicolonln(self);
 }
 
-static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
+static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u32 n_args, int do_mangle) {
 
-    cat(self, mangle_fun(self, name));
+    if (do_mangle) cat(self, mangle_fun(self, name));
+    else cat(self, name);
     cat_open_round(self);
 
     if (!str_is_empty(ctx_var)) {
@@ -476,6 +477,14 @@ static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_
         cat(self, ctx_var);
         if (n_args) cat_commasp(self);
     }
+}
+
+static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
+    return generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
+}
+
+static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_var, u32 n_args) {
+    return generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
 }
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype const *arrow,
@@ -583,8 +592,9 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     // function or the arguments.
 
     // generate untyped arguments
-    str  name = ast_node_str(node->named_application.name);
-    span s    = str_span(&name);
+    str name = ast_node_name_original(node->named_application.name);
+    // str  name = ast_node_str(node->named_application.name);
+    span s = str_span(&name);
     s.buf += 2;
     s.len -= 2;
     name                    = str_copy_span(self->arena, s);
@@ -598,10 +608,13 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
         array_push(args_res, res);
     }
 
-    // Note: all std_ functions have nil result
+    // declare variable to hold funcall result if it's not nil
+    tl_monotype const *type = env_lookup(self, ast_node_str(node->named_application.name));
+    str                res  = generate_funcall_result(self, type, 0);
 
     // function call
-    generate_funcall_head(self, name, str_empty(), args_res.size);
+    if (!str_is_empty(res)) generate_assign_lhs(self, res);
+    generate_funcall_head_no_mangle(self, name, str_empty(), args_res.size);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -1197,8 +1210,14 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
             return S("void");
         } else if (str_eq(S("Ptr"), cons_name)) {
             assert(1 == mono->cons_inst->args.size);
-            tl_polytype wrap = tl_polytype_wrap(mono->cons_inst->args.v[0]);
-            return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
+            tl_monotype const *arg = mono->cons_inst->args.v[0];
+            if (tl_monotype_is_concrete(arg)) {
+                tl_polytype wrap = tl_polytype_wrap(arg);
+                return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
+            } else {
+                // void*
+                return str_init(self->transient, "void*");
+            }
         } else {
             if (!str_is_empty(mono->cons_inst->special_name)) return mono->cons_inst->special_name;
             return cons_name;
