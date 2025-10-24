@@ -623,7 +623,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     cat_close_round(self);
     cat_semicolonln(self);
 
-    return str_empty();
+    return res;
 }
 
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
@@ -697,11 +697,14 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     }
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
-    str res  = next_res(self);
-    generate_decl(self, res, result_type);
-    generate_assign(self, res, body);
-
-    return res;
+    if (!tl_monotype_is_nil(result_type)) {
+        str res = next_res(self);
+        generate_decl(self, res, result_type);
+        generate_assign(self, res, body);
+        return res;
+    } else {
+        return body;
+    }
 }
 
 static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx *ctx) {

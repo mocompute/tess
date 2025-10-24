@@ -134,6 +134,7 @@ tesslang_create_test_no_preamble(v3_global_variables)
 tesslang_create_test_no_preamble(v3_lambda_basic)
 tesslang_create_test_no_preamble(v3_lambda_apply)
 tesslang_create_test_no_preamble(v3_let_in_basic)
+tesslang_create_test_no_preamble(v3_malloc_free)
 tesslang_create_test_no_preamble(v3_relational_basic)
 tesslang_create_test_no_preamble(v3_sizeof)
 
