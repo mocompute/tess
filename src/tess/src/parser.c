@@ -923,9 +923,10 @@ static ast_node *parse_cond_expr(parser *self) {
 static ast_node *parse_base_expression(parser *self) {
 
     if (0 == a_try(self, a_unary_operator)) {
-        ast_node *op            = self->result;
-        int       prec          = operator_precedence(str_cstr(&op->symbol.name), 1);
-        ast_node *expr          = parse_expression(self, prec);
+        ast_node *op   = self->result;
+        int       prec = operator_precedence(str_cstr(&op->symbol.name), 1);
+        ast_node *expr = parse_expression(self, prec);
+        if (!expr) return null;
         ast_node *unary         = ast_node_create(self->ast_arena, ast_unary_op);
         unary->unary_op.operand = expr;
         unary->unary_op.op      = op;
