@@ -400,4 +400,13 @@ let foo x =
  
  p[0] = x
  
- // v3 
+ // v3 pointers and address of operators 
+ // interact badly with arithmetic and bitwise operators if it is unclear by context
+ 
+ x = foo()
+ *x
+ 
+ can be parsed as foo() * x if we don't have a ; end of statement 
+ 
+ 
+ 
