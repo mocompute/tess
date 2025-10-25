@@ -4,8 +4,7 @@ c_malloc(sz : Int) -> Ptr(a)
 : Point(a) { x: a y : a }
 
 main() {
-  tmp = Point(0, 0)
-  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(tmp))
+  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(Point(Int)))
   p->x := 0
   p->y := 1
   p->x

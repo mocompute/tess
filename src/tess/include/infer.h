@@ -10,6 +10,7 @@ typedef struct tl_infer tl_infer;
 typedef struct {
     tl_type_registry *registry;
     tl_type_env      *env;
+    tl_type_subs     *subs;
     hashmap          *toplevels;         // str => ast_node*
     ast_node_sized    nodes;             // full ast (to get utds)
     ast_node_sized    synthesized_nodes; // nodes added by compiler
@@ -25,6 +26,10 @@ void                tl_infer_report_errors(tl_infer *);
 str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
-tl_monotype const  *tl_type_constructor_from_user_type(tl_infer *, ast_node const *node);
+tl_monotype const  *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
+                                           hashmap **map);
+
+tl_monotype const  *tl_infer_update_specialized_type(allocator *alloc, tl_type_registry *registry,
+                                                     tl_monotype const *mono);
 
 #endif

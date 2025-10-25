@@ -55,6 +55,7 @@ typedef struct {
 static void      apply_subs_to_ast(tl_infer *);
 static str       next_instantiation(tl_infer *, str);
 static void      cancel_last_instantiation(tl_infer *);
+static int       is_intrinsic(str);
 
 static void      toplevel_add(tl_infer *, str, ast_node *);
 static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
@@ -424,15 +425,17 @@ typedef struct {
     hashmap *call_chain; // hset str
     hashmap *lex;        // hset str (names in local lexical scope)
     void    *user;
+    int      is_intrinsic_argument;
 } traverse_ctx;
 
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
-    traverse_ctx *out = new (alloc, traverse_ctx);
-    out->call_chain   = hset_create(alloc, 16);
-    out->lex          = hset_create(alloc, 16);
-    out->user         = null;
+    traverse_ctx *out          = new (alloc, traverse_ctx);
+    out->call_chain            = hset_create(alloc, 16);
+    out->lex                   = hset_create(alloc, 16);
+    out->user                  = null;
+    out->is_intrinsic_argument = 0;
 
     return out;
 }
@@ -621,13 +624,18 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             return 0;
         }
 
-        // traverse arguments
+        // traverse arguments, but do not process arguments of intrinsic calls
+        int save = ctx->is_intrinsic_argument;
+        if (is_intrinsic(name)) ctx->is_intrinsic_argument = 1;
+
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter)))
             if (traverse_ast(self, ctx, arg, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
+
+        ctx->is_intrinsic_argument = save;
 
     } break;
 
@@ -1268,9 +1276,13 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    infer_ctx         *ctx  = traverse_ctx->user;
+    infer_ctx *ctx  = traverse_ctx->user;
 
-    str                name = node->named_application.name->symbol.name;
+    str        name = node->named_application.name->symbol.name;
+
+    // do not process intrinsic calls
+    if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
+
     tl_polytype const *type = tl_type_env_lookup(self->env, name);
     if (!type) {
         return 0; // mutual recursion
@@ -2034,13 +2046,18 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
-static tl_monotype const *get_special_type(tl_infer *self, str type_name, tl_monotype_sized args) {
-    tl_monotype const *mono = tl_type_registry_get_cached_instance(self->registry, type_name, args);
+static tl_monotype const *get_special_type(allocator *alloc, tl_type_registry *registry, str type_name,
+                                           tl_monotype_sized args) {
+    tl_monotype const *mono = tl_type_registry_get_cached_instance(registry, type_name, args);
     if (!mono) return null;
-    return tl_monotype_clone(self->arena, mono);
+    return tl_monotype_clone(alloc, mono);
 }
 
-static tl_monotype const *update_one_special_type(tl_infer *self, tl_monotype const *mono) {
+tl_monotype const *tl_infer_update_specialized_type(allocator *alloc, tl_type_registry *registry,
+                                                    tl_monotype const *mono) {
+    // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
+    // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
+
     switch (mono->tag) {
 
     case tl_var:
@@ -2052,20 +2069,22 @@ static tl_monotype const *update_one_special_type(tl_infer *self, tl_monotype co
 
         // first recurse through the type args
         forall(i, mono->cons_inst->args) {
-            tl_monotype const *replace = update_one_special_type(self, mono->cons_inst->args.v[i]);
+            tl_monotype const *replace =
+              tl_infer_update_specialized_type(alloc, registry, mono->cons_inst->args.v[i]);
             if (replace) mono->cons_inst->args.v[i] = replace;
         }
 
         str                type_name = mono->cons_inst->def->name;
         tl_monotype_sized  type_args = mono->cons_inst->args;
-        tl_monotype const *replace   = get_special_type(self, type_name, type_args);
+        tl_monotype const *replace   = get_special_type(alloc, registry, type_name, type_args);
         if (!replace) return null;
         return replace;
 
     case tl_list:
     case tl_tuple:
         forall(i, mono->list.xs) {
-            tl_monotype const *replace = update_one_special_type(self, mono->list.xs.v[i]);
+            tl_monotype const *replace =
+              tl_infer_update_specialized_type(alloc, registry, mono->list.xs.v[i]);
             if (replace) mono->list.xs.v[i] = replace;
         }
         break;
@@ -2080,14 +2099,15 @@ static void update_specialized_types(tl_infer *self) {
         tl_polytype const *poly = *(tl_polytype const **)iter.data;
 
         if (tl_polytype_is_type_constructor(poly)) {
-            tl_monotype const *replace = update_one_special_type(self, poly->type);
+            tl_monotype const *replace =
+              tl_infer_update_specialized_type(self->arena, self->registry, poly->type);
             if (replace) {
                 tl_polytype const *poly_replace  = tl_polytype_absorb_mono(self->arena, replace);
                 *(tl_polytype const **)iter.data = poly_replace;
             }
         } else {
             // otherwise walk through every monotype referenced by this polytype
-            update_one_special_type(self, poly->type);
+            tl_infer_update_specialized_type(self->arena, self->registry, poly->type);
         }
     }
 
@@ -2194,6 +2214,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (out_result) {
         out_result->registry          = self->registry;
         out_result->env               = self->env;
+        out_result->subs              = self->subs;
         out_result->toplevels         = self->toplevels;
         out_result->nodes             = nodes;
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
@@ -2278,6 +2299,12 @@ static void apply_subs_to_ast(tl_infer *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         ast_node_dfs(self, node, do_apply_subs);
     }
+}
+
+//
+
+static int is_intrinsic(str name) {
+    return (0 == str_cmp_nc(name, "_tl_", 4));
 }
 
 //

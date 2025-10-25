@@ -5,8 +5,8 @@ c_free(ptr : Ptr(a)) -> Nil
 : Point(a) { x: a y : a }
 
 main() {
-  tmp = Point(0, 0)
-  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(tmp))
+  tmp = Point(0, 0) // FIXME currently require a concrete type constructor application to specialize the type
+  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(Point(Int)))
   p->x := 0
   p->y := 1
   res = p->x

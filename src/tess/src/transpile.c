@@ -25,6 +25,7 @@ struct transpile {
     ast_node_sized    nodes;
     ast_node_sized    synthesized_nodes;
     tl_type_env      *env;
+    tl_type_subs     *subs;
     hashmap          *toplevels;         // str => ast_node*
     hashmap          *structs;           // u64 set
     hashmap          *context_generated; // str set
@@ -1154,6 +1155,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->synthesized_nodes = opts->infer_result.synthesized_nodes;
     self->registry          = opts->infer_result.registry;
     self->env               = opts->infer_result.env;
+    self->subs              = opts->infer_result.subs;
     self->toplevels         = opts->infer_result.toplevels;
 
     self->structs           = hset_create(self->arena, 64);
@@ -1441,22 +1443,31 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     (void)extra;
 
     assert(ast_node_is_named_application(node));
-    str                name = ast_node_str(node->named_application.name);
 
-    tl_monotype const *type = env_lookup(self, name);
-    if (!type) fatal("funcall with null type");
+    // single argument may be an expression or a type constructor
+    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    ast_node const *arg = node->named_application.arguments[0];
+    if (ast_node_is_named_application(arg)) {
+        // type constructor
+        hashmap           *map  = map_new(self->transient, str, tl_type_variable, 8);
+        tl_monotype const *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        if (!type) fatal("missing type");
 
-    // generate arguments: an array of variables will hold their values
-    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type, ctx);
+        // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
+        // know about how to handle _tl_sizeof_'s arguments.
+        type = tl_infer_update_specialized_type(self->transient, self->registry, type);
+        if (!type) fatal("missing specialized type");
 
-    str_build      b        = str_build_init(self->transient, 80);
-
-    str_build_cat(&b, S("sizeof ("));
-    if (args_res.size < 1) fatal("missing argument");
-    str_build_cat(&b, args_res.v[0]);
-    str_build_cat(&b, S(")"));
-    return str_build_finish(&b);
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
+    } else {
+        // expression
+        int save         = ctx->want_lvalue;
+        ctx->want_lvalue = 1;
+        str expr         = generate_expr(self, null, arg, ctx);
+        ctx->want_lvalue = save;
+        return str_cat_3(self->transient, S("sizeof("), expr, S(")"));
+    }
 }
 
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
