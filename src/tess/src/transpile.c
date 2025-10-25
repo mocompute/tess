@@ -38,6 +38,10 @@ struct transpile {
 
 typedef struct {
     str_sized free_variables;
+
+    // instead of emitting output to evaluate an expression and push it on the result stack, return a str
+    // which can be used as an lvalue for the expression.
+    int want_lvalue;
 } eval_ctx;
 
 extern char const *embed_std_c;
@@ -833,17 +837,30 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
     str right = generate_expr(self, type, node->binary_op.right, ctx);
     str op    = ast_node_str(node->binary_op.op);
 
-    str res   = next_res(self);
-    generate_decl(self, res, type);
-    generate_assign_lhs(self, res);
-    cat(self, left);
-    cat(self, op);
-    cat(self, right);
+    if (!ctx->want_lvalue) {
+        str res = next_res(self);
+        generate_decl(self, res, type);
+        generate_assign_lhs(self, res);
+        cat(self, left);
+        cat(self, op);
+        cat(self, right);
 
-    // Note: special case: if op is [ close square bracket
-    if (0 == str_cmp_c(op, "[")) cat_close_square(self);
-    cat_semicolonln(self);
-    return res;
+        // Note: special case: if op is [ close square bracket
+        if (0 == str_cmp_c(op, "[")) cat_close_square(self);
+        cat_semicolonln(self);
+        return res;
+    }
+
+    else {
+        str_build b = str_build_init(self->transient, 64);
+        str_build_cat(&b, left);
+        str_build_cat(&b, op);
+        str_build_cat(&b, right);
+
+        // Note: special case: if op is [ close square bracket
+        if (0 == str_cmp_c(op, "[")) str_build_cat(&b, S("]"));
+        return str_build_finish(&b);
+    }
 }
 
 static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node const *node,
@@ -852,25 +869,33 @@ static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node 
     str operand = generate_expr(self, type, node->unary_op.operand, ctx);
     str op      = ast_node_str(node->unary_op.op);
 
-    str res     = next_res(self);
-    generate_decl(self, res, type);
-    generate_assign_lhs(self, res);
-    cat(self, op);
-    cat(self, operand);
-    cat_semicolonln(self);
-    return res;
+    if (!ctx->want_lvalue) {
+        str res = next_res(self);
+        generate_decl(self, res, type);
+        generate_assign_lhs(self, res);
+        cat(self, op);
+        cat(self, operand);
+        cat_semicolonln(self);
+        return res;
+    } else {
+        str_build b = str_build_init(self->transient, 64);
+        str_build_cat(&b, op);
+        str_build_cat(&b, operand);
+        return str_build_finish(&b);
+    }
 }
 
 static str generate_reassignment(transpile *self, tl_monotype const *type, ast_node const *node,
                                  eval_ctx *ctx) {
 
-    str value = generate_expr(self, type, node->assignment.value, ctx);
-    if (ast_node_is_symbol(node->assignment.name)) {
-        generate_assign(self, ast_node_str(node->assignment.name), value);
-    } else if (ast_binary_op == node->assignment.name->tag) {
-        // FIXME: render left hand side correctly, for struct dot access or arrow access
-        fatal("not implemented");
-    }
+    int save         = ctx->want_lvalue;
+    ctx->want_lvalue = 1;
+
+    str value        = generate_expr(self, type, node->assignment.value, ctx);
+    str lhs          = generate_expr(self, null, node->assignment.name, ctx);
+    generate_assign(self, lhs, value);
+
+    ctx->want_lvalue = save;
     return value;
 }
 
@@ -942,7 +967,15 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
-    case ast_symbol:       return generate_expr_symbol(self, type, ast_node_str(node), ctx);
+    case ast_symbol: {
+
+        // FIXME: may not need to use env for this
+        str                name     = ast_node_str(node);
+        tl_monotype const *env_type = env_lookup(self, name); // may be null
+        if (env_type) type = env_type;
+
+        return generate_expr_symbol(self, type, ast_node_str(node), ctx);
+    }
 
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
 

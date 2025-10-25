@@ -1194,7 +1194,70 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
+                                       tl_polytype const **out_type) {
+    str                name_inst = next_instantiation(self, name);
+    tl_monotype const *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
+
+    name_and_type      key       = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    str               *existing  = map_get(self->instances, &key, sizeof key);
+    if (existing) {
+        cancel_last_instantiation(self);
+        if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
+        return *existing;
+    }
+    map_set(&self->instances, &key, sizeof key, &name_inst);
+
+    ast_node *utd = toplevel_get(self, name);
+    assert(utd);
+    utd = ast_node_clone(self->arena, utd);
+    ast_node_name_replace(utd->user_type_def.name, name_inst);
+    utd->type = tl_polytype_absorb_mono(self->arena, inst);
+    toplevel_add(self, name_inst, utd);
+    tl_type_env_insert(self->env, name_inst, utd->type);
+    array_push(self->synthesized_nodes, utd);
+
+    if (out_type) *out_type = utd->type; // Note: this helps the transpiler
+    return name_inst;
+}
+
+// static int specialize_user_type_annotation(tl_infer *self, ast_node *node) {
+//     assert(ast_node_is_symbol(node));
+
+//     tl_polytype const *poly = node->symbol.annotation_type;
+//     assert(tl_polytype_is_type_constructor(poly));
+
+//     tl_polytype const *special_type = null;
+
+//     if (tl_monotype_is_ptr(poly->type)) {
+//         tl_monotype const *target = tl_monotype_ptr_target(poly->type);
+//         if (tl_monotype_is_inst(target)) {
+//             str name = target->cons_inst->def->generic_name;
+//             (void)specialize_type_constructor(self, name, target->cons_inst->args, &special_type);
+
+//             // wrap back in pointer
+//             special_type = tl_polytype_absorb_mono(
+//               self->arena, tl_type_registry_ptr(self->registry, special_type->type));
+//             node->symbol.annotation_type = special_type;
+//         } else return 0;
+//     } else {
+//         str                             name      = ast_node_str(node);
+//         tl_type_constructor_inst const *cons_inst = poly->type->cons_inst;
+//         tl_monotype_sized               args      = cons_inst->args;
+
+//         (void)specialize_type_constructor(self, name, args, &special_type);
+//     }
+
+//     // update symbol in type environment
+//     tl_type_env_insert(self->env, ast_node_str(node), special_type);
+
+//     node->type = special_type; // Note: this helps the transpiler
+
+//     return 0;
+// }
+
 static int specialize_user_type(tl_infer *self, ast_node *node) {
+    assert(ast_node_is_named_application(node));
     str                name = node->named_application.name->symbol.name;
 
     tl_monotype_array  arr  = {.alloc = self->transient};
@@ -1208,35 +1271,14 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     }
     array_shrink(arr);
 
-    str                name_inst = next_instantiation(self, name);
-    tl_monotype const *inst =
-      tl_type_registry_specialize(self->registry, name, name_inst, (tl_monotype_sized)sized_all(arr));
-
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
-    str          *existing = map_get(self->instances, &key, sizeof key);
-    if (existing) {
-        node->named_application.name->symbol.original = node->named_application.name->symbol.name;
-        node->named_application.name->symbol.name     = *existing;
-
-        cancel_last_instantiation(self);
-        return 0;
-    }
-    map_set(&self->instances, &key, sizeof key, &name_inst);
-
-    ast_node *utd = toplevel_get(self, name);
-    assert(utd);
-    utd                                      = ast_node_clone(self->arena, utd);
-    utd->user_type_def.name->symbol.original = utd->user_type_def.name->symbol.name;
-    utd->user_type_def.name->symbol.name     = name_inst;
-    utd->type                                = tl_polytype_absorb_mono(self->arena, inst);
-    toplevel_add(self, name_inst, utd);
-    tl_type_env_insert(self->env, name_inst, utd->type);
-    array_push(self->synthesized_nodes, utd);
+    tl_polytype const *special_type = null;
+    str                name_inst =
+      specialize_type_constructor(self, name, (tl_monotype_sized)sized_all(arr), &special_type);
 
     // update callsite
-    node->named_application.name->symbol.original = node->named_application.name->symbol.name;
-    node->named_application.name->symbol.name     = name_inst;
-    node->type                                    = utd->type; // Note: this helps the transpiler
+    ast_node_name_replace(node->named_application.name, name_inst);
+
+    node->type = special_type; // Note: this helps the transpiler
 
     return 0;
 }
@@ -1258,6 +1300,12 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    // FIXME: this seems not needed: type environment is updated by update_specialized_types
+    // symbols may be annotated with concrete type constructors: treat those the same as type constructor
+    // applications
+    // if (ast_node_is_symbol(node) && tl_polytype_is_type_constructor(node->symbol.annotation_type))
+    //     return specialize_user_type_annotation(self, node);
 
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -2027,29 +2075,61 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
+static tl_monotype const *get_special_type(tl_infer *self, str type_name, tl_monotype_sized args) {
+    tl_monotype const *mono = tl_type_registry_get_cached_instance(self->registry, type_name, args);
+    if (!mono) return null;
+    return tl_monotype_clone(self->arena, mono);
+}
+
+static tl_monotype const *update_one_special_type(tl_infer *self, tl_monotype const *mono) {
+    switch (mono->tag) {
+
+    case tl_var:
+    case tl_weak: break;
+
+    case tl_cons_inst:
+        // already specialized?
+        if (!str_is_empty(mono->cons_inst->special_name)) return null;
+
+        // first recurse through the type args
+        forall(i, mono->cons_inst->args) {
+            tl_monotype const *replace = update_one_special_type(self, mono->cons_inst->args.v[i]);
+            if (replace) mono->cons_inst->args.v[i] = replace;
+        }
+
+        str                type_name = mono->cons_inst->def->name;
+        tl_monotype_sized  type_args = mono->cons_inst->args;
+        tl_monotype const *replace   = get_special_type(self, type_name, type_args);
+        if (!replace) return null;
+        return replace;
+
+    case tl_list:
+    case tl_tuple:
+        forall(i, mono->list.xs) {
+            tl_monotype const *replace = update_one_special_type(self, mono->list.xs.v[i]);
+            if (replace) mono->list.xs.v[i] = replace;
+        }
+        break;
+    }
+    return null;
+}
+
 static void update_specialized_types(tl_infer *self) {
 
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
         tl_polytype const *poly = *(tl_polytype const **)iter.data;
-        if (!tl_polytype_is_type_constructor(poly)) continue;
 
-        // already specialized?
-        if (!str_is_empty(poly->type->cons_inst->special_name)) continue;
-
-        str                type_name = poly->type->cons_inst->def->name;
-        tl_monotype_sized  type_args = poly->type->cons_inst->args;
-
-        tl_monotype const *mono =
-          tl_type_registry_get_cached_instance(self->registry, type_name, type_args);
-
-        if (!mono) continue;
-
-        tl_polytype const *replace =
-          tl_polytype_absorb_mono(self->arena, tl_monotype_clone(self->arena, mono));
-
-        // update map in place
-        *(tl_polytype const **)iter.data = replace;
+        if (tl_polytype_is_type_constructor(poly)) {
+            tl_monotype const *replace = update_one_special_type(self, poly->type);
+            if (replace) {
+                tl_polytype const *poly_replace  = tl_polytype_absorb_mono(self->arena, replace);
+                *(tl_polytype const **)iter.data = poly_replace;
+            }
+        } else {
+            // otherwise walk through every monotype referenced by this polytype
+            update_one_special_type(self, poly->type);
+        }
     }
 
     arena_reset(self->transient);

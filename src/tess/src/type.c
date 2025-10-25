@@ -625,7 +625,13 @@ int tl_polytype_is_concrete(tl_polytype const *self) {
 }
 
 int tl_polytype_is_type_constructor(tl_polytype const *self) {
-    return tl_monotype_is_inst(self->type);
+    return self && tl_monotype_is_inst(self->type);
+}
+
+tl_monotype const *tl_monotype_ptr_target(tl_monotype const *self) {
+    assert(tl_monotype_is_ptr(self));
+    assert(self->cons_inst->args.size == 1);
+    return self->cons_inst->args.v[0];
 }
 
 void tl_monotype_sort_fvs(tl_monotype *self) {
