@@ -660,18 +660,6 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     return 0;
 }
 
-//
-
-// -- public read-only portion of struct --
-// FIXME put this elsewhere
-struct tokenizer {
-    allocator  *parent;
-    allocator  *strings;
-    char const *input;
-    size_t      input_len;
-    size_t      pos;
-};
-
 // ---
 
 static int       a_param(parser *);
