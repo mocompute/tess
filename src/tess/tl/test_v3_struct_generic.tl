@@ -1,4 +1,4 @@
-: Point { x: Int y : Int }
+: Point(a) { x: a y : a }
 
 main() {
   p = Point(1, 0)

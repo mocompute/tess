@@ -883,6 +883,27 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (constrain_pm(self, ctx, node->type, target, node)) return 1;
             }
         } else if (is_struct_access_operator(op)) {
+            // TODO: move this to utility function
+            tl_polytype const *struct_type = left->type;
+            if (tl_monotype_is_inst(struct_type->type)) {
+                assert(ast_node_is_symbol(right));
+                str                             field_name = right->symbol.name;
+                tl_type_constructor_inst const *inst       = struct_type->type->cons_inst;
+                tl_type_constructor_def const  *def        = inst->def;
+
+                i32                             found      = -1;
+                forall(i, def->field_names) {
+                    if (str_eq(field_name, def->field_names.v[i])) {
+                        if (i > INT32_MAX) fatal("overflow");
+                        found = (i32)i;
+                    }
+                }
+                if (found != -1) {
+                    if ((u32)found >= inst->args.size) fatal("out of range");
+                    tl_monotype const *field_type = inst->args.v[found];
+                    if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                }
+            }
             if (constrain(self, ctx, node->type, right->type, node)) return 1;
         } else fatal("unknown operator type");
 
