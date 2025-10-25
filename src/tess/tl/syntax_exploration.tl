@@ -408,5 +408,12 @@ let foo x =
  
  can be parsed as foo() * x if we don't have a ; end of statement 
  
+ we could require grouping:
+ 
+ x = malloc(64)
+ (*x)
+ (&x)
+ x->field
+ 
  
  
