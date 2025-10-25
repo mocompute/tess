@@ -1280,10 +1280,52 @@ decl_done:
     return result_ast_node(self, name);
 }
 
+static int toplevel_struct(parser *self) {
+
+    if (a_try(self, a_colon)) return 1;
+
+    if (a_try(self, b_type_identifier)) return 1;
+    ast_node *type_ident = self->result;
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array fields = {.alloc = self->ast_arena};
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (a_try(self, a_param)) return 1;
+        array_push(fields, self->result);
+    }
+    array_shrink(fields);
+
+    ast_node *r = ast_node_create(self->ast_arena, ast_user_type_definition);
+    if (ast_node_is_symbol(type_ident)) {
+        r->user_type_def.n_type_arguments = 0;
+        r->user_type_def.type_arguments   = null;
+        r->user_type_def.name             = type_ident;
+    } else if (ast_node_is_named_application(type_ident)) {
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.name             = type_ident->named_application.name;
+    } else fatal("logic error");
+
+    // The utd struct separates names from annotations, while they are both in the same symbol ast
+    // node variant. So we have to do this splitting just for it to recombine later.
+    r->user_type_def.n_fields          = fields.size;
+    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+    r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+    forall(i, fields) {
+        r->user_type_def.field_names[i]       = fields.v[i];
+        r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
+    }
+
+    return result_ast_node(self, r);
+}
+
 static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
+    if (0 == a_try(self, toplevel_struct)) return 0;
     if (0 == a_try(self, toplevel_defun)) return 0;
     if (0 == a_try(self, toplevel_assign)) return 0;
     if (0 == a_try(self, toplevel_forward)) return 0;
