@@ -509,9 +509,6 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 
     assert(arr.size >= args.size);
     forall(i, args) {
-        if (!arrow) fatal("ran out of arrow");
-        // if (ast_node_is_nil(args.v[i])) break;
-
         str res = generate_expr(self, arr.v[i], args.v[i], ctx);
         array_push(args_res, res);
     }
@@ -1462,75 +1459,6 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     return str_build_finish(&b);
 }
 
-static str tl_unary_op(transpile *self, ast_node const *node, eval_ctx *ctx, void *op) {
-    assert(ast_node_is_named_application(node));
-    str                name = ast_node_str(node->named_application.name);
-
-    tl_monotype const *type = env_lookup(self, name);
-    if (!type) fatal("funcall with null type");
-
-    // generate arguments: an array of variables will hold their values
-    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type, ctx);
-
-    str_build      b        = str_build_init(self->transient, 80);
-    str            op_str   = str_init_small(op);
-
-    str_build_cat(&b, op_str);
-    str_deinit(self->transient, &op_str);
-
-    str_build_cat(&b, S("("));
-    if (args_res.size < 1) fatal("missing argument");
-    str_build_cat(&b, args_res.v[0]);
-    str_build_cat(&b, S(")"));
-    return str_build_finish(&b);
-}
-
-static str tl_binary_op(transpile *self, ast_node const *node, eval_ctx *ctx, void *op) {
-    assert(ast_node_is_named_application(node));
-    str                name = ast_node_str(node->named_application.name);
-
-    tl_monotype const *type = env_lookup(self, name);
-    if (!type) fatal("funcall with null type");
-
-    // generate arguments: an array of variables will hold their values
-    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = generate_args(self, args, type, ctx);
-
-    // args list: join with operator
-    str_build b = str_build_init(self->transient, 128);
-    str_build_cat(&b, S("("));
-
-    str op_str = str_cat_3(self->transient, S(" "), str_init_small(op), S(" "));
-    str_build_join_array(&b, op_str, args_res);
-    str_deinit(self->transient, &op_str);
-
-    str_build_cat(&b, S(")"));
-
-    return str_build_finish(&b);
-}
-
-static str tl_first(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
-    assert(ast_node_is_named_application(node));
-    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
-    return str_cat(self->transient, arg, S(".x0"));
-}
-
-static str tl_second(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
-    assert(ast_node_is_named_application(node));
-    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
-    return str_cat(self->transient, arg, S(".x1"));
-}
-
-static str tl_third(transpile *self, ast_node const *node, eval_ctx *ctx, void *_) {
-    assert(ast_node_is_named_application(node));
-    if (node->named_application.n_arguments != 1) fatal("wrong number of arguments");
-    str arg = generate_expr(self, null, node->named_application.arguments[0], ctx);
-    return str_cat(self->transient, arg, S(".x2"));
-}
-
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
@@ -1544,35 +1472,6 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
     static const struct dispatch table[] = {
       {"_tl_sizeof_", tl_sizeof, null},
       // {"_tl_sizeoft_", tl_sizeoft, null},
-
-      {"_tl_add_", tl_binary_op, "+"},
-      {"_tl_sub_", tl_binary_op, "-"},
-      {"_tl_mod_", tl_binary_op, "%"},
-      {"_tl_mul_", tl_binary_op, "*"},
-      {"_tl_div_", tl_binary_op, "/"},
-
-      {"_tl_lt_", tl_binary_op, "<"},
-      {"_tl_lte_", tl_binary_op, "<="},
-      {"_tl_eq_", tl_binary_op, "=="},
-      {"_tl_neq_", tl_binary_op, "!="},
-      {"_tl_gte_", tl_binary_op, ">="},
-      {"_tl_gt_", tl_binary_op, ">"},
-
-      // {"_tl_and_", tl_and, null},
-      // {"_tl_or_", tl_or, null},
-
-      {"_tl_band_", tl_binary_op, "&"},
-      {"_tl_bor_", tl_binary_op, "|"},
-      {"_tl_bxor_", tl_binary_op, "^"},
-
-      {"_tl_bsl_", tl_binary_op, "<<"},
-      {"_tl_bsr_", tl_binary_op, ">>"},
-
-      {"_tl_bcomp_", tl_unary_op, "~"},
-
-      {"_tl_first_", tl_first, null},
-      {"_tl_second_", tl_second, null},
-      {"_tl_third_", tl_third, null},
 
       {"", null, null},
     };
