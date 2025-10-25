@@ -586,6 +586,11 @@ int tl_monotype_is_concrete(tl_monotype const *self) {
     }
 }
 
+int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete(arr.v[i])) return 0;
+    return 1;
+}
+
 int tl_monotype_is_concrete_no_arrow(tl_monotype const *self) {
     return self && tl_cons_inst == self->tag;
 }

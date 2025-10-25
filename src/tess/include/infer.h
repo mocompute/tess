@@ -8,6 +8,7 @@
 typedef struct tl_infer tl_infer;
 
 typedef struct {
+    tl_infer         *infer;
     tl_type_registry *registry;
     tl_type_env      *env;
     tl_type_subs     *subs;
@@ -29,7 +30,6 @@ ast_node           *toplevel_name_node(ast_node *);
 tl_monotype const  *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
                                            hashmap **map);
 
-tl_monotype const  *tl_infer_update_specialized_type(allocator *alloc, tl_type_registry *registry,
-                                                     tl_monotype const *mono);
+tl_monotype const  *tl_infer_update_specialized_type(tl_infer *, tl_monotype const *mono);
 
 #endif

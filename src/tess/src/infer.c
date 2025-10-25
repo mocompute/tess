@@ -1214,10 +1214,15 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
         if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
         return *existing;
     }
-    map_set(&self->instances, &key, sizeof key, &name_inst);
 
     ast_node *utd = toplevel_get(self, name);
-    assert(utd);
+    if (!utd) {
+        if (out_type) *out_type = null;
+        return str_empty();
+    }
+
+    map_set(&self->instances, &key, sizeof key, &name_inst);
+
     utd = ast_node_clone(self->arena, utd);
     ast_node_name_replace(utd->user_type_def.name, name_inst);
     utd->type = tl_polytype_absorb_mono(self->arena, inst);
@@ -1280,7 +1285,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     str        name = node->named_application.name->symbol.name;
 
-    // do not process intrinsic calls
+    // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
 
     tl_polytype const *type = tl_type_env_lookup(self->env, name);
@@ -2046,15 +2051,21 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     return 0;
 }
 
-static tl_monotype const *get_special_type(allocator *alloc, tl_type_registry *registry, str type_name,
-                                           tl_monotype_sized args) {
-    tl_monotype const *mono = tl_type_registry_get_cached_instance(registry, type_name, args);
-    if (!mono) return null;
-    return tl_monotype_clone(alloc, mono);
+static tl_monotype const *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
+    tl_monotype const *mono = tl_type_registry_get_cached_instance(self->registry, type_name, args);
+    if (!mono) {
+        // not found, specialize it if all args are concrete
+        tl_polytype const *specialized = null;
+        if (!tl_monotype_sized_is_concrete(args)) return null;
+        specialize_type_constructor(self, type_name, args, &specialized);
+        if (!specialized) return null;
+        mono = specialized->type;
+    }
+
+    return tl_monotype_clone(self->arena, mono);
 }
 
-tl_monotype const *tl_infer_update_specialized_type(allocator *alloc, tl_type_registry *registry,
-                                                    tl_monotype const *mono) {
+tl_monotype const *tl_infer_update_specialized_type(tl_infer *self, tl_monotype const *mono) {
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
@@ -2069,22 +2080,20 @@ tl_monotype const *tl_infer_update_specialized_type(allocator *alloc, tl_type_re
 
         // first recurse through the type args
         forall(i, mono->cons_inst->args) {
-            tl_monotype const *replace =
-              tl_infer_update_specialized_type(alloc, registry, mono->cons_inst->args.v[i]);
+            tl_monotype const *replace = tl_infer_update_specialized_type(self, mono->cons_inst->args.v[i]);
             if (replace) mono->cons_inst->args.v[i] = replace;
         }
 
         str                type_name = mono->cons_inst->def->name;
         tl_monotype_sized  type_args = mono->cons_inst->args;
-        tl_monotype const *replace   = get_special_type(alloc, registry, type_name, type_args);
+        tl_monotype const *replace   = get_or_specialize_type(self, type_name, type_args);
         if (!replace) return null;
         return replace;
 
     case tl_list:
     case tl_tuple:
         forall(i, mono->list.xs) {
-            tl_monotype const *replace =
-              tl_infer_update_specialized_type(alloc, registry, mono->list.xs.v[i]);
+            tl_monotype const *replace = tl_infer_update_specialized_type(self, mono->list.xs.v[i]);
             if (replace) mono->list.xs.v[i] = replace;
         }
         break;
@@ -2099,15 +2108,12 @@ static void update_specialized_types(tl_infer *self) {
         tl_polytype const *poly = *(tl_polytype const **)iter.data;
 
         if (tl_polytype_is_type_constructor(poly)) {
-            tl_monotype const *replace =
-              tl_infer_update_specialized_type(self->arena, self->registry, poly->type);
-            if (replace) {
-                tl_polytype const *poly_replace  = tl_polytype_absorb_mono(self->arena, replace);
-                *(tl_polytype const **)iter.data = poly_replace;
-            }
+            tl_monotype const *replace = tl_infer_update_specialized_type(self, poly->type);
+            if (replace) *(tl_polytype const **)iter.data = tl_polytype_absorb_mono(self->arena, replace);
+
         } else {
             // otherwise walk through every monotype referenced by this polytype
-            tl_infer_update_specialized_type(self->arena, self->registry, poly->type);
+            tl_infer_update_specialized_type(self, poly->type);
         }
     }
 
@@ -2212,6 +2218,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     if (out_result) {
+        out_result->infer             = self;
         out_result->registry          = self->registry;
         out_result->env               = self->env;
         out_result->subs              = self->subs;

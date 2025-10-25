@@ -24,6 +24,7 @@ struct transpile {
     tl_type_registry *registry;
     ast_node_sized    nodes;
     ast_node_sized    synthesized_nodes;
+    tl_infer         *infer;
     tl_type_env      *env;
     tl_type_subs     *subs;
     hashmap          *toplevels;         // str => ast_node*
@@ -1153,6 +1154,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
 
     self->nodes             = opts->infer_result.nodes;
     self->synthesized_nodes = opts->infer_result.synthesized_nodes;
+    self->infer             = opts->infer_result.infer;
     self->registry          = opts->infer_result.registry;
     self->env               = opts->infer_result.env;
     self->subs              = opts->infer_result.subs;
@@ -1455,7 +1457,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
         // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
         // know about how to handle _tl_sizeof_'s arguments.
-        type = tl_infer_update_specialized_type(self->transient, self->registry, type);
+        type = tl_infer_update_specialized_type(self->infer, type);
         if (!type) fatal("missing specialized type");
 
         str ctype = type_to_c_mono(self, type);

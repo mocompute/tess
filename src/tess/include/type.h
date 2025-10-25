@@ -121,6 +121,7 @@ int                    tl_monotype_is_list(tl_monotype const *);
 int                    tl_monotype_is_inst(tl_monotype const *);
 int                    tl_monotype_is_tuple(tl_monotype const *);
 int                    tl_monotype_is_concrete(tl_monotype const *);
+int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
 int                    tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int                    tl_monotype_is_arrow(tl_monotype const *);
 int                    tl_monotype_is_ptr(tl_monotype const *);
