@@ -1127,9 +1127,35 @@ static int a_continue_statement(parser *self) {
     return result_ast_node(self, r);
 }
 
+static int a_while_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "while")) return 1;
+    if (a_try(self, a_open_round)) return 1;
+
+    ast_node *condition = parse_expression(self, INT_MIN);
+    if (!condition) return 1;
+    if (a_try(self, a_close_round)) return 1;
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (a_try(self, b_body_element)) return 1;
+        array_push(exprs, self->result);
+        if (0 == a_try(self, a_close_curly)) break;
+    }
+
+    ast_node *body      = create_body(self, exprs);
+
+    ast_node *r         = ast_node_create(self->ast_arena, ast_while);
+    r->while_.condition = condition;
+    r->while_.body      = body;
+    return result_ast_node(self, r);
+}
+
 static int b_statement(parser *self) {
     if (0 == a_try(self, b_assignment)) return 0;
     if (0 == a_try(self, b_reassignment)) return 0;
+    if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;

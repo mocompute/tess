@@ -82,7 +82,7 @@ static void        catln(transpile *, str);
 static void        cat_comment(transpile *, str);
 static void        cat_commentln(transpile *, str);
 // static void        cat_double_slash(transpile *);
-// static void        cat_close_curlyln(transpile *);
+static void cat_close_curlyln(transpile *);
 // static void        cat_i64(transpile *, i64);
 // static void        cat_f64(transpile *, f64);
 
@@ -890,6 +890,32 @@ static str generate_return(transpile *self, tl_monotype const *type, ast_node co
     return value;
 }
 
+static str generate_while(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+
+    // due to the stack-based transpiler, we rewrite while statement as follows:
+    // while(1) { if (!condition) break; body }
+
+    cat(self, S("while(1) "));
+    cat_open_curlyln(self);
+
+    str condition = generate_expr(self, null, node->while_.condition, ctx);
+    cat(self, S("if"));
+    cat_open_round(self);
+    cat(self, S("!"));
+    cat_open_round(self);
+    cat(self, condition);
+    cat_close_round(self);
+    cat_close_round(self);
+    cat(self, S("break;\n"));
+
+    (void)generate_expr(self, null, node->while_.body, ctx);
+
+    cat_close_curlyln(self);
+
+    return str_empty();
+}
+
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
@@ -916,6 +942,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
 
     case ast_return:       return generate_return(self, type, node, ctx);
+    case ast_while:        return generate_while(self, type, node, ctx);
 
     case ast_nil:          fatal("cannot generate nil");
     case ast_any:          fatal("cannot generate any");
@@ -1169,9 +1196,9 @@ static void cat_close_curly(transpile *self) {
 static void cat_close_square(transpile *self) {
     cat(self, S("]"));
 }
-// static void cat_close_curlyln(transpile *self) {
-//     cat(self, S("}\n"));
-// }
+static void cat_close_curlyln(transpile *self) {
+    cat(self, S("}\n"));
+}
 static void cat_semicolon(transpile *self) {
     cat(self, S(";"));
 }

@@ -142,6 +142,11 @@ typedef struct ast_node {
             int              is_break_statement;
         } return_;
 
+        struct ast_while {
+            struct ast_node *condition;
+            struct ast_node *body;
+        } while_;
+
         struct ast_binary_op {
             struct ast_node *left;
             struct ast_node *right;

@@ -194,6 +194,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->return_.value = ast_node_clone(alloc, orig->return_.value);
         break;
 
+    case ast_while:
+        clone->while_.condition = ast_node_clone(alloc, orig->while_.condition);
+        clone->while_.body      = ast_node_clone(alloc, orig->while_.body);
+        break;
+
     case ast_user_type: {
         struct ast_user_type *vclone = ast_node_ut(clone), *vorig = ast_node_ut((ast_node *)orig);
         vclone->name = ast_node_clone(alloc, vorig->name);
@@ -402,6 +407,12 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->return_.value);
         break;
 
+    case ast_while:
+        //
+        fun(ctx, node->while_.condition);
+        fun(ctx, node->while_.body);
+        break;
+
     case ast_user_type:
         //
         fun(ctx, node->user_type.name);
@@ -553,6 +564,11 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_return:
         //
         node->return_.value = fun(ctx, node->return_.value);
+        break;
+
+    case ast_while:
+        node->while_.condition = fun(ctx, node->while_.condition);
+        node->while_.body      = fun(ctx, node->while_.body);
         break;
 
     case ast_user_type:
@@ -845,6 +861,11 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_return:
         //
         return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
+
+    case ast_while:
+        //
+        return str_cat_4(alloc, S("while ("), v2_ast_node_to_string(alloc, node->while_.condition), S(") "),
+                         v2_ast_node_to_string(alloc, node->while_.body));
 
     case ast_symbol: {
         str out = str_empty();
@@ -1301,6 +1322,11 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_return:
         //
         combine_node(self->return_.value);
+        break;
+
+    case ast_while:
+        combine_node(self->while_.condition);
+        combine_node(self->while_.body);
         break;
 
     case ast_labelled_tuple:

@@ -727,6 +727,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_while:
+        if (traverse_ast(self, ctx, node->while_.condition, cb)) return 1;
+        if (traverse_ast(self, ctx, node->while_.body, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -1143,6 +1149,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
         break;
 
+    case ast_while:
     case ast_continue: {
         ensure_tv(self, null, &node->type);
         tl_monotype const *nil = tl_type_registry_nil(self->registry);
@@ -1515,6 +1522,11 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_unary_op: rename_variables(self, node->unary_op.operand, lex, level + 1); break;
 
     case ast_return:   rename_variables(self, node->return_.value, lex, level + 1); break;
+
+    case ast_while:
+        rename_variables(self, node->while_.condition, lex, level + 1);
+        rename_variables(self, node->while_.body, lex, level + 1);
+        break;
 
     case ast_body:
         //
