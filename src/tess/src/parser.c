@@ -237,6 +237,18 @@ int is_logical_operator(char const *s) {
     return 0;
 }
 
+int is_index_operator(char const *s) {
+    return 0 == strcmp(s, "[");
+}
+
+int is_struct_access_operator(char const *s) {
+    static char const *strings[] = {".", "->", null};
+    char const       **it        = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
+}
+
 static int is_unary_operator(char const *s) {
     static char const *strings[] = {"!", "*", "&", "~", null};
     char const       **it        = strings;
@@ -408,6 +420,13 @@ static int a_close_curly(parser *p) {
     return 1;
 }
 
+static int a_close_square(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_close_square == p->token.tag) return result_ast_str(p, ast_symbol, "]");
+    p->error.tag = tl_err_expected_close_square;
+    return 1;
+}
+
 static int operator_precedence(char const *op, int is_prefix);
 
 static int a_binary_operator(parser *self, int min_prec) {
@@ -425,12 +444,13 @@ static int a_binary_operator(parser *self, int min_prec) {
         } else return 1;
         break;
 
-    case tok_star:        op = "*"; break;
-    case tok_dot:         op = "."; break;
-    case tok_equal_equal: op = "=="; break;
-    case tok_logical_and: op = "&&"; break;
-    case tok_arrow:       op = "->"; break;
-    case tok_ampersand:   op = "&"; break;
+    case tok_star:         op = "*"; break;
+    case tok_dot:          op = "."; break;
+    case tok_equal_equal:  op = "=="; break;
+    case tok_logical_and:  op = "&&"; break;
+    case tok_arrow:        op = "->"; break;
+    case tok_ampersand:    op = "&"; break;
+    case tok_open_square:  op = "["; break;
 
     case tok_comma:
     case tok_colon:
@@ -441,11 +461,12 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_close_round:
     case tok_open_curly:
     case tok_close_curly:
+    case tok_close_square:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
     case tok_string:
-    case tok_comment:     return 1;
+    case tok_comment:      return 1;
     }
 
     if (!op) return 1;
@@ -1000,6 +1021,10 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             assert(prec >= min_prec);
             ast_node *right = parse_expression(self, prec + 1); // (prec+1): left-associative
             if (!right) return null;
+
+            // Note: special case: [ as binary operator, need to close it with ] token
+            if (0 == str_cmp_c(op->symbol.name, "["))
+                if (a_try(self, a_close_square)) return null;
 
             ast_node *binop        = ast_node_create(self->ast_arena, ast_binary_op);
             binop->binary_op.left  = left;

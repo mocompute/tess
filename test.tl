@@ -3,6 +3,5 @@ c_free(p : Ptr(a)) -> Nil
 
 main() {
   p : Ptr(Int) = c_malloc(64)
-  c_free(p)
-  (*p)
+  p[0]
 }

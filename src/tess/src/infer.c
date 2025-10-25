@@ -844,18 +844,29 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &left->type);
         ensure_tv(self, null, &right->type);
-        // for relational ops, the type is Bool
-        // for arithmetic ops, the type is the type of an operand
-        // in all cases, the types of the operands must be the same
 
-        if (is_arithmetic_operator(str_cstr(&node->binary_op.op->symbol.name))) {
+        char const *op = str_cstr(&node->binary_op.op->symbol.name);
+        if (is_arithmetic_operator(op)) {
+            // operands and result must all be same type
             if (constrain(self, ctx, node->type, left->type, node)) return 1;
             if (constrain(self, ctx, left->type, right->type, node)) return 1;
-        } else {
+        } else if (is_logical_operator(op) || is_relational_operator(op)) {
+            // operands must be same type, and result must be boolean
             tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
             if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
             if (constrain(self, ctx, left->type, right->type, node)) return 1;
-        }
+        } else if (is_index_operator(op)) {
+            // index must be integral and result must be Ptr's type argument
+            tl_monotype const *int_type = tl_type_registry_int(self->registry);
+            if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
+
+            if (left->type && tl_monotype_is_ptr(left->type->type)) {
+                tl_monotype const *target = left->type->type->cons_inst->args.v[0];
+                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+            }
+        } else if (is_struct_access_operator(op)) {
+            if (constrain(self, ctx, node->type, right->type, node)) return 1;
+        } else fatal("unknown operator type");
 
     } break;
 

@@ -73,6 +73,7 @@ static void        cat_close_round(transpile *);
 static void        cat_open_curly(transpile *);
 static void        cat_open_curlyln(transpile *);
 static void        cat_close_curly(transpile *);
+static void        cat_close_square(transpile *);
 static void        cat_semicolon(transpile *);
 static void        cat_semicolonln(transpile *);
 static void        cat_star(transpile *);
@@ -838,6 +839,9 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
     cat(self, left);
     cat(self, op);
     cat(self, right);
+
+    // Note: special case: if op is [ close square bracket
+    if (0 == str_cmp_c(op, "[")) cat_close_square(self);
     cat_semicolonln(self);
     return res;
 }
@@ -1127,6 +1131,9 @@ static void cat_open_curlyln(transpile *self) {
 }
 static void cat_close_curly(transpile *self) {
     cat(self, S("}"));
+}
+static void cat_close_square(transpile *self) {
+    cat(self, S("]"));
 }
 // static void cat_close_curlyln(transpile *self) {
 //     cat(self, S("}\n"));

@@ -41,5 +41,7 @@ void parser_report_errors(parser *);
 int is_arithmetic_operator(char const *);
 int is_relational_operator(char const *);
 int is_logical_operator(char const *);
+int is_index_operator(char const *);
+int is_struct_access_operator(char const *);
 
 #endif

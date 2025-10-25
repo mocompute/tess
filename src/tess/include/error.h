@@ -64,6 +64,8 @@
     X(tl_err_expected_close_round, "expected_close_round")                                                 \
     X(tl_err_expected_open_curly, "expected_open_curly")                                                   \
     X(tl_err_expected_close_curly, "expected_close_curly")                                                 \
+    X(tl_err_expected_open_square, "expected_open_square")                                                 \
+    X(tl_err_expected_close_square, "expected_close_square")                                               \
     X(tl_err_expected_newline, "expected_newline")                                                         \
     X(tl_err_expected_star, "expected_star")                                                               \
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \

@@ -209,6 +209,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
 
+            case '[':
+                replace_token(self->strings, &res, tok_open_square);
+                state = stop;
+                break;
+
             case ')':
                 replace_token(self->strings, &res, tok_close_round);
                 state = stop;
@@ -216,6 +221,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case '}':
                 replace_token(self->strings, &res, tok_close_curly);
+                state = stop;
+                break;
+
+            case ']':
+                replace_token(self->strings, &res, tok_close_square);
                 state = stop;
                 break;
 
@@ -416,26 +426,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '-':
             case '.':
             case '_': continue;
-            case ' ':
-            case ')':
-            case '}':
-            case ',':
-            case ':':
-            case ';':
-                reverse_pos(self);
-                state = stop_number;
-                break;
 
             default:
-                // all invisible and extended characters break a symbol
-                if (c < 0x20) { // c is signed so this catches c > 0x7f
-                    reverse_pos(self);
-                    state = stop_number;
-                } else {
-                    reverse_pos(self);
-                    if (out_err) tok_error(self, out_err, tl_err_invalid_token);
-                    return 1;
-                }
+                // all other characters break a symbol
+                reverse_pos(self);
+                state = stop_number;
             }
         } break;
 
@@ -478,6 +473,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ')':
             case '{':
             case '}':
+            case '[':
+            case ']':
             case ' ':
             case '"':
             case ':':
