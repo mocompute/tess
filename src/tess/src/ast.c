@@ -232,8 +232,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_body: {
         clone->body.expressions.v = alloc_malloc(alloc, orig->body.expressions.size * sizeof(ast_node *));
         clone->body.expressions.size = orig->body.expressions.size;
-        memcpy(clone->body.expressions.v, orig->body.expressions.v,
-               clone->body.expressions.size * sizeof(ast_node *));
+        forall(i, clone->body.expressions) {
+            clone->body.expressions.v[i] = ast_node_clone(alloc, orig->body.expressions.v[i]);
+        }
     } break;
 
     case ast_unary_op: {
@@ -1059,13 +1060,15 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_named_function_application: {
-        str out = str_copy(alloc, node->named_application.name->symbol.name);
-        for (u32 i = 0; i < node->named_application.n_arguments; ++i) {
-            out = str_cat_3(alloc, out, S(" "),
-                            v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(apply "));
+        str_build_cat(&b, node->named_application.name->symbol.name);
+        for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
+            if (i + 1 < n) str_build_cat(&b, S(" "));
         }
-
-        return out;
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
     } break;
 
     case ast_arrow: {
