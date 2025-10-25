@@ -486,6 +486,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '.':
             case '&':
             case '*':
+            case '-':
                 // these tokens break a symbol TODO there should be more
                 // '=' does not break a symbol so we can support relations eg '>='
                 reverse_pos(self);

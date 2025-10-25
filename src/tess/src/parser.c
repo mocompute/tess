@@ -211,7 +211,7 @@ static int is_reserved(char const *s) {
 
 int is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
-      "+", "-", "*", "/", null,
+      "+", "-", "*", "/", "%", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -238,7 +238,7 @@ int is_logical_operator(char const *s) {
 }
 
 static int is_unary_operator(char const *s) {
-    static char const *strings[] = {"!", "*", "&", null};
+    static char const *strings[] = {"!", "*", "&", "~", null};
     char const       **it        = strings;
     while (*it != null)
         if (0 == strcmp(*it++, s)) return 1;
@@ -429,13 +429,13 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_dot:         op = "."; break;
     case tok_equal_equal: op = "=="; break;
     case tok_logical_and: op = "&&"; break;
+    case tok_arrow:       op = "->"; break;
+    case tok_ampersand:   op = "&"; break;
 
     case tok_comma:
     case tok_colon:
     case tok_colon_equal:
     case tok_semicolon:
-    case tok_ampersand:
-    case tok_arrow:
     case tok_ellipsis:
     case tok_open_round:
     case tok_close_round:
@@ -814,12 +814,45 @@ static int operator_precedence(char const *op, int is_prefix) {
         int         p;
     };
     static struct item const infix[] = {
-      {"||", 10}, {"&&", 20}, {"==", 30}, {"!=", 30}, {"<", 40}, {"<=", 40}, {">=", 40},
-      {">", 40},  {"+", 50},  {"-", 50},  {"*", 60},  {"/", 60}, {null, 0},
+      {"||", 10},
+      {"&&", 20},
+      {"|", 30},
+      {"&", 40},
+      //
+      {"==", 50},
+      {"!=", 50},
+      //
+      {"<", 60},
+      {"<=", 60},
+      {">=", 60},
+      {">", 60},
+      //
+      {"<<", 70},
+      {">>", 70},
+      //
+      {"+", 80},
+      {"-", 80},
+      //
+      {"*", 90},
+      {"/", 90},
+      {"%", 90},
+      //
+      {".", 110},
+      {"->", 110},
+      {"[", 110},
+      //
+      {null, 0},
     };
 
     static struct item const prefix[] = {
-      {"-", 70}, {"!", 70}, {"*", 70}, {"&", 70}, {null, 0},
+      {"-", 100},
+      {"!", 100},
+      {"~", 100},
+      //
+      {"*", 100},
+      {"&", 100},
+      //
+      {null, 0},
     };
 
     for (struct item const *search = is_prefix ? prefix : infix; search->op; ++search) {
