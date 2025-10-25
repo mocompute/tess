@@ -1008,8 +1008,13 @@ static int b_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    if (b_body_element(self)) return 1;
-    ast_node *body  = self->result;
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (b_body_element(self)) break;
+        array_push(exprs, self->result);
+    }
+
+    ast_node *body  = create_body(self, exprs);
 
     ast_node *a     = ast_node_create(self->ast_arena, ast_let_in);
     a->let_in.name  = lval;

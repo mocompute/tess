@@ -1121,12 +1121,15 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     break;
 
+    case ast_dereference: return str_copy(alloc, S("[ast_dereference]"));
+
     case ast_unary_op:
+        return str_cat(alloc, v2_ast_node_to_string(alloc, node->unary_op.op),
+                       v2_ast_node_to_string(alloc, node->unary_op.operand));
 
     case ast_address_of:
     case ast_pointer_to:
     case ast_assignment:
-    case ast_dereference:
     case ast_dereference_assign:
     case ast_eof:
 

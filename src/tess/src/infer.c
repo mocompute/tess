@@ -830,10 +830,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_body: {
+        ensure_tv(self, null, &node->type);
         if (node->body.expressions.size) {
             u32       sz   = node->body.expressions.size;
             ast_node *last = node->body.expressions.v[sz - 1];
-            ensure_tv(self, null, &node->type);
             ensure_tv(self, null, &last->type);
             if (constrain(self, ctx, node->type, last->type, node)) return 1;
         }
@@ -862,6 +862,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_unary_op: {
         ast_node *operand = node->unary_op.operand;
         ensure_tv(self, null, &operand->type);
+        ensure_tv(self, null, &node->type);
         if (constrain(self, ctx, node->type, operand->type, node)) return 1;
     } break;
 
@@ -1524,7 +1525,7 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     str name_inst = next_instantiation(self, name);
     map_set(&self->instances, &key, sizeof key, &name_inst);
 
-    // clone function source ast and rename variables
+    // clone function source ast and rename variables, which also erases type information
     ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
     hashmap  *rename_lex   = map_new(self->transient, str, str, 16);
     rename_variables(self, generic_node, &rename_lex, 0);
