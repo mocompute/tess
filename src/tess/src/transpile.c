@@ -865,7 +865,12 @@ static str generate_reassignment(transpile *self, tl_monotype const *type, ast_n
                                  eval_ctx *ctx) {
 
     str value = generate_expr(self, type, node->assignment.value, ctx);
-    generate_assign(self, ast_node_str(node->assignment.name), value);
+    if (ast_node_is_symbol(node->assignment.name)) {
+        generate_assign(self, ast_node_str(node->assignment.name), value);
+    } else if (ast_binary_op == node->assignment.name->tag) {
+        // FIXME: render left hand side correctly, for struct dot access or arrow access
+        fatal("not implemented");
+    }
     return value;
 }
 
