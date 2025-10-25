@@ -139,6 +139,7 @@ typedef struct ast_node {
 
         struct ast_return {
             struct ast_node *value;
+            int              is_break_statement;
         } return_;
 
         struct ast_binary_op {

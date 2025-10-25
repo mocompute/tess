@@ -1086,16 +1086,38 @@ static int a_return_statement(parser *self) {
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
 
-    ast_node *r      = ast_node_create(self->ast_arena, ast_return);
-    r->return_.value = value;
+    ast_node *r                   = ast_node_create(self->ast_arena, ast_return);
+    r->return_.value              = value;
+    r->return_.is_break_statement = 0;
+    return result_ast_node(self, r);
+}
+
+static int a_break_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "break")) return 1;
+
+    ast_node *value = parse_expression(self, INT_MIN);
+    if (!value) return 1;
+
+    ast_node *r                   = ast_node_create(self->ast_arena, ast_return);
+    r->return_.value              = value;
+    r->return_.is_break_statement = 1;
+    return result_ast_node(self, r);
+}
+
+static int a_continue_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "continue")) return 1;
+
+    ast_node *r = ast_node_create(self->ast_arena, ast_continue);
     return result_ast_node(self, r);
 }
 
 static int b_statement(parser *self) {
     if (0 == a_try(self, b_assignment)) return 0;
+    if (0 == a_try(self, a_break_statement)) return 0;
+    if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
 
-    // FIXME: for_stmt, return_stmt;
+    // FIXME: for_stmt
     return 1;
 }
 

@@ -730,6 +730,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
+    case ast_continue:
     case ast_any:
     case ast_address_of:
     case ast_pointer_to:
@@ -1142,6 +1143,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
         break;
 
+    case ast_continue: {
+        ensure_tv(self, null, &node->type);
+        tl_monotype const *nil = tl_type_registry_nil(self->registry);
+        if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+    } break;
+
     case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:
@@ -1516,6 +1523,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
         break;
 
+    case ast_continue:
     case ast_string:
     case ast_nil:
     case ast_any:

@@ -78,6 +78,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     // clone the rest of the fields
     switch (clone->tag) {
+    case ast_continue:
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
@@ -308,6 +309,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     // process node types that have additional or no-array links
     switch (node->tag) {
+    case ast_continue:
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
@@ -460,6 +462,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
 
     // process node types that have additional or no-array links
     switch (node->tag) {
+    case ast_continue:
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
@@ -832,11 +835,12 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         snprintf(buf, sizeof buf, "(%" PRIi64 " : %s)", node->i64.val, str_cstr(&ty_str));
         return str_init(alloc, buf);
 
-    case ast_u64:    snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
-    case ast_string: return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
-    case ast_bool:   return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
-    case ast_nil:    return S("()");
-    case ast_any:    return S("any");
+    case ast_u64:      snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
+    case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
+    case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
+    case ast_nil:      return S("()");
+    case ast_any:      return S("any");
+    case ast_continue: return S("continue");
 
     case ast_return:
         //
@@ -1151,6 +1155,7 @@ u64 ast_node_hash(ast_node const *self) {
         for (u32 i = 0; i < self->array.n; ++i) combine_node(self->array.nodes[i]);
 
     switch (self->tag) {
+    case ast_continue:
     case ast_nil:
     case ast_any:
     case ast_ellipsis:

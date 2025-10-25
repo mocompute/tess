@@ -862,10 +862,22 @@ static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node 
 }
 
 static str generate_return(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
-    str value = generate_expr(self, type, node->return_.value, ctx);
+    // Note: handles return [expr] and break [expr]
 
-    cat(self, S("return "));
-    cat(self, value);
+    int has_value = !!node->return_.value;
+    int is_break  = node->return_.is_break_statement;
+
+    str value     = str_empty();
+    if (has_value) value = generate_expr(self, type, node->return_.value, ctx);
+
+    if (is_break) cat(self, S("break"));
+    else cat(self, S("return"));
+
+    if (has_value && !is_break) {
+        cat_sp(self);
+        cat(self, value);
+    }
+
     cat_semicolonln(self);
     return value;
 }
@@ -899,6 +911,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     case ast_nil:          fatal("cannot generate nil");
     case ast_any:          fatal("cannot generate any");
+
+    case ast_continue:     cat(self, S("continue;\n")); return str_empty();
 
     case ast_address_of:   {
         if (!tl_monotype_is_ptr(type)) fatal("runtime error");

@@ -22,6 +22,7 @@ typedef enum ast_tag : u16 {
     ast_binary_op,
     ast_body,
     ast_bool,
+    ast_continue,
     ast_dereference,
     ast_dereference_assign,
     ast_ellipsis,
