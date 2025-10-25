@@ -613,14 +613,14 @@ static int a_colon(parser *p) {
     return 1;
 }
 
-// static int a_colon_equal(parser *p) {
-//     if (next_token(p)) return 1;
+static int a_colon_equal(parser *p) {
+    if (next_token(p)) return 1;
 
-//     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
+    if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
-//     p->error.tag = tl_err_expected_colon_equal;
-//     return 1;
-// }
+    p->error.tag = tl_err_expected_colon_equal;
+    return 1;
+}
 
 // static int a_ampersand(parser *p) {
 //     if (next_token(p)) return 1;
@@ -1056,6 +1056,22 @@ static ast_node *parse_lvalue(parser *self) {
     return ident;
 }
 
+static int b_reassignment(parser *self) {
+    // x := newval
+    ast_node *lval = parse_lvalue(self);
+    if (!lval) return 1;
+
+    if (a_try(self, a_colon_equal)) return 1;
+
+    ast_node *val = parse_expression(self, INT_MIN);
+    if (!val) return 1;
+
+    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
+    a->assignment.name  = lval;
+    a->assignment.value = val;
+    return result_ast_node(self, a);
+}
+
 static int b_assignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
@@ -1113,6 +1129,7 @@ static int a_continue_statement(parser *self) {
 
 static int b_statement(parser *self) {
     if (0 == a_try(self, b_assignment)) return 0;
+    if (0 == a_try(self, b_reassignment)) return 0;
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;

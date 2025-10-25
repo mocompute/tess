@@ -861,6 +861,14 @@ static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
+static str generate_reassignment(transpile *self, tl_monotype const *type, ast_node const *node,
+                                 eval_ctx *ctx) {
+
+    str value = generate_expr(self, type, node->assignment.value, ctx);
+    generate_assign(self, ast_node_str(node->assignment.name), value);
+    return value;
+}
+
 static str generate_return(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // Note: handles return [expr] and break [expr]
 
@@ -945,7 +953,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_binary_op:     return generate_binary_op(self, type, node, ctx);
     case ast_unary_op:      return generate_unary_op(self, type, node, ctx);
 
-    case ast_assignment:
+    case ast_assignment:    return generate_reassignment(self, type, node, ctx);
+
     case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:
