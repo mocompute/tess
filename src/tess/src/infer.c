@@ -1221,41 +1221,6 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     return name_inst;
 }
 
-// static int specialize_user_type_annotation(tl_infer *self, ast_node *node) {
-//     assert(ast_node_is_symbol(node));
-
-//     tl_polytype const *poly = node->symbol.annotation_type;
-//     assert(tl_polytype_is_type_constructor(poly));
-
-//     tl_polytype const *special_type = null;
-
-//     if (tl_monotype_is_ptr(poly->type)) {
-//         tl_monotype const *target = tl_monotype_ptr_target(poly->type);
-//         if (tl_monotype_is_inst(target)) {
-//             str name = target->cons_inst->def->generic_name;
-//             (void)specialize_type_constructor(self, name, target->cons_inst->args, &special_type);
-
-//             // wrap back in pointer
-//             special_type = tl_polytype_absorb_mono(
-//               self->arena, tl_type_registry_ptr(self->registry, special_type->type));
-//             node->symbol.annotation_type = special_type;
-//         } else return 0;
-//     } else {
-//         str                             name      = ast_node_str(node);
-//         tl_type_constructor_inst const *cons_inst = poly->type->cons_inst;
-//         tl_monotype_sized               args      = cons_inst->args;
-
-//         (void)specialize_type_constructor(self, name, args, &special_type);
-//     }
-
-//     // update symbol in type environment
-//     tl_type_env_insert(self->env, ast_node_str(node), special_type);
-
-//     node->type = special_type; // Note: this helps the transpiler
-
-//     return 0;
-// }
-
 static int specialize_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_named_application(node));
     str                name = node->named_application.name->symbol.name;
@@ -1300,12 +1265,6 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-
-    // FIXME: this seems not needed: type environment is updated by update_specialized_types
-    // symbols may be annotated with concrete type constructors: treat those the same as type constructor
-    // applications
-    // if (ast_node_is_symbol(node) && tl_polytype_is_type_constructor(node->symbol.annotation_type))
-    //     return specialize_user_type_annotation(self, node);
 
     if (!ast_node_is_nfa(node)) return 0;
 
