@@ -194,7 +194,6 @@ static int result_ast_str(parser *p, ast_tag tag, char const *s) {
 static int result_ast_node(parser *p, ast_node *node) {
     p->result = node;
     set_result_file(p);
-    log(p, "result: %s", v1_ast_node_to_string(p->transient, node));
     return 0;
 }
 
@@ -1081,8 +1080,20 @@ static int b_assignment(parser *self) {
     return result_ast_node(self, a);
 }
 
+static int a_return_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "return")) return 1;
+
+    ast_node *value = parse_expression(self, INT_MIN);
+    if (!value) return 1;
+
+    ast_node *r      = ast_node_create(self->ast_arena, ast_return);
+    r->return_.value = value;
+    return result_ast_node(self, r);
+}
+
 static int b_statement(parser *self) {
     if (0 == a_try(self, b_assignment)) return 0;
+    if (0 == a_try(self, a_return_statement)) return 0;
 
     // FIXME: for_stmt, return_stmt;
     return 1;
@@ -1268,7 +1279,8 @@ int parser_parse_all(parser *p, ast_node_array *out) {
         ast_node *node;
 
         parser_result(p, &node);
-        log(p, "parse_all: parsed node %s", v1_ast_node_to_string(p->transient, node));
+        str str = v2_ast_node_to_string(p->transient, node);
+        log(p, "parse_all: parsed node %s", str_cstr(&str));
 
         array_push(*out, node);
     }

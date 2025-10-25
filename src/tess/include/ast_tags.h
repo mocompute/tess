@@ -32,6 +32,7 @@ typedef enum ast_tag : u16 {
     ast_let_in,
     ast_let_match_in,
     ast_pointer_to,
+    ast_return,
     ast_string,
     ast_symbol,
     ast_u64,

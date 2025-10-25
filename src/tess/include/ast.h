@@ -137,6 +137,10 @@ typedef struct ast_node {
             struct ast_node *no;
         } if_then_else;
 
+        struct ast_return {
+            struct ast_node *value;
+        } return_;
+
         struct ast_binary_op {
             struct ast_node *left;
             struct ast_node *right;

@@ -861,6 +861,15 @@ static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node 
     return res;
 }
 
+static str generate_return(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+    str value = generate_expr(self, type, node->return_.value, ctx);
+
+    cat(self, S("return "));
+    cat(self, value);
+    cat_semicolonln(self);
+    return value;
+}
+
 static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
@@ -885,6 +894,8 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_symbol:       return generate_expr_symbol(self, type, ast_node_str(node), ctx);
 
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
+
+    case ast_return:       return generate_return(self, type, node, ctx);
 
     case ast_nil:          fatal("cannot generate nil");
     case ast_any:          fatal("cannot generate any");

@@ -721,6 +721,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_return:
+        //
+        if (traverse_ast(self, ctx, node->return_.value, cb)) return 1;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
         // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_nil:
@@ -837,6 +843,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ensure_tv(self, null, &last->type);
             if (constrain(self, ctx, node->type, last->type, node)) return 1;
         }
+    } break;
+
+    case ast_return: {
+        ensure_tv(self, null, &node->type);
+        if (constrain(self, ctx, node->type, node->return_.value->type, node)) return 1;
     } break;
 
     case ast_binary_op: {
@@ -1495,6 +1506,8 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         break;
 
     case ast_unary_op: rename_variables(self, node->unary_op.operand, lex, level + 1); break;
+
+    case ast_return:   rename_variables(self, node->return_.value, lex, level + 1); break;
 
     case ast_body:
         //
