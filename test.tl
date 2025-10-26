@@ -1,7 +1,18 @@
-: Point(a) { x : a  y : a }
-: Rect(a)  { topleft: Point(a) botright: Point(a) }
+_tl_sizeof_ (x : a) -> Int
+c_malloc(sz : Int) -> Ptr(a)
+c_free(ptr : Ptr(a)) -> Nil
+
+: Point(a) { x: a y : a }
 
 main() {
-  r = Rect { topleft = Point { x = 0, y = 0 }, botright = Point { x = 10, y = 10 } }
-  r.topleft.x
+  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(Point(Int)))
+  p->x := 0
+  p->y := 1
+
+  obj = *p
+
+
+  res = p->x
+  c_free(p)
+  res
 }

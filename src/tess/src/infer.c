@@ -891,7 +891,21 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ast_node *operand = node->unary_op.operand;
         ensure_tv(self, null, &operand->type);
         ensure_tv(self, null, &node->type);
-        if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+
+        str op = ast_node_str(node->unary_op.op);
+        if (str_eq(op, S("*"))) {
+            if (tl_monotype_is_ptr(operand->type->type)) {
+                tl_monotype const *target = tl_monotype_ptr_target(operand->type->type);
+                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+            } else {
+                // pointer required
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
+                return 1;
+            }
+        } else {
+            fatal("not yet implemented");
+        }
+
     } break;
 
     case ast_let_in: {

@@ -74,6 +74,7 @@
     X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
                                                                                                            \
     /* analyzer */                                                                                         \
+    X(tl_err_expected_pointer, "expected_pointer")                                                         \
     X(tl_err_arity, "wrong_number_of_arguments")                                                           \
     X(tl_err_too_many_arguments, "too_many_arguments")                                                     \
     X(tl_err_function_exists, "function_exists")                                                           \
