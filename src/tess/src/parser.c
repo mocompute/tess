@@ -92,6 +92,7 @@ nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
 static int  eat_comments(parser *);
 static int  next_token(parser *);
 
+static int  a_ampersand(parser *);
 static int  a_arrow(parser *);
 static int  a_bool(parser *);
 static int  a_close_round(parser *);
@@ -102,6 +103,7 @@ static int  a_identifier(parser *);
 static int  a_nil(parser *);
 static int  a_number(parser *);
 static int  a_open_round(parser *);
+static int  a_star(parser *);
 static int  a_string(parser *);
 static int  the_symbol(parser *, char const *const);
 
@@ -265,7 +267,7 @@ int is_struct_access_operator(char const *s) {
 }
 
 static int is_unary_operator(char const *s) {
-    static char const *strings[] = {"!", "*", "&", "~", null};
+    static char const *strings[] = {"!", "~", null};
     char const       **it        = strings;
     while (*it != null)
         if (0 == strcmp(*it++, s)) return 1;
@@ -486,15 +488,15 @@ static int a_unary_operator(parser *self, int min_prec) {
     char const *op = null;
     switch (self->token.tag) {
 
-    case tok_bang:      op = "!"; break;
-    case tok_star:      op = "*"; break;
-    case tok_ampersand: op = "&"; break;
+    case tok_bang: op = "!"; break;
 
     case tok_symbol:
         if (is_unary_operator(self->token.s)) op = self->token.s;
         else return 1;
         break;
 
+    case tok_star:
+    case tok_ampersand:
     case tok_bang_equal:
     case tok_comma:
     case tok_dot:
@@ -520,12 +522,10 @@ static int a_unary_operator(parser *self, int min_prec) {
 
     if (!op) return 1;
 
-    int prec = operator_precedence(op, 0);
+    int prec = operator_precedence(op, 1);
     if (prec < min_prec) return 1;
 
     return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
-
-    return 1;
 }
 
 static int a_identifier(parser *p) {
@@ -629,10 +629,22 @@ static int a_equal_sign(parser *p) {
 
 static int a_colon(parser *p) {
     if (next_token(p)) return 1;
-
     if (tok_colon == p->token.tag) return result_ast_str(p, ast_symbol, ":");
-
     p->error.tag = tl_err_expected_colon;
+    return 1;
+}
+
+static int a_star(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
+    p->error.tag = tl_err_expected_star;
+    return 1;
+}
+
+static int a_ampersand(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_ampersand == p->token.tag) return result_ast_str(p, ast_symbol, "&");
+    p->error.tag = tl_err_expected_ampersand;
     return 1;
 }
 
@@ -1006,9 +1018,24 @@ static ast_node *parse_expression(parser *self, int min_prec) {
     if (!left) return null;
     while (1) {
         if (0 == a_try_int(self, a_binary_operator, min_prec)) {
-            ast_node *op   = self->result;
+            ast_node *op = self->result;
 
-            int       prec = operator_precedence(str_cstr(&op->symbol.name), 0);
+            // Note: special case: .* and .& are converted to unary_op for legacy reasons
+            if (0 == str_cmp_c(op->symbol.name, ".")) {
+                if (0 == a_try(self, a_star)) {
+                    op              = self->result;
+                    ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
+                    left            = unary;
+                    continue;
+                } else if (0 == a_try(self, a_ampersand)) {
+                    op              = self->result;
+                    ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
+                    left            = unary;
+                    continue;
+                }
+            }
+
+            int prec = operator_precedence(str_cstr(&op->symbol.name), 0);
             assert(prec >= min_prec);
             ast_node *right = parse_expression(self, prec + 1); // (prec+1): left-associative
             if (!right) return null;
@@ -1041,6 +1068,8 @@ static ast_node *parse_lvalue(parser *self) {
     else if (ast_binary_op == expr->tag) {
         char const *op = str_cstr(&expr->binary_op.op->symbol.name);
         if (is_struct_access_operator(op)) ident = expr;
+    } else if (ast_unary_op == expr->tag) {
+        if (str_eq(ast_node_str(expr->unary_op.op), S("*"))) ident = expr;
     }
     if (!ident) return null;
 

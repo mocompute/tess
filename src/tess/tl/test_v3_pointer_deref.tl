@@ -9,7 +9,7 @@ main() {
   p->x := 0
   p->y := 1
 
-  obj = *p
+  obj = p.*
   c_free(p)
   obj.x
 }
