@@ -1227,6 +1227,26 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype const **out_type) {
+
+    // no need to specialize if there are no arguments
+    if (!args.size) return name;
+
+    // specialize args first
+    forall(i, args) {
+        if (tl_monotype_is_inst(args.v[i]) && str_is_empty(args.v[i]->cons_inst->special_name)) {
+            tl_polytype const *poly = null;
+            (void)specialize_type_constructor(self, args.v[i]->cons_inst->def->generic_name,
+                                              args.v[i]->cons_inst->args, &poly);
+            if (poly) args.v[i] = tl_polytype_concrete(poly);
+        }
+    }
+
+    // do not specialize if args are not concrete
+    if (!tl_monotype_sized_is_concrete(args)) {
+        if (out_type) *out_type = null;
+        return str_empty();
+    }
+
     str                name_inst = next_instantiation(self, name);
     tl_monotype const *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
 
@@ -1240,6 +1260,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 
     ast_node *utd = toplevel_get(self, name);
     if (!utd) {
+        cancel_last_instantiation(self);
         if (out_type) *out_type = null;
         return str_empty();
     }
@@ -1337,7 +1358,10 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     // Important: If type at the callsite is not fully concrete, do not specialise. It must remain
     // polymorphic until all concrete type information is known.
-    if (!tl_polytype_is_concrete(app)) return 0;
+
+    // FIXME: disabled this early exit even though it's important, because I changed the implementation of
+    // is_concrete to check all cons_inst args too.
+    // if (!tl_polytype_is_concrete(app)) return 0;
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
     // type, e.g consider the identity function
@@ -2027,7 +2051,7 @@ void remove_generic_toplevels(tl_infer *self) {
         tl_polytype const *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
-        if (tl_polytype_is_scheme(type)) array_push(names, name);
+        if (!tl_polytype_is_concrete(type)) array_push(names, name);
     }
 
     forall(i, names) {

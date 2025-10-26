@@ -431,8 +431,7 @@ tl_monotype const *tl_polytype_specialize_cons(allocator *alloc, tl_polytype con
                 tl_monotype_sized  inst_args = args.v[i]->cons_inst->args;
                 tl_monotype const *replace =
                   tl_type_registry_get_cached_instance(registry, name, inst_args);
-                if (!replace) return null;
-                args.v[i] = replace;
+                if (replace) args.v[i] = replace;
             }
         }
 
@@ -576,10 +575,12 @@ int tl_monotype_is_concrete(tl_monotype const *self) {
     if (!self) return 0;
     switch (self->tag) {
     case tl_var:
-    case tl_weak:      return 0;
-    case tl_cons_inst: return 1;
+    case tl_weak: return 0;
+    case tl_cons_inst:
+        forall(i, self->cons_inst->args) if (!tl_monotype_is_concrete(self->cons_inst->args.v[i])) return 0;
+        return 1;
     case tl_list:
-    case tl_tuple:     {
+    case tl_tuple: {
         forall(i, self->list.xs) if (!tl_monotype_is_concrete(self->list.xs.v[i])) return 0;
         return 1;
     }
