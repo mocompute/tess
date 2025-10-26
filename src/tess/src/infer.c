@@ -895,6 +895,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str op = ast_node_str(node->unary_op.op);
         if (str_eq(op, S("*"))) {
             if (tl_monotype_is_ptr(operand->type->type)) {
+                assert(!tl_polytype_is_scheme(operand->type));
                 tl_monotype const *target = tl_monotype_ptr_target(operand->type->type);
                 if (constrain_pm(self, ctx, node->type, target, node)) return 1;
             } else {
@@ -902,8 +903,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
                 return 1;
             }
+        } else if (str_eq(op, S("&"))) {
+            assert(!tl_polytype_is_scheme(operand->type));
+            tl_monotype const *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
+            if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+        } else if (str_eq(op, S("!"))) {
+            tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
+            if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
+        } else if (str_eq(op, S("~"))) {
+            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
         } else {
-            fatal("not yet implemented");
+            fatal("unknown unary operator");
         }
 
     } break;
