@@ -229,7 +229,6 @@ ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
 str            v2_ast_node_to_string(allocator *, ast_node const *);
 
 char const    *ast_tag_to_string(ast_tag);
-int            string_to_ast_operator(char const *, ast_operator *);
 
 str_sized      ast_nodes_get_names(allocator *, ast_node_slice);
 

@@ -46,22 +46,4 @@ typedef enum ast_tag : u16 {
 
 // -- ast_node --
 
-#define TESS_AST_OPERATOR_TAGS(X)                                                                          \
-    X(ast_op_addition, "+")                                                                                \
-    X(ast_op_subtraction, "-")                                                                             \
-    X(ast_op_multiplication, "*")                                                                          \
-    X(ast_op_division, "/")                                                                                \
-                                                                                                           \
-    /* NB: see is_arithmetic and is_relational */                                                          \
-                                                                                                           \
-    X(ast_op_less_than, "<")                                                                               \
-    X(ast_op_less_than_equal, "<=")                                                                        \
-    X(ast_op_equal, "==")                                                                                  \
-    X(ast_op_not_equal, "<>")                                                                              \
-    X(ast_op_greater_than_equal, ">=")                                                                     \
-    X(ast_op_greater_than, ">")                                                                            \
-    X(ast_op_sentinel, null)
-
-typedef enum ast_operator { TESS_AST_OPERATOR_TAGS(MOS_TAG_NAME) } ast_operator;
-
 #endif

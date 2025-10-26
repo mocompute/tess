@@ -324,8 +324,6 @@ void ast_node_name_replace(ast_node *node, str replace) {
     node->symbol.name     = replace;
 }
 
-char const *ast_operator_to_string(ast_operator);
-
 //
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
@@ -760,26 +758,6 @@ char const *ast_tag_to_string(ast_tag tag) {
     tag = TL_AST_CLEAR_BITS(tag);
     assert(tag < sizeof(strings2));
     return strings2[tag];
-}
-
-char const *ast_operator_to_string(ast_operator tag) {
-
-    static char const *const strings[] = {TESS_AST_OPERATOR_TAGS(MOS_TAG_STRING)};
-
-    return strings[tag];
-}
-
-int string_to_ast_operator(char const *const s, ast_operator *out) {
-
-    static char const *const strings[] = {TESS_AST_OPERATOR_TAGS(MOS_TAG_STRING)};
-
-    for (int i = 0; strings[i] != null; ++i) {
-        if (0 == strcmp(strings[i], s)) {
-            *out = (ast_operator)i;
-            return 0;
-        }
-    }
-    return 1;
 }
 
 str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
