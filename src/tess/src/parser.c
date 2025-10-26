@@ -52,6 +52,26 @@ typedef int (*parse_fun_int)(parser *, int);
 
 static int           toplevel(parser *);
 
+static int           a_param(parser *);
+static int           a_assignment(parser *);
+static int           a_simple_assignment(parser *);
+static int           a_body_element(parser *);
+static int           a_expression(parser *);
+static int           a_funcall(parser *);
+static int           a_type_literal(parser *);
+static int           a_lambda_function(parser *);
+static int           a_reassignment(parser *);
+static int           a_statement(parser *);
+static int           a_value(parser *);
+static ast_node     *create_body(parser *self, ast_node_array exprs);
+static int           operator_precedence(char const *op, int is_prefix);
+static ast_node     *parse_base_expression(parser *);
+static ast_node     *parse_expression(parser *, int min_preced);
+static ast_node     *parse_if_expr(parser *);
+static ast_node     *parse_cond_expr(parser *);
+static ast_node     *parse_lvalue(parser *);
+static int           toplevel_defun(parser *);
+
 static int           result_ast(parser *, ast_tag);
 static int           result_ast_bool(parser *, int);
 static int           result_ast_f64(parser *, f64);
@@ -376,21 +396,6 @@ static int a_comma(parser *p) {
     return 1;
 }
 
-// static int a_dot(parser *p) {
-//     if (next_token(p)) return 1;
-//     if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
-//     p->error.tag = tl_err_expected_dot;
-//     return 1;
-// }
-
-// static int a_ellipsis(parser *p) {
-//     if (next_token(p)) return 1;
-//     if (tok_ellipsis == p->token.tag)
-//         return result_ast_node(p, ast_node_create(p->ast_arena, ast_ellipsis));
-//     p->error.tag = tl_err_expected_ellipsis;
-//     return 1;
-// }
-
 static int a_open_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_open_round == p->token.tag) return result_ast_str(p, ast_symbol, "(");
@@ -425,8 +430,6 @@ static int a_close_square(parser *p) {
     p->error.tag = tl_err_expected_close_square;
     return 1;
 }
-
-static int operator_precedence(char const *op, int is_prefix);
 
 static int a_binary_operator(parser *self, int min_prec) {
     if (next_token(self)) {
@@ -537,15 +540,6 @@ static int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-// static int a_star(parser *p) {
-//     if (next_token(p)) return 1;
-
-//     if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
-
-//     p->error.tag = tl_err_expected_star;
-//     return 1;
-// }
-
 static int a_string(parser *p) {
     if (next_token(p)) return 1;
 
@@ -622,15 +616,6 @@ static int a_colon_equal(parser *p) {
     return 1;
 }
 
-// static int a_ampersand(parser *p) {
-//     if (next_token(p)) return 1;
-
-//     if (tok_ampersand == p->token.tag) return result_ast_str(p, ast_symbol, "&");
-
-//     p->error.tag = tl_err_expected_ampersand;
-//     return 1;
-// }
-
 static int a_arrow(parser *p) {
     if (next_token(p)) return 1;
 
@@ -660,40 +645,17 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     return 0;
 }
 
-// ---
+static int a_type_identifier(parser *self) {
 
-static int       a_param(parser *);
-static int       b_assignment(parser *);
-static int       b_simple_assignment(parser *);
-static int       b_body_element(parser *);
-static int       b_expression(parser *);
-static int       b_funcall(parser *);
-static int       b_type_literal(parser *);
-static int       b_lambda_function(parser *);
-static int       b_reassignment(parser *);
-static int       b_statement(parser *);
-static int       b_value(parser *);
-static ast_node *create_body(parser *self, ast_node_array exprs);
-static int       operator_precedence(char const *op, int is_prefix);
-static ast_node *parse_base_expression(parser *);
-static ast_node *parse_expression(parser *, int min_preced);
-static ast_node *parse_if_expr(parser *);
-static ast_node *parse_cond_expr(parser *);
-static ast_node *parse_lvalue(parser *);
-static int       toplevel_defun(parser *);
-
-static int       b_type_identifier(parser *self) {
-
-    if (0 == a_try(self, b_funcall)) return 0;
+    if (0 == a_try(self, a_funcall)) return 0;
     if (0 == a_try(self, a_identifier)) return 0;
 
     return 1;
 }
 
-static int b_type_annotation(parser *self) {
+static int a_type_annotation(parser *self) {
     if (0 == a_try(self, a_colon)) {
-        log(self, "begin type annotation");
-        int res = a_try(self, b_type_identifier);
+        int res = a_try(self, a_type_identifier);
         return res;
     }
 
@@ -705,7 +667,7 @@ static int a_param(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
     ast_node *ann   = null;
-    if (0 == a_try(self, b_type_annotation)) {
+    if (0 == a_try(self, a_type_annotation)) {
         ann = self->result;
     }
 
@@ -714,7 +676,7 @@ static int a_param(parser *self) {
     return result_ast_node(self, ident);
 }
 
-static int b_funcall(parser *self) {
+static int a_funcall(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
@@ -722,12 +684,12 @@ static int b_funcall(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_round)) goto done;
-    if (0 == a_try(self, b_expression)) array_push(args, self->result);
+    if (0 == a_try(self, a_expression)) array_push(args, self->result);
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, b_expression)) return 1;
+        if (a_try(self, a_expression)) return 1;
         array_push(args, self->result);
     }
 
@@ -741,7 +703,7 @@ done:
     return result_ast_node(self, node);
 }
 
-static int b_type_literal(parser *self) {
+static int a_type_literal(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
@@ -749,12 +711,12 @@ static int b_type_literal(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_curly)) goto done;
-    if (0 == a_try(self, b_simple_assignment)) array_push(args, self->result);
+    if (0 == a_try(self, a_simple_assignment)) array_push(args, self->result);
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, b_simple_assignment)) return 1;
+        if (a_try(self, a_simple_assignment)) return 1;
         array_push(args, self->result);
     }
 
@@ -767,7 +729,7 @@ done:
     return result_ast_node(self, node);
 }
 
-static int b_lambda_function(parser *self) {
+static int a_lambda_function(parser *self) {
     ast_node_array params = {.alloc = self->ast_arena};
 
     if (a_try(self, a_open_round)) return 1;
@@ -789,7 +751,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, b_expression)) return 1;
+        if (a_try(self, a_expression)) return 1;
         array_push(exprs, self->result);
     }
 
@@ -803,20 +765,20 @@ decl_done:
     return result_ast_node(self, l);
 }
 
-static int b_lambda_funcall(parser *self) {
-    if (a_try(self, b_lambda_function)) return 1;
+static int a_lambda_funcall(parser *self) {
+    if (a_try(self, a_lambda_function)) return 1;
     ast_node *lambda = self->result;
 
     if (a_try(self, a_open_round)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_round)) goto done;
-    if (0 == a_try(self, b_expression)) array_push(args, self->result);
+    if (0 == a_try(self, a_expression)) array_push(args, self->result);
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, b_expression)) return 1;
+        if (a_try(self, a_expression)) return 1;
         array_push(args, self->result);
     }
 
@@ -830,10 +792,10 @@ done:
     return result_ast_node(self, node);
 }
 
-static int b_value(parser *self) {
-    if (0 == a_try(self, b_type_literal)) return 0;
-    if (0 == a_try(self, b_funcall)) return 0;
-    if (0 == a_try(self, b_lambda_function)) return 0;
+static int a_value(parser *self) {
+    if (0 == a_try(self, a_type_literal)) return 0;
+    if (0 == a_try(self, a_funcall)) return 0;
+    if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
@@ -909,7 +871,7 @@ static ast_node *parse_if_continue(parser *self) {
 
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, b_body_element)) return null;
+        if (a_try(self, a_body_element)) return null;
         array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
@@ -925,7 +887,7 @@ static ast_node *parse_if_continue(parser *self) {
         } else {
             if (a_try(self, a_open_curly)) return null;
             while (1) {
-                if (a_try(self, b_body_element)) return null;
+                if (a_try(self, a_body_element)) return null;
                 array_push(exprs, self->result);
                 if (0 == a_try(self, a_close_curly)) break;
             }
@@ -957,7 +919,7 @@ static ast_node *parse_cond_arm(parser *self) {
 
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, b_body_element)) return null;
+        if (a_try(self, a_body_element)) return null;
         array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
@@ -1006,8 +968,8 @@ static ast_node *parse_base_expression(parser *self) {
 
     // lambda function is identified by open round, so we need to parse it before nil and grouped
     // expressions.
-    if (0 == a_try(self, b_lambda_funcall)) return self->result;
-    if (0 == a_try(self, b_lambda_function)) return self->result;
+    if (0 == a_try(self, a_lambda_funcall)) return self->result;
+    if (0 == a_try(self, a_lambda_function)) return self->result;
     if (0 == a_try(self, a_nil)) return self->result; // parse () before (...)
 
     if (0 == a_try(self, a_open_round)) {
@@ -1022,7 +984,7 @@ static ast_node *parse_base_expression(parser *self) {
     node = parse_cond_expr(self);
     if (node) return node;
 
-    if (0 == a_try(self, b_value)) return self->result;
+    if (0 == a_try(self, a_value)) return self->result;
     return null;
 }
 
@@ -1054,7 +1016,7 @@ static ast_node *parse_expression(parser *self, int min_prec) {
     return left;
 }
 
-static int b_expression(parser *self) {
+static int a_expression(parser *self) {
     ast_node *res = parse_expression(self, INT_MIN);
     if (!res) return 1;
     return result_ast_node(self, res);
@@ -1074,7 +1036,7 @@ static ast_node *parse_lvalue(parser *self) {
     if (!ident) return null;
 
     ast_node *ann = null;
-    if (0 == a_try(self, b_type_annotation)) {
+    if (0 == a_try(self, a_type_annotation)) {
         ann                = self->result;
 
         ast_node *leftmost = ident;
@@ -1089,7 +1051,7 @@ static ast_node *parse_lvalue(parser *self) {
     return ident;
 }
 
-static int b_reassignment(parser *self) {
+static int a_reassignment(parser *self) {
     // x := newval
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
@@ -1105,7 +1067,7 @@ static int b_reassignment(parser *self) {
     return result_ast_node(self, a);
 }
 
-static int b_simple_assignment(parser *self) {
+static int a_simple_assignment(parser *self) {
     // x = val (for type literals)
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
@@ -1121,7 +1083,7 @@ static int b_simple_assignment(parser *self) {
     return result_ast_node(self, a);
 }
 
-static int b_assignment(parser *self) {
+static int a_assignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
@@ -1132,7 +1094,7 @@ static int b_assignment(parser *self) {
 
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
-        if (b_body_element(self)) break;
+        if (a_body_element(self)) break;
         array_push(exprs, self->result);
     }
 
@@ -1188,7 +1150,7 @@ static int a_while_statement(parser *self) {
 
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, b_body_element)) return 1;
+        if (a_try(self, a_body_element)) return 1;
         array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
@@ -1201,21 +1163,20 @@ static int a_while_statement(parser *self) {
     return result_ast_node(self, r);
 }
 
-static int b_statement(parser *self) {
-    if (0 == a_try(self, b_assignment)) return 0;
-    if (0 == a_try(self, b_reassignment)) return 0;
+static int a_statement(parser *self) {
+    if (0 == a_try(self, a_assignment)) return 0;
+    if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
 
-    // FIXME: for_stmt
     return 1;
 }
 
-static int b_body_element(parser *self) {
+static int a_body_element(parser *self) {
     // Note: statement before expression, because assignment and ident are ambiguous
-    if (0 == a_try(self, b_statement) || 0 == a_try(self, b_expression)) return 0;
+    if (0 == a_try(self, a_statement) || 0 == a_try(self, a_expression)) return 0;
     else return 1;
 }
 
@@ -1250,7 +1211,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (b_body_element(self)) return 1;
+        if (a_body_element(self)) return 1;
         array_push(exprs, self->result);
     }
 
@@ -1300,7 +1261,7 @@ decl_done:
 
     if (a_try(self, a_arrow)) return 1;
 
-    if (a_try(self, b_type_identifier)) return 1;
+    if (a_try(self, a_type_identifier)) return 1;
     ast_node *ann = self->result;
 
     // convert param type annotations into an ast tuple so we can make an ast arrow
@@ -1333,7 +1294,7 @@ static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_colon)) return 1;
 
-    if (a_try(self, b_type_identifier)) return 1;
+    if (a_try(self, a_type_identifier)) return 1;
     ast_node *type_ident = self->result;
 
     if (a_try(self, a_open_curly)) return 1;
@@ -1382,8 +1343,6 @@ static int toplevel(parser *self) {
     self->error.tag = tl_err_expected_toplevel;
     return 1;
 }
-
-// -----------------------
 
 int parser_next(parser *self) {
     if (!self->tokenizer) {
@@ -1481,10 +1440,6 @@ static int too_many_arguments(parser *self) {
     self->error.tag = tl_err_too_many_arguments;
     return 1;
 }
-
-// static int has_error(parser *self) {
-//     return self->error.tag != tl_err_ok;
-// }
 
 void log(struct parser *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
