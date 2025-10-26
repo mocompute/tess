@@ -55,27 +55,11 @@ typedef struct ast_node {
             u8                n;
         } array;
 
-        struct ast_begin_end {
-            struct ast_node **expressions;
-            u8                n_expressions;
-        } begin_end;
-
         struct ast_lambda_function {
             struct ast_node **parameters;
             u8                n_parameters;
             struct ast_node  *body;
         } lambda_function;
-
-        struct ast_function_declaration {
-            struct ast_node **parameters;
-            u8                n_parameters;
-            struct ast_node  *name;
-        } function_declaration;
-
-        struct ast_lambda_declaration {
-            struct ast_node **parameters;
-            u8                n_parameters;
-        } lambda_declaration;
 
         struct ast_let {
             struct ast_node **parameters;
@@ -208,38 +192,53 @@ typedef void (*ast_op_cfun)(void *, ast_node const *);
 
 // -- variant accessors --
 
-struct ast_address_of           *ast_node_address_of(ast_node *);
-struct ast_arrow                *ast_node_arrow(ast_node *);
-struct ast_assignment           *ast_node_assignment(ast_node *);
-struct ast_bool                 *ast_node_bool(ast_node *);
-struct ast_dereference          *ast_node_deref(ast_node *);
-struct ast_dereference_assign   *ast_node_deref_assign(ast_node *);
-struct ast_i64                  *ast_node_i64(ast_node *);
-struct ast_u64                  *ast_node_u64(ast_node *);
-struct ast_f64                  *ast_node_f64(ast_node *);
-struct ast_array                *ast_node_arr(ast_node *);
-struct ast_lambda_function      *ast_node_lf(ast_node *);
-struct ast_let_in               *ast_node_let_in(ast_node *);
-struct ast_let_match_in         *ast_node_let_match_in(ast_node *);
-struct ast_function_declaration *ast_node_fd(ast_node *);
-struct ast_lambda_declaration   *ast_node_let_ld(ast_node *);
-struct ast_let                  *ast_node_let(ast_node *);
-struct ast_if_then_else         *ast_node_ifthen(ast_node *);
-struct ast_lambda_application   *ast_node_lambda(ast_node *);
-struct ast_named_application    *ast_node_named(ast_node *);
-struct ast_labelled_tuple       *ast_node_lt(ast_node *);
-struct ast_symbol               *ast_node_sym(ast_node *);
-struct ast_tuple                *ast_node_tuple(ast_node *);
-struct ast_begin_end            *ast_node_begin_end(ast_node *);
-struct ast_user_type            *ast_node_ut(ast_node *);
-struct ast_user_type_get        *ast_node_utg(ast_node *);
-struct ast_user_type_set        *ast_node_uts(ast_node *);
-struct ast_user_type_def        *ast_node_utd(ast_node *);
+struct ast_address_of         *ast_node_address_of(ast_node *);
+struct ast_arrow              *ast_node_arrow(ast_node *);
+struct ast_assignment         *ast_node_assignment(ast_node *);
+struct ast_bool               *ast_node_bool(ast_node *);
+struct ast_dereference        *ast_node_deref(ast_node *);
+struct ast_dereference_assign *ast_node_deref_assign(ast_node *);
+struct ast_i64                *ast_node_i64(ast_node *);
+struct ast_u64                *ast_node_u64(ast_node *);
+struct ast_f64                *ast_node_f64(ast_node *);
+struct ast_array              *ast_node_arr(ast_node *);
+struct ast_lambda_function    *ast_node_lf(ast_node *);
+struct ast_let_in             *ast_node_let_in(ast_node *);
+struct ast_let_match_in       *ast_node_let_match_in(ast_node *);
+struct ast_let                *ast_node_let(ast_node *);
+struct ast_if_then_else       *ast_node_ifthen(ast_node *);
+struct ast_lambda_application *ast_node_lambda(ast_node *);
+struct ast_named_application  *ast_node_named(ast_node *);
+struct ast_labelled_tuple     *ast_node_lt(ast_node *);
+struct ast_symbol             *ast_node_sym(ast_node *);
+struct ast_tuple              *ast_node_tuple(ast_node *);
+struct ast_user_type          *ast_node_ut(ast_node *);
+struct ast_user_type_get      *ast_node_utg(ast_node *);
+struct ast_user_type_set      *ast_node_uts(ast_node *);
+struct ast_user_type_def      *ast_node_utd(ast_node *);
 
 // -- ast_node --
 
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
+nodiscard ast_node *ast_node_create_i64(allocator *, i64) mallocfun;
+nodiscard ast_node *ast_node_create_u64(allocator *, u64) mallocfun;
+nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
+nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
+nodiscard ast_node *ast_node_create_nil(allocator *) mallocfun;
+nodiscard ast_node *ast_node_create_if_then_else(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_binary_op(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
+nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_return(allocator *, ast_node *, int) mallocfun;
+nodiscard ast_node *ast_node_create_continue(allocator *) mallocfun;
+nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;

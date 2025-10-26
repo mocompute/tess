@@ -177,29 +177,25 @@ static int result_ast(parser *p, ast_tag tag) {
 }
 
 static int result_ast_i64(parser *p, i64 val) {
-    p->result          = ast_node_create(p->ast_arena, ast_i64);
-    p->result->i64.val = val;
+    p->result = ast_node_create_i64(p->ast_arena, val);
     set_result_file(p);
     return 0;
 }
 
 static int result_ast_u64(parser *p, u64 val) {
-    p->result          = ast_node_create(p->ast_arena, ast_u64);
-    p->result->u64.val = val;
+    p->result = ast_node_create_u64(p->ast_arena, val);
     set_result_file(p);
     return 0;
 }
 
 static int result_ast_f64(parser *p, f64 val) {
-    p->result          = ast_node_create(p->ast_arena, ast_f64);
-    p->result->f64.val = val;
+    p->result = ast_node_create_f64(p->ast_arena, val);
     set_result_file(p);
     return 0;
 }
 
 static int result_ast_bool(parser *p, int val) {
-    p->result            = ast_node_create(p->ast_arena, ast_bool);
-    p->result->bool_.val = val;
+    p->result = ast_node_create_bool(p->ast_arena, val);
     set_result_file(p);
     return 0;
 }
@@ -696,10 +692,7 @@ static int a_funcall(parser *self) {
 done:
 
     array_shrink(args);
-    ast_node *node                      = ast_node_create(self->ast_arena, ast_named_function_application);
-    node->named_application.arguments   = args.v;
-    node->named_application.n_arguments = args.size;
-    node->named_application.name        = name;
+    ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
@@ -722,10 +715,7 @@ static int a_type_literal(parser *self) {
 
 done:
     array_shrink(args);
-    ast_node *node                      = ast_node_create(self->ast_arena, ast_named_function_application);
-    node->named_application.arguments   = args.v;
-    node->named_application.n_arguments = args.size;
-    node->named_application.name        = name;
+    ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
@@ -756,10 +746,9 @@ decl_done:
     }
 
     array_shrink(exprs);
-    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
-    body->body.expressions = (ast_node_sized)sized_all(exprs);
+    ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
 
-    ast_node *l            = ast_node_create(self->ast_arena, ast_lambda_function);
+    ast_node *l    = ast_node_create(self->ast_arena, ast_lambda_function);
     set_node_parameters(self, l, &params);
     l->lambda_function.body = body;
     return result_ast_node(self, l);
@@ -894,12 +883,9 @@ static ast_node *parse_if_continue(parser *self) {
             no = create_body(self, exprs);
         }
     }
-    if (!no) no = ast_node_create(self->ast_arena, ast_nil);
+    if (!no) no = ast_node_create_nil(self->ast_arena);
 
-    ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
-    n->if_then_else.condition = cond;
-    n->if_then_else.yes       = yes;
-    n->if_then_else.no        = no;
+    ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, no);
     return n;
 }
 
@@ -928,20 +914,15 @@ static ast_node *parse_cond_arm(parser *self) {
 
     if (0 == a_try(self, a_close_curly)) {
         // close the cond expr with no else case
-        ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
-        n->if_then_else.condition = cond;
-        n->if_then_else.yes       = yes;
-        n->if_then_else.no        = ast_node_create(self->ast_arena, ast_nil);
+        ast_node *n =
+          ast_node_create_if_then_else(self->ast_arena, cond, yes, ast_node_create_nil(self->ast_arena));
         return n;
     }
 
     ast_node *no = parse_cond_arm(self);
     if (!no) return null;
 
-    ast_node *n               = ast_node_create(self->ast_arena, ast_if_then_else);
-    n->if_then_else.condition = cond;
-    n->if_then_else.yes       = yes;
-    n->if_then_else.no        = no;
+    ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, no);
     return n;
 }
 
@@ -960,9 +941,7 @@ static ast_node *parse_base_expression(parser *self) {
         int       prec = operator_precedence(str_cstr(&op->symbol.name), 1);
         ast_node *expr = parse_expression(self, prec);
         if (!expr) return null;
-        ast_node *unary         = ast_node_create(self->ast_arena, ast_unary_op);
-        unary->unary_op.operand = expr;
-        unary->unary_op.op      = op;
+        ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, expr);
         return unary;
     }
 
@@ -1005,11 +984,8 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             if (0 == str_cmp_c(op->symbol.name, "["))
                 if (a_try(self, a_close_square)) return null;
 
-            ast_node *binop        = ast_node_create(self->ast_arena, ast_binary_op);
-            binop->binary_op.left  = left;
-            binop->binary_op.right = right;
-            binop->binary_op.op    = op;
-            left                   = binop;
+            ast_node *binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
+            left            = binop;
         } else break;
     }
 
@@ -1061,9 +1037,7 @@ static int a_reassignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
-    a->assignment.name  = lval;
-    a->assignment.value = val;
+    ast_node *a = ast_node_create_assignment(self->ast_arena, lval, val);
     return result_ast_node(self, a);
 }
 
@@ -1077,9 +1051,7 @@ static int a_simple_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
-    a->assignment.name  = name;
-    a->assignment.value = val;
+    ast_node *a = ast_node_create_assignment(self->ast_arena, name, val);
     return result_ast_node(self, a);
 }
 
@@ -1098,12 +1070,9 @@ static int a_assignment(parser *self) {
         array_push(exprs, self->result);
     }
 
-    ast_node *body  = create_body(self, exprs);
+    ast_node *body = create_body(self, exprs);
 
-    ast_node *a     = ast_node_create(self->ast_arena, ast_let_in);
-    a->let_in.name  = lval;
-    a->let_in.value = val;
-    a->let_in.body  = body;
+    ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
     return result_ast_node(self, a);
 }
 
@@ -1113,9 +1082,7 @@ static int a_return_statement(parser *self) {
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
 
-    ast_node *r                   = ast_node_create(self->ast_arena, ast_return);
-    r->return_.value              = value;
-    r->return_.is_break_statement = 0;
+    ast_node *r = ast_node_create_return(self->ast_arena, value, 0);
     return result_ast_node(self, r);
 }
 
@@ -1125,16 +1092,14 @@ static int a_break_statement(parser *self) {
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
 
-    ast_node *r                   = ast_node_create(self->ast_arena, ast_return);
-    r->return_.value              = value;
-    r->return_.is_break_statement = 1;
+    ast_node *r = ast_node_create_return(self->ast_arena, value, 1);
     return result_ast_node(self, r);
 }
 
 static int a_continue_statement(parser *self) {
     if (a_try_s(self, the_symbol, "continue")) return 1;
 
-    ast_node *r = ast_node_create(self->ast_arena, ast_continue);
+    ast_node *r = ast_node_create_continue(self->ast_arena);
     return result_ast_node(self, r);
 }
 
@@ -1155,11 +1120,9 @@ static int a_while_statement(parser *self) {
         if (0 == a_try(self, a_close_curly)) break;
     }
 
-    ast_node *body      = create_body(self, exprs);
+    ast_node *body = create_body(self, exprs);
 
-    ast_node *r         = ast_node_create(self->ast_arena, ast_while);
-    r->while_.condition = condition;
-    r->while_.body      = body;
+    ast_node *r    = ast_node_create_while(self->ast_arena, condition, body);
     return result_ast_node(self, r);
 }
 
@@ -1182,8 +1145,7 @@ static int a_body_element(parser *self) {
 
 static ast_node *create_body(parser *self, ast_node_array exprs) {
     array_shrink(exprs);
-    ast_node *body         = ast_node_create(self->ast_arena, ast_body);
-    body->body.expressions = (ast_node_sized)sized_all(exprs);
+    ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
     return body;
 }
 
@@ -1217,8 +1179,8 @@ decl_done:
 
     ast_node *body = create_body(self, exprs);
 
-    ast_node *let  = ast_node_create(self->ast_arena, ast_let);
-    set_node_parameters(self, let, &params);
+    ast_node *let  = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
+    set_node_parameters(self, let, &params); // FIXME
     let->let.name = name;
     let->let.body = body;
 
@@ -1234,10 +1196,7 @@ static int toplevel_assign(parser *self) {
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
 
-    ast_node *n     = ast_node_create(self->ast_arena, ast_let_in);
-    n->let_in.body  = null;
-    n->let_in.name  = name;
-    n->let_in.value = value;
+    ast_node *n = ast_node_create_let_in(self->ast_arena, name, value, null);
     return result_ast_node(self, n);
 }
 
@@ -1275,14 +1234,10 @@ decl_done:
 
     // make tuple
     array_shrink(params);
-    ast_node *tup         = ast_node_create(self->ast_arena, ast_tuple);
-    tup->tuple.elements   = params.v;
-    tup->tuple.n_elements = params.size;
+    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)sized_all(params));
 
     // make arrow
-    ast_node *arrow    = ast_node_create(self->ast_arena, ast_arrow);
-    arrow->arrow.left  = tup;
-    arrow->arrow.right = ann;
+    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
 
     // attach to name
     name->symbol.annotation = arrow;

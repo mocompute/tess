@@ -1064,10 +1064,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_eof:
     case ast_let_match_in:
     case ast_user_type_definition:
-    case ast_begin_end:
-    case ast_function_declaration:
     case ast_labelled_tuple:
-    case ast_lambda_declaration:
     case ast_lambda_function:
     case ast_let:
     case ast_user_type:

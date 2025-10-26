@@ -32,6 +32,107 @@ ast_node *ast_node_create_bool(allocator *alloc, int val) {
     return out;
 }
 
+ast_node *ast_node_create_i64(allocator *alloc, i64 x) {
+    ast_node *self = ast_node_create(alloc, ast_i64);
+    self->i64.val  = x;
+    return self;
+}
+ast_node *ast_node_create_u64(allocator *alloc, u64 x) {
+    ast_node *self = ast_node_create(alloc, ast_u64);
+    self->u64.val  = x;
+    return self;
+}
+ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
+    ast_node *self = ast_node_create(alloc, ast_f64);
+    self->f64.val  = x;
+    return self;
+}
+ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized args) {
+    ast_node *self                      = ast_node_create(alloc, ast_named_function_application);
+    self->named_application.name        = name;
+    self->named_application.n_arguments = args.size;
+    self->named_application.arguments   = args.v;
+    return self;
+}
+ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
+    ast_node *self         = ast_node_create(alloc, ast_body);
+    self->body.expressions = body;
+    return self;
+}
+ast_node *ast_node_create_nil(allocator *alloc) {
+    ast_node *self = ast_node_create(alloc, ast_nil);
+    return self;
+}
+ast_node *ast_node_create_if_then_else(allocator *alloc, ast_node *cond, ast_node *yes, ast_node *no) {
+    ast_node *self               = ast_node_create(alloc, ast_if_then_else);
+    self->if_then_else.condition = cond;
+    self->if_then_else.yes       = yes;
+    self->if_then_else.no        = no;
+    return self;
+}
+ast_node *ast_node_create_unary_op(allocator *alloc, ast_node *op, ast_node *operand) {
+    ast_node *self         = ast_node_create(alloc, ast_unary_op);
+    self->unary_op.op      = op;
+    self->unary_op.operand = operand;
+    return self;
+}
+ast_node *ast_node_create_binary_op(allocator *alloc, ast_node *op, ast_node *left, ast_node *right) {
+    ast_node *self        = ast_node_create(alloc, ast_binary_op);
+    self->binary_op.op    = op;
+    self->binary_op.left  = left;
+    self->binary_op.right = right;
+    return self;
+}
+ast_node *ast_node_create_assignment(allocator *alloc, ast_node *name, ast_node *value) {
+    ast_node *self         = ast_node_create(alloc, ast_assignment);
+    self->assignment.name  = name;
+    self->assignment.value = value;
+    return self;
+}
+ast_node *ast_node_create_return(allocator *alloc, ast_node *value, int is_break) {
+    ast_node *self                   = ast_node_create(alloc, ast_return);
+    self->return_.value              = value;
+    self->return_.is_break_statement = is_break;
+    return self;
+}
+ast_node *ast_node_create_continue(allocator *alloc) {
+    ast_node *self = ast_node_create(alloc, ast_continue);
+    return self;
+}
+ast_node *ast_node_create_while(allocator *alloc, ast_node *cond, ast_node *body) {
+    ast_node *self         = ast_node_create(alloc, ast_while);
+    self->while_.condition = cond;
+    self->while_.body      = body;
+    return self;
+}
+ast_node *ast_node_create_let_in(allocator *alloc, ast_node *name, ast_node *value, ast_node *body) {
+    ast_node *self     = ast_node_create(alloc, ast_let_in);
+    self->let_in.name  = name;
+    self->let_in.value = value;
+    self->let_in.body  = body;
+    return self;
+}
+ast_node *ast_node_create_let(allocator *alloc, ast_node *name, ast_node_sized args, ast_node *body) {
+    ast_node *self         = ast_node_create(alloc, ast_let);
+    self->let.name         = name;
+    self->let.n_parameters = args.size;
+    self->let.parameters   = args.v;
+    self->let.body         = body;
+    return self;
+}
+ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
+    ast_node *self         = ast_node_create(alloc, ast_tuple);
+    self->tuple.n_elements = xs.size;
+    self->tuple.elements   = xs.v;
+    return self;
+}
+ast_node *ast_node_create_arrow(allocator *alloc, ast_node *left, ast_node *right) {
+    ast_node *self    = ast_node_create(alloc, ast_arrow);
+    self->arrow.left  = left;
+    self->arrow.right = right;
+    return self;
+}
+
 ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     ast_node *self               = ast_node_create(alloc, ast_symbol);
     self->symbol.name            = str_init(alloc, str);
@@ -83,18 +184,16 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_eof:
     case ast_nil:
     case ast_any:
-    case ast_begin_end:
-    case ast_lambda_declaration:
     case ast_labelled_tuple:
-    case ast_tuple:              break;
+    case ast_tuple:          break;
 
-    case ast_bool:               clone->bool_.val = orig->bool_.val; break;
-    case ast_i64:                clone->i64.val = orig->i64.val; break;
-    case ast_u64:                clone->u64.val = orig->u64.val; break;
-    case ast_f64:                clone->f64.val = orig->f64.val; break;
+    case ast_bool:           clone->bool_.val = orig->bool_.val; break;
+    case ast_i64:            clone->i64.val = orig->i64.val; break;
+    case ast_u64:            clone->u64.val = orig->u64.val; break;
+    case ast_f64:            clone->f64.val = orig->f64.val; break;
 
     case ast_address_of:
-    case ast_pointer_to:         {
+    case ast_pointer_to:     {
         struct ast_address_of *vclone = ast_node_address_of(clone),
                               *vorig  = ast_node_address_of((ast_node *)orig);
         vclone->target                = ast_node_clone(alloc, vorig->target);
@@ -169,12 +268,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_lambda_function: {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
         vclone->body = ast_node_clone(alloc, vorig->body);
-    } break;
-
-    case ast_function_declaration: {
-        struct ast_function_declaration *vclone = ast_node_fd(clone),
-                                        *vorig  = ast_node_fd((ast_node *)orig);
-        vclone->name                            = ast_node_clone(alloc, vorig->name);
     } break;
 
     case ast_lambda_function_application: {
@@ -329,8 +422,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_tuple:
-    case ast_lambda_declaration:
-    case ast_begin_end:
     case ast_labelled_tuple:
         //
         return;
@@ -388,11 +479,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_lambda_function:
         //
         fun(ctx, node->lambda_function.body);
-        break;
-
-    case ast_function_declaration:
-        //
-        fun(ctx, node->function_declaration.name);
         break;
 
     case ast_lambda_function_application:
@@ -488,8 +574,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_tuple:
-    case ast_lambda_declaration:
-    case ast_begin_end:
     case ast_labelled_tuple:
         //
         return;
@@ -547,11 +631,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_lambda_function:
         //
         node->lambda_function.body = fun(ctx, node->lambda_function.body);
-        break;
-
-    case ast_function_declaration:
-        //
-        node->function_declaration.name = fun(ctx, node->function_declaration.name);
         break;
 
     case ast_lambda_function_application:
@@ -1001,10 +1080,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_let_match_in:
     case ast_user_type_set:
-    case ast_begin_end:
-    case ast_function_declaration:
     case ast_labelled_tuple:
-    case ast_lambda_declaration:
     case ast_lambda_function_application:
     case ast_tuple:
     case ast_user_type:                   return str_copy(alloc, S("[not implemented]"));
@@ -1093,16 +1169,6 @@ struct ast_let_match_in *ast_node_let_match_in(ast_node *node) {
     return &node->let_match_in;
 }
 
-struct ast_function_declaration *ast_node_fd(ast_node *node) {
-    assert(node->tag == ast_function_declaration);
-    return &node->function_declaration;
-}
-
-struct ast_lambda_declaration *ast_node_let_ld(ast_node *node) {
-    assert(node->tag == ast_lambda_declaration);
-    return &node->lambda_declaration;
-}
-
 struct ast_let *ast_node_let(ast_node *node) {
     assert(node->tag == ast_let);
     return &node->let;
@@ -1131,11 +1197,6 @@ struct ast_labelled_tuple *ast_node_lt(ast_node *node) {
 struct ast_tuple *ast_node_tuple(ast_node *node) {
     assert(node->tag == ast_tuple);
     return &node->tuple;
-}
-
-struct ast_begin_end *ast_node_begin_end(ast_node *node) {
-    assert(node->tag == ast_begin_end);
-    return &node->begin_end;
 }
 
 struct ast_user_type *ast_node_ut(ast_node *node) {
@@ -1279,15 +1340,6 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->user_type_set.value);
         break;
 
-    case ast_begin_end:
-        //
-        break;
-
-    case ast_function_declaration:
-        //
-        combine_node(self->function_declaration.name);
-        break;
-
     case ast_lambda_function:
         // for lambdas and let functions, its type is part of the hash
         combine_node(self->lambda_function.body);
@@ -1338,8 +1390,7 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_tuple:              break;
+    case ast_tuple:          break;
     }
 
     return hash;

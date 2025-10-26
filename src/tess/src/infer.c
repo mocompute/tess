@@ -773,10 +773,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:
-    case ast_begin_end:
-    case ast_function_declaration:
     case ast_labelled_tuple:
-    case ast_lambda_declaration:
     case ast_user_type:
 
         // operate on the leaf node
@@ -1213,11 +1210,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_ellipsis:
     case ast_eof:
     case ast_let_match_in:
-    case ast_begin_end:
-    case ast_function_declaration:
     case ast_labelled_tuple:
-    case ast_lambda_declaration:
-    case ast_user_type:            break;
+    case ast_user_type:          break;
     }
 
     // apply newly created constraint substitutions
@@ -1565,11 +1559,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     } break;
 
-    case ast_begin_end:
-        for (u32 i = 0; i < node->begin_end.n_expressions; ++i)
-            rename_variables(self, node->begin_end.expressions[i], lex, level + 1);
-        break;
-
     case ast_lambda_function_application: {
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
@@ -1639,8 +1628,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_i64:
     case ast_u64:
     case ast_user_type_definition:
-    case ast_function_declaration:
-    case ast_lambda_declaration:
     case ast_user_type:            break;
     }
 }

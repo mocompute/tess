@@ -43,10 +43,7 @@ typedef enum ast_tag : u16 {
     ast_user_type_set,
     ast_while,
 
-    ast_begin_end = BIT(TL_AST_BIT_ARRAY),
-    ast_function_declaration,
-    ast_labelled_tuple,
-    ast_lambda_declaration,
+    ast_labelled_tuple = BIT(TL_AST_BIT_ARRAY),
     ast_lambda_function,
     ast_lambda_function_application,
     ast_let,
