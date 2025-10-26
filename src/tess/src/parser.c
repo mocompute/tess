@@ -1061,7 +1061,6 @@ static int b_expression(parser *self) {
 }
 
 static ast_node *parse_lvalue(parser *self) {
-    // FIXME deref and dot field access
     ast_node *ident = null;
 
     ast_node *expr  = parse_expression(self, INT_MIN);
@@ -1076,15 +1075,16 @@ static ast_node *parse_lvalue(parser *self) {
 
     ast_node *ann = null;
     if (0 == a_try(self, b_type_annotation)) {
-        ann = self->result;
-    }
+        ann                = self->result;
 
-    if (ast_node_is_symbol(ident)) {
-        ident->symbol.annotation = ann;
-    } else if (ast_binary_op == ident->tag) {
-        assert(ast_node_is_symbol(ident->binary_op.left));
-        ident->binary_op.left->symbol.annotation = ann;
-    } else fatal("logic error");
+        ast_node *leftmost = ident;
+        while (!ast_node_is_symbol(leftmost)) {
+            if (ast_binary_op == leftmost->tag) leftmost = leftmost->binary_op.left;
+            else fatal("logic error");
+        }
+
+        leftmost->symbol.annotation = ann;
+    }
 
     return ident;
 }
