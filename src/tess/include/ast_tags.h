@@ -31,7 +31,6 @@ typedef enum ast_tag : u16 {
     ast_i64,
     ast_if_then_else,
     ast_let_in,
-    ast_let_match_in,
     ast_pointer_to,
     ast_return,
     ast_string,
@@ -39,17 +38,13 @@ typedef enum ast_tag : u16 {
     ast_u64,
     ast_unary_op,
     ast_user_type_definition,
-    ast_user_type_get,
-    ast_user_type_set,
     ast_while,
 
-    ast_labelled_tuple = BIT(TL_AST_BIT_ARRAY),
-    ast_lambda_function,
+    ast_lambda_function = BIT(TL_AST_BIT_ARRAY),
     ast_lambda_function_application,
     ast_let,
     ast_named_function_application,
     ast_tuple,
-    ast_user_type,
 
 } ast_tag;
 

@@ -591,31 +591,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     } break;
 
-    case ast_let_match_in: {
-
-        hashmap *save = map_copy(ctx->lex);
-
-        // process node first, because there may be side effects required before traversing body.
-        if (cb(self, ctx, node)) return 1;
-
-        ast_node_sized arr = ast_node_sized_from_ast_array(node->let_match_in.lt);
-        forall(i, arr) {
-            ast_node *ass = arr.v[i];
-            assert(ast_node_is_assignment(ass));
-            ast_node *name_node = ass->assignment.name;
-            assert(ast_node_is_symbol(name_node));
-            str_hset_insert(&ctx->lex, name_node->symbol.name);
-
-            ensure_tv(self, null, &name_node->type);
-            if (cb(self, ctx, name_node)) return 1;
-        }
-
-        if (traverse_ast(self, ctx, node->let_match_in.body, cb)) return 1;
-
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
-    } break;
-
     case ast_named_function_application: {
 
         str name = node->named_application.name->symbol.name;
@@ -692,19 +667,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
     } break;
 
-    case ast_user_type_get:
-        if (traverse_ast(self, ctx, node->user_type_get.struct_name, cb)) return 1;
-        if (traverse_ast(self, ctx, node->user_type_get.field_name, cb)) return 1;
-        if (cb(self, ctx, node)) return 1;
-        break;
-
-    case ast_user_type_set:
-        if (traverse_ast(self, ctx, node->user_type_set.struct_name, cb)) return 1;
-        if (traverse_ast(self, ctx, node->user_type_set.field_name, cb)) return 1;
-        if (traverse_ast(self, ctx, node->user_type_set.value, cb)) return 1;
-        if (cb(self, ctx, node)) return 1;
-        break;
-
     case ast_body:
         forall(i, node->body.expressions) {
             if (traverse_ast(self, ctx, node->body.expressions.v[i], cb)) return 1;
@@ -773,8 +735,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:
-    case ast_labelled_tuple:
-    case ast_user_type:
 
         // operate on the leaf node
         if (cb(self, ctx, node)) return 1;
@@ -1157,38 +1117,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     } break;
 
-    case ast_user_type_get: {
-        ensure_tv(self, null, &node->type);
-
-        tl_polytype const *struct_type =
-          tl_type_env_lookup(self->env, ast_node_str(node->user_type_get.struct_name));
-        tl_polytype_substitute(self->arena, (tl_polytype *)struct_type, self->subs);
-        if (!tl_polytype_is_type_constructor(struct_type)) return 0; // too early
-
-        tl_type_constructor_def const *def        = struct_type->type->cons_inst->def;
-
-        str                            field_name = ast_node_str(node->user_type_get.field_name);
-        u32                            found      = INT32_MAX;
-        forall(i, def->field_names) {
-            if (str_eq(def->field_names.v[i], field_name)) {
-                found = i;
-                break;
-            }
-        }
-        if (INT32_MAX == found) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = node}));
-            return 1;
-        }
-        assert(found < struct_type->type->cons_inst->args.size);
-        tl_monotype const *field_type = struct_type->type->cons_inst->args.v[found];
-        if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
-    } break;
-
-    case ast_user_type_set: {
-        ensure_tv(self, null, &node->type);
-        if (constrain(self, ctx, node->type, node->user_type_set.value->type, node)) return 1;
-    } break;
-
     case ast_user_type_definition: {
     } break;
 
@@ -1208,10 +1136,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:
-    case ast_eof:
-    case ast_let_match_in:
-    case ast_labelled_tuple:
-    case ast_user_type:          break;
+    case ast_eof:                break;
     }
 
     // apply newly created constraint substitutions
@@ -1476,31 +1401,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
     } break;
 
-    case ast_let_match_in: {
-
-        // recurse on value prior to adding name to lexical scope
-        rename_variables(self, node->let_in.value, lex, level + 1);
-
-        hashmap *save = map_copy(*lex);
-
-        for (u32 i = 0; i < node->let_match_in.lt->labelled_tuple.n_assignments; ++i) {
-            ast_node *ass = node->let_match_in.lt->labelled_tuple.assignments[i];
-            assert(ast_node_is_assignment(ass));
-            ast_node *name_node = ass->assignment.name;
-            assert(ast_node_is_symbol(name_node));
-            str name   = name_node->symbol.name;
-            str newvar = next_variable_name(self);
-            ast_node_name_replace(name_node, newvar);
-
-            str_map_set(lex, name, &newvar);
-        }
-
-        rename_variables(self, node->let_match_in.body, lex, level + 1);
-
-        map_destroy(lex);
-        *lex = save;
-    } break;
-
     case ast_symbol: {
         str *found;
         if ((found = str_map_get(*lex, node->symbol.name))) {
@@ -1577,10 +1477,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     } break;
 
-    case ast_user_type_get: rename_variables(self, node->user_type_get.struct_name, lex, level + 1); break;
-    case ast_user_type_set: rename_variables(self, node->user_type_set.struct_name, lex, level + 1); break;
-
-    case ast_tuple:         {
+    case ast_tuple: {
         ast_node_sized arr = ast_node_sized_from_ast_array(node);
         forall(i, arr) rename_variables(self, arr.v[i], lex, level + 1);
     } break;
@@ -1588,11 +1485,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_assignment:
         rename_variables(self, node->assignment.name, lex, level + 1);
         rename_variables(self, node->assignment.value, lex, level + 1);
-        break;
-
-    case ast_labelled_tuple:
-        for (u32 i = 0; i < node->labelled_tuple.n_assignments; ++i)
-            rename_variables(self, node->labelled_tuple.assignments[i], lex, level + 1);
         break;
 
     case ast_binary_op:
@@ -1627,8 +1519,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_f64:
     case ast_i64:
     case ast_u64:
-    case ast_user_type_definition:
-    case ast_user_type:            break;
+    case ast_user_type_definition: break;
     }
 }
 

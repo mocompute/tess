@@ -828,36 +828,6 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     return res;
 }
 
-static str generate_type_get(transpile *self, tl_monotype const *type, ast_node const *node,
-                             eval_ctx *ctx) {
-    (void)ctx;
-    assert(ast_user_type_get == node->tag);
-
-    str res = next_res(self);
-    generate_decl(self, res, type);
-    generate_assign_lhs(self, res);
-    cat(self, ast_node_str(node->user_type_get.struct_name));
-    cat_dot(self);
-    cat(self, ast_node_str(node->user_type_get.field_name));
-    cat_semicolonln(self);
-    return res;
-}
-
-static str generate_type_set(transpile *self, tl_monotype const *type, ast_node const *node,
-                             eval_ctx *ctx) {
-    assert(ast_user_type_set == node->tag);
-
-    str value = generate_expr(self, type, node->user_type_set.value, ctx);
-
-    generate_assign_field(self, ast_node_str(node->user_type_set.struct_name),
-                          ast_node_str(node->user_type_get.field_name), value);
-
-    str res = next_res(self);
-    generate_decl(self, res, type);
-    generate_assign(self, res, value);
-    return res;
-}
-
 static str generate_body(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
     (void)type;
 
@@ -1046,28 +1016,22 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
                        generate_expr(self, deref_ty, node->dereference.target, ctx));
     } break;
 
-    case ast_tuple:         return generate_tuple(self, type, node, ctx);
+    case ast_tuple:      return generate_tuple(self, type, node, ctx);
 
-    case ast_user_type_get: return generate_type_get(self, type, node, ctx);
-    case ast_user_type_set: return generate_type_set(self, type, node, ctx);
+    case ast_body:       return generate_body(self, type, node, ctx);
 
-    case ast_body:          return generate_body(self, type, node, ctx);
+    case ast_binary_op:  return generate_binary_op(self, type, node, ctx);
+    case ast_unary_op:   return generate_unary_op(self, type, node, ctx);
 
-    case ast_binary_op:     return generate_binary_op(self, type, node, ctx);
-    case ast_unary_op:      return generate_unary_op(self, type, node, ctx);
-
-    case ast_assignment:    return generate_reassignment(self, type, node, ctx);
+    case ast_assignment: return generate_reassignment(self, type, node, ctx);
 
     case ast_arrow:
     case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
-    case ast_let_match_in:
     case ast_user_type_definition:
-    case ast_labelled_tuple:
     case ast_lambda_function:
     case ast_let:
-    case ast_user_type:
         cat_commentln(self, S("FIXME: generate_expr"));
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;

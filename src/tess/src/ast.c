@@ -184,16 +184,15 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_eof:
     case ast_nil:
     case ast_any:
-    case ast_labelled_tuple:
-    case ast_tuple:          break;
+    case ast_tuple:      break;
 
-    case ast_bool:           clone->bool_.val = orig->bool_.val; break;
-    case ast_i64:            clone->i64.val = orig->i64.val; break;
-    case ast_u64:            clone->u64.val = orig->u64.val; break;
-    case ast_f64:            clone->f64.val = orig->f64.val; break;
+    case ast_bool:       clone->bool_.val = orig->bool_.val; break;
+    case ast_i64:        clone->i64.val = orig->i64.val; break;
+    case ast_u64:        clone->u64.val = orig->u64.val; break;
+    case ast_f64:        clone->f64.val = orig->f64.val; break;
 
     case ast_address_of:
-    case ast_pointer_to:     {
+    case ast_pointer_to: {
         struct ast_address_of *vclone = ast_node_address_of(clone),
                               *vorig  = ast_node_address_of((ast_node *)orig);
         vclone->target                = ast_node_clone(alloc, vorig->target);
@@ -243,14 +242,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->body  = ast_node_clone(alloc, vorig->body);
     } break;
 
-    case ast_let_match_in: {
-        struct ast_let_match_in *vclone = ast_node_let_match_in(clone),
-                                *vorig  = ast_node_let_match_in((ast_node *)orig);
-        vclone->lt                      = ast_node_clone(alloc, vorig->lt);
-        vclone->value                   = ast_node_clone(alloc, vorig->value);
-        vclone->body                    = ast_node_clone(alloc, vorig->body);
-    } break;
-
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
         vclone->name = ast_node_clone(alloc, vorig->name);
@@ -291,24 +282,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->while_.condition = ast_node_clone(alloc, orig->while_.condition);
         clone->while_.body      = ast_node_clone(alloc, orig->while_.body);
         break;
-
-    case ast_user_type: {
-        struct ast_user_type *vclone = ast_node_ut(clone), *vorig = ast_node_ut((ast_node *)orig);
-        vclone->name = ast_node_clone(alloc, vorig->name);
-    } break;
-
-    case ast_user_type_get: {
-        struct ast_user_type_get *vclone = ast_node_utg(clone), *vorig = ast_node_utg((ast_node *)orig);
-        vclone->struct_name = ast_node_clone(alloc, vorig->struct_name);
-        vclone->field_name  = ast_node_clone(alloc, vorig->field_name);
-    } break;
-
-    case ast_user_type_set: {
-        struct ast_user_type_set *vclone = ast_node_uts(clone), *vorig = ast_node_uts((ast_node *)orig);
-        vclone->struct_name = ast_node_clone(alloc, vorig->struct_name);
-        vclone->field_name  = ast_node_clone(alloc, vorig->field_name);
-        vclone->value       = ast_node_clone(alloc, vorig->value);
-    } break;
 
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
@@ -422,7 +395,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_tuple:
-    case ast_labelled_tuple:
         //
         return;
 
@@ -456,12 +428,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->let_in.name);
         fun(ctx, node->let_in.value);
         fun(ctx, node->let_in.body);
-        break;
-
-    case ast_let_match_in:
-        fun(ctx, node->let_match_in.lt);
-        fun(ctx, node->let_match_in.value);
-        fun(ctx, node->let_match_in.body);
         break;
 
     case ast_let:
@@ -502,21 +468,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->while_.body);
         break;
 
-    case ast_user_type:
-        //
-        fun(ctx, node->user_type.name);
-        break;
-
-    case ast_user_type_get:
-        fun(ctx, node->user_type_get.struct_name);
-        fun(ctx, node->user_type_get.field_name);
-        break;
-
-    case ast_user_type_set:
-        fun(ctx, node->user_type_set.struct_name);
-        fun(ctx, node->user_type_set.field_name);
-        fun(ctx, node->user_type_set.value);
-        break;
     case ast_user_type_definition: {
         struct ast_user_type_def *v = ast_node_utd(node);
 
@@ -574,7 +525,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_f64:
     case ast_string:
     case ast_tuple:
-    case ast_labelled_tuple:
         //
         return;
 
@@ -608,12 +558,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         node->let_in.name  = fun(ctx, node->let_in.name);
         node->let_in.value = fun(ctx, node->let_in.value);
         node->let_in.body  = fun(ctx, node->let_in.body);
-        break;
-
-    case ast_let_match_in:
-        node->let_match_in.lt    = fun(ctx, node->let_match_in.lt);
-        node->let_match_in.value = fun(ctx, node->let_match_in.value);
-        node->let_match_in.body  = fun(ctx, node->let_match_in.body);
         break;
 
     case ast_let:
@@ -653,21 +597,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         node->while_.body      = fun(ctx, node->while_.body);
         break;
 
-    case ast_user_type:
-        //
-        node->user_type.name = fun(ctx, node->user_type.name);
-        break;
-
-    case ast_user_type_get:
-        node->user_type_get.struct_name = fun(ctx, node->user_type_get.struct_name);
-        node->user_type_get.field_name  = fun(ctx, node->user_type_get.field_name);
-        break;
-
-    case ast_user_type_set:
-        node->user_type_set.struct_name = fun(ctx, node->user_type_set.struct_name);
-        node->user_type_set.field_name  = fun(ctx, node->user_type_set.field_name);
-        node->user_type_set.value       = fun(ctx, node->user_type_set.value);
-        break;
     case ast_user_type_definition: {
         struct ast_user_type_def *v = ast_node_utd(node);
 
@@ -1038,13 +967,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return out;
     } break;
 
-    case ast_ellipsis:      return str_copy(alloc, S("..."));
-
-    case ast_user_type_get: {
-        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->user_type_get.struct_name), S("."),
-                         v2_ast_node_to_string(alloc, node->user_type_get.field_name));
-
-    } break;
+    case ast_ellipsis:     return str_copy(alloc, S("..."));
 
     case ast_if_then_else: {
         str_build b = str_build_init(alloc, 80);
@@ -1078,12 +1001,8 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_dereference_assign:
     case ast_eof:
 
-    case ast_let_match_in:
-    case ast_user_type_set:
-    case ast_labelled_tuple:
     case ast_lambda_function_application:
-    case ast_tuple:
-    case ast_user_type:                   return str_copy(alloc, S("[not implemented]"));
+    case ast_tuple:                       return str_copy(alloc, S("[not implemented]"));
     }
 }
 
@@ -1164,11 +1083,6 @@ struct ast_let_in *ast_node_let_in(ast_node *node) {
     return &node->let_in;
 }
 
-struct ast_let_match_in *ast_node_let_match_in(ast_node *node) {
-    assert(node->tag == ast_let_match_in);
-    return &node->let_match_in;
-}
-
 struct ast_let *ast_node_let(ast_node *node) {
     assert(node->tag == ast_let);
     return &node->let;
@@ -1189,29 +1103,9 @@ struct ast_named_application *ast_node_named(ast_node *node) {
     return &node->named_application;
 }
 
-struct ast_labelled_tuple *ast_node_lt(ast_node *node) {
-    assert(node->tag == ast_labelled_tuple);
-    return &node->labelled_tuple;
-}
-
 struct ast_tuple *ast_node_tuple(ast_node *node) {
     assert(node->tag == ast_tuple);
     return &node->tuple;
-}
-
-struct ast_user_type *ast_node_ut(ast_node *node) {
-    assert(node->tag == ast_user_type);
-    return &node->user_type;
-}
-
-struct ast_user_type_get *ast_node_utg(ast_node *node) {
-    assert(node->tag == ast_user_type_get);
-    return &node->user_type_get;
-}
-
-struct ast_user_type_set *ast_node_uts(ast_node *node) {
-    assert(node->tag == ast_user_type_set);
-    return &node->user_type_set;
 }
 
 struct ast_user_type_def *ast_node_utd(ast_node *node) {
@@ -1220,17 +1114,6 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 }
 
 //
-
-//
-
-ast_node **ast_node_assignment_names(allocator *alloc, ast_node const *node) {
-    struct ast_labelled_tuple const *v        = ast_node_lt((ast_node *)node);
-    ast_node                       **elements = alloc_malloc(alloc, v->n_assignments * sizeof elements[0]);
-
-    for (u32 i = 0; i < v->n_assignments; ++i) elements[i] = v->assignments[i]->assignment.name;
-
-    return elements;
-}
 
 u64 ast_node_hash(ast_node const *self) {
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
@@ -1306,12 +1189,6 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->let_in.body);
         break;
 
-    case ast_let_match_in:
-        combine_node(self->let_match_in.lt);
-        combine_node(self->let_match_in.value);
-        combine_node(self->let_match_in.body);
-        break;
-
     case ast_string:
     case ast_symbol: {
         hash = str_hash64_combine(hash, self->symbol.name);
@@ -1325,19 +1202,6 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_user_type_definition:
         //
         combine_node(self->user_type_def.name);
-        break;
-
-    case ast_user_type_get:
-        //
-        combine_node(self->user_type_get.struct_name);
-        combine_node(self->user_type_get.field_name);
-        break;
-
-    case ast_user_type_set:
-        //
-        combine_node(self->user_type_set.struct_name);
-        combine_node(self->user_type_set.field_name);
-        combine_node(self->user_type_set.value);
         break;
 
     case ast_lambda_function:
@@ -1358,8 +1222,6 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_named_function_application: combine_node(self->named_application.name); break;
-
-    case ast_user_type:                  combine_node(self->user_type.name); break;
 
     case ast_body:
         //
@@ -1389,8 +1251,7 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->while_.body);
         break;
 
-    case ast_labelled_tuple:
-    case ast_tuple:          break;
+    case ast_tuple: break;
     }
 
     return hash;

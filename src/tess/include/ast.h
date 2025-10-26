@@ -80,11 +80,6 @@ typedef struct ast_node {
             struct ast_node  *name;
         } named_application;
 
-        struct ast_labelled_tuple {
-            struct ast_node **assignments;
-            u8                n_assignments;
-        } labelled_tuple;
-
         struct ast_tuple {
             struct ast_node **elements;
             u8                n_elements;
@@ -148,23 +143,6 @@ typedef struct ast_node {
             struct ast_node *body;
         } let_in;
 
-        struct ast_let_match_in {
-            struct ast_node *lt; // labelled_tuple
-            struct ast_node *value;
-            struct ast_node *body;
-        } let_match_in;
-
-        struct ast_user_type_get {
-            struct ast_node *struct_name;
-            struct ast_node *field_name;
-        } user_type_get;
-
-        struct ast_user_type_set {
-            struct ast_node *struct_name;
-            struct ast_node *field_name;
-            struct ast_node *value;
-        } user_type_set;
-
         struct ast_user_type_def {
             struct ast_node    *name;
             struct ast_node   **type_arguments;
@@ -209,12 +187,8 @@ struct ast_let                *ast_node_let(ast_node *);
 struct ast_if_then_else       *ast_node_ifthen(ast_node *);
 struct ast_lambda_application *ast_node_lambda(ast_node *);
 struct ast_named_application  *ast_node_named(ast_node *);
-struct ast_labelled_tuple     *ast_node_lt(ast_node *);
 struct ast_symbol             *ast_node_sym(ast_node *);
 struct ast_tuple              *ast_node_tuple(ast_node *);
-struct ast_user_type          *ast_node_ut(ast_node *);
-struct ast_user_type_get      *ast_node_utg(ast_node *);
-struct ast_user_type_set      *ast_node_uts(ast_node *);
 struct ast_user_type_def      *ast_node_utd(ast_node *);
 
 // -- ast_node --
