@@ -985,9 +985,14 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_cat(alloc, v2_ast_node_to_string(alloc, node->unary_op.op),
                        v2_ast_node_to_string(alloc, node->unary_op.operand));
 
+    case ast_assignment:
+        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" = "),
+                         v2_ast_node_to_string(alloc, node->assignment.value));
+
+        break;
+
     case ast_address_of:
     case ast_pointer_to:
-    case ast_assignment:
     case ast_dereference_assign:
     case ast_eof:
 

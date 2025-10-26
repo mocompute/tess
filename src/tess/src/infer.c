@@ -1045,6 +1045,16 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             u32 i = 0;
             while ((arg = ast_arguments_next(&iter))) {
                 if (i >= inst->cons_inst->args.size) fatal("runtime error");
+
+                if (ast_node_is_assignment(arg)) {
+                    // check if name exists in type def
+                    if (!tl_polytype_type_constructor_has_field(type, ast_node_str(arg->assignment.name))) {
+                        array_push(self->errors,
+                                   ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                        return 1;
+                    }
+                }
+
                 if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
             }
 

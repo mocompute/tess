@@ -633,6 +633,12 @@ int tl_polytype_is_type_constructor(tl_polytype const *self) {
     return self && tl_monotype_is_inst(self->type);
 }
 
+int tl_polytype_type_constructor_has_field(tl_polytype const *self, str name) {
+    assert(tl_polytype_is_type_constructor(self));
+    tl_type_constructor_def const *def = self->type->cons_inst->def;
+    return str_array_contains_one(def->field_names, name);
+}
+
 tl_monotype const *tl_monotype_ptr_target(tl_monotype const *self) {
     assert(tl_monotype_is_ptr(self));
     assert(self->cons_inst->args.size == 1);

@@ -159,6 +159,7 @@ str         tl_polytype_to_string(allocator *, tl_polytype const *);
 int         tl_polytype_is_scheme(tl_polytype const *);
 int         tl_polytype_is_concrete(tl_polytype const *);
 int         tl_polytype_is_type_constructor(tl_polytype const *);
+int         tl_polytype_type_constructor_has_field(tl_polytype const *, str);
 
 // -- substitution --
 
