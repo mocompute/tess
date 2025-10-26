@@ -2148,22 +2148,41 @@ tl_monotype const *tl_infer_update_specialized_type(tl_infer *self, tl_monotype 
     return null;
 }
 
+static void update_types_one(tl_infer *self, tl_polytype const **poly) {
+    if (!poly || !*poly) return; // not all ast nodes will have types
+
+    if (tl_polytype_is_type_constructor(*poly)) {
+        tl_monotype const *replace = tl_infer_update_specialized_type(self, (*poly)->type);
+        if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
+
+    } else {
+        // otherwise walk through every monotype referenced by this polytype
+        tl_infer_update_specialized_type(self, (*poly)->type);
+    }
+}
+
+static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    (void)ctx;
+    update_types_one(self, &node->type);
+    return 0;
+}
+
 static void update_specialized_types(tl_infer *self) {
 
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
-        tl_polytype const *poly = *(tl_polytype const **)iter.data;
-
-        if (tl_polytype_is_type_constructor(poly)) {
-            tl_monotype const *replace = tl_infer_update_specialized_type(self, poly->type);
-            if (replace) *(tl_polytype const **)iter.data = tl_polytype_absorb_mono(self->arena, replace);
-
-        } else {
-            // otherwise walk through every monotype referenced by this polytype
-            tl_infer_update_specialized_type(self, poly->type);
-        }
+        tl_polytype const **poly = iter.data;
+        update_types_one(self, poly);
     }
 
+    traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    iter                   = (hashmap_iterator){0};
+    ast_node *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue;
+        traverse_ast(self, traverse, node, update_types_cb);
+    }
+    traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);
 }
 

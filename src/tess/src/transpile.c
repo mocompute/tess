@@ -871,8 +871,8 @@ static str generate_body(transpile *self, tl_monotype const *type, ast_node cons
 static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node const *node,
                               eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
-    str left  = generate_expr(self, type, node->binary_op.left, ctx);
-    str right = generate_expr(self, type, node->binary_op.right, ctx);
+    str left  = generate_expr(self, null, node->binary_op.left, ctx); // types null
+    str right = generate_expr(self, null, node->binary_op.right, ctx);
     str op    = ast_node_str(node->binary_op.op);
 
     if (!ctx->want_lvalue) {
