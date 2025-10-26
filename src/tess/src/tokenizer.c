@@ -140,6 +140,9 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_symbol,
         stop_symbol,
 
+        start_ident, // a symbol, with restricted character set
+        in_ident,
+
         start_comment,
         in_comment,
         stop_comment,
@@ -236,6 +239,12 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                     // any digit starts a number
                     reverse_pos(self);
                     state = start_number;
+                    continue;
+                }
+
+                if ((c == '_') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+                    reverse_pos(self);
+                    state = start_ident;
                     continue;
                 }
 
@@ -475,6 +484,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             state         = in_symbol;
         } break;
 
+        case start_ident: {
+            start_capture = self->pos;
+            state         = in_ident;
+        } break;
+
         case in_symbol: {
             if (self->pos == end) {
                 state = stop_symbol;
@@ -511,6 +525,22 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 }
                 break;
             }
+
+        } break;
+
+        case in_ident: {
+            if (self->pos == end) {
+                state = stop_symbol;
+                continue;
+            }
+
+            char const c = next_char(self);
+            if ((c == '_') || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+                break;
+
+            // all other characters break an identifier
+            reverse_pos(self);
+            state = stop_symbol;
 
         } break;
 

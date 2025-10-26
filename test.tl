@@ -1,6 +1,1 @@
-main() {
-  obj = 1
-  ptr = obj.&
-  ptr.* := 0
-  obj
-}
+main() {x=0 x}
