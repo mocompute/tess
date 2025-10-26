@@ -1,4 +1,4 @@
-: Point(a) { x: a y : a }
+: Point(a) { x: a, y : a }
 
 main() {
   p = Point(1, 0)

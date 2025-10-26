@@ -1318,7 +1318,13 @@ static int toplevel_struct(parser *self) {
 
     ast_node_array fields = {.alloc = self->ast_arena};
     while (1) {
+        int saw_comma = 0;
+        if (0 == a_try(self, a_comma)) saw_comma = 1; // optional comma
         if (0 == a_try(self, a_close_curly)) break;
+        if (!saw_comma && fields.size) {
+            // require comma separators
+            if (a_try(self, a_comma)) return 1;
+        }
         if (a_try(self, a_param)) return 1;
         array_push(fields, self->result);
     }
