@@ -350,26 +350,23 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         case in_equal: {
             if (self->pos == end) {
-                replace_token(self->strings, &res, tok_equal_sign);
+                replace_token(self->strings, &res, tok_ampersand);
                 state = stop;
                 goto finish;
             }
             char const c = next_char(self);
-            if (' ' == c || '\n' == c) {
-                replace_token(self->strings, &res, tok_equal_sign);
-                state = stop;
-                if ('\n' == c) advance_line(self);
-                goto finish;
-            } else if ('=' == c) {
+            if ('=' == c) {
                 // ==
                 replace_token(self->strings, &res, tok_equal_equal);
                 state = stop;
                 goto finish;
+            } else {
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_equal_sign);
+                state = stop;
+                goto finish;
             }
-
-            reverse_pos(self);
-            reverse_pos(self); // minus 2
-            state = start_symbol;
+            break;
 
         } break;
 
@@ -380,21 +377,17 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 goto finish;
             }
             char const c = next_char(self);
-            if (' ' == c || '\n' == c) {
-                replace_token(self->strings, &res, tok_ampersand);
-                state = stop;
-                if ('\n' == c) advance_line(self);
-                goto finish;
-            } else if ('&' == c) {
+            if ('&' == c) {
                 // &&
                 replace_token(self->strings, &res, tok_logical_and);
                 state = stop;
                 goto finish;
+            } else {
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_ampersand);
+                state = stop;
+                goto finish;
             }
-
-            reverse_pos(self);
-            reverse_pos(self); // minus 2
-            state = start_symbol;
 
         } break;
 
@@ -404,7 +397,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 goto finish;
             }
-
             char const c = next_char(self);
             switch (c) {
             case '/': state = start_comment; continue;
