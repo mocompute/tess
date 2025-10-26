@@ -396,3 +396,41 @@ let foo x =
    // named initialisers, but not for funcalls, because that makes param names part of the API
 
  }
+
+
+//
+// type arguments
+//
+
+Exploring new syntax for type arguments, struct declarations:
+
+Consistent use of { } for type arguments, rather than ( ):
+
+Point(a) { x : a, y : a } becomes
+Point{a} { x : a, y : a }
+
+// do struct definitions need an introducing token?
+Point { a } { x : a, y : a }
+id    { a } ( x : a ) { x }
+
+id {a} (x : a) { x }
+
+// no type args, no fields, no params
+Min { }
+min ( ) { }
+
+// no type args, one field, one param
+One { a : Int }
+one ( a : Int ) { ... }
+
+// one type arg, no field, no param
+TA { a } { }
+ta { a } ( ) { ... }
+
+// one type arg, one field, one param
+OneOne { a } { x : a }
+oneone { a } ( x : a ) { ... }
+
+// type literal uses braces and initializers, e.g. as a formal argument:
+foo(Point { x = 1, y = 2 })
+foo(Point { x = 1, y = 2 }, arg2, ...) { ... }
