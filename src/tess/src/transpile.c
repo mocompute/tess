@@ -530,8 +530,47 @@ static str generate_funcall_result(transpile *self, tl_monotype const *type, int
     return res;
 }
 
+static str generate_type_constructor_named(transpile *self, ast_node const *node, eval_ctx *ctx) {
+    // with named arguments (ast_assignment)
+
+    str                name = ast_node_str(node->named_application.name);
+    tl_monotype const *type = env_lookup(self, name);
+    assert(tl_monotype_is_inst(type));
+
+    str                            res = next_res(self);
+    tl_type_constructor_def const *def = type->cons_inst->def;
+
+    assert(def->field_names.size == node->named_application.n_arguments);
+    assert(def->field_names.size == type->cons_inst->args.size);
+
+    generate_decl(self, res, type);
+
+    forall(i, def->field_names) {
+        ast_node const *arg = node->named_application.arguments[i];
+        if (!ast_node_is_assignment(arg)) fatal("expected named assignment node");
+
+        // FIXME: no syntax check to see if the field name in the assignment is valid
+
+        str arg_value = generate_expr(self, type->cons_inst->args.v[i], arg->assignment.value, ctx);
+
+        cat(self, res);
+        cat_dot(self);
+        cat(self, ast_node_str(arg->assignment.name));
+        cat_assign(self);
+        cat(self, arg_value);
+        cat_semicolonln(self);
+    }
+
+    return res;
+}
+
 static str generate_type_constructor(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_named_application(node));
+
+    // divert if named arguments
+    if (node->named_application.n_arguments && ast_node_is_assignment(node->named_application.arguments[0]))
+        return generate_type_constructor_named(self, node, ctx);
+
     str                name = ast_node_str(node->named_application.name);
     tl_monotype const *type = env_lookup(self, name);
     assert(tl_monotype_is_inst(type));

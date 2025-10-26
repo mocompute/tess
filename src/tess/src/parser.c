@@ -664,10 +664,13 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
 
 static int       a_param(parser *);
 static int       b_assignment(parser *);
+static int       b_simple_assignment(parser *);
 static int       b_body_element(parser *);
 static int       b_expression(parser *);
 static int       b_funcall(parser *);
+static int       b_type_literal(parser *);
 static int       b_lambda_function(parser *);
+static int       b_reassignment(parser *);
 static int       b_statement(parser *);
 static int       b_value(parser *);
 static ast_node *create_body(parser *self, ast_node_array exprs);
@@ -730,6 +733,32 @@ static int b_funcall(parser *self) {
 
 done:
 
+    array_shrink(args);
+    ast_node *node                      = ast_node_create(self->ast_arena, ast_named_function_application);
+    node->named_application.arguments   = args.v;
+    node->named_application.n_arguments = args.size;
+    node->named_application.name        = name;
+    return result_ast_node(self, node);
+}
+
+static int b_type_literal(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array args = {.alloc = self->ast_arena};
+    if (0 == a_try(self, a_close_curly)) goto done;
+    if (0 == a_try(self, b_simple_assignment)) array_push(args, self->result);
+
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) goto done;
+        if (a_try(self, a_comma)) return 1;
+        if (a_try(self, b_simple_assignment)) return 1;
+        array_push(args, self->result);
+    }
+
+done:
     array_shrink(args);
     ast_node *node                      = ast_node_create(self->ast_arena, ast_named_function_application);
     node->named_application.arguments   = args.v;
@@ -802,6 +831,7 @@ done:
 }
 
 static int b_value(parser *self) {
+    if (0 == a_try(self, b_type_literal)) return 0;
     if (0 == a_try(self, b_funcall)) return 0;
     if (0 == a_try(self, b_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
@@ -1071,6 +1101,22 @@ static int b_reassignment(parser *self) {
 
     ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
     a->assignment.name  = lval;
+    a->assignment.value = val;
+    return result_ast_node(self, a);
+}
+
+static int b_simple_assignment(parser *self) {
+    // x = val (for type literals)
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+
+    if (a_try(self, a_equal_sign)) return 1;
+
+    ast_node *val = parse_expression(self, INT_MIN);
+    if (!val) return 1;
+
+    ast_node *a         = ast_node_create(self->ast_arena, ast_assignment);
+    a->assignment.name  = name;
     a->assignment.value = val;
     return result_ast_node(self, a);
 }
