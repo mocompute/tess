@@ -114,6 +114,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     enum {
         start,
 
+        in_bang,
         in_minus,
         in_equal,
         in_colon,
@@ -183,6 +184,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '/':  state = forward_slash; continue;
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
+            case '!':  state = in_bang; continue;
 
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
@@ -245,6 +247,26 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 }
 
                 // else skip char
+                break;
+            }
+        } break;
+
+        case in_bang: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_bang);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '=':
+                replace_token(self->strings, &res, tok_bang_equal);
+                state = stop;
+                break;
+            default:
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_bang);
+                state = stop;
                 break;
             }
         } break;

@@ -48,6 +48,8 @@ int token_init_sn(allocator *alloc, token *tok, token_tag tag, char const *s, si
 
 void token_deinit(allocator *alloc, token *tok) {
     switch (tok->tag) {
+    case tok_bang:
+    case tok_bang_equal:
     case tok_comma:
     case tok_dot:
     case tok_colon:
@@ -89,6 +91,8 @@ char *token_to_string(allocator *alloc, token const *tok) {
     char buf[64];
 
     switch (tok->tag) {
+    case tok_bang:
+    case tok_bang_equal:
     case tok_comma:
     case tok_dot:
     case tok_colon:

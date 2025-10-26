@@ -442,6 +442,7 @@ static int a_binary_operator(parser *self, int min_prec) {
         } else return 1;
         break;
 
+    case tok_bang_equal:   op = "!="; break;
     case tok_star:         op = "*"; break;
     case tok_dot:          op = "."; break;
     case tok_equal_equal:  op = "=="; break;
@@ -450,6 +451,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_ampersand:    op = "&"; break;
     case tok_open_square:  op = "["; break;
 
+    case tok_bang:
     case tok_comma:
     case tok_colon:
     case tok_colon_equal:
@@ -475,22 +477,53 @@ static int a_binary_operator(parser *self, int min_prec) {
     return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
 }
 
-static int a_unary_operator(parser *self) {
+static int a_unary_operator(parser *self, int min_prec) {
     if (next_token(self)) {
         if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
         return 1;
     }
 
-    if (tok_symbol == self->token.tag)
-        if (is_unary_operator(self->token.s))
-            return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, self->token.s));
+    char const *op = null;
+    switch (self->token.tag) {
 
-    if (tok_star == self->token.tag || tok_ampersand == self->token.tag) {
-        ast_node *sym;
-        if (tok_star == self->token.tag) sym = ast_node_create_sym_c(self->ast_arena, "*");
-        else sym = ast_node_create_sym_c(self->ast_arena, "&");
-        return result_ast_node(self, sym);
+    case tok_bang:      op = "!"; break;
+    case tok_star:      op = "*"; break;
+    case tok_ampersand: op = "&"; break;
+
+    case tok_symbol:
+        if (is_unary_operator(self->token.s)) op = self->token.s;
+        else return 1;
+        break;
+
+    case tok_bang_equal:
+    case tok_comma:
+    case tok_dot:
+    case tok_colon:
+    case tok_colon_equal:
+    case tok_semicolon:
+    case tok_logical_and:
+    case tok_arrow:
+    case tok_ellipsis:
+    case tok_open_round:
+    case tok_close_round:
+    case tok_open_curly:
+    case tok_close_curly:
+    case tok_open_square:
+    case tok_close_square:
+    case tok_equal_sign:
+    case tok_equal_equal:
+    case tok_invalid:
+    case tok_number:
+    case tok_string:
+    case tok_comment:      return 1;
     }
+
+    if (!op) return 1;
+
+    int prec = operator_precedence(op, 0);
+    if (prec < min_prec) return 1;
+
+    return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
 
     return 1;
 }
@@ -936,7 +969,7 @@ static ast_node *parse_cond_expr(parser *self) {
 
 static ast_node *parse_base_expression(parser *self) {
 
-    if (0 == a_try(self, a_unary_operator)) {
+    if (0 == a_try_int(self, a_unary_operator, INT_MIN)) {
         ast_node *op   = self->result;
         int       prec = operator_precedence(str_cstr(&op->symbol.name), 1);
         ast_node *expr = parse_expression(self, prec);
