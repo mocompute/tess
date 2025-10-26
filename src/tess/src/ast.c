@@ -232,6 +232,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             vclone->field_names[i]       = ast_node_clone(alloc, vorig->field_names[i]);
         }
 
+        vclone->type_arguments = null;
+        vclone->field_types    = null;
+
     } break;
 
     case ast_binary_op: {

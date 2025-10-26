@@ -1,6 +1,8 @@
 : Point(a) { x : a  y : a }
+: Rect(a)  { topleft: Point(a) botright: Point(a) }
 
 main() {
-  p = Point { x = 0, y = 1 }
-  p.x
+  // p = Point { x = 0, y = 1 }
+  r = Rect { topleft = Point { x = 0, y = 0 }, botright = Point { x = 10, y = 10 } }
+  r.topleft.x
 }

@@ -426,6 +426,7 @@ typedef struct {
     hashmap *lex;        // hset str (names in local lexical scope)
     void    *user;
     int      is_intrinsic_argument;
+    int      is_field_name;
 } traverse_ctx;
 
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
@@ -436,6 +437,7 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     out->lex                   = hset_create(alloc, 16);
     out->user                  = null;
     out->is_intrinsic_argument = 0;
+    out->is_field_name         = 0;
 
     return out;
 }
@@ -713,7 +715,16 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_binary_op:
         // don't traverse op, it's just an operator
         if (traverse_ast(self, ctx, node->binary_op.left, cb)) return 1;
-        if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
+
+        // when traversing to the right of . and ->, we could encounter field names that should not be
+        // considered free variables, so signal that in the traverse_ctx
+        {
+            int save           = ctx->is_field_name;
+            ctx->is_field_name = 1;
+            if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
+            ctx->is_field_name = save;
+        }
+
         if (cb(self, ctx, node)) return 1;
         break;
 
@@ -724,7 +735,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         break;
 
     case ast_assignment:
+        ctx->is_field_name = 1;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
+        ctx->is_field_name = 0;
         if (traverse_ast(self, ctx, node->assignment.value, cb)) return 1;
         if (cb(self, ctx, node)) return 1;
         break;
@@ -1806,7 +1819,7 @@ typedef struct {
 } collect_free_variables_ctx;
 
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-    if (!ast_node_is_symbol(node)) return 0;
+    if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
     collect_free_variables_ctx *ctx      = traverse_ctx->user;
 
