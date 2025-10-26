@@ -184,21 +184,14 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_eof:
     case ast_nil:
     case ast_any:
-    case ast_tuple:      break;
+    case ast_tuple:    break;
 
-    case ast_bool:       clone->bool_.val = orig->bool_.val; break;
-    case ast_i64:        clone->i64.val = orig->i64.val; break;
-    case ast_u64:        clone->u64.val = orig->u64.val; break;
-    case ast_f64:        clone->f64.val = orig->f64.val; break;
+    case ast_bool:     clone->bool_.val = orig->bool_.val; break;
+    case ast_i64:      clone->i64.val = orig->i64.val; break;
+    case ast_u64:      clone->u64.val = orig->u64.val; break;
+    case ast_f64:      clone->f64.val = orig->f64.val; break;
 
-    case ast_address_of:
-    case ast_pointer_to: {
-        struct ast_address_of *vclone = ast_node_address_of(clone),
-                              *vorig  = ast_node_address_of((ast_node *)orig);
-        vclone->target                = ast_node_clone(alloc, vorig->target);
-    } break;
-
-    case ast_arrow: {
+    case ast_arrow:    {
         struct ast_arrow *vclone = ast_node_arrow(clone), *vorig = ast_node_arrow((ast_node *)orig);
         vclone->left  = ast_node_clone(alloc, vorig->left);
         vclone->right = ast_node_clone(alloc, vorig->right);
@@ -209,18 +202,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                               *vorig  = ast_node_assignment((ast_node *)orig);
         vclone->name                  = ast_node_clone(alloc, vorig->name);
         vclone->value                 = ast_node_clone(alloc, vorig->value);
-    } break;
-
-    case ast_dereference: {
-        struct ast_dereference *vclone = ast_node_deref(clone), *vorig = ast_node_deref((ast_node *)orig);
-        vclone->target = ast_node_clone(alloc, vorig->target);
-    } break;
-
-    case ast_dereference_assign: {
-        struct ast_dereference_assign *vclone = ast_node_deref_assign(clone),
-                                      *vorig  = ast_node_deref_assign((ast_node *)orig);
-        vclone->target                        = ast_node_clone(alloc, vorig->target);
-        vclone->value                         = ast_node_clone(alloc, vorig->value);
     } break;
 
     case ast_symbol:
@@ -398,12 +379,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         //
         return;
 
-    case ast_address_of:
-    case ast_pointer_to:
-        //
-        fun(ctx, node->address_of.target);
-        break;
-
     case ast_arrow:
         fun(ctx, node->arrow.left);
         fun(ctx, node->arrow.right);
@@ -412,16 +387,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_assignment:
         fun(ctx, node->assignment.name);
         fun(ctx, node->assignment.value);
-        break;
-
-    case ast_dereference:
-        //
-        fun(ctx, node->dereference.target);
-        break;
-
-    case ast_dereference_assign:
-        fun(ctx, node->dereference_assign.target);
-        fun(ctx, node->dereference_assign.value);
         break;
 
     case ast_let_in:
@@ -528,12 +493,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         //
         return;
 
-    case ast_address_of:
-    case ast_pointer_to:
-        //
-        node->address_of.target = fun(ctx, node->address_of.target);
-        break;
-
     case ast_arrow:
         node->arrow.left  = fun(ctx, node->arrow.left);
         node->arrow.right = fun(ctx, node->arrow.right);
@@ -542,16 +501,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_assignment:
         node->assignment.name  = fun(ctx, node->assignment.name);
         node->assignment.value = fun(ctx, node->assignment.value);
-        break;
-
-    case ast_dereference:
-        //
-        node->dereference.target = fun(ctx, node->dereference.target);
-        break;
-
-    case ast_dereference_assign:
-        node->dereference_assign.target = fun(ctx, node->dereference_assign.target);
-        node->dereference_assign.value  = fun(ctx, node->dereference_assign.value);
         break;
 
     case ast_let_in:
@@ -984,8 +933,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     break;
 
-    case ast_dereference: return str_copy(alloc, S("[ast_dereference]"));
-
     case ast_unary_op:
         return str_cat(alloc, v2_ast_node_to_string(alloc, node->unary_op.op),
                        v2_ast_node_to_string(alloc, node->unary_op.operand));
@@ -996,9 +943,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
         break;
 
-    case ast_address_of:
-    case ast_pointer_to:
-    case ast_dereference_assign:
     case ast_eof:
 
     case ast_lambda_function_application:
@@ -1023,11 +967,6 @@ struct ast_symbol *ast_node_sym(ast_node *node) {
     return &node->symbol;
 }
 
-struct ast_address_of *ast_node_address_of(ast_node *node) {
-    assert(node->tag == ast_address_of);
-    return &node->address_of;
-}
-
 struct ast_arrow *ast_node_arrow(ast_node *node) {
     assert(node->tag == ast_arrow);
     return &node->arrow;
@@ -1041,16 +980,6 @@ struct ast_assignment *ast_node_assignment(ast_node *node) {
 struct ast_bool *ast_node_bool(ast_node *node) {
     assert(node->tag == ast_bool);
     return &node->bool_;
-}
-
-struct ast_dereference *ast_node_deref(ast_node *node) {
-    assert(node->tag == ast_dereference);
-    return &node->dereference;
-}
-
-struct ast_dereference_assign *ast_node_deref_assign(ast_node *node) {
-    assert(node->tag == ast_dereference_assign);
-    return &node->dereference_assign;
 }
 
 struct ast_i64 *ast_node_i64(ast_node *node) {
@@ -1134,12 +1063,6 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_ellipsis:
     case ast_eof:      break;
 
-    case ast_address_of:
-    case ast_pointer_to:
-        //
-        combine_node(self->address_of.target);
-        break;
-
     case ast_arrow:
         //
         combine_node(self->arrow.left);
@@ -1155,16 +1078,6 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_bool:
         //
         hash = hash64_combine(hash, (byte *)&self->bool_.val, sizeof(self->bool_.val));
-        break;
-
-    case ast_dereference:
-        //
-        combine_node(self->dereference.target);
-        break;
-
-    case ast_dereference_assign:
-        combine_node(self->dereference_assign.target);
-        combine_node(self->dereference_assign.value);
         break;
 
     case ast_f64:

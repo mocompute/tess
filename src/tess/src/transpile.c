@@ -995,38 +995,17 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     case ast_continue:     cat(self, S("continue;\n")); return str_empty();
 
-    case ast_address_of:   {
-        if (!tl_monotype_is_ptr(type)) fatal("runtime error");
-        assert(1 == type->cons_inst->args.size);
-        tl_monotype const *target_ty = type->cons_inst->args.v[0];
-        return str_cat(self->transient, S("&"),
-                       generate_expr(self, target_ty, node->address_of.target, ctx));
-    } break;
-    case ast_pointer_to: {
-        if (!tl_monotype_is_ptr(type)) fatal("runtime error");
-        assert(1 == type->cons_inst->args.size);
-        tl_monotype const *target_ty = type->cons_inst->args.v[0];
-        return str_cat(self->transient, generate_expr(self, target_ty, node->address_of.target, ctx),
-                       S("*"));
-    } break;
+    case ast_tuple:        return generate_tuple(self, type, node, ctx);
 
-    case ast_dereference: {
-        tl_monotype const *deref_ty = type;
-        return str_cat(self->transient, S("*"),
-                       generate_expr(self, deref_ty, node->dereference.target, ctx));
-    } break;
+    case ast_body:         return generate_body(self, type, node, ctx);
 
-    case ast_tuple:      return generate_tuple(self, type, node, ctx);
+    case ast_binary_op:    return generate_binary_op(self, type, node, ctx);
+    case ast_unary_op:     return generate_unary_op(self, type, node, ctx);
 
-    case ast_body:       return generate_body(self, type, node, ctx);
-
-    case ast_binary_op:  return generate_binary_op(self, type, node, ctx);
-    case ast_unary_op:   return generate_unary_op(self, type, node, ctx);
-
-    case ast_assignment: return generate_reassignment(self, type, node, ctx);
+    case ast_assignment:   return generate_reassignment(self, type, node, ctx);
 
     case ast_arrow:
-    case ast_dereference_assign:
+
     case ast_ellipsis:
     case ast_eof:
     case ast_user_type_definition:

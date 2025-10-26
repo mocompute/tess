@@ -721,12 +721,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_nil:
     case ast_continue:
     case ast_any:
-    case ast_address_of:
-    case ast_pointer_to:
     case ast_arrow:
     case ast_bool:
-    case ast_dereference:
-    case ast_dereference_assign:
     case ast_ellipsis:
     case ast_eof:
     case ast_f64:
@@ -754,41 +750,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     switch (node->tag) {
     case ast_nil:
-    case ast_any:        ensure_tv(self, null, &node->type); break;
-    case ast_address_of:
-    case ast_pointer_to: {
-
-        // address-of operator only accept symbols (lvalues)
-        ensure_tv(self, null, &node->type);
-        ast_node *target = node->address_of.target;
-        if (ast_node_is_symbol(target)) {
-            tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
-            if (target_ty && tl_polytype_is_concrete(target_ty)) {
-                // ptr to concrete type
-                tl_monotype const *ptr = tl_type_registry_ptr(self->registry, target_ty->type);
-                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
-            } else if (target_ty) {
-                // ptr to weak type variable, constrained to the type of the target
-                tl_monotype const *wv  = tl_monotype_create_fresh_weak(self->subs);
-                tl_monotype const *ptr = tl_type_registry_ptr(self->registry, wv);
-                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
-                if (constrain_pm(self, ctx, target_ty, wv, node)) return 1;
-            }
-        }
-    } break;
-
-    case ast_dereference: {
-        ensure_tv(self, null, &node->type);
-        ast_node *target = node->dereference.target;
-        if (ast_node_is_symbol(target)) {
-            tl_polytype const *target_ty = tl_type_env_lookup(self->env, target->symbol.name);
-            if (!target_ty) return 0;
-            assert(target_ty->type->cons_inst->args.size == 1);
-            tl_monotype const *deref = target_ty->type->cons_inst->args.v[0];
-            if (constrain_pm(self, ctx, node->type, deref, node)) return 1;
-        }
-
-    } break;
+    case ast_any:    ensure_tv(self, null, &node->type); break;
 
     case ast_string: {
         tl_monotype const *ty = tl_type_registry_string(self->registry);
@@ -904,6 +866,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 return 1;
             }
         } else if (str_eq(op, S("&"))) {
+            // TODO: do we need a weak type variable here?
             assert(!tl_polytype_is_scheme(operand->type));
             tl_monotype const *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
             if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
@@ -1158,9 +1121,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_arrow:
-    case ast_dereference_assign:
     case ast_ellipsis:
-    case ast_eof:                break;
+    case ast_eof:      break;
     }
 
     // apply newly created constraint substitutions
@@ -1380,15 +1342,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     node->type = null;
 
     switch (node->tag) {
-
-    case ast_address_of:
-    case ast_pointer_to:  rename_variables(self, node->address_of.target, lex, level + 1); break;
-    case ast_dereference: rename_variables(self, node->dereference.target, lex, level + 1); break;
-
-    case ast_dereference_assign:
-        rename_variables(self, node->dereference_assign.target, lex, level + 1);
-        rename_variables(self, node->dereference_assign.value, lex, level + 1);
-        break;
 
     case ast_if_then_else:
         rename_variables(self, node->if_then_else.condition, lex, level + 1);
