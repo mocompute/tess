@@ -638,12 +638,12 @@ int tl_monotype_is_tuple(tl_monotype const *self) {
 
 int tl_monotype_is_ptr(tl_monotype const *self) {
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(self->cons_inst->def->name, S("Ptr"));
+           str_eq(self->cons_inst->def->generic_name, S("Ptr"));
 }
 
 int tl_monotype_is_type_literal(tl_monotype const *self) {
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(self->cons_inst->def->name, S("Type"));
+           str_eq(self->cons_inst->def->generic_name, S("Type"));
 }
 
 int tl_polytype_is_scheme(tl_polytype const *poly) {
@@ -738,11 +738,12 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
         if (!str_is_empty(self->cons_inst->special_name)) str_build_cat(&b, self->cons_inst->special_name);
         else str_build_cat(&b, self->cons_inst->def->name);
         if (self->cons_inst->args.size) {
-            str_build_cat(&b, S(" "));
+            str_build_cat(&b, S("("));
             forall(i, self->cons_inst->args) {
                 str_build_cat(&b, tl_monotype_to_string(alloc, self->cons_inst->args.v[i]));
-                if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(" -> "));
+                if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(", "));
             }
+            str_build_cat(&b, S(")"));
         }
     } break;
 
@@ -859,18 +860,40 @@ static int unify_type_constructor_def(tl_type_constructor_def const *lhs,
     return 1;
 }
 
-int unify_type_literal(tl_type_subs *subs, tl_monotype const *lit, tl_monotype const *right,
+int unify_type_literal(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
                        type_error_cb_fun cb, void *user) {
 
-    assert(tl_monotype_is_type_literal(lit));
-    tl_monotype const *target = lit->cons_inst->args.v[0];
-    return tl_type_subs_unify_mono(subs, target, right, cb, user);
+    assert(tl_monotype_is_type_literal(left));
+
+    // tl_monotype const *target = left->cons_inst->args.v[0];
+    // return tl_type_subs_unify_mono(subs, target, right, cb, user);
+
+    // unify with any Type specialisation
+    switch (right->tag) {
+
+    case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
+    case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
+
+    case tl_cons_inst:
+        if (!tl_monotype_is_type_literal(right)) {
+            if (cb) cb(user, left, right);
+            return 1;
+        }
+        return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
+
+    case tl_list:
+    case tl_tuple:
+        if (cb) cb(user, left, right);
+        return 1;
+    }
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
                             type_error_cb_fun cb, void *user) {
 
     if (!left || !right) return 1;
+
+    // FIXME
     if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
     if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
 

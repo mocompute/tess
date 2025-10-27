@@ -1,8 +1,8 @@
 _tl_sizeof_ (x : a) -> Int
-sizeof(T: Type) { _tl_sizeof_(T) }
+sizeof(T1: Type) { _tl_sizeof_(T1) }
 
-c_malloc(sz : Int) -> Ptr(a)
-c_free(ptr : Ptr(a)) -> Nil
+c_malloc(sz : Int) -> Ptr
+c_free(ptr : Ptr) -> Nil
 
 
 : Point(a) {x : a, y : a }

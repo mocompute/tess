@@ -265,6 +265,9 @@ static void process_annotation(tl_infer *self, ast_node *node) {
     if (!name->symbol.annotation) return;
     if (name->symbol.annotation_type) return;
 
+    // FIXME: function type arguments are not respected in annotations. I.e., the free vars used in a type
+    // annotation are distinct from any Type() in formal params.
+
     hashmap           *map = map_new(self->transient, str, tl_type_variable, 8);
     tl_monotype const *ann =
       tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
@@ -576,12 +579,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // process node first, because there may be side effects required before traversing body.
         if (cb(self, ctx, node)) return 1;
 
-        // traverse value first, then traverse body
+        // traverse value first, then traverse name and body
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
-
-        ensure_tv(self, null, &node->let_in.name->type);
-        if (cb(self, ctx, node->let_in.name)) return 1;
-
+        if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
 
         // process node again: for specialised types, typing the name depends on typing the value.
@@ -740,6 +740,47 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     }
 
     return 0;
+}
+
+static tl_monotype const *instantiate_type_literal(tl_infer *self, ast_node *node) {
+    if (ast_node_is_symbol(node)) {
+
+        str                name = ast_node_str(node);
+        tl_monotype const *inst =
+          tl_type_registry_get_cached_instance(self->registry, name, (tl_monotype_sized){0});
+        if (!inst) return null;
+
+        // set node type to type literal
+        tl_monotype const *ty =
+          tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena, inst));
+        node->type = tl_polytype_absorb_mono(self->arena, ty);
+
+        return inst;
+    }
+    if (!ast_node_is_nfa(node)) return null;
+
+    // FIXME: duplicated with specialize_type_identifier()
+
+    str                name      = ast_node_str(node->named_application.name);
+    ast_node_sized     node_args = ast_node_sized_from_ast_array(node);
+    tl_polytype const *poly      = tl_type_registry_get(self->registry, name);
+    if (!poly) return null;
+    assert(tl_monotype_is_inst(poly->type));
+    if (node_args.size != poly->quantifiers.size) return null;
+
+    tl_monotype_array arg_types = {.alloc = self->transient};
+    forall(i, node_args) {
+        tl_monotype const *arg_ty = instantiate_type_literal(self, node_args.v[i]);
+        if (!arg_ty) return null;
+        array_push(arg_types, arg_ty);
+    }
+    array_shrink(arg_types);
+
+    tl_monotype_sized  arg_types_ = (tl_monotype_sized)sized_all(arg_types);
+    tl_monotype const *inst       = tl_type_registry_instantiate_with(self->registry, name, arg_types_);
+    if (!inst) fatal("runtime error");
+
+    return tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena, inst));
 }
 
 static int add_generic(tl_infer *, ast_node *);
@@ -974,6 +1015,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (tl_polytype_is_type_constructor(type)) {
             // a type constructor or type literal
 
+            tl_monotype const *literal = instantiate_type_literal(self, node);
+            if (literal) {
+                if (constrain_pm(self, ctx, node->type, literal, node)) return 1;
+                // set node type directly after constraint
+                node->type = tl_polytype_absorb_mono(self->arena, literal);
+                break;
+            }
+
             tl_monotype_array  args = {.alloc = self->arena};
             ast_arguments_iter iter = ast_node_arguments_iter(node);
             ast_node          *arg;
@@ -1206,14 +1255,6 @@ static tl_monotype const *specialize_type_identifer(tl_infer *self, ast_node *no
         node->type = tl_polytype_absorb_mono(self->arena, ty);
 
         return inst;
-
-        // str name_inst = next_instantiation(self, name);
-        // out = tl_type_registry_specialize(self->registry, name, name_inst, (tl_monotype_sized){0});
-        // if (!out) goto error;
-
-        // tl_type_env_insert(self->env, name_inst, tl_polytype_absorb_mono(self->arena, inst));
-        // // ast_node_name_replace(node, name_inst);
-        // return out;
     }
     if (!ast_node_is_nfa(node)) return null;
 
@@ -2130,6 +2171,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
 
     log(self, "-- inference complete --");
+    log(self, "");
     log(self, "-- toplevels");
     log_toplevels(self);
     log(self, "-- subs");
