@@ -4,7 +4,7 @@ sizeof(T : Type) { _tl_sizeof_(T) }
 : Point(a) {x : a, y : a }
 
 main() {
-  sizeof(Point(Int))
+  sizeof(Int)
 }
 
 

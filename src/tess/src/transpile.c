@@ -986,11 +986,6 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
 
     case ast_symbol: {
 
-        // FIXME: may not need to use env for this
-        str                name     = ast_node_str(node);
-        tl_monotype const *env_type = env_lookup(self, name); // may be null
-        if (env_type) type = env_type;
-
         return generate_expr_symbol(self, type, ast_node_str(node), ctx);
     }
 

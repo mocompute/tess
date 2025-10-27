@@ -1196,7 +1196,7 @@ static tl_monotype const *specialize_type_identifer(tl_infer *self, ast_node *no
         str                name = ast_node_str(node);
         tl_monotype const *inst =
           tl_type_registry_get_cached_instance(self->registry, name, (tl_monotype_sized){0});
-        if (!inst) fatal("runtime error");
+        if (!inst) return null;
 
         // set node type to type literal
         tl_monotype const *ty =
@@ -1256,7 +1256,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // divert if type constructor application is actually a type literal
     if (specialize_type_identifer(self, node)) return 0;
 
-    assert(ast_node_is_named_application(node));
+    if (!ast_node_is_named_application(node)) return 0;
+
     str                name = node->named_application.name->symbol.name;
 
     tl_monotype_array  arr  = {.alloc = self->transient};
@@ -1299,6 +1300,9 @@ static ast_node *get_infer_target(ast_node *node) {
 }
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    // check for nullary type constructors
+    if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
 
     if (!ast_node_is_nfa(node)) return 0;
 
