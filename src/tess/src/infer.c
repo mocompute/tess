@@ -911,14 +911,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 // Note: special case std_ functions and give them all a Nil return type
                 tl_monotype const *nil   = tl_type_registry_nil(self->registry);
                 node->let_in.value->type = tl_polytype_absorb_mono(self->arena, nil);
-            } else {
-                // Note: special case type literals
-                // FIXME needed?
-                // tl_monotype const *ty = specialize_type_identifer(self, node->let_in.value);
-                // if (ty) {
-                //     node->let_in.value->type = tl_polytype_absorb_mono(
-                //       self->arena, tl_type_registry_type_literal(self->registry, ty));
-                // }
             }
 
             if (constrain(self, ctx, node->let_in.name->type, node->let_in.value->type, node)) return 1;
@@ -957,15 +949,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ensure_tv(self, null, &node->type);
         }
 
-        // Note: special case type literals to wrap them in Type(a)
-        // FIXME
-
-        // tl_monotype const *ty = specialize_type_identifer(self, node);
-        // if (ty) {
-        //     ty         = tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena,
-        //     ty)); node->type = tl_polytype_absorb_mono(self->arena, ty);
-        // }
-
         // if symbol has a type annotation, constrain it
         if (node->symbol.annotation) {
             process_annotation(self, node);
@@ -989,15 +972,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         if (tl_polytype_is_type_constructor(type)) {
             // a type constructor or type literal
-
-            // Note: special case type literals to wrap them in Type(a)
-            // FIXME needed?
-            // tl_monotype const *ty = specialize_type_identifer(self, node);
-            // if (ty) {
-            //     ty = tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena, ty));
-            //     node->type = tl_polytype_absorb_mono(self->arena, ty);
-            //     break;
-            // }
 
             tl_monotype_array  args = {.alloc = self->arena};
             ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -1279,7 +1253,7 @@ static tl_monotype const *specialize_type_identifer(tl_infer *self, ast_node *no
 
 static int specialize_user_type(tl_infer *self, ast_node *node) {
 
-    // FIXME
+    // divert if type constructor application is actually a type literal
     if (specialize_type_identifer(self, node)) return 0;
 
     assert(ast_node_is_named_application(node));
@@ -1290,9 +1264,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     ast_node          *arg;
     while ((arg = ast_arguments_next(&iter))) {
         tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type);
+        assert(tl_polytype_is_concrete(poly));
         tl_polytype_substitute(self->arena, poly, self->subs);
-        // assert(tl_polytype_is_concrete(poly));
-        // FIXME assert is needed?
         array_push(arr, poly->type);
     }
     array_shrink(arr);
@@ -1726,14 +1699,6 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
                 return null;
             }
 
-            // Note: special case type literals
-            // FIXME
-            // tl_monotype const *ty = specialize_type_identifer(self, args.v[i]);
-            // if (ty) {
-            //     ty = tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena, ty));
-            // } else {
-            //     ty = tl_monotype_clone(self->arena, arg_type);
-            // }
             tl_monotype const *ty = tl_monotype_clone(self->arena, arg_type);
             array_push(clone, ty);
         }
