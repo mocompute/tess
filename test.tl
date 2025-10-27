@@ -1,37 +1,24 @@
 _tl_sizeof_ (x : a) -> Int
 sizeof(T: Type) { _tl_sizeof_(T) }
 
+c_malloc(sz : Int) -> Ptr(a)
+c_free(ptr : Ptr(a)) -> Nil
+
+
 : Point(a) {x : a, y : a }
 
-main() {
-  if (sizeof(Int) + sizeof(Int) == sizeof(Point(Int))) { 0 } else { 1 }
+: Array(a) {
+  v:    Ptr(a),
+  size: Int,
 }
 
 
+array_new(T, count) {
+  p : Ptr(T) = c_malloc(count * sizeof(T))
+  Array { v = p, size = count }
+}
 
-// _tl_sizeof_ (x : a) -> Int
-// c_malloc(sz : Int) -> Ptr(a)
-// c_free(ptr : Ptr(a)) -> Nil
-
-
-// : Array(a) {
-//   v:    Ptr(a)
-//   size: Int
-// }
-
-// array_new(n : Int, x) {
-//   // Array(Ptr(a), 0)
-//   // Array {
-//   //   v : Ptr(x) = c_malloc(n * _tl_sizeof_(x))
-//   //   size = 0
-//   // }
-//   Array { v = x, size = 0 }
-// }
-
-// : Point { x : Int y : Int }
-
-// main() {
-
-//   array_new(8, Point(0, 0))
-
-// }
+main() {
+  a = array_new(Point(Int), 8)
+  0
+}

@@ -1267,8 +1267,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     ast_node          *arg;
     while ((arg = ast_arguments_next(&iter))) {
         tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type);
-        assert(tl_polytype_is_concrete(poly));
         tl_polytype_substitute(self->arena, poly, self->subs);
+        assert(tl_polytype_is_concrete(poly));
         array_push(arr, poly->type);
     }
     array_shrink(arr);
