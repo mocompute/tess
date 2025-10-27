@@ -1014,6 +1014,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 }
 
                 if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+                ++i;
             }
 
             if (constrain_pm(self, ctx, node->type, inst, node)) return 1;
