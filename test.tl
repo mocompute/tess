@@ -1,8 +1,7 @@
 _tl_sizeof_ (x : a) -> Int
+sizeof(T : Type) { _tl_sizeof_(T) }
 
-sizeof(T) { _tl_sizeof_(T) }
-
-: Point(a) {x:a, y:a }
+: Point(a) {x : a, y : a }
 
 main() {
   sizeof(Point(Int))

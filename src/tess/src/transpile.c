@@ -34,7 +34,6 @@ struct transpile {
     str_build         build;
 
     u32               next_res;
-    u32               next_type_id; // FIXME needed?
 
     int               verbose;
 };
@@ -1153,7 +1152,6 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->context_generated = hset_create(self->arena, 64);
 
     self->next_res          = 0;
-    self->next_type_id      = 0;
 
     self->verbose           = !!opts->verbose;
 
