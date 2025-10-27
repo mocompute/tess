@@ -434,3 +434,15 @@ oneone { a } ( x : a ) { ... }
 // type literal uses braces and initializers, e.g. as a formal argument:
 foo(Point { x = 1, y = 2 })
 foo(Point { x = 1, y = 2 }, arg2, ...) { ... }
+
+But: could we do without type arguments as a special syntactic structure, and
+think about type identifiers as first class?
+
+array_new{T}(count: Int) -> Ptr(T)
+call: array_new{Point{Int}}(16)
+or:   array_new(Point(Int), 16)
+
+vs.
+
+array_new(T : Type, count : Int) -> Ptr(T)
+array_new(Point(Int), 16)

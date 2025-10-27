@@ -1130,6 +1130,55 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+static tl_monotype const *specialize_type_identifer(tl_infer *self, ast_node *node) {
+    // specialize a type id, e.g. `Point(Int)`. Contrast to specialize_type_constructor, which specialises
+    // based on a callsite like `Point(1, 2)`. Assuming Point(a) { x : a, y : a }.
+    // return null if node is not a type identifier or other error occurs.
+
+    tl_monotype const *out = null;
+
+    if (ast_node_is_symbol(node)) {
+        str                name = ast_node_str(node);
+        tl_monotype const *inst =
+          tl_type_registry_get_cached_instance(self->registry, name, (tl_monotype_sized){0});
+        if (inst) return inst;
+        str name_inst = next_instantiation(self, name);
+        out = tl_type_registry_specialize(self->registry, name, name_inst, (tl_monotype_sized){0});
+        if (!out) goto error;
+        return out;
+    }
+    if (!ast_node_is_nfa(node)) return null;
+
+    // number of type arguments must match type definition
+    str                name      = ast_node_str(node->named_application.name);
+    ast_node_sized     node_args = ast_node_sized_from_ast_array(node);
+    tl_polytype const *poly      = tl_type_registry_get(self->registry, name);
+    if (!poly) return null;
+    assert(tl_monotype_is_inst(poly->type));
+    if (node_args.size != poly->type->cons_inst->args.size) return null;
+
+    tl_monotype_array arg_types = {.alloc = self->transient};
+    forall(i, node_args) {
+        tl_monotype const *arg_ty = specialize_type_identifer(self, node_args.v[i]);
+        if (!arg_ty) return null;
+        array_push(arg_types, arg_ty);
+    }
+    array_shrink(arg_types);
+
+    tl_monotype_sized  arg_types_ = (tl_monotype_sized)sized_all(arg_types);
+    tl_monotype const *inst       = tl_type_registry_get_cached_instance(self->registry, name, arg_types_);
+    if (inst) return inst;
+
+    str name_inst = next_instantiation(self, name);
+    out           = tl_type_registry_specialize(self->registry, name, name_inst, arg_types_);
+    if (!out) goto error;
+    return out;
+
+error:
+    cancel_last_instantiation(self);
+    return null;
+}
+
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype const **out_type) {
 
@@ -1188,6 +1237,10 @@ cancel:
 }
 
 static int specialize_user_type(tl_infer *self, ast_node *node) {
+
+    // FIXME
+    specialize_type_identifer(self, node);
+
     assert(ast_node_is_named_application(node));
     str                name = node->named_application.name->symbol.name;
 
@@ -1235,8 +1288,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!ast_node_is_nfa(node)) return 0;
 
     infer_ctx *ctx  = traverse_ctx->user;
-
-    str        name = node->named_application.name->symbol.name;
+    str        name = ast_node_str(node->named_application.name);
 
     // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;

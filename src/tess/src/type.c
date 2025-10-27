@@ -15,13 +15,13 @@ static void log(tl_type_env const *self, char const *restrict fmt, ...);
 // -- type constructor --
 
 tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
-    tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
-    self->alloc            = alloc;
-    self->subs             = subs;
-    self->definitions      = map_create(self->alloc, sizeof(tl_type_constructor_def *), 64); // key: str
-    self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
+    tl_type_registry *self       = alloc_malloc(alloc, sizeof *self);
+    self->alloc                  = alloc;
+    self->subs                   = subs;
+    self->definitions            = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
+    self->instances              = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
 
-    str_sized              empty    = {0};
+    str_sized              empty = {0};
     tl_type_variable_sized empty_tv = {0};
     tl_monotype_sized      empty_mt = {0};
 
@@ -38,6 +38,10 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     tl_monotype_array  mt_arr    = {.alloc = alloc};
     array_push(mt_arr, tv_type);
     tl_type_constructor_def_create(self, S("Ptr"), unary, empty, (tl_monotype_sized)sized_all(mt_arr));
+
+    unary.v[0]  = tl_type_subs_fresh(self->subs);
+    mt_arr.v[0] = tl_monotype_create_tv(alloc, unary.v[0]);
+    tl_type_constructor_def_create(self, S("Type"), unary, empty, (tl_monotype_sized)sized_all(mt_arr));
 
     empty_mt  = (tl_monotype_sized){0};
     str blank = str_empty();
@@ -139,6 +143,10 @@ tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name,
     }
 
     return type;
+}
+
+tl_polytype const *tl_type_registry_get(tl_type_registry *self, str name) {
+    return str_map_get_ptr(self->definitions, name);
 }
 
 int tl_type_registry_exists(tl_type_registry *self, str name) {

@@ -84,6 +84,7 @@ tl_monotype const *tl_type_registry_float(tl_type_registry *);
 tl_monotype const *tl_type_registry_bool(tl_type_registry *);
 tl_monotype const *tl_type_registry_string(tl_type_registry *);
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
+tl_polytype const *tl_type_registry_get(tl_type_registry *, str);
 int                tl_type_registry_exists(tl_type_registry *, str);
 
 // -- type environment --
