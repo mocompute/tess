@@ -265,12 +265,13 @@ static void process_annotation(tl_infer *self, ast_node *node) {
     if (!name->symbol.annotation) return;
     if (name->symbol.annotation_type) return;
 
-    hashmap *map = map_new(self->transient, str, tl_type_variable, 8);
-    // tl_polytype const *ann          = make_type_annotation(self, name->symbol.annotation, &map);
+    hashmap           *map = map_new(self->transient, str, tl_type_variable, 8);
     tl_monotype const *ann =
       tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
 
-    node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, ann);
+    tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
+    tl_polytype_generalize(poly, self->env, self->subs);
+    node->symbol.annotation_type = poly;
 
     map_destroy(&map);
 }
@@ -1744,6 +1745,9 @@ typedef struct {
 
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
+
+    // don't collect symbols which are nullary type literals
+    if (tl_type_registry_is_nullary_type(self->registry, ast_node_str(node))) return 0;
 
     collect_free_variables_ctx *ctx      = traverse_ctx->user;
 

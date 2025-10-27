@@ -122,6 +122,10 @@ tl_monotype const *tl_type_registry_get_cached_instance(tl_type_registry *self, 
     return map_get_ptr(self->instances, &key, sizeof key);
 }
 
+int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
+    return !!(tl_type_registry_get_cached_instance(self, name, (tl_monotype_sized){0}));
+}
+
 tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                                tl_monotype_sized args) {
     tl_monotype const *type = null;

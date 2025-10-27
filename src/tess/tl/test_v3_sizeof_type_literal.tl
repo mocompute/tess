@@ -4,5 +4,5 @@ sizeof(T : Type) { _tl_sizeof_(T) }
 : Point(a) {x : a, y : a }
 
 main() {
-  if (16 == sizeof(Point(Int))) { 0 } else { 1 }
+  if (sizeof(Int) + sizeof(Int) == sizeof(Point(Int))) { 0 } else { 1 }
 }
