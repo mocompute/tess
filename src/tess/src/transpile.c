@@ -34,6 +34,7 @@ struct transpile {
     str_build         build;
 
     u32               next_res;
+    u32               next_type_id; // FIXME needed?
 
     int               verbose;
 };
@@ -281,6 +282,10 @@ static str generate_ctx_var(transpile *self) {
 static str generate_expr_symbol(transpile *self, tl_monotype const *type, str symbol_name, eval_ctx *ctx) {
     str name = symbol_name;
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
+
+    if (tl_monotype_is_type_literal(type)) {
+        return str_init(self->transient, "0");
+    }
 
     if (str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
     {
@@ -570,6 +575,11 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     // divert if named arguments
     if (node->named_application.n_arguments && ast_node_is_assignment(node->named_application.arguments[0]))
         return generate_type_constructor_named(self, node, ctx);
+
+    // detect if type literal
+    if (tl_monotype_is_type_literal(node->type->type)) {
+        return str_init(self->transient, "0");
+    }
 
     str                name = ast_node_str(node->named_application.name);
     tl_monotype const *type = env_lookup(self, name);
@@ -1143,6 +1153,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->context_generated = hset_create(self->arena, 64);
 
     self->next_res          = 0;
+    self->next_type_id      = 0;
 
     self->verbose           = !!opts->verbose;
 
@@ -1307,7 +1318,11 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
                 // void*
                 return str_init(self->transient, "void*");
             }
-        } else {
+        } else if (str_eq(S("Type"), cons_name)) {
+            return S("/*Type*/long long");
+        }
+
+        else {
             if (!str_is_empty(mono->cons_inst->special_name)) return mono->cons_inst->special_name;
             return cons_name;
         }
@@ -1428,7 +1443,12 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
-    if (ast_node_is_named_application(arg)) {
+    if (tl_monotype_is_type_literal(arg->type->type)) {
+        // type literal
+        str ctype = type_to_c_mono(self, arg->type->type->cons_inst->args.v[0]);
+        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
+
+    } else if (ast_node_is_named_application(arg)) {
         // type constructor
         hashmap           *map  = map_new(self->transient, str, tl_type_variable, 8);
         tl_monotype const *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);

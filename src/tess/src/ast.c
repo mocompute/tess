@@ -860,8 +860,8 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, S("(apply "));
         str_build_cat(&b, node->named_application.name->symbol.name);
         for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
+            str_build_cat(&b, S(" "));
             str_build_cat(&b, v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
-            if (i + 1 < n) str_build_cat(&b, S(" "));
         }
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);

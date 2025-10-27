@@ -84,6 +84,7 @@ tl_monotype const *tl_type_registry_float(tl_type_registry *);
 tl_monotype const *tl_type_registry_bool(tl_type_registry *);
 tl_monotype const *tl_type_registry_string(tl_type_registry *);
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *, tl_monotype const *);
+tl_monotype const *tl_type_registry_type_literal(tl_type_registry *, tl_monotype const *);
 tl_polytype const *tl_type_registry_get(tl_type_registry *, str);
 int                tl_type_registry_exists(tl_type_registry *, str);
 
@@ -126,6 +127,7 @@ int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
 int                    tl_monotype_is_concrete_no_arrow(tl_monotype const *); // constructed non-arrow type
 int                    tl_monotype_is_arrow(tl_monotype const *);
 int                    tl_monotype_is_ptr(tl_monotype const *);
+int                    tl_monotype_is_type_literal(tl_monotype const *);
 tl_monotype const     *tl_monotype_ptr_target(tl_monotype const *);
 
 // -- polytype --

@@ -129,7 +129,7 @@ tl_monotype const *tl_type_registry_specialize(tl_type_registry *self, str name,
     if ((type = map_get_ptr(self->instances, &key, sizeof key))) return type;
 
     tl_polytype *poly = str_map_get_ptr(self->definitions, name);
-    if (!poly) fatal("type cons name not found");
+    if (!poly) return null;
 
     u32 arity = poly->type->cons_inst->args.size;
     if (args.size != arity) return null;
@@ -172,6 +172,13 @@ tl_monotype const *tl_type_registry_string(tl_type_registry *self) {
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *self, tl_monotype const *arg) {
     tl_monotype const *out =
       tl_type_registry_instantiate_with(self, S("Ptr"), (tl_monotype_sized){.size = 1, .v = &arg});
+    assert(out);
+    return out;
+}
+
+tl_monotype const *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype const *arg) {
+    tl_monotype const *out =
+      tl_type_registry_instantiate_with(self, S("Type"), (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
@@ -630,6 +637,11 @@ int tl_monotype_is_ptr(tl_monotype const *self) {
            str_eq(self->cons_inst->def->name, S("Ptr"));
 }
 
+int tl_monotype_is_type_literal(tl_monotype const *self) {
+    return self && tl_cons_inst == self->tag && self->cons_inst->def &&
+           str_eq(self->cons_inst->def->name, S("Type"));
+}
+
 int tl_polytype_is_scheme(tl_polytype const *poly) {
     return poly->quantifiers.size != 0;
 }
@@ -893,7 +905,6 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
 
         case tl_list:
         case tl_tuple:
-
             if (cb) cb(user, left, right);
             return 1;
         }
