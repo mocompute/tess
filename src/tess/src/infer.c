@@ -348,7 +348,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
         else if (ast_node_is_let_in(node)) {
             str name_str = node->let_in.name->symbol.name;
             str_map_set(&tops, name_str, &node);
-            process_annotation(self, node);
+            process_annotation(self, node->let_in.name);
         }
 
         else {
