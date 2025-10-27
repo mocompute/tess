@@ -636,6 +636,10 @@ int tl_monotype_is_tuple(tl_monotype const *self) {
     return self && tl_tuple == self->tag;
 }
 
+int tl_monotype_is_tv(tl_monotype const *self) {
+    return self && tl_var == self->tag;
+}
+
 int tl_monotype_is_ptr(tl_monotype const *self) {
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
            str_eq(self->cons_inst->def->generic_name, S("Ptr"));

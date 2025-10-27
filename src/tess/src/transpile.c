@@ -1443,7 +1443,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     } else if (ast_node_is_named_application(arg)) {
         // type constructor
-        hashmap           *map  = map_new(self->transient, str, tl_type_variable, 8);
+        hashmap           *map  = map_new(self->transient, str, tl_monotype *, 8);
         tl_monotype const *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
         if (!type) fatal("missing type");
 
