@@ -855,10 +855,20 @@ static int unify_type_constructor_def(tl_type_constructor_def const *lhs,
     return 1;
 }
 
+int unify_type_literal(tl_type_subs *subs, tl_monotype const *lit, tl_monotype const *right,
+                       type_error_cb_fun cb, void *user) {
+
+    assert(tl_monotype_is_type_literal(lit));
+    tl_monotype const *target = lit->cons_inst->args.v[0];
+    return tl_type_subs_unify_mono(subs, target, right, cb, user);
+}
+
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_monotype const *right,
                             type_error_cb_fun cb, void *user) {
 
     if (!left || !right) return 1;
+    if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
+    if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
 
     switch (left->tag) {
 
