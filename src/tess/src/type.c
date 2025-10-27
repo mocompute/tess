@@ -670,6 +670,12 @@ tl_monotype const *tl_monotype_ptr_target(tl_monotype const *self) {
     return self->cons_inst->args.v[0];
 }
 
+tl_monotype const *tl_monotype_type_literal_target(tl_monotype const *self) {
+    assert(tl_monotype_is_type_literal(self));
+    assert(self->cons_inst->args.size == 1);
+    return self->cons_inst->args.v[0];
+}
+
 void tl_monotype_sort_fvs(tl_monotype *self) {
     if (tl_list != self->tag) return;
     if (!self->list.fvs.size) return;

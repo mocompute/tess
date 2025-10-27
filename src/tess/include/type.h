@@ -130,6 +130,7 @@ int                    tl_monotype_is_arrow(tl_monotype const *);
 int                    tl_monotype_is_ptr(tl_monotype const *);
 int                    tl_monotype_is_type_literal(tl_monotype const *);
 tl_monotype const     *tl_monotype_ptr_target(tl_monotype const *);
+tl_monotype const     *tl_monotype_type_literal_target(tl_monotype const *);
 
 // -- polytype --
 

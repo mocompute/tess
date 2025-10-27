@@ -536,13 +536,58 @@ static void               rename_variables(tl_infer *, ast_node *, hashmap **, i
 static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
 static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 static tl_polytype const *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
+static int                traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
-static ast_node          *clone_generic(allocator *alloc, ast_node const *node) {
-    ast_node *clone = ast_node_clone(alloc, node);
+//
+
+static int clone_generic_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (!ast_node_is_symbol(node)) return 0;
+    if (!node->symbol.annotation) return 0;
+
+    hashmap           *map  = ctx->user;
+
+    tl_monotype const *mono = str_map_get_ptr(map, node->symbol.name);
+    if (mono) {
+        // FIXME: annotations are ast trees that are processed into tl_polytypes. We need a function to
+        // track the type variables that are assigned to the particular textual variables from the ast tree,
+        // and create a new replacement map to replace those type variables with the monotypes passed in to
+        // the map hashmap.
+    }
+
+    traverse_ast(self, ctx, node->symbol.annotation, clone_generic_cb);
+    return 0;
+}
+
+static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
+    ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
     name->symbol.annotation_type = null;
     name->symbol.annotation      = null;
+
+    // for let nodes, process type arguments into every node that has an annotation.
+    if (ast_node_is_let(node)) {
+        hashmap           *map  = map_create(self->transient, sizeof(tl_monotype *), 8);
+
+        ast_arguments_iter iter = ast_node_arguments_iter(clone);
+        ast_node const    *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            tl_monotype const *mono = arg->type->type;
+            if (tl_monotype_is_type_literal(mono)) {
+                str                arg_name = ast_node_str(arg);
+                tl_monotype const *target   = tl_monotype_type_literal_target(mono);
+                str_map_set_ptr(&map, arg_name, target);
+            }
+        }
+
+        traverse_ctx *ctx = traverse_ctx_create(self->transient);
+        ctx->user         = map;
+        traverse_ast(self, ctx, clone, clone_generic_cb);
+        traverse_ctx_destroy(self->transient, &ctx);
+
+        map_destroy(&map);
+    }
+
     return clone;
 }
 
@@ -1635,7 +1680,7 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     map_set(&self->instances, &key, sizeof key, &name_inst);
 
     // clone function source ast and rename variables, which also erases type information
-    ast_node *generic_node = clone_generic(self->arena, toplevel_get(self, name));
+    ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
     hashmap  *rename_lex   = map_new(self->transient, str, str, 16);
     rename_variables(self, generic_node, &rename_lex, 0);
     map_destroy(&rename_lex);
