@@ -1152,22 +1152,22 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
         return str_empty();
     }
 
-    str                name_inst = next_instantiation(self, name);
+    str                out_str   = str_empty();
+    str                name_inst = next_instantiation(self, name); // may be cancelled later
     tl_monotype const *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
 
     name_and_type      key       = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
     str               *existing  = map_get(self->instances, &key, sizeof key);
     if (existing) {
-        cancel_last_instantiation(self);
         if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
-        return *existing;
+        out_str = *existing;
+        goto cancel;
     }
 
     ast_node *utd = toplevel_get(self, name);
     if (!utd) {
-        cancel_last_instantiation(self);
         if (out_type) *out_type = null;
-        return str_empty();
+        goto cancel;
     }
 
     map_set(&self->instances, &key, sizeof key, &name_inst);
@@ -1181,6 +1181,10 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
     return name_inst;
+
+cancel:
+    cancel_last_instantiation(self);
+    return out_str;
 }
 
 static int specialize_user_type(tl_infer *self, ast_node *node) {
