@@ -21,6 +21,6 @@ array_new(T : Type, count) {
 
 main() {
   a = array_new(Point(Int), 8)
-  b = array_new(Rect(Point(Int)), 8)
+  b = array_new(Rect(Int), 8)
   0
 }
