@@ -4,7 +4,6 @@
 #include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
-#include "dbg.h"
 #include "hashmap.h"
 #include "infer.h"
 #include "str.h"
@@ -1348,13 +1347,13 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
     if (!tl_monotype_is_arrow(type)) fatal("expected arrow");
-    tl_monotype const *right = tl_monotype_sized_last(type->list.xs);
+    assert(type->list.xs.size == 2);
+    tl_monotype const *right = type->list.xs.v[1];
     str_build_cat(b, type_to_c_mono(self, right));
     str_build_cat(b, S(" (*"));
     str_build_cat(b, name);
     str_build_cat(b, S(") ("));
 
-    assert(type->list.xs.size == 2);
     assert(tl_tuple == type->list.xs.v[0]->tag);
     tl_monotype_sized params = type->list.xs.v[0]->list.xs;
 
@@ -1367,7 +1366,7 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
     }
 
     for (u32 i = 0, n = params.size; i < n; ++i) {
-        str_build_cat(b, type_to_c_mono(self, type->list.xs.v[i]));
+        str_build_cat(b, type_to_c_mono(self, params.v[i]));
         if (i + 1 < n) str_build_cat(b, S(", "));
     }
 
