@@ -544,9 +544,12 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl
 
     tl_monotype const *lhs = null, *rhs = null;
 
-    if (left->quantifiers.size) fatal("type scheme");
+    if (left->quantifiers.size)
+        left = tl_polytype_absorb_mono(self->arena, tl_polytype_instantiate(self->arena, left, self->subs));
     else lhs = left->type;
-    if (right->quantifiers.size) fatal("type scheme");
+    if (right->quantifiers.size)
+        right =
+          tl_polytype_absorb_mono(self->arena, tl_polytype_instantiate(self->arena, right, self->subs));
     else rhs = right->type;
 
     return constrain_mono(self, lhs, rhs, node);
@@ -1482,7 +1485,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     tl_polytype const *type = tl_type_env_lookup(self->env, name);
     if (!type) {
-        return 0; // mutual recursion
+        return 0; // mutual recursion or variable holding function pointer
     }
 
     if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
