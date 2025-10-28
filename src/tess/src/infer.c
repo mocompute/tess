@@ -1215,8 +1215,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_assignment:
         ensure_tv(self, null, &node->type);
-        if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
+        ensure_tv(self, null, &node->assignment.name->type);
+        ensure_tv(self, null, &node->assignment.value->type);
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
+
+        // FIXME: this shouldn't be needed but I've observed a stale type in the assignment.name during
+        // specialising, and so this is necessary when dealing with generics.
+        if (tl_polytype_is_concrete(node->assignment.value->type)) {
+            node->assignment.name->type = node->assignment.value->type;
+        } else {
+            if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
+        }
+
         break;
 
     case ast_while:
@@ -1430,9 +1440,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
             continue;
         }
 
-        tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type);
+        tl_polytype *poly = tl_polytype_clone(self->arena, arg->type);
         tl_polytype_substitute(self->arena, poly, self->subs);
-
         assert(tl_polytype_is_concrete(poly));
 
         tl_monotype const *mono = poly->type;
@@ -1603,18 +1612,12 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         if (level) {
             // do not rename toplevel symbols again (see rename_let_in)
             str newvar = next_variable_name(self);
-            ast_node_name_replace(node->let_in.name, newvar);
-
-            // Note: because this arm bypasses ast_symbol for the let_in.name, we have to keep it in sync.
-            rename_variables(self, node->let_in.name->symbol.annotation, lex, level + 1);
-
-            log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
-                str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
-                str_buf(&node->let_in.name->symbol.name));
 
             // establish lexical scope of the let-in binding and recurse
             save = map_copy(*lex);
             str_map_set(lex, name, &newvar);
+
+            rename_variables(self, node->let_in.name, lex, level + 1);
         }
 
         rename_variables(self, node->let_in.body, lex, level + 1);

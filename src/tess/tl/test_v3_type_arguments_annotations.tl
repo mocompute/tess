@@ -6,6 +6,7 @@ c_free(ptr : Ptr) -> Nil
 
 
 : Point(a) {x : a, y : a }
+: Rect(a)  { topleft: Point(a), botright: Point(a) }
 
 : Array(a) {
   v:    Ptr(a),
@@ -22,5 +23,6 @@ array_new(T : Type, count) {
 
 main() {
   a = array_new(Point(Int), 8)
+  b = array_new(Rect(Int), 8)
   0
 }
