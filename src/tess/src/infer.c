@@ -453,6 +453,18 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
                 ast_node_dfs(ctx, next, do_tree_shake);
             }
         }
+    } else if (ast_node_is_let_in(node)) {
+        ast_node *value = node->let_in.value;
+        if (ast_node_is_symbol(value)) {
+            str name = ast_node_str(value); // caution: the value name, not the let's name
+
+            // if it is a toplevel, recurse through it
+            ast_node *next = toplevel_get(self, name);
+            if (next) {
+                ast_node_dfs(ctx, next, do_tree_shake);
+            }
+            str_hset_insert(&ctx->names, name);
+        }
     }
 }
 
