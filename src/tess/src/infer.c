@@ -1247,6 +1247,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     forall(i, args) {
         if (tl_monotype_is_inst(args.v[i]) && str_is_empty(args.v[i]->cons_inst->special_name)) {
             tl_polytype const *poly = null;
+
             (void)specialize_type_constructor(self, args.v[i]->cons_inst->def->generic_name,
                                               args.v[i]->cons_inst->args, &poly);
             if (poly) args.v[i] = tl_polytype_concrete(poly);
@@ -1364,8 +1365,13 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     while ((arg = ast_arguments_next(&iter))) {
         tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type);
         tl_polytype_substitute(self->arena, poly, self->subs);
+
         assert(tl_polytype_is_concrete(poly));
-        array_push(arr, poly->type);
+
+        // unwrap Type literals
+        tl_monotype const *mono = poly->type;
+        if (tl_monotype_is_type_literal(mono)) mono = tl_monotype_type_literal_target(mono);
+        array_push(arr, mono);
     }
     array_shrink(arr);
 
