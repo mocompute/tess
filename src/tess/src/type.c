@@ -275,7 +275,7 @@ tl_polytype const *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *s
     return tl_polytype_create_tv(alloc, tl_type_subs_fresh(subs));
 }
 
-tl_polytype const *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
+tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype const *orig) {
     tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
     clone->quantifiers = orig->quantifiers;
     clone->type        = tl_monotype_clone(alloc, orig->type);
@@ -1138,9 +1138,8 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype cons
     return 0;
 }
 
-void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs const *subs,
-                            hashmap *exclude) {
-    // exclude may be null
+void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
+    // exclude may be null.
     if (!self) return;
 
     switch (self->tag) {
@@ -1154,6 +1153,13 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
 
         tl_monotype const *resolved = subs->v[root].type;
         if (resolved) {
+            int tries = 10;
+            while (tries-- && !tl_monotype_is_concrete(resolved)) {
+                tl_monotype *copy = tl_monotype_clone(alloc, resolved);
+                tl_monotype_substitute(alloc, copy, subs, exclude);
+                resolved = copy;
+            }
+
             *self = *resolved;
         } else {
             // update to representative tv
@@ -1176,7 +1182,7 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs co
     }
 }
 
-static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs const *subs,
+static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
                                        hashmap **exclude) {
     if (exclude) map_reset(*exclude);
 
@@ -1189,7 +1195,7 @@ static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_t
     tl_monotype_substitute(alloc, (tl_monotype *)self->type, subs, exclude ? *exclude : null); // const cast
 }
 
-void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs const *subs) {
+void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
     hashmap *exclude = null;
 
     if (self->quantifiers.size) exclude = map_create(alloc, sizeof(tl_type_variable), 8);

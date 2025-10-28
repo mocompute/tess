@@ -112,7 +112,7 @@ nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype const *
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype const *) mallocfun;
 
-void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs const *, hashmap *);
+void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs *, hashmap *);
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
 void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
@@ -142,7 +142,7 @@ nodiscard tl_polytype const *tl_polytype_create_tv(allocator *, tl_type_variable
 nodiscard tl_polytype const *tl_polytype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype const *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
-nodiscard tl_polytype const *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
+nodiscard tl_polytype       *tl_polytype_clone(allocator *, tl_polytype const *) mallocfun;
 
 void                         tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype const *);
 nodiscard tl_monotype const *tl_polytype_instantiate(allocator *, tl_polytype const *, tl_type_subs *);
@@ -151,7 +151,7 @@ nodiscard tl_monotype const *tl_polytype_instantiate_with(allocator *, tl_polyty
 nodiscard tl_monotype const *tl_polytype_specialize(allocator *, tl_polytype const *, tl_monotype_sized);
 nodiscard tl_monotype const *tl_polytype_specialize_cons(allocator *, tl_polytype const *,
                                                          tl_monotype_sized, tl_type_registry *, str);
-void                         tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs const *);
+void                         tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
 void                         tl_polytype_generalize(tl_polytype *, tl_type_env const *, tl_type_subs *);
 
 tl_monotype const           *tl_polytype_concrete(tl_polytype const *);
