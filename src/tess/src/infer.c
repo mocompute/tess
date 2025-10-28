@@ -1370,18 +1370,8 @@ static tl_monotype const *specialize_type_identifer(tl_infer *self, ast_node *no
     }
     if (!ast_node_is_nfa(node)) return null;
 
-    // number of type arguments must match type definition
-    str name = ast_node_name_original(node->named_application.name);
-
-    // unwrap Type container
-    if (str_eq(name, S("Type"))) {
-        if (1 != node->named_application.n_arguments) fatal("runtime error");
-        ast_node *target = node->named_application.arguments[0];
-        return specialize_type_identifer(self, target);
-    }
-
+    str                name      = ast_node_name_original(node->named_application.name);
     ast_node_sized     node_args = ast_node_sized_from_ast_array(node);
-
     tl_polytype const *poly      = tl_type_registry_get(self->registry, name);
     if (!poly) return null;
     assert(tl_monotype_is_inst(poly->type));
