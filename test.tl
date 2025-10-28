@@ -2,5 +2,6 @@ id(x) { x }
 apply(f, x) { f(x) }
 
 main() {
-  apply(id, 0)
+  f1 = id.&
+  apply(f1, 0)
 }

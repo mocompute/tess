@@ -979,9 +979,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         } else if (str_eq(op, S("&"))) {
             // TODO: do we need a weak type variable here?
-            assert(!tl_polytype_is_scheme(operand->type));
-            tl_monotype const *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
-            if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+            if (!tl_polytype_is_scheme(operand->type)) {
+                tl_monotype const *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
+                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+            } else {
+                tl_monotype const *weak = tl_monotype_create_fresh_weak(self->subs);
+                tl_monotype const *ptr  = tl_type_registry_ptr(self->registry, weak);
+                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+            }
         } else if (str_eq(op, S("!"))) {
             tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
             if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
