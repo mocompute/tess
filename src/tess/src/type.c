@@ -680,6 +680,14 @@ tl_monotype const *tl_monotype_type_literal_target(tl_monotype const *self) {
     return self->cons_inst->args.v[0];
 }
 
+tl_monotype const *tl_monotype_arrow_args(tl_monotype const *self) {
+    assert(tl_monotype_is_list(self));
+    assert(2 == self->list.xs.size);
+    tl_monotype const *args = self->list.xs.v[0];
+    assert(tl_monotype_is_tuple(args));
+    return args;
+}
+
 void tl_monotype_sort_fvs(tl_monotype *self) {
     if (tl_list != self->tag) return;
     if (!self->list.fvs.size) return;

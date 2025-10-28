@@ -127,6 +127,7 @@ endfunction()
 
 tesslang_create_test_no_preamble(v3_address_of)
 tesslang_create_test_no_preamble(v3_anon_lambda)
+tesslang_create_test_no_preamble(v3_apply_generic)
 tesslang_create_test_no_preamble(v3_apply_lambda)
 tesslang_create_test_no_preamble(v3_binop)
 tesslang_create_test_no_preamble(v3_closure_polymorphism)

@@ -584,11 +584,11 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type)
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void               rename_variables(tl_infer *, ast_node *, hashmap **, int);
-static str                specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
-static tl_polytype const *make_arrow(tl_infer *, ast_node_sized, ast_node *);
-static tl_polytype const *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
-static int                traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
+static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
+static str          specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
+static tl_polytype *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static tl_polytype *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
+static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
 //
 
@@ -1482,6 +1482,31 @@ static ast_node *get_infer_target(ast_node *node) {
     return null;
 }
 
+static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
+
+static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
+                          tl_monotype const *type) {
+    str      *existing;
+    str       arg_name = ast_node_str(arg);
+    ast_node *top      = toplevel_get(self, arg_name);
+    if ((existing = str_map_get(ctx->specials, arg_name))) {
+        str inst_name = *existing;
+        ast_node_name_replace(arg, inst_name);
+        return -1;
+    } else {
+        str inst_name = specialize_fun(self, ctx, top, type);
+        str_map_set(&ctx->specials, arg_name, &inst_name);
+        ast_node *special = toplevel_get(self, inst_name);
+        ast_node_name_replace(arg, inst_name);
+        ast_node *infer_target = get_infer_target(special);
+        if (infer_target) {
+            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
+        }
+    }
+    return 0;
+}
+
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
     // check for nullary type constructors
@@ -1509,11 +1534,11 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     // Important: use _with variant to copy free variables info to the arrow, which is added to the
     // environment further down.
-    tl_polytype const *app = make_arrow_with(self, iter.nodes, node, type);
+    tl_polytype *app = make_arrow_with(self, iter.nodes, node, type);
     if (!app) return 1;
 
     // Important: resolve type variables by calling polytype_substitute.
-    tl_polytype_substitute(self->arena, (tl_polytype *)app, self->subs); // const cast
+    tl_polytype_substitute(self->arena, app, self->subs); // const cast
 
     str app_str = tl_polytype_to_string(self->transient, app);
     log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
@@ -1528,46 +1553,45 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
     // type, e.g consider the identity function
-    str *existing;
-    if ((existing = str_map_get(ctx->specials, name))) {
-        str inst_name = *existing;
 
-        ast_node_name_replace(node->named_application.name, inst_name);
+    int res = specialize_one(self, ctx, traverse_ctx, node->named_application.name, app->type);
 
-    } else {
-        str       inst_name = specialize_fun(self, ctx, fun_node, app->type);
-        ast_node *special   = toplevel_get(self, inst_name);
-
-        str_map_set(&ctx->specials, name, &inst_name);
-
-        ast_node_name_replace(node->named_application.name, inst_name);
-
-        // now infer and specialize the newly specialised fun
-        ast_node *infer_target = get_infer_target(special);
-        if (infer_target) {
-            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
-        }
-
+    if (1 == res) return 1;
+    if (0 == res) {
         // and recurse over any arguments which are toplevel functions
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
+        iter = ast_node_arguments_iter(node);
+        ast_node         *arg;
+        tl_monotype_sized app_args = tl_monotype_arrow_args(app->type)->list.xs;
+        u32               i        = 0;
         while ((arg = ast_arguments_next(&iter))) {
-            if (!ast_node_is_symbol(arg)) continue;
+            if (!ast_node_is_symbol(arg)) goto next;
+
+            // take the updated arrow type from the specialization and constrain the args again
+            assert(i < app_args.size);
+            if (tl_polytype_is_scheme(arg->type))
+                arg->type = tl_polytype_absorb_mono(
+                  self->transient, tl_polytype_instantiate(self->arena, arg->type, self->subs));
+
+            if (constrain_pm(self, ctx, arg->type, app_args.v[i], arg)) return 1;
+
             str       arg_name = ast_node_str(arg);
             ast_node *top      = toplevel_get(self, arg_name);
-            if (!top) continue;
-            if (top->type && !tl_monotype_is_arrow(top->type->type)) continue;
+            if (!top) goto next;
+            if (top->type && !tl_monotype_is_arrow(top->type->type)) goto next;
 
-            if (traverse_ast(self, traverse_ctx, top, infer_traverse_cb)) return 1;
-            if (traverse_ast(self, traverse_ctx, top, specialize_applications_cb)) return 1;
+            if (specialize_one(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
+
+        next:
+            ++i;
         }
-
-        // remove name from specials after recursing, so it doesn't shadow subsequent uses of the same name,
-        // eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
+        // remove name from specials after recursing through arguments, so it doesn't shadow subsequent uses
+        // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
         str_map_erase(ctx->specials, name);
     }
+
+    return 0;
+
     return 0;
 }
 
@@ -1853,7 +1877,7 @@ static void cancel_last_instantiation(tl_infer *self) {
     self->next_instantiation--;
 }
 
-static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
+static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
 
     if (result) ensure_tv(self, null, &result->type);
 
@@ -1877,15 +1901,7 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
         forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type);
             tl_monotype const *arg_type = args.v[i]->type->type;
-
-            if (tl_polytype_is_scheme(args.v[i]->type)) {
-                array_push(self->errors, ((tl_infer_error){.tag  = tl_err_polymorphic_function_argument,
-                                                           .node = args.v[i]}));
-                // Note: add a type annotation to the function definition to eliminate this error
-                return null;
-            }
-
-            tl_monotype const *ty = tl_monotype_clone(self->arena, arg_type);
+            tl_monotype const *ty       = tl_monotype_clone(self->arena, arg_type);
             array_push(clone, ty);
         }
 
@@ -1910,9 +1926,9 @@ static tl_polytype const *make_arrow(tl_infer *self, ast_node_sized args, ast_no
     }
 }
 
-static tl_polytype const *make_arrow_with(tl_infer *self, ast_node_sized args, ast_node *result,
-                                          tl_polytype const *type) {
-    tl_polytype const *out = make_arrow(self, args, result);
+static tl_polytype *make_arrow_with(tl_infer *self, ast_node_sized args, ast_node *result,
+                                    tl_polytype const *type) {
+    tl_polytype *out = make_arrow(self, args, result);
     if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
         ((tl_monotype *)out->type)->list.fvs = type->type->list.fvs; // const cast
