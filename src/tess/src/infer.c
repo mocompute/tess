@@ -121,7 +121,10 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 
 static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **map, tl_type_subs *subs) {
     tl_monotype *found = str_map_get_ptr(*map, name);
-    if (found) return found;
+
+    if (found) {
+        return found;
+    }
 
     tl_type_variable tv = tl_type_subs_fresh(subs);
     found               = tl_monotype_create_tv(self->alloc, tv);
@@ -146,13 +149,7 @@ tl_monotype const *tl_type_registry_parse(tl_type_registry *self, ast_node const
         if (out) return out;
 
         str                name = ast_node_str(node);
-
-        tl_monotype const *tv   = str_map_get_ptr(*map, name);
-        if (tv) return tv;
-
-        tl_type_variable fresh = tl_type_subs_fresh(subs);
-        tv                     = tl_monotype_create_tv(self->alloc, fresh);
-        str_map_set_ptr(map, name, tv);
+        tl_monotype const *tv   = get_tv_or_fresh(self, name, map, subs);
         return tv;
     }
 
@@ -274,9 +271,18 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     ast_node const *name = toplevel_name_node(node);
 
     if (!name->symbol.annotation) return;
-    log(self, "process_annotation: %.*s", str_ilen(name->symbol.name), str_buf(&name->symbol.name));
+    {
+        str ann_str = v2_ast_node_to_string(self->transient, name->symbol.annotation);
+        log(self, "process_annotation: %.*s : ast:%s", str_ilen(name->symbol.name),
+            str_buf(&name->symbol.name), str_cstr(&ann_str));
+    }
+    if (name->symbol.annotation_type) {
+        str poly_str = tl_polytype_to_string(self->transient, name->symbol.annotation_type);
+        log(self, "process_annotation exists: %.*s : %s", str_ilen(name->symbol.name),
+            str_buf(&name->symbol.name), str_cstr(&poly_str));
 
-    // if (name->symbol.annotation_type) return;
+        // return;
+    }
 
     hashmap *map;
     if (ctx) map = ctx->type_arguments;
@@ -286,7 +292,7 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
       tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
 
     tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
-    tl_polytype_generalize(poly, self->env, self->subs);
+    // tl_polytype_generalize(poly, self->env, self->subs);
     node->symbol.annotation_type = poly;
 
     str poly_str                 = tl_polytype_to_string(self->transient, poly);
@@ -302,15 +308,18 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
     // map : map_new(self->transient, str, tl_monotype*, 8);
 
     ast_arguments_iter iter = ast_node_arguments_iter(node);
-    ast_node const    *arg;
+    ast_node          *arg;
     while ((arg = ast_arguments_next(&iter))) {
         if (!arg->type) continue;
         assert(arg->type);
+
         tl_monotype const *mono = arg->type->type;
         if (tl_monotype_is_type_literal(mono)) {
             str                arg_name = ast_node_str(arg);
             tl_monotype const *target   = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
+            str target_str = tl_monotype_to_string(self->transient, target);
+            log(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
         }
     }
 }
@@ -535,9 +544,9 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl
 
     tl_monotype const *lhs = null, *rhs = null;
 
-    if (left->quantifiers.size) lhs = tl_polytype_instantiate(self->arena, left, self->subs);
+    if (left->quantifiers.size) fatal("type scheme");
     else lhs = left->type;
-    if (right->quantifiers.size) rhs = tl_polytype_instantiate(self->arena, right, self->subs);
+    if (right->quantifiers.size) fatal("type scheme");
     else rhs = right->type;
 
     return constrain_mono(self, lhs, rhs, node);
@@ -568,27 +577,6 @@ static int                traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_no
 
 //
 
-// static int clone_generic_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
-//     if (!ast_node_is_symbol(node)) return 0;
-//     if (!node->symbol.annotation) return 0;
-
-//     hashmap           *map  = ctx->user;
-
-//     tl_monotype const *mono = str_map_get_ptr(map, node->symbol.name);
-//     if (mono) {
-//         // FIXME: annotations are ast trees that are processed into tl_polytypes. We need a function to
-//         // track the type variables that are assigned to the particular textual variables from the ast
-//         tree,
-//         // and create a new replacement map to replace those type variables with the monotypes passed in
-//         to
-//         // the map hashmap.
-//         ;
-//     }
-
-//     traverse_ast(self, ctx, node->symbol.annotation, clone_generic_cb);
-//     return 0;
-// }
-
 static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
@@ -611,7 +599,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_let: {
 
         map_reset(ctx->type_arguments);
-        collect_type_arguments(self, node, &ctx->type_arguments);
 
         hashmap           *save = map_copy(ctx->lex);
 
@@ -624,6 +611,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             if (cb(self, ctx, param)) return 1;
         }
 
+        // collect type arguments after traversing/inferring arguments
+        collect_type_arguments(self, node, &ctx->type_arguments);
+
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
         map_destroy(&ctx->lex);
@@ -632,8 +622,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     } break;
 
     case ast_let_in: {
-
-        if (ast_node_is_let_in_lambda(node)) collect_type_arguments(self, node, &ctx->type_arguments);
 
         hashmap *save = map_copy(ctx->lex);
         assert(ast_node_is_symbol(node->let_in.name));
@@ -644,6 +632,10 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         // traverse value first, then traverse name and body
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
+
+        // collect type arguments after traversing/inferring arguments
+        if (ast_node_is_let_in_lambda(node)) collect_type_arguments(self, node, &ctx->type_arguments);
+
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
 
@@ -1372,8 +1364,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     while ((arg = ast_arguments_next(&iter))) {
         tl_polytype *poly = (tl_polytype *)tl_polytype_clone(self->arena, arg->type);
         tl_polytype_substitute(self->arena, poly, self->subs);
-        // assert(tl_polytype_is_concrete(poly));
-        // FIXME
+        assert(tl_polytype_is_concrete(poly));
         array_push(arr, poly->type);
     }
     array_shrink(arr);
@@ -1542,6 +1533,10 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             // do not rename toplevel symbols again (see rename_let_in)
             str newvar = next_variable_name(self);
             ast_node_name_replace(node->let_in.name, newvar);
+
+            // Note: because this arm bypasses ast_symbol for the let_in.name, we have to keep it in sync.
+            rename_variables(self, node->let_in.name->symbol.annotation, lex, level + 1);
+
             log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
                 str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
                 str_buf(&node->let_in.name->symbol.name));
@@ -1563,8 +1558,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_symbol: {
         str *found;
         if ((found = str_map_get(*lex, node->symbol.name))) {
-            node->symbol.original = node->symbol.name;
-            node->symbol.name     = *found;
+            ast_node_name_replace(node, *found);
             log(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
         } else {
@@ -1572,10 +1566,12 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
 
         // ensure renamed symbols do not carry a type
-        node->type = null;
+        node->type                   = null;
+        node->symbol.annotation_type = null;
 
-        // traverse into annotation too, to support type arguments
-        if (node->symbol.annotation) rename_variables(self, node->symbol.annotation, lex, level + 1);
+        // traverse into annotation too, to support type arguments.
+        // Note: keep in sync with ast_let_in arm.
+        rename_variables(self, node->symbol.annotation, lex, level + 1);
     } break;
 
     case ast_lambda_function: {

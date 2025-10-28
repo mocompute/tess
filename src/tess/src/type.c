@@ -875,9 +875,6 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype const *left, tl_monotype 
 
     assert(tl_monotype_is_type_literal(left));
 
-    // tl_monotype const *target = left->cons_inst->args.v[0];
-    // return tl_type_subs_unify_mono(subs, target, right, cb, user);
-
     // unify with any Type specialisation
     switch (right->tag) {
 
@@ -903,7 +900,6 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
 
     if (!left || !right) return 1;
 
-    // FIXME
     if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
     if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
 

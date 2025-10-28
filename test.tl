@@ -13,7 +13,7 @@ c_free(ptr : Ptr) -> Nil
 }
 
 
-array_new(T, count) {
+array_new(T : Type, count) {
   p : Ptr(T) = c_malloc(count * sizeof(T))
   Array { v = p, size = count }
 }
