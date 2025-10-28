@@ -556,12 +556,9 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype const *left, tl
 
     tl_monotype const *lhs = null, *rhs = null;
 
-    if (left->quantifiers.size)
-        left = tl_polytype_absorb_mono(self->arena, tl_polytype_instantiate(self->arena, left, self->subs));
+    if (left->quantifiers.size) lhs = tl_polytype_instantiate(self->arena, left, self->subs);
     else lhs = left->type;
-    if (right->quantifiers.size)
-        right =
-          tl_polytype_absorb_mono(self->arena, tl_polytype_instantiate(self->arena, right, self->subs));
+    if (right->quantifiers.size) rhs = tl_polytype_instantiate(self->arena, right, self->subs);
     else rhs = right->type;
 
     return constrain_mono(self, lhs, rhs, node);
@@ -1487,13 +1484,17 @@ static ast_node *get_infer_target(ast_node *node) {
     return null;
 }
 
-static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
+static ast_node *toplevel_get_arrow_or_name(tl_infer *self, tl_monotype const *arrow, str name);
+static int       specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
 
-static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
-                          tl_monotype const *type) {
+static int       specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
+                                tl_monotype const *type) {
     str      *existing;
     str       arg_name = ast_node_str(arg);
-    ast_node *top      = toplevel_get(self, arg_name);
+    ast_node *top      = toplevel_get_arrow_or_name(self, type, arg_name);
+    // Note: using the arrow type's name helps cases where a function pointer has been assigned to a
+    // variable.
+
     if ((existing = str_map_get(ctx->specials, arg_name))) {
         str inst_name = *existing;
         ast_node_name_replace(arg, inst_name);
@@ -1512,15 +1513,20 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
     return 0;
 }
 
+static int specialize_let_in(tl_infer *self, infer_ctx *infer_ctx, ast_node *node);
+
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
     // check for nullary type constructors
     if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
 
+    infer_ctx *ctx = traverse_ctx->user;
+
+    if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, node);
+
     if (!ast_node_is_nfa(node)) return 0;
 
-    infer_ctx *ctx  = traverse_ctx->user;
-    str        name = ast_node_str(node->named_application.name);
+    str name = ast_node_str(node->named_application.name);
 
     // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
@@ -1581,7 +1587,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             if (constrain_pm(self, ctx, arg->type, app_args.v[i], arg)) return 1;
 
             str       arg_name = ast_node_str(arg);
-            ast_node *top      = toplevel_get(self, arg_name);
+            ast_node *top      = toplevel_get_arrow_or_name(self, arg->type->type, arg_name);
             if (!top) goto next;
             if (top->type && !tl_monotype_is_arrow(top->type->type)) goto next;
 
@@ -1596,9 +1602,35 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     }
 
     return 0;
+}
 
+static int specialize_let_in(tl_infer *self, infer_ctx *ctx, ast_node *node) {
+    // Here we handle let fptr = id ... function pointers. When this is called after the function being
+    // pointed to has been specialised, the arrow types will be concrete. We use those types to look up
+    // (using specialize_fun) the specialised version and replace the symbol name with the specialised name.
+    // This ensures the transpiler refers to an existant concrete function rather than the generic template.
+
+    assert(ast_node_is_let_in(node));
+    str                name       = ast_node_str(node->let_in.name);
+    tl_polytype const *name_type  = node->let_in.name->type;
+    tl_polytype const *value_type = node->let_in.value->type;
+
+    if (!name_type || !value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
+    if (!tl_polytype_is_concrete(name_type) || !tl_polytype_is_concrete(value_type)) return 0;
+
+    str fun_name = tl_monotype_arrow_get_name(value_type->type);
+    if (str_is_empty(fun_name)) return 0;
+    ast_node *top       = toplevel_get_arrow_or_name(self, value_type->type, fun_name);
+    str       inst_name = specialize_fun(self, ctx, top, value_type->type);
+    if (str_is_empty(inst_name)) return 0;
+
+    ast_node_name_replace(node->let_in.value, inst_name);
+
+    (void)name;
     return 0;
 }
+
+// --
 
 static str next_variable_name(tl_infer *);
 
@@ -2044,12 +2076,12 @@ static int infer_one(tl_infer *self, ast_node *infer_target) {
 static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
-    ast_node          *infer_target = get_infer_target(node);
-    ast_node          *name_node    = toplevel_name_node(node);
-    tl_polytype const *provisional  = null;
+    ast_node    *infer_target = get_infer_target(node);
+    ast_node    *name_node    = toplevel_name_node(node);
+    tl_polytype *provisional  = null;
 
-    str                name         = name_node->symbol.name;
-    str                orig_name    = name_node->symbol.original;
+    str          name         = name_node->symbol.name;
+    str          orig_name    = name_node->symbol.original;
 
     // do not process a second time
     if (tl_type_env_lookup(self->env, name)) return 0;
@@ -2093,6 +2125,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     // add provisional type to environment (for polymorphic recursion)
     if (provisional) {
         // Note: ensure this is not quantified until after inference
+        tl_monotype_arrow_set_name((tl_monotype *)provisional->type, name);
         tl_type_env_insert(self->env, name, provisional);
     }
 
@@ -2120,6 +2153,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // collect free variables from infer target and add to the generic's arrow type
     add_free_variables_to_arrow(self, infer_target, (tl_polytype *)arrow); // const cast
+    tl_monotype_arrow_set_name((tl_monotype *)arrow->type, name);
     tl_type_env_insert(self->env, name, arrow);
 
     // log(self, "-- global env --");
@@ -2539,6 +2573,14 @@ static void toplevel_del(tl_infer *self, str name) {
 }
 
 static ast_node *toplevel_get(tl_infer *self, str name) {
+    return ast_node_str_map_get(self->toplevels, name);
+}
+
+static ast_node *toplevel_get_arrow_or_name(tl_infer *self, tl_monotype const *arrow, str name) {
+    if (tl_monotype_is_arrow(arrow) && !str_is_empty(arrow->list.name)) {
+        ast_node *out = toplevel_get(self, arrow->list.name);
+        if (out) return out;
+    }
     return ast_node_str_map_get(self->toplevels, name);
 }
 
