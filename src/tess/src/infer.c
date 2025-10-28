@@ -2170,6 +2170,44 @@ static void update_types_one_type(tl_infer *self, tl_polytype const **poly) {
 static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     (void)ctx;
     update_types_one_type(self, &node->type);
+
+    // propagate the types back up the ast, especially for type constructors
+    switch (node->tag) {
+    case ast_assignment: node->type = node->assignment.value->type; break;
+
+    case ast_body:       {
+        u32 n = node->body.expressions.size;
+        if (n) node->type = node->body.expressions.v[n - 1]->type;
+    } break;
+
+    case ast_let_in:
+        if (node->let_in.body) node->type = node->let_in.body->type;
+        break;
+
+    case ast_nil:
+    case ast_any:
+    case ast_arrow:
+    case ast_binary_op:
+    case ast_bool:
+    case ast_continue:
+    case ast_ellipsis:
+    case ast_eof:
+    case ast_f64:
+    case ast_i64:
+    case ast_if_then_else:
+    case ast_return:
+    case ast_string:
+    case ast_symbol:
+    case ast_u64:
+    case ast_unary_op:
+    case ast_user_type_definition:
+    case ast_while:
+    case ast_lambda_function:
+    case ast_lambda_function_application:
+    case ast_let:
+    case ast_named_function_application:
+    case ast_tuple:                       break;
+    }
     return 0;
 }
 

@@ -154,6 +154,7 @@ tesslang_create_test_no_preamble(v3_static_init)
 tesslang_create_test_no_preamble(v3_struct_concrete)
 tesslang_create_test_no_preamble(v3_struct_generic)
 tesslang_create_test_no_preamble(v3_type_literal_generic)
+tesslang_create_test_no_preamble(v3_type_arguments_annotations)
 tesslang_create_test_no_preamble(v3_while_statement)
 
 # FIXME: v2-parser: disable all tests
