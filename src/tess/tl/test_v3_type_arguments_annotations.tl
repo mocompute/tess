@@ -5,10 +5,10 @@ c_malloc(sz : Int) -> Ptr
 c_free(ptr : Ptr) -> Nil
 
 
-: Point(a) {x : a, y : a }
-: Rect(a)  { topleft: Point(a), botright: Point(a) }
+Point(a) : {x : a, y : a }
+Rect(a)  : { topleft: Point(a), botright: Point(a) }
 
-: Array(a) {
+Array(a) : {
   v:    Ptr(a),
   size: Int,
 }

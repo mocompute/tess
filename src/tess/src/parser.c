@@ -1309,10 +1309,10 @@ decl_done:
 
 static int toplevel_struct(parser *self) {
 
-    if (a_try(self, a_colon)) return 1;
-
     if (a_try(self, a_type_identifier)) return 1;
     ast_node *type_ident = self->result;
+
+    if (a_try(self, a_colon)) return 1;
 
     if (a_try(self, a_open_curly)) return 1;
 
