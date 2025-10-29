@@ -666,7 +666,9 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 
     // declare variable to hold funcall result if it's not nil
     tl_monotype const *type = env_lookup(self, ast_node_str(node->named_application.name));
-    str                res  = generate_funcall_result(self, type, 0);
+    str                res;
+    if (type) res = generate_funcall_result(self, type, 0);
+    else res = str_empty();
 
     // function call
     if (!str_is_empty(res)) generate_assign_lhs(self, res);
@@ -1354,7 +1356,10 @@ static str type_to_c_mono(transpile *self, tl_monotype const *type) {
 }
 
 static str arrow_rhs_to_c(transpile *self, tl_polytype const *type) {
-    if (tl_polytype_is_scheme(type)) fatal("type scheme");
+    if (tl_polytype_is_scheme(type)) {
+        return S("void");
+    }
+
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
     tl_monotype const *right = tl_monotype_sized_last(type->type->list.xs);
     return type_to_c_mono(self, right);
@@ -1452,7 +1457,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
 tl_monotype const *env_lookup(transpile *self, str name) {
     // may return null if type is missing or is a type scheme
     tl_polytype const *type = tl_type_env_lookup(self->env, name);
-    if (!type) fatal("type missing");
+    if (!type) return null;
     if (tl_polytype_is_scheme(type)) return null;
     return type->type;
 }
