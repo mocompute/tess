@@ -1366,7 +1366,14 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
     str_build_cat(b, S(") ("));
 
     assert(tl_tuple == type->list.xs.v[0]->tag);
+
     tl_monotype_sized params = type->list.xs.v[0]->list.xs;
+
+    // if no params or context, exit early
+    if (!params.size && !type->list.fvs.size) {
+        str_build_cat(b, S("void"));
+        goto done;
+    }
 
     // generate lambda context argument for free variables
     if (type->list.fvs.size) {
@@ -1381,6 +1388,7 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *t
         if (i + 1 < n) str_build_cat(b, S(", "));
     }
 
+done:
     str_build_cat(b, S(")"));
 }
 
@@ -1398,6 +1406,12 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     tl_monotype_sized params = arrow->list.xs.v[0]->list.xs;
     assert(!param_names.size || param_names.size == params.size);
 
+    // if no params or context, exit early
+    if (!params.size && !arrow->list.fvs.size) {
+        str_build_cat(&b, S("void"));
+        return str_build_finish(&b);
+    }
+
     // generate lambda context argument for free variables
     if (arrow->list.fvs.size) {
         str ctx_name = context_name(self, arrow->list.fvs);
@@ -1407,6 +1421,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
         // always output a name for the context parameter, because we might be in a function definition.
         cat_sp(self);
         cat(self, S("tl_ctx"));
+
         if (params.size) cat_commasp(self);
     }
 
