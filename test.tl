@@ -1,15 +1,14 @@
-f1() { 1 }
-f2() { 2 }
+_tl_sizeof_ (x : a) -> Int
+c_malloc(sz : Int) -> Ptr(a)
+c_free(ptr : Ptr(a)) -> Nil
 
-Ctx(t1, t2) : {
-  p1 : t1, p2 : t2
-}
-
-init() {
-  Ctx { p1 = f1, p2 = f2 }
-}
+Point(a) : { x: a, y : a }
 
 main() {
-  ctx = init()
-  ctx.p1()
+  p : Ptr(Point(Int)) = c_malloc(_tl_sizeof_(Point(Int)))
+  p->x := 0
+  p->y := 1
+  res = p->x
+  c_free(p)
+  res
 }

@@ -934,8 +934,19 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         } else if (is_struct_access_operator(op)) {
             // TODO: move this to utility function
-            tl_polytype const *struct_type = left->type;
-            if (tl_monotype_is_inst(struct_type->type)) {
+            tl_monotype const *struct_type = null;
+
+            // handle -> vs . access
+            if (0 == strcmp("->", op)) {
+                if (!tl_monotype_is_ptr(left->type->type)) {
+                    array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+                    return 1;
+                }
+                struct_type = tl_monotype_ptr_target(left->type->type);
+            } else {
+                struct_type = left->type->type;
+            }
+            if (tl_monotype_is_inst(struct_type)) {
                 // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
                 // fun_ptr is a function pointer.
                 ast_node *nfa = null;
@@ -946,7 +957,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 ensure_tv(self, null, &right->type);
                 if (ast_node_is_symbol(right)) {
                     str                             field_name = right->symbol.name;
-                    tl_type_constructor_inst const *inst       = struct_type->type->cons_inst;
+                    tl_type_constructor_inst const *inst       = struct_type->cons_inst;
                     tl_type_constructor_def const  *def        = inst->def;
 
                     i32                             found      = -1;
@@ -961,13 +972,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                         tl_monotype const *field_type = inst->args.v[found];
                         if (nfa) {
                             tl_monotype const *result_type = tl_monotype_arrow_result(field_type);
-                            if (constrain_pm(self, ctx, right->type, field_type, node))
-                                return 1; // right = nfa's name
+                            // right = nfa's name
+                            if (constrain_pm(self, ctx, right->type, field_type, node)) return 1;
                             if (constrain_pm(self, ctx, nfa->type, result_type, node)) return 1;
                             if (constrain_pm(self, ctx, node->type, result_type, node)) return 1;
                         } else {
                             if (constrain_pm(self, ctx, right->type, field_type, node)) return 1;
                             if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                            if (constrain(self, ctx, node->type, right->type, node)) return 1;
                         }
                     }
 
