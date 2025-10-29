@@ -1,3 +1,3 @@
 main() {
-  if (false) { 1 } else if (false) { 2 } else { 0 }
+  if false { 1 } else if false { 2 } else { 0 }
 }
