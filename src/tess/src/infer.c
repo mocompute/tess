@@ -936,22 +936,29 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // TODO: move this to utility function
             tl_polytype const *struct_type = left->type;
             if (tl_monotype_is_inst(struct_type->type)) {
-                assert(ast_node_is_symbol(right));
-                str                             field_name = right->symbol.name;
-                tl_type_constructor_inst const *inst       = struct_type->type->cons_inst;
-                tl_type_constructor_def const  *def        = inst->def;
-
-                i32                             found      = -1;
-                forall(i, def->field_names) {
-                    if (str_eq(field_name, def->field_names.v[i])) {
-                        if (i > INT32_MAX) fatal("overflow");
-                        found = (i32)i;
-                    }
+                if (ast_node_is_nfa(right)) {
+                    right = right->named_application.name;
+                    ensure_tv(self, null, &right->type);
                 }
-                if (found != -1) {
-                    if ((u32)found >= inst->args.size) fatal("out of range");
-                    tl_monotype const *field_type = inst->args.v[found];
-                    if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                if (ast_node_is_symbol(right)) {
+                    str                             field_name = right->symbol.name;
+                    tl_type_constructor_inst const *inst       = struct_type->type->cons_inst;
+                    tl_type_constructor_def const  *def        = inst->def;
+
+                    i32                             found      = -1;
+                    forall(i, def->field_names) {
+                        if (str_eq(field_name, def->field_names.v[i])) {
+                            if (i > INT32_MAX) fatal("overflow");
+                            found = (i32)i;
+                        }
+                    }
+                    if (found != -1) {
+                        if ((u32)found >= inst->args.size) fatal("out of range");
+                        tl_monotype const *field_type = inst->args.v[found];
+                        if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                    }
+                } else {
+                    fatal("unreachable");
                 }
             }
             if (constrain(self, ctx, node->type, right->type, node)) return 1;
@@ -1544,6 +1551,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!ast_node_is_nfa(node)) return 0;
 
     str name = ast_node_str(node->named_application.name);
+    log(self, "specialize_applications_cb: nfa '%.*s'", str_ilen(node->named_application.name->symbol.name),
+        str_buf(&node->named_application.name->symbol.name));
 
     // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
@@ -1658,7 +1667,11 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
     if (str_is_empty(inst_name)) return 0;
 
     // Don't replace into binary_op, e.g. struct.field, ptr->field
-    if (ast_node_is_symbol(node->let_in.value)) ast_node_name_replace(node->let_in.value, inst_name);
+    // TODO: duplicated code handling the return from specialize_arrow
+    ast_node *arg = node->let_in.value;
+    if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
+    else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
+        ast_node_name_replace(arg->assignment.value, inst_name);
 
     (void)name;
     return 0;
@@ -2371,14 +2384,14 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_string:
     case ast_symbol:
     case ast_u64:
-    case ast_unary_op:
     case ast_user_type_definition:
     case ast_while:
     case ast_lambda_function:
     case ast_lambda_function_application:
     case ast_let:
     case ast_named_function_application:
-    case ast_tuple:                       break;
+    case ast_tuple:
+    case ast_unary_op:                    break;
     }
     return 0;
 }

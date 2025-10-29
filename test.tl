@@ -11,6 +11,5 @@ init() {
 
 main() {
   ctx = init()
-  p = ctx.p1  // FIXME: currently must extract function ptr before applying it
-  p() - 1
+  ctx.p1()
 }

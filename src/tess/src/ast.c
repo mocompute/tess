@@ -331,6 +331,12 @@ ast_node *ast_node_lvalue(ast_node *self) {
     else fatal("unreachable");
 }
 
+ast_node *ast_node_op_rightmost(ast_node *self) {
+    if (ast_binary_op == self->tag) return ast_node_op_rightmost(self->binary_op.right);
+    else if (ast_unary_op == self->tag) return ast_node_op_rightmost(self->unary_op.operand);
+    else return self;
+}
+
 //
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
