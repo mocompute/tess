@@ -582,7 +582,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype const **type)
 }
 
 static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
-static str          specialize_fun(tl_infer *, infer_ctx *, ast_node *, tl_monotype const *);
+static str          specialize_fun(tl_infer *, ast_node *, tl_monotype const *);
 static tl_polytype *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 static tl_polytype *make_arrow_with(tl_infer *, ast_node_sized, ast_node *, tl_polytype const *);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
@@ -1500,7 +1500,7 @@ static int       specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
         ast_node_name_replace(arg, inst_name);
         return -1;
     } else {
-        str inst_name = specialize_fun(self, ctx, top, type);
+        str inst_name = specialize_fun(self, top, type);
         str_map_set(&ctx->specials, arg_name, &inst_name);
         ast_node *special = toplevel_get(self, inst_name);
         ast_node_name_replace(arg, inst_name);
@@ -1513,20 +1513,19 @@ static int       specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     return 0;
 }
 
-static int specialize_let_in(tl_infer *self, infer_ctx *infer_ctx, ast_node *node);
+static int specialize_let_in(tl_infer *self, ast_node *node);
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
     // check for nullary type constructors
     if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
-
-    infer_ctx *ctx = traverse_ctx->user;
-
-    if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, node);
-
+    // check for let-in with function pointer values
+    if (ast_node_is_let_in(node)) return specialize_let_in(self, node);
+    // or else the remainder of this function handles nfas
     if (!ast_node_is_nfa(node)) return 0;
 
-    str name = ast_node_str(node->named_application.name);
+    infer_ctx *ctx  = traverse_ctx->user;
+    str        name = ast_node_str(node->named_application.name);
 
     // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
@@ -1555,16 +1554,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
         str_ilen(app_str), str_buf(&app_str));
 
-    // Important: If type at the callsite is not fully concrete, do not specialise. It must remain
-    // polymorphic until all concrete type information is known.
-
-    // FIXME: disabled this early exit even though it's important, because I changed the implementation of
-    // is_concrete to check all cons_inst args too.
-    // if (!tl_polytype_is_concrete(app)) return 0;
-
-    // check if we already have a specialisation by name, because specialize_fun de-duplicates using name +
-    // type, e.g consider the identity function
-
+    // try to specialize
     int res = specialize_one(self, ctx, traverse_ctx, node->named_application.name, app->type);
 
     if (1 == res) return 1;
@@ -1604,8 +1594,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     return 0;
 }
 
-static int specialize_let_in(tl_infer *self, infer_ctx *ctx, ast_node *node) {
-    // Here we handle let fptr = id ... function pointers. When this is called after the function being
+static int specialize_let_in(tl_infer *self, ast_node *node) {
+    // Here we handle let fptr = id in ... function pointers. When this is called after the function being
     // pointed to has been specialised, the arrow types will be concrete. We use those types to look up
     // (using specialize_fun) the specialised version and replace the symbol name with the specialised name.
     // This ensures the transpiler refers to an existant concrete function rather than the generic template.
@@ -1621,7 +1611,7 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, ast_node *node) {
     str fun_name = tl_monotype_arrow_get_name(value_type->type);
     if (str_is_empty(fun_name)) return 0;
     ast_node *top       = toplevel_get_arrow_or_name(self, value_type->type, fun_name);
-    str       inst_name = specialize_fun(self, ctx, top, value_type->type);
+    str       inst_name = specialize_fun(self, top, value_type->type);
     if (str_is_empty(inst_name)) return 0;
 
     ast_node_name_replace(node->let_in.value, inst_name);
@@ -1823,8 +1813,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
 static void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
 
-static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_monotype const *arrow) {
-    (void)ctx;
+static str  specialize_fun(tl_infer *self, ast_node *node, tl_monotype const *arrow) {
     str name = toplevel_name(node);
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
@@ -1846,6 +1835,13 @@ static str  specialize_fun(tl_infer *self, infer_ctx *ctx, ast_node *node, tl_mo
     add_free_variables_to_arrow(self, generic_node, &wrap);
 
     // add to type environment
+    if (!tl_monotype_is_concrete(arrow)) {
+        // Note: functions like c_malloc etc will not have concrete types but still need to exist in the
+        // environment.
+        str arrow_str = tl_monotype_to_string(self->transient, arrow);
+        log(self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&name_inst),
+             str_cstr(&arrow_str));
+    }
     tl_type_env_insert_mono(self->env, name_inst, arrow);
 
     ast_node      *body   = null;
