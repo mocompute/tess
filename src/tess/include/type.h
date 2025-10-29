@@ -137,6 +137,7 @@ int                    tl_monotype_is_type_literal(tl_monotype const *);
 tl_monotype const     *tl_monotype_ptr_target(tl_monotype const *);
 tl_monotype const     *tl_monotype_type_literal_target(tl_monotype const *);
 tl_monotype const     *tl_monotype_arrow_args(tl_monotype const *);
+tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype const *);
 
 // -- polytype --
 

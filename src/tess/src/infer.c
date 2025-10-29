@@ -2330,7 +2330,7 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     map_destroy(&used);
 }
 
-static int check_main_function(tl_infer *self, ast_node const *main) {
+static int check_main_function(tl_infer *self, ast_node *main) {
     // instantiate and infer main
     assert(ast_node_is_let(main));
     tl_polytype const *type = tl_type_env_lookup(self->env, S("main"));
@@ -2340,6 +2340,11 @@ static int check_main_function(tl_infer *self, ast_node const *main) {
     if (!body_type || tl_polytype_is_scheme(body_type)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_main_function_bad_type, .node = main}));
         return 1;
+    }
+
+    // remove free variables from main type
+    if (tl_monotype_is_arrow(type->type)) {
+        ((tl_monotype *)type->type)->list.fvs.size = 0;
     }
 
     return 0;
