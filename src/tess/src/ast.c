@@ -1205,6 +1205,9 @@ int ast_node_is_lambda_application(ast_node const *self) {
 int ast_node_is_assignment(ast_node const *self) {
     return ast_assignment == self->tag;
 }
+int ast_node_is_binary_op(ast_node const *self) {
+    return ast_binary_op == self->tag;
+}
 
 int ast_node_is_std_application(ast_node const *self) {
     if (!ast_node_is_named_application(self)) return 0;

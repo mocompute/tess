@@ -936,10 +936,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // TODO: move this to utility function
             tl_polytype const *struct_type = left->type;
             if (tl_monotype_is_inst(struct_type->type)) {
+                // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
+                // fun_ptr is a function pointer.
+                ast_node *nfa = null;
                 if (ast_node_is_nfa(right)) {
+                    nfa   = right;
                     right = right->named_application.name;
-                    ensure_tv(self, null, &right->type);
                 }
+                ensure_tv(self, null, &right->type);
                 if (ast_node_is_symbol(right)) {
                     str                             field_name = right->symbol.name;
                     tl_type_constructor_inst const *inst       = struct_type->type->cons_inst;
@@ -955,13 +959,24 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     if (found != -1) {
                         if ((u32)found >= inst->args.size) fatal("out of range");
                         tl_monotype const *field_type = inst->args.v[found];
-                        if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                        if (nfa) {
+                            tl_monotype const *result_type = tl_monotype_arrow_result(field_type);
+                            if (constrain_pm(self, ctx, right->type, field_type, node))
+                                return 1; // right = nfa's name
+                            if (constrain_pm(self, ctx, nfa->type, result_type, node)) return 1;
+                            if (constrain_pm(self, ctx, node->type, result_type, node)) return 1;
+                        } else {
+                            if (constrain_pm(self, ctx, right->type, field_type, node)) return 1;
+                            if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
+                        }
                     }
+
                 } else {
                     fatal("unreachable");
                 }
+            } else {
+                if (constrain(self, ctx, node->type, right->type, node)) return 1;
             }
-            if (constrain(self, ctx, node->type, right->type, node)) return 1;
         } else fatal("unknown operator type");
 
     } break;
@@ -1538,6 +1553,8 @@ static int       specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
 }
 
 static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node);
+static int specialize_struct_field_nfa(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                       ast_node *node);
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
@@ -1547,6 +1564,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (ast_node_is_symbol(node)) return specialize_user_type(self, ctx, traverse_ctx, node);
     // check for let-in with function pointer values
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
+    // check for struct field nfa
+    if (ast_node_is_binary_op(node)) return specialize_struct_field_nfa(self, ctx, traverse_ctx, node);
     // or else the remainder of this function handles nfas
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -1669,6 +1688,31 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
     // Don't replace into binary_op, e.g. struct.field, ptr->field
     // TODO: duplicated code handling the return from specialize_arrow
     ast_node *arg = node->let_in.value;
+    if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
+    else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
+        ast_node_name_replace(arg->assignment.value, inst_name);
+
+    (void)name;
+    return 0;
+}
+
+static int specialize_struct_field_nfa(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                       ast_node *node) {
+    assert(ast_node_is_binary_op(node));
+    if (!ast_node_is_nfa(node->binary_op.right)) return 0;
+
+    ast_node          *nfa  = node->binary_op.right;
+    tl_polytype const *poly = nfa->named_application.name->type;
+    if (!poly || !tl_polytype_is_concrete(poly) || !tl_monotype_is_arrow(poly->type)) return 0;
+
+    str name      = ast_node_str(nfa->named_application.name);
+
+    str inst_name = specialize_arrow(self, ctx, traverse_ctx, poly->type);
+    if (str_is_empty(inst_name)) return 0;
+
+    // Don't replace into binary_op, e.g. struct.field, ptr->field
+    // TODO: duplicated code handling the return from specialize_arrow
+    ast_node *arg = nfa->named_application.name;
     if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
     else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
         ast_node_name_replace(arg->assignment.value, inst_name);

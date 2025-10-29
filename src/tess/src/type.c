@@ -829,6 +829,11 @@ str tl_monotype_arrow_get_name(tl_monotype const *self) {
     if (!tl_monotype_is_arrow(self)) fatal("logic error");
     return self->list.name;
 }
+tl_monotype const *tl_monotype_arrow_result(tl_monotype const *self) {
+    if (!tl_monotype_is_arrow(self)) fatal("logic error");
+    if (2 != self->list.xs.size) fatal("runtime error");
+    return self->list.xs.v[1];
+}
 
 // -- substitutions --
 

@@ -11,6 +11,5 @@ init() {
 
 main() {
   ctx = init()
-  p = ctx.p1  // See test_function_pointer_in_struct_direct to avoid this temp assignment
-  p() - 1
+  ctx.p1() - 1
 }

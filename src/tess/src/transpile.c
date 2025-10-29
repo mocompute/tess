@@ -6,6 +6,7 @@
 #include "ast_tags.h"
 #include "hashmap.h"
 #include "infer.h"
+#include "parser.h"
 #include "str.h"
 #include "type.h"
 
@@ -853,6 +854,10 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
     str left  = generate_expr(self, null, node->binary_op.left, ctx); // types null
     str right = generate_expr(self, null, node->binary_op.right, ctx);
     str op    = ast_node_str(node->binary_op.op);
+
+    // Note: special case if right hand is a funcall of a struct member
+    if (ast_node_is_named_application(node->binary_op.right) && is_struct_access_operator(str_cstr(&op)))
+        return right;
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);

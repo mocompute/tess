@@ -120,6 +120,7 @@ void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
 u64                    tl_monotype_hash64(tl_monotype const *);
 void                   tl_monotype_arrow_set_name(tl_monotype *, str);
 str                    tl_monotype_arrow_get_name(tl_monotype const *);
+tl_monotype const     *tl_monotype_arrow_result(tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);
 int                    tl_monotype_is_nil(tl_monotype const *);
