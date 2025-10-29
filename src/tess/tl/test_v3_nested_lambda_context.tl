@@ -5,5 +5,5 @@ main() {
   val = true
   afun = () { val }
   foo = apply3(afun)
-  0
+  if foo { 0 } else { 1 }
 }
