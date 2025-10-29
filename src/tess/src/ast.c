@@ -324,6 +324,13 @@ void ast_node_name_replace(ast_node *node, str replace) {
     node->symbol.name     = replace;
 }
 
+ast_node *ast_node_lvalue(ast_node *self) {
+    if (ast_node_is_symbol(self)) return self;
+    else if (ast_binary_op == self->tag) return ast_node_lvalue(self->binary_op.right);
+    else if (ast_unary_op == self->tag) return ast_node_lvalue(self->unary_op.operand);
+    else fatal("unreachable");
+}
+
 //
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,

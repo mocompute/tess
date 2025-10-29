@@ -201,6 +201,7 @@ void                ast_node_move(ast_node *dst, ast_node *src);
 str                 ast_node_str(ast_node const *);
 str                 ast_node_name_original(ast_node const *);
 void                ast_node_name_replace(ast_node *, str);
+ast_node           *ast_node_lvalue(ast_node *);
 
 // -- traversal --
 

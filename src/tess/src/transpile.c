@@ -43,6 +43,7 @@ typedef struct {
     // instead of emitting output to evaluate an expression and push it on the result stack, return a str
     // which can be used as an lvalue for the expression.
     int want_lvalue;
+
 } eval_ctx;
 
 extern char const *embed_std_c;
@@ -1264,6 +1265,11 @@ static str mangle_fun(transpile *self, str s) {
     // If name is already mangled, it could be a variable name. Don't mangle it further.
     if (0 == str_cmp_nc(s, "tl_", 3)) return s;
     if (0 == str_cmp_nc(s, "std_", 4)) return s;
+
+    // don't mangle names which don't refer to actual functions. This helps avoid mangling struct field
+    // names that have an arrow type.
+    if (!str_map_contains(self->toplevels, s)) return s;
+
     str_build b = str_build_init(self->transient, str_len(s) + 7);
     str_build_cat(&b, S("tl_fun_"));
     str_build_cat(&b, s);

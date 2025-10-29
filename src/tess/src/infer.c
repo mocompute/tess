@@ -432,6 +432,7 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) {
+            if (ast_node_is_assignment(arg)) arg = arg->assignment.value;
             if (!ast_node_is_symbol(arg)) continue;
             if (str_eq(name, arg->symbol.name)) continue;
             if (!str_hset_contains(ctx->names, arg->symbol.name)) {
@@ -1263,6 +1264,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                            tl_monotype const *arrow);
+
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype const **out_type) {
 
@@ -1427,7 +1431,8 @@ static tl_monotype const *specialize_type_identifer_unwrap(tl_infer *self, ast_n
     return null;
 }
 
-static int specialize_user_type(tl_infer *self, ast_node *node) {
+static int specialize_user_type(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                ast_node *node) {
 
     // divert if type constructor application is actually a type literal
     if (specialize_type_identifer(self, node)) return 0;
@@ -1452,6 +1457,18 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
         assert(tl_polytype_is_concrete(poly));
 
         tl_monotype const *mono = poly->type;
+
+        // for arrow types, try to specialize at this point of application
+        if (tl_monotype_is_arrow(mono)) {
+            str inst_name = specialize_arrow(self, ctx, traverse_ctx, mono);
+            if (!str_is_empty(inst_name)) {
+                if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
+                else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
+                    ast_node_name_replace(arg->assignment.value, inst_name);
+                else fatal("unreachable");
+            }
+        }
+
         array_push(arr, mono);
     }
     array_shrink(arr);
@@ -1513,19 +1530,20 @@ static int       specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     return 0;
 }
 
-static int specialize_let_in(tl_infer *self, ast_node *node);
+static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node);
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
+    infer_ctx *ctx = traverse_ctx->user;
+
     // check for nullary type constructors
-    if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
+    if (ast_node_is_symbol(node)) return specialize_user_type(self, ctx, traverse_ctx, node);
     // check for let-in with function pointer values
-    if (ast_node_is_let_in(node)) return specialize_let_in(self, node);
+    if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
     // or else the remainder of this function handles nfas
     if (!ast_node_is_nfa(node)) return 0;
 
-    infer_ctx *ctx  = traverse_ctx->user;
-    str        name = ast_node_str(node->named_application.name);
+    str name = ast_node_str(node->named_application.name);
 
     // do not process intrinsic calls or their arguments
     if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
@@ -1535,7 +1553,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         return 0; // mutual recursion or variable holding function pointer
     }
 
-    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
+    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, ctx, traverse_ctx, node);
 
     // instantiate generic function type being applied
     ast_arguments_iter iter     = ast_node_arguments_iter(node);
@@ -1594,7 +1612,35 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     return 0;
 }
 
-static int specialize_let_in(tl_infer *self, ast_node *node) {
+static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                            tl_monotype const *arrow) {
+    // TODO: cleanup combine with specialize_one
+    str inst_name = str_empty();
+    if (!tl_monotype_is_concrete(arrow)) return inst_name;
+
+    str fun_name = tl_monotype_arrow_get_name(arrow);
+    if (str_is_empty(fun_name)) return inst_name;
+    ast_node *top = toplevel_get_arrow_or_name(self, arrow, fun_name);
+
+    str      *existing;
+    if ((existing = str_map_get(ctx->specials, fun_name))) {
+        return *existing;
+    } else {
+        inst_name = specialize_fun(self, top, arrow);
+        str_map_set(&ctx->specials, fun_name, &inst_name);
+        ast_node *special      = toplevel_get(self, inst_name);
+
+        ast_node *infer_target = get_infer_target(special);
+        if (infer_target) {
+            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return str_empty();
+            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb))
+                return str_empty();
+        }
+        return inst_name;
+    }
+}
+
+static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
     // Here we handle let fptr = id in ... function pointers. When this is called after the function being
     // pointed to has been specialised, the arrow types will be concrete. We use those types to look up
     // (using specialize_fun) the specialised version and replace the symbol name with the specialised name.
@@ -1608,13 +1654,11 @@ static int specialize_let_in(tl_infer *self, ast_node *node) {
     if (!name_type || !value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
     if (!tl_polytype_is_concrete(name_type) || !tl_polytype_is_concrete(value_type)) return 0;
 
-    str fun_name = tl_monotype_arrow_get_name(value_type->type);
-    if (str_is_empty(fun_name)) return 0;
-    ast_node *top       = toplevel_get_arrow_or_name(self, value_type->type, fun_name);
-    str       inst_name = specialize_fun(self, top, value_type->type);
+    str inst_name = specialize_arrow(self, ctx, traverse_ctx, value_type->type);
     if (str_is_empty(inst_name)) return 0;
 
-    ast_node_name_replace(node->let_in.value, inst_name);
+    // Don't replace into binary_op, e.g. struct.field, ptr->field
+    if (ast_node_is_symbol(node->let_in.value)) ast_node_name_replace(node->let_in.value, inst_name);
 
     (void)name;
     return 0;
@@ -2152,11 +2196,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     tl_monotype_arrow_set_name((tl_monotype *)arrow->type, name);
     tl_type_env_insert(self->env, name, arrow);
 
-    // log(self, "-- global env --");
-    // log_env(self);
-    // log(self, "-- subs");
-    // log_subs(self);
-
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
@@ -2214,7 +2253,10 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
         if (!str_hset_contains(used, name)) array_push(remove, name);
     }
 
-    forall(i, remove) toplevel_del(self, remove.v[i]);
+    forall(i, remove) {
+        log(self, "tree_shake_toplevels: removing '%s'", str_cstr(&remove.v[i]));
+        toplevel_del(self, remove.v[i]);
+    }
     array_free(remove);
     map_destroy(&used);
 }
