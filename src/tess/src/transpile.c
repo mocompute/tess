@@ -685,6 +685,8 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 }
 
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
+    // Note: the main logic of this function is also duplicated in generate_binary_op.
+
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
@@ -856,13 +858,66 @@ static str generate_body(transpile *self, tl_monotype const *type, ast_node cons
 static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node const *node,
                               eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
-    str left  = generate_expr(self, null, node->binary_op.left, ctx); // types null
-    str right = generate_expr(self, null, node->binary_op.right, ctx);
-    str op    = ast_node_str(node->binary_op.op);
+    str op   = ast_node_str(node->binary_op.op);
+
+    str left = generate_expr(self, null, node->binary_op.left, ctx); // types null
+    str right;
 
     // Note: special case if right hand is a funcall of a struct member
-    if (ast_node_is_named_application(node->binary_op.right) && is_struct_access_operator(str_cstr(&op)))
-        return right;
+    if (ast_node_is_named_application(node->binary_op.right) && is_struct_access_operator(str_cstr(&op))) {
+        // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`, then
+        // invoke the funcall logic. The named_application.name node holds the function type.
+
+        str fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
+        tl_monotype const *fun_type = node->binary_op.right->named_application.name->type->type;
+
+        str                fun_res  = next_res(self);
+        generate_decl(self, fun_res, fun_type);
+        generate_assign_lhs(self, fun_res);
+        cat(self, left);
+        cat(self, op);
+        cat(self, fun);
+        cat_semicolonln(self);
+
+        {
+            // Note: duplicated with generate_funcall
+            node                    = node->binary_op.right;
+            str                name = fun_res;
+            tl_monotype const *type = fun_type;
+
+            // type constructor?
+            if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
+
+            // generate arguments: an array of variables will hold their values
+            ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
+            str_array      args_res = generate_args(self, args, type, ctx);
+
+            // declare variable to hold funcall result if it's not nil
+            str res = generate_funcall_result(self, type, 0);
+
+            assert(tl_monotype_is_list(type));
+            str ctx_var = str_empty();
+            if (type->list.fvs.size) {
+                ctx_var = generate_context(self, type->list.fvs, ctx);
+            }
+
+            // function call
+            if (!str_is_empty(res)) generate_assign_lhs(self, res);
+            generate_funcall_head(self, name, ctx_var, args_res.size);
+
+            // args list
+            str_build b = str_build_init(self->transient, 128);
+            str_build_join_array(&b, S(", "), args_res);
+            cat(self, str_build_finish(&b));
+            cat_close_round(self);
+            cat_semicolonln(self);
+
+            return res;
+        }
+
+    } else {
+        right = generate_expr(self, null, node->binary_op.right, ctx);
+    }
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);

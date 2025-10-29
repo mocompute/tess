@@ -3,6 +3,7 @@
 #include "ast_tags.h"
 #include "hash.h"
 #include "hashmap.h"
+#include "parser.h"
 #include "sexp.h"
 #include "str.h"
 #include "type.h"
@@ -1207,6 +1208,11 @@ int ast_node_is_assignment(ast_node const *self) {
 }
 int ast_node_is_binary_op(ast_node const *self) {
     return ast_binary_op == self->tag;
+}
+int ast_node_is_binary_op_struct_access(ast_node const *self) {
+    if (!ast_node_is_binary_op(self)) return 0;
+    str op = ast_node_str(self->binary_op.op);
+    return is_struct_access_operator(str_cstr(&op));
 }
 
 int ast_node_is_std_application(ast_node const *self) {

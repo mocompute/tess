@@ -245,6 +245,7 @@ u64            ast_node_hash(ast_node const *);
 int            ast_node_is_arrow(ast_node const *);
 int            ast_node_is_assignment(ast_node const *);
 int            ast_node_is_binary_op(ast_node const *);
+int            ast_node_is_binary_op_struct_access(ast_node const *);
 int            ast_node_is_lambda_function(ast_node const *);
 int            ast_node_is_lambda_application(ast_node const *);
 int            ast_node_is_let(ast_node const *);

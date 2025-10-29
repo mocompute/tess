@@ -1654,6 +1654,10 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
 static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
                             tl_monotype const *arrow) {
+
+    // FIXME
+    return str_empty();
+
     // TODO: cleanup combine with specialize_one
     str inst_name = str_empty();
     if (!tl_monotype_is_concrete(arrow)) return inst_name;
@@ -1680,6 +1684,20 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
     }
 }
 
+static str specialize_arrow_2(tl_infer *self, str name, tl_monotype const *arrow) {
+
+    // TODO: cleanup combine with specialize_one
+    str inst_name = str_empty();
+    if (!tl_monotype_is_concrete(arrow)) return inst_name;
+
+    // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
+    // because types are frequently cloned.
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
+    str          *existing = map_get(self->instances, &key, sizeof key);
+    if (existing) return *existing;
+    return str_empty();
+}
+
 static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
     // Here we handle let fptr = id in ... function pointers. When this is called after the function being
     // pointed to has been specialised, the arrow types will be concrete. We use those types to look up
@@ -1699,10 +1717,12 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
 
     // Don't replace into binary_op, e.g. struct.field, ptr->field
     // TODO: duplicated code handling the return from specialize_arrow
-    ast_node *arg = node->let_in.value;
-    if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
-    else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
-        ast_node_name_replace(arg->assignment.value, inst_name);
+
+    // FIXME
+    // ast_node *arg = node->let_in.value;
+    // if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
+    // else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
+    //     ast_node_name_replace(arg->assignment.value, inst_name);
 
     (void)name;
     return 0;
@@ -1724,10 +1744,12 @@ static int specialize_struct_field_nfa(tl_infer *self, infer_ctx *ctx, traverse_
 
     // Don't replace into binary_op, e.g. struct.field, ptr->field
     // TODO: duplicated code handling the return from specialize_arrow
-    ast_node *arg = nfa->named_application.name;
-    if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
-    else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
-        ast_node_name_replace(arg->assignment.value, inst_name);
+
+    // FIXME
+    // ast_node *arg = nfa->named_application.name;
+    // if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
+    // else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
+    //     ast_node_name_replace(arg->assignment.value, inst_name);
 
     (void)name;
     return 0;
@@ -2413,9 +2435,29 @@ static void update_types_one_type(tl_infer *self, tl_polytype const **poly) {
     }
 }
 
+static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
+    if (ast_node_is_symbol(ident)) {
+        tl_monotype const *type = ident->type->type;
+        if (!tl_monotype_is_arrow(type)) return;
+        str name      = ast_node_str(ident);
+        str inst_name = specialize_arrow_2(self, name, type);
+        if (!str_is_empty(inst_name)) {
+            ast_node_name_replace(ident, inst_name);
+        }
+    }
+}
+
+static void update_types_arrow(tl_infer *self, ast_node *node) {
+    if (ast_node_is_let_in(node)) {
+        ast_node *ident = node->let_in.value;
+        fixup_arrow_name(self, ident);
+    }
+}
+
 static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     (void)ctx;
     update_types_one_type(self, &node->type);
+    update_types_arrow(self, node);
 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
