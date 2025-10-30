@@ -51,11 +51,11 @@ extern char const *embed_std_c;
 
 static str         next_res(transpile *);
 
-static void        generate_decl(transpile *, str, tl_monotype const *);
-static void        generate_decl_pointer(transpile *, str, tl_monotype const *);
-static str         generate_expr(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
-static str         generate_inline_lambda(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
-static str         generate_let_in(transpile *, tl_monotype const *, ast_node const *, eval_ctx *);
+static void        generate_decl(transpile *, str, tl_monotype *);
+static void        generate_decl_pointer(transpile *, str, tl_monotype *);
+static str         generate_expr(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
+static str         generate_inline_lambda(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
+static str         generate_let_in(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
 static str         generate_if_then_else(transpile *, ast_node const *, eval_ctx *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *, eval_ctx *);
@@ -93,14 +93,14 @@ static void cat_close_curlyln(transpile *);
 // static void        cat_i64(transpile *, i64);
 // static void        cat_f64(transpile *, f64);
 
-tl_monotype const *env_lookup(transpile *, str); // may be null
-static str         mangle_fun(transpile *, str); // allocates transient
-static int         is_intrinsic(str);
-static int         should_generate(str, tl_polytype const *);
-static str         type_to_c(transpile *, tl_polytype const *);
-static str         type_to_c_mono(transpile *, tl_monotype const *);
-static str         arrow_rhs_to_c(transpile *, tl_polytype const *);
-static str         arrow_to_c_params(transpile *, tl_polytype const *, str_sized); // allocates transient
+tl_monotype *env_lookup(transpile *, str); // may be null
+static str   mangle_fun(transpile *, str); // allocates transient
+static int   is_intrinsic(str);
+static int   should_generate(str, tl_polytype *);
+static str   type_to_c(transpile *, tl_polytype *);
+static str   type_to_c_mono(transpile *, tl_monotype *);
+static str   arrow_rhs_to_c(transpile *, tl_polytype *);
+static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
 
 //
 
@@ -112,8 +112,8 @@ static void generate_prototypes(transpile *self, int decl_static) {
 
         if (ast_node_is_utd(node)) continue;
 
-        str                name = toplevel_name(node);
-        tl_polytype const *type = tl_type_env_lookup(self->env, name);
+        str          name = toplevel_name(node);
+        tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
@@ -132,7 +132,7 @@ static void generate_prototypes(transpile *self, int decl_static) {
     }
 }
 
-static str make_struct_name(allocator *alloc, tl_monotype const *type, u64 *out_hash) {
+static str make_struct_name(allocator *alloc, tl_monotype *type, u64 *out_hash) {
     u64  hash = tl_monotype_hash64(type);
 
     char buf[128];
@@ -147,7 +147,7 @@ static str make_tuple_field_name(u32 i) {
     return str_init_small(buf);
 }
 
-static str generate_tuple(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_tuple(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
     str res = next_res(self);
     generate_decl(self, res, type);
@@ -164,7 +164,7 @@ static str generate_tuple(transpile *self, tl_monotype const *type, ast_node con
     return res;
 }
 
-static void generate_struct(transpile *self, tl_monotype const *type) {
+static void generate_struct(transpile *self, tl_monotype *type) {
 
     if (tl_monotype_is_tuple(type)) {
         u64 hash;
@@ -190,7 +190,7 @@ static void generate_struct(transpile *self, tl_monotype const *type) {
 static void generate_structs(transpile *self) {
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
-        tl_polytype const *type = *(tl_polytype const **)iter.data;
+        tl_polytype *type = *(tl_polytype **)iter.data;
 
         if (type->type->tag == tl_tuple) {
             if (tl_polytype_is_scheme(type)) fatal("type is scheme");
@@ -206,12 +206,12 @@ static void generate_user_types(transpile *self) {
         ast_node *node = self->synthesized_nodes.v[i];
 
         if (!ast_node_is_utd(node)) continue;
-        str                name = toplevel_name(node);
-        tl_polytype const *poly = node->type;
+        str          name = toplevel_name(node);
+        tl_polytype *poly = node->type;
         if (!tl_polytype_is_concrete(poly)) fatal("type scheme");
         if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
 
-        tl_type_constructor_def const *def = poly->type->cons_inst->def;
+        tl_type_constructor_def *def = poly->type->cons_inst->def;
         if (!def) fatal("missing type def");
 
         cat(self, S("typedef struct "));
@@ -247,8 +247,8 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
 
     // check types we don't want to emit because they are not concrete
     forall(i, fvs) {
-        str                field      = fvs.v[i];
-        tl_polytype const *field_type = tl_type_env_lookup(self->env, field);
+        str          field      = fvs.v[i];
+        tl_polytype *field_type = tl_type_env_lookup(self->env, field);
         if (!field_type) return;
         if (!tl_polytype_is_concrete(field_type)) return;
     }
@@ -259,8 +259,8 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
     cat_open_curlyln(self);
 
     forall(i, fvs) {
-        str                field      = fvs.v[i];
-        tl_polytype const *field_type = tl_type_env_lookup(self->env, field);
+        str          field      = fvs.v[i];
+        tl_polytype *field_type = tl_type_env_lookup(self->env, field);
         generate_decl_pointer(self, field, field_type->type);
         if (i + 1 < fvs.size) cat_nl(self);
     }
@@ -279,7 +279,7 @@ static str generate_ctx_var(transpile *self) {
     return out;
 }
 
-static str generate_expr_symbol(transpile *self, tl_monotype const *type, str symbol_name, eval_ctx *ctx) {
+static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, eval_ctx *ctx) {
     str name = symbol_name;
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
 
@@ -313,8 +313,8 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
         cat_ampersand(self);
         cat_open_round(self);
 
-        str                name = fvs.v[i];
-        tl_polytype const *type = tl_type_env_lookup(self->env, name);
+        str          name = fvs.v[i];
+        tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
         name = generate_expr_symbol(self, type->type, name, ctx);
         cat(self, name);
@@ -334,7 +334,7 @@ static void generate_toplevel_contexts(transpile *self) {
 
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
-        tl_polytype const *type = *(tl_polytype const **)iter.data;
+        tl_polytype *type = *(tl_polytype **)iter.data;
 
         if (type->type->tag == tl_list && type->type->list.fvs.size) {
             generate_context_struct(self, type->type->list.fvs);
@@ -350,8 +350,8 @@ static void generate_toplevel_values(transpile *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
-        str                name = ast_node_str(node->let_in.name);
-        tl_polytype const *type = node->let_in.value->type;
+        str          name = ast_node_str(node->let_in.name);
+        tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
         generate_decl(self, name, type->type);
@@ -365,8 +365,8 @@ static void generate_toplevel_values(transpile *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
-        str                name = ast_node_str(node->let_in.name);
-        tl_polytype const *type = node->let_in.value->type;
+        str          name = ast_node_str(node->let_in.name);
+        tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
         str value = generate_expr(self, type->type, node->let_in.value, null);
@@ -384,16 +384,16 @@ static void generate_toplevels(transpile *self) {
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_utd(node)) continue;
-        str                name = toplevel_name(node);
-        tl_polytype const *poly = tl_type_env_lookup(self->env, name);
+        str          name = toplevel_name(node);
+        tl_polytype *poly = tl_type_env_lookup(self->env, name);
         if (!poly) fatal("missing type");
 
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(name, poly)) continue;
 
         assert(poly->type->list.xs.size == 2);
-        tl_monotype const *return_type = tl_monotype_sized_last(poly->type->list.xs);
-        ast_node          *node        = ast_node_str_map_get(self->toplevels, name);
+        tl_monotype *return_type = tl_monotype_sized_last(poly->type->list.xs);
+        ast_node    *node        = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
         ast_node *body = ast_node_body(node);
@@ -444,8 +444,8 @@ static void generate_main(transpile *self) {
     if (!main) fatal("no main function");
     if (ast_let != main->tag) fatal("logic error");
 
-    tl_monotype const *type = env_lookup(self, S("main"));
-    tl_monotype_sized  args = {0};
+    tl_monotype      *type = env_lookup(self, S("main"));
+    tl_monotype_sized args = {0};
     if (type && tl_monotype_is_arrow(type)) {
         args = tl_monotype_arrow_get_args(type);
     }
@@ -502,8 +502,7 @@ static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_v
     return generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
 }
 
-static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype const *arrow,
-                               eval_ctx *ctx) {
+static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
     // generate args to match arrow type or type constructor
     str_array args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
@@ -525,10 +524,10 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     return args_res;
 }
 
-static str generate_funcall_result(transpile *self, tl_monotype const *type, int do_assign_lhs) {
+static str generate_funcall_result(transpile *self, tl_monotype *type, int do_assign_lhs) {
     assert(tl_monotype_is_list(type));
-    tl_monotype const *funcall_result_type = tl_monotype_sized_last(type->list.xs);
-    str                res                 = str_empty(); // empty signals void result
+    tl_monotype *funcall_result_type = tl_monotype_sized_last(type->list.xs);
+    str          res                 = str_empty(); // empty signals void result
 
     if (!tl_monotype_is_nil(funcall_result_type)) {
         res = next_res(self);
@@ -541,8 +540,8 @@ static str generate_funcall_result(transpile *self, tl_monotype const *type, int
 static str generate_type_constructor_named(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // with named arguments (ast_assignment)
 
-    str                name = ast_node_str(node->named_application.name);
-    tl_monotype const *type = env_lookup(self, name);
+    str          name = ast_node_str(node->named_application.name);
+    tl_monotype *type = env_lookup(self, name);
     assert(tl_monotype_is_inst(type));
 
     str                            res = next_res(self);
@@ -584,12 +583,12 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
         return str_init(self->transient, "0");
     }
 
-    str                name = ast_node_str(node->named_application.name);
-    tl_monotype const *type = env_lookup(self, name);
+    str          name = ast_node_str(node->named_application.name);
+    tl_monotype *type = env_lookup(self, name);
     assert(tl_monotype_is_inst(type));
 
-    str                            res = next_res(self);
-    tl_type_constructor_def const *def = type->cons_inst->def;
+    str                      res = next_res(self);
+    tl_type_constructor_def *def = type->cons_inst->def;
 
     assert(def->field_names.size == node->named_application.n_arguments);
     assert(def->field_names.size == type->cons_inst->args.size);
@@ -665,8 +664,8 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     }
 
     // declare variable to hold funcall result if it's not nil
-    tl_monotype const *type = env_lookup(self, ast_node_str(node->named_application.name));
-    str                res;
+    tl_monotype *type = env_lookup(self, ast_node_str(node->named_application.name));
+    str          res;
     if (type) res = generate_funcall_result(self, type, 0);
     else res = str_empty();
 
@@ -693,7 +692,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
     if (0 == str_cmp_nc(name, "c_", 2)) return generate_funcall_c(self, node, ctx);
 
-    tl_monotype const *type = env_lookup(self, name);
+    tl_monotype *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // type constructor?
@@ -726,7 +725,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     return res;
 }
 
-static str generate_let_in_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node,
+static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
 
     // don't declare or assign to name, because it is hoisted to a toplevel.
@@ -739,13 +738,12 @@ static str generate_let_in_lambda(transpile *self, tl_monotype const *result_typ
     return res;
 }
 
-static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_node const *node,
-                           eval_ctx *ctx) {
+static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node const *node, eval_ctx *ctx) {
     if (ast_node_is_let_in_lambda(node)) return generate_let_in_lambda(self, result_type, node, ctx);
     assert(ast_node_is_let_in(node));
 
-    str                name = ast_node_str(node->let_in.name);
-    tl_monotype const *type = env_lookup(self, name); // may be null
+    str          name = ast_node_str(node->let_in.name);
+    tl_monotype *type = env_lookup(self, name); // may be null
 
     if (type) {
         str value = generate_expr(self, type, node->let_in.value, ctx);
@@ -781,13 +779,13 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
 
 static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_if_then_else == node->tag);
-    ast_node const    *cond        = node->if_then_else.condition;
-    ast_node const    *yes         = node->if_then_else.yes;
-    ast_node const    *no          = node->if_then_else.no;
-    tl_monotype const *result_type = yes->type->type;
+    ast_node const *cond        = node->if_then_else.condition;
+    ast_node const *yes         = node->if_then_else.yes;
+    ast_node const *no          = node->if_then_else.no;
+    tl_monotype    *result_type = yes->type->type;
 
-    str                cond_str    = generate_expr(self, null, cond, ctx);
-    str                res         = next_res(self);
+    str             cond_str    = generate_expr(self, null, cond, ctx);
+    str             res         = next_res(self);
 
     generate_decl(self, res, result_type);
     cat(self, S("if ("));
@@ -808,7 +806,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     return res;
 }
 
-static str generate_inline_lambda(transpile *self, tl_monotype const *result_type, ast_node const *node,
+static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
     assert(ast_node_is_lambda_application(node));
 
@@ -817,9 +815,9 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     assert(params.size == args.size);
 
     if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
-    tl_monotype const *arrow    = node->lambda_application.lambda->type->type;
+    tl_monotype *arrow    = node->lambda_application.lambda->type->type;
 
-    str_array          args_res = generate_args(self, args, arrow, ctx);
+    str_array    args_res = generate_args(self, args, arrow, ctx);
     assert(args_res.size == params.size);
 
     // initialise parameters
@@ -847,7 +845,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype const *result_typ
     return res;
 }
 
-static str generate_str(transpile *self, str expr, tl_monotype const *type) {
+static str generate_str(transpile *self, str expr, tl_monotype *type) {
     if (str_is_empty(expr)) return expr;
     str res = next_res(self);
     generate_decl(self, res, type);
@@ -857,7 +855,7 @@ static str generate_str(transpile *self, str expr, tl_monotype const *type) {
     return res;
 }
 
-static str generate_body(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_body(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     (void)type;
 
     str out = str_empty();
@@ -867,8 +865,7 @@ static str generate_body(transpile *self, tl_monotype const *type, ast_node cons
     return out;
 }
 
-static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node const *node,
-                              eval_ctx *ctx) {
+static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
     str op   = ast_node_str(node->binary_op.op);
 
@@ -880,10 +877,10 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
         // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`, then
         // invoke the funcall logic. The named_application.name node holds the function type.
 
-        str fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
-        tl_monotype const *fun_type = node->binary_op.right->named_application.name->type->type;
+        str          fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
+        tl_monotype *fun_type = node->binary_op.right->named_application.name->type->type;
 
-        str                fun_res  = next_res(self);
+        str          fun_res  = next_res(self);
         generate_decl(self, fun_res, fun_type);
         generate_assign_lhs(self, fun_res);
         cat(self, left);
@@ -893,9 +890,9 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
 
         {
             // Note: duplicated with generate_funcall
-            node                    = node->binary_op.right;
-            str                name = fun_res;
-            tl_monotype const *type = fun_type;
+            node              = node->binary_op.right;
+            str          name = fun_res;
+            tl_monotype *type = fun_type;
 
             // type constructor?
             if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
@@ -957,8 +954,7 @@ static str generate_binary_op(transpile *self, tl_monotype const *type, ast_node
     }
 }
 
-static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node const *node,
-                             eval_ctx *ctx) {
+static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_unary_op == node->tag);
     str operand = generate_expr(self, type, node->unary_op.operand, ctx);
     str op      = ast_node_str(node->unary_op.op);
@@ -979,8 +975,7 @@ static str generate_unary_op(transpile *self, tl_monotype const *type, ast_node 
     }
 }
 
-static str generate_reassignment(transpile *self, tl_monotype const *type, ast_node const *node,
-                                 eval_ctx *ctx) {
+static str generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
     int save         = ctx->want_lvalue;
     ctx->want_lvalue = 1;
@@ -993,7 +988,7 @@ static str generate_reassignment(transpile *self, tl_monotype const *type, ast_n
     return value;
 }
 
-static str generate_return(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // Note: handles return [expr] and break [expr]
 
     int has_value = !!node->return_.value;
@@ -1014,7 +1009,7 @@ static str generate_return(transpile *self, tl_monotype const *type, ast_node co
     return value;
 }
 
-static str generate_while(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_while(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     (void)type;
 
     // due to the stack-based transpiler, we rewrite while statement as follows:
@@ -1040,7 +1035,7 @@ static str generate_while(transpile *self, tl_monotype const *type, ast_node con
     return str_empty();
 }
 
-static str generate_expr(transpile *self, tl_monotype const *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_expr(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
     // the name of the variable which holds the evaluated value.
@@ -1098,9 +1093,9 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     }
 }
 
-static void build_arrow_to_c(transpile *, str_build *b, tl_monotype const *type, str name);
+static void build_arrow_to_c(transpile *, str_build *b, tl_monotype *type, str name);
 
-static void generate_decl(transpile *self, str name, tl_monotype const *type) {
+static void generate_decl(transpile *self, str name, tl_monotype *type) {
     if (tl_list == type->tag) {
         // arrow
 
@@ -1137,7 +1132,7 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     }
 }
 
-static void generate_decl_pointer(transpile *self, str name, tl_monotype const *type) {
+static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) {
     if (tl_list == type->tag) {
         // arrow
 
@@ -1359,7 +1354,7 @@ static int is_intrinsic(str s) {
     return 0 == str_cmp_nc(s, "_tl_", 4);
 }
 
-static int should_generate(str name, tl_polytype const *type) {
+static int should_generate(str name, tl_polytype *type) {
     // return 0 if this function should not be generated by transpile
     // during its processing of functions in the environment.
 
@@ -1372,9 +1367,9 @@ static int should_generate(str name, tl_polytype const *type) {
     return 1;
 }
 
-static str type_to_c(transpile *self, tl_polytype const *type) {
+static str type_to_c(transpile *self, tl_polytype *type) {
     if (type->quantifiers.size) fatal("type scheme");
-    tl_monotype const *mono = type->type;
+    tl_monotype *mono = type->type;
     if (tl_monotype_is_concrete_no_arrow(mono)) {
         str cons_name = mono->cons_inst->def->name;
         if (str_eq(S("Int"), cons_name)) {
@@ -1389,7 +1384,7 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
             return S("void");
         } else if (str_eq(S("Ptr"), cons_name)) {
             assert(1 == mono->cons_inst->args.size);
-            tl_monotype const *arg = mono->cons_inst->args.v[0];
+            tl_monotype *arg = mono->cons_inst->args.v[0];
             if (tl_monotype_is_concrete(arg)) {
                 tl_polytype wrap = tl_polytype_wrap(arg);
                 return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
@@ -1421,27 +1416,27 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     // else
     //     fatal("can't render a type variable");
 }
-static str type_to_c_mono(transpile *self, tl_monotype const *type) {
+static str type_to_c_mono(transpile *self, tl_monotype *type) {
     tl_polytype wrap = tl_polytype_wrap((tl_monotype *)type);
     return type_to_c(self, &wrap);
 }
 
-static str arrow_rhs_to_c(transpile *self, tl_polytype const *type) {
+static str arrow_rhs_to_c(transpile *self, tl_polytype *type) {
     if (tl_polytype_is_scheme(type)) {
         return S("void");
     }
 
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
-    tl_monotype const *right = tl_monotype_sized_last(type->type->list.xs);
+    tl_monotype *right = tl_monotype_sized_last(type->type->list.xs);
     return type_to_c_mono(self, right);
 }
 
-static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype const *type, str name) {
+static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype *type, str name) {
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
     if (!tl_monotype_is_arrow(type)) fatal("expected arrow");
     assert(type->list.xs.size == 2);
-    tl_monotype const *right = type->list.xs.v[1];
+    tl_monotype *right = type->list.xs.v[1];
     str_build_cat(b, type_to_c_mono(self, right));
     str_build_cat(b, S(" (*"));
     str_build_cat(b, name);
@@ -1474,14 +1469,14 @@ done:
     str_build_cat(b, S(")"));
 }
 
-static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized param_names) {
+static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param_names) {
     // param_names may be empty, e.g. when printing a prototype with no param names.
     if (tl_polytype_is_scheme(type)) fatal("type scheme");
     if (!tl_monotype_is_arrow(type->type)) fatal("expected arrow");
 
-    str_build          b     = str_build_init(self->transient, 64);
+    str_build    b     = str_build_init(self->transient, 64);
 
-    tl_monotype const *arrow = type->type;
+    tl_monotype *arrow = type->type;
     if (tl_list != arrow->tag) fatal("logic error");
     assert(arrow->list.xs.size == 2);
     assert(tl_tuple == arrow->list.xs.v[0]->tag);
@@ -1508,7 +1503,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     }
 
     for (u32 i = 0, n = params.size; i < n; ++i) {
-        tl_monotype const *arg = params.v[i];
+        tl_monotype *arg = params.v[i];
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
         } else {
@@ -1525,9 +1520,9 @@ static str arrow_to_c_params(transpile *self, tl_polytype const *type, str_sized
     return str_build_finish(&b);
 }
 
-tl_monotype const *env_lookup(transpile *self, str name) {
+tl_monotype *env_lookup(transpile *self, str name) {
     // may return null if type is missing or is a type scheme
-    tl_polytype const *type = tl_type_env_lookup(self->env, name);
+    tl_polytype *type = tl_type_env_lookup(self->env, name);
     if (!type) return null;
     if (tl_polytype_is_scheme(type)) return null;
     return type->type;
@@ -1550,8 +1545,8 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     } else if (ast_node_is_named_application(arg)) {
         // type constructor
-        hashmap           *map  = map_new(self->transient, str, tl_monotype *, 8);
-        tl_monotype const *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
+        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
         if (!type) fatal("missing type");
 
         // replace type with its specialized version. tl_infer had no chance to do this because it doesn't

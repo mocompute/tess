@@ -17,10 +17,10 @@ defslice(ast_node_slice, struct ast_node *);
 typedef struct ast_node {
     union {
         struct ast_symbol {
-            str                name;
-            str                original;
-            struct ast_node   *annotation;
-            tl_polytype const *annotation_type;
+            str              name;
+            str              original;
+            struct ast_node *annotation;
+            tl_polytype     *annotation_type;
         } symbol;
 
         struct ast_bool {
@@ -125,22 +125,22 @@ typedef struct ast_node {
         } let_in;
 
         struct ast_user_type_def {
-            struct ast_node    *name;
-            struct ast_node   **type_arguments;
-            struct ast_node   **field_annotations;
-            struct ast_node   **field_names;
-            tl_monotype const **field_types;
-            u8                  n_fields;
-            u8                  n_type_arguments;
+            struct ast_node  *name;
+            struct ast_node **type_arguments;
+            struct ast_node **field_annotations;
+            struct ast_node **field_names;
+            tl_monotype     **field_types;
+            u8                n_fields;
+            u8                n_type_arguments;
         } user_type_def;
     };
 
-    char const        *file;
-    u32                line;
-    u32                col;
-    tl_polytype const *type;
-    ast_tag            tag;
-    enum tl_error_tag  error;
+    char const       *file;
+    u32               line;
+    u32               col;
+    tl_polytype      *type;
+    ast_tag           tag;
+    enum tl_error_tag error;
 } ast_node;
 
 // -- iterator functions --
