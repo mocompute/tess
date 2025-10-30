@@ -1112,7 +1112,8 @@ static void generate_decl(transpile *self, str name, tl_monotype const *type) {
     }
 
     else if (tl_cons_inst == type->tag) {
-        if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
+        if (tl_monotype_is_nil(type)) return;
+        // if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
 
         str typec = type_to_c_mono(self, type);
         cat(self, typec);

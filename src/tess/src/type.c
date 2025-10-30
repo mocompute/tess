@@ -892,6 +892,7 @@ static int unify_type_constructor_def(tl_type_constructor_def const *lhs,
     if (lhs == rhs) return 0;
     if (str_eq(lhs->name, rhs->name)) return 0;
     if (str_eq(lhs->generic_name, rhs->generic_name)) return 0;
+
     return 1;
 }
 
@@ -961,16 +962,22 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     case tl_cons_inst:
         switch (right->tag) {
 
-        case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
-        case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
+        case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
+        case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
-        case tl_cons_inst:
+        case tl_cons_inst: {
+            // FIXME
+            // // Nil: any nil is compatible with any Ptr
+            // tl_type_constructor_def const *lhs = left->cons_inst->def, *rhs = right->cons_inst->def;
+            // if (str_eq(lhs->generic_name, S("Nil")) && str_eq(rhs->generic_name, S("Ptr"))) return 0;
+            // if (str_eq(lhs->generic_name, S("Ptr")) && str_eq(rhs->generic_name, S("Nil"))) return 0;
+
             if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
                 if (cb) cb(user, left, right);
                 return 1;
             }
             return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
-
+        }
         case tl_list:
         case tl_tuple:
             if (cb) cb(user, left, right);

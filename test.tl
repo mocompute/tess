@@ -1,11 +1,10 @@
-// Foo : {
-//   x : Int,
-//   p : Ptr(Foo),
-// }
+Foo : {
+  x : Int,
+  p : Ptr(Foo),
+}
 
 
 main() {
-  nil = ()
-  nil
+  foo = Foo { x = 0, p = () }
   0
 }
