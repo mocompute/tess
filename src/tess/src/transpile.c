@@ -798,7 +798,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     generate_assign(self, res, yes_str);
     cat(self, S("}\n"));
 
-    if (!ast_node_is_nil(no)) {
+    if (no && !ast_node_is_nil(no)) {
         cat(self, S("else {\n"));
         str no_str = generate_expr(self, null, no, ctx);
         generate_assign(self, res, no_str);

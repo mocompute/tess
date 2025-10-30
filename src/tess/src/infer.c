@@ -866,10 +866,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     if (null == node) return 0;
 
     switch (node->tag) {
-    case ast_nil:
-        ensure_tv(self, null, &node->type);
-        if (constrain_pm(self, ctx, node->type, tl_type_registry_nil(self->registry), node)) return 1;
-        break;
+    case ast_nil:    node->type = tl_polytype_nil(self->arena, self->registry); break;
     case ast_any:    ensure_tv(self, null, &node->type); break;
 
     case ast_string: {
@@ -1253,7 +1250,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         tl_monotype const *bool_type = tl_type_registry_bool(self->registry);
         if (constrain_pm(self, ctx, node->if_then_else.condition->type, bool_type, node)) return 1;
-        if (constrain(self, ctx, node->if_then_else.yes->type, node->if_then_else.no->type, node)) return 1;
+
+        // a nil type in else arm indicates the arm should not be generated, so don't type check it
+        if (!tl_monotype_is_nil(node->if_then_else.no->type->type))
+            if (constrain(self, ctx, node->if_then_else.yes->type, node->if_then_else.no->type, node))
+                return 1;
+
         ensure_tv(self, null, &node->type);
         if (constrain(self, ctx, node->type, node->if_then_else.yes->type, node)) return 1;
     } break;

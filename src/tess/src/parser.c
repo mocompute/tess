@@ -959,8 +959,7 @@ static ast_node *parse_cond_arm(parser *self) {
 
     if (0 == a_try(self, a_close_curly)) {
         // close the cond expr with no else case
-        ast_node *n =
-          ast_node_create_if_then_else(self->ast_arena, cond, yes, ast_node_create_nil(self->ast_arena));
+        ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, null);
         return n;
     }
 

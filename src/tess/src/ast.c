@@ -917,9 +917,11 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, S(" { "));
         str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.yes));
         str_build_cat(&b, S("}"));
-        str_build_cat(&b, S(" else { "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.no));
-        str_build_cat(&b, S("}"));
+        if (node->if_then_else.no) {
+            str_build_cat(&b, S(" else { "));
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.no));
+            str_build_cat(&b, S("}"));
+        }
         return str_build_finish(&b);
     }
 

@@ -946,7 +946,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype const *left, tl_mono
     case tl_weak:
         switch (right->tag) {
 
-        case tl_var: return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user);
+        case tl_var: return tl_type_subs_unify_tv_weak(subs, right->var, left, cb, user);
 
         case tl_weak:
             // unify two weak variables: put them in same equivalence class
