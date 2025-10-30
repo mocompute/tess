@@ -753,10 +753,14 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // when traversing to the right of . and ->, we could encounter field names that should not be
         // considered free variables, so signal that in the traverse_ctx
         {
-            int save           = ctx->is_field_name;
-            ctx->is_field_name = 1;
+            int is_symbol = ast_node_is_symbol(node->binary_op.right);
+            int save      = 0;
+            if (is_symbol) {
+                save               = ctx->is_field_name;
+                ctx->is_field_name = 1;
+            }
             if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
-            ctx->is_field_name = save;
+            if (is_symbol) ctx->is_field_name = save;
         }
 
         if (cb(self, ctx, node)) return 1;
