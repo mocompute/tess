@@ -24,5 +24,7 @@ array_new(T : Type, count) {
 main() {
   a = array_new(Point(Int), 8)
   b = array_new(Rect(Int), 8)
+  c_free(a.v)
+  c_free(b.v)
   0
 }

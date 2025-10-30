@@ -1088,6 +1088,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_symbol: {
+
         tl_polytype const *global = tl_type_env_lookup(self->env, node->symbol.name);
 
         if (global) {
@@ -1110,7 +1111,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         // add to environment
-        if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
+        if (!traverse_ctx->is_field_name)
+            if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
 
     } break;
 
