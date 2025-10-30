@@ -35,7 +35,6 @@ typedef struct tl_monotype {
         struct {
             tl_monotype_sized xs;
             str_sized         fvs;
-            str               name; // for arrow types constrained to a specific global function
         } list;
     };
     enum { tl_var, tl_weak, tl_cons_inst, tl_list, tl_tuple } tag;
@@ -118,8 +117,6 @@ void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype const *);
 void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
 u64                    tl_monotype_hash64(tl_monotype const *);
-void                   tl_monotype_arrow_set_name(tl_monotype *, str);
-str                    tl_monotype_arrow_get_name(tl_monotype const *);
 tl_monotype const     *tl_monotype_arrow_result(tl_monotype const *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype const *);

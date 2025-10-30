@@ -583,8 +583,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype const *orig) {
     case tl_tuple:
         *clone =
           (tl_monotype){.tag = orig->tag, .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs)}};
-        clone->list.fvs  = orig->list.fvs; // shallow copy
-        clone->list.name = str_copy(alloc, orig->list.name);
+        clone->list.fvs = orig->list.fvs; // shallow copy
         break;
     }
 
@@ -786,11 +785,6 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype const *self) {
             str_build_cat(&b, tl_monotype_to_string(alloc, self->list.xs.v[i]));
             if (i + 1 < self->list.xs.size) str_build_cat(&b, S(" -> "));
         }
-        if (!str_is_empty(self->list.name)) {
-            str_build_cat(&b, S(" \""));
-            str_build_cat(&b, self->list.name);
-            str_build_cat(&b, S("\""));
-        }
         str_build_cat(&b, S(")"));
     } break;
 
@@ -827,14 +821,6 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype const *self) {
     return str_build_finish(&b);
 }
 
-void tl_monotype_arrow_set_name(tl_monotype *self, str name) {
-    if (!tl_monotype_is_arrow(self)) fatal("logic error");
-    self->list.name = name;
-}
-str tl_monotype_arrow_get_name(tl_monotype const *self) {
-    if (!tl_monotype_is_arrow(self)) fatal("logic error");
-    return self->list.name;
-}
 tl_monotype const *tl_monotype_arrow_result(tl_monotype const *self) {
     if (!tl_monotype_is_arrow(self)) fatal("logic error");
     if (2 != self->list.xs.size) fatal("runtime error");
