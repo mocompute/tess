@@ -1465,10 +1465,7 @@ static tl_monotype const *specialize_type_identifer_unwrap(tl_infer *self, ast_n
     return null;
 }
 
-static int specialize_user_type(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
-                                ast_node *node) {
-    (void)ctx;
-    (void)traverse_ctx;
+static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     // divert if type constructor application is actually a type literal
     if (specialize_type_identifer(self, node)) return 0;
@@ -1536,7 +1533,6 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
     str      *existing;
     str       arg_name = ast_node_str(arg);
     ast_node *top      = toplevel_get(self, arg_name);
-    // FIXME: remove this use of name
     // Note: using the arrow type's name helps cases where a function pointer has been assigned to a
     // variable.
 
@@ -1577,15 +1573,6 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
     if (str_is_empty(inst_name)) return 0;
     ast_node_name_replace(node->let_in.value, inst_name);
     return 0;
-
-    // Don't replace into binary_op, e.g. struct.field, ptr->field
-    // TODO: duplicated code handling the return from specialize_arrow
-
-    // FIXME
-    // ast_node *arg = node->let_in.value;
-    // if (ast_node_is_symbol(arg)) ast_node_name_replace(arg, inst_name);
-    // else if (ast_node_is_assignment(arg) && ast_node_is_symbol(arg->assignment.value))
-    //     ast_node_name_replace(arg->assignment.value, inst_name);
 }
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
@@ -1593,7 +1580,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     infer_ctx *ctx = traverse_ctx->user;
 
     // check for nullary type constructors
-    if (ast_node_is_symbol(node)) return specialize_user_type(self, ctx, traverse_ctx, node);
+    if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
     // check for let_in nodes
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
     // or else the remainder of this function handles nfas
@@ -1611,7 +1598,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         return 0; // mutual recursion or variable holding function pointer
     }
 
-    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, ctx, traverse_ctx, node);
+    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
 
     // instantiate generic function type being applied
     ast_arguments_iter iter     = ast_node_arguments_iter(node);
@@ -2219,7 +2206,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     // add provisional type to environment (for polymorphic recursion)
     if (provisional) {
         // Note: ensure this is not quantified until after inference
-        // FIXME: needed?
         tl_type_env_insert(self->env, name, provisional);
     }
 
