@@ -750,9 +750,21 @@ static str generate_let_in(transpile *self, tl_monotype const *result_type, ast_
     if (type) {
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
-        if (!tl_monotype_is_nil(type)) {
-            generate_decl(self, name, type);
-            generate_assign(self, name, value);
+        if (tl_monotype_is_concrete(type)) {
+            if (!tl_monotype_is_nil(type)) {
+                generate_decl(self, name, type);
+                generate_assign(self, name, value);
+            }
+        } else {
+            // Note: do not emit values that are not concrete. These can come out of type inference if the
+            // variable is never referenced, so it is safe to avoid emitting them. Conversely, we can't
+            // correctly emit them because the type information is incomplete. However, there are
+            // exceptions: return value type information is not always available for c_ functions, so we
+            // emit all non-arrow values and c_* arrow values.
+            if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
+                generate_decl(self, name, type);
+                generate_assign(self, name, value);
+            }
         }
     }
 
@@ -1400,10 +1412,13 @@ static str type_to_c(transpile *self, tl_polytype const *type) {
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
+    } else {
+        // do not fatal here: instead return a valid type, but caller will probably not use it.
+        return S("void*");
     }
 
-    else
-        fatal("can't render a type variable");
+    // else
+    //     fatal("can't render a type variable");
 }
 static str type_to_c_mono(transpile *self, tl_monotype const *type) {
     tl_polytype wrap = tl_polytype_wrap((tl_monotype *)type);
