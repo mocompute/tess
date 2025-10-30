@@ -937,7 +937,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         } else if (is_struct_access_operator(op)) {
             // TODO: move this to utility function
-            tl_monotype const *struct_type = null;
+            tl_monotype *struct_type = null;
 
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
@@ -945,10 +945,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
                     return 1;
                 }
-                struct_type = tl_monotype_ptr_target(left->type->type);
+                struct_type = (tl_monotype *)tl_monotype_ptr_target(left->type->type);
             } else {
-                struct_type = left->type->type;
+                struct_type = (tl_monotype *)left->type->type;
             }
+            // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
+            tl_monotype_substitute(self->arena, struct_type, self->subs, null);
             if (tl_monotype_is_inst(struct_type)) {
                 // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
                 // fun_ptr is a function pointer.
