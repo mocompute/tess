@@ -173,6 +173,11 @@ tl_monotype const *tl_type_registry_string(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("String"));
 }
 
+tl_polytype const *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
+    tl_monotype const *nil = tl_type_registry_nil(self);
+    return tl_polytype_absorb_mono(alloc, nil);
+}
+
 tl_monotype const *tl_type_registry_ptr(tl_type_registry *self, tl_monotype const *arg) {
     tl_monotype const *out =
       tl_type_registry_instantiate_with(self, S("Ptr"), (tl_monotype_sized){.size = 1, .v = &arg});

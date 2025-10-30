@@ -867,6 +867,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     switch (node->tag) {
     case ast_nil:
+        ensure_tv(self, null, &node->type);
+        if (constrain_pm(self, ctx, node->type, tl_type_registry_nil(self->registry), node)) return 1;
+        break;
     case ast_any:    ensure_tv(self, null, &node->type); break;
 
     case ast_string: {
@@ -1067,8 +1070,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             if (ast_node_is_std_application(node->let_in.value)) {
                 // Note: special case std_ functions and give them all a Nil return type
-                tl_monotype const *nil   = tl_type_registry_nil(self->registry);
-                node->let_in.value->type = tl_polytype_absorb_mono(self->arena, nil);
+                node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
             }
 
             if (constrain(self, ctx, node->let_in.name->type, node->let_in.value->type, node)) return 1;
@@ -1115,6 +1117,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         // add to environment
+
+        // Important: this is necessary in
+        // particular for formal parameters which are type literals,
+        // because the type is propagated via the environment.
         if (!traverse_ctx->is_field_name)
             if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
 

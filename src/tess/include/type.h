@@ -159,6 +159,8 @@ void                         tl_polytype_generalize(tl_polytype *, tl_type_env c
 
 tl_monotype const           *tl_polytype_concrete(tl_polytype const *);
 
+tl_polytype const           *tl_polytype_nil(allocator *, tl_type_registry *);
+
 // Warning: must use same allocator as that which created self's array.
 void        tl_polytype_merge_quantifiers(allocator *, tl_polytype *, tl_polytype const *);
 

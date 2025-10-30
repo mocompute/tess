@@ -1071,7 +1071,7 @@ static str generate_expr(transpile *self, tl_monotype const *type, ast_node cons
     case ast_return:       return generate_return(self, type, node, ctx);
     case ast_while:        return generate_while(self, type, node, ctx);
 
-    case ast_nil:          fatal("cannot generate nil");
+    case ast_nil:          return S("NULL");
     case ast_any:          fatal("cannot generate any");
 
     case ast_continue:     cat(self, S("continue;\n")); return str_empty();
