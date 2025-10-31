@@ -1245,7 +1245,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_body_element(self)) return 1;
+        if (a_try(self, a_body_element)) return 1;
         array_push(exprs, self->result);
     }
 
@@ -1317,6 +1317,18 @@ decl_done:
     return result_ast_node(self, name);
 }
 
+static int toplevel_symbol_annotation(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *ident = self->result;
+
+    if (a_try(self, a_type_annotation)) return 1;
+    ast_node *ann = self->result;
+
+    assert(ast_node_is_symbol(ident));
+    ident->symbol.annotation = ann;
+    return result_ast_node(self, ident);
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1;
@@ -1372,8 +1384,9 @@ static int toplevel(parser *self) {
     if (0 == a_try(self, toplevel_defun)) return 0;
     if (0 == a_try(self, toplevel_assign)) return 0;
     if (0 == a_try(self, toplevel_forward)) return 0;
+    if (0 == a_try(self, toplevel_symbol_annotation)) return 0;
 
-    // self->error.tag = tl_err_expected_toplevel;
+    self->error.tag = tl_err_expected_toplevel;
     return 1;
 }
 
