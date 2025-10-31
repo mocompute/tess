@@ -1098,11 +1098,11 @@ static ast_node *parse_lvalue(parser *self) {
 }
 
 static int a_reassignment(parser *self) {
-    // x := newval
+    // x = newval
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
-    if (a_try(self, a_colon_equal)) return 1;
+    if (a_try(self, a_equal_sign)) return 1;
 
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
@@ -1129,7 +1129,7 @@ static int a_assignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
-    if (a_try(self, a_equal_sign)) return 1;
+    if (a_try(self, a_colon_equal)) return 1;
 
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
@@ -1262,7 +1262,7 @@ decl_done:
 static int toplevel_assign(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
-    if (a_try(self, a_equal_sign)) return 1;
+    if (a_try(self, a_colon_equal)) return 1;
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
 
