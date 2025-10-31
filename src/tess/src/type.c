@@ -986,7 +986,7 @@ static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_cons
 int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
                                  type_error_cb_fun cb, void *user) {
     assert(tl_monotype_is_inst(left));
-    assert(str_eq(S("Union"), left->cons_inst->def->generic_name));
+    assert(left->cons_inst->def->is_variable_args);
 
     tl_monotype_sized unions = left->cons_inst->args;
 
@@ -996,19 +996,18 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
     case tl_cons_inst: {
-        if (str_eq(S("Union"), right->cons_inst->def->generic_name)) {
+        if (right->cons_inst->def->is_variable_args) {
             tl_monotype_sized right_unions = right->cons_inst->args;
             forall(i, unions) {
                 forall(j, right_unions) {
-                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
+                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], cb, user))
+                        return 0;
                 }
             }
         } else {
-            if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
-                if (cb) cb(user, left, right);
-                return 1;
+            forall(i, unions) {
+                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
             }
-            return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
         }
     } break;
 
@@ -1018,15 +1017,18 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
         forall(i, unions) {
             if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
         }
-        if (cb) cb(user, left, right);
-        return 1;
+        break;
     }
+
+    if (cb) cb(user, left, right);
     return 1;
 }
 
 int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
                            void *user) {
     assert(tl_monotype_is_inst(left));
+    if (left->cons_inst->def->is_variable_args)
+        return unify_type_constructor_union(subs, left, right, cb, user);
 
     switch (right->tag) {
 
@@ -1034,11 +1036,9 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
     case tl_cons_inst: {
-        // FIXME
-        // // Nil: any nil is compatible with any Ptr
-        // tl_type_constructor_def const *lhs = left->cons_inst->def, *rhs = right->cons_inst->def;
-        // if (str_eq(lhs->generic_name, S("Nil")) && str_eq(rhs->generic_name, S("Ptr"))) return 0;
-        // if (str_eq(lhs->generic_name, S("Ptr")) && str_eq(rhs->generic_name, S("Nil"))) return 0;
+
+        if (right->cons_inst->def->is_variable_args)
+            return unify_type_constructor_union(subs, right, left, cb, user);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
             if (cb) cb(user, left, right);

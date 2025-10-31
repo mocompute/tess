@@ -101,6 +101,7 @@ static int  a_comma(parser *);
 static int  a_equal_sign(parser *);
 static int  a_identifier(parser *);
 static int  a_nil(parser *);
+static int  a_null(parser *);
 static int  a_number(parser *);
 static int  a_open_round(parser *);
 static int  a_star(parser *);
@@ -674,6 +675,14 @@ static int a_nil(parser *self) {
     return 1;
 }
 
+static int a_null(parser *self) {
+
+    if (0 == the_symbol(self, "null")) return result_ast(self, ast_nil);
+
+    self->error.tag = tl_err_expected_nil;
+    return 1;
+}
+
 static int set_node_parameters(parser *self, ast_node *node, ast_node_array *parameters) {
     // given parsed parameters for a function or lambda, initialize
     // the node array properly
@@ -834,8 +843,8 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_string)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
+    if (0 == a_try(self, a_null)) return 0;
     if (0 == a_try(self, a_identifier)) return 0;
-    // if (0 == a_try(self, b_field)) return 0;
 
     self->error.tag = tl_err_expected_value;
     return 1;
