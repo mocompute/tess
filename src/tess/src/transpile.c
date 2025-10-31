@@ -279,7 +279,13 @@ static str generate_ctx_var(transpile *self) {
     return out;
 }
 
-static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, eval_ctx *ctx) {
+static int useful_name(str original, str name) {
+    // heuristic to say if it's useful to output original name in a comment
+    return !str_eq(original, name) && !str_is_empty(original) && str_cmp_nc(original, "tl_", 3);
+}
+
+static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, str original_name,
+                                eval_ctx *ctx) {
     str name = symbol_name;
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
 
@@ -292,7 +298,12 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
         // generate reference through context
         return str_cat(self->transient, S("*tl_ctx->"), name);
     } else {
-        return name;
+        if (useful_name(original_name, name)) {
+            // TODO: put this behind an option
+            return str_cat_4(self->transient, S("/*"), original_name, S("*/ "), name);
+        } else {
+            return name;
+        }
     }
 }
 
@@ -316,7 +327,7 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
         str          name = fvs.v[i];
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
-        name = generate_expr_symbol(self, type->type, name, ctx);
+        name = generate_expr_symbol(self, type->type, name, str_empty(), ctx);
         cat(self, name);
 
         cat_close_round(self);
@@ -1058,7 +1069,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
 
     case ast_symbol: {
 
-        return generate_expr_symbol(self, type, ast_node_str(node), ctx);
+        return generate_expr_symbol(self, type, ast_node_str(node), ast_node_name_original(node), ctx);
     }
 
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
