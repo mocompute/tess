@@ -1089,7 +1089,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_while:        return generate_while(self, type, node, ctx);
 
     case ast_nil:          return S("NULL");
-    case ast_any:          fatal("cannot generate any");
 
     case ast_continue:     cat(self, S("continue;\n")); return str_empty();
 

@@ -797,7 +797,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_nil:
     case ast_continue:
-    case ast_any:
     case ast_arrow:
     case ast_bool:
     case ast_ellipsis:
@@ -873,7 +872,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
         if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
     } break;
-    case ast_any:    ensure_tv(self, null, &node->type); break;
 
     case ast_string: {
         tl_monotype *ty = tl_type_registry_string(self->registry);
@@ -1912,7 +1910,6 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_continue:
     case ast_string:
     case ast_nil:
-    case ast_any:
     case ast_arrow:
     case ast_bool:
     case ast_ellipsis:
@@ -2480,7 +2477,6 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         break;
 
     case ast_nil:
-    case ast_any:
     case ast_arrow:
     case ast_binary_op:
     case ast_bool:

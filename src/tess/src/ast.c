@@ -184,7 +184,6 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
-    case ast_any:
     case ast_tuple:    break;
 
     case ast_bool:     clone->bool_.val = orig->bool_.val; break;
@@ -380,7 +379,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
-    case ast_any:
     case ast_bool:
     case ast_symbol:
     case ast_i64:
@@ -494,7 +492,6 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
-    case ast_any:
     case ast_bool:
     case ast_symbol:
     case ast_i64:
@@ -807,7 +804,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
     case ast_nil:      return S("()");
-    case ast_any:      return S("any");
     case ast_continue: return S("continue");
 
     case ast_return:
@@ -1053,7 +1049,6 @@ u64 ast_node_hash(ast_node const *self) {
     switch (self->tag) {
     case ast_continue:
     case ast_nil:
-    case ast_any:
     case ast_ellipsis:
     case ast_eof:      break;
 
