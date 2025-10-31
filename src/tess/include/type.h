@@ -105,6 +105,7 @@ void tl_type_env_log(tl_type_env *);
 
 // -- monotype --
 
+nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;

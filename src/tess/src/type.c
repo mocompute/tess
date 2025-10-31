@@ -617,6 +617,12 @@ tl_monotype *tl_polytype_concrete(tl_polytype *self) {
 
 // -- monotype --
 
+tl_monotype *tl_monotype_create_any(allocator *alloc) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_any};
+    return self;
+}
+
 tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_var, .var = tv};

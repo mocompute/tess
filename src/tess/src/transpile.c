@@ -540,7 +540,7 @@ static str generate_funcall_result(transpile *self, tl_monotype *type, int do_as
     tl_monotype *funcall_result_type = tl_monotype_sized_last(type->list.xs);
     str          res                 = str_empty(); // empty signals void result
 
-    if (!tl_monotype_is_nil(funcall_result_type)) {
+    if (!tl_monotype_is_nil(funcall_result_type) && !tl_monotype_is_tv(funcall_result_type)) {
         res = next_res(self);
         generate_decl(self, res, funcall_result_type);
         if (do_assign_lhs) generate_assign_lhs(self, res);
@@ -1119,7 +1119,6 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
     else if (tl_cons_inst == type->tag) {
         if (tl_monotype_is_nil(type)) return;
-        // if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
 
         str typec = type_to_c_mono(self, type);
         cat(self, typec);
@@ -1371,6 +1370,9 @@ static int should_generate(str name, tl_polytype *type) {
 
     // generate main even if generic type
     if (str_eq(name, S("main"))) return 1;
+
+    // never generate c_ prefixed functions
+    if (0 == str_cmp_nc(name, "c_", 2)) return 0;
 
     if (tl_polytype_is_scheme(type)) return 0;
     if (!tl_monotype_is_arrow(type->type)) return 0; // not an arrow

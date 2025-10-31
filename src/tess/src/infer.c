@@ -148,7 +148,11 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
     }
 
     if (ast_node_is_symbol(node)) {
-        tl_monotype *out = tl_type_registry_instantiate(self, ast_node_str(node));
+        // Note: special case the symbol 'any' to return an any type
+        tl_monotype *out;
+
+        if (str_eq(ast_node_str(node), S("any"))) out = tl_monotype_create_any(self->alloc);
+        else out = tl_type_registry_instantiate(self, ast_node_str(node));
         if (out) return out;
 
         str          name = ast_node_str(node);
