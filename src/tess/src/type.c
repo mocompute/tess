@@ -10,9 +10,82 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-static void log(tl_type_env *self, char const *restrict fmt, ...);
+static void                      log(tl_type_env *, char const *restrict fmt, ...);
+static void                      make_unary_tc(tl_type_registry *, str);
+static void                      make_variable_arity_tc(tl_type_registry *, str);
+static tl_type_constructor_def  *make_tc_def(tl_type_registry *, str);
+static tl_type_constructor_def  *make_tc_def_var_args(tl_type_registry *, str);
+static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *, tl_type_constructor_def *,
+                                                   tl_monotype_sized);
+static tl_type_constructor_inst *make_tc_inst_binary(tl_type_registry *, tl_type_constructor_def *,
+                                                     tl_monotype *, tl_monotype *);
+static tl_polytype              *make_ptr_generic(tl_type_registry *, tl_type_subs *);
+static void                      make_unary_inst(tl_type_registry *, str);
+static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_constructor_inst *,
+                                                   tl_type_variable_sized);
 
 // -- type constructor --
+
+tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
+    tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
+    self->alloc            = alloc;
+    self->subs             = subs;
+    self->definitions      = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
+    self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
+
+    make_unary_inst(self, S("Nil"));
+    make_unary_inst(self, S("Int"));
+    make_unary_inst(self, S("Bool"));
+    make_unary_inst(self, S("Float"));
+    make_unary_inst(self, S("String"));
+
+    // Ptr and Type are unary type constructors
+    make_unary_tc(self, S("Ptr"));
+    make_unary_tc(self, S("Type"));
+
+    // Union has variable arity
+    make_variable_arity_tc(self, S("Union"));
+
+    // TODO: type aliases
+    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) : Union(Ptr(a),
+    // Nil) type here
+    {
+        tl_polytype *ptr = make_ptr_generic(self, subs); // quantified
+        tl_monotype *nil = tl_type_registry_nil(self);
+
+        // FIXME: see tl_type_constructor_def_create_ext, but here we need to set is_variable_args
+        str                       name = str_init(alloc, "PtrOrNull");
+        tl_type_constructor_def  *def  = make_tc_def_var_args(self, name);
+        tl_type_constructor_inst *inst = make_tc_inst_binary(self, def, ptr->type, nil);
+        tl_polytype              *poly = make_generic_inst(self, inst, ptr->quantifiers);
+
+        str_map_set_ptr(&self->definitions, def->name, poly);
+    }
+
+    return self;
+}
+
+tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name, str generic_name,
+                                                tl_type_variable_sized type_variables,
+                                                str_sized field_names, tl_monotype_sized field_types) {
+
+    tl_type_constructor_def *def   = make_tc_def(self, name);
+    def->field_names               = field_names;
+    def->generic_name              = generic_name;
+
+    tl_type_constructor_inst *inst = make_tc_inst_args(self, def, field_types);
+    tl_polytype              *poly = make_generic_inst(self, inst, type_variables);
+
+    str_map_set_ptr(&self->definitions, def->name, poly);
+    return poly;
+}
+
+tl_polytype *tl_type_constructor_def_create(tl_type_registry *self, str name,
+                                            tl_type_variable_sized type_variables, str_sized field_names,
+                                            tl_monotype_sized field_types) {
+
+    return tl_type_constructor_def_create_ext(self, name, name, type_variables, field_names, field_types);
+}
 
 static void make_unary_tc(tl_type_registry *self, str name) {
     str_sized              empty = {0};
@@ -51,6 +124,15 @@ static tl_type_constructor_def *make_tc_def_var_args(tl_type_registry *self, str
     return def;
 }
 
+static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *self, tl_type_constructor_def *def,
+                                                   tl_monotype_sized args) {
+    tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
+    inst->def                      = def;
+    inst->args                     = args;
+    inst->special_name             = str_empty();
+    return inst;
+}
+
 static tl_type_constructor_inst *make_tc_inst_binary(tl_type_registry *self, tl_type_constructor_def *def,
                                                      tl_monotype *first, tl_monotype *second) {
     tl_monotype_array mt_arr = {.alloc = self->alloc};
@@ -58,11 +140,7 @@ static tl_type_constructor_inst *make_tc_inst_binary(tl_type_registry *self, tl_
     array_push(mt_arr, first);
     array_push(mt_arr, second);
 
-    tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
-    inst->def                      = def;
-    inst->args                     = (tl_monotype_sized)sized_all(mt_arr);
-    inst->special_name             = str_empty();
-    return inst;
+    return make_tc_inst_args(self, def, (tl_monotype_sized)sized_all(mt_arr));
 }
 
 static tl_polytype *make_ptr_generic(tl_type_registry *self, tl_type_subs *subs) {
@@ -78,91 +156,26 @@ static tl_polytype *make_ptr_generic(tl_type_registry *self, tl_type_subs *subs)
     return poly;
 }
 
-tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
-    tl_type_registry *self       = alloc_malloc(alloc, sizeof *self);
-    self->alloc                  = alloc;
-    self->subs                   = subs;
-    self->definitions            = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
-    self->instances              = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
-
-    str_sized              empty = {0};
-    tl_type_variable_sized empty_tv = {0};
-    tl_monotype_sized      empty_mt = {0};
-
-    tl_type_constructor_def_create(self, S("Nil"), empty_tv, empty, empty_mt);
-    tl_type_constructor_def_create(self, S("Int"), empty_tv, empty, empty_mt);
-    tl_type_constructor_def_create(self, S("Bool"), empty_tv, empty, empty_mt);
-    tl_type_constructor_def_create(self, S("Float"), empty_tv, empty, empty_mt);
-    tl_type_constructor_def_create(self, S("String"), empty_tv, empty, empty_mt);
-
-    // Ptr and Type are unary type constructors
-    make_unary_tc(self, S("Ptr"));
-    make_unary_tc(self, S("Type"));
-
-    // Union has variable arity
-    make_variable_arity_tc(self, S("Union"));
-
-    // Create specialisations of nullary builtin types
-    empty_mt  = (tl_monotype_sized){0};
-    str blank = str_empty();
-    tl_type_registry_specialize(self, S("Nil"), blank, empty_mt);
-    tl_type_registry_specialize(self, S("Int"), blank, empty_mt);
-    tl_type_registry_specialize(self, S("Bool"), blank, empty_mt);
-    tl_type_registry_specialize(self, S("Float"), blank, empty_mt);
-    tl_type_registry_specialize(self, S("String"), blank, empty_mt);
-
-    // TODO: type aliases
-    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) : Union(Ptr(a),
-    // Nil) type here
-    {
-        tl_polytype *ptr = make_ptr_generic(self, subs); // quantified
-        tl_monotype *nil = tl_type_registry_nil(self);
-
-        // FIXME: see tl_type_constructor_def_create_ext, but here we need to set is_variable_args
-        str                       name = str_init(alloc, "PtrOrNull");
-        tl_type_constructor_def  *def  = make_tc_def_var_args(self, name);
-        tl_type_constructor_inst *inst = make_tc_inst_binary(self, def, ptr->type, nil);
-
-        tl_monotype              *mono = tl_monotype_create_cons(self->alloc, inst);
-        tl_polytype              *poly = tl_polytype_absorb_mono(self->alloc, mono);
-
-        // move quantifiers from ptr to poly
-        poly->quantifiers = ptr->quantifiers;
-        str_map_set_ptr(&self->definitions, def->name, poly);
-    }
-
-    return self;
-}
-
-tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name, str generic_name,
-                                                tl_type_variable_sized type_variables,
-                                                str_sized field_names, tl_monotype_sized field_types) {
-
-    tl_type_constructor_def *def   = alloc_malloc(self->alloc, sizeof *def);
-    def->name                      = str_copy(self->alloc, name);
-    def->generic_name              = str_copy(self->alloc, generic_name);
-    def->field_names               = field_names;
-    def->is_variable_args          = 0;
-
-    tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
-    inst->def                      = def;
-    inst->args                     = field_types;
-    inst->special_name             = str_empty();
-
-    tl_monotype *mono              = tl_monotype_create_cons(self->alloc, inst);
-    tl_polytype *poly              = tl_polytype_absorb_mono(self->alloc, mono);
-    poly->quantifiers              = type_variables;
-
-    str_map_set_ptr(&self->definitions, def->name, poly);
+static tl_polytype *make_generic_inst(tl_type_registry *self, tl_type_constructor_inst *inst,
+                                      tl_type_variable_sized quantifiers) {
+    tl_monotype *mono = tl_monotype_create_cons(self->alloc, inst);
+    tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, mono);
+    poly->quantifiers = quantifiers;
     return poly;
 }
 
-tl_polytype *tl_type_constructor_def_create(tl_type_registry *self, str name,
-                                            tl_type_variable_sized type_variables, str_sized field_names,
-                                            tl_monotype_sized field_types) {
+static void make_unary_inst(tl_type_registry *self, str name) {
 
-    return tl_type_constructor_def_create_ext(self, name, name, type_variables, field_names, field_types);
+    str_sized              empty    = {0};
+    tl_type_variable_sized empty_tv = {0};
+    tl_monotype_sized      empty_mt = {0};
+    str                    blank    = str_empty();
+
+    tl_type_constructor_def_create(self, name, empty_tv, empty, empty_mt);
+    tl_type_registry_specialize(self, name, blank, empty_mt);
 }
+
+// --
 
 typedef struct {
     u64 name_hash;
