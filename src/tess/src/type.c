@@ -703,6 +703,7 @@ int tl_monotype_is_tv(tl_monotype *self) {
 }
 
 int tl_monotype_is_ptr(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) return 0;
     str generic_name = self->cons_inst->def->generic_name;
     return self && tl_cons_inst == self->tag && self->cons_inst->def && str_eq(generic_name, S("Ptr"));
 }
@@ -711,6 +712,11 @@ int tl_monotype_is_ptr_or_null(tl_monotype *self) {
     str generic_name = self->cons_inst->def->generic_name;
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
            str_eq(generic_name, S("PtrOrNull"));
+}
+
+int tl_monotype_has_ptr(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) return 0;
+    return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
 }
 
 int tl_monotype_is_type_literal(tl_monotype *self) {

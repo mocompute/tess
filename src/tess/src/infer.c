@@ -938,9 +938,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype *int_type = tl_type_registry_int(self->registry);
             if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
 
-            if (left->type && tl_monotype_is_ptr(left->type->type)) {
-                tl_monotype *target = left->type->type->cons_inst->args.v[0];
-                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+            if (left->type) {
+                tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+                if (tl_monotype_has_ptr(left->type->type)) {
+                    tl_monotype *target = tl_monotype_ptr_target(left->type->type);
+                    if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+                }
             }
         } else if (is_struct_access_operator(op)) {
             // TODO: move this to utility function
@@ -948,7 +951,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
-                if (!tl_monotype_is_ptr(left->type->type)) {
+                if (!tl_monotype_has_ptr(left->type->type)) {
                     array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
                     return 1;
                 }
@@ -977,6 +980,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                         if (str_eq(field_name, def->field_names.v[i])) {
                             if (i > INT32_MAX) fatal("overflow");
                             found = (i32)i;
+                            break;
                         }
                     }
                     if (found != -1) {
@@ -1012,7 +1016,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         str op = ast_node_str(node->unary_op.op);
         if (str_eq(op, S("*"))) {
-            if (tl_monotype_is_ptr(operand->type->type)) {
+            if (tl_monotype_has_ptr(operand->type->type)) {
                 assert(!tl_polytype_is_scheme(operand->type));
                 tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
                 if (constrain_pm(self, ctx, node->type, target, node)) return 1;

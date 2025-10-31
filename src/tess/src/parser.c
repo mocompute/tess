@@ -937,7 +937,7 @@ static ast_node *parse_if_continue(parser *self) {
             no = create_body(self, exprs);
         }
     }
-    if (!no) no = ast_node_create_nil(self->ast_arena);
+    if (!no) no = null; // ok to have no case null
 
     ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, no);
     return n;
@@ -1075,7 +1075,7 @@ static ast_node *parse_lvalue(parser *self) {
     if (ast_node_is_symbol(expr)) ident = expr;
     else if (ast_binary_op == expr->tag) {
         char const *op = str_cstr(&expr->binary_op.op->symbol.name);
-        if (is_struct_access_operator(op)) ident = expr;
+        if (is_struct_access_operator(op) || is_index_operator(op)) ident = expr;
     } else if (ast_unary_op == expr->tag) {
         if (str_eq(ast_node_str(expr->unary_op.op), S("*"))) ident = expr;
     }
@@ -1371,7 +1371,7 @@ static int toplevel(parser *self) {
     if (0 == a_try(self, toplevel_assign)) return 0;
     if (0 == a_try(self, toplevel_forward)) return 0;
 
-    self->error.tag = tl_err_expected_toplevel;
+    // self->error.tag = tl_err_expected_toplevel;
     return 1;
 }
 
