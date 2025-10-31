@@ -2270,6 +2270,30 @@ int check_missing_free_variables(tl_infer *self) {
     return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, self);
 }
 
+void do_admit_generic_pointers(void *ctx, ast_node *node) {
+    tl_monotype *nil = ctx;
+    if (node->type) tl_monotype_force_tv_to_nil(node->type->type, nil);
+}
+
+void admit_generic_pointers(tl_infer *self) {
+
+    // Note: special case for undecided Ptr(a) types: force them to Ptr(Nil) so that the transpiler will
+    // accept them as void*.
+
+    tl_monotype     *nil = tl_type_registry_nil(self->registry);
+    ast_node        *node;
+    hashmap_iterator iter = {0};
+    while ((node = toplevel_iter(self, &iter))) {
+        ast_node_dfs(nil, node, do_admit_generic_pointers);
+
+        str          name = ast_node_str(toplevel_name_node(node));
+        tl_polytype *type = tl_type_env_lookup(self->env, name);
+        if (!type) fatal("runtime error");
+
+        if (!tl_polytype_is_concrete(type)) tl_monotype_force_tv_to_nil(type->type, nil);
+    }
+}
+
 void remove_generic_toplevels(tl_infer *self) {
     str_array        names = {.alloc = self->transient};
 
@@ -2287,7 +2311,8 @@ void remove_generic_toplevels(tl_infer *self) {
     }
 
     forall(i, names) {
-        str_map_erase(self->toplevels, names.v[i]);
+        log(self, "remove_generic_toplevels: removing '%s'", str_cstr(&names.v[i]));
+        toplevel_del(self, names.v[i]);
     }
     array_free(names);
 }
@@ -2566,17 +2591,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (check_main_function(self, main)) return 1;
     arena_reset(self->transient);
 
+    admit_generic_pointers(self);
+    arena_reset(self->transient);
+
+    remove_generic_toplevels(self);
+    arena_reset(self->transient);
+
+    tree_shake_toplevels(self, main);
+    arena_reset(self->transient);
+
     log(self, "-- final subs");
     log_subs(self);
     log(self, "-- final env --");
     log_env(self);
     arena_reset(self->transient);
-
-    remove_generic_toplevels(self);
-    arena_reset(self->transient);
-    tree_shake_toplevels(self, main);
-    arena_reset(self->transient);
-
     log(self, "-- final toplevels");
     log_toplevels(self);
     arena_reset(self->transient);

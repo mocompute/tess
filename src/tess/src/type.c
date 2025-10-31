@@ -783,6 +783,24 @@ void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
     self->list.fvs = fvs;
 }
 
+void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
+    if (!self) return;
+    switch (self->tag) {
+    case tl_var:
+    case tl_weak: *self = *nil; break;
+
+    case tl_cons_inst:
+        forall(i, self->cons_inst->args) tl_monotype_force_tv_to_nil(self->cons_inst->args.v[i], nil);
+        break;
+
+    case tl_list:
+    case tl_tuple: {
+        forall(i, self->list.xs) tl_monotype_force_tv_to_nil(self->list.xs.v[i], nil);
+        break;
+    }
+    }
+}
+
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     u64 hash = str_hash64(self->name);
     hash     = str_array_hash64(hash, self->field_names);
