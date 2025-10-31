@@ -2387,6 +2387,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 
     switch (mono->tag) {
 
+    case tl_any:
     case tl_var:
     case tl_weak: break;
 

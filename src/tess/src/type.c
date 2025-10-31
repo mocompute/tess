@@ -412,6 +412,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     array_push_many(arr, left->list.xs.v, left->list.xs.size);
 
     switch (right->tag) {
+    case tl_any:
     case tl_var:
     case tl_weak:
     case tl_cons_inst: array_push(arr, right); break;
@@ -444,6 +445,8 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
     switch (self->tag) {
+    case tl_any: break;
+
     case tl_var: {
         tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
@@ -469,6 +472,8 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
     switch (self->tag) {
+    case tl_any: break;
+
     case tl_var: {
         tl_monotype *replace = map_get_ptr(map, &self->var, sizeof self->var);
         if (replace) *self = *replace;
@@ -568,6 +573,8 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
     if (!self) return;
 
     switch (self->tag) {
+    case tl_any: break;
+
     case tl_var: array_set_insert(*quant, self->var); break;
 
     case tl_weak:
@@ -667,6 +674,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
 
     switch (orig->tag) {
+    case tl_any:  *clone = (tl_monotype){.tag = tl_any, .var = orig->var}; return clone;
     case tl_var:  *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
     case tl_weak: *clone = (tl_monotype){.tag = tl_weak, .var = orig->var}; return clone;
 
@@ -696,6 +704,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
 int tl_monotype_is_concrete(tl_monotype *self) {
     if (!self) return 0;
     switch (self->tag) {
+    case tl_any:
     case tl_var:
     case tl_weak: return 0;
     case tl_cons_inst:
@@ -716,6 +725,10 @@ int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
 
 int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
     return self && tl_cons_inst == self->tag;
+}
+
+int tl_monotype_is_any(tl_monotype *self) {
+    return self && tl_any == self->tag;
 }
 
 int tl_monotype_is_arrow(tl_monotype *self) {
@@ -833,6 +846,8 @@ void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
 void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
     if (!self) return;
     switch (self->tag) {
+    case tl_any:  break;
+
     case tl_var:
     case tl_weak: *self = *nil; break;
 
@@ -857,6 +872,7 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
 u64 tl_monotype_hash64(tl_monotype *self) {
     u64 hash = hash64(&self->tag, sizeof self->tag);
     switch (self->tag) {
+    case tl_any:       break;
     case tl_var:
     case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
@@ -883,6 +899,11 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
     str_build b = str_build_init(alloc, 64);
 
     switch (self->tag) {
+
+    case tl_any:
+        //
+        str_build_cat(&b, S("any"));
+        break;
 
     case tl_var: {
         char buf[64];
@@ -1038,6 +1059,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     tl_monotype_sized unions = left->cons_inst->args;
 
     switch (right->tag) {
+    case tl_any:       return 0;
 
     case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
@@ -1078,6 +1100,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         return unify_type_constructor_union(subs, left, right, cb, user);
 
     switch (right->tag) {
+    case tl_any:       return 0;
 
     case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
@@ -1107,6 +1130,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
 
     // unify with any Type specialisation
     switch (right->tag) {
+    case tl_any:  return 0;
 
     case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
     case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
@@ -1130,15 +1154,20 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     if (!left || !right) return 1;
 
+    // `any` types unify with everything but are not concrete, so they don't resolve type variables
+    if (tl_monotype_is_any(left) || tl_monotype_is_any(right)) return 0;
+
     if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
     if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
     if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user);
     if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user);
 
     switch (left->tag) {
+    case tl_any: fatal("unreachable");
 
     case tl_var:
         switch (right->tag) {
+        case tl_any:       fatal("unreachable");
 
         case tl_var:       return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user);
         case tl_weak:      return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user);
@@ -1152,6 +1181,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_weak:
         switch (right->tag) {
+        case tl_any: fatal("unreachable");
 
         case tl_var: return tl_type_subs_unify_tv_weak(subs, right->var, left, cb, user);
 
@@ -1169,6 +1199,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_list:
         switch (right->tag) {
+        case tl_any:  fatal("unreachable");
 
         case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
         case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
@@ -1185,6 +1216,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_tuple:
         switch (right->tag) {
+        case tl_any:  fatal("unreachable");
 
         case tl_var:  return tl_type_subs_unify(subs, right->var, left, cb, user);
         case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
@@ -1223,6 +1255,8 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     if (!mono) return 0;
 
     switch (mono->tag) {
+    case tl_any:  return 0;
+
     case tl_var:
     case tl_weak: {
         tl_type_variable root = uf_find(self, mono->var);
@@ -1326,6 +1360,10 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
     tl_type_variable tv_root = uf_find(self, tv);
 
     switch (mono->tag) {
+    case tl_any:
+        // unifies with everything, but does not resolve
+        return 0;
+
     case tl_var:
         // case 1: both are tvs
         return tl_type_subs_unify_tv(self, tv, mono->var, cb, user);
@@ -1357,6 +1395,7 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *s
     if (!self) return;
 
     switch (self->tag) {
+    case tl_any:  break;
 
     case tl_var:
     case tl_weak: {
