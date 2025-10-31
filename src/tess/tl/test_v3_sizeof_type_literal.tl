@@ -6,6 +6,6 @@ sizeof(T) { _tl_sizeof_(T) }
 Point(a) : {x : a, y : a }
 
 main() {
-  x = 42
+  x := 42
   if (sizeof(Int) + sizeof(x) == sizeof(Point(Int))) { 0 } else { 1 }
 }

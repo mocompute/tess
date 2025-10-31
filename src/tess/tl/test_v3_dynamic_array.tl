@@ -29,7 +29,7 @@ Rect(a)  : { topleft: Point(a), botright: Point(a) }
 array_new(T : Type, count) {
   // This type annotation is required for the return type of c_malloc to be concrete. Note that it refers to
   // the type argument T.
-  p : PtrOrNull(T) = c_malloc(count * sizeof(T))
+  p : PtrOrNull(T) := c_malloc(count * sizeof(T))
   Array { v = p, size = count }
 }
 
@@ -40,17 +40,17 @@ make_points(count) { array_new(Point(Int), count) }
 make_rects(count)  { array_new(Rect(Int), count) }
 
 main() {
-  points = make_points(8)
-  rects = make_rects(8)
+  points := make_points(8)
+  rects := make_rects(8)
 
-  points.v[0] := Point(0, 1)
-  points.v[1] := Point(2, 3)
+  points.v[0] = Point(0, 1)
+  points.v[1] = Point(2, 3)
 
-  res = points.v[0].x
-  if (points.v[0].x != 0) { res := 1 }
-  if (points.v[0].y != 1) { res := 1 }
-  if (points.v[1].x != 2) { res := 1 }
-  if (points.v[1].y != 3) { res := 1 }
+  res := points.v[0].x
+  if (points.v[0].x != 0) { res = 1 }
+  if (points.v[0].y != 1) { res = 1 }
+  if (points.v[1].x != 2) { res = 1 }
+  if (points.v[1].y != 3) { res = 1 }
 
   array_free(points)
   array_free(rects)

@@ -10,6 +10,6 @@ init() {
 }
 
 main() {
-  ctx = init()
+  ctx := init()
   ctx.p1() - 1
 }
