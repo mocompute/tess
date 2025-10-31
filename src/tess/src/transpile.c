@@ -1392,7 +1392,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
                 return str_init(self->transient, "void*");
             }
         } else if (str_eq(S("Type"), cons_name)) {
-            return S("/*Type*/long long");
+            return S("/*Type*/int");
         }
 
         else {
