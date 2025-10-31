@@ -125,7 +125,9 @@ CPMAddPackage("https://www.zlib.net/zlib-1.3.1.tar.gz")
 
 # -- doxygen --
 # must be provided by system, see flake.nix
-find_package(Doxygen REQUIRED)
+if(MOS_DOXY)
+  find_package(Doxygen REQUIRED)
+endif()
 
 # -- readline --
 
