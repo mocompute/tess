@@ -1,8 +1,11 @@
 _tl_sizeof_ (x : a) -> Int
-sizeof(T : Type) { _tl_sizeof_(T) }
+
+// Here T may be a type literal (Type) or a concrete value
+sizeof(T) { _tl_sizeof_(T) }
 
 Point(a) : {x : a, y : a }
 
 main() {
-  if (sizeof(Int) + sizeof(Int) == sizeof(Point(Int))) { 0 } else { 1 }
+  x = 42
+  if (sizeof(Int) + sizeof(x) == sizeof(Point(Int))) { 0 } else { 1 }
 }

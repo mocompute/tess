@@ -7,7 +7,7 @@ is_null     (p : PtrOrNull(a)) -> Bool
 is_ptr      (p : PtrOrNull(a)) -> Bool
 ptr         (p : PtrOrNull(a)) -> Ptr(a)
 
-sizeof      (T : Type) { _tl_sizeof_(T) }
+sizeof      (T) { _tl_sizeof_(T) }       // T may be Type (literal) or concrete
 
 is_null(p) {
   if p == null { true } else { false }
