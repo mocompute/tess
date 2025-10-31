@@ -95,7 +95,6 @@ static void cat_close_curlyln(transpile *);
 
 tl_monotype *env_lookup(transpile *, str); // may be null
 static str   mangle_fun(transpile *, str); // allocates transient
-static int   is_intrinsic(str);
 static int   should_generate(str, tl_polytype *);
 static str   type_to_c(transpile *, tl_polytype *);
 static str   type_to_c_mono(transpile *, tl_monotype *);
@@ -368,7 +367,8 @@ static void generate_toplevel_values(transpile *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
-        str          name = ast_node_str(node->let_in.name);
+        str name = ast_node_str(node->let_in.name);
+        if (is_c_symbol(name)) continue;
         tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
@@ -383,7 +383,8 @@ static void generate_toplevel_values(transpile *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
-        str          name = ast_node_str(node->let_in.name);
+        str name = ast_node_str(node->let_in.name);
+        if (is_c_symbol(name)) continue;
         tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
@@ -1368,10 +1369,6 @@ static str mangle_fun(transpile *self, str s) {
     str_build_cat(&b, s);
 
     return str_build_finish(&b);
-}
-
-static int is_intrinsic(str s) {
-    return 0 == str_cmp_nc(s, "_tl_", 4);
 }
 
 static int should_generate(str name, tl_polytype *type) {

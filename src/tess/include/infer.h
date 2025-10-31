@@ -32,4 +32,7 @@ tl_monotype        *tl_type_registry_parse(tl_type_registry *self, ast_node cons
 
 tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
 
+int                 is_c_symbol(str);
+int                 is_intrinsic(str);
+
 #endif

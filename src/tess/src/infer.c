@@ -67,7 +67,6 @@ typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 static void      apply_subs_to_ast(tl_infer *);
 static str       next_instantiation(tl_infer *, str);
 static void      cancel_last_instantiation(tl_infer *);
-static int       is_intrinsic(str);
 
 static void      toplevel_add(tl_infer *, str, ast_node *);
 static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
@@ -1742,7 +1741,9 @@ static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
     // For toplevel definitions, rename them and keep them in lexical scope.
     if (!ast_node_is_let_in(node)) return;
 
-    str name   = node->let_in.name->symbol.name;
+    str name = node->let_in.name->symbol.name;
+    if (is_c_symbol(name)) return;
+
     str newvar = next_variable_name(self);
     ast_node_name_replace(node->let_in.name, newvar);
     log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
@@ -1776,6 +1777,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
         hashmap *save = null;
         str      name = node->let_in.name->symbol.name;
+        if (is_c_symbol(name)) break;
         if (level) {
             // do not rename toplevel symbols again (see rename_let_in)
             str newvar = next_variable_name(self);
@@ -2720,8 +2722,12 @@ static void apply_subs_to_ast(tl_infer *self) {
 
 //
 
-static int is_intrinsic(str name) {
+int is_intrinsic(str name) {
     return (0 == str_cmp_nc(name, "_tl_", 4));
+}
+
+int is_c_symbol(str name) {
+    return (0 == str_cmp_nc(name, "c_", 2));
 }
 
 //
