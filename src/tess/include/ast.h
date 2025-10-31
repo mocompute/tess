@@ -133,6 +133,11 @@ typedef struct ast_node {
             u8                n_fields;
             u8                n_type_arguments;
         } user_type_def;
+
+        struct ast_hash_command {
+            str       name;
+            str_sized args;
+        } hash_command;
     };
 
     char const       *file;

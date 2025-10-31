@@ -147,6 +147,10 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_comment,
         stop_comment,
 
+        start_hash_dir,
+        in_hash_dir,
+        stop_hash_dir,
+
         stop,
     } state          = start;
 
@@ -572,6 +576,30 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         case stop_comment:
             assert(self->pos >= start_capture);
             replace_token_sn(self->strings, &res, tok_comment, self->input.v + start_capture,
+                             self->pos - start_capture);
+            state = stop;
+            break;
+
+        case start_hash_dir:
+            start_capture = self->pos;
+            state         = in_hash_dir;
+            break;
+
+        case in_hash_dir: {
+            if (self->pos == end) {
+                state = stop_hash_dir;
+                continue;
+            }
+            char const c = next_char(self);
+            if (c == '\n') {
+                reverse_pos(self);
+                state = stop_hash_dir;
+            }
+        } break;
+
+        case stop_hash_dir:
+            assert(self->pos >= start_capture);
+            replace_token_sn(self->strings, &res, tok_hash_command, self->input.v + start_capture,
                              self->pos - start_capture);
             state = stop;
             break;

@@ -469,7 +469,8 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
-    case tok_comment:      return 1;
+    case tok_comment:
+    case tok_hash_command: return 1;
     }
 
     if (!op) return 1;
@@ -518,7 +519,8 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
-    case tok_comment:      return 1;
+    case tok_comment:
+    case tok_hash_command: return 1;
     }
 
     if (!op) return 1;

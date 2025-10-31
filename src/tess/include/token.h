@@ -12,6 +12,7 @@
 #define TESS_TOKEN_TAGS(X)                                                                                 \
     X(tok_bang, "bang")                                                                                    \
     X(tok_bang_equal, "bang_equal")                                                                        \
+    X(tok_hash_command, "hash_directive")                                                                  \
     X(tok_comma, "comma")                                                                                  \
     X(tok_dot, "dot")                                                                                      \
     X(tok_colon, "colon")                                                                                  \
