@@ -1382,9 +1382,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("char const*");
         } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
-        } else if (str_eq(S("Ptr"), cons_name)) {
-            assert(1 == mono->cons_inst->args.size);
-            tl_monotype *arg = mono->cons_inst->args.v[0];
+        } else if (str_eq(S("Ptr"), cons_name) || str_eq(S("PtrOrNull"), cons_name)) {
+            tl_monotype *arg = tl_monotype_ptr_target(mono); // extract Ptr type from Ptr or PtrOrNull
             if (tl_monotype_is_concrete(arg)) {
                 tl_polytype wrap = tl_polytype_wrap(arg);
                 return str_cat(self->transient, type_to_c(self, &wrap), S("*"));

@@ -1,10 +1,6 @@
-Foo : {
-  x : Int,
-  p : Ptr(Foo),
-}
-
+c_malloc (count : Int) -> PtrOrNull(a)
 
 main() {
-  foo = Foo { x = 0, p = () }
+  c_malloc(16)
   0
 }

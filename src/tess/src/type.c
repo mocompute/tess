@@ -31,28 +31,36 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     tl_type_constructor_def_create(self, S("Float"), empty_tv, empty, empty_mt);
     tl_type_constructor_def_create(self, S("String"), empty_tv, empty, empty_mt);
 
-    tl_type_variable_sized unary = {.size = 1, .v = alloc_malloc(alloc, sizeof(tl_type_variable))};
-    unary.v[0]                   = tl_type_subs_fresh(self->subs);
-    tl_monotype *tv_type         = tl_monotype_create_tv(alloc, unary.v[0]);
-
     // Ptr and Type are unary type constructors
 
-    tl_monotype_array mt_arr = {.alloc = alloc};
-    array_push(mt_arr, tv_type);
-    tl_type_constructor_def_create(self, S("Ptr"), unary, empty, (tl_monotype_sized)sized_all(mt_arr));
+    {
+        tl_type_variable_array unary = {.alloc = alloc};
+        tl_type_variable       tv    = tl_type_subs_fresh(self->subs);
+        array_push(unary, tv);
+        tl_monotype      *tv_type = tl_monotype_create_tv(alloc, unary.v[0]);
+        tl_monotype_array mt_arr  = {.alloc = alloc};
+        array_push(mt_arr, tv_type);
+        tl_type_constructor_def_create(self, S("Ptr"), (tl_type_variable_sized)sized_all(unary), empty,
+                                       (tl_monotype_sized)sized_all(mt_arr));
+    }
 
-    unary.v[0]  = tl_type_subs_fresh(self->subs);
-    mt_arr.v[0] = tl_monotype_create_tv(alloc, unary.v[0]);
-    tl_type_constructor_def_create(self, S("Type"), unary, empty, (tl_monotype_sized)sized_all(mt_arr));
-
+    {
+        tl_type_variable_array unary = {.alloc = alloc};
+        tl_type_variable       tv    = tl_type_subs_fresh(self->subs);
+        array_push(unary, tv);
+        tl_monotype_array mt_arr = {.alloc = alloc};
+        tl_monotype      *mono   = tl_monotype_create_tv(alloc, unary.v[0]);
+        array_push(mt_arr, mono);
+        tl_type_constructor_def_create(self, S("Type"), (tl_type_variable_sized)sized_all(unary), empty,
+                                       (tl_monotype_sized)sized_all(mt_arr));
+    }
     // Union has variable arity
-    // FIXME
-    // {
-    //     tl_polytype *poly = tl_type_constructor_def_create(self, S("Union"), empty_tv, empty, empty_mt);
-    //     poly->type->cons_inst->def->is_variable_args = 1;
-    // }
-    // Create instances of nullary builtin types
+    {
+        tl_polytype *poly = tl_type_constructor_def_create(self, S("Union"), empty_tv, empty, empty_mt);
+        poly->type->cons_inst->def->is_variable_args = 1;
+    }
 
+    // Create specialisations of nullary builtin types
     empty_mt  = (tl_monotype_sized){0};
     str blank = str_empty();
     tl_type_registry_specialize(self, S("Nil"), blank, empty_mt);
@@ -60,6 +68,40 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     tl_type_registry_specialize(self, S("Bool"), blank, empty_mt);
     tl_type_registry_specialize(self, S("Float"), blank, empty_mt);
     tl_type_registry_specialize(self, S("String"), blank, empty_mt);
+
+    // TODO: type aliases
+    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) : Union(Ptr(a),
+    // Nil) type here
+    {
+        tl_type_variable_array unary  = {.alloc = alloc};
+        tl_monotype_array      mt_arr = {.alloc = alloc};
+        tl_type_variable       tv     = tl_type_subs_fresh(subs);
+        array_push(unary, tv);
+        array_shrink(unary);
+        tl_monotype *ptr = tl_type_registry_ptr(self, tl_monotype_create_tv(alloc, tv));
+        tl_monotype *nil = tl_type_registry_nil(self);
+        array_push(mt_arr, ptr);
+        array_push(mt_arr, nil);
+        array_shrink(mt_arr);
+
+        // FIXME: see tl_type_constructor_def_create_ext, but here we need to set is_variable_args
+        str                      name  = str_init(alloc, "PtrOrNull");
+        tl_type_constructor_def *def   = alloc_malloc(self->alloc, sizeof *def);
+        def->name                      = str_copy(self->alloc, name);
+        def->generic_name              = str_copy(self->alloc, name);
+        def->field_names               = (str_sized){0};
+        def->is_variable_args          = 1; // a union type
+
+        tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
+        inst->def                      = def;
+        inst->args                     = (tl_monotype_sized)sized_all(mt_arr);
+        inst->special_name             = str_empty();
+
+        tl_monotype *mono              = tl_monotype_create_cons(self->alloc, inst);
+        tl_polytype *poly              = tl_polytype_absorb_mono(self->alloc, mono);
+        poly->quantifiers              = (tl_type_variable_sized)sized_all(unary);
+        str_map_set_ptr(&self->definitions, def->name, poly);
+    }
 
     return self;
 }
@@ -144,8 +186,11 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     tl_polytype *poly = str_map_get_ptr(self->definitions, name);
     if (!poly) return null;
 
-    u32 arity = poly->type->cons_inst->args.size;
-    if (args.size != arity) return null;
+    tl_type_constructor_def *def = poly->type->cons_inst->def;
+    if (!def->is_variable_args) {
+        u32 arity = poly->type->cons_inst->args.size;
+        if (args.size != arity) return null;
+    }
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
     map_set_ptr(&self->instances, &key, sizeof key, type);
@@ -190,6 +235,13 @@ tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
 tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     tl_monotype *out =
       tl_type_registry_instantiate_with(self, S("Ptr"), (tl_monotype_sized){.size = 1, .v = &arg});
+    assert(out);
+    return out;
+}
+
+tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *self, tl_monotype *arg) {
+    tl_monotype *out =
+      tl_type_registry_instantiate_with(self, S("PtrOrNull"), (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
@@ -651,8 +703,14 @@ int tl_monotype_is_tv(tl_monotype *self) {
 }
 
 int tl_monotype_is_ptr(tl_monotype *self) {
+    str generic_name = self->cons_inst->def->generic_name;
+    return self && tl_cons_inst == self->tag && self->cons_inst->def && str_eq(generic_name, S("Ptr"));
+}
+
+int tl_monotype_is_ptr_or_null(tl_monotype *self) {
+    str generic_name = self->cons_inst->def->generic_name;
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(self->cons_inst->def->generic_name, S("Ptr"));
+           str_eq(generic_name, S("PtrOrNull"));
 }
 
 int tl_monotype_is_type_literal(tl_monotype *self) {
@@ -679,9 +737,14 @@ int tl_polytype_type_constructor_has_field(tl_polytype *self, str name) {
 }
 
 tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
-    assert(tl_monotype_is_ptr(self));
-    assert(self->cons_inst->args.size == 1);
-    return self->cons_inst->args.v[0];
+    if (tl_monotype_is_ptr(self)) {
+        assert(self->cons_inst->args.size == 1);
+        return self->cons_inst->args.v[0];
+    } else if (tl_monotype_is_ptr_or_null(self)) {
+        assert(self->cons_inst->args.size == 2);
+        // first argument is Ptr
+        return tl_monotype_ptr_target(self->cons_inst->args.v[0]);
+    } else fatal("unreachable");
 }
 
 tl_monotype *tl_monotype_type_literal_target(tl_monotype *self) {
@@ -891,6 +954,8 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monot
                                       void *);
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype *weak, tl_monotype *, type_error_cb_fun,
                                    void *);
+int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
+                            void *user);
 
 static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_constructor_def *rhs) {
     if (lhs == rhs) return 0;
@@ -898,6 +963,76 @@ static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_cons
     if (str_eq(lhs->generic_name, rhs->generic_name)) return 0;
 
     return 1;
+}
+
+int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
+                                 type_error_cb_fun cb, void *user) {
+    assert(tl_monotype_is_inst(left));
+    assert(str_eq(S("Union"), left->cons_inst->def->generic_name));
+
+    tl_monotype_sized unions = left->cons_inst->args;
+
+    switch (right->tag) {
+
+    case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
+    case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
+
+    case tl_cons_inst: {
+        if (str_eq(S("Union"), right->cons_inst->def->generic_name)) {
+            tl_monotype_sized right_unions = right->cons_inst->args;
+            forall(i, unions) {
+                forall(j, right_unions) {
+                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
+                }
+            }
+        } else {
+            if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
+                if (cb) cb(user, left, right);
+                return 1;
+            }
+            return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
+        }
+    } break;
+
+    case tl_list:
+    case tl_tuple:
+        // attempt to union with any of the union types
+        forall(i, unions) {
+            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
+        }
+        if (cb) cb(user, left, right);
+        return 1;
+    }
+    return 1;
+}
+
+int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
+                           void *user) {
+    assert(tl_monotype_is_inst(left));
+
+    switch (right->tag) {
+
+    case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
+    case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
+
+    case tl_cons_inst: {
+        // FIXME
+        // // Nil: any nil is compatible with any Ptr
+        // tl_type_constructor_def const *lhs = left->cons_inst->def, *rhs = right->cons_inst->def;
+        // if (str_eq(lhs->generic_name, S("Nil")) && str_eq(rhs->generic_name, S("Ptr"))) return 0;
+        // if (str_eq(lhs->generic_name, S("Ptr")) && str_eq(rhs->generic_name, S("Nil"))) return 0;
+
+        if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
+            if (cb) cb(user, left, right);
+            return 1;
+        }
+        return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
+    }
+    case tl_list:
+    case tl_tuple:
+        if (cb) cb(user, left, right);
+        return 1;
+    }
 }
 
 int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -932,6 +1067,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
     if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
+    if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user);
+    if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user);
 
     switch (left->tag) {
 
@@ -963,31 +1100,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         }
         break;
 
-    case tl_cons_inst:
-        switch (right->tag) {
-
-        case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user);
-        case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user);
-
-        case tl_cons_inst: {
-            // FIXME
-            // // Nil: any nil is compatible with any Ptr
-            // tl_type_constructor_def const *lhs = left->cons_inst->def, *rhs = right->cons_inst->def;
-            // if (str_eq(lhs->generic_name, S("Nil")) && str_eq(rhs->generic_name, S("Ptr"))) return 0;
-            // if (str_eq(lhs->generic_name, S("Ptr")) && str_eq(rhs->generic_name, S("Nil"))) return 0;
-
-            if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
-                if (cb) cb(user, left, right);
-                return 1;
-            }
-            return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
-        }
-        case tl_list:
-        case tl_tuple:
-            if (cb) cb(user, left, right);
-            return 1;
-        }
-        break;
+    case tl_cons_inst: fatal("unreachable"); break;
 
     case tl_list:
         switch (right->tag) {
