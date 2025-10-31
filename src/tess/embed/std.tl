@@ -1,62 +1,10 @@
-// -- intrinsic function types --
+_tl_sizeof_ (x : a)        -> Int
 
-let _tl_sizeof_  : a -> Int
+c_malloc    (count : Int)  -> PtrOrNull(a)
+c_free      (ptr : Ptr) -> Nil
 
-let _tl_add_     : a -> a -> a
-let _tl_sub_     : a -> a -> a
-let _tl_mod_     : a -> a -> a
-let _tl_mul_     : a -> a -> a
-let _tl_div_     : a -> a -> a
+is_null     (p : PtrOrNull(a)) -> Bool
+is_ptr      (p : PtrOrNull(a)) -> Bool
+ptr         (p : PtrOrNull(a)) -> Ptr(a)
 
-let _tl_lt_      : a -> a -> Bool
-let _tl_lte_     : a -> a -> Bool
-let _tl_eq_      : a -> a -> Bool
-let _tl_neq_     : a -> a -> Bool
-let _tl_gte_     : a -> a -> Bool
-let _tl_gt_      : a -> a -> Bool
-
-// let _tl_and_     : (..., ) -> Bool
-// let _tl_or_      : (..., ) -> Bool
-
-let _tl_band_    : a -> a -> a
-let _tl_bor_     : a -> a -> a
-let _tl_bxor_    : a -> a -> a
-let _tl_bcomp_   : a -> a
-
-let _tl_bsl_     : a -> Int -> a
-let _tl_bsr_     : a -> Int -> a
-
-// -- c stdlib function types --
-
-let c_malloc     : Int -> Ptr a
-let c_free       : Ptr a -> ()
-
-// let std_dbg      : (..., ) -> Int
-
-// -- tl lib short-named function implementations --
-
-let sizeof x      = _tl_sizeof_ x
-
-let add l r       = _tl_add_ l r
-let sub l r       = _tl_sub_ l r
-let mod l r       = _tl_mod_ l r
-let mul l r       = _tl_mul_ l r
-let div l r       = _tl_div_ l r
-
-let lt  l r       = _tl_lt_  l r
-let lte l r       = _tl_lte_ l r
-let eq  l r       = _tl_eq_  l r
-let neq l r       = _tl_neq_ l r
-let gte l r       = _tl_gte_ l r
-let gt  l r       = _tl_gt_  l r
-
-let band l r      = _tl_band_ l r
-let bor  l r      = _tl_bor_  l r
-let bxor l r      = _tl_bxor_ l r
-let bcomp x       = _tl_bcomp_ x
-
-let bsl arg n     = _tl_bsl_ arg n
-let bsr arg n     = _tl_bsr_ arg n
-
-let decr x        = sub x 1
-let incr x        = add x 1
+sizeof      (T : Type) { _tl_sizeof_(T) }

@@ -1,6 +1,8 @@
-c_malloc (count : Int) -> PtrOrNull(a)
+is_null(p) {
+  if p == null { true } else { false }
+}
 
 main() {
-  c_malloc(16)
-  0
+  p = c_malloc(16)
+  if is_null(p) { 1 } else { 0 }
 }
