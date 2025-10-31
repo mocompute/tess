@@ -2087,8 +2087,13 @@ typedef struct {
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
+    str name = ast_node_str(node);
+
     // don't collect symbols which are nullary type literals
-    if (tl_type_registry_is_nullary_type(self->registry, ast_node_str(node))) return 0;
+    if (tl_type_registry_is_nullary_type(self->registry, name)) return 0;
+
+    // don't collect symbols that start with c_
+    if (0 == str_cmp_nc(name, "c_", 2)) return 0;
 
     collect_free_variables_ctx *ctx      = traverse_ctx->user;
 

@@ -284,6 +284,8 @@ static int useful_name(str original, str name) {
     return !str_eq(original, name) && !str_is_empty(original) && str_cmp_nc(original, "tl_", 3);
 }
 
+static str remove_c_prefix(allocator *alloc, str name);
+
 static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, str original_name,
                                 eval_ctx *ctx) {
     str name = symbol_name;
@@ -291,6 +293,11 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
 
     if (tl_monotype_is_type_literal(type)) {
         return str_init(self->transient, "0");
+    }
+
+    // c_ prefixed symbols are always emitted literally
+    if (0 == str_cmp_nc(name, "c_", 2)) {
+        return remove_c_prefix(self->transient, name);
     }
 
     if (str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
@@ -652,18 +659,21 @@ static str generate_funcall_std(transpile *self, ast_node const *node, eval_ctx 
     return str_empty();
 }
 
+static str remove_c_prefix(allocator *alloc, str name) {
+    span s = str_span(&name);
+    s.buf += 2;
+    s.len -= 2;
+    return str_copy_span(alloc, s);
+}
+
 static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *ctx) {
 
     // a funcall to a c function is fundamentally different: we don't have type information on the
     // function or the arguments.
 
     // generate untyped arguments
-    str name = ast_node_name_original(node->named_application.name);
-    // str  name = ast_node_str(node->named_application.name);
-    span s = str_span(&name);
-    s.buf += 2;
-    s.len -= 2;
-    name                    = str_copy_span(self->arena, s);
+    str name                = ast_node_name_original(node->named_application.name);
+    name                    = remove_c_prefix(self->arena, name);
 
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
     str_array      args_res = {.alloc = self->transient};

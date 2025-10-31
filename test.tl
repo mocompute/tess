@@ -1,8 +1,4 @@
-c_foo(x : any) -> any
-
 main() {
-  c_foo(0)
-  c_foo(1.5)
-  c_foo("hello")
+  c_printf("INT_MAX = %i", c_INT_MAX)
   0
 }
