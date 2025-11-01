@@ -3,6 +3,7 @@
 #include "array.h"
 #include "hash.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -304,6 +305,10 @@ u64 str_hash64_combine(u64 hash, str self) {
     u64 h = str_hash64(self);
     return hash64_combine(hash, &h, sizeof h);
 }
+u64 str_hash64_combine_sized(u64 hash, str_sized arr) {
+    forall(i, arr) hash = str_hash64_combine(hash, arr.v[i]);
+    return hash;
+}
 
 span str_span(str *self) {
     if (is_small(*self)) return (span){.len = self->small.len, .buf = self->small.buf};
@@ -470,6 +475,55 @@ str str_init_f64(allocator *alloc, f64 val) {
     return str_init_n(alloc, buf, len);
 }
 
+void str_parse_words(str in, str_array *out) {
+    span        s         = str_span(&in);
+    char const *start     = s.buf;
+    char const *end       = s.buf + s.len;
+
+    int         in_string = 0;
+    char const *pos       = start;
+
+    while (pos < end && isspace(*pos)) pos++;
+    start = pos;
+
+    for (; pos < end; ++pos) {
+        if (in_string) {
+            if (*pos == '"') {
+                in_string = 0;
+                pos++; // include quotes
+                if (start < pos) {
+                    str word = str_init_n(out->alloc, start, pos - start);
+                    array_push(*out, word);
+                }
+                while (pos < end && isspace(*pos)) pos++;
+                start = pos;
+                if (pos < end) --pos;
+            }
+        } else if (*pos == '"') {
+            if (start < pos) {
+                str word = str_init_n(out->alloc, start, pos - start);
+                array_push(*out, word);
+            }
+            in_string = 1;
+            start     = pos; // include quotes
+        } else {
+            if (isspace(*pos)) {
+                if (start < pos) {
+                    str word = str_init_n(out->alloc, start, pos - start);
+                    array_push(*out, word);
+                }
+                while (pos < end && isspace(*pos)) pos++;
+                start = pos;
+                if (pos < end) --pos;
+            }
+        }
+    }
+    if (start < pos) {
+        str word = str_init_n(out->alloc, start, pos - start);
+        array_push(*out, word);
+    }
+}
+
 // -- str_build --
 
 nodiscard str_build str_build_init(allocator *alloc, u32 sz) {
@@ -497,6 +551,9 @@ void str_build_join(str_build *self, str sep, str const *strs, u32 len) {
 }
 
 void str_build_join_array(str_build *self, str sep, str_array strs) {
+    str_build_join(self, sep, strs.v, strs.size);
+}
+void str_build_join_sized(str_build *self, str sep, str_sized strs) {
     str_build_join(self, sep, strs.v, strs.size);
 }
 

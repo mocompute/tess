@@ -88,6 +88,7 @@ u32         str_hash32(str);
 u64         str_hash64(str);
 u32         str_hash32_combine(u32, str);
 u64         str_hash64_combine(u64, str);
+u64         str_hash64_combine_sized(u64, str_sized);
 
 span        str_span(str *);
 ispan       str_ispan(str *); // for use with C lib; exits program on int overflow
@@ -108,6 +109,7 @@ void        str_array_set_insert(str_array *, str); // insert if not present
 
 int         str_parse_num(str, i64 *, u64 *, f64 *);           // Returns: 0, 1, 2, 3
 int         str_parse_cnum(char const *, i64 *, u64 *, f64 *); // Returns: 0, 1, 2, 3
+void        str_parse_words(str, str_array *);
 
 str         str_init_i64(allocator *, i64);
 str         str_init_u64(allocator *, u64);
@@ -123,6 +125,7 @@ nodiscard str_build str_build_init(allocator *, u32); // init builder with initi
 void                str_build_cat(str_build *, str);
 void                str_build_join(str_build *, str, str const *, u32);
 void                str_build_join_array(str_build *, str, str_array);
+void                str_build_join_sized(str_build *, str, str_sized);
 str                 str_build_str(allocator *, str_build); // construct str from copy of array
 str                 str_build_finish(str_build *);         // construct str from destr. move (do not deinit)
 void                str_build_deinit(str_build);

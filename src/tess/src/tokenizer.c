@@ -147,9 +147,9 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_comment,
         stop_comment,
 
-        start_hash_dir,
-        in_hash_dir,
-        stop_hash_dir,
+        start_hash_command,
+        in_hash_command,
+        stop_hash_command,
 
         stop,
     } state          = start;
@@ -192,6 +192,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
             case '!':  state = in_bang; continue;
+            case '#':  state = start_hash_command; continue;
 
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
@@ -580,24 +581,24 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             state = stop;
             break;
 
-        case start_hash_dir:
+        case start_hash_command:
             start_capture = self->pos;
-            state         = in_hash_dir;
+            state         = in_hash_command;
             break;
 
-        case in_hash_dir: {
+        case in_hash_command: {
             if (self->pos == end) {
-                state = stop_hash_dir;
+                state = stop_hash_command;
                 continue;
             }
             char const c = next_char(self);
             if (c == '\n') {
                 reverse_pos(self);
-                state = stop_hash_dir;
+                state = stop_hash_command;
             }
         } break;
 
-        case stop_hash_dir:
+        case stop_hash_command:
             assert(self->pos >= start_capture);
             replace_token_sn(self->strings, &res, tok_hash_command, self->input.v + start_capture,
                              self->pos - start_capture);

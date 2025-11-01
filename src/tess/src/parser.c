@@ -395,6 +395,13 @@ static int a_comma(parser *p) {
     return 1;
 }
 
+static int a_hash_command(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_hash_command == p->token.tag) return result_ast_str(p, ast_hash_command, p->token.s);
+    p->error.tag = tl_err_expected_hash_command;
+    return 1;
+}
+
 static int a_open_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_open_round == p->token.tag) return result_ast_str(p, ast_symbol, "(");
@@ -1329,6 +1336,19 @@ static int toplevel_symbol_annotation(parser *self) {
     return result_ast_node(self, ident);
 }
 
+static int toplevel_hash(parser *self) {
+    if (a_try(self, a_hash_command)) return 1;
+    ast_node *command = self->result;
+
+    str_array words   = {.alloc = self->ast_arena};
+    str_parse_words(command->hash_command.full, &words);
+
+    array_shrink(words);
+    command->hash_command.words = (str_sized)sized_all(words);
+
+    return 0;
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1;
@@ -1380,6 +1400,7 @@ static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
+    if (0 == a_try(self, toplevel_hash)) return 0;
     if (0 == a_try(self, toplevel_struct)) return 0;
     if (0 == a_try(self, toplevel_defun)) return 0;
     if (0 == a_try(self, toplevel_assign)) return 0;

@@ -1,3 +1,6 @@
+#include <limits.h>
+#include <stdio.h>
+
 c_INT_MAX : Int
 
 main() {

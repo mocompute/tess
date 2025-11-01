@@ -37,6 +37,7 @@ struct tl_infer {
     hashmap             *toplevels;      // str => ast_node*
     hashmap             *instances;      // u64 hash => str specialised name in env
     hashmap             *instance_names; // str set
+    str_array            hash_includes;
     tl_infer_error_array errors;
 
     u32                  next_var_name;
@@ -93,6 +94,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
     self->toplevels          = null;
     self->instances          = map_new(self->arena, name_and_type, str, 512);
     self->instance_names     = hset_create(self->arena, 512);
+    self->hash_includes      = (str_array){.alloc = self->arena};
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
     self->next_var_name      = 0;
@@ -329,10 +331,26 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
     }
 }
 
-static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes,
-                              tl_infer_error_array *out_errors) {
-    hashmap             *tops   = ast_node_str_map_create(alloc, 1024);
-    tl_infer_error_array errors = {.alloc = alloc};
+static int toplevel_hash_command(tl_infer *self, ast_node *node) {
+    assert(ast_node_is_hash_command(node));
+    str_sized words = node->hash_command.words;
+
+    if (words.size < 2) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+        return 1;
+    }
+
+    if (str_eq(words.v[0], S("include"))) {
+        array_push(self->hash_includes, words.v[1]);
+        return 0;
+    } else {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_unknown_hash_command, .node = node}));
+        return 1;
+    }
+}
+
+static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes) {
+    hashmap *tops = ast_node_str_map_create(alloc, 1024);
     (void)self;
 
     forall(i, nodes) {
@@ -343,7 +361,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             if (p) {
                 // merge annotation if existing node is a let node; otherwise error
                 if (!ast_node_is_let(*p)) {
-                    array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
                     continue;
                 }
 
@@ -367,7 +385,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
                 if (!ast_node_is_symbol(*p)) {
-                    array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
                     continue;
                 }
 
@@ -392,7 +410,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             ast_node **p        = str_map_get(tops, name_str);
 
             if (p) {
-                array_push(errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
                 str_map_set(&tops, name_str, &node);
             }
@@ -404,13 +422,16 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             process_annotation(self, node->let_in.name, null);
         }
 
+        else if (ast_node_is_hash_command(node)) {
+            (void)toplevel_hash_command(self, node);
+        }
+
         else {
-            array_push(errors, ((tl_infer_error){.tag = tl_err_invalid_toplevel, .node = node}));
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_invalid_toplevel, .node = node}));
             continue;
         }
     }
 
-    *out_errors = errors;
     arena_reset(self->transient);
     return tops;
 }
@@ -795,6 +816,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         // FIXME: complete the misisng traversals for the various ast types below
 
+    case ast_hash_command:
     case ast_nil:
     case ast_continue:
     case ast_arrow:
@@ -1315,9 +1337,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
     } break;
 
+    case ast_hash_command:
     case ast_arrow:
     case ast_ellipsis:
-    case ast_eof:      break;
+    case ast_eof:          break;
     }
 
     // apply newly created constraint substitutions
@@ -1907,6 +1930,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
         break;
 
+    case ast_hash_command:
     case ast_continue:
     case ast_string:
     case ast_nil:
@@ -2497,7 +2521,8 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_let:
     case ast_named_function_application:
     case ast_tuple:
-    case ast_unary_op:                    break;
+    case ast_unary_op:
+    case ast_hash_command:                break;
     }
     return 0;
 }
@@ -2537,7 +2562,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     // Load all top level forms.
-    self->toplevels = load_toplevel(self, self->arena, nodes, &self->errors);
+    self->toplevels = load_toplevel(self, self->arena, nodes);
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 
@@ -2546,7 +2571,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
     // inside the iteration because infer will add lambda functions to the toplevel.
-    forall(i, nodes) add_generic(self, nodes.v[i]);
+    forall(i, nodes) {
+        if (ast_node_is_hash_command(nodes.v[i])) continue;
+        add_generic(self, nodes.v[i]);
+    }
     arena_reset(self->transient);
 
     if (self->errors.size) return 1;
@@ -2626,13 +2654,17 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     if (out_result) {
-        out_result->infer             = self;
-        out_result->registry          = self->registry;
-        out_result->env               = self->env;
-        out_result->subs              = self->subs;
-        out_result->toplevels         = self->toplevels;
-        out_result->nodes             = nodes;
+        out_result->infer     = self;
+        out_result->registry  = self->registry;
+        out_result->env       = self->env;
+        out_result->subs      = self->subs;
+        out_result->toplevels = self->toplevels;
+        out_result->nodes     = nodes;
+
+        array_shrink(self->synthesized_nodes);
+        array_shrink(self->hash_includes);
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
+        out_result->hash_includes     = (str_sized)sized_all(self->hash_includes);
     }
     arena_reset(self->transient);
     return 0;

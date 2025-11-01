@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "ast.h"
+#include "str.h"
 #include "type.h"
 
 typedef struct tl_infer tl_infer;
@@ -15,6 +16,7 @@ typedef struct {
     hashmap          *toplevels;         // str => ast_node*
     ast_node_sized    nodes;             // full ast (to get utds)
     ast_node_sized    synthesized_nodes; // nodes added by compiler
+    str_sized         hash_includes;
 } tl_infer_result;
 
 nodiscard tl_infer *tl_infer_create(allocator *) mallocfun;

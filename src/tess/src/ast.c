@@ -216,6 +216,14 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         }
     } break;
 
+    case ast_hash_command: {
+        clone->hash_command.full = str_copy(alloc, orig->hash_command.full);
+        str_array arr            = {.alloc = alloc};
+        forall(i, orig->hash_command.words) array_push(arr, orig->hash_command.words.v[i]);
+        array_shrink(arr);
+        clone->hash_command.words = (str_sized)sized_all(arr);
+    } break;
+
     case ast_let_in: {
         struct ast_let_in *vclone = ast_node_let_in(clone), *vorig = ast_node_let_in((ast_node *)orig);
         vclone->name  = ast_node_clone(alloc, vorig->name);
@@ -381,6 +389,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_nil:
     case ast_bool:
     case ast_symbol:
+    case ast_hash_command:
     case ast_i64:
     case ast_u64:
     case ast_f64:
@@ -494,6 +503,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_nil:
     case ast_bool:
     case ast_symbol:
+    case ast_hash_command:
     case ast_i64:
     case ast_u64:
     case ast_f64:
@@ -777,6 +787,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     str  ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
     switch (node->tag) {
+    case ast_hash_command: {
+        str_build b = str_build_init(alloc, 128);
+        str_build_cat(&b, S("#"));
+        str_build_join_sized(&b, S(" "), node->hash_command.words);
+        return str_build_finish(&b);
+    } break;
+
     case ast_body: {
         str_build b = str_build_init(alloc, 128);
         forall(i, node->body.expressions) {
@@ -1096,6 +1113,8 @@ u64 ast_node_hash(ast_node const *self) {
         hash = str_hash64_combine(hash, self->symbol.name);
     } break;
 
+    case ast_hash_command: hash = str_hash64_combine_sized(hash, self->hash_command.words); break;
+
     case ast_u64:
         //
         hash = hash64_combine(hash, (byte *)&self->u64.val, sizeof(self->u64.val));
@@ -1210,6 +1229,9 @@ int ast_node_is_binary_op_struct_access(ast_node const *self) {
     if (!ast_node_is_binary_op(self)) return 0;
     str op = ast_node_str(self->binary_op.op);
     return is_struct_access_operator(str_cstr(&op));
+}
+int ast_node_is_hash_command(ast_node const *self) {
+    return ast_hash_command == self->tag;
 }
 
 int ast_node_is_std_application(ast_node const *self) {

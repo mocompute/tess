@@ -24,6 +24,7 @@ struct transpile {
     tl_type_registry *registry;
     ast_node_sized    nodes;
     ast_node_sized    synthesized_nodes;
+    str_sized         hash_includes;
     tl_infer         *infer;
     tl_type_env      *env;
     tl_type_subs     *subs;
@@ -197,6 +198,15 @@ static void generate_structs(transpile *self) {
             generate_struct(self, type->type);
         }
     }
+}
+
+static void generate_hash_includes(transpile *self) {
+    forall(i, self->hash_includes) {
+        cat(self, S("#include "));
+        cat(self, self->hash_includes.v[i]);
+        cat_nl(self);
+    }
+    cat_nl(self);
 }
 
 static void generate_user_types(transpile *self) {
@@ -1102,7 +1112,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_assignment:   return generate_reassignment(self, type, node, ctx);
 
     case ast_arrow:
-
     case ast_ellipsis:
     case ast_eof:
     case ast_user_type_definition:
@@ -1111,6 +1120,8 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         cat_commentln(self, S("FIXME: generate_expr"));
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;
+
+    case ast_hash_command: fatal("logic error");
     }
 }
 
@@ -1198,6 +1209,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
     cat_nl(self);
 
+    generate_hash_includes(self);
+
     generate_user_types(self);
     generate_structs(self);
     generate_toplevel_contexts(self);
@@ -1229,12 +1242,13 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->transient         = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
 
     self->nodes             = opts->infer_result.nodes;
-    self->synthesized_nodes = opts->infer_result.synthesized_nodes;
     self->infer             = opts->infer_result.infer;
     self->registry          = opts->infer_result.registry;
     self->env               = opts->infer_result.env;
     self->subs              = opts->infer_result.subs;
     self->toplevels         = opts->infer_result.toplevels;
+    self->synthesized_nodes = opts->infer_result.synthesized_nodes;
+    self->hash_includes     = opts->infer_result.hash_includes;
 
     self->structs           = hset_create(self->arena, 64);
     self->context_generated = hset_create(self->arena, 64);
