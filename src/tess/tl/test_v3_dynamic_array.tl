@@ -23,7 +23,7 @@ Array(a) : {
 }
 
 
-Point(a) : {x : a, y : a }
+Point(a) : { x : a, y : a }
 Rect(a)  : { topleft: Point(a), botright: Point(a) }
 
 array_new(T : Type, count) {

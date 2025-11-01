@@ -194,7 +194,7 @@ static void generate_structs(transpile *self) {
 
         if (type->type->tag == tl_tuple) {
             if (tl_polytype_is_scheme(type)) fatal("type is scheme");
-            if (!tl_polytype_is_concrete(type)) continue;
+            if (!tl_polytype_is_concrete(type)) fatal("struct type is not concrete");
             generate_struct(self, type->type);
         }
     }

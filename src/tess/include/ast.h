@@ -208,6 +208,7 @@ str                 ast_node_name_original(ast_node const *);
 void                ast_node_name_replace(ast_node *, str);
 ast_node           *ast_node_lvalue(ast_node *);
 ast_node           *ast_node_op_rightmost(ast_node *);
+void                ast_node_type_set(ast_node *, tl_polytype *);
 
 // -- traversal --
 

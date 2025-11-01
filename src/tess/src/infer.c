@@ -260,7 +260,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
       (str_sized)sized_all(field_names), (tl_monotype_sized)sized_all(field_types));
 
     tl_type_env_insert(self->env, name, poly);
-    node->type = poly;
+    ast_node_type_set(node, poly);
 }
 
 void load_user_type(tl_infer *self, ast_node *node) {
@@ -850,17 +850,19 @@ static tl_monotype *instantiate_type_literal(tl_infer *self, ast_node *node) {
         // set node type to type literal
         tl_monotype *ty =
           tl_type_registry_type_literal(self->registry, tl_monotype_clone(self->arena, inst));
-        node->type = tl_polytype_absorb_mono(self->arena, ty);
+        ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, ty));
 
         return inst;
     }
     if (!ast_node_is_nfa(node)) return null;
 
-    // FIXME: duplicated with specialize_type_identifier()
+    // FIXME: portion duplicated with specialize_type_identifier()
 
     str            name      = ast_node_str(node->named_application.name);
     ast_node_sized node_args = ast_node_sized_from_ast_array(node);
-    tl_polytype   *poly      = tl_type_registry_get(self->registry, name);
+    // zero argument nfa cannot be a type identifier
+    if (!node_args.size) return null;
+    tl_polytype *poly = tl_type_registry_get(self->registry, name);
     if (!poly) return null;
     assert(tl_monotype_is_inst(poly->type));
     if (node_args.size != poly->quantifiers.size) return null;
@@ -1129,7 +1131,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (node->type) {
                 if (constrain(self, ctx, node->type, global_copy, node)) return 1;
             } else {
-                node->type = global_copy;
+                ast_node_type_set(node, global_copy);
             }
         }
 
@@ -1170,7 +1172,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (literal) {
                 if (constrain_pm(self, ctx, node->type, literal, node)) return 1;
                 // set node type directly after constraint
-                node->type = tl_polytype_absorb_mono(self->arena, literal);
+                ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, literal));
                 break;
             }
 
@@ -1271,7 +1273,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype       *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
             if (!arrow) return 1;
             tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
-            node->type = arrow;
+            ast_node_type_set(node, arrow);
         }
 
     } break;
@@ -1351,8 +1353,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype **out_type) {
 
-    // no need to specialize if there are no arguments
-    if (!args.size) return name;
     if (out_type) *out_type = null;
 
     // specialize args first
@@ -1467,14 +1467,19 @@ static tl_monotype *specialize_type_identifer(tl_infer *self, ast_node *node) {
         if (str_eq(name, S("Type"))) fatal("runtime error");
         (void)specialize_type_identifier_na(self, name, (tl_monotype_sized){0}, &out_poly);
         if (!out_poly) return null;
-        node->type = out_poly;
+        ast_node_type_set(node, out_poly);
         return out_poly->type;
     }
     if (!ast_node_is_nfa(node)) return null;
 
+    // FIXME: portion duplicated with instantiate_type_literal()
+
     str            name      = ast_node_name_original(node->named_application.name);
     ast_node_sized node_args = ast_node_sized_from_ast_array(node);
-    tl_polytype   *poly      = tl_type_registry_get(self->registry, name);
+    // zero argument nfa cannot be a type identifier
+    if (!node_args.size) return null;
+
+    tl_polytype *poly = tl_type_registry_get(self->registry, name);
     if (!poly) return null;
     assert(tl_monotype_is_inst(poly->type));
     if (node_args.size != poly->quantifiers.size) return null;
@@ -1491,7 +1496,7 @@ static tl_monotype *specialize_type_identifer(tl_infer *self, ast_node *node) {
       specialize_type_identifier_na(self, name, (tl_monotype_sized)sized_all(arg_types), &out_poly);
 
     if (!out_poly) fatal("runtime error");
-    node->type = out_poly;
+    ast_node_type_set(node, out_poly);
 
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
@@ -1549,7 +1554,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
-    node->type = special_type; // Note: this helps the transpiler
+    if (special_type) ast_node_type_set(node, special_type); // Note: this helps the transpiler
 
     return 0;
 }
@@ -1781,7 +1786,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     if (null == node) return;
 
     // ensure all types are removed: important for the post-clone rename of functions being specialized.
-    node->type = null;
+    ast_node_type_set(node, null);
 
     switch (node->tag) {
 
@@ -2489,15 +2494,15 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
-    case ast_assignment: node->type = node->assignment.value->type; break;
+    case ast_assignment: ast_node_type_set(node, node->assignment.value->type); break;
 
     case ast_body:       {
         u32 n = node->body.expressions.size;
-        if (n) node->type = node->body.expressions.v[n - 1]->type;
+        if (n) ast_node_type_set(node, node->body.expressions.v[n - 1]->type);
     } break;
 
     case ast_let_in:
-        if (node->let_in.body) node->type = node->let_in.body->type;
+        if (node->let_in.body) ast_node_type_set(node, node->let_in.body->type);
         break;
 
     case ast_nil:

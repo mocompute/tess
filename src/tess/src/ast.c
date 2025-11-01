@@ -345,6 +345,10 @@ ast_node *ast_node_op_rightmost(ast_node *self) {
     else return self;
 }
 
+void ast_node_type_set(ast_node *self, tl_polytype *type) {
+    self->type = type;
+}
+
 //
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
