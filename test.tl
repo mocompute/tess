@@ -1,6 +1,8 @@
-foo : { }
+#include <time.h>
+
+c_timespec : { }
 
 main() {
-  ts := foo()
+  ts := c_timespec()
   0
 }

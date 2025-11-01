@@ -136,6 +136,9 @@ defslice(c_string_cslice, char const *);
         (p).v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]));              \
     } while (0)
 
+#define array_sized(p)                                                                                     \
+    {.size = (p).size, .v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]))}
+
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
 #define slice_size(x) ((x).end - (x).begin)
 #define sized_all(x)  {.v = (x).v, .size = (x).size}

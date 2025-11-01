@@ -176,10 +176,10 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             }
             array_push(args_mono, mono);
         }
-        array_shrink(args_mono);
 
+        tl_monotype_sized args_mono_ = array_sized(args_mono);
         return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
-                                                 (tl_monotype_sized)sized_all(args_mono));
+                                                 args_mono_);
     }
 
     if (ast_node_is_arrow(node)) {
@@ -192,9 +192,9 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             tl_monotype const *t = tl_type_registry_parse(self, tuple.v[i], subs, map);
             array_push(arr, t);
         }
-        array_shrink(arr);
-        tl_monotype *left  = tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)sized_all(arr));
-        tl_monotype *right = tl_type_registry_parse(self, node->arrow.right, subs, map);
+        tl_monotype_sized arr_sized = array_sized(arr);
+        tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
+        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, subs, map);
         return tl_monotype_create_arrow(self->alloc, left, right);
     }
 
@@ -873,9 +873,8 @@ static tl_monotype *instantiate_type_literal(tl_infer *self, ast_node *node) {
         if (!arg_ty) return null;
         array_push(arg_types, arg_ty);
     }
-    array_shrink(arg_types);
 
-    tl_monotype_sized arg_types_ = (tl_monotype_sized)sized_all(arg_types);
+    tl_monotype_sized arg_types_ = array_sized(arg_types);
     tl_monotype      *inst       = tl_type_registry_instantiate_with(self->registry, name, arg_types_);
     if (!inst) fatal("runtime error");
 
@@ -1490,10 +1489,9 @@ static tl_monotype *specialize_type_identifer(tl_infer *self, ast_node *node) {
         if (!arg_ty) return null;
         array_push(arg_types, arg_ty);
     }
-    array_shrink(arg_types);
 
-    str name_inst =
-      specialize_type_identifier_na(self, name, (tl_monotype_sized)sized_all(arg_types), &out_poly);
+    tl_monotype_sized arg_types_ = array_sized(arg_types);
+    str               name_inst  = specialize_type_identifier_na(self, name, arg_types_, &out_poly);
 
     if (!out_poly) fatal("runtime error");
     ast_node_type_set(node, out_poly);
@@ -1545,11 +1543,10 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
         array_push(arr, mono);
     }
-    array_shrink(arr);
 
-    tl_polytype *special_type = null;
-    str          name_inst =
-      specialize_type_constructor(self, name, (tl_monotype_sized)sized_all(arr), &special_type);
+    tl_monotype_sized arr_sized    = array_sized(arr);
+    tl_polytype      *special_type = null;
+    str               name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
     if (str_is_empty(name_inst)) fatal("runtime error");
 
     // update callsite
