@@ -677,6 +677,13 @@ static str remove_c_prefix(allocator *alloc, str name) {
     return str_copy_span(alloc, s);
 }
 
+static str remove_c_struct_prefix(allocator *alloc, str name) {
+    span s = str_span(&name);
+    s.buf += 9;
+    s.len -= 9;
+    return str_copy_span(alloc, s);
+}
+
 static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *ctx) {
 
     // a funcall to a c function is fundamentally different: we don't have type information on the
@@ -718,13 +725,22 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Note: the main logic of this function is also duplicated in generate_binary_op.
 
+    // A funcall can be a standard tl funcall, a c_ funcall, a type constructor, or a c_ type constructor.
+
     assert(ast_node_is_named_application(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
     if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
+
+    // c_ prefix: may be a c_ funcall or a c_ type constructor. If there is no type
+    tl_monotype *type = env_lookup(self, name);
+
+    // type constructor?
+    if (type && tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
+
+    // check c_ after type constructor
     if (0 == str_cmp_nc(name, "c_", 2)) return generate_funcall_c(self, node, ctx);
 
-    tl_monotype *type = env_lookup(self, name);
     if (!type) fatal("funcall with null type");
 
     // type constructor?
@@ -783,7 +799,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
         if (tl_monotype_is_concrete(type)) {
             if (!tl_monotype_is_nil(type)) {
                 generate_decl(self, name, type);
-                generate_assign(self, name, value);
+
+                if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
         } else {
             // Note: do not emit values that are not concrete. These can come out of type inference if the
@@ -1429,6 +1446,12 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         }
 
         else {
+            if (is_c_symbol(cons_name)) {
+                if (is_c_struct_symbol(cons_name))
+                    return str_cat(self->transient, S("struct "),
+                                   remove_c_struct_prefix(self->transient, cons_name));
+                return remove_c_prefix(self->transient, cons_name);
+            }
             if (!str_is_empty(mono->cons_inst->special_name)) return mono->cons_inst->special_name;
             return cons_name;
         }

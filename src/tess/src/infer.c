@@ -891,8 +891,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_nil: {
         ensure_tv(self, null, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-        tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-        if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+        // tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
+        if (constrain_pm(self, ctx, node->type, weak, node)) return 1;
     } break;
 
     case ast_string: {
@@ -2757,6 +2757,10 @@ int is_intrinsic(str name) {
 
 int is_c_symbol(str name) {
     return (0 == str_cmp_nc(name, "c_", 2));
+}
+
+int is_c_struct_symbol(str name) {
+    return (0 == str_cmp_nc(name, "c_struct_", 9));
 }
 
 //
