@@ -799,7 +799,6 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
         if (tl_monotype_is_concrete(type)) {
             if (!tl_monotype_is_nil(type)) {
                 generate_decl(self, name, type);
-
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
         } else {
@@ -810,7 +809,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             // emit all non-arrow values and c_* arrow values.
             if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
                 generate_decl(self, name, type);
-                generate_assign(self, name, value);
+                if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
         }
     }
@@ -819,7 +818,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     if (!tl_monotype_is_nil(result_type)) {
         str res = next_res(self);
         generate_decl(self, res, result_type);
-        generate_assign(self, res, body);
+        if (!ast_node_is_nil(node->let_in.body)) generate_assign(self, res, body);
         return res;
     } else {
         return body;
@@ -1156,9 +1155,13 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     }
 
     else if (tl_cons_inst == type->tag) {
-        if (tl_monotype_is_nil(type)) return;
+        str typec;
+        if (tl_monotype_is_nil(type)) {
+            typec = str_init(self->transient, "/*nil*/ void*");
+        } else {
+            typec = type_to_c_mono(self, type);
+        }
 
-        str typec = type_to_c_mono(self, type);
         cat(self, typec);
         cat_sp(self);
         cat(self, name);
@@ -1433,14 +1436,9 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
         } else if (str_eq(S("Ptr"), cons_name) || str_eq(S("PtrOrNull"), cons_name)) {
-            tl_monotype *arg = tl_monotype_ptr_target(mono); // extract Ptr type from Ptr or PtrOrNull
-            if (tl_monotype_is_concrete(arg)) {
-                tl_polytype wrap = tl_polytype_wrap(arg);
-                return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
-            } else {
-                // void*
-                return str_init(self->transient, "void*");
-            }
+            tl_monotype *arg  = tl_monotype_ptr_target(mono); // extract Ptr type from Ptr or PtrOrNull
+            tl_polytype  wrap = tl_polytype_wrap(arg);
+            return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
         } else if (str_eq(S("Type"), cons_name)) {
             return S("/*Type*/int");
         }
