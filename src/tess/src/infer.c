@@ -251,13 +251,12 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         array_push(field_types, field);
     }
 
-    array_shrink(field_types);
-    array_shrink(field_names);
-    array_shrink(type_argument_tvs);
+    str_sized              field_names_       = array_sized(field_names);
+    tl_monotype_sized      field_types_       = array_sized(field_types);
+    tl_type_variable_sized type_argument_tvs_ = array_sized(type_argument_tvs);
 
-    tl_polytype *poly = tl_type_constructor_def_create(
-      self->registry, name, (tl_type_variable_sized)sized_all(type_argument_tvs),
-      (str_sized)sized_all(field_names), (tl_monotype_sized)sized_all(field_types));
+    tl_polytype           *poly =
+      tl_type_constructor_def_create(self->registry, name, type_argument_tvs_, field_names_, field_types_);
 
     tl_type_env_insert(self->env, name, poly);
     ast_node_type_set(node, poly);
