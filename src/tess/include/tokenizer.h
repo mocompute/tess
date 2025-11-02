@@ -1,6 +1,7 @@
 #ifndef TESS_TOKENIZER_H
 #define TESS_TOKENIZER_H
 
+#include "str.h"
 #include "token.h"
 
 #include "alloc.h"
@@ -32,6 +33,6 @@ nodiscard int tokenizer_next(tokenizer *, token *out, tokenizer_error *);
 void tokenizer_put_back(tokenizer *, token const *, size_t);
 
 // For unity build support
-void tokenizer_set_file(tokenizer *, char const *);
+void tokenizer_set_file(tokenizer *, str);
 
 #endif

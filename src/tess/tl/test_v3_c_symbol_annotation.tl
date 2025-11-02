@@ -1,3 +1,4 @@
+#module main
 c_INT_MAX : Int
 
 main() {

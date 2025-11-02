@@ -1,3 +1,4 @@
+#module main
 main() {
   b1 := 0 == 0
   b2 := 1 >= 0

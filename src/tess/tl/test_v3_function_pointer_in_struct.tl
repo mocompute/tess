@@ -1,3 +1,4 @@
+#module main
 f1() { 1 }
 f2() { 2 }
 

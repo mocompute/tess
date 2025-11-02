@@ -1,3 +1,4 @@
+#module main
 id(x) { x }
 apply(f, x) { f(x) }
 

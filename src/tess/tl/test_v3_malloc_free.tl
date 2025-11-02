@@ -1,3 +1,4 @@
+#module main
 c_malloc(sz : Int) -> Ptr(a)
 c_free(p : Ptr(a)) -> Nil
 

@@ -15,6 +15,7 @@
     /* parser */                                                                                           \
     X(tl_err_expected_toplevel, "expected_toplevel")                                                       \
     X(tl_err_expected_hash_command, "expected_hash_command")                                               \
+    X(tl_err_expected_module, "expected_module")                                                           \
     X(tl_err_unfinished_begin_end, "unfinished_begin_end")                                                 \
     X(tl_err_unfinished_expression, "unfinished_expression")                                               \
     X(tl_err_unfinished_struct, "unfinished_struct")                                                       \

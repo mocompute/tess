@@ -1,3 +1,4 @@
+#module main
 _tl_sizeof_ (x : a) -> Int
 
 // Here T may be a type literal (Type) or a concrete value

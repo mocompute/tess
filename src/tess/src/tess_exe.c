@@ -7,6 +7,7 @@
 #include "transpile.h"
 #include "types.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdnoreturn.h>
@@ -136,7 +137,7 @@ void read_import_lines(char_csized input, str_array *output) {
         case start: {
             char c = data[pos++];
             if ('#' == c) state = start_hash;
-            else if ('\n' == c) state = start;
+            else if (isspace(c)) state = start;
             else state = noise;
         } break;
         case noise: {
@@ -292,7 +293,13 @@ int compile(state *self) {
     char_array      unity  = make_unity_buffer(self, paths);
     char_csized     unity_ = array_sized(unity);
 
-    parser         *parser =
+    if (self->verbose) {
+        printf("------------------\n");
+        printf("%.*s\n", unity.size, unity.v);
+        printf("------------------\n");
+    }
+
+    parser *parser =
       parser_create(default_allocator(), (char_csized)sized_all(preamble), unity_, (c_string_csized){0});
     if (!parser) fatal("could not create parser");
 

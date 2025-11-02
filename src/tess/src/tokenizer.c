@@ -2,7 +2,7 @@
 
 #include "alloc.h"
 #include "array.h"
-#include "dbg.h"
+#include "str.h"
 #include "token.h"
 
 #include <assert.h>
@@ -14,7 +14,7 @@ struct tokenizer {
     allocator  *parent;
     allocator  *strings;
     char_csized input;
-    char const *file;
+    str         file;
     u32         line;
     u32         pos;
     u32         col;
@@ -27,7 +27,7 @@ struct tokenizer {
 
 static void tok_error(tokenizer *self, tokenizer_error *err, tl_error_tag tag) {
     err->tag  = tag;
-    err->file = self->file;
+    err->file = str_cstr(&self->file);
     err->line = self->line;
     err->col  = self->col;
 }
@@ -41,7 +41,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     self->strings   = arena_create(alloc, 4096);
     self->input     = input;
     self->pos       = 0;
-    self->file      = file;
+    self->file      = str_init(self->strings, file);
     self->line      = 1;
     self->col       = 0;
 
@@ -160,7 +160,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     size_t start_capture = 0;
 
     // return value, to be copied to *out
-    token res = {.file = self->file};
+    token res = {.file = str_cstr(&self->file)};
 
     while (1) {
 
@@ -694,7 +694,7 @@ finish:
     }
 
     else if (stop == state) {
-        res.file = self->file;
+        res.file = str_cstr(&self->file);
         res.line = self->line;
         res.col  = self->col;
         alloc_copy(out, &res);
@@ -717,7 +717,7 @@ void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
     }
 }
 
-void tokenizer_set_file(tokenizer *self, char const *file) {
-    self->file = file;
+void tokenizer_set_file(tokenizer *self, str file) {
+    self->file = str_copy(self->strings, file);
     self->line = 0;
 }

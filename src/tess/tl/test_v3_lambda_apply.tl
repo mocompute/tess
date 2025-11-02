@@ -1,3 +1,4 @@
+#module main
 apply_nil(f) { f() }
 
 main() {

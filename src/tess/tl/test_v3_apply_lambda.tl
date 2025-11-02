@@ -1,3 +1,4 @@
+#module main
 apply(f) { f() }
 
 main() {

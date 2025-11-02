@@ -1,3 +1,4 @@
+#module main
 main() {
   cond {
     false { 9 }

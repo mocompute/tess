@@ -46,6 +46,7 @@ struct parser {
     int                    indent_level;
     int                    in_function_application; // enable greedy parsing
     int                    skip_module;             // skip parsing until next module or file
+    int expect_module; // expect a module immediately after a #unity_file before any terms
 };
 
 typedef int (*parse_fun)(parser *);
@@ -140,6 +141,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, char_csized unity,
     self->indent_level            = 0;
     self->in_function_application = 0;
     self->skip_module             = 0;
+    self->expect_module           = 0;
 
     self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
@@ -1350,17 +1352,20 @@ static int toplevel_hash(parser *self) {
     if (words.size >= 2) {
         str command  = words.v[0];
         str argument = words.v[1];
+        log(self, "hash: %s %s", str_cstr(&command), str_cstr(&argument));
         if (str_eq(command, S("unity_file"))) {
-            self->skip_module = 0;
-            tokenizer_set_file(self->tokenizer, str_cstr(&argument));
+            self->skip_module   = 0;
+            self->expect_module = 1;
+            tokenizer_set_file(self->tokenizer, argument);
         }
 
         else if (str_eq(command, S("module"))) {
             // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
             // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
             // #unity_file directive is seen.
-            str module        = argument;
-            self->skip_module = 0;
+            str module          = argument;
+            self->skip_module   = 0;
+            self->expect_module = 0;
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
             else str_hset_insert(&self->modules_seen, module);
         }
@@ -1425,7 +1430,7 @@ static int toplevel(parser *self) {
 
     while (!is_eof(self)) {
 
-        if (0 == a_try(self, toplevel_hash)) goto success;
+        if (0 == a_try(self, toplevel_hash)) goto success_hash;
         if (0 == a_try(self, toplevel_struct)) goto success;
         if (0 == a_try(self, toplevel_defun)) goto success;
         if (0 == a_try(self, toplevel_assign)) goto success;
@@ -1436,6 +1441,12 @@ static int toplevel(parser *self) {
         return 1;
 
     success:
+        if (self->expect_module) {
+            self->error.tag = tl_err_expected_module;
+            return 1;
+        }
+
+    success_hash:
         if (!self->skip_module) return 0;
     }
 

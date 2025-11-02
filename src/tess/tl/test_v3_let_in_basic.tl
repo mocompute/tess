@@ -1,3 +1,4 @@
+#module main
 main() {
  a := 99
  b := 1

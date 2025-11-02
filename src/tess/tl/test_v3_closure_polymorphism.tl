@@ -1,3 +1,4 @@
+#module main
 f(g) { if (g()) { true } else { false } }
 
 main() {

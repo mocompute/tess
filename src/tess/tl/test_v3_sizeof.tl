@@ -1,3 +1,4 @@
+#module main
 _tl_sizeof_ (x : a) -> Int
 
 main() {

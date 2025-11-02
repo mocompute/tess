@@ -1,3 +1,4 @@
+#module main
 // This test exercises the Union type PtrOrNull
 
 

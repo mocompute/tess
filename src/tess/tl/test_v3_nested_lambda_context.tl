@@ -1,3 +1,4 @@
+#module main
 apply(f)  { f() }
 apply2(f) { apply(f) }
 apply3(f) { apply2(f) }

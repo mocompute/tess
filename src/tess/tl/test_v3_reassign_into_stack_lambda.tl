@@ -1,3 +1,4 @@
+#module main
 main() {
   x := 1
   f := () { x }

@@ -1,3 +1,4 @@
+#module main
 _tl_sizeof_ (x : a)        -> Int
 
 c_malloc    (count : Int)  -> PtrOrNull(a)

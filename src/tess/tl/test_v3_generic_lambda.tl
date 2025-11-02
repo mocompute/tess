@@ -1,3 +1,4 @@
+#module main
 main() {
   f := (a, b) { a + b }
   x1 := f(1, 2)

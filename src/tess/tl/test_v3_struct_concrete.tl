@@ -1,3 +1,4 @@
+#module main
 Point : { x: Int, y : Int }
 
 main() {

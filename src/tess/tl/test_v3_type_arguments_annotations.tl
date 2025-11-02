@@ -1,3 +1,4 @@
+#module main
 _tl_sizeof_ (x : a) -> Int
 sizeof(T1: Type) { _tl_sizeof_(T1) }
 
