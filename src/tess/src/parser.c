@@ -1226,11 +1226,9 @@ static int a_continue_statement(parser *self) {
 
 static int a_while_statement(parser *self) {
     if (a_try_s(self, the_symbol, "while")) return 1;
-    if (a_try(self, a_open_round)) return 1;
 
     ast_node *condition = parse_expression(self, INT_MIN);
     if (!condition) return 1;
-    if (a_try(self, a_close_round)) return 1;
 
     if (a_try(self, a_open_curly)) return 1;
 
