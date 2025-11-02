@@ -6,6 +6,7 @@
 #include "ast_tags.h"
 #include "error.h"
 #include "file.h"
+#include "hashmap.h"
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
@@ -27,9 +28,11 @@ struct parser {
 
     tokenizer             *tokenizer;
 
+    char_csized            unity;
     c_string_csized        files;
-    u16                    files_index;
+    i16                    files_index;
     char_csized            current_file_data;
+    hashmap               *modules_seen; // str hset
 
     ast_node              *result;
     token_array            tokens;
@@ -42,6 +45,7 @@ struct parser {
     int                    verbose;
     int                    indent_level;
     int                    in_function_application; // enable greedy parsing
+    int                    skip_module;             // skip parsing until next module or file
 };
 
 typedef int (*parse_fun)(parser *);
@@ -117,7 +121,7 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized files) {
+parser *parser_create(allocator *alloc, char_csized preamble, char_csized unity, c_string_csized files) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
@@ -126,13 +130,16 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
     self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->unity                   = unity;
     self->files                   = files;
-    self->files_index             = 0;
+    self->files_index             = -1;
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
+    self->modules_seen            = hset_create(self->parent_alloc, 32);
     self->verbose                 = 0;
     self->indent_level            = 0;
     self->in_function_application = 0;
+    self->skip_module             = 0;
 
     self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
@@ -144,10 +151,6 @@ parser *parser_create(allocator *alloc, char_csized preamble, c_string_csized fi
     return self;
 }
 
-parser *parser_create_simple(allocator *alloc, char const *in, u32 len) {
-    return parser_create(alloc, (char_csized){.v = in, .size = len}, (c_string_csized){.v = null});
-}
-
 void parser_destroy(parser **self) {
     // error token: arena
     // tokens: arena
@@ -157,6 +160,7 @@ void parser_destroy(parser **self) {
 
     // arena
     allocator *alloc = (*self)->parent_alloc;
+    hset_destroy(&(*self)->modules_seen);
     arena_destroy(alloc, &(*self)->transient);
     arena_destroy(alloc, &(*self)->ast_arena);
     arena_destroy(alloc, &(*self)->tokens_arena);
@@ -1343,6 +1347,25 @@ static int toplevel_hash(parser *self) {
     str_array words   = {.alloc = self->ast_arena};
     str_parse_words(command->hash_command.full, &words);
 
+    if (words.size >= 2) {
+        str command  = words.v[0];
+        str argument = words.v[1];
+        if (str_eq(command, S("unity_file"))) {
+            self->skip_module = 0;
+            tokenizer_set_file(self->tokenizer, str_cstr(&argument));
+        }
+
+        else if (str_eq(command, S("module"))) {
+            // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
+            // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
+            // #unity_file directive is seen.
+            str module        = argument;
+            self->skip_module = 0;
+            if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
+            else str_hset_insert(&self->modules_seen, module);
+        }
+    }
+
     array_shrink(words);
     command->hash_command.words = (str_sized)sized_all(words);
 
@@ -1400,21 +1423,34 @@ static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
-    if (0 == a_try(self, toplevel_hash)) return 0;
-    if (0 == a_try(self, toplevel_struct)) return 0;
-    if (0 == a_try(self, toplevel_defun)) return 0;
-    if (0 == a_try(self, toplevel_assign)) return 0;
-    if (0 == a_try(self, toplevel_forward)) return 0;
-    if (0 == a_try(self, toplevel_symbol_annotation)) return 0;
+    while (!is_eof(self)) {
 
-    self->error.tag = tl_err_expected_toplevel;
+        if (0 == a_try(self, toplevel_hash)) goto success;
+        if (0 == a_try(self, toplevel_struct)) goto success;
+        if (0 == a_try(self, toplevel_defun)) goto success;
+        if (0 == a_try(self, toplevel_assign)) goto success;
+        if (0 == a_try(self, toplevel_forward)) goto success;
+        if (0 == a_try(self, toplevel_symbol_annotation)) goto success;
+
+        self->error.tag = tl_err_expected_toplevel;
+        return 1;
+
+    success:
+        if (!self->skip_module) return 0;
+    }
+
     return 1;
 }
 
 int parser_next(parser *self) {
     if (!self->tokenizer) {
 
-        if (self->files_index >= self->files.size) {
+        // A new tokenizer is created for each file being parsed.
+
+        self->error.tag           = tl_err_ok;
+        self->tokenizer_error.tag = tl_err_ok;
+
+        if ((i32)self->files_index >= (i32)self->files.size) {
             self->error.tag = tl_err_eof;
             return 1;
         }
@@ -1426,12 +1462,18 @@ int parser_next(parser *self) {
             self->current_file_data.size = 0;
         }
 
-        // read file
-        char const *file = self->files.v[self->files_index++];
-        file_read(self->file_arena, file, (char **)&self->current_file_data.v,
-                  &self->current_file_data.size);
+        if (self->files_index == -1) {
+            self->tokenizer   = tokenizer_create(self->parent_alloc, self->unity, "unity");
+            self->files_index = 0;
 
-        self->tokenizer = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+        } else {
+            // read file
+            char const *file = self->files.v[self->files_index++];
+            file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                      &self->current_file_data.size);
+
+            self->tokenizer = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+        }
     }
 
     int res = toplevel(self);

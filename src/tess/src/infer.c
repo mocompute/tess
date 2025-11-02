@@ -342,7 +342,17 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     if (str_eq(words.v[0], S("include"))) {
         array_push(self->hash_includes, words.v[1]);
         return 0;
-    } else {
+    }
+    else if (str_eq(words.v[0], S("import"))) {
+        return 0;
+    }
+    else if (str_eq(words.v[0], S("unity_file"))) {
+        return 0;
+    }
+    else if (str_eq(words.v[0], S("module"))) {
+        return 0;
+    }
+    else {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_unknown_hash_command, .node = node}));
         return 1;
     }

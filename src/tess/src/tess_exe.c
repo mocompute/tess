@@ -112,7 +112,7 @@ void eval_print(char *in) {
 int repl(state *self) {
     (void)self;
     while (1) {
-        char *line = readline("tess > ");
+        char *line = readline("tl > ");
 
         if (!line) continue;
 
@@ -123,6 +123,157 @@ int repl(state *self) {
     }
 
     return 0;
+}
+
+void read_import_lines(char_csized input, str_array *output) {
+    u32         pos = 0, capture_start = 0;
+    char const *data                                            = input.v;
+    u32         size                                            = input.size;
+
+    enum { start, noise, start_hash, in_hash, stop_hash } state = start;
+    while (pos < size) {
+        switch (state) {
+        case start: {
+            char c = data[pos++];
+            if ('#' == c) state = start_hash;
+            else if ('\n' == c) state = start;
+            else state = noise;
+        } break;
+        case noise: {
+            char c = data[pos++];
+            if ('\n' == c) state = start;
+        } break;
+        case start_hash: {
+            capture_start = pos;
+            state         = in_hash;
+        } break;
+        case in_hash: {
+            char c = data[pos++];
+            if ('\n' == c) state = stop_hash;
+        } break;
+        case stop_hash: {
+            str       command = str_init_n(output->alloc, &data[capture_start], pos - capture_start);
+            str_array words   = {.alloc = output->alloc};
+            str_parse_words(command, &words);
+            if (words.size > 2 && str_eq(words.v[0], S("import"))) array_push(*output, words.v[1]);
+            state = start;
+        } break;
+        }
+    }
+
+    if (stop_hash == state) {
+        // catch command at end of file
+        str       command = str_init_n(output->alloc, &data[capture_start], pos - capture_start);
+        str_array words   = {.alloc = output->alloc};
+        str_parse_words(command, &words);
+        if (words.size > 2 && str_eq(words.v[0], S("import"))) array_push(*output, words.v[1]);
+    }
+}
+
+str strip_quotes(allocator *alloc, str quoted) {
+    // TODO: would be better to operate on spans so we don't needlessly copy strings
+    span s = str_span(&quoted);
+    if (s.buf[0] != '"' || s.buf[s.len - 1] != '"') return str_empty();
+    s.buf++;
+    s.len -= 2;
+    return str_copy_span(alloc, s);
+}
+
+static void do_one_import(str path, str_array *imports) {
+    char *data;
+    u32   size;
+
+    // path must be a quoted string, so detect and eliminate quotes
+    path = strip_quotes(imports->alloc, path);
+    if (str_is_empty(path)) return;
+
+    file_read(imports->alloc, str_cstr(&path), &data, &size);
+
+    str_array file_imports = {.alloc = imports->alloc};
+    array_reserve(file_imports, 32);
+
+    read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
+    forall(i, file_imports) {
+        array_push(*imports, file_imports.v[i]);
+        do_one_import(file_imports.v[i], imports);
+    }
+}
+
+static void do_one_file(str path, str_array *imports) {
+    char *data;
+    u32   size;
+
+    file_read(imports->alloc, str_cstr(&path), &data, &size);
+
+    str_array file_imports = {.alloc = imports->alloc};
+    array_reserve(file_imports, 32);
+
+    read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
+    forall(i, file_imports) {
+        array_push(*imports, file_imports.v[i]);
+        do_one_import(file_imports.v[i], imports);
+    }
+}
+
+static char_array make_unity_buffer(state *self, c_string_csized files) {
+    // Reads each file, finds #import "..." commands, reads those files, and produces a single text buffer.
+
+    allocator  *alloc  = self->arena;
+    char const *header = "#unity_file ";
+    char        nl     = '\n';
+
+    char_array  buffer = {.alloc = alloc};
+    array_reserve(buffer, 64 * 1024);
+
+    //
+
+    str_array imports = {.alloc = alloc};
+    array_reserve(imports, 32);
+
+    forall(i, files) {
+        char *data;
+        u32   size;
+        file_read(alloc, files.v[i], &data, &size);
+
+        do_one_file(str_init_static(files.v[i]), &imports);
+    }
+
+    // imports now holds an array of quoted strings for paths to read, in depth first order.
+
+    forall(i, imports) {
+        str path = strip_quotes(alloc, imports.v[i]);
+        if (str_is_empty(path)) continue;
+        if (self->verbose) {
+            printf("Reading file: %s\n", str_cstr(&path));
+        }
+
+        char *data;
+        u32   size;
+        file_read(alloc, str_cstr(&path), &data, &size);
+
+        array_push_many(buffer, header, strlen(header));
+        array_push_many(buffer, str_buf(&path), str_len(path));
+        array_push(buffer, nl);
+
+        array_push_many(buffer, data, size);
+        array_push(buffer, nl);
+    }
+
+    // now append all the primary files in order
+
+    forall(i, files) {
+        char *data;
+        u32   size;
+        file_read(alloc, files.v[i], &data, &size);
+
+        array_push_many(buffer, header, strlen(header));
+        array_push_many(buffer, files.v[i], strlen(files.v[i]));
+        array_push(buffer, nl);
+        array_push_many(buffer, data, size);
+        array_push(buffer, nl);
+    }
+
+    return buffer;
 }
 
 int compile(state *self) {
@@ -137,8 +288,12 @@ int compile(state *self) {
 
     if (!self->no_preamble) array_push_many(preamble, embed_std_tl, preamble_len);
 
-    parser *parser = parser_create(default_allocator(), (char_csized)sized_all(preamble),
-                                   (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1});
+    c_string_csized paths  = {.v = &self->words.v[1], .size = self->words.size - 1};
+    char_array      unity  = make_unity_buffer(self, paths);
+    char_csized     unity_ = array_sized(unity);
+
+    parser         *parser =
+      parser_create(default_allocator(), (char_csized)sized_all(preamble), unity_, (c_string_csized){0});
     if (!parser) fatal("could not create parser");
 
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);

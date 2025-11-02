@@ -716,3 +716,8 @@ void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
         array_push(self->backtrack, toks[i - 1]);
     }
 }
+
+void tokenizer_set_file(tokenizer *self, char const *file) {
+    self->file = file;
+    self->line = 0;
+}
