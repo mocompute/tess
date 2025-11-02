@@ -4,6 +4,7 @@
 #include "array.h"
 #include "ast.h"
 #include "nodiscard.h"
+#include "str.h"
 #include "tokenizer.h"
 
 #include "alloc.h"
@@ -21,7 +22,7 @@ typedef struct parser_error {
 
 // -- allocation and deallocation --
 
-nodiscard parser *parser_create(allocator *, char_csized, char_csized, c_string_csized) mallocfun;
+nodiscard parser *parser_create(allocator *, char_csized, str_sized) mallocfun;
 void              parser_destroy(parser **);
 
 // -- access --

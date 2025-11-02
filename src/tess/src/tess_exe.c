@@ -171,10 +171,17 @@ void read_import_lines(char_csized input, str_array *output) {
     }
 }
 
-str strip_quotes(allocator *alloc, str quoted) {
+static int is_quoted(str arg) {
+    span s = str_span(&arg);
+    if (s.buf[0] != '"' || s.buf[s.len - 1] != '"') return 0;
+    return 1;
+}
+
+static str strip_quotes(allocator *alloc, str quoted) {
     // TODO: would be better to operate on spans so we don't needlessly copy strings
+    if (!is_quoted(quoted)) return str_empty();
+
     span s = str_span(&quoted);
-    if (s.buf[0] != '"' || s.buf[s.len - 1] != '"') return str_empty();
     s.buf++;
     s.len -= 2;
     return str_copy_span(alloc, s);
@@ -216,17 +223,11 @@ static void do_one_file(str path, str_array *imports) {
     }
 }
 
-static char_array make_unity_buffer(state *self, c_string_csized files) {
-    // Reads each file, finds #import "..." commands, reads those files, and produces a single text buffer.
+static str_sized collect_imports(state *self, c_string_csized files) {
+    allocator *alloc  = self->arena;
 
-    allocator  *alloc  = self->arena;
-    char const *header = "#unity_file ";
-    char        nl     = '\n';
-
-    char_array  buffer = {.alloc = alloc};
+    char_array buffer = {.alloc = alloc};
     array_reserve(buffer, 64 * 1024);
-
-    //
 
     str_array imports = {.alloc = alloc};
     array_reserve(imports, 32);
@@ -239,42 +240,29 @@ static char_array make_unity_buffer(state *self, c_string_csized files) {
         do_one_file(str_init_static(files.v[i]), &imports);
     }
 
-    // imports now holds an array of quoted strings for paths to read, in depth first order.
+    return (str_sized)array_sized(imports);
+}
+
+static str_sized files_in_order(state *self, c_string_csized files) {
+    str_sized imports        = collect_imports(self, files);
+
+    str_array files_in_order = {.alloc = self->arena};
+    array_reserve(files_in_order, imports.size + files.size);
 
     forall(i, imports) {
-        str path = strip_quotes(alloc, imports.v[i]);
-        if (str_is_empty(path)) continue;
-        if (self->verbose) {
-            printf("Reading file: %s\n", str_cstr(&path));
-        }
+        str file = imports.v[i];
 
-        char *data;
-        u32   size;
-        file_read(alloc, str_cstr(&path), &data, &size);
-
-        array_push_many(buffer, header, strlen(header));
-        array_push_many(buffer, str_buf(&path), str_len(path));
-        array_push(buffer, nl);
-
-        array_push_many(buffer, data, size);
-        array_push(buffer, nl);
+        if (!is_quoted(file)) continue;
+        file = strip_quotes(self->arena, file);
+        array_push(files_in_order, file);
     }
-
-    // now append all the primary files in order
 
     forall(i, files) {
-        char *data;
-        u32   size;
-        file_read(alloc, files.v[i], &data, &size);
-
-        array_push_many(buffer, header, strlen(header));
-        array_push_many(buffer, files.v[i], strlen(files.v[i]));
-        array_push(buffer, nl);
-        array_push_many(buffer, data, size);
-        array_push(buffer, nl);
+        str file = str_init(self->arena, files.v[i]);
+        array_push(files_in_order, file);
     }
 
-    return buffer;
+    return (str_sized)array_sized(files_in_order);
 }
 
 int compile(state *self) {
@@ -289,18 +277,10 @@ int compile(state *self) {
 
     if (!self->no_preamble) array_push_many(preamble, embed_std_tl, preamble_len);
 
-    c_string_csized paths  = {.v = &self->words.v[1], .size = self->words.size - 1};
-    char_array      unity  = make_unity_buffer(self, paths);
-    char_csized     unity_ = array_sized(unity);
+    c_string_csized paths = {.v = &self->words.v[1], .size = self->words.size - 1};
 
-    if (self->verbose) {
-        printf("------------------\n");
-        printf("%.*s\n", unity.size, unity.v);
-        printf("------------------\n");
-    }
-
-    parser *parser =
-      parser_create(default_allocator(), (char_csized)sized_all(preamble), unity_, (c_string_csized){0});
+    parser         *parser =
+      parser_create(default_allocator(), (char_csized)sized_all(preamble), files_in_order(self, paths));
     if (!parser) fatal("could not create parser");
 
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);

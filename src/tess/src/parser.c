@@ -28,9 +28,8 @@ struct parser {
 
     tokenizer             *tokenizer;
 
-    char_csized            unity;
-    c_string_csized        files;
-    i16                    files_index;
+    str_sized              files;
+    u32                    files_index;
     char_csized            current_file_data;
     hashmap               *modules_seen; // str hset
 
@@ -122,7 +121,7 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, char_csized preamble, char_csized unity, c_string_csized files) {
+parser *parser_create(allocator *alloc, char_csized preamble, str_sized files) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
@@ -131,9 +130,8 @@ parser *parser_create(allocator *alloc, char_csized preamble, char_csized unity,
     self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
     self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->unity                   = unity;
     self->files                   = files;
-    self->files_index             = -1;
+    self->files_index             = 0;
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
     self->modules_seen            = hset_create(self->parent_alloc, 32);
@@ -1473,18 +1471,13 @@ int parser_next(parser *self) {
             self->current_file_data.size = 0;
         }
 
-        if (self->files_index == -1) {
-            self->tokenizer   = tokenizer_create(self->parent_alloc, self->unity, "unity");
-            self->files_index = 0;
+        // read file
+        char const *file = str_cstr(&self->files.v[self->files_index++]);
+        file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                  &self->current_file_data.size);
 
-        } else {
-            // read file
-            char const *file = self->files.v[self->files_index++];
-            file_read(self->file_arena, file, (char **)&self->current_file_data.v,
-                      &self->current_file_data.size);
-
-            self->tokenizer = tokenizer_create(self->parent_alloc, self->current_file_data, file);
-        }
+        self->tokenizer     = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+        self->expect_module = 1;
     }
 
     int res = toplevel(self);
