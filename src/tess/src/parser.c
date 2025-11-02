@@ -40,6 +40,7 @@ struct parser {
     struct tokenizer_error tokenizer_error;
     struct token           token;
 
+    str                    current_module;
     u32                    next_nil_name;
     int                    verbose;
     int                    indent_level;
@@ -113,6 +114,8 @@ static int  a_string(parser *);
 static int  the_symbol(parser *, char const *const);
 
 static int  string_to_number(parser *, char const *const);
+static void mangle_name_for_module(parser *, ast_node *, str);
+static void mangle_name(parser *, ast_node *);
 
 static void tokens_push_back(struct parser *, struct token *);
 static void tokens_shrink(struct parser *, u32);
@@ -130,11 +133,19 @@ parser *parser_create(allocator *alloc, char_csized preamble, str_sized files) {
     self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
     self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->tokenizer               = null;
     self->files                   = files;
     self->files_index             = 0;
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
     self->modules_seen            = hset_create(self->parent_alloc, 32);
+    self->result                  = null;
+    self->tokens                  = (token_array){0};
+    self->error                   = (struct parser_error){0};
+    self->tokenizer_error         = (struct tokenizer_error){0};
+    self->token                   = (struct token){0};
+    self->current_module          = str_empty();
+    self->next_nil_name           = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
     self->in_function_application = 0;
@@ -1061,12 +1072,26 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             ast_node *right = parse_expression(self, prec + 1); // (prec+1): left-associative
             if (!right) return null;
 
+            // Note: special case: mangle Module.foo and Module.bar() to simple expressions
+            if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(left) &&
+                str_hset_contains(self->modules_seen, left->symbol.name)) {
+                ast_node *to_mangle = null;
+                if (ast_node_is_symbol(right)) to_mangle = right;
+                else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
+                if (to_mangle) {
+                    mangle_name_for_module(self, to_mangle, left->symbol.name);
+                    left = right;
+                    continue;
+                }
+            }
+
             // Note: special case: [ as binary operator, need to close it with ] token
             if (0 == str_cmp_c(op->symbol.name, "["))
                 if (a_try(self, a_close_square)) return null;
 
             ast_node *binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
             left            = binop;
+
         } else break;
     }
 
@@ -1079,7 +1104,18 @@ static int a_expression(parser *self) {
     return result_ast_node(self, res);
 }
 
+static void mangle_name_for_module(parser *self, ast_node *name, str module) {
+    if (ast_node_is_symbol(name) && !str_is_empty(module)) {
+        name->symbol.name = str_cat_3(self->ast_arena, module, S("_"), name->symbol.name);
+    }
+}
+
+static void mangle_name(parser *self, ast_node *name) {
+    mangle_name_for_module(self, name, self->current_module);
+}
+
 static ast_node *parse_lvalue(parser *self) {
+    // Note: mangles name based on self->current_module
     ast_node *ident = null;
 
     ast_node *expr  = parse_expression(self, INT_MIN);
@@ -1106,6 +1142,8 @@ static ast_node *parse_lvalue(parser *self) {
 
         leftmost->symbol.annotation = ann;
     }
+
+    mangle_name(self, ident);
 
     return ident;
 }
@@ -1262,7 +1300,8 @@ decl_done:
 
     ast_node *body = create_body(self, exprs);
 
-    ast_node *let  = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
+    mangle_name(self, name);
+    ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params); // FIXME
     let->let.name = name;
     let->let.body = body;
@@ -1273,8 +1312,12 @@ decl_done:
 }
 
 static int toplevel_assign(parser *self) {
+    // cannot use parse_lvalue here
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
+
+    mangle_name(self, name);
+
     if (a_try(self, a_colon_equal)) return 1;
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return 1;
@@ -1365,7 +1408,11 @@ static int toplevel_hash(parser *self) {
             self->skip_module   = 0;
             self->expect_module = 0;
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
-            else str_hset_insert(&self->modules_seen, module);
+            else {
+                str_hset_insert(&self->modules_seen, module);
+                if (str_eq(module, S("main"))) self->current_module = str_empty();
+                else self->current_module = module;
+            }
         }
     }
 
