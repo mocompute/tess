@@ -140,7 +140,7 @@ typedef struct ast_node {
         } hash_command;
 
         struct ast_type_alias {
-            str              name;
+            struct ast_node *name;   // symbol or nfa
             struct ast_node *target; // symbol or nfa
         } type_alias;
     };

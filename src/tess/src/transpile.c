@@ -1600,7 +1600,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     } else if (ast_node_is_named_application(arg)) {
         // type constructor
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
-        tl_monotype *type = tl_type_registry_parse(self->registry, self->infer, arg, self->subs, &map);
+        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
         if (!type) fatal("missing type");
 
         // replace type with its specialized version. tl_infer had no chance to do this because it doesn't

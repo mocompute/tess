@@ -129,7 +129,7 @@ ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
 }
 ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node *target) {
     ast_node *self          = ast_node_create(alloc, ast_type_alias);
-    self->type_alias.name   = str_copy(alloc, name->symbol.name);
+    self->type_alias.name   = name;
     self->type_alias.target = target;
     return self;
 }
@@ -270,7 +270,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     } break;
 
     case ast_type_alias: {
-        clone->type_alias.name   = str_copy(alloc, orig->type_alias.name);
+        clone->type_alias.name   = ast_node_clone(alloc, orig->type_alias.name);
         clone->type_alias.target = ast_node_clone(alloc, orig->type_alias.target);
     } break;
 
@@ -942,7 +942,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_type_alias: {
         str_build b = str_build_init(alloc, 64);
         str_build_cat(&b, S("(alias "));
-        str_build_cat(&b, node->type_alias.name);
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.name));
         str_build_cat(&b, S(" "));
         str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.target));
         str_build_cat(&b, S(")"));
@@ -1157,7 +1157,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_type_alias:
         //
-        hash = str_hash64_combine(hash, self->type_alias.name);
+        combine_node(self->type_alias.name);
         combine_node(self->type_alias.target);
         break;
 

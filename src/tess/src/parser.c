@@ -1421,8 +1421,9 @@ static int toplevel_hash(parser *self) {
 }
 
 static int toplevel_type_alias(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node *name = null;
+    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) name = self->result;
+    else return 1;
     if (a_try(self, a_equal_sign)) return 1;
 
     ast_node *target = null;

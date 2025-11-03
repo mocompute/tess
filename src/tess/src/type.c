@@ -30,7 +30,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
     self->alloc            = alloc;
     self->subs             = subs;
-    self->definitions      = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
+    self->definitions      = map_new(self->alloc, str, tl_polytype *, 64);       // key: str
     self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
@@ -208,6 +208,20 @@ tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name,
     if (args.size != arity) return null;
 
     type = tl_polytype_instantiate_with(self->alloc, poly, args);
+
+    return type;
+}
+
+tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
+    str          name = S("Union");
+    tl_monotype *type = null;
+
+    tl_polytype *poly = str_map_get_ptr(self->definitions, name);
+    if (!poly) fatal("runtime error");
+
+    type = tl_polytype_instantiate(self->alloc, poly, self->subs);
+    assert(tl_monotype_is_inst(type));
+    type->cons_inst->args = args;
 
     return type;
 }

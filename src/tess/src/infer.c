@@ -138,8 +138,8 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
     return found;
 }
 
-tl_monotype *tl_type_registry_parse(tl_type_registry *self, tl_infer *infer, ast_node const *node,
-                                    tl_type_subs *subs, hashmap **map) {
+tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
+                                    hashmap **map) {
     // map : map_new(self->transient, str, tl_monotype*, 8);
     // used to ensure same symbol gets same type variable.
     // map may be null in which case type arguments are not supported, as in the case of simple type
@@ -176,7 +176,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, tl_infer *infer, ast
         tl_monotype_array args_mono = {.alloc = self->alloc};
         array_reserve(args_mono, args.size);
         forall(i, args) {
-            tl_monotype const *mono = tl_type_registry_parse(self, infer, args.v[i], subs, map);
+            tl_monotype const *mono = tl_type_registry_parse(self, args.v[i], subs, map);
             if (!mono) {
                 // a type variable
                 if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
@@ -187,9 +187,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, tl_infer *infer, ast
 
         tl_monotype_sized args_mono_ = array_sized(args_mono);
         if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
-            str name         = S("Union");
-            str special_name = next_instantiation(infer, name);
-            return tl_type_registry_specialize(self, name, special_name, args_mono_);
+            return tl_type_registry_instantiate_union(self, args_mono_);
         } else {
             return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
                                                      args_mono_);
@@ -203,12 +201,12 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, tl_infer *infer, ast
         ast_node_sized    tuple = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
         tl_monotype_array arr   = {.alloc = self->alloc};
         forall(i, tuple) {
-            tl_monotype const *t = tl_type_registry_parse(self, infer, tuple.v[i], subs, map);
+            tl_monotype const *t = tl_type_registry_parse(self, tuple.v[i], subs, map);
             array_push(arr, t);
         }
         tl_monotype_sized arr_sized = array_sized(arr);
         tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
-        tl_monotype      *right     = tl_type_registry_parse(self, infer, node->arrow.right, subs, map);
+        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, subs, map);
         return tl_monotype_create_arrow(self->alloc, left, right);
     }
 
@@ -255,8 +253,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         }
 
         if (!field)
-            field =
-              tl_type_registry_parse(self->registry, self, field_type_node, self->subs, &type_argument_map);
+            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
 
         if (!field) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
@@ -310,8 +307,7 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     if (ctx) map = ctx->type_arguments;
     else map = map_new(self->transient, str, tl_monotype *, 8);
 
-    tl_monotype *ann =
-      tl_type_registry_parse(self->registry, self, name->symbol.annotation, self->subs, &map);
+    tl_monotype *ann  = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
 
     tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
     // tl_polytype_generalize(poly, self->env, self->subs);
@@ -400,9 +396,10 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
         }
 
         else if (ast_node_is_type_alias(node)) {
-            str          name = node->type_alias.name;
+            str          name = toplevel_name(node);
             tl_monotype *ann =
-              tl_type_registry_parse(self->registry, self, node->type_alias.target, self->subs, null);
+              tl_type_registry_parse(self->registry, node->type_alias.target, self->subs, null);
+            assert(ann);
             tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
             tl_polytype_generalize(poly, self->env, self->subs);
             {
@@ -2827,7 +2824,12 @@ ast_node *toplevel_name_node(ast_node *node) {
     else if (ast_node_is_symbol(node)) return node;
     else if (ast_node_is_utd(node)) return node->user_type_def.name;
     else if (ast_node_is_nfa(node)) return node->named_application.name;
-    else fatal("logic error");
+    else if (ast_node_is_type_alias(node)) {
+        if (ast_node_is_symbol(node->type_alias.name)) return node->type_alias.name;
+        else if (ast_node_is_nfa(node->type_alias.name))
+            return node->type_alias.name->named_application.name;
+        else fatal("runtime error");
+    } else fatal("logic error");
 }
 
 str toplevel_name(ast_node const *node) {
