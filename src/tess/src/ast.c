@@ -481,6 +481,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     case ast_type_alias:
         //
+        fun(ctx, node->type_alias.name);
         fun(ctx, node->type_alias.target);
         break;
 

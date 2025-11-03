@@ -138,6 +138,7 @@ int                    tl_monotype_is_arrow(tl_monotype *);
 int                    tl_monotype_is_ptr(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
 int                    tl_monotype_is_ptr_or_null(tl_monotype *);
+int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
 int                    tl_monotype_is_type_literal(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
@@ -145,6 +146,7 @@ tl_monotype           *tl_monotype_type_literal_target(tl_monotype *);
 tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 void                   tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *);
+void                   tl_monotype_force_union_resolve(tl_monotype *);
 
 // -- polytype --
 

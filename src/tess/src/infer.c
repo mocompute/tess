@@ -2366,6 +2366,34 @@ void admit_generic_pointers(tl_infer *self) {
     }
 }
 
+void do_resolve_unions(void *ctx, ast_node *node) {
+    (void)ctx;
+
+    if (!node->type) return;
+    tl_monotype_force_union_resolve(node->type->type);
+}
+
+void resolve_unions(tl_infer *self) {
+    // Note: Union types may remain unresolved during type checking: resolve them by arbitrarily picking a
+    // variant.
+
+    {
+        ast_node        *node;
+        hashmap_iterator iter = {0};
+        while ((node = toplevel_iter(self, &iter))) {
+            ast_node_dfs(null, node, do_resolve_unions);
+        }
+    }
+    {
+        hashmap_iterator iter = {0};
+        while (map_iter(self->env->map, &iter)) {
+            tl_polytype **poly = iter.data;
+            if (!poly || !(*poly)->type) continue;
+            tl_monotype_force_union_resolve((*poly)->type);
+        }
+    }
+}
+
 void remove_generic_toplevels(tl_infer *self) {
     str_array        names = {.alloc = self->transient};
 
@@ -2670,6 +2698,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
 
     admit_generic_pointers(self);
+    arena_reset(self->transient);
+
+    resolve_unions(self);
     arena_reset(self->transient);
 
     remove_generic_toplevels(self);

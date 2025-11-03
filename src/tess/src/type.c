@@ -809,7 +809,10 @@ int tl_monotype_is_ptr_or_null(tl_monotype *self) {
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
            str_eq(generic_name, S("PtrOrNull"));
 }
-
+int tl_monotype_is_union(tl_monotype *self) {
+    return self && tl_cons_inst == self->tag && self->cons_inst->def &&
+           str_eq(self->cons_inst->def->generic_name, S("Union"));
+}
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
     return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
@@ -900,6 +903,32 @@ void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
     case tl_list:
     case tl_tuple: {
         forall(i, self->list.xs) tl_monotype_force_tv_to_nil(self->list.xs.v[i], nil);
+        break;
+    }
+    }
+}
+
+void tl_monotype_force_union_resolve(tl_monotype *self) {
+    if (!self) return;
+    if (tl_monotype_is_union(self)) {
+        if (!self->cons_inst->args.size) fatal("runtime error");
+
+        *self = *self->cons_inst->args.v[0];
+        return;
+    }
+
+    switch (self->tag) {
+    case tl_any:
+    case tl_var:
+    case tl_weak: break;
+
+    case tl_cons_inst:
+        forall(i, self->cons_inst->args) tl_monotype_force_union_resolve(self->cons_inst->args.v[i]);
+        break;
+
+    case tl_list:
+    case tl_tuple: {
+        forall(i, self->list.xs) tl_monotype_force_union_resolve(self->list.xs.v[i]);
         break;
     }
     }
