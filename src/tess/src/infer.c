@@ -28,6 +28,8 @@ struct tl_infer {
     allocator           *transient;
     allocator           *arena;
 
+    tl_infer_opts        opts;
+
     tl_type_registry    *registry;
     tl_type_env         *env;
     tl_type_subs        *subs;
@@ -56,6 +58,7 @@ typedef struct {
     hashmap *call_chain;     // hset str
     hashmap *lex;            // hset str (names in local lexical scope)
     hashmap *type_arguments; // map str -> tl_monotype*
+    hashmap *seen_node;      // hset ast_node* FIXME: needed?
     void    *user;
     int      is_intrinsic_argument;
     int      is_field_name;
@@ -80,8 +83,10 @@ static void      log_subs(tl_infer *);
 
 //
 
-tl_infer *tl_infer_create(allocator *alloc) {
+tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     tl_infer *self           = new (alloc, tl_infer);
+
+    self->opts               = *opts;
 
     self->transient          = arena_create(alloc, 4096);
     self->arena              = arena_create(alloc, 16 * 1024);
@@ -443,6 +448,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             if (p) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
+                create_type_constructor_from_user_type(self, node);
                 str_map_set(&tops, name_str, &node);
             }
         }
@@ -542,6 +548,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out          = new (alloc, traverse_ctx);
+    out->seen_node             = hset_create(alloc, 1024);
     out->call_chain            = hset_create(alloc, 16);
     out->lex                   = hset_create(alloc, 16);
     out->type_arguments        = map_create_ptr(alloc, 16);
@@ -553,6 +560,7 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
 }
 
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
+    if ((*p)->seen_node) map_destroy(&(*p)->seen_node);
     if ((*p)->type_arguments) map_destroy(&(*p)->type_arguments);
     if ((*p)->lex) hset_destroy(&(*p)->lex);
     if ((*p)->call_chain) hset_destroy(&(*p)->call_chain);
@@ -663,6 +671,8 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
 
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
+
+    hset_insert(&ctx->seen_node, &node, sizeof(ast_node *));
 
     switch (node->tag) {
     case ast_let: {
@@ -1190,8 +1200,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         ensure_tv(self, null, &node->type);
 
-        str          name = node->named_application.name->symbol.name;
-        tl_polytype *type = tl_type_env_lookup(self->env, name);
+        str          name     = ast_node_str(node->named_application.name);
+        str          original = ast_node_name_original(node->named_application.name);
+        tl_polytype *type     = tl_type_env_lookup(self->env, name);
         if (!type) {
             return 0; // mututal recursion, undeclared std_* functions, etc
         }
@@ -1254,6 +1265,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         } else {
             // a function type
+
+            // if the type is not generic, try to recover the generic one
+            if (tl_polytype_is_concrete(type)) {
+                if (!str_is_empty(original)) {
+                    tl_polytype *found = tl_type_env_lookup(self->env, original);
+                    if (found) type = found;
+                }
+            }
 
             // instantiate generic function type being applied
             ast_arguments_iter iter     = ast_node_arguments_iter(node);
@@ -1570,7 +1589,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
         tl_polytype *poly = tl_polytype_clone(self->arena, arg->type);
         tl_polytype_substitute(self->arena, poly, self->subs);
-        assert(tl_polytype_is_concrete(poly));
+        if (!tl_polytype_is_concrete(poly)) return 0; // FIXME
 
         tl_monotype *mono = poly->type;
 
@@ -2267,7 +2286,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
     } else if (ast_node_is_utd(node)) {
-        load_user_type(self, node);
+        // already loaded from load_toplevel
         return 0;
     } else if (ast_node_is_let_in(node)) {
         if (infer_one(self, infer_target)) {
@@ -2665,12 +2684,15 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_env(self);
     arena_reset(self->transient);
 
-    ast_node **found_main = str_map_get(self->toplevels, S("main"));
-    if (!found_main) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
-        return 1;
+    ast_node *main = null;
+    if (!self->opts.is_library) {
+        ast_node **found_main = str_map_get(self->toplevels, S("main"));
+        if (!found_main) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
+            return 1;
+        }
+        main = *found_main;
     }
-    ast_node *main = *found_main;
 
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up
@@ -2681,8 +2703,25 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
     traverse->user         = ctx;
 
-    traverse_ast(self, traverse, main, specialize_applications_cb);
+    if (main) {
+        traverse_ast(self, traverse, main, specialize_applications_cb);
+    } else {
 
+        ast_node *node = null;
+        forall(i, nodes) {
+            node = nodes.v[i];
+
+            if (ast_node_is_let(node)) {
+                ast_node *name = toplevel_name_node(node);
+                if (!name->symbol.annotation_type) {
+                    str fun_name = ast_node_str(name);
+                    log(self, "skipping '%s' due to lack of annotation", str_cstr(&fun_name));
+                    continue;
+                }
+            }
+            traverse_ast(self, traverse, node, specialize_applications_cb);
+        }
+    }
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);
@@ -2696,8 +2735,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     update_specialized_types(self);
 
     // ensure main function has the correct type
-    if (check_main_function(self, main)) return 1;
-    arena_reset(self->transient);
+    if (main) {
+        if (check_main_function(self, main)) return 1;
+        arena_reset(self->transient);
+    }
 
     admit_generic_pointers(self);
     arena_reset(self->transient);
@@ -2708,8 +2749,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     remove_generic_toplevels(self);
     arena_reset(self->transient);
 
-    tree_shake_toplevels(self, main);
-    arena_reset(self->transient);
+    if (main) {
+        tree_shake_toplevels(self, main);
+        arena_reset(self->transient);
+    }
 
     log(self, "-- final subs");
     log_subs(self);

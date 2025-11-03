@@ -9,6 +9,7 @@ typedef struct transpile transpile;
 typedef struct {
     tl_infer_result infer_result;
     int             verbose;
+    int             is_library;
 } transpile_opts;
 
 nodiscard transpile *transpile_create(allocator *, transpile_opts const *) mallocfun;

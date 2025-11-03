@@ -19,7 +19,11 @@ typedef struct {
     str_sized         hash_includes;
 } tl_infer_result;
 
-nodiscard tl_infer *tl_infer_create(allocator *) mallocfun;
+typedef struct {
+    int is_library; // build a library, not an executable
+} tl_infer_opts;
+
+nodiscard tl_infer *tl_infer_create(allocator *, tl_infer_opts const *) mallocfun;
 void                tl_infer_destroy(allocator *, tl_infer **);
 void                tl_infer_set_verbose(tl_infer *, int);
 

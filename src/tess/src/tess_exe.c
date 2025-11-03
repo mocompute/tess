@@ -31,6 +31,8 @@ typedef struct {
     int             verbose_parse;
     int             no_preamble;
     int             help;
+
+    int             is_library;
 } state;
 
 noreturn void usage(int status, char const *argv0) {
@@ -39,6 +41,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("Usage: %s [-hv] [c | repl] [-o outpath] [path1 path2 ... pathn] \n", progname);
     puts("Commands:\n");
     printf("    c                      transpile input files to stdout\n");
+    printf("    lib                    transpile input files to stdout\n");
     printf("    repl                   launch the repl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage\n");
@@ -60,6 +63,8 @@ void state_init(state *self) {
     self->verbose_parse = 0;
     self->no_preamble   = 0;
     self->help          = 0;
+
+    self->is_library    = 0;
 }
 
 void state_deinit(state *self) {
@@ -300,7 +305,8 @@ int compile(state *self) {
         }
     }
 
-    tl_infer       *infer        = tl_infer_create(default_allocator());
+    tl_infer_opts   infer_opts   = {.is_library = self->is_library};
+    tl_infer       *infer        = tl_infer_create(default_allocator(), &infer_opts);
     tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
     if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes), &infer_result)) {
@@ -309,7 +315,7 @@ int compile(state *self) {
         goto cleanup_ti;
     }
 
-    transpile_opts transpile_opts = {.infer_result = infer_result};
+    transpile_opts transpile_opts = {.infer_result = infer_result, .is_library = self->is_library};
     transpile     *transpile      = transpile_create(default_allocator(), &transpile_opts);
 
     str_build      program_build;
@@ -356,6 +362,11 @@ int main(int argc, char *argv[]) {
 
     if (0 == strcmp("c", self.words.v[0])) {
         result = compile(&self);
+    }
+
+    else if (0 == strcmp("lib", self.words.v[0])) {
+        self.is_library = 1;
+        result          = compile(&self);
     }
 
     else if (0 == strcmp("repl", self.words.v[0])) {

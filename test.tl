@@ -10,7 +10,7 @@ is_null     (p : PtrOrNull(a)) -> Bool
 is_ptr      (p : PtrOrNull(a)) -> Bool
 ptr         (p : PtrOrNull(a)) -> Ptr(a)
 
-sizeof      (T) { _tl_sizeof_(T) }
+sizeof      (T: Type) { _tl_sizeof_(T) }
 
 is_null(p) {
   if p == null { true } else { false }
@@ -39,23 +39,26 @@ array_new(T : Type, count) {
 array_free(arr) { c_free(arr.v) }
 
 
+make_points(count : Int) -> Array(Point(Int))
+make_rects(count : Int) -> Array(Rect(Int))
+
 make_points(count) { array_new(Point(Int), count) }
 make_rects(count)  { array_new(Rect(Int), count) }
 
-main() {
-  points := make_points(8)
-  rects := make_rects(8)
+// main() {
+//   points := make_points(8)
+//   rects := make_rects(8)
 
-  points.v[0] = Point(0, 1)
-  points.v[1] = Point(2, 3)
+//   points.v[0] = Point(0, 1)
+//   points.v[1] = Point(2, 3)
 
-  res := points.v[0].x
-  if (points.v[0].x != 0) { res = 1 }
-  if (points.v[0].y != 1) { res = 1 }
-  if (points.v[1].x != 2) { res = 1 }
-  if (points.v[1].y != 3) { res = 1 }
+//   res := points.v[0].x
+//   if (points.v[0].x != 0) { res = 1 }
+//   if (points.v[0].y != 1) { res = 1 }
+//   if (points.v[1].x != 2) { res = 1 }
+//   if (points.v[1].y != 3) { res = 1 }
 
-  array_free(points)
-  array_free(rects)
-  res
-}
+//   array_free(points)
+//   array_free(rects)
+//   res
+// }

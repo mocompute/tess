@@ -21,6 +21,8 @@ struct transpile {
     allocator        *arena;
     allocator        *transient;
 
+    transpile_opts    opts;
+
     tl_type_registry *registry;
     ast_node_sized    nodes;
     ast_node_sized    synthesized_nodes;
@@ -739,7 +741,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     if (type && tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
 
     // check c_ after type constructor
-    if (0 == str_cmp_nc(name, "c_", 2)) return generate_funcall_c(self, node, ctx);
+    if (is_c_symbol(name)) return generate_funcall_c(self, node, ctx);
 
     if (!type) fatal("funcall with null type");
 
@@ -1236,7 +1238,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_structs(self);
     generate_toplevel_contexts(self);
 
-    generate_prototypes(self, 1);
+    generate_prototypes(self, !self->opts.is_library);
     cat_nl(self);
 
     generate_toplevel_values(self);
@@ -1245,7 +1247,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_toplevels(self);
     cat_nl(self);
 
-    generate_main(self);
+    if (!self->opts.is_library) generate_main(self);
 
     if (out_build) {
         *out_build = self->build;
@@ -1257,6 +1259,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     transpile *self         = new (alloc, transpile);
+
+    self->opts              = *opts;
 
     self->parent            = alloc;
     self->arena             = arena_create(alloc, TRANSPILE_ARENA_SIZE);
