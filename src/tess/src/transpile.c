@@ -1137,7 +1137,8 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;
 
-    case ast_hash_command: fatal("logic error");
+    case ast_hash_command:
+    case ast_type_alias:   fatal("logic error");
     }
 }
 
@@ -1599,7 +1600,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     } else if (ast_node_is_named_application(arg)) {
         // type constructor
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
-        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        tl_monotype *type = tl_type_registry_parse(self->registry, self->infer, arg, self->subs, &map);
         if (!type) fatal("missing type");
 
         // replace type with its specialized version. tl_infer had no chance to do this because it doesn't

@@ -1420,6 +1420,21 @@ static int toplevel_hash(parser *self) {
     return 0;
 }
 
+static int toplevel_type_alias(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+    if (a_try(self, a_equal_sign)) return 1;
+
+    ast_node *target = null;
+    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) target = self->result;
+    else return 1;
+
+    ast_node *node = ast_node_create_type_alias(self->ast_arena, name, target);
+    return result_ast_node(self, node);
+
+    return 0;
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1;
@@ -1474,6 +1489,7 @@ static int toplevel(parser *self) {
     while (!is_eof(self)) {
 
         if (0 == a_try(self, toplevel_hash)) goto success_hash;
+        if (0 == a_try(self, toplevel_type_alias)) goto success;
         if (0 == a_try(self, toplevel_struct)) goto success;
         if (0 == a_try(self, toplevel_defun)) goto success;
         if (0 == a_try(self, toplevel_assign)) goto success;

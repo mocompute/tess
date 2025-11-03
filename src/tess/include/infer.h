@@ -29,8 +29,8 @@ void                tl_infer_report_errors(tl_infer *);
 str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
-tl_monotype        *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
-                                           hashmap **map);
+tl_monotype        *tl_type_registry_parse(tl_type_registry *, tl_infer *, ast_node const *, tl_type_subs *,
+                                           hashmap **);
 
 tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
 

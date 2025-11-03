@@ -37,6 +37,7 @@ struct tl_infer {
     hashmap             *toplevels;      // str => ast_node*
     hashmap             *instances;      // u64 hash => str specialised name in env
     hashmap             *instance_names; // str set
+    hashmap             *type_aliases;   // str => polytype
     str_array            hash_includes;
     tl_infer_error_array errors;
 
@@ -94,6 +95,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
     self->toplevels          = null;
     self->instances          = map_new(self->arena, name_and_type, str, 512);
     self->instance_names     = hset_create(self->arena, 512);
+    self->type_aliases       = map_new(self->arena, str, tl_polytype *, 64);
     self->hash_includes      = (str_array){.alloc = self->arena};
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
@@ -108,6 +110,7 @@ tl_infer *tl_infer_create(allocator *alloc) {
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 
+    if ((*p)->type_aliases) map_destroy(&(*p)->type_aliases);
     if ((*p)->toplevels) map_destroy(&(*p)->toplevels);
     if ((*p)->instances) map_destroy(&(*p)->instances);
     if ((*p)->instance_names) hset_destroy(&(*p)->instance_names);
@@ -124,7 +127,9 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
 }
 
 static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **map, tl_type_subs *subs) {
-    tl_monotype *found = str_map_get_ptr(*map, name);
+    // map may be null, in which case type arguments are not supported
+    tl_monotype *found = null;
+    if (map) found = str_map_get_ptr(*map, name);
 
     if (found) {
         return found;
@@ -132,14 +137,16 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
 
     tl_type_variable tv = tl_type_subs_fresh(subs);
     found               = tl_monotype_create_tv(self->alloc, tv);
-    str_map_set_ptr(map, name, found);
+    if (map) str_map_set_ptr(map, name, found);
     return found;
 }
 
-tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
-                                    hashmap **map) {
+tl_monotype *tl_type_registry_parse(tl_type_registry *self, tl_infer *infer, ast_node const *node,
+                                    tl_type_subs *subs, hashmap **map) {
     // map : map_new(self->transient, str, tl_monotype*, 8);
-    // used to ensure same symbol gets same type variable
+    // used to ensure same symbol gets same type variable.
+    // map may be null in which case type arguments are not supported, as in the case of simple type
+    // aliases, which alias an identifier to a type
 
     // TODO: it's weird that this is here, but it depends on type_registry, which does not exist until the
     // inference stage.
@@ -168,7 +175,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         tl_monotype_array args_mono = {.alloc = self->alloc};
         array_reserve(args_mono, args.size);
         forall(i, args) {
-            tl_monotype const *mono = tl_type_registry_parse(self, args.v[i], subs, map);
+            tl_monotype const *mono = tl_type_registry_parse(self, infer, args.v[i], subs, map);
             if (!mono) {
                 // a type variable
                 if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
@@ -178,8 +185,14 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         }
 
         tl_monotype_sized args_mono_ = array_sized(args_mono);
-        return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
-                                                 args_mono_);
+        if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
+            str name         = S("Union");
+            str special_name = next_instantiation(infer, name);
+            return tl_type_registry_specialize(self, name, special_name, args_mono_);
+        } else {
+            return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
+                                                     args_mono_);
+        }
     }
 
     if (ast_node_is_arrow(node)) {
@@ -189,12 +202,12 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         ast_node_sized    tuple = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
         tl_monotype_array arr   = {.alloc = self->alloc};
         forall(i, tuple) {
-            tl_monotype const *t = tl_type_registry_parse(self, tuple.v[i], subs, map);
+            tl_monotype const *t = tl_type_registry_parse(self, infer, tuple.v[i], subs, map);
             array_push(arr, t);
         }
         tl_monotype_sized arr_sized = array_sized(arr);
         tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
-        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, subs, map);
+        tl_monotype      *right     = tl_type_registry_parse(self, infer, node->arrow.right, subs, map);
         return tl_monotype_create_arrow(self->alloc, left, right);
     }
 
@@ -241,7 +254,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         }
 
         if (!field)
-            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
+            field =
+              tl_type_registry_parse(self->registry, self, field_type_node, self->subs, &type_argument_map);
 
         if (!field) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
@@ -295,7 +309,8 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     if (ctx) map = ctx->type_arguments;
     else map = map_new(self->transient, str, tl_monotype *, 8);
 
-    tl_monotype *ann  = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
+    tl_monotype *ann =
+      tl_type_registry_parse(self->registry, self, name->symbol.annotation, self->subs, &map);
 
     tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
     // tl_polytype_generalize(poly, self->env, self->subs);
@@ -342,17 +357,13 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     if (str_eq(words.v[0], S("include"))) {
         array_push(self->hash_includes, words.v[1]);
         return 0;
-    }
-    else if (str_eq(words.v[0], S("import"))) {
+    } else if (str_eq(words.v[0], S("import"))) {
         return 0;
-    }
-    else if (str_eq(words.v[0], S("unity_file"))) {
+    } else if (str_eq(words.v[0], S("unity_file"))) {
         return 0;
-    }
-    else if (str_eq(words.v[0], S("module"))) {
+    } else if (str_eq(words.v[0], S("module"))) {
         return 0;
-    }
-    else {
+    } else {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_unknown_hash_command, .node = node}));
         return 1;
     }
@@ -385,6 +396,17 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                     process_annotation(self, node, null);
                 }
             }
+        }
+
+        else if (ast_node_is_type_alias(node)) {
+
+            tl_monotype *ann =
+              tl_type_registry_parse(self->registry, self, node->type_alias.target, self->subs, null);
+
+            tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
+
+            str_map_set_ptr(&self->type_aliases, node->type_alias.name, poly);
+
         }
 
         else if (ast_node_is_let(node)) {
@@ -837,6 +859,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_string:
     case ast_symbol:
     case ast_u64:
+    case ast_type_alias:
     case ast_user_type_definition:
 
         // operate on the leaf node
@@ -1350,7 +1373,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_hash_command:
     case ast_arrow:
     case ast_ellipsis:
-    case ast_eof:          break;
+    case ast_eof:
+    case ast_type_alias:   break;
     }
 
     // apply newly created constraint substitutions
@@ -1952,6 +1976,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_f64:
     case ast_i64:
     case ast_u64:
+    case ast_type_alias:
     case ast_user_type_definition: break;
     }
 }
@@ -2533,7 +2558,8 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_named_function_application:
     case ast_tuple:
     case ast_unary_op:
-    case ast_hash_command:                break;
+    case ast_hash_command:
+    case ast_type_alias:                  break;
     }
     return 0;
 }
@@ -2584,6 +2610,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // inside the iteration because infer will add lambda functions to the toplevel.
     forall(i, nodes) {
         if (ast_node_is_hash_command(nodes.v[i])) continue;
+        if (ast_node_is_type_alias(nodes.v[i])) continue;
         add_generic(self, nodes.v[i]);
     }
     arena_reset(self->transient);

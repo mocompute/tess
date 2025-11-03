@@ -127,6 +127,13 @@ ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
     self->tuple.elements   = xs.v;
     return self;
 }
+ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node *target) {
+    ast_node *self          = ast_node_create(alloc, ast_type_alias);
+    self->type_alias.name   = str_copy(alloc, name->symbol.name);
+    self->type_alias.target = target;
+    return self;
+}
+
 ast_node *ast_node_create_arrow(allocator *alloc, ast_node *left, ast_node *right) {
     ast_node *self    = ast_node_create(alloc, ast_arrow);
     self->arrow.left  = left;
@@ -260,6 +267,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
+    } break;
+
+    case ast_type_alias: {
+        clone->type_alias.name   = str_copy(alloc, orig->type_alias.name);
+        clone->type_alias.target = ast_node_clone(alloc, orig->type_alias.target);
     } break;
 
     case ast_return:
@@ -465,8 +477,12 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
             fun(ctx, v->field_annotations[i]);
             fun(ctx, v->field_names[i]);
         }
-
     } break;
+
+    case ast_type_alias:
+        //
+        fun(ctx, node->type_alias.target);
+        break;
 
     case ast_body:
         //
@@ -580,6 +596,11 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         }
 
     } break;
+
+    case ast_type_alias:
+        //
+        node->type_alias.target = fun(ctx, node->type_alias.target);
+        break;
 
     case ast_body:
         //
@@ -918,6 +939,16 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     } break;
 
+    case ast_type_alias: {
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(alias "));
+        str_build_cat(&b, node->type_alias.name);
+        str_build_cat(&b, S(" "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.target));
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
+    } break;
+
     case ast_user_type_definition: {
         str out = str_copy(alloc, S("[user_type_definition: "));
         str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
@@ -1124,6 +1155,12 @@ u64 ast_node_hash(ast_node const *self) {
         hash = hash64_combine(hash, (byte *)&self->u64.val, sizeof(self->u64.val));
         break;
 
+    case ast_type_alias:
+        //
+        hash = str_hash64_combine(hash, self->type_alias.name);
+        combine_node(self->type_alias.target);
+        break;
+
     case ast_user_type_definition:
         //
         combine_node(self->user_type_def.name);
@@ -1204,6 +1241,9 @@ int ast_node_is_symbol(ast_node const *self) {
 }
 int ast_node_is_tuple(ast_node const *self) {
     return ast_tuple == self->tag;
+}
+int ast_node_is_type_alias(ast_node const *self) {
+    return ast_type_alias == self->tag;
 }
 int ast_node_is_let(ast_node const *self) {
     return ast_let == self->tag;

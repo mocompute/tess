@@ -138,6 +138,11 @@ typedef struct ast_node {
             str       full; // must be first, as in ast_symbol
             str_sized words;
         } hash_command;
+
+        struct ast_type_alias {
+            str              name;
+            struct ast_node *target; // symbol or nfa
+        } type_alias;
     };
 
     char const       *file;
@@ -198,6 +203,7 @@ nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, 
 nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
@@ -263,6 +269,7 @@ int            ast_node_is_nfa(ast_node const *);
 int            ast_node_is_nil(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
+int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
 

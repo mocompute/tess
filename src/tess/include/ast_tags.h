@@ -31,6 +31,7 @@ typedef enum ast_tag : u16 {
     ast_return,
     ast_string,
     ast_symbol,
+    ast_type_alias,
     ast_u64,
     ast_unary_op,
     ast_user_type_definition,

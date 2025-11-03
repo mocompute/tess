@@ -227,6 +227,7 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     tl_polytype *poly = str_map_get_ptr(self->definitions, name);
     if (!poly) return null;
 
+    assert(tl_monotype_is_inst(poly->type));
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def->is_variable_args) {
         u32 arity = poly->type->cons_inst->args.size;
@@ -549,8 +550,11 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
 
     // ignores quantifiers
     if (tl_cons_inst == fresh->tag) {
-        tl_monotype_sized *inst = &fresh->cons_inst->args;
-        if (args.size != inst->size) fatal("logic error");
+        tl_monotype_sized *inst             = &fresh->cons_inst->args;
+        int                is_variable_args = fresh->cons_inst->def->is_variable_args;
+        if (!is_variable_args) {
+            if (args.size != inst->size) fatal("logic error");
+        }
 
         // specialise cons arguments using registry
         forall(i, args) {
@@ -562,7 +566,12 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
             }
         }
 
-        forall(i, *inst) inst->v[i]    = args.v[i];
+        if (!is_variable_args) {
+            forall(i, *inst) inst->v[i] = args.v[i];
+        } else {
+            // FIXME: need to clone?
+            *inst = args;
+        }
         fresh->cons_inst->special_name = str_copy(alloc, special_name);
     }
 
