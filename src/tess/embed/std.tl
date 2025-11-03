@@ -1,5 +1,6 @@
 _tl_sizeof_ (x : a)        -> Int
 
+PtrOrNull = Union(Ptr(a), Nil)
 c_malloc    (count : Int)  -> PtrOrNull(a)
 c_free      (ptr : Ptr) -> Nil
 

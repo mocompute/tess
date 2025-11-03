@@ -1,7 +1,7 @@
 #module main
 // This test exercises the Union type PtrOrNull
 
-
+PtrOrNull = Union(Ptr(a), Nil)
 c_malloc    (count : Int)  -> PtrOrNull(a)
 c_free      (ptr : Ptr) -> Nil
 

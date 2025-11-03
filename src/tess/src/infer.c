@@ -2371,6 +2371,8 @@ void do_resolve_unions(void *ctx, ast_node *node) {
 
     if (!node->type) return;
     tl_monotype_force_union_resolve(node->type->type);
+    if (ast_node_is_symbol(node) && node->symbol.annotation_type)
+        tl_monotype_force_union_resolve(node->symbol.annotation_type->type);
 }
 
 void resolve_unions(tl_infer *self) {

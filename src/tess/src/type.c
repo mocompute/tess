@@ -14,12 +14,8 @@ static void                      log(tl_type_env *, char const *restrict fmt, ..
 static void                      make_unary_tc(tl_type_registry *, str);
 static void                      make_variable_arity_tc(tl_type_registry *, str);
 static tl_type_constructor_def  *make_tc_def(tl_type_registry *, str);
-static tl_type_constructor_def  *make_tc_def_var_args(tl_type_registry *, str);
 static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *, tl_type_constructor_def *,
                                                    tl_monotype_sized);
-static tl_type_constructor_inst *make_tc_inst_binary(tl_type_registry *, tl_type_constructor_def *,
-                                                     tl_monotype *, tl_monotype *);
-static tl_polytype              *make_ptr_generic(tl_type_registry *, tl_type_subs *);
 static void                      make_unary_inst(tl_type_registry *, str);
 static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_constructor_inst *,
                                                    tl_type_variable_sized);
@@ -46,22 +42,6 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
 
     // Union has variable arity
     make_variable_arity_tc(self, S("Union"));
-
-    // TODO: type aliases
-    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) = Union(Ptr(a),
-    // Nil) type here
-    {
-        tl_polytype *ptr = make_ptr_generic(self, subs); // quantified
-        tl_monotype *nil = tl_type_registry_nil(self);
-
-        // FIXME: see tl_type_constructor_def_create_ext, but here we need to set is_variable_args
-        str                       name = str_init(alloc, "PtrOrNull");
-        tl_type_constructor_def  *def  = make_tc_def_var_args(self, name);
-        tl_type_constructor_inst *inst = make_tc_inst_binary(self, def, ptr->type, nil);
-        tl_polytype              *poly = make_generic_inst(self, inst, ptr->quantifiers);
-
-        str_map_set_ptr(&self->definitions, def->name, poly);
-    }
 
     return self;
 }
@@ -119,12 +99,6 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     return def;
 }
 
-static tl_type_constructor_def *make_tc_def_var_args(tl_type_registry *self, str name) {
-    tl_type_constructor_def *def = make_tc_def(self, name);
-    def->is_variable_args        = 1;
-    return def;
-}
-
 static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *self, tl_type_constructor_def *def,
                                                    tl_monotype_sized args) {
     tl_type_constructor_inst *inst = alloc_malloc(self->alloc, sizeof *inst);
@@ -132,29 +106,6 @@ static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *self, tl_ty
     inst->args                     = args;
     inst->special_name             = str_empty();
     return inst;
-}
-
-static tl_type_constructor_inst *make_tc_inst_binary(tl_type_registry *self, tl_type_constructor_def *def,
-                                                     tl_monotype *first, tl_monotype *second) {
-    tl_monotype_array mt_arr = {.alloc = self->alloc};
-    array_reserve(mt_arr, 2);
-    array_push(mt_arr, first);
-    array_push(mt_arr, second);
-
-    return make_tc_inst_args(self, def, (tl_monotype_sized)sized_all(mt_arr));
-}
-
-static tl_polytype *make_ptr_generic(tl_type_registry *self, tl_type_subs *subs) {
-    tl_type_variable       tv  = tl_type_subs_fresh(subs);
-    tl_monotype           *ptr = tl_type_registry_ptr(self, tl_monotype_create_tv(self->alloc, tv));
-
-    tl_type_variable_array arr = {.alloc = self->alloc};
-    array_reserve(arr, 1);
-    array_push(arr, tv);
-
-    tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, ptr);
-    poly->quantifiers = (tl_type_variable_sized)sized_all(arr);
-    return poly;
 }
 
 static tl_polytype *make_generic_inst(tl_type_registry *self, tl_type_constructor_inst *inst,
@@ -815,7 +766,14 @@ int tl_monotype_is_union(tl_monotype *self) {
 }
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
-    return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
+    if (tl_monotype_is_union(self)) {
+        forall(i, self->cons_inst->args) {
+            if (tl_monotype_has_ptr(self->cons_inst->args.v[i])) return 1;
+        }
+        return 0;
+    } else {
+        return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
+    }
 }
 
 int tl_monotype_is_type_literal(tl_monotype *self) {
@@ -849,7 +807,16 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
         assert(self->cons_inst->args.size == 2);
         // first argument is Ptr
         return tl_monotype_ptr_target(self->cons_inst->args.v[0]);
-    } else fatal("unreachable");
+    } else if (tl_monotype_is_union(self)) {
+        forall(i, self->cons_inst->args) {
+            tl_monotype *arg = self->cons_inst->args.v[i];
+            if (tl_monotype_is_ptr(arg)) return tl_monotype_ptr_target(arg);
+        }
+        fatal("runtime error");
+    }
+
+    else
+        fatal("unreachable");
 }
 
 tl_monotype *tl_monotype_type_literal_target(tl_monotype *self) {

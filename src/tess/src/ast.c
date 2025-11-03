@@ -865,7 +865,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         out = str_cat(alloc, out, node->symbol.name);
 
         if (node->symbol.annotation_type) {
-            out = str_cat_4(alloc, out, S(" (v2: "),
+            out = str_cat_4(alloc, out, S(" (ann:"),
                             tl_polytype_to_string(alloc, node->symbol.annotation_type), S(")"));
         } else if (node->symbol.annotation) {
             out =
