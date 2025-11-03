@@ -1,7 +1,10 @@
 #module main
-
-IntOrFloat = Union(Int, Float)
+PtrOrNull2 = Union(Ptr(a), Nil)
+c_malloc    (count : Int)  -> PtrOrNull2(a)
+c_free      (ptr : Ptr) -> Nil
 
 main() {
-  val : IntOrFloat = "foo"
+  p := c_malloc(64)
+  c_free(p)
+  0
 }

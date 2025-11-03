@@ -32,6 +32,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     self->subs             = subs;
     self->definitions      = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
     self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
+    self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
     make_unary_inst(self, S("Nil"));
     make_unary_inst(self, S("Int"));
@@ -47,7 +48,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     make_variable_arity_tc(self, S("Union"));
 
     // TODO: type aliases
-    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) : Union(Ptr(a),
+    // Without type aliases in the language yet, we manually create a forall a. PtrOrNull(a) = Union(Ptr(a),
     // Nil) type here
     {
         tl_polytype *ptr = make_ptr_generic(self, subs); // quantified
@@ -185,8 +186,9 @@ typedef struct {
 
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     tl_monotype *type = null;
-
-    tl_polytype *poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = null;
+    poly              = str_map_get_ptr(self->type_aliases, name);
+    if (!poly) poly = str_map_get_ptr(self->definitions, name);
     if (!poly) return null;
 
     type = tl_polytype_instantiate(self->alloc, poly, self->subs);
@@ -197,7 +199,9 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
     tl_monotype *type = null;
 
-    tl_polytype *poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = null;
+    poly              = str_map_get_ptr(self->type_aliases, name);
+    if (!poly) poly = str_map_get_ptr(self->definitions, name);
     if (!poly) return null;
 
     u32 arity = poly->quantifiers.size;
@@ -214,6 +218,10 @@ tl_monotype *tl_type_registry_get_cached_instance(tl_type_registry *self, str na
     return map_get_ptr(self->instances, &key, sizeof key);
 }
 
+void tl_type_registry_type_alias_insert(tl_type_registry *self, str name, tl_polytype *type) {
+    str_map_set_ptr(&self->type_aliases, name, type);
+}
+
 int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
     return !!(tl_type_registry_get_cached_instance(self, name, (tl_monotype_sized){0}));
 }
@@ -224,7 +232,9 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     if ((type = map_get_ptr(self->instances, &key, sizeof key))) return type;
 
-    tl_polytype *poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = null;
+    poly              = str_map_get_ptr(self->type_aliases, name);
+    if (!poly) poly = str_map_get_ptr(self->definitions, name);
     if (!poly) return null;
 
     assert(tl_monotype_is_inst(poly->type));
@@ -246,11 +256,14 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
 }
 
 tl_polytype *tl_type_registry_get(tl_type_registry *self, str name) {
-    return str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = null;
+    poly              = str_map_get_ptr(self->type_aliases, name);
+    if (!poly) poly = str_map_get_ptr(self->definitions, name);
+    return poly;
 }
 
 int tl_type_registry_exists(tl_type_registry *self, str name) {
-    return str_map_contains(self->definitions, name);
+    return str_map_contains(self->type_aliases, name) || str_map_contains(self->definitions, name);
 }
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *self) {

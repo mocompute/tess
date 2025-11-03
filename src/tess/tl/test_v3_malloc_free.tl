@@ -1,6 +1,6 @@
 #module main
-c_malloc(sz : Int) -> Ptr(a)
-c_free(p : Ptr(a)) -> Nil
+c_malloc    (count : Int)  -> PtrOrNull(a)
+c_free      (ptr : Ptr) -> Nil
 
 main() {
   p := c_malloc(64)

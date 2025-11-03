@@ -63,10 +63,11 @@ typedef struct {
 defarray(tl_type_subs, tl_type_uf_node);
 
 typedef struct {
-    allocator    *alloc;       // manages lifetime of all type constructors
-    tl_type_subs *subs;        // needed for instantiation
-    hashmap      *definitions; // str => tl_polytype*
-    hashmap      *instances;   // key => tl_type_constructor_inst*
+    allocator    *alloc;        // manages lifetime of all type constructors
+    tl_type_subs *subs;         // needed for instantiation
+    hashmap      *definitions;  // str => tl_polytype*
+    hashmap      *instances;    // key => tl_type_constructor_inst*
+    hashmap      *type_aliases; // str => polytype
 } tl_type_registry;
 
 // -- type constructor and registry --
@@ -78,6 +79,7 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_get_cached_instance(tl_type_registry *, str, tl_monotype_sized);
+void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *);
 tl_monotype *tl_type_registry_int(tl_type_registry *);
