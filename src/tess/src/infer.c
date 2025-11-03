@@ -2706,7 +2706,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (main) {
         traverse_ast(self, traverse, main, specialize_applications_cb);
     } else {
-
+        // TODO: this isn't really the full story for building libraries. For now, we must stay will full
+        // program analysis.
         ast_node *node = null;
         forall(i, nodes) {
             node = nodes.v[i];

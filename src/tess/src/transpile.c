@@ -48,6 +48,10 @@ typedef struct {
     // which can be used as an lvalue for the expression.
     int want_lvalue;
 
+    // the type of the expression just evaluated is effectively void, regardless of its declared type. For
+    // example, _tl_fatal_ is -> any, but when it appears it should never be assigned to a result variable.
+    int is_effective_void;
+
 } eval_ctx;
 
 extern char const *embed_std_c;
@@ -555,12 +559,20 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     return args_res;
 }
 
+static int is_nil_result(tl_monotype *type) {
+    return tl_monotype_is_nil(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type);
+}
+
+static int should_assign_result(eval_ctx *ctx, tl_monotype *type) {
+    return !ctx->is_effective_void && !is_nil_result(type);
+}
+
 static str generate_funcall_result(transpile *self, tl_monotype *type, int do_assign_lhs) {
     assert(tl_monotype_is_list(type));
     tl_monotype *funcall_result_type = tl_monotype_sized_last(type->list.xs);
     str          res                 = str_empty(); // empty signals void result
 
-    if (!tl_monotype_is_nil(funcall_result_type) && !tl_monotype_is_tv(funcall_result_type)) {
+    if (!is_nil_result(funcall_result_type)) {
         res = next_res(self);
         generate_decl(self, res, funcall_result_type);
         if (do_assign_lhs) generate_assign_lhs(self, res);
@@ -799,7 +811,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
         if (tl_monotype_is_concrete(type)) {
-            if (!tl_monotype_is_nil(type)) {
+            if (should_assign_result(ctx, type)) {
                 generate_decl(self, name, type);
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
@@ -817,7 +829,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     }
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
-    if (!tl_monotype_is_nil(result_type)) {
+    if (should_assign_result(ctx, result_type)) {
         str res = next_res(self);
         generate_decl(self, res, result_type);
         if (!ast_node_is_nil(node->let_in.body)) generate_assign(self, res, body);
@@ -843,13 +855,23 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     cat(self, S(") {\n"));
 
     str yes_str = generate_expr(self, null, yes, ctx);
-    generate_assign(self, res, yes_str);
+    if (should_assign_result(ctx, result_type)) {
+        generate_assign(self, res, yes_str);
+    } else {
+        cat(self, yes_str);
+        cat_semicolonln(self);
+    }
     cat(self, S("}\n"));
 
     if (no && !ast_node_is_nil(no)) {
         cat(self, S("else {\n"));
         str no_str = generate_expr(self, null, no, ctx);
-        generate_assign(self, res, no_str);
+        if (should_assign_result(ctx, no->type->type)) {
+            generate_assign(self, res, no_str);
+        } else {
+            cat(self, no_str);
+            cat_semicolonln(self);
+        }
         cat(self, S("}\n"));
     }
 
@@ -931,8 +953,10 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         tl_monotype *fun_type = node->binary_op.right->named_application.name->type->type;
 
         str          fun_res  = next_res(self);
-        generate_decl(self, fun_res, fun_type);
-        generate_assign_lhs(self, fun_res);
+        if (!is_nil_result(fun_type)) {
+            generate_decl(self, fun_res, fun_type);
+            generate_assign_lhs(self, fun_res);
+        }
         cat(self, left);
         cat(self, op);
         cat(self, fun);
@@ -961,7 +985,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             }
 
             // function call
-            if (!str_is_empty(res)) generate_assign_lhs(self, res);
+            if (!str_is_empty(res) && !is_nil_result(type)) generate_assign_lhs(self, res);
             generate_funcall_head(self, name, ctx_var, args_res.size);
 
             // args list
@@ -980,8 +1004,10 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);
-        generate_decl(self, res, type);
-        generate_assign_lhs(self, res);
+        if (!is_nil_result(type)) {
+            generate_decl(self, res, type);
+            generate_assign_lhs(self, res);
+        }
         cat(self, left);
         cat(self, op);
         cat(self, right);
@@ -1011,8 +1037,10 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);
-        generate_decl(self, res, type);
-        generate_assign_lhs(self, res);
+        if (!is_nil_result(type)) {
+            generate_decl(self, res, type);
+            generate_assign_lhs(self, res);
+        }
         cat(self, op);
         cat(self, operand);
         cat_semicolonln(self);
@@ -1032,7 +1060,7 @@ static str generate_reassignment(transpile *self, tl_monotype *type, ast_node co
 
     str value        = generate_expr(self, type, node->assignment.value, ctx);
     str lhs          = generate_expr(self, null, node->assignment.name, ctx);
-    generate_assign(self, lhs, value);
+    if (!is_nil_result(type)) generate_assign(self, lhs, value);
 
     ctx->want_lvalue = save;
     return value;
@@ -1089,6 +1117,8 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     // This function is used to generate output to evaluate an expression with a given type, for example for
     // function arguments. If type is null, then the type is taken from the expression. The str returned is
     // the name of the variable which holds the evaluated value.
+
+    if (ctx) ctx->is_effective_void = 0;
 
     if (!type) {
         assert(node->type);
@@ -1441,9 +1471,11 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         } else if (str_eq(S("Nil"), cons_name)) {
             return S("void");
         } else if (tl_monotype_is_ptr(mono)) {
-            tl_monotype *arg  = tl_monotype_ptr_target(mono);
-            tl_polytype  wrap = tl_polytype_wrap(arg);
-            return str_cat(self->transient, type_to_c(self, &wrap), S("*"));
+            tl_monotype *arg   = tl_monotype_ptr_target(mono);
+            tl_polytype  wrap  = tl_polytype_wrap(arg);
+            str          typec = type_to_c(self, &wrap);
+            // if (str_eq(typec, S("void*"))) fatal("oops");
+            return str_cat(self->transient, typec, S("*"));
         } else if (str_eq(S("Type"), cons_name)) {
             return S("/*Type*/int");
         }
@@ -1468,7 +1500,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         return struct_name;
     } else {
         // do not fatal here: instead return a valid type, but caller will probably not use it.
-        return S("void*");
+        return S("/*untyped*/void*");
     }
 
     // else
@@ -1624,8 +1656,27 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     }
 }
 
+static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
+    (void)extra;
+    (void)ctx;
+    assert(ast_node_is_nfa(node));
+
+    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    ast_node const *arg = node->named_application.arguments[0];
+    if (ast_string != arg->tag) {
+        // FIXME: report error
+        fatal("expected string");
+    }
+
+    ctx->is_effective_void = 1;
+
+    str msg                = ast_node_str(arg);
+
+    return str_cat_3(self->transient, S("(fprintf(stderr, \""), msg, S("\"), exit(1))"));
+}
+
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
-    assert(ast_node_is_named_application(node));
+    assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
 
     struct dispatch {
@@ -1636,6 +1687,7 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
 
     static const struct dispatch table[] = {
       {"_tl_sizeof_", tl_sizeof, null},
+      {"_tl_fatal_", tl_fatal, null},
       // {"_tl_sizeoft_", tl_sizeoft, null},
 
       {"", null, null},

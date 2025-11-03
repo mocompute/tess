@@ -1,7 +1,8 @@
 #module main
-_tl_sizeof_ (x : a)        -> Int
+PtrOrNull   = Union(Ptr(a), Nil)
 
-PtrOrNull = Union(Ptr(a), Nil)
+_tl_sizeof_ (x : a)        -> Int
+_tl_fatal_  (s : String )  -> any
 
 c_malloc    (count : Int)  -> PtrOrNull(a)
 c_free      (ptr : Ptr) -> Nil
@@ -10,55 +11,15 @@ is_null     (p : PtrOrNull(a)) -> Bool
 is_ptr      (p : PtrOrNull(a)) -> Bool
 ptr         (p : PtrOrNull(a)) -> Ptr(a)
 
-sizeof      (T: Type) { _tl_sizeof_(T) }
+sizeof      (T) { _tl_sizeof_(T) }       // T may be Type (literal) or concrete
 
-is_null(p) {
-  if p == null { true } else { false }
+is_null(p) { if p == null { true } else { false } }
+is_ptr(p)  { !is_null(p) }
+ptr(p)     { if is_null(p) { _tl_fatal_("null pointer") } else { p } }
+
+main() {
+  ptr := c_malloc(128)
+  ptr = ptr(p)
+  c_free(p)
+  0
 }
-
-// -- end std --
-
-
-
-Array(a) : {
-  v:    PtrOrNull(a),
-  size: Int,
-}
-
-
-Point(a) : { x : a, y : a }
-Rect(a)  : { topleft: Point(a), botright: Point(a) }
-
-array_new(T : Type, count) {
-  // This type annotation is required for the return type of c_malloc to be concrete. Note that it refers to
-  // the type argument T.
-  p : PtrOrNull(T) := c_malloc(count * sizeof(T))
-  Array { v = p, size = count }
-}
-
-array_free(arr) { c_free(arr.v) }
-
-
-make_points(count : Int) -> Array(Point(Int))
-make_rects(count : Int) -> Array(Rect(Int))
-
-make_points(count) { array_new(Point(Int), count) }
-make_rects(count)  { array_new(Rect(Int), count) }
-
-// main() {
-//   points := make_points(8)
-//   rects := make_rects(8)
-
-//   points.v[0] = Point(0, 1)
-//   points.v[1] = Point(2, 3)
-
-//   res := points.v[0].x
-//   if (points.v[0].x != 0) { res = 1 }
-//   if (points.v[0].y != 1) { res = 1 }
-//   if (points.v[1].x != 2) { res = 1 }
-//   if (points.v[1].y != 3) { res = 1 }
-
-//   array_free(points)
-//   array_free(rects)
-//   res
-// }
