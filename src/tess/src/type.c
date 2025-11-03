@@ -1084,13 +1084,15 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
             tl_monotype_sized right_unions = right->cons_inst->args;
             forall(i, unions) {
                 forall(j, right_unions) {
-                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], cb, user))
+                    // don't pass cb so that any error is a soft error
+                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null))
                         return 0;
                 }
             }
         } else {
             forall(i, unions) {
-                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user)) return 0;
+                // don't pass cb so that any error is a soft error
+                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, null, null)) return 0;
             }
         }
     } break;

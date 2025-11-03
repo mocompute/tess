@@ -2,4 +2,6 @@
 
 IntOrFloat = Union(Int, Float)
 
-main() { 0 }
+main() {
+  val : IntOrFloat = "foo"
+}
