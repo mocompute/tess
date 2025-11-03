@@ -264,7 +264,6 @@ int            ast_node_is_lambda_application(ast_node const *);
 int            ast_node_is_let(ast_node const *);
 int            ast_node_is_let_in(ast_node const *);
 int            ast_node_is_let_in_lambda(ast_node const *);
-int            ast_node_is_named_application(ast_node const *);
 int            ast_node_is_nfa(ast_node const *);
 int            ast_node_is_nil(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);

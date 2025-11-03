@@ -1230,7 +1230,7 @@ int ast_node_is_let_in_lambda(ast_node const *self) {
     return ast_let_in == self->tag && ast_lambda_function == self->let_in.value->tag;
 }
 
-int ast_node_is_named_application(ast_node const *self) {
+int ast_node_is_nfa(ast_node const *self) {
     return ast_named_function_application == self->tag;
 }
 
@@ -1255,9 +1255,6 @@ int ast_node_is_let_in(ast_node const *self) {
 int ast_node_is_utd(ast_node const *self) {
     return ast_user_type_definition == self->tag;
 }
-int ast_node_is_nfa(ast_node const *self) {
-    return ast_named_function_application == self->tag;
-}
 int ast_node_is_lambda_function(ast_node const *self) {
     return ast_lambda_function == self->tag;
 }
@@ -1280,7 +1277,7 @@ int ast_node_is_hash_command(ast_node const *self) {
 }
 
 int ast_node_is_std_application(ast_node const *self) {
-    if (!ast_node_is_named_application(self)) return 0;
+    if (!ast_node_is_nfa(self)) return 0;
     return (0 == str_cmp_nc(ast_node_str(self->named_application.name), "std_", 4));
 }
 

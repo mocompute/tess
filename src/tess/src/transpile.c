@@ -603,7 +603,7 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
 }
 
 static str generate_type_constructor(transpile *self, ast_node const *node, eval_ctx *ctx) {
-    assert(ast_node_is_named_application(node));
+    assert(ast_node_is_nfa(node));
 
     // divert if named arguments
     if (node->named_application.n_arguments && ast_node_is_assignment(node->named_application.arguments[0]))
@@ -729,7 +729,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
 
     // A funcall can be a standard tl funcall, a c_ funcall, a type constructor, or a c_ type constructor.
 
-    assert(ast_node_is_named_application(node));
+    assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
     if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
@@ -923,7 +923,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     str right;
 
     // Note: special case if right hand is a funcall of a struct member
-    if (ast_node_is_named_application(node->binary_op.right) && is_struct_access_operator(str_cstr(&op))) {
+    if (ast_node_is_nfa(node->binary_op.right) && is_struct_access_operator(str_cstr(&op))) {
         // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`, then
         // invoke the funcall logic. The named_application.name node holds the function type.
 
@@ -1591,7 +1591,7 @@ tl_monotype *env_lookup(transpile *self, str name) {
 static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
     (void)extra;
 
-    assert(ast_node_is_named_application(node));
+    assert(ast_node_is_nfa(node));
 
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
@@ -1601,7 +1601,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         str ctype = type_to_c_mono(self, arg->type->type->cons_inst->args.v[0]);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
 
-    } else if (ast_node_is_named_application(arg)) {
+    } else if (ast_node_is_nfa(arg)) {
         // type constructor
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
         tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);

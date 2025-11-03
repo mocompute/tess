@@ -1464,7 +1464,7 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.n_type_arguments = 0;
         r->user_type_def.type_arguments   = null;
         r->user_type_def.name             = type_ident;
-    } else if (ast_node_is_named_application(type_ident)) {
+    } else if (ast_node_is_nfa(type_ident)) {
         r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
         r->user_type_def.type_arguments   = type_ident->named_application.arguments;
         r->user_type_def.name             = type_ident->named_application.name;

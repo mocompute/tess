@@ -1572,7 +1572,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // divert if type constructor application is actually a type literal
     if (specialize_type_identifer(self, node)) return 0;
 
-    if (!ast_node_is_named_application(node)) return 0;
+    if (!ast_node_is_nfa(node)) return 0;
 
     str                name = node->named_application.name->symbol.name;
 
