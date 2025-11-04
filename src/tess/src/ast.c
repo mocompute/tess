@@ -863,7 +863,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str out = str_empty();
         if (node->type) out = str_copy(alloc, S("(")); // wrap in () if type exists
 
-        out = str_cat(alloc, out, node->symbol.name);
+        str name     = ast_node_str(node);
+        str original = ast_node_name_original(node);
+        out          = str_cat(alloc, out, str_is_empty(original) ? name : original);
 
         if (node->symbol.annotation_type) {
             out = str_cat_4(alloc, out, S(" (ann:"),
