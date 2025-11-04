@@ -352,13 +352,24 @@ cleanup_parser:
 
 int main(int argc, char *argv[]) {
 
-    int   result = 0;
+    int  result = 0;
+    char buf[256];
+    span buf_s = {.buf = buf, .len = sizeof buf};
+
+    if (!file_current_working_directory(buf_s)) {
+        fprintf(stderr, "failed to determine current working directory.\n");
+        exit(1);
+    }
 
     state self;
     state_init(&self);
     state_gather_options(&self, argc, argv);
     if (self.help) usage(0, argv[0]);
     if (self.words.size == 0) usage(0, argv[0]);
+
+    if (self.verbose) {
+        printf("Current working directory: %s\n", buf_s.buf);
+    }
 
     if (0 == strcmp("c", self.words.v[0])) {
         result = compile(&self);

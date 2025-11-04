@@ -1,9 +1,16 @@
 #include "file.h"
+#include "platform.h"
 #include "types.h"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef MOS_WINDOWS
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 
 void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size) {
 
@@ -56,4 +63,14 @@ cleanup:
 char const *file_basename(char const *input) {
     char const *p = strrchr(input, '/');
     return p + 1;
+}
+
+char *file_current_working_directory(span buf) {
+    char *out;
+#ifndef MOS_WINDOWS
+    out = getcwd(buf.buf, buf.len);
+#else
+    out = _getcwd(buf.buf, buf.len);
+#endif
+    return out;
 }
