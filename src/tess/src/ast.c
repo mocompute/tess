@@ -228,7 +228,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         str_array arr            = {.alloc = alloc};
         forall(i, orig->hash_command.words) array_push(arr, orig->hash_command.words.v[i]);
         array_shrink(arr);
-        clone->hash_command.words = (str_sized)sized_all(arr);
+        clone->hash_command.words      = (str_sized)sized_all(arr);
+        clone->hash_command.is_c_block = orig->hash_command.is_c_block;
     } break;
 
     case ast_let_in: {
@@ -1274,6 +1275,9 @@ int ast_node_is_binary_op_struct_access(ast_node const *self) {
 }
 int ast_node_is_hash_command(ast_node const *self) {
     return ast_hash_command == self->tag;
+}
+int ast_node_is_ifc_block(ast_node const *self) {
+    return ast_node_is_hash_command(self) && self->hash_command.is_c_block;
 }
 
 int ast_node_is_std_application(ast_node const *self) {

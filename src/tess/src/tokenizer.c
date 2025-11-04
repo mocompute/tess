@@ -90,6 +90,11 @@ static void advance_pos(tokenizer *self) {
     self->pos++;
 }
 
+static void advance_pos_n(tokenizer *self, i32 n) {
+    self->col += n;
+    self->pos += n;
+}
+
 static void reverse_pos(tokenizer *self) {
     self->col--;
     self->pos--;
@@ -98,6 +103,11 @@ static void reverse_pos(tokenizer *self) {
 static char next_char(tokenizer *self) {
     self->col++;
     return self->input.v[self->pos++];
+}
+
+static char peek_char(tokenizer *self, u32 pos) {
+    if (pos >= self->input.size) return '\0';
+    return self->input.v[pos];
 }
 
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
@@ -149,6 +159,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         start_hash_command,
         in_hash_command,
+        in_ifc,
         stop_hash_command,
 
         stop,
@@ -591,11 +602,43 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop_hash_command;
                 continue;
             }
+            // check for #ifc ... #endc block
+            size_t const pos = self->pos;
+            if ('i' == peek_char(self, pos) && 'f' == peek_char(self, pos + 1) &&
+                'c' == peek_char(self, pos + 2)) {
+                state = in_ifc;
+                start_capture += 3;
+                advance_pos_n(self, 3);
+                continue;
+            }
+
             char const c = next_char(self);
             if (c == '\n') {
                 reverse_pos(self);
                 state = stop_hash_command;
+                continue;
             }
+
+        } break;
+
+        case in_ifc: {
+            if (self->pos == end) {
+                state = stop_hash_command;
+                continue;
+            }
+            size_t const pos = self->pos;
+            if ('#' == peek_char(self, pos) && 'e' == peek_char(self, pos + 1) &&
+                'n' == peek_char(self, pos + 2) && 'd' == peek_char(self, pos + 3) &&
+                'c' == peek_char(self, pos + 4)) {
+
+                assert(self->pos >= start_capture);
+                replace_token_sn(self->strings, &res, tok_c_block, self->input.v + start_capture,
+                                 self->pos - start_capture);
+                advance_pos_n(self, 5);
+                state = stop;
+                break;
+            }
+            self->pos++;
         } break;
 
         case stop_hash_command:

@@ -52,6 +52,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_bang_equal:
     case tok_comma:
     case tok_dot:
+    case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
     case tok_semicolon:
@@ -118,6 +119,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_symbol:
     case tok_string:
     case tok_comment:
+    case tok_c_block:
     case tok_hash_command: {
         char *big = alloc_malloc(alloc, strlen(tok->s) + 64);
         if (!big) return big;

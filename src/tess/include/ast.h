@@ -137,6 +137,7 @@ typedef struct ast_node {
         struct ast_hash_command {
             str       full; // must be first, as in ast_symbol
             str_sized words;
+            int       is_c_block;
         } hash_command;
 
         struct ast_type_alias {
@@ -259,6 +260,7 @@ int            ast_node_is_assignment(ast_node const *);
 int            ast_node_is_binary_op(ast_node const *);
 int            ast_node_is_binary_op_struct_access(ast_node const *);
 int            ast_node_is_hash_command(ast_node const *);
+int            ast_node_is_ifc_block(ast_node const *);
 int            ast_node_is_lambda_function(ast_node const *);
 int            ast_node_is_lambda_application(ast_node const *);
 int            ast_node_is_let(ast_node const *);

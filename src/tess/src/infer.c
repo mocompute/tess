@@ -349,6 +349,10 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
 
 static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     assert(ast_node_is_hash_command(node));
+
+    // skip #ifc .. #endc blocks
+    if (ast_node_is_ifc_block(node)) return 0;
+
     str_sized words = node->hash_command.words;
 
     if (words.size < 2) {

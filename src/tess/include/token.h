@@ -13,6 +13,7 @@
     X(tok_bang, "bang")                                                                                    \
     X(tok_bang_equal, "bang_equal")                                                                        \
     X(tok_hash_command, "hash_directive")                                                                  \
+    X(tok_c_block, "c_block")                                                                              \
     X(tok_comma, "comma")                                                                                  \
     X(tok_dot, "dot")                                                                                      \
     X(tok_colon, "colon")                                                                                  \

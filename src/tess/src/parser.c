@@ -412,7 +412,24 @@ static int a_comma(parser *p) {
 
 static int a_hash_command(parser *p) {
     if (next_token(p)) return 1;
-    if (tok_hash_command == p->token.tag) return result_ast_str(p, ast_hash_command, p->token.s);
+    if (tok_hash_command == p->token.tag) {
+        int res                            = result_ast_str(p, ast_hash_command, p->token.s);
+        p->result->hash_command.words      = (str_sized){0};
+        p->result->hash_command.is_c_block = 0;
+        return res;
+    }
+    p->error.tag = tl_err_expected_hash_command;
+    return 1;
+}
+
+static int a_c_block(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_c_block == p->token.tag) {
+        int res                            = result_ast_str(p, ast_hash_command, p->token.s);
+        p->result->hash_command.words      = (str_sized){0};
+        p->result->hash_command.is_c_block = 1;
+        return res;
+    }
     p->error.tag = tl_err_expected_hash_command;
     return 1;
 }
@@ -478,6 +495,7 @@ static int a_binary_operator(parser *self, int min_prec) {
 
     case tok_bang:
     case tok_comma:
+    case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
     case tok_semicolon:
@@ -524,6 +542,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_bang_equal:
     case tok_comma:
     case tok_dot:
+    case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
     case tok_semicolon:
@@ -1381,6 +1400,14 @@ static int toplevel_symbol_annotation(parser *self) {
     return result_ast_node(self, ident);
 }
 
+static int toplevel_c_chunk(parser *self) {
+    if (a_try(self, a_c_block)) return 1;
+    ast_node *command = self->result;
+
+    fprintf(stderr, "got c chunk: \n\n---\n%s\n---\n", str_cstr(&command->hash_command.full));
+    return 0;
+}
+
 static int toplevel_hash(parser *self) {
     if (a_try(self, a_hash_command)) return 1;
     ast_node *command = self->result;
@@ -1489,6 +1516,7 @@ static int toplevel(parser *self) {
 
     while (!is_eof(self)) {
 
+        if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
         if (0 == a_try(self, toplevel_hash)) goto success_hash;
         if (0 == a_try(self, toplevel_type_alias)) goto success;
         if (0 == a_try(self, toplevel_struct)) goto success;

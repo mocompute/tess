@@ -215,6 +215,16 @@ static void generate_hash_includes(transpile *self) {
     cat_nl(self);
 }
 
+static void generate_ifc_blocks(transpile *self) {
+    forall(i, self->nodes) {
+        ast_node *node = self->nodes.v[i];
+        if (!ast_node_is_ifc_block(node)) continue;
+
+        cat(self, node->hash_command.full);
+        cat_nl(self);
+    }
+}
+
 static void generate_user_types(transpile *self) {
 
     forall(i, self->synthesized_nodes) {
@@ -1263,6 +1273,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
 
     generate_hash_includes(self);
+    generate_ifc_blocks(self);
 
     generate_user_types(self);
     generate_structs(self);
