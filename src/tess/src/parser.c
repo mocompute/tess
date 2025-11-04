@@ -1402,9 +1402,6 @@ static int toplevel_symbol_annotation(parser *self) {
 
 static int toplevel_c_chunk(parser *self) {
     if (a_try(self, a_c_block)) return 1;
-    ast_node *command = self->result;
-
-    fprintf(stderr, "got c chunk: \n\n---\n%s\n---\n", str_cstr(&command->hash_command.full));
     return 0;
 }
 
