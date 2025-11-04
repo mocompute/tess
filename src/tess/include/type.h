@@ -26,7 +26,9 @@ typedef struct {
 typedef struct {
     tl_type_constructor_def *def;
     tl_monotype_sized        args;
-    str                      special_name; // name of specialized instance, e.g. Point a => Point_0 Int
+    // name of specialized instance, e.g. Point a => Point_0 Int. Nullary types like Int are never
+    // specialized.
+    str special_name;
 } tl_type_constructor_inst;
 
 typedef struct tl_monotype {
@@ -66,8 +68,8 @@ typedef struct {
     allocator    *alloc;        // manages lifetime of all type constructors
     tl_type_subs *subs;         // needed for instantiation
     hashmap      *definitions;  // str => tl_polytype*
-    hashmap      *instances;    // key => tl_type_constructor_inst*
-    hashmap      *type_aliases; // str => polytype
+    hashmap      *instances;    // registry_key => tl_monotype*
+    hashmap      *type_aliases; // str => polytype*
 } tl_type_registry;
 
 // -- type constructor and registry --
