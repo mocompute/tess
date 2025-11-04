@@ -1,14 +1,12 @@
-#ifc
-// C code goes here
-
-int add(int a, int b) { return a + b; }
-
-#endc
+#import "src/tl/std/stdlib.tl"
 
 #module main
 
-c_add(a: Int, b: Int) -> Int
-
 main() {
-  c_add(-1, 1)
+  out : String := ()
+  d := c_strtod("1.234 foo bar", out.&)
+  c_printf("out = %p\n", out.&)
+  c_printf("out = '%s'\n", out)
+  c_printf("d = %f\n", d)
+  0
 }

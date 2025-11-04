@@ -13,6 +13,7 @@ void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size
     FILE *f   = fopen(filename, "rb");
     if (!f) {
         perror("failed to open file");
+        fprintf(stderr, "error: %s\n", filename);
         return;
     }
 
