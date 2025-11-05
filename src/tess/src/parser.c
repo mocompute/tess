@@ -274,6 +274,10 @@ int is_index_operator(char const *s) {
     return 0 == strcmp(s, "[");
 }
 
+int is_dot_operator(char const *s) {
+    return 0 == strcmp(s, ".");
+}
+
 int is_struct_access_operator(char const *s) {
     static char const *strings[] = {".", "->", null};
     char const       **it        = strings;
@@ -1460,6 +1464,52 @@ static int toplevel_type_alias(parser *self) {
     return 0;
 }
 
+static int toplevel_enum(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *name = self->result;
+    mangle_name(self, name);
+
+    if (a_try(self, a_colon)) return 1;
+    if (a_try(self, a_open_curly)) return 1;
+    ast_node_array idents = {.alloc = self->ast_arena};
+    while (1) {
+        int saw_comma = 0;
+        if (0 == a_try(self, a_comma)) saw_comma = 1; // optional comma
+        if (0 == a_try(self, a_close_curly)) break;
+        if (!saw_comma && idents.size) {
+            // require comma separators
+            if (a_try(self, a_comma)) return 1;
+        }
+        if (a_try(self, a_identifier))
+            return 1; // enum must be an identifier; not mangled because access is through the type name
+        array_push(idents, self->result);
+    }
+    array_shrink(idents);
+    if (!idents.size) {
+        array_free(idents);
+        return 1;
+    }
+
+    // an enum uses the ast_user_type_definition with no type_arguments and no field_annotations. The actual
+    // enums are saved in field_names.
+    ast_node *r                       = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.name             = name;
+    r->user_type_def.n_type_arguments = 0;
+    r->user_type_def.type_arguments   = null;
+    r->user_type_def.field_types      = null;
+
+    // The utd struct separates names from annotations, while they are both in the same symbol ast
+    // node variant. So we have to do this splitting just for it to recombine later.
+    r->user_type_def.n_fields          = idents.size;
+    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, idents.size * sizeof(ast_node *));
+    r->user_type_def.field_annotations = null;
+    forall(i, idents) {
+        r->user_type_def.field_names[i] = idents.v[i];
+    }
+
+    return result_ast_node(self, r);
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1;
@@ -1516,6 +1566,7 @@ static int toplevel(parser *self) {
         if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
         if (0 == a_try(self, toplevel_hash)) goto success_hash;
         if (0 == a_try(self, toplevel_type_alias)) goto success;
+        if (0 == a_try(self, toplevel_enum)) goto success;
         if (0 == a_try(self, toplevel_struct)) goto success;
         if (0 == a_try(self, toplevel_defun)) goto success;
         if (0 == a_try(self, toplevel_assign)) goto success;

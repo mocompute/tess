@@ -249,23 +249,29 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         assert(ast_node_is_symbol(fields[i]));
         array_push(field_names, fields[i]->symbol.name);
 
-        // field type, could be type argument, or type constructor
-        tl_monotype const *field           = null;
-        ast_node const    *field_type_node = annotations[i];
-        if (ast_node_is_symbol(field_type_node)) {
-            tl_monotype const *found = str_map_get_ptr(type_argument_map, ast_node_str(field_type_node));
-            if (found) field = found;
+        // enum types have fields with no type information
+
+        // field type, could be type argument, or type constructor, or null
+        if (annotations) {
+            tl_monotype const *field           = null;
+            ast_node const    *field_type_node = annotations[i];
+            if (ast_node_is_symbol(field_type_node)) {
+                tl_monotype const *found =
+                  str_map_get_ptr(type_argument_map, ast_node_str(field_type_node));
+                if (found) field = found;
+            }
+
+            if (!field)
+                field =
+                  tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
+
+            if (!field) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+                return;
+            }
+
+            array_push(field_types, field);
         }
-
-        if (!field)
-            field = tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
-
-        if (!field) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
-            return;
-        }
-
-        array_push(field_types, field);
     }
 
     str_sized              field_names_       = array_sized(field_names);
@@ -1055,6 +1061,16 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                         }
                     }
                     if (found != -1) {
+                        // Enums: they have no types and no instance arguments. Detect those and give them
+                        // an Int type.
+                        if (!inst->args.size) {
+                            tl_monotype *int_ty = tl_type_registry_int(self->registry);
+                            if (constrain_pm(self, ctx, right->type, int_ty, node)) return 1;
+                            if (constrain_pm(self, ctx, node->type, int_ty, node)) return 1;
+                            if (constrain(self, ctx, node->type, right->type, node)) return 1;
+                            break;
+                        }
+
                         if ((u32)found >= inst->args.size) fatal("out of range");
                         tl_monotype *field_type = inst->args.v[found];
                         if (nfa) {

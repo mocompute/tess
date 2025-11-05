@@ -239,19 +239,35 @@ static void generate_user_types(transpile *self) {
         tl_type_constructor_def *def = poly->type->cons_inst->def;
         if (!def) fatal("missing type def");
 
-        cat(self, S("typedef struct "));
-        cat(self, name);
-        catln(self, S(" {"));
+        // enums have no instance arguments. They have only field names.
+        if (!tl_monotype_is_enum(poly->type)) {
+            cat(self, S("typedef struct "));
+            cat(self, name);
+            catln(self, S(" {"));
 
-        assert(def->field_names.size == poly->type->cons_inst->args.size);
-        forall(i, def->field_names) {
-            generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
+            assert(def->field_names.size == poly->type->cons_inst->args.size);
+            forall(i, def->field_names) {
+                generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
+            }
+
+            cat(self, S("} "));
+            cat(self, name);
+            cat_semicolonln(self);
+            cat_nl(self);
+        } else {
+            // an enum
+            forall(i, def->field_names) {
+                cat(self, S("#define "));
+                // mangle name: name_field
+                cat(self, def->name);
+                cat(self, S("_"));
+                cat(self, def->field_names.v[i]);
+                cat_sp(self);
+                str value = str_fmt(self->transient, "%i", i);
+                cat(self, value);
+                cat_nl(self);
+            }
         }
-
-        cat(self, S("} "));
-        cat(self, name);
-        cat_semicolonln(self);
-        cat_nl(self);
     }
 
     cat_nl(self);
@@ -948,7 +964,18 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
 
 static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
-    str op   = ast_node_str(node->binary_op.op);
+    str op = ast_node_str(node->binary_op.op);
+
+    // Note: Special case enum field access to mangle the name rather than use a . field access operator.
+    if (ast_node_is_symbol(node->binary_op.left) && ast_node_is_symbol(node->binary_op.right) &&
+        is_dot_operator(str_cstr(&op))) {
+        tl_monotype *left_type = env_lookup(self, ast_node_str(node->binary_op.left));
+        if (left_type && tl_monotype_is_enum(left_type)) {
+            str mangled = str_cat_3(self->transient, ast_node_str(node->binary_op.left), S("_"),
+                                    ast_node_str(node->binary_op.right));
+            return mangled;
+        }
+    }
 
     str left = generate_expr(self, null, node->binary_op.left, ctx); // types null
     str right;

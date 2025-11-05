@@ -43,5 +43,6 @@ int is_relational_operator(char const *);
 int is_logical_operator(char const *);
 int is_index_operator(char const *);
 int is_struct_access_operator(char const *);
+int is_dot_operator(char const *);
 
 #endif

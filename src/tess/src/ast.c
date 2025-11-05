@@ -288,17 +288,23 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
-        vclone->name              = ast_node_clone(alloc, vorig->name);
-        vclone->n_fields          = vorig->n_fields;
-        vclone->n_type_arguments  = vorig->n_type_arguments;
+        vclone->name             = ast_node_clone(alloc, vorig->name);
+        vclone->n_fields         = vorig->n_fields;
+        vclone->n_type_arguments = vorig->n_type_arguments;
 
-        vclone->field_annotations = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
-        vclone->field_names       = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
+        vclone->field_names      = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
 
-        for (u32 i = 0; i < vclone->n_fields; ++i) {
-            vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
-            vclone->field_names[i]       = ast_node_clone(alloc, vorig->field_names[i]);
-        }
+        // enums have no field annotations
+        if (vorig->field_annotations)
+            vclone->field_annotations = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
+        else vclone->field_annotations = null;
+
+        for (u32 i = 0; i < vclone->n_fields; ++i)
+            vclone->field_names[i] = ast_node_clone(alloc, vorig->field_names[i]);
+
+        if (vorig->field_annotations)
+            for (u32 i = 0; i < vclone->n_fields; ++i)
+                vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
 
         vclone->type_arguments = null;
         vclone->field_types    = null;
@@ -475,7 +481,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->user_type_def.name);
 
         for (u32 i = 0; i < v->n_fields; ++i) {
-            fun(ctx, v->field_annotations[i]);
+            if (v->field_annotations) fun(ctx, v->field_annotations[i]);
             fun(ctx, v->field_names[i]);
         }
     } break;
@@ -1258,6 +1264,10 @@ int ast_node_is_let_in(ast_node const *self) {
 int ast_node_is_utd(ast_node const *self) {
     return ast_user_type_definition == self->tag;
 }
+int ast_node_is_enum_def(ast_node const *self) {
+    return ast_node_is_utd(self) && self->user_type_def.field_annotations == null;
+}
+
 int ast_node_is_lambda_function(ast_node const *self) {
     return ast_lambda_function == self->tag;
 }

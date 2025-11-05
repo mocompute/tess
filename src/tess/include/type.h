@@ -132,6 +132,7 @@ int                    tl_monotype_is_any(tl_monotype *);
 int                    tl_monotype_is_nil(tl_monotype *);
 int                    tl_monotype_is_list(tl_monotype *);
 int                    tl_monotype_is_inst(tl_monotype *);
+int                    tl_monotype_is_enum(tl_monotype *);
 int                    tl_monotype_is_tuple(tl_monotype *);
 int                    tl_monotype_is_concrete(tl_monotype *);
 int                    tl_monotype_sized_is_concrete(tl_monotype_sized);

@@ -127,8 +127,8 @@ typedef struct ast_node {
         struct ast_user_type_def {
             struct ast_node  *name;
             struct ast_node **type_arguments;
-            struct ast_node **field_annotations;
-            struct ast_node **field_names;
+            struct ast_node **field_annotations; // if null from parser, this is an enum.
+            struct ast_node **field_names;       // contains enum names
             tl_monotype     **field_types;
             u8                n_fields;
             u8                n_type_arguments;
@@ -273,6 +273,7 @@ int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
+int            ast_node_is_enum_def(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
