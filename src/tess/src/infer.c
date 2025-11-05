@@ -1780,7 +1780,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             assert(i < app_args.size);
             if (tl_polytype_is_scheme(arg->type))
                 arg->type = tl_polytype_absorb_mono(
-                  self->transient, tl_polytype_instantiate(self->arena, arg->type, self->subs));
+                  self->arena, tl_polytype_instantiate(self->arena, arg->type, self->subs));
 
             if (constrain_pm(self, ctx, arg->type, app_args.v[i], arg)) return 1;
 
