@@ -375,15 +375,13 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     }
 }
 
-static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized nodes) {
-    hashmap *tops = ast_node_str_map_create(alloc, 1024);
-    (void)self;
+static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
     forall(i, nodes) {
         ast_node *node = nodes.v[i];
         if (ast_node_is_symbol(node)) {
             str        name_str = node->symbol.name;
-            ast_node **p        = str_map_get(tops, name_str);
+            ast_node **p        = str_map_get(self->toplevels, name_str);
             if (p) {
                 // merge annotation if existing node is a let node; otherwise error
                 if (!ast_node_is_let(*p)) {
@@ -398,7 +396,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
-                    str_map_set(&tops, name_str, &node);
+                    str_map_set(&self->toplevels, name_str, &node);
                     process_annotation(self, node, null);
                 }
             }
@@ -420,7 +418,7 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
 
         else if (ast_node_is_let(node)) {
             str        name_str = ast_node_str(node->let.name);
-            ast_node **p        = str_map_get(tops, name_str);
+            ast_node **p        = str_map_get(self->toplevels, name_str);
 
             if (p) {
                 // merge type if the existing node is a symbol; otherwise error
@@ -440,31 +438,35 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
                 // replace prior symbol entry with let node
                 *p = node;
             } else {
-                str_map_set(&tops, name_str, &node);
+                str_map_set(&self->toplevels, name_str, &node);
                 process_annotation(self, node->let.name, null);
             }
         }
 
         else if (ast_node_is_utd(node)) {
             str        name_str = ast_node_str(node->user_type_def.name);
-            ast_node **p        = str_map_get(tops, name_str);
+            ast_node **p        = str_map_get(self->toplevels, name_str);
 
             if (p) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
                 create_type_constructor_from_user_type(self, node);
-                str_map_set(&tops, name_str, &node);
+                str_map_set(&self->toplevels, name_str, &node);
             }
         }
 
         else if (ast_node_is_let_in(node)) {
             str name_str = node->let_in.name->symbol.name;
-            str_map_set(&tops, name_str, &node);
+            str_map_set(&self->toplevels, name_str, &node);
             process_annotation(self, node->let_in.name, null);
         }
 
         else if (ast_node_is_hash_command(node)) {
             (void)toplevel_hash_command(self, node);
+        }
+
+        else if (ast_node_is_body(node)) {
+            load_toplevel(self, node->body.expressions);
         }
 
         else {
@@ -474,7 +476,6 @@ static hashmap *load_toplevel(tl_infer *self, allocator *alloc, ast_node_sized n
     }
 
     arena_reset(self->transient);
-    return tops;
 }
 
 // -- tree shake --
@@ -2652,7 +2653,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     // Load all top level forms.
-    self->toplevels = load_toplevel(self, self->arena, nodes);
+    self->toplevels = ast_node_str_map_create(self->arena, 1024);
+    load_toplevel(self, nodes);
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 

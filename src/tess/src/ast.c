@@ -1275,6 +1275,9 @@ int ast_node_is_binary_op_struct_access(ast_node const *self) {
     str op = ast_node_str(self->binary_op.op);
     return is_struct_access_operator(str_cstr(&op));
 }
+int ast_node_is_body(ast_node const *self) {
+    return ast_body == self->tag;
+}
 int ast_node_is_hash_command(ast_node const *self) {
     return ast_hash_command == self->tag;
 }

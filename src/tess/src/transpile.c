@@ -500,8 +500,7 @@ static void generate_main(transpile *self) {
     } else if (1 == args.size) {
         cat(self, S("int main(int argc) { tl_init(); return tl_fun_main(argc); }\n"));
     } else if (2 == args.size) {
-        cat(self,
-            S("int main(int argc, char const* argv[]) { tl_init(); return tl_fun_main(argc, argv); }\n"));
+        cat(self, S("int main(int argc, char* argv[]) { tl_init(); return tl_fun_main(argc, argv); }\n"));
     }
 }
 
