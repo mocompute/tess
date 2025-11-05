@@ -205,6 +205,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '!':  state = in_bang; continue;
             case '#':  state = start_hash_command; continue;
 
+            case '|':
+                replace_token(self->strings, &res, tok_bar);
+                state = stop;
+                break;
+
             case ';':
                 replace_token(self->strings, &res, tok_semicolon);
                 state = stop;
@@ -464,7 +469,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '+':
             case '-':
             case '.':
-            case '_': continue;
+            case '_':
+            case '|': continue;
 
             default:
                 // all other characters break a symbol
@@ -528,6 +534,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '&':
             case '*':
             case '-':
+            case '|':
                 // these tokens break a symbol TODO there should be more
                 // '=' does not break a symbol so we can support relations eg '>='
                 reverse_pos(self);

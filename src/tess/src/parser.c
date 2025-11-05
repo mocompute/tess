@@ -102,6 +102,7 @@ static int  a_arrow(parser *);
 static int  a_bool(parser *);
 static int  a_close_round(parser *);
 static int  a_colon(parser *);
+static int  a_vertical_bar(parser *);
 static int  a_comma(parser *);
 static int  a_equal_sign(parser *);
 static int  a_identifier(parser *);
@@ -414,6 +415,13 @@ static int a_comma(parser *p) {
     return 1;
 }
 
+static int a_vertical_bar(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_bar == p->token.tag) return result_ast_str(p, ast_symbol, "|");
+    p->error.tag = tl_err_expected_vertical_bar;
+    return 1;
+}
+
 static int a_hash_command(parser *p) {
     if (next_token(p)) return 1;
     if (tok_hash_command == p->token.tag) {
@@ -498,6 +506,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_open_square:  op = "["; break;
 
     case tok_bang:
+    case tok_bar:
     case tok_comma:
     case tok_c_block:
     case tok_colon:
@@ -544,6 +553,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_star:
     case tok_ampersand:
     case tok_bang_equal:
+    case tok_bar:
     case tok_comma:
     case tok_dot:
     case tok_c_block:
@@ -1557,6 +1567,51 @@ static int toplevel_struct(parser *self) {
     return result_ast_node(self, r);
 }
 
+static int toplevel_union(parser *self) {
+
+    if (a_try(self, a_type_identifier)) return 1;
+    ast_node *type_ident = self->result;
+
+    if (a_try(self, a_colon)) return 1;
+
+    // Format: MyUnion : { | variant1 : Type1 | variant2 : Type 2 }
+
+    if (a_try(self, a_open_curly)) return 1;
+
+    ast_node_array fields = {.alloc = self->ast_arena};
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (a_try(self, a_vertical_bar)) return 1;
+        if (a_try(self, a_param)) return 1;
+        array_push(fields, self->result);
+    }
+    array_shrink(fields);
+
+    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.is_union = 1;
+    if (ast_node_is_symbol(type_ident)) {
+        r->user_type_def.n_type_arguments = 0;
+        r->user_type_def.type_arguments   = null;
+        r->user_type_def.name             = type_ident;
+    } else if (ast_node_is_nfa(type_ident)) {
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.name             = type_ident->named_application.name;
+    } else fatal("logic error");
+
+    // The utd struct separates names from annotations, while they are both in the same symbol ast
+    // node variant. So we have to do this splitting just for it to recombine later.
+    r->user_type_def.n_fields          = fields.size;
+    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+    r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+    forall(i, fields) {
+        r->user_type_def.field_names[i]       = fields.v[i];
+        r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
+    }
+
+    return result_ast_node(self, r);
+}
+
 static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
@@ -1568,6 +1623,7 @@ static int toplevel(parser *self) {
         if (0 == a_try(self, toplevel_type_alias)) goto success;
         if (0 == a_try(self, toplevel_enum)) goto success;
         if (0 == a_try(self, toplevel_struct)) goto success;
+        if (0 == a_try(self, toplevel_union)) goto success;
         if (0 == a_try(self, toplevel_defun)) goto success;
         if (0 == a_try(self, toplevel_assign)) goto success;
         if (0 == a_try(self, toplevel_forward)) goto success;

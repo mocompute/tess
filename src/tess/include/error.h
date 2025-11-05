@@ -69,6 +69,7 @@
     X(tl_err_expected_open_square, "expected_open_square")                                                 \
     X(tl_err_expected_close_square, "expected_close_square")                                               \
     X(tl_err_expected_newline, "expected_newline")                                                         \
+    X(tl_err_expected_vertical_bar, "expected_vertical_bar")                                               \
     X(tl_err_expected_star, "expected_star")                                                               \
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \

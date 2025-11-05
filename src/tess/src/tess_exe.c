@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
     if (self.words.size == 0) usage(0, argv[0]);
 
     if (self.verbose) {
-        printf("Current working directory: %s\n", buf_s.buf);
+        fprintf(stderr, "Current working directory: %s\n", buf_s.buf);
     }
 
     if (0 == strcmp("c", self.words.v[0])) {
