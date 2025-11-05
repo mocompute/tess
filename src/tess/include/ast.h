@@ -132,6 +132,7 @@ typedef struct ast_node {
             tl_monotype     **field_types;
             u8                n_fields;
             u8                n_type_arguments;
+            u8                is_union;
         } user_type_def;
 
         struct ast_hash_command {

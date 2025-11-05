@@ -241,7 +241,8 @@ static void generate_user_types(transpile *self) {
 
         // enums have no instance arguments. They have only field names.
         if (!tl_monotype_is_enum(poly->type)) {
-            cat(self, S("typedef struct "));
+            if (node->user_type_def.is_union) cat(self, S("typedef union "));
+            else cat(self, S("typedef struct "));
             cat(self, name);
             catln(self, S(" {"));
 

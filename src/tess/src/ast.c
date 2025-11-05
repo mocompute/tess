@@ -291,6 +291,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->name             = ast_node_clone(alloc, vorig->name);
         vclone->n_fields         = vorig->n_fields;
         vclone->n_type_arguments = vorig->n_type_arguments;
+        vclone->is_union         = vorig->is_union;
 
         vclone->field_names      = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
 
