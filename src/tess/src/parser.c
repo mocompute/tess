@@ -59,11 +59,11 @@ static int           toplevel(parser *);
 
 static int           a_param(parser *);
 static int           a_assignment(parser *);
-static int           a_simple_assignment(parser *);
+static int           a_field_assignment(parser *);
 static int           a_body_element(parser *);
 static int           a_expression(parser *);
 static int           a_funcall(parser *);
-static int           a_type_literal(parser *);
+static int           a_type_constructor(parser *);
 static int           a_lambda_function(parser *);
 static int           a_reassignment(parser *);
 static int           a_statement(parser *);
@@ -754,8 +754,14 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
 
 static int a_type_identifier(parser *self) {
 
-    if (0 == a_try(self, a_funcall)) return 0;
-    if (0 == a_try(self, a_identifier)) return 0;
+    if (0 == a_try(self, a_funcall)) {
+        mangle_name(self, self->result->named_application.name);
+        return 0;
+    }
+    if (0 == a_try(self, a_identifier)) {
+        mangle_name(self, self->result);
+        return 0;
+    }
 
     return 1;
 }
@@ -807,7 +813,7 @@ done:
     return result_ast_node(self, node);
 }
 
-static int a_type_literal(parser *self) {
+static int a_type_constructor(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
@@ -815,12 +821,12 @@ static int a_type_literal(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_curly)) goto done;
-    if (0 == a_try(self, a_simple_assignment)) array_push(args, self->result);
+    if (0 == a_try(self, a_field_assignment)) array_push(args, self->result);
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, a_simple_assignment)) return 1;
+        if (a_try(self, a_field_assignment)) return 1;
         array_push(args, self->result);
     }
 
@@ -893,7 +899,7 @@ done:
 }
 
 static int a_value(parser *self) {
-    if (0 == a_try(self, a_type_literal)) return 0;
+    if (0 == a_try(self, a_type_constructor)) return 0;
     if (0 == a_try(self, a_funcall)) return 0;
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
@@ -1195,7 +1201,7 @@ static int a_reassignment(parser *self) {
     return result_ast_node(self, a);
 }
 
-static int a_simple_assignment(parser *self) {
+static int a_field_assignment(parser *self) {
     // x = val (for type literals)
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
@@ -1205,7 +1211,8 @@ static int a_simple_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a = ast_node_create_assignment(self->ast_arena, name, val);
+    ast_node *a                 = ast_node_create_assignment(self->ast_arena, name, val);
+    a->assignment.is_field_name = 1;
     return result_ast_node(self, a);
 }
 
@@ -1503,6 +1510,7 @@ static int toplevel_enum(parser *self) {
     // an enum uses the ast_user_type_definition with no type_arguments and no field_annotations. The actual
     // enums are saved in field_names.
     ast_node *r                       = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.is_union         = 0;
     r->user_type_def.name             = name;
     r->user_type_def.n_type_arguments = 0;
     r->user_type_def.type_arguments   = null;
@@ -1543,7 +1551,8 @@ static int toplevel_struct(parser *self) {
     }
     array_shrink(fields);
 
-    ast_node *r = ast_node_create(self->ast_arena, ast_user_type_definition);
+    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.is_union = 0;
     if (ast_node_is_symbol(type_ident)) {
         r->user_type_def.n_type_arguments = 0;
         r->user_type_def.type_arguments   = null;

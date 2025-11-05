@@ -204,6 +204,7 @@ static void generate_structs(transpile *self) {
             generate_struct(self, type->type);
         }
     }
+    cat_nl(self);
 }
 
 static void generate_hash_includes(transpile *self) {
@@ -223,6 +224,30 @@ static void generate_ifc_blocks(transpile *self) {
         cat(self, node->hash_command.full);
         cat_nl(self);
     }
+    cat_nl(self);
+}
+
+static void generate_enums(transpile *self) {
+
+    // FIXME: duplicates are generated, and enum types are being specialised when they should not be.
+
+    hashmap_iterator iter = {0};
+    while (map_iter(self->env->map, &iter)) {
+        tl_polytype *type = *(tl_polytype **)iter.data;
+        if (!tl_monotype_is_enum(type->type)) continue;
+        cat(self, S("typedef /*enum*/ int "));
+        cat(self, type->type->cons_inst->special_name);
+        cat_semicolonln(self);
+    }
+
+    // forall(i, self->nodes) {
+    //     ast_node *node = self->nodes.v[i];
+    //     if (!ast_node_is_enum_def(node)) continue;
+    //     cat(self, S("typedef /*enum*/ int "));
+    //     cat(self, ast_node_str(node->user_type_def.name));
+    //     cat_semicolonln(self);
+    // }
+    cat_nl(self);
 }
 
 static void generate_user_types(transpile *self) {
@@ -616,12 +641,11 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
     str                            res = next_res(self);
     tl_type_constructor_def const *def = type->cons_inst->def;
 
-    assert(def->field_names.size == node->named_application.n_arguments);
-    assert(def->field_names.size == type->cons_inst->args.size);
-
     generate_decl(self, res, type);
 
     forall(i, def->field_names) {
+        // Allow partial construction, required for C unions
+        if (i == node->named_application.n_arguments) break;
         ast_node const *arg = node->named_application.arguments[i];
         if (!ast_node_is_assignment(arg)) fatal("expected named assignment node");
 
@@ -1302,6 +1326,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_hash_includes(self);
     generate_ifc_blocks(self);
 
+    generate_enums(self);
     generate_user_types(self);
     generate_structs(self);
     generate_toplevel_contexts(self);

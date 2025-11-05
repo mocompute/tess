@@ -85,9 +85,10 @@ ast_node *ast_node_create_binary_op(allocator *alloc, ast_node *op, ast_node *le
     return self;
 }
 ast_node *ast_node_create_assignment(allocator *alloc, ast_node *name, ast_node *value) {
-    ast_node *self         = ast_node_create(alloc, ast_assignment);
-    self->assignment.name  = name;
-    self->assignment.value = value;
+    ast_node *self                 = ast_node_create(alloc, ast_assignment);
+    self->assignment.name          = name;
+    self->assignment.value         = value;
+    self->assignment.is_field_name = 0;
     return self;
 }
 ast_node *ast_node_create_return(allocator *alloc, ast_node *value, int is_break) {
@@ -209,6 +210,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                               *vorig  = ast_node_assignment((ast_node *)orig);
         vclone->name                  = ast_node_clone(alloc, vorig->name);
         vclone->value                 = ast_node_clone(alloc, vorig->value);
+        vclone->is_field_name         = vorig->is_field_name;
     } break;
 
     case ast_symbol:
@@ -1267,6 +1269,9 @@ int ast_node_is_utd(ast_node const *self) {
 }
 int ast_node_is_enum_def(ast_node const *self) {
     return ast_node_is_utd(self) && self->user_type_def.field_annotations == null;
+}
+int ast_node_is_union_def(ast_node const *self) {
+    return ast_node_is_utd(self) && self->user_type_def.is_union;
 }
 
 int ast_node_is_lambda_function(ast_node const *self) {

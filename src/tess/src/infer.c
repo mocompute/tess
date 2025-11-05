@@ -1063,10 +1063,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     if (found != -1) {
                         // Enums: they have no types and no instance arguments. Detect those and give them
                         // an Int type.
+                        // FIXME
                         if (!inst->args.size) {
-                            tl_monotype *int_ty = tl_type_registry_int(self->registry);
-                            if (constrain_pm(self, ctx, right->type, int_ty, node)) return 1;
-                            if (constrain_pm(self, ctx, node->type, int_ty, node)) return 1;
+                            // tl_monotype *int_ty = tl_type_registry_int(self->registry);
+                            if (constrain_pm(self, ctx, right->type, struct_type, node)) return 1;
+                            if (constrain_pm(self, ctx, node->type, struct_type, node)) return 1;
                             if (constrain(self, ctx, node->type, right->type, node)) return 1;
                             break;
                         }
@@ -1199,6 +1200,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         else {
             ensure_tv(self, null, &node->type);
+
+            // Note: special case: if symbol is the name of an enum, constraint it to an Int
+            // FIXME
+            ast_node *utd = toplevel_get(self, node->symbol.name);
+            if (0 && utd && ast_node_is_enum_def(utd)) {
+                tl_monotype *int_ty = tl_type_registry_int(self->registry);
+                if (constrain_pm(self, ctx, node->type, int_ty, node)) return 1;
+            }
         }
 
         // if symbol has a type annotation, constrain it
@@ -1271,7 +1280,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
                 if (ast_node_is_assignment(arg)) {
                     // check if name exists in type def
-                    if (!tl_polytype_type_constructor_has_field(type, ast_node_str(arg->assignment.name))) {
+                    if (!tl_polytype_type_constructor_has_field(
+                          type, ast_node_name_original(arg->assignment.name))) {
                         array_push(self->errors,
                                    ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
                         return 1;
@@ -1595,7 +1605,14 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    str                name = node->named_application.name->symbol.name;
+    // Check if type being constructed is a C union. If so, do not specialize. We don't support polymorphic
+    // unions.
+    str name = node->named_application.name->symbol.name;
+
+    {
+        ast_node *utd = toplevel_get(self, name);
+        if (utd && ast_node_is_union_def(utd)) return 0;
+    }
 
     tl_monotype_array  arr  = {.alloc = self->transient};
     ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -1980,7 +1997,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     } break;
 
     case ast_assignment:
-        rename_variables(self, node->assignment.name, lex, level + 1);
+        // Note: no longer rename lhs of assignment, because it is used for named arguments of type
+        // constructors
+        if (!node->assignment.is_field_name) rename_variables(self, node->assignment.name, lex, level + 1);
         rename_variables(self, node->assignment.value, lex, level + 1);
         break;
 

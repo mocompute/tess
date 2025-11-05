@@ -47,6 +47,7 @@ typedef struct ast_node {
         struct ast_assignment {
             struct ast_node *name;
             struct ast_node *value;
+            int              is_field_name;
         } assignment;
 
         struct ast_array {
@@ -275,6 +276,7 @@ int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
+int            ast_node_is_union_def(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);

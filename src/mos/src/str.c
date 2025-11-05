@@ -277,8 +277,9 @@ int str_cmp_nc(str lhs, char const *rhs, size_t max) {
     if (!rhs) return 1;
     span   left    = str_span(&lhs);
     size_t rhs_len = strlen(rhs);
-    if (max > left.len) max = left.len;
+    if (max > left.len) return 1; // Note: acts like starts_with
     if (max > rhs_len) max = rhs_len;
+
     return memcmp(left.buf, rhs, max);
 }
 
