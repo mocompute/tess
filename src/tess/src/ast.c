@@ -1268,7 +1268,8 @@ int ast_node_is_utd(ast_node const *self) {
     return ast_user_type_definition == self->tag;
 }
 int ast_node_is_enum_def(ast_node const *self) {
-    return ast_node_is_utd(self) && self->user_type_def.field_annotations == null;
+    return ast_node_is_utd(self) && self->user_type_def.n_fields &&
+           self->user_type_def.field_annotations == null;
 }
 int ast_node_is_union_def(ast_node const *self) {
     return ast_node_is_utd(self) && self->user_type_def.is_union;

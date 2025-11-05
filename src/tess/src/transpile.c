@@ -235,8 +235,9 @@ static void generate_enums(transpile *self) {
     while (map_iter(self->env->map, &iter)) {
         tl_polytype *type = *(tl_polytype **)iter.data;
         if (!tl_monotype_is_enum(type->type)) continue;
+        tl_type_constructor_inst *inst = type->type->cons_inst;
         cat(self, S("typedef /*enum*/ int "));
-        cat(self, type->type->cons_inst->special_name);
+        cat(self, str_is_empty(inst->special_name) ? inst->def->name : inst->special_name);
         cat_semicolonln(self);
     }
 
@@ -250,50 +251,58 @@ static void generate_enums(transpile *self) {
     cat_nl(self);
 }
 
+static void generate_one_user_type(transpile *self, ast_node *node) {
+    if (!ast_node_is_utd(node)) return;
+    str          name = toplevel_name(node);
+    tl_polytype *poly = node->type;
+    if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
+
+    tl_type_constructor_def *def = poly->type->cons_inst->def;
+    if (!def) fatal("missing type def");
+
+    // enums have no instance arguments. They have only field names.
+    if (!tl_monotype_is_enum(poly->type)) {
+        if (node->user_type_def.is_union) cat(self, S("typedef union "));
+        else cat(self, S("typedef struct "));
+        cat(self, name);
+        catln(self, S(" {"));
+
+        assert(def->field_names.size == poly->type->cons_inst->args.size);
+        forall(i, def->field_names) {
+            generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
+        }
+
+        cat(self, S("} "));
+        cat(self, name);
+        cat_semicolonln(self);
+        cat_nl(self);
+    } else {
+        // an enum
+        forall(i, def->field_names) {
+            cat(self, S("#define "));
+            // mangle name: name_field
+            cat(self, def->name);
+            cat(self, S("_"));
+            cat(self, def->field_names.v[i]);
+            cat_sp(self);
+            str value = str_fmt(self->transient, "%i", i);
+            cat(self, value);
+            cat_nl(self);
+        }
+    }
+}
+
 static void generate_user_types(transpile *self) {
 
     forall(i, self->synthesized_nodes) {
         ast_node *node = self->synthesized_nodes.v[i];
+        generate_one_user_type(self, node);
+    }
 
-        if (!ast_node_is_utd(node)) continue;
-        str          name = toplevel_name(node);
-        tl_polytype *poly = node->type;
-        if (!tl_polytype_is_concrete(poly)) fatal("type scheme");
-        if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
-
-        tl_type_constructor_def *def = poly->type->cons_inst->def;
-        if (!def) fatal("missing type def");
-
-        // enums have no instance arguments. They have only field names.
-        if (!tl_monotype_is_enum(poly->type)) {
-            if (node->user_type_def.is_union) cat(self, S("typedef union "));
-            else cat(self, S("typedef struct "));
-            cat(self, name);
-            catln(self, S(" {"));
-
-            assert(def->field_names.size == poly->type->cons_inst->args.size);
-            forall(i, def->field_names) {
-                generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
-            }
-
-            cat(self, S("} "));
-            cat(self, name);
-            cat_semicolonln(self);
-            cat_nl(self);
-        } else {
-            // an enum
-            forall(i, def->field_names) {
-                cat(self, S("#define "));
-                // mangle name: name_field
-                cat(self, def->name);
-                cat(self, S("_"));
-                cat(self, def->field_names.v[i]);
-                cat_sp(self);
-                str value = str_fmt(self->transient, "%i", i);
-                cat(self, value);
-                cat_nl(self);
-            }
-        }
+    // Also look for unspecialised enums and unions in program nodes.
+    forall(i, self->nodes) {
+        ast_node *node = self->nodes.v[i];
+        generate_one_user_type(self, node);
     }
 
     cat_nl(self);

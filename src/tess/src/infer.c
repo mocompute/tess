@@ -1437,6 +1437,12 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 
     if (out_type) *out_type = null;
 
+    // do not specialize if it's an enum
+    {
+        ast_node *utd = toplevel_get(self, name);
+        if (utd && ast_node_is_enum_def(utd)) return str_empty();
+    }
+
     // specialize args first
     forall(i, args) {
         if (tl_monotype_is_inst(args.v[i]) && str_is_empty(args.v[i]->cons_inst->special_name)) {
@@ -1637,7 +1643,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     tl_monotype_sized arr_sized    = array_sized(arr);
     tl_polytype      *special_type = null;
     str               name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
-    if (str_is_empty(name_inst)) fatal("runtime error");
+    if (str_is_empty(name_inst)) return 0;
 
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
