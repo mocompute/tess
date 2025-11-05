@@ -1460,7 +1460,8 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
         return str_empty();
     }
 
-    str          out_str   = str_empty();
+    // str          out_str   = name;                           // default is unspecialized name
+    str          out_str   = str_empty();                    // default is unspecialized name
     str          name_inst = next_instantiation(self, name); // may be cancelled later
     tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
     if (!inst) goto cancel;

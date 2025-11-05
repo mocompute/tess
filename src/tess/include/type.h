@@ -68,7 +68,7 @@ typedef struct {
     allocator    *alloc;        // manages lifetime of all type constructors
     tl_type_subs *subs;         // needed for instantiation
     hashmap      *definitions;  // str => tl_polytype*
-    hashmap      *instances;    // registry_key => tl_monotype*
+    hashmap      *specialized;  // registry_key => tl_monotype*
     hashmap      *type_aliases; // str => polytype*
 } tl_type_registry;
 

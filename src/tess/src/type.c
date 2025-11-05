@@ -27,7 +27,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     self->alloc            = alloc;
     self->subs             = subs;
     self->definitions      = map_new(self->alloc, str, tl_polytype *, 64);       // key: str
-    self->instances        = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
+    self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
     make_unary_inst(self, S("Nil"));
@@ -36,11 +36,11 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     make_unary_inst(self, S("Float"));
     make_unary_inst(self, S("String"));
 
-    // Ptr and Type are unary type constructors
+    // Ptr and Type are unary type constructors and are not added to env
     make_unary_tc(self, S("Ptr"));
     make_unary_tc(self, S("Type"));
 
-    // Union has variable arity
+    // Union has variable arity and is not added to env
     make_variable_arity_tc(self, S("Union"));
 
     return self;
@@ -137,9 +137,7 @@ typedef struct {
 
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     tl_monotype *type = null;
-    tl_polytype *poly = null;
-    poly              = str_map_get_ptr(self->type_aliases, name);
-    if (!poly) poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
 
     type = tl_polytype_instantiate(self->alloc, poly, self->subs);
@@ -148,11 +146,10 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
 }
 
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
+    // FIXME: shouldn't callers of this function be using specialize instead?
     tl_monotype *type = null;
 
-    tl_polytype *poly = null;
-    poly              = str_map_get_ptr(self->type_aliases, name);
-    if (!poly) poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
 
     u32 arity = poly->quantifiers.size;
@@ -180,7 +177,9 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
 tl_monotype *tl_type_registry_get_cached_instance(tl_type_registry *self, str name,
                                                   tl_monotype_sized args) {
     registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
-    return map_get_ptr(self->instances, &key, sizeof key);
+    tl_monotype *out = map_get_ptr(self->specialized, &key, sizeof key);
+    if (!out) out = tl_type_registry_instantiate(self, name);
+    return out;
 }
 
 void tl_type_registry_type_alias_insert(tl_type_registry *self, str name, tl_polytype *type) {
@@ -193,13 +192,15 @@ int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
 
 tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                          tl_monotype_sized args) {
+    if (!args.size) {
+        // fprintf(stderr, "specialize: no args: '%s'\n", str_cstr(&name));
+        return tl_type_registry_instantiate(self, name);
+    }
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
-    if ((type = map_get_ptr(self->instances, &key, sizeof key))) return type;
+    if ((type = map_get_ptr(self->specialized, &key, sizeof key))) return type;
 
-    tl_polytype *poly = null;
-    poly              = str_map_get_ptr(self->type_aliases, name);
-    if (!poly) poly = str_map_get_ptr(self->definitions, name);
+    tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
 
     assert(tl_monotype_is_inst(poly->type));
@@ -210,7 +211,7 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     }
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
-    map_set_ptr(&self->instances, &key, sizeof key, type);
+    map_set_ptr(&self->specialized, &key, sizeof key, type);
 
     if (!str_is_empty(special_name)) {
         tl_type_constructor_def_create_ext(self, special_name, name, (tl_type_variable_sized){0},
@@ -221,8 +222,7 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
 }
 
 tl_polytype *tl_type_registry_get(tl_type_registry *self, str name) {
-    tl_polytype *poly = null;
-    poly              = str_map_get_ptr(self->type_aliases, name);
+    tl_polytype *poly = str_map_get_ptr(self->type_aliases, name);
     if (!poly) poly = str_map_get_ptr(self->definitions, name);
     return poly;
 }
