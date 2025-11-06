@@ -1,6 +1,5 @@
 #module Foo
 
-
 Circle : { radius : Float }
 Square : { length : Int }
 

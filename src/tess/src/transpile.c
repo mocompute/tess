@@ -232,6 +232,7 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
+    if (!tl_monotype_is_concrete(poly->type)) return;
 
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
@@ -279,6 +280,13 @@ static void generate_user_types(transpile *self) {
     forall(i, self->nodes) {
         ast_node *node = self->nodes.v[i];
         if (!ast_node_is_enum_def(node)) continue;
+        generate_one_user_type(self, node);
+    }
+
+    // Then emit concrete user types because they won't have been specialized.
+    forall(i, self->nodes) {
+        ast_node *node = self->nodes.v[i];
+        if (ast_node_is_enum_def(node)) continue;
         generate_one_user_type(self, node);
     }
 

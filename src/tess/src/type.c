@@ -201,8 +201,9 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
                                          tl_monotype_sized args) {
     if (!args.size) {
         // no args, no need to specialize
-        return tl_type_registry_instantiate(self, name);
+        return null;
     }
+
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     if ((type = map_get_ptr(self->specialized, &key, sizeof key))) return type;

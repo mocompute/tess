@@ -60,7 +60,6 @@ typedef struct {
     hashmap *type_arguments; // map str -> tl_monotype*
     hashmap *seen_node;      // hset ast_node* FIXME: needed?
     void    *user;
-    int      is_intrinsic_argument;
     int      is_field_name;
 } traverse_ctx;
 
@@ -563,14 +562,13 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 // -- inference --
 
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
-    traverse_ctx *out          = new (alloc, traverse_ctx);
-    out->seen_node             = hset_create(alloc, 1024);
-    out->call_chain            = hset_create(alloc, 16);
-    out->lex                   = hset_create(alloc, 16);
-    out->type_arguments        = map_create_ptr(alloc, 16);
-    out->user                  = null;
-    out->is_intrinsic_argument = 0;
-    out->is_field_name         = 0;
+    traverse_ctx *out   = new (alloc, traverse_ctx);
+    out->seen_node      = hset_create(alloc, 1024);
+    out->call_chain     = hset_create(alloc, 16);
+    out->lex            = hset_create(alloc, 16);
+    out->type_arguments = map_create_ptr(alloc, 16);
+    out->user           = null;
+    out->is_field_name  = 0;
 
     return out;
 }
@@ -752,9 +750,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             return 0;
         }
 
-        // traverse arguments, but do not process arguments of intrinsic calls
-        int save = ctx->is_intrinsic_argument;
-        if (is_intrinsic(name)) ctx->is_intrinsic_argument = 1;
+        // traverse arguments
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
@@ -762,8 +758,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             if (traverse_ast(self, ctx, arg, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
-
-        ctx->is_intrinsic_argument = save;
 
     } break;
 
@@ -1743,7 +1737,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         str_buf(&node->named_application.name->symbol.name));
 
     // do not process intrinsic calls or their arguments
-    if (is_intrinsic(name) || traverse_ctx->is_intrinsic_argument) return 0;
+    if (is_intrinsic(name)) return 0;
 
     tl_polytype *type = tl_type_env_lookup(self->env, name);
     if (!type) {
