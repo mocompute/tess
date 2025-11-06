@@ -164,11 +164,14 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         if (str_eq(name, S("any"))) {
             return tl_monotype_create_any(self->alloc);
         } else {
-            // or else check if it's a known type
-            tl_monotype *out = tl_type_registry_instantiate(self, name);
-            if (out) return out;
+            // or else check if it's a known nullary type
+            if (tl_type_registry_is_nullary_type(self, name)) {
+                tl_polytype *poly = tl_type_registry_get(self, name);
+                return tl_monotype_clone(self->alloc, poly->type);
+            }
         }
 
+        // otherwise assign a fresh type variable
         tl_monotype *tv = get_tv_or_fresh(self, name, map, subs);
         return tv;
     }
@@ -182,11 +185,6 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         array_reserve(args_mono, args.size);
         forall(i, args) {
             tl_monotype const *mono = tl_type_registry_parse(self, args.v[i], subs, map);
-            if (!mono) {
-                // a type variable
-                if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
-                mono = get_tv_or_fresh(self, ast_node_str(args.v[i]), map, subs);
-            }
             array_push(args_mono, mono);
         }
 
@@ -194,6 +192,8 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
             return tl_type_registry_instantiate_union(self, args_mono_);
         } else {
+            // args includes fresh type variables, e.g. for polymorphic types, or the nfa is a type
+            // literal, e.g. Point(Int).
             return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
                                                      args_mono_);
         }
@@ -266,7 +266,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                   tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
 
             if (!field) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_expected_type, .node = field_type_node}));
                 return;
             }
 
@@ -897,7 +898,7 @@ static tl_monotype *instantiate_type_literal(tl_infer *self, ast_node *node) {
 
         str          name = ast_node_str(node);
         tl_monotype *inst =
-          tl_type_registry_get_cached_instance(self->registry, name, (tl_monotype_sized){0});
+          tl_type_registry_get_cached_specialization(self->registry, name, (tl_monotype_sized){0});
         if (!inst) return null;
 
         // set node type to type literal
@@ -927,6 +928,7 @@ static tl_monotype *instantiate_type_literal(tl_infer *self, ast_node *node) {
         array_push(arg_types, arg_ty);
     }
 
+    // e.g. Point(Int)
     tl_monotype_sized arg_types_ = array_sized(arg_types);
     tl_monotype      *inst       = tl_type_registry_instantiate_with(self->registry, name, arg_types_);
     if (!inst) fatal("runtime error");
@@ -1460,8 +1462,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
         return str_empty();
     }
 
-    // str          out_str   = name;                           // default is unspecialized name
-    str          out_str   = str_empty();                    // default is unspecialized name
+    str          out_str   = str_empty();
     str          name_inst = next_instantiation(self, name); // may be cancelled later
     tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
     if (!inst) goto cancel;
@@ -1501,7 +1502,8 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
 
     if (!args.size) {
         tl_monotype *inst =
-          tl_type_registry_get_cached_instance(self->registry, name, (tl_monotype_sized){0});
+          tl_type_registry_get_cached_specialization(self->registry, name, (tl_monotype_sized){0});
+        if (!inst) inst = tl_type_registry_instantiate(self->registry, name);
         if (!inst) goto error;
 
         if (out_type) {
@@ -2535,7 +2537,7 @@ static int check_main_function(tl_infer *self, ast_node *main) {
 }
 
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
-    tl_monotype *mono = tl_type_registry_get_cached_instance(self->registry, type_name, args);
+    tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
     if (!mono) {
         // not found, specialize it if all args are concrete
         tl_polytype *specialized = null;

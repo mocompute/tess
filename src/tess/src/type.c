@@ -36,11 +36,11 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     make_unary_inst(self, S("Float"));
     make_unary_inst(self, S("String"));
 
-    // Ptr and Type are unary type constructors and are not added to env
+    // Ptr and Type are unary type constructors
     make_unary_tc(self, S("Ptr"));
     make_unary_tc(self, S("Type"));
 
-    // Union has variable arity and is not added to env
+    // Union has variable arity
     make_variable_arity_tc(self, S("Union"));
 
     return self;
@@ -136,6 +136,8 @@ typedef struct {
 } registry_key;
 
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
+    if (str_eq(name, S("Union"))) fatal("runtime error");
+    if (str_eq(name, S("Ptr"))) fatal("runtime error");
     tl_monotype *type = null;
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
@@ -146,14 +148,14 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
 }
 
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
-    // FIXME: shouldn't callers of this function be using specialize instead?
+    // For use with Type literals only, e.g. instantiate a Point(a) as a Point(Int)
     tl_monotype *type = null;
 
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
 
     u32 arity = poly->quantifiers.size;
-    if (args.size != arity) return null;
+    if (args.size != arity) fatal("runtime error");
 
     type = tl_polytype_instantiate_with(self->alloc, poly, args);
 
@@ -163,6 +165,8 @@ tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name,
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
     str          name = S("Union");
     tl_monotype *type = null;
+
+    if (!args.size) fatal("runtime error");
 
     tl_polytype *poly = str_map_get_ptr(self->definitions, name);
     if (!poly) fatal("runtime error");
@@ -174,11 +178,10 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
     return type;
 }
 
-tl_monotype *tl_type_registry_get_cached_instance(tl_type_registry *self, str name,
-                                                  tl_monotype_sized args) {
+tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *self, str name,
+                                                        tl_monotype_sized args) {
     registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     tl_monotype *out = map_get_ptr(self->specialized, &key, sizeof key);
-    if (!out) out = tl_type_registry_instantiate(self, name);
     return out;
 }
 
@@ -187,13 +190,17 @@ void tl_type_registry_type_alias_insert(tl_type_registry *self, str name, tl_pol
 }
 
 int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
-    return !!(tl_type_registry_get_cached_instance(self, name, (tl_monotype_sized){0}));
+    tl_polytype *poly = tl_type_registry_get(self, name);
+    if (!poly) return 0;
+    if (tl_polytype_is_scheme(poly)) return 0;
+    if (!tl_monotype_is_inst(poly->type)) return 0;
+    return 1;
 }
 
 tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                          tl_monotype_sized args) {
     if (!args.size) {
-        // fprintf(stderr, "specialize: no args: '%s'\n", str_cstr(&name));
+        // no args, no need to specialize
         return tl_type_registry_instantiate(self, name);
     }
     tl_monotype *type = null;
@@ -207,7 +214,7 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def->is_variable_args) {
         u32 arity = poly->type->cons_inst->args.size;
-        if (args.size != arity) return null;
+        if (args.size != arity) fatal("runtime error");
     }
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
@@ -254,21 +261,21 @@ tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
 
 tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     tl_monotype *out =
-      tl_type_registry_instantiate_with(self, S("Ptr"), (tl_monotype_sized){.size = 1, .v = &arg});
+      tl_type_registry_specialize(self, S("Ptr"), str_empty(), (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
 
 tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *self, tl_monotype *arg) {
-    tl_monotype *out =
-      tl_type_registry_instantiate_with(self, S("PtrOrNull"), (tl_monotype_sized){.size = 1, .v = &arg});
+    tl_monotype *out = tl_type_registry_specialize(self, S("PtrOrNull"), str_empty(),
+                                                   (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
 
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype *arg) {
     tl_monotype *out =
-      tl_type_registry_instantiate_with(self, S("Type"), (tl_monotype_sized){.size = 1, .v = &arg});
+      tl_type_registry_specialize(self, S("Type"), str_empty(), (tl_monotype_sized){.size = 1, .v = &arg});
     assert(out);
     return out;
 }
@@ -539,7 +546,8 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
             if (tl_monotype_is_inst(args.v[i])) {
                 str               name      = args.v[i]->cons_inst->def->name;
                 tl_monotype_sized inst_args = args.v[i]->cons_inst->args;
-                tl_monotype      *replace = tl_type_registry_get_cached_instance(registry, name, inst_args);
+                tl_monotype      *replace =
+                  tl_type_registry_get_cached_specialization(registry, name, inst_args);
                 if (replace) args.v[i] = replace;
             }
         }

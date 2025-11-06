@@ -1714,8 +1714,8 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
         // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
         // know about how to handle _tl_sizeof_'s arguments.
-        type = tl_infer_update_specialized_type(self->infer, type);
-        if (!type) fatal("missing specialized type");
+        tl_monotype *replace = tl_infer_update_specialized_type(self->infer, type);
+        if (replace) type = replace;
 
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
