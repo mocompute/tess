@@ -58,9 +58,11 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     make_unary_inst(self, S("CLongLong"));
     make_unary_inst(self, S("CUnsignedLongLong"));
     make_unary_inst(self, S("CSize"));
+    make_unary_inst(self, S("CPtrDiff"));
 
     // Integer convertible types
     mark_integer_type(self, S("Int"));
+    mark_integer_type(self, S("Bool"));
     mark_integer_type(self, S("CChar"));
     mark_integer_type(self, S("CUnsignedChar"));
     mark_integer_type(self, S("CSignedChar"));
@@ -71,6 +73,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     mark_integer_type(self, S("CLongLong"));
     mark_integer_type(self, S("CUnsignedLongLong"));
     mark_integer_type(self, S("CSize"));
+    mark_integer_type(self, S("CPtrDiff"));
 
     return self;
 }

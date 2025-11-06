@@ -8,5 +8,5 @@ main() {
   c_printf("rand = %i\n", x)
   x = c_rand()
   c_printf("rand = %i\n", x)
-  0
+  false
 }
