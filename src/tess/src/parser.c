@@ -10,6 +10,7 @@
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "type.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -25,6 +26,8 @@ struct parser {
     allocator             *tokens_arena; // for tokens only
     allocator             *ast_arena;    // for ast nodes and related
     allocator             *transient;    // reset after each call to parser_next
+
+    parser_opts            opts;
 
     tokenizer             *tokenizer;
 
@@ -127,8 +130,8 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 parser *parser_create(allocator *alloc, parser_opts const *opts) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
-
     alloc_zero(self);
+    self->opts                    = *opts;
     self->parent_alloc            = alloc;
     self->file_arena              = arena_create(alloc, 64 * 1024);
     self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
@@ -1150,6 +1153,11 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
 }
 
 static void mangle_name(parser *self, ast_node *name) {
+    if (ast_node_is_symbol(name)) {
+        str name_str = ast_node_str(name);
+        if (tl_type_registry_get(self->opts.registry, name_str)) return;
+    }
+
     mangle_name_for_module(self, name, self->current_module);
 }
 
