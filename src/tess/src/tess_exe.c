@@ -5,6 +5,7 @@
 #include "parser.h"
 #include "str.h"
 #include "transpile.h"
+#include "type.h"
 #include "types.h"
 
 #include <ctype.h>
@@ -282,10 +283,17 @@ int compile(state *self) {
 
     if (!self->no_preamble) array_push_many(preamble, embed_std_tl, preamble_len);
 
-    c_string_csized paths = {.v = &self->words.v[1], .size = self->words.size - 1};
+    c_string_csized paths       = {.v = &self->words.v[1], .size = self->words.size - 1};
 
-    parser         *parser =
-      parser_create(default_allocator(), (char_csized)sized_all(preamble), files_in_order(self, paths));
+    tl_infer_opts   infer_opts  = {.is_library = self->is_library};
+    tl_infer       *infer       = tl_infer_create(default_allocator(), &infer_opts);
+
+    parser_opts     parser_opts = {
+          .registry = tl_infer_get_registry(infer),
+          .files    = files_in_order(self, paths),
+          .preamble = sized_all(preamble),
+    };
+    parser *parser = parser_create(default_allocator(), &parser_opts);
     if (!parser) fatal("could not create parser");
 
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
@@ -305,8 +313,6 @@ int compile(state *self) {
         }
     }
 
-    tl_infer_opts   infer_opts   = {.is_library = self->is_library};
-    tl_infer       *infer        = tl_infer_create(default_allocator(), &infer_opts);
     tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
     if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes), &infer_result)) {

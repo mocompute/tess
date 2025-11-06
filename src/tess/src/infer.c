@@ -128,6 +128,10 @@ void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->env->verbose = verbose;
 }
 
+tl_type_registry *tl_infer_get_registry(tl_infer *self) {
+    return self->registry;
+}
+
 static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **map, tl_type_subs *subs) {
     // map may be null, in which case type arguments are not supported
     tl_monotype *found = null;

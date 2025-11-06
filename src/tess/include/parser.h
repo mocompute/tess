@@ -8,6 +8,7 @@
 #include "tokenizer.h"
 
 #include "alloc.h"
+#include "type.h"
 
 typedef struct parser parser;
 
@@ -20,9 +21,15 @@ typedef struct parser_error {
     u32              col;
 } parser_error;
 
+typedef struct {
+    tl_type_registry *registry;
+    char_csized       preamble;
+    str_sized         files;
+} parser_opts;
+
 // -- allocation and deallocation --
 
-nodiscard parser *parser_create(allocator *, char_csized, str_sized) mallocfun;
+nodiscard parser *parser_create(allocator *, parser_opts const *) mallocfun;
 void              parser_destroy(parser **);
 
 // -- access --

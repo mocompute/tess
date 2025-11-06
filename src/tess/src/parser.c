@@ -125,7 +125,7 @@ static void log(struct parser *, char const *restrict fmt, ...) __attribute__((f
 
 // -- allocation and deallocation --
 
-parser *parser_create(allocator *alloc, char_csized preamble, str_sized files) {
+parser *parser_create(allocator *alloc, parser_opts const *opts) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
 
     alloc_zero(self);
@@ -135,7 +135,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, str_sized files) {
     self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->tokenizer               = null;
-    self->files                   = files;
+    self->files                   = opts->files;
     self->files_index             = 0;
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
@@ -153,7 +153,7 @@ parser *parser_create(allocator *alloc, char_csized preamble, str_sized files) {
     self->skip_module             = 0;
     self->expect_module           = 0;
 
-    self->tokenizer               = tokenizer_create(alloc, preamble, "std_preamble");
+    self->tokenizer               = tokenizer_create(alloc, opts->preamble, "std_preamble");
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
 
     token_init(&self->token, tok_invalid);
