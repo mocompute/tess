@@ -21,6 +21,7 @@ typedef struct {
     str       generic_name;     // used to recover canonical name, eg Ptr_1 -> Ptr
     str_sized field_names;      // for user types
     int       is_variable_args; // non-zero if type allows a variable number of arguments, e.g. Union(...)
+    int       is_integer_convertible; // the type is implicitly convertible to any other integer type
 } tl_type_constructor_def;
 
 typedef struct {
@@ -144,6 +145,7 @@ int                    tl_monotype_is_ptr_or_null(tl_monotype *);
 int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
 int                    tl_monotype_is_type_literal(tl_monotype *);
+int                    tl_monotype_is_integer_convertible(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
 tl_monotype           *tl_monotype_type_literal_target(tl_monotype *);
 tl_monotype           *tl_monotype_arrow_args(tl_monotype *);

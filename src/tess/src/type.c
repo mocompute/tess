@@ -4,6 +4,7 @@
 #include "array.h"
 #include "hash.h"
 #include "hashmap.h"
+#include "infer.h"
 #include "str.h"
 #include "util.h"
 
@@ -20,6 +21,8 @@ static void                      make_unary_inst(tl_type_registry *, str);
 static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_constructor_inst *,
                                                    tl_type_variable_sized);
 
+static void                      mark_integer_type(tl_type_registry *, str);
+
 // -- type constructor --
 
 tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
@@ -30,6 +33,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
+    // Basic types
     make_unary_inst(self, S("Nil"));
     make_unary_inst(self, S("Int"));
     make_unary_inst(self, S("Bool"));
@@ -42,6 +46,29 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
 
     // Union has variable arity
     make_variable_arity_tc(self, S("Union"));
+
+    // C Integer types
+    make_unary_inst(self, S("CChar"));
+    make_unary_inst(self, S("CUnsignedChar"));
+    make_unary_inst(self, S("CSignedChar"));
+    make_unary_inst(self, S("CInt"));
+    make_unary_inst(self, S("CUnsignedInt"));
+    make_unary_inst(self, S("CLong"));
+    make_unary_inst(self, S("CUnsignedLong"));
+    make_unary_inst(self, S("CLongLong"));
+    make_unary_inst(self, S("CUnsignedLongLong"));
+
+    // Integer convertible types
+    mark_integer_type(self, S("Int"));
+    mark_integer_type(self, S("CChar"));
+    mark_integer_type(self, S("CUnsignedChar"));
+    mark_integer_type(self, S("CSignedChar"));
+    mark_integer_type(self, S("CInt"));
+    mark_integer_type(self, S("CUnsignedInt"));
+    mark_integer_type(self, S("CLong"));
+    mark_integer_type(self, S("CUnsignedLong"));
+    mark_integer_type(self, S("CLongLong"));
+    mark_integer_type(self, S("CUnsignedLongLong"));
 
     return self;
 }
@@ -96,6 +123,7 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     def->generic_name            = str_copy(self->alloc, name);
     def->field_names             = (str_sized){0};
     def->is_variable_args        = 0;
+    def->is_integer_convertible  = 0;
     return def;
 }
 
@@ -125,6 +153,12 @@ static void make_unary_inst(tl_type_registry *self, str name) {
 
     tl_type_constructor_def_create(self, name, empty_tv, empty, empty_mt);
     tl_type_registry_specialize(self, name, blank, empty_mt);
+}
+
+static void mark_integer_type(tl_type_registry *self, str name) {
+    tl_polytype *poly = tl_type_registry_get(self, name);
+    if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
+    poly->type->cons_inst->def->is_integer_convertible = 1;
 }
 
 // --
@@ -793,6 +827,10 @@ int tl_monotype_has_ptr(tl_monotype *self) {
 int tl_monotype_is_type_literal(tl_monotype *self) {
     return self && tl_cons_inst == self->tag && self->cons_inst->def &&
            str_eq(self->cons_inst->def->generic_name, S("Type"));
+}
+
+int tl_monotype_is_integer_convertible(tl_monotype *self) {
+    return tl_monotype_is_inst(self) && self->cons_inst->def->is_integer_convertible;
 }
 
 int tl_polytype_is_scheme(tl_polytype *poly) {
