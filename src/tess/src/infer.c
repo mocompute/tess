@@ -1156,10 +1156,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
             }
 
-            if (constrain(self, ctx, node->let_in.name->type, node->let_in.value->type, node)) return 1;
+            // if name has an annotation, make it supreme: it overrides the value's type but must still
+            // unify
+            tl_polytype *name_type = node->let_in.name->type;
+            if (ast_node_is_symbol(node->let_in.name) && node->let_in.name->symbol.annotation_type)
+                name_type = node->let_in.name->symbol.annotation_type;
 
-            // add value to environment
-            tl_type_env_insert(self->env, node->let_in.name->symbol.name, node->let_in.value->type);
+            if (constrain(self, ctx, name_type, node->let_in.value->type, node)) return 1;
+            tl_type_env_insert(self->env, node->let_in.name->symbol.name, name_type);
 
             if (node->let_in.body)
                 if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;

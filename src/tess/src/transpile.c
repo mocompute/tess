@@ -1541,6 +1541,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("long long");
         } else if (str_eq(S("CUnsignedLongLong"), cons_name)) {
             return S("unsigned long long");
+        } else if (str_eq(S("CSize"), cons_name)) {
+            return S("size_t");
+        } else if (str_eq(S("CPtrDiff"), cons_name)) {
+            return S("ptrdiff_t");
         }
 
         else if (str_eq(S("Float"), cons_name)) {
