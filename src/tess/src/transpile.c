@@ -227,30 +227,6 @@ static void generate_ifc_blocks(transpile *self) {
     cat_nl(self);
 }
 
-static void generate_enums(transpile *self) {
-
-    // FIXME: duplicates are generated, and enum types are being specialised when they should not be.
-
-    hashmap_iterator iter = {0};
-    while (map_iter(self->env->map, &iter)) {
-        tl_polytype *type = *(tl_polytype **)iter.data;
-        if (!tl_monotype_is_enum(type->type)) continue;
-        tl_type_constructor_inst *inst = type->type->cons_inst;
-        cat(self, S("typedef /*enum*/ int "));
-        cat(self, str_is_empty(inst->special_name) ? inst->def->name : inst->special_name);
-        cat_semicolonln(self);
-    }
-
-    // forall(i, self->nodes) {
-    //     ast_node *node = self->nodes.v[i];
-    //     if (!ast_node_is_enum_def(node)) continue;
-    //     cat(self, S("typedef /*enum*/ int "));
-    //     cat(self, ast_node_str(node->user_type_def.name));
-    //     cat_semicolonln(self);
-    // }
-    cat_nl(self);
-}
-
 static void generate_one_user_type(transpile *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
     str          name = toplevel_name(node);
@@ -278,30 +254,36 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
         cat_nl(self);
     } else {
         // an enum
+        cat(self, S("typedef enum {\n"));
+
         forall(i, def->field_names) {
-            cat(self, S("#define "));
             // mangle name: name_field
             cat(self, def->name);
             cat(self, S("_"));
             cat(self, def->field_names.v[i]);
-            cat_sp(self);
-            str value = str_fmt(self->transient, "%i", i);
-            cat(self, value);
+            if (i + 1 < def->field_names.size) cat_commasp(self);
             cat_nl(self);
         }
+
+        cat_close_curly(self);
+        cat_sp(self);
+        cat(self, def->name);
+        cat_semicolonln(self);
+        cat_nl(self);
     }
 }
 
 static void generate_user_types(transpile *self) {
 
-    forall(i, self->synthesized_nodes) {
-        ast_node *node = self->synthesized_nodes.v[i];
+    // First emit enums in program nodes.
+    forall(i, self->nodes) {
+        ast_node *node = self->nodes.v[i];
+        if (!ast_node_is_enum_def(node)) continue;
         generate_one_user_type(self, node);
     }
 
-    // Also look for unspecialised enums and unions in program nodes.
-    forall(i, self->nodes) {
-        ast_node *node = self->nodes.v[i];
+    forall(i, self->synthesized_nodes) {
+        ast_node *node = self->synthesized_nodes.v[i];
         generate_one_user_type(self, node);
     }
 
@@ -1335,7 +1317,6 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_hash_includes(self);
     generate_ifc_blocks(self);
 
-    generate_enums(self);
     generate_user_types(self);
     generate_structs(self);
     generate_toplevel_contexts(self);
