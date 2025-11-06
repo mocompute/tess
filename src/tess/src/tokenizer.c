@@ -80,6 +80,28 @@ static void replace_token_sn(allocator *alloc, token *tok, token_tag tag, char c
     token_init_sn(alloc, tok, tag, s, len);
 }
 
+static void remove_number_extras(token *tok) {
+    // remove '_' characters from string
+    if (!tok->s) return;
+    ptrdiff_t len   = (ptrdiff_t)strlen(tok->s);
+    char     *start = tok->s;
+    // skip initial characters
+    while ('_' == *start && start - tok->s < len) start++;
+    len -= (start - tok->s);
+    tok->s  = start;
+
+    char *p = tok->s;
+    while (p - tok->s < len) {
+        if ('_' == *p && p - tok->s < len) {
+            memmove(p, p + 1, len - (p - tok->s) - 1);
+            --len;
+        } else {
+            ++p;
+        }
+    }
+    tok->s[len] = '\0';
+}
+
 static void advance_line(tokenizer *self) {
     self->line++;
     self->col = 0;
@@ -473,7 +495,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '|': continue;
 
             default:
-                // all other characters break a symbol
+                // all other characters break a number
                 reverse_pos(self);
                 state = stop_number;
             }
@@ -498,6 +520,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             assert(self->pos >= start_capture);
             replace_token_sn(self->strings, &res, tok_number, self->input.v + start_capture,
                              self->pos - start_capture);
+            remove_number_extras(&res);
             state = stop;
         } break;
 
