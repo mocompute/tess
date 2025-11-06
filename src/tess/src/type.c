@@ -429,7 +429,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
 
     tl_monotype *left  = lhs->type;
     tl_monotype *right = rhs->type;
-    assert(tl_list == left->tag);
+    assert(tl_arrow == left->tag);
 
     tl_monotype_array arr = {.alloc = alloc};
     array_reserve(arr, left->list.xs.size);
@@ -440,7 +440,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     case tl_var:
     case tl_weak:
     case tl_cons_inst: array_push(arr, right); break;
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     array_push_many(arr, right->list.xs.v, right->list.xs.size); break;
     }
 
@@ -482,7 +482,7 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
         break;
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         tl_monotype_sized arr;
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
@@ -509,7 +509,7 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
         break;
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         tl_monotype_sized arr;
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
@@ -615,7 +615,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant) {
         break;
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         tl_monotype_sized arr;
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
@@ -691,7 +691,7 @@ tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype *lhs, tl_mon
 
 tl_monotype *tl_monotype_create_list(allocator *alloc, tl_monotype_sized xs) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_list, .list = {.xs = xs}};
+    *self             = (tl_monotype){.tag = tl_arrow, .list = {.xs = xs}};
     return self;
 }
 
@@ -729,7 +729,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
 
         break;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:
         *clone =
           (tl_monotype){.tag = orig->tag, .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs)}};
@@ -749,7 +749,7 @@ int tl_monotype_is_concrete(tl_monotype *self) {
     case tl_cons_inst:
         forall(i, self->cons_inst->args) if (!tl_monotype_is_concrete(self->cons_inst->args.v[i])) return 0;
         return 1;
-    case tl_list:
+    case tl_arrow:
     case tl_tuple: {
         forall(i, self->list.xs) if (!tl_monotype_is_concrete(self->list.xs.v[i])) return 0;
         return 1;
@@ -771,7 +771,7 @@ int tl_monotype_is_any(tl_monotype *self) {
 }
 
 int tl_monotype_is_arrow(tl_monotype *self) {
-    return self && tl_list == self->tag;
+    return self && tl_arrow == self->tag;
 }
 
 int tl_monotype_is_nil(tl_monotype *self) {
@@ -780,7 +780,7 @@ int tl_monotype_is_nil(tl_monotype *self) {
 }
 
 int tl_monotype_is_list(tl_monotype *self) {
-    return self && tl_list == self->tag;
+    return self && tl_arrow == self->tag;
 }
 
 int tl_monotype_is_inst(tl_monotype *self) {
@@ -909,18 +909,18 @@ tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *self) {
 }
 
 void tl_monotype_sort_fvs(tl_monotype *self) {
-    if (tl_list != self->tag) return;
+    if (tl_arrow != self->tag) return;
     if (!self->list.fvs.size) return;
     qsort(self->list.fvs.v, self->list.fvs.size, sizeof self->list.fvs.v[0], str_cmp_v);
 }
 
 str_sized tl_monotype_fvs(tl_monotype *self) {
-    if (tl_list != self->tag) return (str_sized){0};
+    if (tl_arrow != self->tag) return (str_sized){0};
     return self->list.fvs;
 }
 
 void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
-    if (tl_list != self->tag) fatal("logic error");
+    if (tl_arrow != self->tag) fatal("logic error");
     self->list.fvs = fvs;
 }
 
@@ -936,7 +936,7 @@ void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
         forall(i, self->cons_inst->args) tl_monotype_force_tv_to_nil(self->cons_inst->args.v[i], nil);
         break;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple: {
         forall(i, self->list.xs) tl_monotype_force_tv_to_nil(self->list.xs.v[i], nil);
         break;
@@ -962,7 +962,7 @@ void tl_monotype_force_union_resolve(tl_monotype *self) {
         forall(i, self->cons_inst->args) tl_monotype_force_union_resolve(self->cons_inst->args.v[i]);
         break;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple: {
         forall(i, self->list.xs) tl_monotype_force_union_resolve(self->list.xs.v[i]);
         break;
@@ -991,10 +991,10 @@ u64 tl_monotype_hash64(tl_monotype *self) {
         // unspecialised name + hash to de-duplicate
     } break;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple: {
         hash = tl_monotype_sized_hash64(hash, self->list.xs);
-        if (tl_list == self->tag) hash = str_array_hash64(hash, self->list.fvs);
+        if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
 
@@ -1037,7 +1037,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
         }
     } break;
 
-    case tl_list: {
+    case tl_arrow: {
         if (self->list.fvs.size) {
             str_build_cat(&b, S("["));
             forall(i, self->list.fvs) {
@@ -1189,7 +1189,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
         }
     } break;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:
         // attempt to union with any of the union types
         forall(i, unions) {
@@ -1225,7 +1225,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         }
         return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
     }
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:
         if (cb) cb(user, left, right);
         return 1;
@@ -1251,7 +1251,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
         }
         return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user);
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:
         if (cb) cb(user, left, right);
         return 1;
@@ -1286,7 +1286,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_cons_inst:
 
-        case tl_list:
+        case tl_arrow:
         case tl_tuple:     return tl_type_subs_unify(subs, left->var, right, cb, user);
         }
         break;
@@ -1302,14 +1302,14 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
             return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user);
 
         case tl_cons_inst:
-        case tl_list:
+        case tl_arrow:
         case tl_tuple:     return tl_type_subs_unify_weak(subs, left, right, cb, user);
         }
         break;
 
     case tl_cons_inst: fatal("unreachable"); break;
 
-    case tl_list:
+    case tl_arrow:
         switch (right->tag) {
         case tl_any:  fatal("unreachable");
 
@@ -1321,7 +1321,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
             if (cb) cb(user, left, right);
             return 1;
 
-        case tl_list: return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user);
+        case tl_arrow: return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user);
         }
 
         break;
@@ -1334,7 +1334,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user);
 
         case tl_cons_inst:
-        case tl_list:
+        case tl_arrow:
             if (cb) cb(user, left, right);
             return 1;
 
@@ -1379,7 +1379,7 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     } break;
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         tl_monotype_sized arr;
         if (tl_cons_inst == mono->tag) arr = mono->cons_inst->args;
@@ -1484,7 +1484,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user);
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         // case 3: tv = concrete type or arrow or tuple
         tl_monotype *tv_type = self->v[tv_root].type;
@@ -1534,7 +1534,7 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *s
     } break;
 
     case tl_cons_inst:
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:     {
         tl_monotype_sized arr;
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;

@@ -41,7 +41,7 @@ typedef struct tl_monotype {
             str_sized         fvs;
         } list;
     };
-    enum { tl_any, tl_var, tl_weak, tl_cons_inst, tl_list, tl_tuple } tag;
+    enum { tl_any, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple } tag;
 } tl_monotype;
 
 typedef struct tl_polytype {

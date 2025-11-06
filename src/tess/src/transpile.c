@@ -420,7 +420,7 @@ static void generate_toplevel_contexts(transpile *self) {
     while (map_iter(self->env->map, &iter)) {
         tl_polytype *type = *(tl_polytype **)iter.data;
 
-        if (type->type->tag == tl_list && type->type->list.fvs.size) {
+        if (type->type->tag == tl_arrow && type->type->list.fvs.size) {
             generate_context_struct(self, type->type->list.fvs);
         }
     }
@@ -593,7 +593,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
     array_reserve(args_res, args.size);
 
     tl_monotype_sized arr;
-    if (tl_list == arrow->tag) {
+    if (tl_arrow == arrow->tag) {
         assert(2 == arrow->list.xs.size);
         assert(tl_tuple == arrow->list.xs.v[0]->tag);
         arr = arrow->list.xs.v[0]->list.xs;
@@ -1237,7 +1237,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
 static void build_arrow_to_c(transpile *, str_build *b, tl_monotype *type, str name);
 
 static void generate_decl(transpile *self, str name, tl_monotype *type) {
-    if (tl_list == type->tag) {
+    if (tl_arrow == type->tag) {
         // arrow
 
         str_build b = str_build_init(self->transient, 80);
@@ -1277,7 +1277,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 }
 
 static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) {
-    if (tl_list == type->tag) {
+    if (tl_arrow == type->tag) {
         // arrow
 
         str_build b = str_build_init(self->transient, 80);
@@ -1649,7 +1649,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
     str_build    b     = str_build_init(self->transient, 64);
 
     tl_monotype *arrow = type->type;
-    if (tl_list != arrow->tag) fatal("logic error");
+    if (tl_arrow != arrow->tag) fatal("logic error");
     assert(arrow->list.xs.size == 2);
     assert(tl_tuple == arrow->list.xs.v[0]->tag);
     tl_monotype_sized params = arrow->list.xs.v[0]->list.xs;

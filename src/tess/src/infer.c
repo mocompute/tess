@@ -2096,7 +2096,7 @@ static str  specialize_fun(tl_infer *self, ast_node *node, tl_monotype *arrow) {
 
     if (body) {
         // assign concrete types to parameters based on callsite arguments
-        assert(tl_list == arrow->tag);
+        assert(tl_arrow == arrow->tag);
 
         assert(arrow->list.xs.size == 2);
         assert(tl_tuple == arrow->list.xs.v[0]->tag);
@@ -2567,7 +2567,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         if (!replace) return null;
         return replace;
 
-    case tl_list:
+    case tl_arrow:
     case tl_tuple:
         forall(i, mono->list.xs) {
             tl_monotype *replace = tl_infer_update_specialized_type(self, mono->list.xs.v[i]);
