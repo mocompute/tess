@@ -2005,8 +2005,11 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     case ast_assignment:
         // Note: no longer rename lhs of assignment, because it is used for named arguments of type
-        // constructors
+        // constructors. However, the type must be erased, because cloning generic functions relies on
+        // rename_variables to erase types.
         if (!node->assignment.is_field_name) rename_variables(self, node->assignment.name, lex, level + 1);
+        else ast_node_type_set(node->assignment.name, null);
+
         rename_variables(self, node->assignment.value, lex, level + 1);
         break;
 
