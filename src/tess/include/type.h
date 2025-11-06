@@ -41,7 +41,7 @@ typedef struct tl_monotype {
             str_sized         fvs;
         } list;
     };
-    enum { tl_any, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple } tag;
+    enum { tl_any, tl_ellipsis, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple } tag;
 } tl_monotype;
 
 typedef struct tl_polytype {
@@ -112,6 +112,7 @@ void tl_type_env_log(tl_type_env *);
 // -- monotype --
 
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;

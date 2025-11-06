@@ -161,11 +161,14 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
     }
 
     if (ast_node_is_symbol(node)) {
-        // Note: special case the symbol 'any' to return an any type
+        // Note: special case the symbol 'any' to return an any type. And special case symbol '...' to
+        // return ellipsis type.
         str name = ast_node_str(node);
 
         if (str_eq(name, S("any"))) {
             return tl_monotype_create_any(self->alloc);
+        } else if (str_eq(name, S("..."))) {
+            return tl_monotype_create_ellipsis(self->alloc);
         } else {
             // or else check if it's a known nullary type
             if (tl_type_registry_is_nullary_type(self, name)) {
@@ -2548,8 +2551,9 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     switch (mono->tag) {
 
     case tl_any:
+    case tl_ellipsis:
     case tl_var:
-    case tl_weak: break;
+    case tl_weak:     break;
 
     case tl_cons_inst:
         // already specialized?

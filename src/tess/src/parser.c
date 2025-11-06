@@ -107,6 +107,7 @@ static int  a_close_round(parser *);
 static int  a_colon(parser *);
 static int  a_vertical_bar(parser *);
 static int  a_comma(parser *);
+static int  a_ellipsis(parser *);
 static int  a_equal_sign(parser *);
 static int  a_identifier(parser *);
 static int  a_nil(parser *);
@@ -415,6 +416,13 @@ static int a_comma(parser *p) {
     if (next_token(p)) return 1;
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
     p->error.tag = tl_err_expected_comma;
+    return 1;
+}
+
+static int a_ellipsis(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_ellipsis == p->token.tag) return result_ast_str(p, ast_symbol, "...");
+    p->error.tag = tl_err_expected_ellipsis;
     return 1;
 }
 
@@ -763,6 +771,9 @@ static int a_type_identifier(parser *self) {
     }
     if (0 == a_try(self, a_identifier)) {
         mangle_name(self, self->result);
+        return 0;
+    }
+    if (0 == a_try(self, a_ellipsis)) {
         return 0;
     }
 
