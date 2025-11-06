@@ -49,8 +49,8 @@ c_strtod        (nptr: String, endptr: Ptr(String)) -> Float
 // void *aligned_alloc(size_t alignment, size_t size);                       // C11
 
 
-c_rand  ()              -> Int
-c_srand (seed: Int)     -> Nil
-c_aligned_alloc(alignment: Int, size: Int) -> Ptr(T)
-c_calloc (num: Int, size_each: Int) -> Ptr(T)
+c_rand  ()                                      -> CInt
+c_srand (seed: CUnsignedInt)                    -> Nil
+c_aligned_alloc(alignment: CSize, size: CSize)  -> Ptr(T)
+c_calloc (num: CSize, size_each: CSize)         -> Ptr(T)
 c_free   (ptr: Ptr(T))  -> Nil
