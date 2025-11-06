@@ -1523,7 +1523,27 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         str cons_name = mono->cons_inst->def->name;
         if (str_eq(S("Int"), cons_name)) {
             return S("long long");
-        } else if (str_eq(S("Float"), cons_name)) {
+        } else if (str_eq(S("CChar"), cons_name)) {
+            return S("char");
+        } else if (str_eq(S("CUnsignedChar"), cons_name)) {
+            return S("unsigned char");
+        } else if (str_eq(S("CSignedChar"), cons_name)) {
+            return S("signed char");
+        } else if (str_eq(S("CInt"), cons_name)) {
+            return S("int");
+        } else if (str_eq(S("CUnsignedInt"), cons_name)) {
+            return S("unsigned int");
+        } else if (str_eq(S("CLong"), cons_name)) {
+            return S("long");
+        } else if (str_eq(S("CUnsignedLong"), cons_name)) {
+            return S("unsigned long");
+        } else if (str_eq(S("CLongLong"), cons_name)) {
+            return S("long long");
+        } else if (str_eq(S("CUnsignedLongLong"), cons_name)) {
+            return S("unsigned long long");
+        }
+
+        else if (str_eq(S("Float"), cons_name)) {
             return S("double");
         } else if (str_eq(S("Bool"), cons_name)) {
             return S("/*bool*/int");
