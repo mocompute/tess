@@ -1263,6 +1263,9 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // `any` types unify with everything but are not concrete, so they don't resolve type variables
     if (tl_monotype_is_any(left) || tl_monotype_is_any(right)) return 0;
 
+    // integer-convertible types always unify
+    if (tl_monotype_is_integer_convertible(left) && tl_monotype_is_integer_convertible(right)) return 0;
+
     if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user);
     if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user);
     if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user);
