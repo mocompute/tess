@@ -1050,22 +1050,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (ast_node_is_symbol(right)) {
                     str                       field_name = right->symbol.name;
                     tl_type_constructor_inst *inst       = struct_type->cons_inst;
-                    tl_type_constructor_def  *def        = inst->def;
+                    i32 found = tl_monotype_type_constructor_field_index(struct_type, field_name);
 
-                    i32                       found      = -1;
-                    forall(i, def->field_names) {
-                        if (str_eq(field_name, def->field_names.v[i])) {
-                            if (i > INT32_MAX) fatal("overflow");
-                            found = (i32)i;
-                            break;
-                        }
-                    }
                     if (found != -1) {
-                        // Enums: they have no types and no instance arguments. Detect those and give them
-                        // an Int type.
-                        // FIXME
                         if (!inst->args.size) {
-                            // tl_monotype *int_ty = tl_type_registry_int(self->registry);
                             if (constrain_pm(self, ctx, right->type, struct_type, node)) return 1;
                             if (constrain_pm(self, ctx, node->type, struct_type, node)) return 1;
                             if (constrain(self, ctx, node->type, right->type, node)) return 1;
@@ -1280,15 +1268,20 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
                 if (ast_node_is_assignment(arg)) {
                     // check if name exists in type def
-                    if (!tl_polytype_type_constructor_has_field(
-                          type, ast_node_name_original(arg->assignment.name))) {
+                    i32 found = tl_monotype_type_constructor_field_index(
+                      inst, ast_node_name_original(arg->assignment.name));
+
+                    if (-1 == found) {
                         array_push(self->errors,
                                    ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
                         return 1;
                     }
-                }
+                    assert(found < (i32)inst->cons_inst->args.size);
+                    if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+                } else {
 
-                if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+                    if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+                }
                 ++i;
             }
 

@@ -150,6 +150,7 @@ tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 void                   tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *);
 void                   tl_monotype_force_union_resolve(tl_monotype *);
+i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
 
 // -- polytype --
 

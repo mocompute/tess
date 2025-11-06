@@ -813,6 +813,20 @@ int tl_polytype_type_constructor_has_field(tl_polytype *self, str name) {
     return str_array_contains_one(def->field_names, name);
 }
 
+i32 tl_monotype_type_constructor_field_index(tl_monotype *self, str name) {
+    assert(tl_monotype_is_inst(self));
+    tl_type_constructor_def *def   = self->cons_inst->def;
+    i32                      found = -1;
+    forall(i, def->field_names) {
+        if (str_eq(name, def->field_names.v[i])) {
+            if (i > INT32_MAX) fatal("overflow");
+            found = (i32)i;
+            break;
+        }
+    }
+    return found;
+}
+
 tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
     if (tl_monotype_is_ptr(self)) {
         assert(self->cons_inst->args.size == 1);
