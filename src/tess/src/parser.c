@@ -95,38 +95,36 @@ static int           is_reserved(char const *);
 
 nodiscard static int a_try(parser *, parse_fun);
 nodiscard static int a_try_s(parser *, parse_fun_s, char const *);
-// nodiscard static int a_try_special(parser *, parse_fun);
-// nodiscard static int a_try_special_ext(parser *, parse_fun);
 
-static int  eat_comments(parser *);
-static int  next_token(parser *);
+static int           eat_comments(parser *);
+static int           next_token(parser *);
 
-static int  a_ampersand(parser *);
-static int  a_arrow(parser *);
-static int  a_bool(parser *);
-static int  a_close_round(parser *);
-static int  a_colon(parser *);
-static int  a_vertical_bar(parser *);
-static int  a_char(parser *);
-static int  a_comma(parser *);
-static int  a_ellipsis(parser *);
-static int  a_equal_sign(parser *);
-static int  a_identifier(parser *);
-static int  a_nil(parser *);
-static int  a_null(parser *);
-static int  a_number(parser *);
-static int  a_open_round(parser *);
-static int  a_star(parser *);
-static int  a_string(parser *);
-static int  the_symbol(parser *, char const *const);
+static int           a_ampersand(parser *);
+static int           a_arrow(parser *);
+static int           a_bool(parser *);
+static int           a_close_round(parser *);
+static int           a_colon(parser *);
+static int           a_vertical_bar(parser *);
+static int           a_char(parser *);
+static int           a_comma(parser *);
+static int           a_ellipsis(parser *);
+static int           a_equal_sign(parser *);
+static int           a_identifier(parser *);
+static int           a_nil(parser *);
+static int           a_null(parser *);
+static int           a_number(parser *);
+static int           a_open_round(parser *);
+static int           a_star(parser *);
+static int           a_string(parser *);
+static int           the_symbol(parser *, char const *const);
 
-static int  string_to_number(parser *, char const *const);
-static void mangle_name_for_module(parser *, ast_node *, str);
-static void mangle_name(parser *, ast_node *);
+static int           string_to_number(parser *, char const *const);
+static void          mangle_name_for_module(parser *, ast_node *, str);
+static void          mangle_name(parser *, ast_node *);
 
-static void tokens_push_back(struct parser *, struct token *);
-static void tokens_shrink(struct parser *, u32);
-static int  too_many_arguments(parser *);
+static void          tokens_push_back(struct parser *, struct token *);
+static void          tokens_shrink(struct parser *, u32);
+static int           too_many_arguments(parser *);
 static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
@@ -346,9 +344,11 @@ static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        char *str = token_to_string(p->transient, &p->token);
-        log(p, "next_token: %s", str);
-        alloc_free(p->transient, str);
+        if (0) {
+            char *str = token_to_string(p->transient, &p->token);
+            log(p, "next_token: %s", str);
+            alloc_free(p->transient, str);
+        }
 
         tokens_push_back(p, &p->token);
         return 0;
@@ -359,16 +359,17 @@ nodiscard static int a_try(parser *p, parse_fun fun) {
     int       result    = 0;
     u32 const save_toks = p->tokens.size;
 
-    if (fun(p)) {
+    if ((result = fun(p))) {
         assert(p->tokens.size >= save_toks);
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
-            alloc_free(p->transient, str);
+            if (0) {
+                char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
+                // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
+                alloc_free(p->transient, str);
+            }
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
-        result = 1;
         goto cleanup;
     }
 
@@ -379,17 +380,19 @@ cleanup:
 }
 
 nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
+    int       result    = 0;
     u32 const save_toks = p->tokens.size;
-    if (fun(p, arg)) {
+    if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            alloc_free(p->transient, str);
-
+            if (0) {
+                char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
+                alloc_free(p->transient, str);
+            }
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
 
-        return 1;
+        return result;
     }
     // do not reset tokens on success, because calls to a_try may be
     // nested.
@@ -397,17 +400,19 @@ nodiscard static int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
 }
 
 nodiscard static int a_try_int(parser *p, parse_fun_int fun, int arg) {
+    int       result    = 0;
     u32 const save_toks = p->tokens.size;
-    if (fun(p, arg)) {
+    if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {
-            char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-            alloc_free(p->transient, str);
-
+            if (0) {
+                char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
+                alloc_free(p->transient, str);
+            }
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
 
-        return 1;
+        return result;
     }
     // do not reset tokens on success, because calls to a_try may be
     // nested.
@@ -1379,7 +1384,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, a_body_element)) return 1;
+        if (a_try(self, a_body_element)) return 2; // stop parsing
         array_push(exprs, self->result);
     }
 
@@ -1387,7 +1392,7 @@ decl_done:
 
     mangle_name(self, name);
     ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
-    set_node_parameters(self, let, &params); // FIXME
+    set_node_parameters(self, let, &params);
     let->let.name = name;
     let->let.body = body;
 
@@ -1405,7 +1410,7 @@ static int toplevel_assign(parser *self) {
 
     if (a_try(self, a_colon_equal)) return 1;
     ast_node *value = parse_expression(self, INT_MIN);
-    if (!value) return 1;
+    if (!value) return 2;
 
     ast_node *n = ast_node_create_let_in(self->ast_arena, name, value, null);
     return result_ast_node(self, n);
@@ -1422,8 +1427,8 @@ static int toplevel_forward(parser *self) {
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto decl_done;
-        if (a_try(self, a_comma)) return 1;
-        if (a_try(self, a_param)) return 1;
+        if (a_try(self, a_comma)) return 2;
+        if (a_try(self, a_param)) return 2;
         array_push(params, self->result);
     }
 
@@ -1460,7 +1465,7 @@ static int toplevel_symbol_annotation(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *ident = self->result;
 
-    if (a_try(self, a_type_annotation)) return 1;
+    if (a_try(self, a_type_annotation)) return 2;
     ast_node *ann = self->result;
 
     assert(ast_node_is_symbol(ident));
@@ -1593,7 +1598,9 @@ static int toplevel_struct(parser *self) {
             // require comma separators
             if (a_try(self, a_comma)) return 1;
         }
-        if (a_try(self, a_param)) return 1;
+
+        // this syntax overlaps with enums, so we can't exit parse too early
+        if (a_try(self, a_param)) return saw_comma ? 2 : 1; // far enough along to exit parse
         array_push(fields, self->result);
     }
     array_shrink(fields);
@@ -1638,7 +1645,7 @@ static int toplevel_union(parser *self) {
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
         if (a_try(self, a_vertical_bar)) return 1;
-        if (a_try(self, a_param)) return 1;
+        if (a_try(self, a_param)) return 2; // exit parse
         array_push(fields, self->result);
     }
     array_shrink(fields);
@@ -1674,19 +1681,38 @@ static int toplevel(parser *self) {
 
     while (!is_eof(self)) {
 
+        int res = 0;
+
         if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
         if (0 == a_try(self, toplevel_hash)) goto success_hash;
         if (0 == a_try(self, toplevel_type_alias)) goto success;
-        if (0 == a_try(self, toplevel_enum)) goto success;
-        if (0 == a_try(self, toplevel_struct)) goto success;
-        if (0 == a_try(self, toplevel_union)) goto success;
-        if (0 == a_try(self, toplevel_defun)) goto success;
-        if (0 == a_try(self, toplevel_assign)) goto success;
-        if (0 == a_try(self, toplevel_forward)) goto success;
-        if (0 == a_try(self, toplevel_symbol_annotation)) goto success;
+
+        if (0 == (res = a_try(self, toplevel_enum))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_struct))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_union))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_defun))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_assign))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_forward))) goto success;
+        else if (2 == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_symbol_annotation))) goto success;
+        else if (2 == res) goto error;
 
         self->error.tag = tl_err_expected_toplevel;
         return 1;
+
+    error:
+        return res;
 
     success:
         if (self->expect_module) {
