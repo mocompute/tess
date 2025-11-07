@@ -1,4 +1,4 @@
-#module Stdlib
+#module stdlib
 #include <stdlib.h>
 
 c_atof          (nptr: String) -> Float
@@ -51,8 +51,11 @@ system          (str: String)  -> Int
 // void *aligned_alloc(size_t alignment, size_t size);                       // C11
 
 
-c_rand  ()                                      -> CInt
-c_srand (seed: CUnsignedInt)                    -> Nil
+c_rand         ()                               -> CInt
+c_srand        (seed: CUnsignedInt)             -> Nil
 c_aligned_alloc(alignment: CSize, size: CSize)  -> Ptr(T)
-c_calloc (num: CSize, size_each: CSize)         -> Ptr(T)
-c_free   (ptr: Ptr(T))  -> Nil
+c_calloc       (num: CSize, size_each: CSize)   -> Ptr(T)
+c_free         (ptr: Ptr(T))                    -> Nil
+c_malloc       (size: CSize)                    -> Ptr(T)
+c_realloc      (ptr: Ptr(T), size: CSize)       -> Ptr(T)
+c_exit         (status: CInt)                   -> Nil
