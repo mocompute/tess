@@ -309,14 +309,14 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
 
     if (!name->symbol.annotation) return;
     {
-        str ann_str = v2_ast_node_to_string(self->transient, name->symbol.annotation);
-        log(self, "process_annotation: %.*s : ast:%s", str_ilen(name->symbol.name),
-            str_buf(&name->symbol.name), str_cstr(&ann_str));
+        // str ann_str = v2_ast_node_to_string(self->transient, name->symbol.annotation);
+        // log(self, "process_annotation: %.*s : ast:%s", str_ilen(name->symbol.name),
+        //     str_buf(&name->symbol.name), str_cstr(&ann_str));
     }
     if (name->symbol.annotation_type) {
-        str poly_str = tl_polytype_to_string(self->transient, name->symbol.annotation_type);
-        log(self, "process_annotation exists: %.*s : %s", str_ilen(name->symbol.name),
-            str_buf(&name->symbol.name), str_cstr(&poly_str));
+        // str poly_str = tl_polytype_to_string(self->transient, name->symbol.annotation_type);
+        // log(self, "process_annotation exists: %.*s : %s", str_ilen(name->symbol.name),
+        //     str_buf(&name->symbol.name), str_cstr(&poly_str));
 
         // return;
     }
@@ -331,9 +331,9 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     // tl_polytype_generalize(poly, self->env, self->subs);
     node->symbol.annotation_type = poly;
 
-    str poly_str                 = tl_polytype_to_string(self->transient, poly);
-    log(self, "process_annotation: %.*s : %s", str_ilen(name->symbol.name), str_buf(&name->symbol.name),
-        str_cstr(&poly_str));
+    // str poly_str                 = tl_polytype_to_string(self->transient, poly);
+    // log(self, "process_annotation: %.*s : %s", str_ilen(name->symbol.name), str_buf(&name->symbol.name),
+    //     str_cstr(&poly_str));
 
     if (!ctx) map_destroy(&map);
 }
