@@ -808,7 +808,10 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     // check c_ after type constructor
     if (is_c_symbol(name)) return generate_funcall_c(self, node, ctx);
 
-    if (!type) fatal("funcall with null type");
+    if (!type) {
+        fprintf(stderr, "error: funcall with null type: %s\n", str_cstr(&name));
+        fatal("funcall with null type");
+    }
 
     // type constructor?
     if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
