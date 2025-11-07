@@ -18,6 +18,11 @@ c_realloc      (ptr: Ptr(T), size: CSize)          -> Ptr(T)
 c_exit         (status: CInt)                      -> Nil
 c_abort        ()                                  -> Nil
 
+c_abs          (j: CInt)                           -> CInt
+c_labs         (j: CLong)                          -> CLong
+c_llabs        (j: CLongLong)                      -> CLongLong
+
+
 // float              strtof  (const char* restrict nptr, char** restrict endptr); // C99
 // long double        strtold (const char* restrict nptr, char** restrict endptr); // C99
 // long               strtol  (const char* restrict nptr, char** restrict endptr, int base);
@@ -30,11 +35,6 @@ c_abort        ()                                  -> Nil
 //               int (*compar)(const void *, const void *));
 // void qsort(void* base, size_t nmemb, size_t size,
 //            int (*compar)(const void *, const void *));
-// int         abs(      int j);
-// long        abs(     long j);
-// long long   abs(long long j);                                             // C++0X
-// long       labs(     long j);
-// long long llabs(long long j);                                             // C99
 // div_t     div(      int numer,       int denom);
 // ldiv_t    div(     long numer,      long denom);
 // lldiv_t   div(long long numer, long long denom);                          // C++0X

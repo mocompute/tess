@@ -1,13 +1,8 @@
-#import "src/tl/std/stdio.tl"
-
 #module main
+#import <stdlib.tl>
 
 main() {
-  i := 0
-  len := 10
-  while i < len, i = i + 1 {
-    if i % 2 == 0 { continue }
-    c_printf("%i\n", i)
-  }
-  0
+  x1 := c_llabs(-1)
+  // x2 := c_abs(-0.5)
+  x1
 }
