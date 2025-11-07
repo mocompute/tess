@@ -1,5 +1,7 @@
 #module main
-// This test exercises the Union type PtrOrNull
+// This test exercises the Union type PtrOrNull so we don't include stdlib.tl
+
+#include <stdlib.h>
 
 PtrOrNull = Union(Ptr(a), Nil)
 c_malloc    (count : Int)  -> PtrOrNull(a)

@@ -1,4 +1,5 @@
 #module main
+#import <stdio.tl>
 
 main() {
   c := '\0'

@@ -1,4 +1,7 @@
 #module main
+#include <limits.h>
+#import <stdio.tl>
+
 c_INT_MAX : Int
 
 main() {

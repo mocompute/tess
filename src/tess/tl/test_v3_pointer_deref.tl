@@ -1,7 +1,5 @@
 #module main
-// _tl_sizeof_ (x : a) -> Int
-c_malloc(sz : Int) -> Ptr(a)
-c_free(ptr : Ptr(a)) -> Nil
+#import <stdlib.tl>
 
 Point(a) : { x: a, y : a }
 
