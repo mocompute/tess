@@ -5,7 +5,6 @@
 #include "parser.h"
 #include "str.h"
 #include "transpile.h"
-#include "type.h"
 #include "types.h"
 
 #include <ctype.h>
@@ -151,6 +150,7 @@ int repl(state *self) {
 }
 
 void read_import_lines(char_csized input, str_array *output) {
+    // Note: output includes surrounding "..." marks for reasons
     u32         pos = 0, capture_start = 0;
     char const *data                                            = input.v;
     u32         size                                            = input.size;
@@ -201,9 +201,15 @@ static int is_quoted(str arg) {
     return 1;
 }
 
+static int is_angle_quoted(str arg) {
+    span s = str_span(&arg);
+    if (s.buf[0] != '<' || s.buf[s.len - 1] != '>') return 0;
+    return 1;
+}
+
 static str strip_quotes(allocator *alloc, str quoted) {
     // TODO: would be better to operate on spans so we don't needlessly copy strings
-    if (!is_quoted(quoted)) return str_empty();
+    if (!is_quoted(quoted) && !is_angle_quoted(quoted)) return str_empty();
 
     span s = str_span(&quoted);
     s.buf++;
@@ -220,6 +226,10 @@ static void print_import_paths(state *self) {
 }
 
 static str find_import_file(state *self, str path) {
+    // Note: path must be quoted, either with quotes or angle brackets
+    if (!is_quoted(path) && !is_angle_quoted(path)) return str_empty();
+
+    path = strip_quotes(self->arena, path);
     if (file_exists(str_cstr(&path))) return path;
 
     forall(i, self->include_paths) {
@@ -229,21 +239,18 @@ static str find_import_file(state *self, str path) {
         }
     }
 
-    fprintf(stderr, "error: import not found: %s\n", str_cstr(&path));
+    fprintf(stderr, "error: import not found: '%s'\n", str_cstr(&path));
     print_import_paths(self);
     exit(1);
 }
 
-static void do_one_import(state *self, str path, str_array *imports) {
+static void collect_imports_from_import_file(state *self, str path, str_array *imports) {
     char *data;
     u32   size;
 
-    // path must be a quoted string, so detect and eliminate quotes
-    path = strip_quotes(imports->alloc, path);
     if (str_is_empty(path)) return;
 
     path = find_import_file(self, path);
-
     file_read(imports->alloc, str_cstr(&path), &data, &size);
 
     str_array file_imports = {.alloc = imports->alloc};
@@ -252,11 +259,11 @@ static void do_one_import(state *self, str path, str_array *imports) {
     read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
     forall(i, file_imports) {
         array_push(*imports, file_imports.v[i]);
-        do_one_import(self, file_imports.v[i], imports);
+        collect_imports_from_import_file(self, file_imports.v[i], imports);
     }
 }
 
-static void do_one_file(state *self, str path, str_array *imports) {
+static void collect_imports_from_file(state *self, str path, str_array *imports) {
     char *data;
     u32   size;
 
@@ -268,7 +275,7 @@ static void do_one_file(state *self, str path, str_array *imports) {
     read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
     forall(i, file_imports) {
         array_push(*imports, file_imports.v[i]);
-        do_one_import(self, file_imports.v[i], imports);
+        collect_imports_from_import_file(self, file_imports.v[i], imports);
     }
 }
 
@@ -282,23 +289,20 @@ static str_sized collect_imports(state *self, c_string_csized files) {
     array_reserve(imports, 32);
 
     forall(i, files) {
-        char *data;
-        u32   size;
-        file_read(alloc, files.v[i], &data, &size);
-
-        do_one_file(self, str_init_static(files.v[i]), &imports);
+        collect_imports_from_file(self, str_init_static(files.v[i]), &imports);
     }
 
     return (str_sized)array_sized(imports);
 }
 
 static str_sized files_in_order(state *self, c_string_csized files) {
+
     str_sized imports        = collect_imports(self, files);
 
     str_array files_in_order = {.alloc = self->arena};
     array_reserve(files_in_order, imports.size + files.size);
 
-    str builtin = find_import_file(self, S("builtin.tl"));
+    str builtin = find_import_file(self, S("<builtin.tl>"));
     if (str_is_empty(builtin)) {
         fprintf(stderr, "error: failed to find 'builtin.tl'\n");
         print_import_paths(self);
@@ -307,10 +311,9 @@ static str_sized files_in_order(state *self, c_string_csized files) {
     array_push(files_in_order, builtin);
 
     forall(i, imports) {
+        // resolve file paths and strip quotes
         str file = imports.v[i];
-
-        if (!is_quoted(file)) continue;
-        file = strip_quotes(self->arena, file);
+        file     = find_import_file(self, file);
         array_push(files_in_order, file);
     }
 

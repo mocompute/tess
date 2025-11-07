@@ -1,23 +1,6 @@
-#import "../../src/tl/std/stdlib.tl"
+#import <stdlib.tl>
 
 #module main
-// _tl_sizeof_ (x : a)        -> Int
-
-// c_malloc    (count : Int)  -> Ptr(a)
-// c_free      (ptr : Ptr) -> Nil
-
-// is_null     (p : Ptr(a)) -> Bool
-// is_ptr      (p : Ptr(a)) -> Bool
-// ptr         (p : Ptr(a)) -> Ptr(a)
-
-// sizeof      (T) { _tl_sizeof_(T) }
-
-// is_null(p) {
-//   if p == null { true } else { false }
-// }
-
-// -- end std --
-
 
 
 Array(a) : {

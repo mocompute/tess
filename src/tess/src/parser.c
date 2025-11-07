@@ -7,6 +7,7 @@
 #include "error.h"
 #include "file.h"
 #include "hashmap.h"
+#include "infer.h"
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
@@ -1175,13 +1176,18 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
 }
 
 static void mangle_name(parser *self, ast_node *name) {
+    if (str_is_empty(self->current_module)) return;
+
+    // Don't mangle names in 'builtin' module
+    if (str_eq(self->current_module, S("builtin"))) return;
+
     if (ast_node_is_symbol(name)) {
         // Don't mangle names of known types
         str name_str = ast_node_str(name);
         if (tl_type_registry_get(self->opts.registry, name_str)) return;
 
-        // Don't mangle names in 'builtin' module
-        if (str_eq(self->current_module, S("builtin"))) return;
+        // Don't mangle c_ names
+        if (is_c_symbol(name_str)) return;
     }
 
     mangle_name_for_module(self, name, self->current_module);
