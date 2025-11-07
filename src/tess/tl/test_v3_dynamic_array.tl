@@ -1,13 +1,12 @@
 #module main
 _tl_sizeof_ (x : a)        -> Int
 
-PtrOrNull = Union(Ptr(a), Nil)
-c_malloc    (count : Int)  -> PtrOrNull(a)
+c_malloc    (count : Int)  -> Ptr(a)
 c_free      (ptr : Ptr) -> Nil
 
-is_null     (p : PtrOrNull(a)) -> Bool
-is_ptr      (p : PtrOrNull(a)) -> Bool
-ptr         (p : PtrOrNull(a)) -> Ptr(a)
+is_null     (p : Ptr(a)) -> Bool
+is_ptr      (p : Ptr(a)) -> Bool
+ptr         (p : Ptr(a)) -> Ptr(a)
 
 sizeof      (T) { _tl_sizeof_(T) }
 
@@ -20,7 +19,7 @@ is_null(p) {
 
 
 Array(a) : {
-  v:    PtrOrNull(a),
+  v:    Ptr(a),
   size: Int,
 }
 
@@ -31,7 +30,7 @@ Rect(a)  : { topleft: Point(a), botright: Point(a) }
 array_new(T : Type, count) {
   // This type annotation is required for the return type of c_malloc to be concrete. Note that it refers to
   // the type argument T.
-  p : PtrOrNull(T) := c_malloc(count * sizeof(T))
+  p : Ptr(T) := c_malloc(count * sizeof(T))
   Array { v = p, size = count }
 }
 
