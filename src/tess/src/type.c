@@ -794,9 +794,12 @@ int tl_monotype_is_arrow(tl_monotype *self) {
     return self && tl_arrow == self->tag;
 }
 
+int tl_monotype_is_inst_of(tl_monotype *self, str name) {
+    return self && tl_cons_inst == self->tag && str_eq(self->cons_inst->def->generic_name, name);
+}
+
 int tl_monotype_is_nil(tl_monotype *self) {
-    return self && tl_cons_inst == self->tag && self->cons_inst &&
-           str_eq(self->cons_inst->def->name, S("Nil"));
+    return tl_monotype_is_inst_of(self, S("Nil"));
 }
 
 int tl_monotype_is_list(tl_monotype *self) {
@@ -820,20 +823,25 @@ int tl_monotype_is_tv(tl_monotype *self) {
     return self && tl_var == self->tag;
 }
 
+int tl_monotype_is_string(tl_monotype *self) {
+    return self && tl_monotype_is_inst_of(self, S("String"));
+}
+
+int tl_monotype_is_ptr_to_char(tl_monotype *self) {
+    if (!self || !tl_monotype_is_ptr(self)) return 0;
+    tl_monotype *target = tl_monotype_ptr_target(self);
+    return tl_monotype_is_inst_of(target, S("CChar"));
+}
+
 int tl_monotype_is_ptr(tl_monotype *self) {
-    if (!tl_monotype_is_inst(self)) return 0;
-    str generic_name = self->cons_inst->def->generic_name;
-    return self && tl_cons_inst == self->tag && self->cons_inst->def && str_eq(generic_name, S("Ptr"));
+    return tl_monotype_is_inst_of(self, S("Ptr"));
 }
 
 int tl_monotype_is_ptr_or_null(tl_monotype *self) {
-    str generic_name = self->cons_inst->def->generic_name;
-    return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(generic_name, S("PtrOrNull"));
+    return tl_monotype_is_inst_of(self, S("PtrOrNull"));
 }
 int tl_monotype_is_union(tl_monotype *self) {
-    return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(self->cons_inst->def->generic_name, S("Union"));
+    return tl_monotype_is_inst_of(self, S("Union"));
 }
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
@@ -848,8 +856,7 @@ int tl_monotype_has_ptr(tl_monotype *self) {
 }
 
 int tl_monotype_is_type_literal(tl_monotype *self) {
-    return self && tl_cons_inst == self->tag && self->cons_inst->def &&
-           str_eq(self->cons_inst->def->generic_name, S("Type"));
+    return tl_monotype_is_inst_of(self, S("Type"));
 }
 
 int tl_monotype_is_integer_convertible(tl_monotype *self) {

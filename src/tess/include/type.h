@@ -135,6 +135,7 @@ int                    tl_monotype_is_any(tl_monotype *);
 int                    tl_monotype_is_nil(tl_monotype *);
 int                    tl_monotype_is_list(tl_monotype *);
 int                    tl_monotype_is_inst(tl_monotype *);
+int                    tl_monotype_is_inst_of(tl_monotype *, str);
 int                    tl_monotype_is_enum(tl_monotype *);
 int                    tl_monotype_is_tuple(tl_monotype *);
 int                    tl_monotype_is_concrete(tl_monotype *);
@@ -155,6 +156,8 @@ tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 void                   tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *);
 void                   tl_monotype_force_union_resolve(tl_monotype *);
 i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
+int                    tl_monotype_is_string(tl_monotype *);
+int                    tl_monotype_is_ptr_to_char(tl_monotype *);
 
 // -- polytype --
 

@@ -318,7 +318,7 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
         // log(self, "process_annotation exists: %.*s : %s", str_ilen(name->symbol.name),
         //     str_buf(&name->symbol.name), str_cstr(&poly_str));
 
-        // return;
+        return;
     }
 
     hashmap *map;
@@ -627,6 +627,18 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
     return tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx);
+}
+
+static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right) {
+    // Note: special case: rather than teach the type system about this conversion, we turn a blind
+    // eye to String : Ptr(CChar) things. Sadly this requires doing a substitution first.
+    tl_polytype_substitute(self->arena, left, self->subs);
+    tl_polytype_substitute(self->arena, right, self->subs);
+    if ((tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
+        (tl_monotype_is_ptr_to_char(right->type) && tl_monotype_is_string(left->type))) {
+        return 1;
+    }
+    return 0;
 }
 
 static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_polytype *right,
@@ -1163,13 +1175,22 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
             }
 
-            // if name has an annotation, make it supreme: it overrides the value's type but must still
-            // unify
-            tl_polytype *name_type = node->let_in.name->type;
-            if (ast_node_is_symbol(node->let_in.name) && node->let_in.name->symbol.annotation_type)
-                name_type = node->let_in.name->symbol.annotation_type;
+            // casting: if name has an annotation, make it supreme: it overrides the value's type but must
+            // still unify
+            tl_polytype *name_type  = node->let_in.name->type;
+            tl_polytype *value_type = node->let_in.value->type;
 
-            if (constrain(self, ctx, name_type, node->let_in.value->type, node)) return 1;
+            // process annotation here because we haven't traversed to the name ast_symbol case yet
+            if (ast_node_is_symbol(node->let_in.name)) {
+                ast_node *name = node->let_in.name;
+                if (name->symbol.annotation) process_annotation(self, name, traverse_ctx);
+                if (name->symbol.annotation_type) name_type = node->let_in.name->symbol.annotation_type;
+            }
+
+            if (!escape_constraint(self, name_type, value_type) &&
+                constrain(self, ctx, name_type, value_type, node))
+                return 1;
+
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, name_type);
 
             if (node->let_in.body)
@@ -1194,7 +1215,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (global) {
             tl_polytype *global_copy = tl_polytype_clone(self->arena, global);
             if (node->type) {
-                if (constrain(self, ctx, node->type, global_copy, node)) return 1;
+                if (!escape_constraint(self, node->type, global_copy) &&
+                    constrain(self, ctx, node->type, global_copy, node))
+                    return 1;
             } else {
                 ast_node_type_set(node, global_copy);
             }
@@ -1215,7 +1238,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // if symbol has a type annotation, constrain it
         if (node->symbol.annotation) {
             process_annotation(self, node, traverse_ctx);
-            if (constrain(self, ctx, node->symbol.annotation_type, node->type, node)) return 1;
+
+            if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
+                constrain(self, ctx, node->symbol.annotation_type, node->type, node))
+                return 1;
         }
 
         // add to environment
