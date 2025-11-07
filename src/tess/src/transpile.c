@@ -1193,6 +1193,8 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_u64:                         return generate_str(self, str_init_u64(self->transient, node->u64.val), type);
     case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
+    case ast_char:
+        return generate_str(self, str_cat_3(self->transient, S("'"), node->symbol.name, S("'")), type);
     case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 

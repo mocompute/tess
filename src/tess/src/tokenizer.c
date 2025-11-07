@@ -168,6 +168,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_string_backslash_unescaped,
         stop_string,
 
+        start_char,
+        in_char,
+        in_char_backslash,
+        stop_char,
+
         start_symbol,
         in_symbol,
         stop_symbol,
@@ -218,6 +223,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
 
             case '"':  state = start_string; continue;
+            case '\'': state = start_char; continue;
 
             case '\n': advance_line(self); continue;
 
@@ -677,6 +683,52 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                              self->pos - start_capture);
             state = stop;
             break;
+
+        case start_char: {
+            self->buf.size = 0;
+            state          = in_char;
+        } break;
+
+        case in_char: {
+            if (self->pos == end) {
+                state = stop_string;
+                continue;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '\\': state = in_char_backslash; break;
+            case '\'': state = stop_char; break;
+            default:   {
+                if (self->buf.size >= 1) {
+                    // full
+                    tok_error(self, out_err, tl_err_invalid_token);
+                    return 1;
+                }
+                array_push(self->buf, c);
+            } break;
+            }
+        } break;
+
+        case in_char_backslash: {
+            if (self->pos == end) {
+                state = stop_string;
+                continue;
+            }
+            char const c = next_char(self);
+
+            // keep it literal
+            char backslash = '\\';
+            array_push(self->buf, backslash);
+            array_push(self->buf, c);
+
+            state = in_char;
+
+        } break;
+
+        case stop_char: {
+            replace_token_sn(self->strings, &res, tok_char, self->buf.v, self->buf.size);
+            state = stop;
+        } break;
 
         case start_string: {
             self->buf.size = 0;

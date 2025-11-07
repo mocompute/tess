@@ -214,7 +214,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     } break;
 
     case ast_symbol:
-    case ast_string: {
+    case ast_string:
+    case ast_char:   {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         vclone->name            = str_copy(alloc, vorig->name);
         vclone->original        = str_copy(alloc, vorig->original);
@@ -420,6 +421,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
+    case ast_char:
     case ast_tuple:
         //
         return;
@@ -539,6 +541,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
+    case ast_char:
     case ast_tuple:
         //
         return;
@@ -855,6 +858,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_u64:      snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
     case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
+    case ast_char:     return str_cat_3(alloc, S("'"), node->symbol.name, S("'"));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
     case ast_nil:      return S("()");
     case ast_continue: return S("continue");
@@ -1157,7 +1161,8 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_string:
-    case ast_symbol: {
+    case ast_symbol:
+    case ast_char:   {
         hash = str_hash64_combine(hash, self->symbol.name);
     } break;
 

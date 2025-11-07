@@ -880,6 +880,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_f64:
     case ast_i64:
     case ast_string:
+    case ast_char:
     case ast_symbol:
     case ast_u64:
     case ast_type_alias:
@@ -954,6 +955,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_string: {
         tl_monotype *ty = tl_type_registry_string(self->registry);
+        ensure_tv(self, null, &node->type);
+        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+    } break;
+
+    case ast_char: {
+        tl_monotype *ty = tl_type_registry_char(self->registry);
         ensure_tv(self, null, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
@@ -2037,6 +2044,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_hash_command:
     case ast_continue:
     case ast_string:
+    case ast_char:
     case ast_nil:
     case ast_arrow:
     case ast_bool:
@@ -2648,6 +2656,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_if_then_else:
     case ast_return:
     case ast_string:
+    case ast_char:
     case ast_symbol:
     case ast_u64:
     case ast_user_type_definition:

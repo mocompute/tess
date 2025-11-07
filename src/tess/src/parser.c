@@ -106,6 +106,7 @@ static int  a_bool(parser *);
 static int  a_close_round(parser *);
 static int  a_colon(parser *);
 static int  a_vertical_bar(parser *);
+static int  a_char(parser *);
 static int  a_comma(parser *);
 static int  a_ellipsis(parser *);
 static int  a_equal_sign(parser *);
@@ -412,6 +413,13 @@ nodiscard static int a_try_int(parser *p, parse_fun_int fun, int arg) {
     return 0;
 }
 
+static int a_char(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_char == p->token.tag) return result_ast_str(p, ast_char, p->token.s);
+    p->error.tag = tl_err_expected_comma;
+    return 1;
+}
+
 static int a_comma(parser *p) {
     if (next_token(p)) return 1;
     if (tok_comma == p->token.tag) return result_ast_str(p, ast_symbol, ",");
@@ -533,6 +541,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
+    case tok_char:
     case tok_comment:
     case tok_hash_command: return 1;
     }
@@ -585,6 +594,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
+    case tok_char:
     case tok_comment:
     case tok_hash_command: return 1;
     }
@@ -918,6 +928,7 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
+    if (0 == a_try(self, a_char)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;

@@ -1,7 +1,7 @@
 #module main
 
 main() {
-  c := 'a'
+  c := '\0'
   c_printf("char c = %i\n", c)
-  c - 97
+  c
 }

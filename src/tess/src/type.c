@@ -293,6 +293,9 @@ tl_monotype *tl_type_registry_bool(tl_type_registry *self) {
 tl_monotype *tl_type_registry_string(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("String"));
 }
+tl_monotype *tl_type_registry_char(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("CChar"));
+}
 
 tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
     tl_monotype *nil = tl_type_registry_nil(self);

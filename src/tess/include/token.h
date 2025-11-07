@@ -37,6 +37,7 @@
     X(tok_number, "number")                                                                                \
     X(tok_symbol, "symbol")                                                                                \
     X(tok_string, "string")                                                                                \
+    X(tok_char, "char")                                                                                    \
     X(tok_comment, "comment")
 
 typedef enum token_tag { TESS_TOKEN_TAGS(MOS_TAG_NAME) } token_tag;
