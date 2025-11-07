@@ -13,7 +13,6 @@
 #include "types.h"
 
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 
 typedef struct {
@@ -1716,6 +1715,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
 static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
                           tl_monotype *type) {
+
+    if (!tl_monotype_is_arrow(type)) return 0;
+
     str      *existing;
     str       arg_name = ast_node_str(arg);
     ast_node *top      = toplevel_get(self, arg_name);

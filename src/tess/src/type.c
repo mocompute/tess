@@ -347,7 +347,7 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
     tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
     str          type_str = tl_polytype_to_string(self->transient, clone);
-    log(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+    log(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
