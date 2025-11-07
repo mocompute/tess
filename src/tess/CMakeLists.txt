@@ -83,6 +83,8 @@ function(tesslang_create_test NAME)
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
     COMMAND tess_exe
       c
+      -I ${CMAKE_CURRENT_SOURCE_DIR}
+      -I ${PROJECT_SOURCE_DIR}/src/tl/std
       -o ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}.c
       ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
     DEPENDS

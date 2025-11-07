@@ -1,8 +1,7 @@
 #module main
-_tl_sizeof_ (x : a) -> Int
-
-// Here T may be a type literal (Type) or a concrete value
-sizeof(T) { _tl_sizeof_(T) }
+// // Here T may be a type literal (Type) or a concrete value
+// _tl_sizeof_ (x : a) -> Int
+// sizeof(T) { _tl_sizeof_(T) }
 
 Point(a) : {x : a, y : a }
 

@@ -1,18 +1,20 @@
+#import "../../src/tl/std/stdlib.tl"
+
 #module main
-_tl_sizeof_ (x : a)        -> Int
+// _tl_sizeof_ (x : a)        -> Int
 
-c_malloc    (count : Int)  -> Ptr(a)
-c_free      (ptr : Ptr) -> Nil
+// c_malloc    (count : Int)  -> Ptr(a)
+// c_free      (ptr : Ptr) -> Nil
 
-is_null     (p : Ptr(a)) -> Bool
-is_ptr      (p : Ptr(a)) -> Bool
-ptr         (p : Ptr(a)) -> Ptr(a)
+// is_null     (p : Ptr(a)) -> Bool
+// is_ptr      (p : Ptr(a)) -> Bool
+// ptr         (p : Ptr(a)) -> Ptr(a)
 
-sizeof      (T) { _tl_sizeof_(T) }
+// sizeof      (T) { _tl_sizeof_(T) }
 
-is_null(p) {
-  if p == null { true } else { false }
-}
+// is_null(p) {
+//   if p == null { true } else { false }
+// }
 
 // -- end std --
 

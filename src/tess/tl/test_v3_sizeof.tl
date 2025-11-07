@@ -1,5 +1,4 @@
 #module main
-_tl_sizeof_ (x : a) -> Int
 
 main() {
   x : Float := 1.0

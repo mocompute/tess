@@ -12,6 +12,15 @@
 #include <unistd.h>
 #endif
 
+int file_exists(char const *filename) {
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        return 0;
+    }
+    fclose(f);
+    return 1;
+}
+
 void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size) {
 
     *out      = null;

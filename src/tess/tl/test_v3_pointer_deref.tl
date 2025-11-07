@@ -1,5 +1,5 @@
 #module main
-_tl_sizeof_ (x : a) -> Int
+// _tl_sizeof_ (x : a) -> Int
 c_malloc(sz : Int) -> Ptr(a)
 c_free(ptr : Ptr(a)) -> Nil
 
