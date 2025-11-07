@@ -1199,6 +1199,7 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
 
     cat(self, S("goto "));
     cat(self, ctx->update_label);
+    cat_semicolonln(self);
     return str_empty();
 }
 
