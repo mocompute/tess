@@ -1,13 +1,22 @@
 #module stdlib
 #include <stdlib.h>
 
-c_atof          (nptr: String) -> Float
-c_atoi          (nptr: String) -> Int
-c_atol          (nptr: String) -> Int
-c_atoll         (nptr: String) -> Int
-c_strtod        (nptr: String, endptr: Ptr(String)) -> Float
-c_getenv        (name: String) -> String
-system          (str: String)  -> Int
+c_atof         (nptr: String)                      -> Float
+c_atoi         (nptr: String)                      -> Int
+c_atol         (nptr: String)                      -> Int
+c_atoll        (nptr: String)                      -> Int
+c_strtod       (nptr: String, endptr: Ptr(String)) -> Float
+c_getenv       (name: String)                      -> String
+c_system       (str: String)                       -> Int
+c_rand         ()                                  -> CInt
+c_srand        (seed: CUnsignedInt)                -> Nil
+c_aligned_alloc(alignment: CSize, size: CSize)     -> Ptr(T)
+c_calloc       (num: CSize, size_each: CSize)      -> Ptr(T)
+c_free         (ptr: Ptr(T))                       -> Nil
+c_malloc       (size: CSize)                       -> Ptr(T)
+c_realloc      (ptr: Ptr(T), size: CSize)          -> Ptr(T)
+c_exit         (status: CInt)                      -> Nil
+c_abort        ()                                  -> Nil
 
 // float              strtof  (const char* restrict nptr, char** restrict endptr); // C99
 // long double        strtold (const char* restrict nptr, char** restrict endptr); // C99
@@ -15,18 +24,8 @@ system          (str: String)  -> Int
 // long long          strtoll (const char* restrict nptr, char** restrict endptr, int base); // C99
 // unsigned long      strtoul (const char* restrict nptr, char** restrict endptr, int base);
 // unsigned long long strtoull(const char* restrict nptr, char** restrict endptr, int base); // C99
-// int rand(void);
-// void srand(unsigned int seed);
-// void* calloc(size_t nmemb, size_t size);
-// void free(void* ptr);
-// void* malloc(size_t size);
-// void* realloc(void* ptr, size_t size);
-// void abort(void);
 // int atexit(void (*func)(void));
-// void exit(int status);
 // void _Exit(int status);
-// char* getenv(const char* name);
-// int system(const char* string);
 // void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
 //               int (*compar)(const void *, const void *));
 // void qsort(void* base, size_t nmemb, size_t size,
@@ -49,13 +48,3 @@ system          (str: String)  -> Int
 // int at_quick_exit(void (*func)(void))                                     // C++11
 // void quick_exit(int status);                                              // C++11
 // void *aligned_alloc(size_t alignment, size_t size);                       // C11
-
-
-c_rand         ()                               -> CInt
-c_srand        (seed: CUnsignedInt)             -> Nil
-c_aligned_alloc(alignment: CSize, size: CSize)  -> Ptr(T)
-c_calloc       (num: CSize, size_each: CSize)   -> Ptr(T)
-c_free         (ptr: Ptr(T))                    -> Nil
-c_malloc       (size: CSize)                    -> Ptr(T)
-c_realloc      (ptr: Ptr(T), size: CSize)       -> Ptr(T)
-c_exit         (status: CInt)                   -> Nil
