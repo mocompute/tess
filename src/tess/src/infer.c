@@ -1448,8 +1448,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         break;
 
-    case ast_while:
-    case ast_continue: {
+    case ast_continue:
+        // use 'any' for continue so it can unify with any other conditional arm
+        ensure_tv(self, null, &node->type);
+        if (constrain_pm(self, ctx, node->type, tl_monotype_create_any(self->arena), node)) return 1;
+        break;
+
+    case ast_while: {
         ensure_tv(self, null, &node->type);
         tl_monotype *nil = tl_type_registry_nil(self->registry);
         if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
