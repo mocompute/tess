@@ -6,6 +6,8 @@ c_atoi          (nptr: String) -> Int
 c_atol          (nptr: String) -> Int
 c_atoll         (nptr: String) -> Int
 c_strtod        (nptr: String, endptr: Ptr(String)) -> Float
+c_getenv        (name: String) -> String
+system          (str: String)  -> Int
 
 // float              strtof  (const char* restrict nptr, char** restrict endptr); // C99
 // long double        strtold (const char* restrict nptr, char** restrict endptr); // C99
