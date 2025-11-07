@@ -105,6 +105,7 @@ typedef struct ast_node {
 
         struct ast_while {
             struct ast_node *condition;
+            struct ast_node *update;
             struct ast_node *body;
         } while_;
 
@@ -201,7 +202,7 @@ nodiscard ast_node *ast_node_create_if_then_else(allocator *, ast_node *, ast_no
 nodiscard ast_node *ast_node_create_binary_op(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_return(allocator *, ast_node *, int) mallocfun;
-nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;

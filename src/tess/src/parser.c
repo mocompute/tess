@@ -1300,6 +1300,13 @@ static int a_while_statement(parser *self) {
     ast_node *condition = parse_expression(self, INT_MIN);
     if (!condition) return 1;
 
+    // optional update expression: a command, then expression, before the open curly
+    ast_node *update = null;
+    if (0 == a_try(self, a_comma)) {
+        if (a_try(self, a_statement)) return 1;
+        update = self->result;
+    }
+
     if (a_try(self, a_open_curly)) return 1;
 
     ast_node_array exprs = {.alloc = self->ast_arena};
@@ -1311,7 +1318,7 @@ static int a_while_statement(parser *self) {
 
     ast_node *body = create_body(self, exprs);
 
-    ast_node *r    = ast_node_create_while(self->ast_arena, condition, body);
+    ast_node *r    = ast_node_create_while(self->ast_arena, condition, update, body);
     return result_ast_node(self, r);
 }
 

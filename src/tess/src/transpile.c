@@ -44,6 +44,9 @@ struct transpile {
 typedef struct {
     str_sized free_variables;
 
+    // inside a while statement body, update_label is used as the target of a continue statement.
+    str update_label;
+
     // instead of emitting output to evaluate an expression and push it on the result stack, return a str
     // which can be used as an lvalue for the expression.
     int want_lvalue;
@@ -57,6 +60,7 @@ typedef struct {
 extern char const *embed_std_c;
 
 static str         next_res(transpile *);
+static str         next_label(transpile *);
 
 static void        generate_decl(transpile *, str, tl_monotype *);
 static void        generate_decl_pointer(transpile *, str, tl_monotype *);
@@ -1151,7 +1155,7 @@ static str generate_while(transpile *self, tl_monotype *type, ast_node const *no
     (void)type;
 
     // due to the stack-based transpiler, we rewrite while statement as follows:
-    // while(1) { if (!condition) break; body }
+    // while(1) { if (!condition) break; body; update_label: update}
 
     cat(self, S("while(1) "));
     cat_open_curlyln(self);
@@ -1166,10 +1170,35 @@ static str generate_while(transpile *self, tl_monotype *type, ast_node const *no
     cat_close_round(self);
     cat(self, S("break;\n"));
 
+    str save_update_label = ctx->update_label;
+    if (node->while_.update) {
+        ctx->update_label = next_label(self);
+    }
+
     (void)generate_expr(self, null, node->while_.body, ctx);
+
+    if (node->while_.update) {
+        // include semicolon after label for c99 reasons: label followed by a declaration is a c23 thing
+        cat(self, ctx->update_label);
+        cat(self, S(":;\n"));
+        ctx->update_label = save_update_label;
+
+        (void)generate_expr(self, null, node->while_.update, ctx);
+    }
 
     cat_close_curlyln(self);
 
+    return str_empty();
+}
+
+static str generate_continue(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+    (void)node;
+
+    if (str_is_empty(ctx->update_label)) fatal("logic error");
+
+    cat(self, S("goto "));
+    cat(self, ctx->update_label);
     return str_empty();
 }
 
@@ -1207,10 +1236,9 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
 
     case ast_return:       return generate_return(self, type, node, ctx);
     case ast_while:        return generate_while(self, type, node, ctx);
+    case ast_continue:     return generate_continue(self, type, node, ctx);
 
     case ast_nil:          return S("NULL");
-
-    case ast_continue:     cat(self, S("continue;\n")); return str_empty();
 
     case ast_tuple:        return generate_tuple(self, type, node, ctx);
 
@@ -1396,6 +1424,12 @@ void transpile_set_verbose(transpile *self, int val) {
 static str next_res(transpile *self) {
     char buf[64];
     int  len = snprintf(buf, sizeof buf, "tl_res%u", self->next_res++);
+    return str_init_n(self->transient, buf, len);
+}
+
+static str next_label(transpile *self) {
+    char buf[64];
+    int  len = snprintf(buf, sizeof buf, "tl_label%u", self->next_res++);
     return str_init_n(self->transient, buf, len);
 }
 

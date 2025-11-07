@@ -155,6 +155,7 @@ tesslang_create_test_no_preamble(v3_type_arguments_annotations)
 tesslang_create_test_no_preamble(v3_union_module_intermediate)
 tesslang_create_test_no_preamble(v3_union_module_second_variant)
 tesslang_create_test_no_preamble(v3_while_statement)
+tesslang_create_test_no_preamble(v3_while_update_statement)
 
 
 # -- doxygen --

@@ -101,9 +101,10 @@ ast_node *ast_node_create_continue(allocator *alloc) {
     ast_node *self = ast_node_create(alloc, ast_continue);
     return self;
 }
-ast_node *ast_node_create_while(allocator *alloc, ast_node *cond, ast_node *body) {
+ast_node *ast_node_create_while(allocator *alloc, ast_node *cond, ast_node *update, ast_node *body) {
     ast_node *self         = ast_node_create(alloc, ast_while);
     self->while_.condition = cond;
+    self->while_.update    = update;
     self->while_.body      = body;
     return self;
 }
@@ -285,6 +286,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_while:
         clone->while_.condition = ast_node_clone(alloc, orig->while_.condition);
+        clone->while_.update    = ast_node_clone(alloc, orig->while_.update);
         clone->while_.body      = ast_node_clone(alloc, orig->while_.body);
         break;
 
@@ -477,6 +479,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_while:
         //
         fun(ctx, node->while_.condition);
+        fun(ctx, node->while_.update);
         fun(ctx, node->while_.body);
         break;
 
@@ -596,6 +599,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
 
     case ast_while:
         node->while_.condition = fun(ctx, node->while_.condition);
+        node->while_.update    = fun(ctx, node->while_.update);
         node->while_.body      = fun(ctx, node->while_.body);
         break;
 
@@ -823,7 +827,9 @@ char const *ast_tag_to_string(ast_tag tag) {
 str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     char buf[64];
 
-    str  ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
+    if (!node) return str_init(alloc, "[null]");
+
+    str ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
     switch (node->tag) {
     case ast_hash_command: {
@@ -869,7 +875,8 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_while:
         //
-        return str_cat_4(alloc, S("while ("), v2_ast_node_to_string(alloc, node->while_.condition), S(") "),
+        return str_cat_6(alloc, S("while ("), v2_ast_node_to_string(alloc, node->while_.condition),
+                         S("), ("), v2_ast_node_to_string(alloc, node->while_.update), S(") "),
                          v2_ast_node_to_string(alloc, node->while_.body));
 
     case ast_symbol: {
@@ -1228,6 +1235,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_while:
         combine_node(self->while_.condition);
+        combine_node(self->while_.update);
         combine_node(self->while_.body);
         break;
 

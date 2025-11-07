@@ -1,7 +1,13 @@
+#import "src/tl/std/stdio.tl"
+
 #module main
 
 main() {
-  s := "hello, world"
-  c : Ptr(CChar) := s
-  c[1] - 101 // 101 is 'e' in ascii
+  i := 0
+  len := 10
+  while i < len, i = i + 1 {
+    if i % 2 == 0 { continue }
+    c_printf("%i\n", i)
+  }
+  0
 }

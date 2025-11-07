@@ -876,6 +876,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_while:
         if (traverse_ast(self, ctx, node->while_.condition, cb)) return 1;
+        if (node->while_.update)
+            if (traverse_ast(self, ctx, node->while_.update, cb)) return 1;
         if (traverse_ast(self, ctx, node->while_.body, cb)) return 1;
         if (cb(self, ctx, node)) return 1;
         break;
@@ -2057,6 +2059,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     case ast_while:
         rename_variables(self, node->while_.condition, lex, level + 1);
+        rename_variables(self, node->while_.update, lex, level + 1);
         rename_variables(self, node->while_.body, lex, level + 1);
         break;
 
