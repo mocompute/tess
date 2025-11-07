@@ -1,7 +1,6 @@
 #ifndef TESS_PARSER_H
 #define TESS_PARSER_H
 
-#include "array.h"
 #include "ast.h"
 #include "nodiscard.h"
 #include "str.h"
@@ -23,7 +22,6 @@ typedef struct parser_error {
 
 typedef struct {
     tl_type_registry *registry;
-    char_csized       preamble;
     str_sized         files;
 } parser_opts;
 

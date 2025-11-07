@@ -158,7 +158,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->skip_module             = 0;
     self->expect_module           = 0;
 
-    self->tokenizer               = tokenizer_create(alloc, opts->preamble, "std_preamble");
+    self->tokenizer               = null;
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
 
     token_init(&self->token, tok_invalid);

@@ -38,7 +38,6 @@ typedef struct {
 
     int             verbose;
     int             verbose_parse;
-    int             no_preamble;
     int             help;
     int             optimize;
 
@@ -56,7 +55,6 @@ noreturn void usage(int status, char const *argv0) {
     printf("    repl                   launch the repl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage\n");
-    printf("    -no-preamble           do not include std.tl preamble\n");
     printf("    -o                     write output to path instead of stdout\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
@@ -76,7 +74,6 @@ void state_init(state *self) {
     self->program       = str_empty();
     self->verbose       = 0;
     self->verbose_parse = 0;
-    self->no_preamble   = 0;
     self->help          = 0;
     self->optimize      = 0;
     self->is_library    = 0;
@@ -103,7 +100,6 @@ void state_gather_single_options(state *self, char *str) {
 
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
-    else if (0 == strcmp("--no-preamble", str)) self->no_preamble = 1;
 }
 
 void state_gather_options(state *self, int argc, char *argv[]) {
@@ -312,14 +308,7 @@ static void get_c_compiler(state *self) {
 int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
-    int error = 0;
-
-    // embed std_tl header
-    char_array preamble     = {.alloc = default_allocator()};
-    size_t     preamble_len = strlen(embed_std_tl);
-    array_reserve(preamble, preamble_len);
-
-    if (!self->no_preamble) array_push_many(preamble, embed_std_tl, preamble_len);
+    int             error       = 0;
 
     c_string_csized paths       = {.v = &self->words.v[1], .size = self->words.size - 1};
 
@@ -329,7 +318,7 @@ int compile(state *self) {
     parser_opts     parser_opts = {
           .registry = tl_infer_get_registry(infer),
           .files    = files_in_order(self, paths),
-          .preamble = sized_all(preamble),
+
     };
     parser *parser = parser_create(default_allocator(), &parser_opts);
     if (!parser) fatal("could not create parser");
@@ -394,7 +383,6 @@ cleanup_ti:
     tl_infer_destroy(default_allocator(), &infer);
 
 cleanup_parser:
-    array_free(preamble);
     parser_destroy(&parser);
     array_free(nodes);
     arena_destroy(default_allocator(), &nodes_alloc);
