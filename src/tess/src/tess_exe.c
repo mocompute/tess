@@ -40,6 +40,7 @@ typedef struct {
     int             verbose_parse;
     int             no_preamble;
     int             help;
+    int             optimize;
 
     int             is_library;
     int             is_executable;
@@ -57,6 +58,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -h                     print usage\n");
     printf("    -no-preamble           do not include std.tl preamble\n");
     printf("    -o                     write output to path instead of stdout\n");
+    printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
     exit(status);
@@ -76,6 +78,7 @@ void state_init(state *self) {
     self->verbose_parse = 0;
     self->no_preamble   = 0;
     self->help          = 0;
+    self->optimize      = 0;
     self->is_library    = 0;
     self->is_executable = 0;
 }
@@ -92,6 +95,7 @@ void state_gather_single_options(state *self, char *str) {
         switch (str[i]) {
         case 'h': self->help = 1; break;
         case 'v': self->verbose = 1; break;
+        case 'O': self->optimize = 1; break;
         default:  break;
         }
     }
@@ -435,6 +439,10 @@ int compile_c(state *self) {
 
         array_push_val(argv, "-o");
         array_push(argv, self->out_path);
+
+        if (self->optimize) {
+            array_push_val(argv, "-O2");
+        }
 
         forall(i, self->cflags) {
             char const *cstr = str_cstr(&self->cflags.v[i]);
