@@ -236,7 +236,7 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
-    if (!tl_monotype_is_concrete(poly->type)) return;
+    if (!tl_polytype_is_concrete(poly)) return;
 
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
