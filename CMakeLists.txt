@@ -129,36 +129,6 @@ if(MOS_DOXY)
   find_package(Doxygen REQUIRED)
 endif()
 
-# -- readline --
-
-find_program(MAKE_EXE NAMES gmake nmake make)
-find_library(tinfo NAMES tinfo curses) # readline requires tinfo (comes with ncurses)
-ExternalProject_Add(readline_build
-  URL       "ftp://ftp.cwru.edu/pub/bash/readline-8.2.tar.gz"
-  URL_HASH  SHA256=3feb7171f16a84ee82ca18a36d7b9be109a52c04f492a053331d7d1095007c35
-  DOWNLOAD_DIR ${PROJECT_SOURCE_DIR}/.cache/readline
-  BUILD_IN_SOURCE YES
-  CONFIGURE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} <SOURCE_DIR>/configure --prefix <INSTALL_DIR> --enable-static --disable-shared --with-curses
-  BUILD_COMMAND "${MAKE_EXE}"
-  BUILD_BYPRODUCTS "<SOURCE_DIR>/libreadline.a"
-  INSTALL_COMMAND ${MAKE_EXE} install
-  INSTALL_BYPRODUCTS <INSTALL_DIR>/lib/libreadline.a
-)
-ExternalProject_Get_property(readline_build INSTALL_DIR)
-file(MAKE_DIRECTORY ${INSTALL_DIR}/include) # required for
-                                            # INTERFACE_INCLUDE_DIRECTORIES
-                                            # to work during configure
-                                            # phase before directory
-                                            # is installed
-
-add_library(readline STATIC IMPORTED)
-set_target_properties(readline PROPERTIES
-  IMPORTED_LOCATION ${INSTALL_DIR}/lib/libreadline.a
-  INTERFACE_INCLUDE_DIRECTORIES ${INSTALL_DIR}/include
-)
-add_dependencies(readline readline_build)
-target_link_libraries(readline INTERFACE tinfo) # users of readline must link tinfo
-
 # -- system specific -----------------------------------------------
 # -- Keep this AFTER including external packages --
 

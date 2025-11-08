@@ -16,9 +16,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "readline/history.h"
-#include "readline/readline.h"
-
 // -- embed externs --
 extern char const *embed_std_tl;
 
@@ -52,7 +49,6 @@ noreturn void usage(int status, char const *argv0) {
     puts("Commands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o required)\n");
-    printf("    repl                   launch the repl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage\n");
     printf("    -I <path>              add <path> to import search path. Multiple ok.\n");
@@ -131,22 +127,6 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
 void eval_print(char *in) {
     printf("you said: '%s'\n", in);
-}
-
-int repl(state *self) {
-    (void)self;
-    while (1) {
-        char *line = readline("tl > ");
-
-        if (!line) continue;
-
-        eval_print(line);
-        add_history(line);
-
-        free(line);
-    }
-
-    return 0;
 }
 
 void read_import_lines(char_csized input, str_array *output) {
@@ -560,10 +540,6 @@ int main(int argc, char *argv[]) {
     else if (0 == strcmp("lib", self.words.v[0])) {
         self.is_library = 1;
         result          = compile(&self);
-    }
-
-    else if (0 == strcmp("repl", self.words.v[0])) {
-        return repl(&self);
     }
 
 done:
