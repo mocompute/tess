@@ -1436,15 +1436,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->assignment.name->type);
         ensure_tv(self, null, &node->assignment.value->type);
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
-
-        // FIXME: this shouldn't be needed but I've observed a stale type in the assignment.name during
-        // specialising, and so this is necessary when dealing with generics.
-        if (tl_polytype_is_concrete(node->assignment.value->type)) {
-            node->assignment.name->type = node->assignment.value->type;
-        } else {
-            if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
-        }
-
+        if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
         break;
 
     case ast_continue:
@@ -2775,8 +2767,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log(self, "");
     log(self, "-- toplevels");
     log_toplevels(self);
-    log(self, "-- subs");
-    log_subs(self);
+    if (0) {
+        log(self, "-- subs");
+        log_subs(self);
+    }
     log(self, "-- env");
     log_env(self);
     arena_reset(self->transient);
@@ -2852,8 +2846,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         arena_reset(self->transient);
     }
 
-    log(self, "-- final subs");
-    log_subs(self);
+    if (0) {
+        log(self, "-- final subs");
+        log_subs(self);
+    }
     log(self, "-- final env --");
     log_env(self);
     arena_reset(self->transient);
