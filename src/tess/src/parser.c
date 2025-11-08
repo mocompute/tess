@@ -788,7 +788,7 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
 }
 
 static int a_type_identifier(parser *self) {
-
+    // Callers expect name to be mangled.
     if (0 == a_try(self, a_funcall)) {
         mangle_name(self, self->result->named_application.name);
         return 0;
@@ -1477,6 +1477,7 @@ static int toplevel_symbol_annotation(parser *self) {
 
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
+    mangle_name(self, ident);
     return result_ast_node(self, ident);
 }
 
@@ -1534,6 +1535,7 @@ static int toplevel_type_alias(parser *self) {
     if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) target = self->result;
     else return 1;
 
+    mangle_name(self, name);
     ast_node *node = ast_node_create_type_alias(self->ast_arena, name, target);
     return result_ast_node(self, node);
 
@@ -1543,7 +1545,6 @@ static int toplevel_type_alias(parser *self) {
 static int toplevel_enum(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
-    mangle_name(self, name);
 
     if (a_try(self, a_colon)) return 1;
     if (a_try(self, a_open_curly)) return 1;
@@ -1565,6 +1566,8 @@ static int toplevel_enum(parser *self) {
         array_free(idents);
         return 1;
     }
+
+    mangle_name(self, name);
 
     // an enum uses the ast_user_type_definition with no type_arguments and no field_annotations. The actual
     // enums are saved in field_names.
@@ -1589,7 +1592,7 @@ static int toplevel_enum(parser *self) {
 
 static int toplevel_struct(parser *self) {
 
-    if (a_try(self, a_type_identifier)) return 1;
+    if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
     ast_node *type_ident = self->result;
 
     if (a_try(self, a_colon)) return 1;
