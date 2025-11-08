@@ -418,6 +418,10 @@ tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype *orig) {
     return clone;
 }
 
+tl_polytype *tl_polytype_clone_mono(allocator *alloc, tl_monotype *mono) {
+    return tl_polytype_absorb_mono(alloc, tl_monotype_clone(alloc, mono));
+}
+
 void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rhs) {
 
     if (rhs->quantifiers.size) {

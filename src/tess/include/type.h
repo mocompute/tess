@@ -169,6 +169,7 @@ nodiscard tl_polytype *tl_polytype_create_weak(allocator *, tl_type_variable) ma
 nodiscard tl_polytype *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype *) mallocfun;
+nodiscard tl_polytype *tl_polytype_clone_mono(allocator *, tl_monotype *) mallocfun;
 
 void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype *);
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype *, tl_type_subs *);
