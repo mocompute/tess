@@ -5,8 +5,8 @@
 Point(a) : { x : a, y : a }
 Rect(a)  : { topleft: Point(a), botright: Point(a) }
 
-make_points(count) { Array.new(Point(Int), count) }
-make_rects(count)  { Array.new(Rect(Int), count) }
+make_points(count) { Array.with_capacity(Point(Int), count) }
+make_rects(count)  { Array.with_capacity(Rect(Int), count) }
 
 main() {
   points := make_points(8)

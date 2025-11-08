@@ -172,6 +172,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             // or else check if it's a known nullary type
             if (tl_type_registry_is_nullary_type(self, name)) {
                 tl_polytype *poly = tl_type_registry_get(self, name);
+                // return tl_monotype_clone(self->alloc, poly->type);
                 return poly->type;
             }
         }
@@ -645,7 +646,9 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_polyt
     (void)ctx;
 
     if (left == right) return 0;
-    log_constraint(self, left, right, node);
+    if (0) {
+        log_constraint(self, left, right, node);
+    }
 
     tl_monotype *lhs = null, *rhs = null;
 
@@ -669,6 +672,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype **type) {
     if (*type) return;
 
     if (name) *type = tl_type_env_lookup(self->env, *name);
+    // if (name) *type = tl_polytype_clone(self->arena, tl_type_env_lookup(self->env, *name));
     if (*type) return;
 
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
@@ -1325,6 +1329,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_polytype *global = tl_type_env_lookup(self->env, node->symbol.name);
 
         if (global) {
+            // tl_polytype *global_copy = tl_polytype_clone(self->arena, global);
             if (node->type) {
                 if (!escape_constraint(self, node->type, global) &&
                     constrain(self, ctx, node->type, global, node))
@@ -2187,7 +2192,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
     if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
         // always use a tuple on the left side of arrow, even if zero elements
         tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
-        tl_monotype *rhs   = result ? result->type->type : null;
+        tl_monotype *rhs   = result ? tl_monotype_clone(self->arena, result->type->type) : null;
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
@@ -2203,12 +2208,15 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
         array_reserve(args_types, args.size);
         forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type);
-            array_push(args_types, args.v[i]->type->type);
+            // tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
+            tl_monotype *tmp = args.v[i]->type->type;
+            array_push(args_types, tmp);
         }
 
         tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
         tl_monotype *right = null;
         if (result) {
+            // right = tl_monotype_clone(self->arena, result->type->type);
             right = result->type->type;
         } else {
             right = tl_type_registry_nil(self->registry);
@@ -2412,7 +2420,11 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (name_node->symbol.annotation_type) {
         arrow = name_node->symbol.annotation_type;
     } else {
-        arrow = tl_type_env_lookup(self->env, name);
+        tl_polytype *tmp = tl_type_env_lookup(self->env, name);
+        if (!tmp) fatal("runtime error");
+        // arrow = tl_polytype_clone(self->arena, tmp);
+        arrow = tmp;
+
         if (!arrow) fatal("runtime error");
     }
     tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
@@ -2572,6 +2584,7 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
         mono = specialized->type;
     }
 
+    // return tl_monotype_clone(self->arena, mono);
     return mono;
 }
 

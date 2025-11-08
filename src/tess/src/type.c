@@ -1037,6 +1037,8 @@ u64 tl_monotype_hash64(tl_monotype *self) {
 
 str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
 
+    if (!self) return S("[null]");
+
     str_build b = str_build_init(alloc, 64);
 
     switch (self->tag) {

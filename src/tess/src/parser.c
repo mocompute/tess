@@ -45,6 +45,8 @@ struct parser {
     struct token           token;
 
     str                    current_module;
+    hashmap               *current_module_symbols; // hset str
+
     u32                    next_nil_name;
     int                    verbose;
     int                    indent_level;
@@ -121,6 +123,7 @@ static int           the_symbol(parser *, char const *const);
 static int           string_to_number(parser *, char const *const);
 static void          mangle_name_for_module(parser *, ast_node *, str);
 static void          mangle_name(parser *, ast_node *);
+static void          unmangle_name(parser *, ast_node *);
 
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
@@ -150,6 +153,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->tokenizer_error         = (struct tokenizer_error){0};
     self->token                   = (struct token){0};
     self->current_module          = str_empty();
+    self->current_module_symbols  = hset_create(self->parent_alloc, 32);
     self->next_nil_name           = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
@@ -176,6 +180,7 @@ void parser_destroy(parser **self) {
 
     // arena
     allocator *alloc = (*self)->parent_alloc;
+    hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(alloc, &(*self)->transient);
     arena_destroy(alloc, &(*self)->ast_arena);
@@ -183,6 +188,17 @@ void parser_destroy(parser **self) {
     arena_destroy(alloc, &(*self)->file_arena);
     alloc_free(alloc, *self);
     *self = null;
+}
+
+// -- module --
+
+static void add_module_symbol(parser *self, ast_node *name) {
+    if (ast_node_is_symbol(name)) {
+        str_hset_insert(&self->current_module_symbols,
+                        name->symbol.is_mangled ? name->symbol.original : name->symbol.name);
+    } else if (ast_node_is_nfa(name)) {
+        add_module_symbol(self, name->named_application.name);
+    }
 }
 
 // -- parser --
@@ -847,6 +863,7 @@ static int a_funcall(parser *self) {
 done:
 
     array_shrink(args);
+    mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
@@ -854,8 +871,6 @@ done:
 static int a_type_constructor(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
-
-    mangle_name(self, name);
 
     if (a_try(self, a_open_curly)) return 1;
 
@@ -872,6 +887,7 @@ static int a_type_constructor(parser *self) {
 
 done:
     array_shrink(args);
+    mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
@@ -948,7 +964,10 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;
-    if (0 == a_try(self, a_identifier)) return 0;
+    if (0 == a_try(self, a_identifier)) {
+        mangle_name(self, self->result);
+        return 0;
+    }
 
     self->error.tag = tl_err_expected_value;
     return 1;
@@ -1159,6 +1178,7 @@ static ast_node *parse_expression(parser *self, int min_prec) {
                 if (ast_node_is_symbol(right)) to_mangle = right;
                 else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
                 if (to_mangle) {
+                    unmangle_name(self, to_mangle);
                     mangle_name_for_module(self, to_mangle, left->symbol.name);
                     left = right;
                     continue;
@@ -1184,26 +1204,42 @@ static int a_expression(parser *self) {
     return result_ast_node(self, res);
 }
 
+static void unmangle_name(parser *self, ast_node *name) {
+    (void)self;
+    if (!ast_node_is_symbol(name)) return;
+    if (!name->symbol.is_mangled) return;
+    if (str_is_empty(name->symbol.original)) return;
+    name->symbol.name       = name->symbol.original;
+    name->symbol.is_mangled = 0;
+}
+
 static void mangle_name_for_module(parser *self, ast_node *name, str module) {
     if (ast_node_is_symbol(name) && !str_is_empty(module)) {
-        name->symbol.name = str_cat_3(self->ast_arena, module, S("_"), name->symbol.name);
+        ast_node_name_replace(name, str_cat_3(self->ast_arena, module, S("_"), name->symbol.name));
+        name->symbol.is_mangled = 1;
+        fprintf(stderr, "parser: mangle '%s' to '%s'\n", str_cstr(&name->symbol.original),
+                str_cstr(&name->symbol.name));
     }
 }
 
 static void mangle_name(parser *self, ast_node *name) {
     if (str_is_empty(self->current_module)) return;
+    if (ast_node_is_nfa(name)) return mangle_name(self, name->named_application.name);
+    if (!ast_node_is_symbol(name)) return;
+    if (name->symbol.is_mangled) return;
+
+    // Don't mangle names of known types
+    str name_str = ast_node_str(name);
+    if (tl_type_registry_get(self->opts.registry, name_str)) return;
+
+    // Don't mangle c_ names
+    if (is_c_symbol(name_str)) return;
 
     // Don't mangle names in 'builtin' module
     if (str_eq(self->current_module, S("builtin"))) return;
 
-    if (ast_node_is_symbol(name)) {
-        // Don't mangle names of known types
-        str name_str = ast_node_str(name);
-        if (tl_type_registry_get(self->opts.registry, name_str)) return;
-
-        // Don't mangle c_ names
-        if (is_c_symbol(name_str)) return;
-    }
+    // Don't mangle names that haven't been defined in the current module
+    if (!str_hset_contains(self->current_module_symbols, name_str)) return;
 
     mangle_name_for_module(self, name, self->current_module);
 }
@@ -1397,6 +1433,7 @@ decl_done:
 
     ast_node *body = create_body(self, exprs);
 
+    add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params);
@@ -1463,6 +1500,7 @@ decl_done:
     // attach to name
     name->symbol.annotation = arrow;
 
+    add_module_symbol(self, name);
     mangle_name(self, name);
 
     return result_ast_node(self, name);
@@ -1477,6 +1515,8 @@ static int toplevel_symbol_annotation(parser *self) {
 
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
+
+    add_module_symbol(self, ident);
     mangle_name(self, ident);
     return result_ast_node(self, ident);
 }
@@ -1515,6 +1555,7 @@ static int toplevel_hash(parser *self) {
                 str_hset_insert(&self->modules_seen, module);
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
                 else self->current_module = module;
+                hset_reset(self->current_module_symbols);
             }
         }
     }
@@ -1535,6 +1576,7 @@ static int toplevel_type_alias(parser *self) {
     if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) target = self->result;
     else return 1;
 
+    add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_type_alias(self->ast_arena, name, target);
     return result_ast_node(self, node);
@@ -1567,6 +1609,7 @@ static int toplevel_enum(parser *self) {
         return 1;
     }
 
+    add_module_symbol(self, name);
     mangle_name(self, name);
 
     // an enum uses the ast_user_type_definition with no type_arguments and no field_annotations. The actual
@@ -1637,12 +1680,14 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
 
+    add_module_symbol(self, type_ident);
+    mangle_name(self, type_ident);
     return result_ast_node(self, r);
 }
 
 static int toplevel_union(parser *self) {
 
-    if (a_try(self, a_type_identifier)) return 1;
+    if (a_try(self, a_type_identifier)) return 1; // mangles name
     ast_node *type_ident = self->result;
 
     if (a_try(self, a_colon)) return 1;
@@ -1682,6 +1727,8 @@ static int toplevel_union(parser *self) {
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
 
+    add_module_symbol(self, type_ident);
+    mangle_name(self, type_ident);
     return result_ast_node(self, r);
 }
 

@@ -1746,6 +1746,13 @@ tl_monotype *env_lookup(transpile *self, str name) {
 
 //
 
+static void update_type(transpile *self, tl_monotype **type) {
+    // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
+    // know about how to handle _tl_sizeof_'s arguments.
+    tl_monotype *replace = tl_infer_update_specialized_type(self->infer, *type);
+    if (replace) *type = replace;
+}
+
 static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
     (void)extra;
 
@@ -1756,7 +1763,10 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     ast_node const *arg = node->named_application.arguments[0];
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
-        str ctype = type_to_c_mono(self, arg->type->type->cons_inst->args.v[0]);
+
+        tl_monotype *type = arg->type->type->cons_inst->args.v[0];
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
 
     } else if (ast_node_is_nfa(arg)) {
@@ -1764,11 +1774,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
         tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
         if (!type) fatal("missing type");
-
-        // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
-        // know about how to handle _tl_sizeof_'s arguments.
-        tl_monotype *replace = tl_infer_update_specialized_type(self->infer, type);
-        if (replace) type = replace;
+        update_type(self, &type);
 
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
@@ -1792,7 +1798,9 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     ast_node const *arg = node->named_application.arguments[0];
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
-        str ctype = type_to_c_mono(self, arg->type->type->cons_inst->args.v[0]);
+        tl_monotype *type = arg->type->type->cons_inst->args.v[0];
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
 
     } else if (ast_node_is_nfa(arg)) {
@@ -1800,11 +1808,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
         tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
         if (!type) fatal("missing type");
-
-        // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
-        // know about how to handle _tl_alignof_'s arguments.
-        tl_monotype *replace = tl_infer_update_specialized_type(self->infer, type);
-        if (replace) type = replace;
+        update_type(self, &type);
 
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));

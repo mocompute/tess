@@ -21,6 +21,7 @@ typedef struct ast_node {
             str              original;
             struct ast_node *annotation;
             tl_polytype     *annotation_type;
+            int              is_mangled;
         } symbol;
 
         struct ast_bool {

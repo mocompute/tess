@@ -149,6 +149,7 @@ ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     self->symbol.original        = str_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
+    self->symbol.is_mangled      = 0;
     return self;
 }
 
@@ -158,6 +159,7 @@ ast_node *ast_node_create_sym(allocator *alloc, str str) {
     self->symbol.original        = str_empty();
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
+    self->symbol.is_mangled      = 0;
     return self;
 }
 
@@ -1011,8 +1013,19 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_eof:
 
-    case ast_lambda_function_application:
-    case ast_tuple:                       return str_copy(alloc, S("[not implemented]"));
+    case ast_tuple: {
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(tuple "));
+        for (u32 i = 0, n = node->tuple.n_elements; i < n; ++i) {
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->tuple.elements[i]));
+            if (i + 1 < n) str_build_cat(&b, S(", "));
+        }
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
+
+    } break;
+
+    case ast_lambda_function_application: return str_copy(alloc, S("[not implemented]"));
     }
 }
 
