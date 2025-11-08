@@ -1,29 +1,12 @@
-#import <stdlib.tl>
-
 #module main
-
-
-Array(a) : {
-  v:    Ptr(a),
-  size: Int,
-}
-
+#import <stdlib.tl>
+#import <Array.tl>
 
 Point(a) : { x : a, y : a }
 Rect(a)  : { topleft: Point(a), botright: Point(a) }
 
-array_new(T : Type, count) {
-  // This type annotation is required for the return type of c_malloc to be concrete. Note that it refers to
-  // the type argument T.
-  p : Ptr(T) := c_malloc(count * sizeof(T))
-  Array { v = p, size = count }
-}
-
-array_free(arr) { c_free(arr.v) }
-
-
-make_points(count) { array_new(Point(Int), count) }
-make_rects(count)  { array_new(Rect(Int), count) }
+make_points(count) { Array.new(Point(Int), count) }
+make_rects(count)  { Array.new(Rect(Int), count) }
 
 main() {
   points := make_points(8)
@@ -38,7 +21,7 @@ main() {
   if (points.v[1].x != 2) { res = 1 }
   if (points.v[1].y != 3) { res = 1 }
 
-  array_free(points)
-  array_free(rects)
+  Array.free(points)
+  Array.free(rects)
   res
 }
