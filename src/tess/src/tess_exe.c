@@ -238,8 +238,8 @@ static void collect_imports_from_import_file(state *self, str path, str_array *i
 
     read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
     forall(i, file_imports) {
-        array_push(*imports, file_imports.v[i]);
         collect_imports_from_import_file(self, file_imports.v[i], imports);
+        array_push(*imports, file_imports.v[i]);
     }
 }
 
@@ -254,8 +254,8 @@ static void collect_imports_from_file(state *self, str path, str_array *imports)
 
     read_import_lines((char_csized){.size = size, .v = data}, &file_imports);
     forall(i, file_imports) {
-        array_push(*imports, file_imports.v[i]);
         collect_imports_from_import_file(self, file_imports.v[i], imports);
+        array_push(*imports, file_imports.v[i]);
     }
 }
 
@@ -341,6 +341,7 @@ int compile(state *self) {
           .registry = tl_infer_get_registry(infer),
           .files    = files_in_order(self, paths),
     };
+
     parser *parser = parser_create(default_allocator(), &parser_opts);
     if (!parser) fatal("could not create parser");
 
