@@ -847,6 +847,8 @@ static int a_type_constructor(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
+    mangle_name(self, name);
+
     if (a_try(self, a_open_curly)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
@@ -1199,7 +1201,6 @@ static void mangle_name(parser *self, ast_node *name) {
 }
 
 static ast_node *parse_lvalue(parser *self) {
-    // Note: mangles name based on self->current_module
     ast_node *ident = null;
 
     ast_node *expr  = parse_expression(self, INT_MIN);
@@ -1226,8 +1227,6 @@ static ast_node *parse_lvalue(parser *self) {
 
         leftmost->symbol.annotation = ann;
     }
-
-    mangle_name(self, ident);
 
     return ident;
 }
@@ -1405,8 +1404,6 @@ static int toplevel_assign(parser *self) {
     // cannot use parse_lvalue here
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
-
-    mangle_name(self, name);
 
     if (a_try(self, a_colon_equal)) return 1;
     ast_node *value = parse_expression(self, INT_MIN);
