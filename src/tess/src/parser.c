@@ -275,6 +275,14 @@ int is_logical_operator(char const *s) {
     return 0;
 }
 
+int is_bitwise_operator(char const *s) {
+    static char const *strings[] = {"&", "|", "^", "<<", ">>", null};
+    char const       **it        = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
+}
+
 int is_index_operator(char const *s) {
     return 0 == strcmp(s, "[");
 }

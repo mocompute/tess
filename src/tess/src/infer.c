@@ -1135,6 +1135,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // operands and result must all be same type
             if (constrain(self, ctx, node->type, left->type, node)) return 1;
             if (constrain(self, ctx, left->type, right->type, node)) return 1;
+        } else if (is_bitwise_operator(op)) {
+            // operands must be integer
+            tl_monotype *int_type = tl_type_registry_int(self->registry);
+            if (constrain_pm(self, ctx, left->type, int_type, node)) return 1;
+            if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
         } else if (is_logical_operator(op) || is_relational_operator(op)) {
             // operands must be same type, and result must be boolean
             tl_monotype *bool_type = tl_type_registry_bool(self->registry);
