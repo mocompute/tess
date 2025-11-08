@@ -1782,6 +1782,42 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     }
 }
 
+static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
+    (void)extra;
+
+    assert(ast_node_is_nfa(node));
+
+    // single argument may be an expression or a type constructor
+    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    ast_node const *arg = node->named_application.arguments[0];
+    if (tl_monotype_is_type_literal(arg->type->type)) {
+        // type literal
+        str ctype = type_to_c_mono(self, arg->type->type->cons_inst->args.v[0]);
+        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
+
+    } else if (ast_node_is_nfa(arg)) {
+        // type constructor
+        hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
+        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        if (!type) fatal("missing type");
+
+        // replace type with its specialized version. tl_infer had no chance to do this because it doesn't
+        // know about how to handle _tl_alignof_'s arguments.
+        tl_monotype *replace = tl_infer_update_specialized_type(self->infer, type);
+        if (replace) type = replace;
+
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
+    } else {
+        // expression
+        int save         = ctx->want_lvalue;
+        ctx->want_lvalue = 1;
+        str expr         = generate_expr(self, null, arg, ctx);
+        ctx->want_lvalue = save;
+        return str_cat_3(self->transient, S("_Alignof("), expr, S(")"));
+    }
+}
+
 static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
     (void)extra;
     (void)ctx;
@@ -1812,8 +1848,9 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
     };
 
     static const struct dispatch table[] = {
-      {"_tl_sizeof_", tl_sizeof, null},
+      {"_tl_alignof_", tl_alignof, null},
       {"_tl_fatal_", tl_fatal, null},
+      {"_tl_sizeof_", tl_sizeof, null},
       // {"_tl_sizeoft_", tl_sizeoft, null},
 
       {"", null, null},

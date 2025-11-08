@@ -1,8 +1,7 @@
 #module main
-#import <string.tl>
+#import <stdio.tl>
 
 main() {
-  s1 := "hello"
-  s2 := "hello"
-  c_strcmp(s1, s2
+  c_printf("alignof int: %zu\n", _tl_alignof_(Int))
+  0
 }
