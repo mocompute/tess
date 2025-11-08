@@ -1463,6 +1463,8 @@ decl_done:
     // attach to name
     name->symbol.annotation = arrow;
 
+    mangle_name(self, name);
+
     return result_ast_node(self, name);
 }
 
