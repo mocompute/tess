@@ -2278,7 +2278,8 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     if (is_arrow && !tl_polytype_is_scheme(type)) {
         str_sized type_fvs = tl_monotype_fvs(type->type);
         forall(i, type_fvs) {
-            str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
+            if (!str_hset_contains(traverse_ctx->lex, type_fvs.v[i]))
+                str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
         }
     }
 
