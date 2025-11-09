@@ -1338,10 +1338,7 @@ static int a_return_statement(parser *self) {
 static int a_break_statement(parser *self) {
     if (a_try_s(self, the_symbol, "break")) return 1;
 
-    ast_node *value = parse_expression(self, INT_MIN);
-    if (!value) return 1;
-
-    ast_node *r = ast_node_create_return(self->ast_arena, value, 1);
+    ast_node *r = ast_node_create_return(self->ast_arena, null, 1);
     return result_ast_node(self, r);
 }
 
