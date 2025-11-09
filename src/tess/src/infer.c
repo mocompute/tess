@@ -2566,9 +2566,13 @@ static int check_main_function(tl_infer *self, ast_node *main) {
         return 1;
     }
 
-    // remove free variables from main type
+    // remove free variables from main type if they are toplevel (e.g. lambda functions)
     if (tl_monotype_is_arrow(type->type)) {
-        ((tl_monotype *)type->type)->list.fvs.size = 0;
+        for (u32 i = 0, n = type->type->list.fvs.size; i < n; ++i) {
+            str fv = type->type->list.fvs.v[i];
+            if (toplevel_get(self, fv)) array_sized_erase(type->type->list.fvs, i);
+            else ++i;
+        }
     }
 
     return 0;

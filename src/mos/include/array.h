@@ -29,6 +29,7 @@
     } NAME;
 
 defarray(array_t, void);
+defsized(array_sized_t, void);
 
 defarray(byte_array, byte);
 defarray(char_array, char);
@@ -130,6 +131,12 @@ defslice(c_string_cslice, char const *);
         array_erase_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));                  \
     } while (0)
 
+#define array_sized_erase(p, i)                                                                            \
+    do {                                                                                                   \
+        static_assert(sizeof(p) >= sizeof(array_sized_t), "not an array_sized");                           \
+        array_sized_erase_impl((array_sized_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));      \
+    } while (0)
+
 #define array_shrink(p)                                                                                    \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
@@ -210,6 +217,7 @@ int             array_contains_impl(array_t *, void *restrict, u32, u16, void co
 nodiscard void *array_shrink_impl(array_t *h, void *, u32, u16);
 
 void            array_erase_impl(array_t *h, void *ptr, u32 index, u32, u16);
+void            array_sized_erase_impl(array_sized_t *, void *, u32, u32, u16);
 void            array_free_impl(array_t *, void *);
 
 // -- array set operations --

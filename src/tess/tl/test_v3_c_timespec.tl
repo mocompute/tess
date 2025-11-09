@@ -11,7 +11,7 @@ c_struct_timespec : {
 
 main() {
   ts : c_struct_timespec := ()
-  c_timespec_get(ts.&, TIME_UTC)
+  c_timespec_get(ts.&, c_TIME_UTC)
   c_printf("Current tv_sec = %i\n", ts.tv_sec)
   0
 }
