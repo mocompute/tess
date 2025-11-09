@@ -90,7 +90,8 @@
     X(tl_err_free_variable_not_found, "free_variable_not_found")                                           \
     X(tl_err_type_error, "type_error")                                                                     \
     X(tl_err_field_not_found, "field_not_found")                                                           \
-    X(tl_err_polymorphic_function_argument, "polymorphic_function_argument")
+    X(tl_err_polymorphic_function_argument, "polymorphic_function_argument")                               \
+    X(tl_err_unknown_symbol_in_main, "unknown symbol in main()")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

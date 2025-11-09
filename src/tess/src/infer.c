@@ -2567,15 +2567,23 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     }
 
     // remove free variables from main type if they are toplevel (e.g. lambda functions)
+    str_sized *fvs = &type->type->list.fvs;
     if (tl_monotype_is_arrow(type->type)) {
-        for (u32 i = 0, n = type->type->list.fvs.size; i < n; ++i) {
-            str fv = type->type->list.fvs.v[i];
-            if (toplevel_get(self, fv)) array_sized_erase(type->type->list.fvs, i);
+        for (u32 i = 0, n = fvs->size; i < n; ++i) {
+            str fv = fvs->v[i];
+            if (toplevel_get(self, fv)) array_sized_erase(*fvs, i);
             else ++i;
         }
     }
 
-    return 0;
+    // report errors: main must have no free variables
+    int error = 0;
+    forall(i, *fvs) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_unknown_symbol_in_main, .message = fvs->v[i]}));
+        ++error;
+    }
+    return error;
 }
 
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
