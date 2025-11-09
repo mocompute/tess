@@ -867,7 +867,18 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     if (type) {
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
-        if (tl_monotype_is_concrete(type)) {
+        if (tl_monotype_is_tv(type)) {
+            // The assignment target has an indeterminate type, most likely because `value` is an unknown
+            // symbol.
+            if (ast_node_is_symbol(node->let_in.value)) {
+                str value_str = ast_node_str(node->let_in.value);
+                exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
+                           str_cstr(&value_str));
+            } else {
+                // TODO: improve error
+                exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol");
+            }
+        } else if (tl_monotype_is_concrete(type)) {
             if (should_assign_result(ctx, type)) {
                 generate_decl(self, name, type);
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
@@ -879,6 +890,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             // exceptions: return value type information is not always available for c_ functions, so we
             // emit all non-arrow values and c_* arrow values.
             if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
+
                 generate_decl(self, name, type);
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
