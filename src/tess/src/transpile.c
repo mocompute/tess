@@ -10,6 +10,7 @@
 #include "str.h"
 #include "type.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 
 #define TRANSPILE_ARENA_SIZE     32 * 1024
@@ -111,6 +112,7 @@ static str   type_to_c(transpile *, tl_polytype *);
 static str   type_to_c_mono(transpile *, tl_monotype *);
 static str   arrow_rhs_to_c(transpile *, tl_polytype *);
 static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
+static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 
 //
 
@@ -809,8 +811,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     if (is_c_symbol(name)) return generate_funcall_c(self, node, ctx);
 
     if (!type) {
-        fprintf(stderr, "error: funcall with null type: %s\n", str_cstr(&name));
-        fatal("funcall with null type");
+        exit_error(node->file, node->line, "unknown function: %s", str_cstr(&name));
     }
 
     // type constructor?
@@ -1867,4 +1868,20 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
         if (0 == str_cmp_nc(name, p->name, strlen(p->name))) return p->fun(self, node, ctx, p->extra);
 
     return str_empty();
+}
+
+static void exit_error(char const *file, u32 line, char const *restrict fmt, ...) {
+    char buf[256];
+    if (file) {
+        snprintf(buf, sizeof buf, "%s:%u: error: %s\n", file, line, fmt);
+    } else {
+        snprintf(buf, sizeof buf, "error: %s\n", fmt);
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, buf, args); // NOLINT
+    va_end(args);
+
+    exit(1);
 }

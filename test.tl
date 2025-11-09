@@ -2,6 +2,6 @@
 #import <stdio.tl>
 
 main() {
-  c_printf("alignof int: %zu\n", _tl_alignof_(Int))
+  c_printf("alignof int: %zu\n", alignofXXX(Int))
   0
 }
