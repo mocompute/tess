@@ -56,7 +56,7 @@ typedef struct {
 typedef struct {
     hashmap *call_chain;     // hset str
     hashmap *lex;            // hset str (names in local lexical scope)
-    hashmap *type_arguments; // map str -> tl_monotype*
+    hashmap *type_arguments; // map str -> tl_monotype*: arguments which are type literals
     hashmap *seen_node;      // hset ast_node* FIXME: needed?
     void    *user;
     int      is_field_name;
@@ -326,7 +326,6 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     else map = map_new(self->transient, str, tl_monotype *, 8);
 
     tl_monotype *ann  = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
-
     tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
     // tl_polytype_generalize(poly, self->env, self->subs);
     node->symbol.annotation_type = poly;
@@ -339,7 +338,8 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
 }
 
 static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map) {
-    // populate type variable map used by tl_type_registry_parse with type arguments, if any
+    // Note: collects names and target types of arguments which are type literal arguments. This map is used
+    // by tl_type_registry_parse.
     (void)self;
     // map : map_new(self->transient, str, tl_monotype*, 8);
 
@@ -354,8 +354,10 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
             str          arg_name = ast_node_str(arg);
             tl_monotype *target   = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
-            str target_str = tl_monotype_to_string(self->transient, target);
-            log(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
+            if (1) {
+                str target_str = tl_monotype_to_string(self->transient, target);
+                log(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
+            }
         }
     }
 }
@@ -701,6 +703,18 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
     return clone;
 }
 
+static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *param;
+    while ((param = ast_arguments_next(&iter))) {
+        assert(ast_node_is_symbol(param));
+        str_hset_insert(&ctx->lex, param->symbol.name);
+        ensure_tv(self, null, &param->type);
+        if (cb(self, ctx, param)) return 1;
+    }
+    return 0;
+}
+
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
 
@@ -711,18 +725,11 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         map_reset(ctx->type_arguments);
 
-        hashmap           *save = map_copy(ctx->lex);
+        hashmap *save = map_copy(ctx->lex);
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str_hset_insert(&ctx->lex, param->symbol.name);
-            ensure_tv(self, null, &param->type);
-            if (cb(self, ctx, param)) return 1;
-        }
+        if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
 
-        // collect type arguments after traversing/inferring arguments
+        // collect type arguments after traversing/inferring parameters
         collect_type_arguments(self, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
@@ -781,16 +788,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_lambda_function: {
 
-        hashmap           *save = map_copy(ctx->lex);
+        hashmap *save = map_copy(ctx->lex);
 
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str_hset_insert(&ctx->lex, param->symbol.name);
-            ensure_tv(self, null, &param->type);
-            if (cb(self, ctx, param)) return 1;
-        }
+        if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
+
+        // collect type arguments after traversing/inferring arguments
+        collect_type_arguments(self, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
 
@@ -813,6 +816,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->lambda_application.lambda, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
+
     } break;
 
     case ast_if_then_else: {
