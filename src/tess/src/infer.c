@@ -145,6 +145,19 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
     return found;
 }
 
+tl_monotype      *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
+                                         hashmap **map);
+
+tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, tl_type_subs *subs,
+                              hashmap **map) {
+    // See tl_type_registry_parse.
+
+    tl_monotype_array arr = {.alloc = self->alloc};
+    array_reserve(arr, args.size);
+    forall(i, args) array_push_val(arr, tl_type_registry_parse(self, args.v[i], subs, map));
+    return (tl_monotype_sized)array_sized(arr);
+}
+
 tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
                                     hashmap **map) {
     // map : map_new(self->transient, str, tl_monotype*, 8);
@@ -184,24 +197,16 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
 
     if (ast_node_is_nfa(node)) {
 
-        ast_node_sized    args      = {.v    = node->named_application.arguments,
-                                       .size = node->named_application.n_arguments};
+        ast_node_sized    args      = ast_node_sized_from_ast_array_const(node);
+        tl_monotype_sized args_mono = parse_types(self, args, subs, map);
 
-        tl_monotype_array args_mono = {.alloc = self->alloc};
-        array_reserve(args_mono, args.size);
-        forall(i, args) {
-            tl_monotype const *mono = tl_type_registry_parse(self, args.v[i], subs, map);
-            array_push(args_mono, mono);
-        }
-
-        tl_monotype_sized args_mono_ = array_sized(args_mono);
         if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
-            return tl_type_registry_instantiate_union(self, args_mono_);
+            return tl_type_registry_instantiate_union(self, args_mono);
         } else {
             // args includes fresh type variables, e.g. for polymorphic types, or the nfa is a type
             // literal, e.g. Point(Int).
             return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
-                                                     args_mono_);
+                                                     args_mono);
         }
     }
 
@@ -209,13 +214,8 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         // arrow types are always ([{ a }]) -> b
         ast_node const *tup = node->arrow.left;
         assert(ast_node_is_tuple(tup));
-        ast_node_sized    tuple = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
-        tl_monotype_array arr   = {.alloc = self->alloc};
-        forall(i, tuple) {
-            tl_monotype const *t = tl_type_registry_parse(self, tuple.v[i], subs, map);
-            array_push(arr, t);
-        }
-        tl_monotype_sized arr_sized = array_sized(arr);
+        ast_node_sized    tuple     = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
+        tl_monotype_sized arr_sized = parse_types(self, tuple, subs, map);
         tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
         tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, subs, map);
         return tl_monotype_create_arrow(self->alloc, left, right);

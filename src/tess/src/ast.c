@@ -1336,6 +1336,9 @@ int ast_node_is_std_application(ast_node const *self) {
 ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {
     return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
 }
+ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *node) {
+    return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
+}
 
 //
 

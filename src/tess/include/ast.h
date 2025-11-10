@@ -282,6 +282,7 @@ int            ast_node_is_union_def(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
+ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *);
 
 // -- hashmap: str => ast_node* --
 
