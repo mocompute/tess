@@ -681,6 +681,7 @@ static void ensure_tv(tl_infer *self, str const *name, tl_polytype **type) {
 }
 
 static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
+static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static str          specialize_fun(tl_infer *, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, ast_node_sized, ast_node *);
 static tl_polytype *make_arrow_with(tl_infer *, ast_node *, tl_polytype *);
@@ -1480,17 +1481,21 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // Instantiate and save type since it will never be generic.
         tl_monotype *inst =
           tl_polytype_instantiate(self->arena, node->lambda_application.lambda->type, self->subs);
-        node->lambda_application.lambda->type = tl_polytype_absorb_mono(self->arena, inst);
+        ast_node_type_set(node->lambda_application.lambda, tl_polytype_absorb_mono(self->arena, inst));
 
         // constrain arrow types
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         tl_polytype       *app  = make_arrow(self, iter.nodes, node);
         if (!app) return 1;
-        tl_polytype wrap     = tl_polytype_wrap(inst);
-        str         inst_str = tl_monotype_to_string(self->transient, inst);
-        str         app_str  = tl_polytype_to_string(self->transient, app);
-        log(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
-            str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+
+        {
+            str inst_str = tl_monotype_to_string(self->transient, inst);
+            str app_str  = tl_polytype_to_string(self->transient, app);
+            log(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
+                str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+        }
+
+        tl_polytype wrap = tl_polytype_wrap(inst);
         if (constrain(self, ctx, &wrap, app, node)) return 1;
 
         // constain node type to the lambda body type
@@ -1501,14 +1506,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_lambda_function: {
+        ensure_tv(self, null, &node->type);
 
-        if (!node->type) {
-            ast_arguments_iter iter  = ast_node_arguments_iter(node);
-            tl_polytype       *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
-            if (!arrow) return 1;
-            tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
-            ast_node_type_set(node, arrow);
-        }
+        ast_arguments_iter iter  = ast_node_arguments_iter(node);
+        tl_polytype       *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
+        if (!arrow) return 1;
+        tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
+        if (constrain(self, ctx, node->type, arrow, node)) return 1;
 
     } break;
 
@@ -1720,9 +1724,9 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 }
 
 static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
-                          tl_monotype *type) {
+                          tl_monotype *callsite) {
 
-    if (!tl_monotype_is_arrow(type)) return 0;
+    if (!tl_monotype_is_arrow(callsite)) return 0;
 
     str      *existing;
     str       arg_name = ast_node_str(arg);
@@ -1741,11 +1745,12 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
         // occurs.
         // tl_monotype_substitute(self->arena, type, self->subs, null);
 
-        str inst_name = specialize_fun(self, top, type);
+        str inst_name = specialize_fun(self, top, callsite);
         str_map_set(&ctx->specials, arg_name, &inst_name);
         ast_node *special = toplevel_get(self, inst_name);
-        ast_node_name_replace(arg, inst_name);
         if (post_specialize(self, traverse_ctx, special)) return 1;
+
+        ast_node_name_replace(arg, inst_name);
     }
     return 0;
 }
@@ -1812,48 +1817,58 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
     // check for let_in nodes
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
-    // or else the remainder of this function handles nfas
-    if (!ast_node_is_nfa(node)) return 0;
 
-    str name = ast_node_str(node->named_application.name);
-    log(self, "specialize_applications_cb: nfa '%.*s'", str_ilen(node->named_application.name->symbol.name),
-        str_buf(&node->named_application.name->symbol.name));
+    int is_anon = ast_node_is_lambda_application(node);
 
-    // do not process intrinsic calls or their arguments
-    if (is_intrinsic(name)) return 0;
+    // or else the remainder of this function handles nfas and anon lambda applications
+    if (!ast_node_is_nfa(node) && !ast_node_is_lambda_application(node)) return 0;
 
-    tl_polytype *type = tl_type_env_lookup(self->env, name);
-    if (!type) return 0; // mutual recursion or variable holding function pointer
+    tl_polytype *callsite = null;
+    if (!is_anon) {
+        str name = ast_node_str(node->named_application.name);
 
-    // divert if this is a type constructor
-    if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
+        log(self, "specialize_applications_cb: nfa '%.*s'",
+            str_ilen(node->named_application.name->symbol.name),
+            str_buf(&node->named_application.name->symbol.name));
 
-    // instantiate generic function type being applied
-    ast_node *fun_node = toplevel_get(self, name);
-    if (!fun_node) return 0; // too early
+        // do not process intrinsic calls or their arguments
+        if (is_intrinsic(name)) return 0;
 
-    // Important: use _with variant to copy free variables info to the arrow, which is added to the
-    // environment further down.
-    tl_polytype *app = make_arrow_with(self, node, type);
-    if (!app) return 1;
+        // may be too early, e.g. for pointers
+        if (!toplevel_get(self, name)) return 0; // to early
 
-    {
-        str app_str = tl_polytype_to_string(self->transient, app);
-        log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
-            str_ilen(app_str), str_buf(&app_str));
-    }
+        tl_polytype *type = tl_type_env_lookup(self->env, name);
+        if (!type) return 0; // mutual recursion or variable holding function pointer
 
-    // try to specialize
-    int res = specialize_one(self, ctx, traverse_ctx, node->named_application.name, app->type);
+        // divert if this is a type constructor
+        if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
 
-    if (1 == res) return 1;
-    if (0 == res) {
+        // Important: use _with variant to copy free variables info to the arrow, which is added to the
+        // environment further down.
+        callsite = make_arrow_with(self, node, type);
+        if (!callsite) return 1;
+
+        if (1) {
+            str app_str = tl_polytype_to_string(self->transient, callsite);
+            log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
+                str_ilen(app_str), str_buf(&app_str));
+        }
+
+        // try to specialize
+        if (specialize_one(self, ctx, traverse_ctx, node->named_application.name, callsite->type)) return 1;
         // and recurse over any arguments which are toplevel functions
-        if (specialize_arguments(self, ctx, traverse_ctx, node, app->type)) return 1;
+        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) return 1;
 
         // remove name from specials after recursing through arguments, so it doesn't shadow subsequent uses
         // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
         str_map_erase(ctx->specials, name);
+
+    } else {
+        callsite = make_arrow(self, ast_node_sized_from_ast_array(node), node);
+
+        concretize_params(self, node, callsite->type);
+        if (post_specialize(self, traverse_ctx, node->lambda_application.lambda)) return 1;
+        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) return 1;
     }
 
     return 0;
@@ -2104,12 +2119,47 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
 static void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
 
-static str  specialize_fun(tl_infer *self, ast_node *node, tl_monotype *arrow) {
+static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite) {
+    if (ast_node_is_symbol(node)) return;
+
+    ast_node      *body   = null;
+    ast_node_sized params = {0};
+    if (ast_node_is_let(node)) {
+        body   = node->let.body;
+        params = ast_node_sized_from_ast_array(node);
+    } else if (ast_node_is_let_in_lambda(node)) {
+        body   = node->let_in.value->lambda_function.body;
+        params = ast_node_sized_from_ast_array(node->let_in.value);
+    } else if (ast_node_is_lambda_application(node)) {
+        body   = node->lambda_application.lambda->lambda_function.body;
+        params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
+    } else {
+        fatal("logic error");
+    }
+
+    // assign concrete types to parameters based on callsite arguments
+
+    assert(tl_arrow == callsite->tag);
+    assert(callsite->list.xs.size == 2);
+    assert(tl_tuple == callsite->list.xs.v[0]->tag);
+    tl_monotype_sized callsite_args = callsite->list.xs.v[0]->list.xs;
+    assert(callsite_args.size == params.size);
+
+    forall(i, params) {
+        ast_node *param = params.v[i];
+        param->type     = tl_polytype_clone_mono(self->arena, callsite_args.v[i]);
+    }
+
+    tl_monotype *inst_result = tl_monotype_sized_last(callsite->list.xs);
+    body->type               = tl_polytype_clone_mono(self->arena, inst_result);
+}
+
+static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite) {
     str name = toplevel_name(node);
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(callsite)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
 
@@ -2122,29 +2172,23 @@ static str  specialize_fun(tl_infer *self, ast_node *node, tl_monotype *arrow) {
     ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
 
     // recalculate free variables, because symbol names have been renamed
-    tl_polytype wrap                      = tl_polytype_wrap(arrow);
-    ((tl_monotype *)arrow)->list.fvs.size = 0; // const cast
+    tl_polytype wrap                         = tl_polytype_wrap(callsite);
+    ((tl_monotype *)callsite)->list.fvs.size = 0; // const cast
     add_free_variables_to_arrow(self, generic_node, &wrap);
 
     // add to type environment
-    if (!tl_monotype_is_concrete(arrow)) {
+    if (!tl_monotype_is_concrete(callsite)) {
         // Note: functions like c_malloc etc will not have concrete types but still need to exist in the
         // environment.
-        str arrow_str = tl_monotype_to_string(self->transient, arrow);
+        str arrow_str = tl_monotype_to_string(self->transient, callsite);
         log(self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&name_inst),
-             str_cstr(&arrow_str));
+            str_cstr(&arrow_str));
     }
-    tl_type_env_insert_mono(self->env, name_inst, arrow);
+    tl_type_env_insert_mono(self->env, name_inst, callsite);
 
-    ast_node      *body   = null;
-    ast_node_sized params = {0};
     if (ast_node_is_let(generic_node)) {
-        body   = generic_node->let.body;
-        params = ast_node_sized_from_ast_array(generic_node);
         ast_node_name_replace(generic_node->let.name, name_inst);
     } else if (ast_node_is_let_in_lambda(generic_node)) {
-        body   = generic_node->let_in.value->lambda_function.body;
-        params = ast_node_sized_from_ast_array(generic_node->let_in.value);
         ast_node_name_replace(generic_node->let_in.name, name_inst);
     } else if (ast_node_is_symbol(generic_node)) {
         // no body
@@ -2153,34 +2197,11 @@ static str  specialize_fun(tl_infer *self, ast_node *node, tl_monotype *arrow) {
         fatal("logic error");
     }
 
-    if (body) {
-        // assign concrete types to parameters based on callsite arguments
-        assert(tl_arrow == arrow->tag);
+    concretize_params(self, generic_node, callsite);
 
-        assert(arrow->list.xs.size == 2);
-        assert(tl_tuple == arrow->list.xs.v[0]->tag);
-        tl_monotype_sized callsite_args = arrow->list.xs.v[0]->list.xs;
-        assert(callsite_args.size == params.size);
-
-        forall(i, params) {
-            ast_node *param = params.v[i];
-            param->type     = tl_polytype_clone_mono(self->arena, callsite_args.v[i]);
-        }
-
-        tl_monotype *inst_result = tl_monotype_sized_last(arrow->list.xs);
-        body->type               = tl_polytype_clone_mono(self->arena, inst_result);
-
-        // add to toplevel
-        log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
-        toplevel_add(self, name_inst, generic_node);
-    }
-
-    else {
-        // even no-body polymorphic toplevels (like intrinsics, which are represented by symbols as forward
-        // decls), need to be added to toplevel with their specialized names.
-        log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
-        toplevel_add(self, name_inst, generic_node);
-    }
+    // add to toplevel
+    log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
+    toplevel_add(self, name_inst, generic_node);
 
     return name_inst;
 }
