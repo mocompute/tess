@@ -1217,8 +1217,10 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
     if (ast_node_is_symbol(name) && !str_is_empty(module)) {
         ast_node_name_replace(name, str_cat_3(self->ast_arena, module, S("_"), name->symbol.name));
         name->symbol.is_mangled = 1;
-        fprintf(stderr, "parser: mangle '%s' to '%s'\n", str_cstr(&name->symbol.original),
-                str_cstr(&name->symbol.name));
+        if (0) {
+            fprintf(stderr, "parser: mangle '%s' to '%s'\n", str_cstr(&name->symbol.original),
+                    str_cstr(&name->symbol.name));
+        }
     }
 }
 
