@@ -42,7 +42,7 @@ void *array_push_impl(array_t *h, void *restrict ptr, u32 width, u16 align, void
         ptr         = array_reserve_impl(h, ptr, new_cap, width, align);
         h->capacity = new_cap;
     }
-    memcpy(&ptr[h->size++ * alloc_align(width, align)], data, width);
+    memcpy(&((byte *)ptr)[h->size++ * alloc_align(width, align)], data, width);
     return ptr;
 }
 
@@ -52,7 +52,7 @@ int array_contains_impl(array_t *h, void *restrict ptr, u32 width, u16 align, vo
     u32 actual_align = alloc_align(width, align);
 
     for (u32 i = 0; i < h->size; ++i) {
-        if (0 == memcmp(&ptr[i * actual_align], data, width)) return 1;
+        if (0 == memcmp(&((byte *)ptr)[i * actual_align], data, width)) return 1;
     }
     return 0;
 }
@@ -62,7 +62,7 @@ void *array_push_many_impl(array_t *h, void *restrict ptr, u32 width, u16 align,
     if (!data || !num) return ptr;
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
-    memcpy(&ptr[h->size * alloc_align(width, align)], data, num * width);
+    memcpy(&((byte *)ptr)[h->size * alloc_align(width, align)], data, num * width);
     h->size += num;
     return ptr;
 }
@@ -70,7 +70,7 @@ void *array_push_many_impl(array_t *h, void *restrict ptr, u32 width, u16 align,
 void *array_move_impl(array_t *h, void *ptr, u32 width, u16 align, void *data, u32 num) {
     ptr = array_reserve_impl(h, ptr, h->size + num, width, align);
 
-    memmove(&ptr[h->size * alloc_align(width, align)], data, num * width);
+    memmove(&((byte *)ptr)[h->size * alloc_align(width, align)], data, num * width);
     h->size += num;
     return ptr;
 }
@@ -83,8 +83,9 @@ void *array_insert_impl(array_t *h, void *restrict ptr, u32 index, u32 width, u1
 
     size_t aligned = alloc_align(width, align);
 
-    memmove(&ptr[(index + num) * aligned], &ptr[index * aligned], (h->size - index) * aligned);
-    memcpy(&ptr[index * aligned], data, num * width);
+    memmove(&((byte *)ptr)[(index + num) * aligned], &((byte *)ptr)[index * aligned],
+            (h->size - index) * aligned);
+    memcpy(&((byte *)ptr)[index * aligned], data, num * width);
 
     h->size += num;
     return ptr;
@@ -95,7 +96,8 @@ void array_erase_impl(array_t *h, void *ptr, u32 index, u32 width, u16 align) {
 
     size_t aligned = alloc_align(width, align);
 
-    memmove(&ptr[index * aligned], &ptr[(index + 1) * aligned], (h->size - index - 1) * aligned);
+    memmove(&((byte *)ptr)[index * aligned], &((byte *)ptr)[(index + 1) * aligned],
+            (h->size - index - 1) * aligned);
 
     h->size--;
 }
@@ -105,7 +107,8 @@ void array_sized_erase_impl(array_sized_t *h, void *ptr, u32 index, u32 width, u
 
     size_t aligned = alloc_align(width, align);
 
-    memmove(&ptr[index * aligned], &ptr[(index + 1) * aligned], (h->size - index - 1) * aligned);
+    memmove(&((byte *)ptr)[index * aligned], &((byte *)ptr)[(index + 1) * aligned],
+            (h->size - index - 1) * aligned);
 
     h->size--;
 }
@@ -137,12 +140,13 @@ void *array_insert_sorted_impl(array_t *h, void *restrict ptr, u32 width, u16 al
 
     u32 index = 0;
     for (; index < h->size; ++index)
-        if (cmp(data, &ptr[index * aligned]) >= 0) break;
+        if (cmp(data, &((byte *)ptr)[index * aligned]) >= 0) break;
 
     if (index < h->size)
-        memmove(&ptr[(index + 1) * aligned], &ptr[index * aligned], (h->size - index) * aligned);
+        memmove(&((byte *)ptr)[(index + 1) * aligned], &((byte *)ptr)[index * aligned],
+                (h->size - index) * aligned);
 
-    memcpy(&ptr[index * aligned], data, width);
+    memcpy(&((byte *)ptr)[index * aligned], data, width);
     h->size++;
 
     return ptr;
@@ -156,7 +160,7 @@ void *array_set_insert_impl(array_t *h, void *restrict ptr, u32 width, u16 align
 
     for (u32 i = 0; i < h->size; ++i) {
         u32 offset = i * aligned;
-        if (0 == memcmp(&ptr[offset], data, width)) return ptr;
+        if (0 == memcmp(&((byte *)ptr)[offset], data, width)) return ptr;
     }
 
     return array_push_impl(h, ptr, width, align, data);
@@ -173,9 +177,9 @@ void *array_set_difference_impl(array_t *res, void *restrict res_ptr, array_t *l
     // TODO optimize nested loop
 
     for (u32 i = 0; i < lhs->size; i++) {
-        void *candidate = &lhs_ptr[i * aligned];
+        void *candidate = &((byte *)lhs_ptr)[i * aligned];
         for (u32 j = 0; j < rhs->size; j++) {
-            void *exists = &rhs_ptr[j * aligned];
+            void *exists = &((byte *)rhs_ptr)[j * aligned];
             if (0 == memcmp(exists, candidate, width)) goto exists;
         }
 
@@ -199,7 +203,7 @@ void *array_set_union_impl(array_t *res, void *restrict res_ptr, array_t *lhs, v
 
     // TODO optimize nested loop
     for (u32 i = 0; i < rhs->size; ++i) {
-        res_ptr = array_set_insert_impl(res, res_ptr, width, align, &rhs_ptr[i * aligned]);
+        res_ptr = array_set_insert_impl(res, res_ptr, width, align, &((byte *)rhs_ptr)[i * aligned]);
     }
 
     return res_ptr;

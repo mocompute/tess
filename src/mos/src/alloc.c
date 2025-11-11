@@ -554,9 +554,12 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
     leak_detector *self = (leak_detector *)alloc;
     leak_detector_reserve_one(self);
 
+    struct leak_allocation leak_record = {
+      .realloc_ptr = p, .size = sz, .file = file, .line = line, .status = leak_action_realloc};
+
     void *ptr                = realloc(p, sz);
-    self->data[self->size++] = (struct leak_allocation){
-      .ptr = ptr, .realloc_ptr = p, .size = sz, .file = file, .line = line, .status = leak_action_realloc};
+    leak_record.ptr          = ptr;
+    self->data[self->size++] = leak_record;
     return ptr;
 }
 

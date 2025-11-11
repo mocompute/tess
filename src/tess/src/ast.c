@@ -930,8 +930,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         out     = str_cat(alloc, out, S(" in "));
         if (node->let_in.body) out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
         return out;
-
-    } break;
+    }
 
     case ast_named_function_application: {
         str_build b = str_build_init(alloc, 64);
@@ -943,13 +942,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         }
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
-    } break;
+    }
 
     case ast_arrow: {
         str out = str_cat_3(alloc, v2_ast_node_to_string(alloc, node->arrow.left), S(" -> "),
                             v2_ast_node_to_string(alloc, node->arrow.right));
         return out;
-    } break;
+    }
 
     case ast_lambda_function: {
         str out = str_copy(alloc, S("fun"));
@@ -962,8 +961,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         out = str_cat(alloc, out, S(" -> "));
         out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->lambda_function.body));
         return out;
-
-    } break;
+    }
 
     case ast_type_alias: {
         str_build b = str_build_init(alloc, 64);
@@ -973,14 +971,14 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.target));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
-    } break;
+    }
 
     case ast_user_type_definition: {
         str out = str_copy(alloc, S("[user_type_definition: "));
         str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
         str_dcat(alloc, &out, S("]"));
         return out;
-    } break;
+    }
 
     case ast_ellipsis:     return str_copy(alloc, S("..."));
 
@@ -999,8 +997,6 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     }
 
-    break;
-
     case ast_unary_op:
         return str_cat(alloc, v2_ast_node_to_string(alloc, node->unary_op.op),
                        v2_ast_node_to_string(alloc, node->unary_op.operand));
@@ -1009,10 +1005,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" = "),
                          v2_ast_node_to_string(alloc, node->assignment.value));
 
-        break;
-
     case ast_eof:
-
     case ast_tuple: {
         str_build b = str_build_init(alloc, 64);
         str_build_cat(&b, S("(tuple "));
@@ -1022,11 +1015,12 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         }
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
-
-    } break;
+    }
 
     case ast_lambda_function_application: return str_copy(alloc, S("[not implemented]"));
     }
+
+    fatal("unreachable");
 }
 
 str_sized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {

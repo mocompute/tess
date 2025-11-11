@@ -128,7 +128,7 @@ static void          unmangle_name(parser *, ast_node *);
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
 static int           too_many_arguments(parser *);
-static void log(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+static void dbg(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // -- allocation and deallocation --
 
@@ -330,7 +330,7 @@ static int is_eof(parser *p) {
 static int eat_comments(parser *p) {
     while (1) {
         if (tokenizer_next(p->tokenizer, &p->token, &p->tokenizer_error)) {
-            log(p, "tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
+            dbg(p, "tokenizer error: %s", tl_error_tag_to_string(p->tokenizer_error.tag));
             p->error.file = p->tokenizer_error.file;
             p->error.line = p->tokenizer_error.line;
             p->error.col  = p->tokenizer_error.col;
@@ -370,7 +370,7 @@ static int next_token(parser *p) {
 
         if (0) {
             char *str = token_to_string(p->transient, &p->token);
-            log(p, "next_token: %s", str);
+            dbg(p, "next_token: %s", str);
             alloc_free(p->transient, str);
         }
 
@@ -1535,7 +1535,7 @@ static int toplevel_hash(parser *self) {
     if (words.size >= 2) {
         str command  = words.v[0];
         str argument = words.v[1];
-        log(self, "hash: %s %s", str_cstr(&command), str_cstr(&argument));
+        dbg(self, "hash: %s %s", str_cstr(&command), str_cstr(&argument));
         if (str_eq(command, S("unity_file"))) {
             self->skip_module   = 0;
             self->expect_module = 1;
@@ -1840,7 +1840,7 @@ int parser_parse_all(parser *p, ast_node_array *out) {
 
         parser_result(p, &node);
         str str = v2_ast_node_to_string(p->transient, node);
-        log(p, "parse_all: parsed node %s", str_cstr(&str));
+        dbg(p, "parse_all: parsed node %s", str_cstr(&str));
 
         array_push(*out, node);
     }
@@ -1853,9 +1853,9 @@ int parser_parse_all(parser *p, ast_node_array *out) {
 int parser_parse_all_verbose(parser *p, ast_node_array *out) {
     p->verbose = 1;
 
-    log(p, "begin parse");
+    dbg(p, "begin parse");
     int res = parser_parse_all(p, out);
-    log(p, "end parse status %i", res);
+    dbg(p, "end parse status %i", res);
 
     p->verbose = 0;
     return res;
@@ -1886,7 +1886,7 @@ static int too_many_arguments(parser *self) {
     return 1;
 }
 
-void log(struct parser *self, char const *restrict fmt, ...) {
+void dbg(struct parser *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;

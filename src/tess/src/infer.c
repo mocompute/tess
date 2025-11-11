@@ -74,7 +74,7 @@ static void      toplevel_add(tl_infer *, str, ast_node *);
 static ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
 static void      toplevel_del(tl_infer *self, str name);
 
-static void      log(tl_infer const *self, char const *restrict fmt, ...);
+static void      dbg(tl_infer const *self, char const *restrict fmt, ...);
 static void      log_toplevels(tl_infer const *);
 static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
@@ -356,7 +356,7 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
             str_map_set_ptr(map, arg_name, target);
             if (1) {
                 str target_str = tl_monotype_to_string(self->transient, target);
-                log(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
+                dbg(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
             }
         }
     }
@@ -426,7 +426,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             tl_polytype_generalize(poly, self->env, self->subs);
             {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
-                log(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
+                dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
             tl_type_registry_type_alias_insert(self->registry, name, poly);
         }
@@ -772,7 +772,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         // do not process recursive calls
         if (str_hset_contains(ctx->call_chain, name)) {
-            log(self, "detected recursive call to '%s'", str_cstr(&name));
+            dbg(self, "detected recursive call to '%s'", str_cstr(&name));
             return 0;
         }
 
@@ -1418,7 +1418,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 tl_polytype *app      = make_arrow(self, iter.nodes, null);
                 if (!app) return 1;
                 str app_str = tl_polytype_to_string(self->transient, app);
-                log(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
                     str_cstr(&inst_str), str_cstr(&app_str));
             }
 
@@ -1466,7 +1466,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype       *app      = make_arrow(self, iter.nodes, node);
             if (!app) return 1;
             str app_str = tl_polytype_to_string(self->transient, app);
-            log(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
+            dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
                 str_cstr(&app_str));
             tl_polytype wrap = tl_polytype_wrap(inst);
 
@@ -1491,7 +1491,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         {
             str inst_str = tl_monotype_to_string(self->transient, inst);
             str app_str  = tl_polytype_to_string(self->transient, app);
-            log(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
+            dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
                 str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
         }
 
@@ -1827,7 +1827,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
 
-        log(self, "specialize_applications_cb: nfa '%.*s'",
+        dbg(self, "specialize_applications_cb: nfa '%.*s'",
             str_ilen(node->named_application.name->symbol.name),
             str_buf(&node->named_application.name->symbol.name));
 
@@ -1850,7 +1850,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
         if (1) {
             str app_str = tl_polytype_to_string(self->transient, callsite);
-            log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
+            dbg(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
                 str_ilen(app_str), str_buf(&app_str));
         }
 
@@ -1931,7 +1931,7 @@ static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
 
     str newvar = next_variable_name(self);
     ast_node_name_replace(node->let_in.name, newvar);
-    log(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
+    dbg(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
         str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
         str_buf(&node->let_in.name->symbol.name));
 
@@ -1987,7 +1987,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         str *found;
         if ((found = str_map_get(*lex, node->symbol.name))) {
             ast_node_name_replace(node, *found);
-            log(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
+            dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
         } else {
             // a free variable
@@ -2181,7 +2181,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
         // Note: functions like c_malloc etc will not have concrete types but still need to exist in the
         // environment.
         str arrow_str = tl_monotype_to_string(self->transient, callsite);
-        log(self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&name_inst),
+        dbg(self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&name_inst),
             str_cstr(&arrow_str));
     }
     tl_type_env_insert_mono(self->env, name_inst, callsite);
@@ -2200,7 +2200,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
     concretize_params(self, generic_node, callsite);
 
     // add to toplevel
-    log(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
+    dbg(self, "toplevel_add: %.*s", str_ilen(name_inst), str_buf(&name_inst));
     toplevel_add(self, name_inst, generic_node);
 
     return name_inst;
@@ -2234,7 +2234,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
 
         {
             str str = tl_monotype_to_string(self->transient, arrow);
-            log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
+            dbg(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
         return tl_polytype_absorb_mono(self->arena, arrow);
@@ -2263,7 +2263,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
 
         {
             str str = tl_monotype_to_string(self->transient, out);
-            log(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
+            dbg(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
         }
 
@@ -2346,9 +2346,9 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
     traverse_ctx_destroy(self->transient, &traverse_ctx);
 
     array_shrink(ctx.fvs);
-    log(self, "-- free variables: %u --", ctx.fvs.size);
+    dbg(self, "-- free variables: %u --", ctx.fvs.size);
     forall(i, ctx.fvs) {
-        log(self, "%.*s", str_ilen(ctx.fvs.v[i]), str_buf(&ctx.fvs.v[i]));
+        dbg(self, "%.*s", str_ilen(ctx.fvs.v[i]), str_buf(&ctx.fvs.v[i]));
     }
 
     // find any sublists with free variables and bring them to the top
@@ -2414,7 +2414,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         return 0;
     } else if (ast_node_is_let_in(node)) {
         if (infer_one(self, infer_target)) {
-            log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+            dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
                 str_ilen(orig_name), str_buf(&orig_name));
         }
 
@@ -2426,7 +2426,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         fatal("logic error");
     }
 
-    log(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
+    dbg(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
     process_annotation(self, name_node, null);
@@ -2444,7 +2444,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // run inference
     if (infer_one(self, infer_target)) {
-        log(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+        dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
         return 1;
     }
@@ -2471,7 +2471,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 
-    log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
+    dbg(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
     return 0;
@@ -2559,7 +2559,7 @@ void remove_generic_toplevels(tl_infer *self) {
     }
 
     forall(i, names) {
-        log(self, "remove_generic_toplevels: removing '%s'", str_cstr(&names.v[i]));
+        dbg(self, "remove_generic_toplevels: removing '%s'", str_cstr(&names.v[i]));
         toplevel_del(self, names.v[i]);
     }
     array_free(names);
@@ -2584,7 +2584,7 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     }
 
     forall(i, remove) {
-        log(self, "tree_shake_toplevels: removing '%s'", str_cstr(&remove.v[i]));
+        dbg(self, "tree_shake_toplevels: removing '%s'", str_cstr(&remove.v[i]));
         toplevel_del(self, remove.v[i]);
     }
     array_free(remove);
@@ -2775,7 +2775,7 @@ static void update_specialized_types(tl_infer *self) {
 }
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
-    log(self, "-- start inference --");
+    dbg(self, "-- start inference --");
 
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
     // preserving lexical scope. This simplifies later passes by removing name collision concerns.
@@ -2795,7 +2795,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 
-    log(self, "-- toplevels");
+    dbg(self, "-- toplevels");
     log_toplevels(self);
 
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
@@ -2817,15 +2817,15 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     apply_subs_to_ast(self);
     arena_reset(self->transient);
 
-    log(self, "-- inference complete --");
-    log(self, "");
-    log(self, "-- toplevels");
+    dbg(self, "-- inference complete --");
+    dbg(self, "");
+    dbg(self, "-- toplevels");
     log_toplevels(self);
     if (0) {
-        log(self, "-- subs");
+        dbg(self, "-- subs");
         log_subs(self);
     }
-    log(self, "-- env");
+    dbg(self, "-- env");
     log_env(self);
     arena_reset(self->transient);
 
@@ -2842,7 +2842,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // Final phase: communiate type information top-down by following applications. This contrasts with the
     // bottom-up inference we just completed. At this point the program is well-typed and we are setting up
     // for the transpiler.
-    log(self, "-- specialize phase");
+    dbg(self, "-- specialize phase");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
@@ -2861,7 +2861,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
                 ast_node *name = toplevel_name_node(node);
                 if (!name->symbol.annotation_type) {
                     str fun_name = ast_node_str(name);
-                    log(self, "skipping '%s' due to lack of annotation", str_cstr(&fun_name));
+                    dbg(self, "skipping '%s' due to lack of annotation", str_cstr(&fun_name));
                     continue;
                 }
             }
@@ -2901,13 +2901,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     if (0) {
-        log(self, "-- final subs");
+        dbg(self, "-- final subs");
         log_subs(self);
     }
-    log(self, "-- final env --");
+    dbg(self, "-- final env --");
     log_env(self);
     arena_reset(self->transient);
-    log(self, "-- final toplevels");
+    dbg(self, "-- final toplevels");
     log_toplevels(self);
     arena_reset(self->transient);
 
@@ -2955,7 +2955,7 @@ void tl_infer_report_errors(tl_infer *self) {
 
 //
 
-static void log(tl_infer const *self, char const *restrict fmt, ...) {
+static void dbg(tl_infer const *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
 
     int  spaces = self->indent_level * 2;
@@ -3067,14 +3067,14 @@ static void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
     str node_str  = v2_ast_node_to_string(self->transient, node);
-    log(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
+    dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
 
 static void log_type_error(tl_infer *self, tl_polytype *left, tl_polytype *right) {
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
-    log(self, "error: constraints are not compatible:  %s versus %s", str_cstr(&left_str),
+    dbg(self, "error: constraints are not compatible:  %s versus %s", str_cstr(&left_str),
         str_cstr(&right_str));
 }
 static void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *right) {

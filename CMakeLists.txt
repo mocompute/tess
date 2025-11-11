@@ -57,7 +57,7 @@ else()
     -Wunused
 
     # allow gnu extensions
-    -Wno-gnu-alignof-expression
+    # -Wno-gnu-alignof-expression
 
     # FIXME
     # -Wno-unused-function

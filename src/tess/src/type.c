@@ -11,7 +11,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-static void                      log(tl_type_env *, char const *restrict fmt, ...);
+static void                      dbg(tl_type_env *, char const *restrict fmt, ...);
 static void                      make_unary_tc(tl_type_registry *, str);
 static void                      make_variable_arity_tc(tl_type_registry *, str);
 static tl_type_constructor_def  *make_tc_def(tl_type_registry *, str);
@@ -337,7 +337,7 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
     str type_str = tl_polytype_to_string(self->transient, type);
-    log(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+    dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 
     tl_polytype *clone = tl_polytype_clone(self->alloc, type);
@@ -347,7 +347,7 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
     tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
     str          type_str = tl_polytype_to_string(self->transient, clone);
-    log(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+    dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
     str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
 }
@@ -776,6 +776,7 @@ int tl_monotype_is_concrete(tl_monotype *self) {
         return 1;
     }
     }
+    fatal("unreachable");
 }
 
 int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
@@ -1275,6 +1276,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         if (cb) cb(user, left, right);
         return 1;
     }
+    fatal("unreachable");
 }
 
 int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -1302,6 +1304,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
         if (cb) cb(user, left, right);
         return 1;
     }
+    fatal("unreachable");
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -1398,6 +1401,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         break;
     }
+    fatal("unreachable");
 }
 
 int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
@@ -1787,7 +1791,7 @@ tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized
     return (tl_monotype_sized)sized_all(arr);
 }
 
-static void log(tl_type_env *self, char const *restrict fmt, ...) {
+static void dbg(tl_type_env *self, char const *restrict fmt, ...) {
     if (!self->verbose) return;
 
     char buf[256];

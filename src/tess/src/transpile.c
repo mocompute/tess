@@ -1279,6 +1279,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_hash_command:
     case ast_type_alias:   fatal("logic error");
     }
+    fatal("unreachable");
 }
 
 static void build_arrow_to_c(transpile *, str_build *b, tl_monotype *type, str name);
