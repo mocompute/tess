@@ -1170,7 +1170,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype *struct_type = null;
 
             // handle -> vs . access
-            if (0 == strcmp("->", op)) {
+            if (0 == strcmp("->", op) && tl_polytype_is_concrete(left->type)) {
+                // Important: must check if type is concrete before requiring the type to be a pointer
                 if (!tl_monotype_has_ptr(left->type->type)) {
                     array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
                     return 1;
@@ -2941,9 +2942,13 @@ void tl_infer_report_errors(tl_infer *self) {
 
             if (node) {
                 str node_str = v2_ast_node_to_string(self->transient, node);
-                fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
-                        tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
-                        str_ilen(node_str), str_buf(&node_str));
+                if (node->file && *node->file)
+                    fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
+                            tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
+                            str_ilen(node_str), str_buf(&node_str));
+                else
+                    fprintf(stderr, "%s: %.*s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
+                            str_buf(&message), str_ilen(node_str), str_buf(&node_str));
             }
 
             else
