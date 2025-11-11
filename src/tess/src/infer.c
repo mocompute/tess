@@ -1689,7 +1689,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 }
 
 static ast_node *get_infer_target(ast_node *node) {
-    if (ast_node_is_let(node)) {
+    if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
         return node;
     }
 
@@ -1709,6 +1709,16 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
                             tl_monotype *arrow);
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
 
+static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special) {
+    // Do this after creating a specialised function
+    ast_node *infer_target = get_infer_target(special);
+    if (infer_target) {
+        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
+        if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
+    }
+    return 0;
+}
+
 static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
                           tl_monotype *type) {
 
@@ -1725,15 +1735,17 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
         ast_node_name_replace(arg, inst_name);
         return -1;
     } else {
+
+        // Important: resolve type variables before attempting to specialize.
+        // FIXME: disable this even though it was marked "important" because no regression test failure
+        // occurs.
+        // tl_monotype_substitute(self->arena, type, self->subs, null);
+
         str inst_name = specialize_fun(self, top, type);
         str_map_set(&ctx->specials, arg_name, &inst_name);
         ast_node *special = toplevel_get(self, inst_name);
         ast_node_name_replace(arg, inst_name);
-        ast_node *infer_target = get_infer_target(special);
-        if (infer_target) {
-            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
-        }
+        if (post_specialize(self, traverse_ctx, special)) return 1;
     }
     return 0;
 }
@@ -1794,12 +1806,11 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     tl_polytype *app = make_arrow_with(self, iter.nodes, node, type);
     if (!app) return 1;
 
-    // Important: resolve type variables by calling polytype_substitute.
-    tl_polytype_substitute(self->arena, app, self->subs); // const cast
-
-    str app_str = tl_polytype_to_string(self->transient, app);
-    log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
-        str_ilen(app_str), str_buf(&app_str));
+    {
+        str app_str = tl_polytype_to_string(self->transient, app);
+        log(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
+            str_ilen(app_str), str_buf(&app_str));
+    }
 
     // try to specialize
     int res = specialize_one(self, ctx, traverse_ctx, node->named_application.name, app->type);
@@ -1816,11 +1827,11 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             if (!ast_node_is_symbol(arg)) goto next;
 
             // take the updated arrow type from the specialization and constrain the args again
-            assert(i < app_args.size);
             if (tl_polytype_is_scheme(arg->type))
                 arg->type = tl_polytype_absorb_mono(
                   self->arena, tl_polytype_instantiate(self->arena, arg->type, self->subs));
 
+            assert(i < app_args.size);
             if (constrain_pm(self, ctx, arg->type, app_args.v[i], arg)) return 1;
 
             str       arg_name = ast_node_str(arg);
@@ -1876,14 +1887,8 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
     } else {
         inst_name = specialize_fun(self, top, arrow);
         str_map_set(&ctx->specials, name, &inst_name);
-        ast_node *special      = toplevel_get(self, inst_name);
-
-        ast_node *infer_target = get_infer_target(special);
-        if (infer_target) {
-            if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return str_empty();
-            if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb))
-                return str_empty();
-        }
+        ast_node *special = toplevel_get(self, inst_name);
+        if (post_specialize(self, traverse_ctx, special)) return str_empty();
         return inst_name;
     }
 }
@@ -2243,7 +2248,7 @@ static tl_polytype *make_arrow_with(tl_infer *self, ast_node_sized args, ast_nod
     tl_polytype *out = make_arrow(self, args, result);
     if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
-        ((tl_monotype *)out->type)->list.fvs = type->type->list.fvs; // const cast
+        (out->type)->list.fvs = type->type->list.fvs;
     }
     return out;
 }
