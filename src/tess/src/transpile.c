@@ -1149,7 +1149,7 @@ static str generate_reassignment(transpile *self, tl_monotype *type, ast_node co
 static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // Note: handles return [expr] and break
 
-    int has_value = !!node->return_.value;
+    int has_value = !!node->return_.value && !ast_node_is_nil(node->return_.value);
     int is_break  = node->return_.is_break_statement;
 
     str value     = str_empty();
