@@ -459,13 +459,14 @@ int compile_c(state *self) {
             array_push(argv, cstr);
         }
 
+        array_push_val(argv, "-std=c11");
+        array_push_val(argv, "-Wno-format-security");
         array_push_val(argv, "-x");
         array_push_val(argv, "c");
         array_push_val(argv, "-");
 
         array_push_val(argv, null);
 
-        // char *envp[] = {null};
         child_res = execvp(cc, argv.v);
         perror("exec failed");
 
