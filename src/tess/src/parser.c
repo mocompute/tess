@@ -872,14 +872,14 @@ static int a_type_constructor(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
-    if (a_try(self, a_open_curly)) return 1;
+    if (a_try(self, a_open_round)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
-    if (0 == a_try(self, a_close_curly)) goto done;
+    if (0 == a_try(self, a_close_round)) goto done;
     if (0 == a_try(self, a_field_assignment)) array_push(args, self->result);
 
     while (1) {
-        if (0 == a_try(self, a_close_curly)) goto done;
+        if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
         if (a_try(self, a_field_assignment)) return 1;
         array_push(args, self->result);

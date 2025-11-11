@@ -33,7 +33,7 @@ push(self: T(a), x: a) -> Nil
 // -- Implementation --
 
 empty(a: Type) {
-  T { v = null, capacity = 0, size = 0 }
+  T ( v = null, capacity = 0, size = 0 )
 }
 
 free(self) { c_free(self.v) }
@@ -48,9 +48,16 @@ reserve(self: Ptr(T(a)), count: Int) {
   }
 }
 
-
 with_capacity(a: Type, count: Int) {
   width      := _type_width_aligned(a)
   p : Ptr(a) := c_malloc(count * width)
-  T { v = p, capacity = count, size = 0 }
+  T ( v = p, capacity = count, size = 0 )
+}
+
+_grow(self: Ptr(T), at_least: Int) {
+  if self->capacity >= at_least { return }
+  count := self->capacity
+  if count < at_least { count = count * 2 }
+  while count < at_least { count = count * 2 }
+  reserve(self, count)
 }
