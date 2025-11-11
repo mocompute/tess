@@ -41,15 +41,10 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     -Wunused
     -Winline
     -Wimplicit-fallthrough
+
+    -Wno-gnu-alignof-expression
+
   )
-
-  if (CMAKE_HOST_APPLE)
-    list(APPEND MOS_C_DIAGNOSTIC
-      # allow gnu extensions - flag not defined in linux configuration
-      -Wno-gnu-alignof-expression
-    )
-  endif()
-
 
 else()
 
@@ -63,17 +58,11 @@ else()
     -Wimplicit-fallthrough
     -Wunused
 
+    -Wno-gnu-alignof-expression
 
     # FIXME
     # -Wno-unused-function
   )
-
-  if (CMAKE_HOST_APPLE)
-    list(APPEND MOS_C_DIAGNOSTIC
-      # allow gnu extensions - flag not defined in linux configuration
-      -Wno-gnu-alignof-expression
-    )
-  endif()
 
 endif()
 
