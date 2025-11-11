@@ -2,7 +2,9 @@
 #import <Alloc.tl>
 #import <stdlib.tl>
 
-// The Array struct.
+// The Array struct. Conventionally, when a module primarily provides functions which operate on a single
+// struct, that struct is called `T`. This prevents redundant module-qualified struct names, like
+// `Array.Array`.
 T(a) : {
   v:            Ptr(a),
   size:         Int,
