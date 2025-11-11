@@ -875,7 +875,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_return:
         //
-        return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
+        if (!node->return_.is_break_statement)
+            return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
+        else return str_cat(alloc, S("break "), v2_ast_node_to_string(alloc, node->return_.value));
 
     case ast_while:
         //

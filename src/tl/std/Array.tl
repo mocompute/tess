@@ -26,7 +26,7 @@ reserve(self: Ptr(T(a)), count: Int) -> Nil
 with_capacity(a: Type, count: Int) -> T(a)
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: T(a), x: a) -> Nil
+push(self: Ptr(T(a)), x: a) -> Nil
 
 
 
@@ -43,9 +43,10 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 reserve(self: Ptr(T(a)), count: Int) {
   if self->capacity < count {
     // TODO: assume no failure is possible
-    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a)) // FIXME type argument
     self->v = p
   }
+  ()
 }
 
 with_capacity(a: Type, count: Int) {
@@ -54,10 +55,19 @@ with_capacity(a: Type, count: Int) {
   T ( v = p, capacity = count, size = 0 )
 }
 
-_grow(self: Ptr(T), at_least: Int) {
-  if self->capacity >= at_least { return }
+_grow(self, at_least) {
+  if self->capacity >= at_least { return () }
   count := self->capacity
-  if count < at_least { count = count * 2 }
   while count < at_least { count = count * 2 }
   reserve(self, count)
+  ()
+}
+
+_is_full(self) { self->capacity == self->size }
+
+push(self, x) {
+  if _is_full(self) { _grow(self, self->capacity + 1) }
+  self->v[self->size] = x
+  self->size = self->size + 1
+  ()
 }

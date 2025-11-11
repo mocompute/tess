@@ -12,8 +12,8 @@ main() {
   points := make_points(8)
   rects := make_rects(8)
 
-  points.v[0] = Point(0, 1)
-  points.v[1] = Point(2, 3)
+  Array.push(points.&, Point(0, 1))
+  Array.push(points.&, Point(2, 3))
 
   res := points.v[0].x
   if (points.v[0].x != 0) { res = 1 }
