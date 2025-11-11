@@ -1324,7 +1324,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ast_arguments_iter iter  = ast_node_arguments_iter(node);
         tl_polytype       *arrow = make_arrow(self, iter.nodes, node->let.body);
         if (!arrow) return 1;
-        tl_polytype_substitute(self->arena, (tl_polytype *)arrow, self->subs); // const cast
+        tl_polytype_substitute(self->arena, arrow, self->subs);
         tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
 
     } break;
@@ -1508,10 +1508,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_lambda_function: {
         ensure_tv(self, null, &node->type);
 
-        ast_arguments_iter iter  = ast_node_arguments_iter(node);
-        tl_polytype       *arrow = make_arrow(self, iter.nodes, node->lambda_function.body);
+        tl_polytype *arrow =
+          make_arrow(self, ast_node_sized_from_ast_array(node), node->lambda_function.body);
         if (!arrow) return 1;
-        tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
+        tl_polytype_generalize(arrow, self->env, self->subs);
         if (constrain(self, ctx, node->type, arrow, node)) return 1;
 
     } break;
@@ -2172,8 +2172,8 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
     ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
 
     // recalculate free variables, because symbol names have been renamed
-    tl_polytype wrap                         = tl_polytype_wrap(callsite);
-    ((tl_monotype *)callsite)->list.fvs.size = 0; // const cast
+    tl_polytype wrap        = tl_polytype_wrap(callsite);
+    callsite->list.fvs.size = 0;
     add_free_variables_to_arrow(self, generic_node, &wrap);
 
     // add to type environment
@@ -2356,11 +2356,10 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
     // add free variables to arrow type
     if (ctx.fvs.size) {
-        tl_monotype_absorb_fvs((tl_monotype *)arrow->type,
-                               (str_sized)sized_all(ctx.fvs)); // const cast
+        tl_monotype_absorb_fvs(arrow->type, (str_sized)sized_all(ctx.fvs));
 
         // sort free variables
-        tl_monotype_sort_fvs((tl_monotype *)arrow->type); // const cast
+        tl_monotype_sort_fvs(arrow->type);
     }
 }
 
@@ -2373,8 +2372,7 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
 
     // must quantify arrow types
     if (tl_monotype_is_arrow(node->symbol.annotation_type->type))
-        tl_polytype_generalize((tl_polytype *)node->symbol.annotation_type, self->env,
-                               self->subs); // const cast
+        tl_polytype_generalize(node->symbol.annotation_type, self->env, self->subs);
     tl_type_env_insert(self->env, name, node->symbol.annotation_type);
     return 0;
 }
@@ -2467,10 +2465,10 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
         if (!arrow) fatal("runtime error");
     }
-    tl_polytype_generalize((tl_polytype *)arrow, self->env, self->subs); // const cast
+    tl_polytype_generalize(arrow, self->env, self->subs);
 
     // collect free variables from infer target and add to the generic's arrow type
-    add_free_variables_to_arrow(self, infer_target, (tl_polytype *)arrow); // const cast
+    add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 
     log(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
@@ -3000,7 +2998,7 @@ static void log_env(tl_infer const *self) {
 static void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
     if (node->type) {
-        tl_polytype_substitute(self->arena, (tl_polytype *)node->type, self->subs); // const_cast
+        tl_polytype_substitute(self->arena, node->type, self->subs);
     }
 }
 
