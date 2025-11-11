@@ -17,13 +17,17 @@ T(a) : {
 empty(a: Type) -> T(a)
 
 // Deallocate array buffer.
-free(arr: T(a)) -> Nil
+free(self: T(a)) -> Nil
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(arr: Ptr(T(a)), count: Int) -> Nil
+reserve(self: Ptr(T(a)), count: Int) -> Nil
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(a: Type, count: Int) -> T(a)
+
+// Push an item to the back of the array, allocating to expand capacity if necessary.
+push(self: T(a), x: a) -> Nil
+
 
 
 // -- Implementation --
@@ -32,20 +36,21 @@ empty(a: Type) {
   T { v = null, capacity = 0, size = 0 }
 }
 
-free(arr) { c_free(arr.v) }
+free(self) { c_free(self.v) }
 
-type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
+_type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
-reserve(arr: Ptr(T(a)), count: Int) {
-  if arr->capacity < count {
+reserve(self: Ptr(T(a)), count: Int) {
+  if self->capacity < count {
     // TODO: assume no failure is possible
-    p : Ptr(a) := c_realloc(arr->v, count * type_width_aligned(a))
-    arr->v = p
+    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+    self->v = p
   }
 }
 
+
 with_capacity(a: Type, count: Int) {
-  width      := type_width_aligned(a)
+  width      := _type_width_aligned(a)
   p : Ptr(a) := c_malloc(count * width)
   T { v = p, capacity = count, size = 0 }
 }
