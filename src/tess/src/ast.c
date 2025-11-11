@@ -227,6 +227,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         if (vorig->annotation_type) {
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         }
+        vclone->is_mangled = vorig->is_mangled;
     } break;
 
     case ast_hash_command: {
@@ -283,7 +284,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_return:
         //
-        clone->return_.value = ast_node_clone(alloc, orig->return_.value);
+        clone->return_.value              = ast_node_clone(alloc, orig->return_.value);
+        clone->return_.is_break_statement = orig->return_.is_break_statement;
         break;
 
     case ast_while:
