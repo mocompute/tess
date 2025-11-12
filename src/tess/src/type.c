@@ -479,6 +479,9 @@ void tl_polytype_merge_quantifiers(allocator *alloc, tl_polytype *self, tl_polyt
 static void replace_tv(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
+    // TODO document the difference between this and following function
+    
+    
     switch (self->tag) {
     case tl_any:
     case tl_ellipsis: break;
@@ -533,6 +536,9 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
 }
 
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
+  
+  // FIXME: combine with following function _with
+  
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
 
