@@ -62,11 +62,12 @@ with_capacity(a: Type, count: Int) {
 _grow(self, at_least) {
   if self->capacity >= at_least { return () }
   count := self->capacity
+  if count < 1 { count = 1 }
   while count < at_least { count = count * 2 }
   reserve(self, count)
 }
 
-_is_full(self: Ptr(T(a))) { self->capacity == self->size }
+_is_full(self) { self->capacity == self->size }
 
 push(self, x) {
   if _is_full(self) { _grow(self, self->capacity + 1) }
