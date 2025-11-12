@@ -1,6 +1,7 @@
 #module Array
 #import <Alloc.tl>
 #import <stdlib.tl>
+#import <stdio.tl> // for fatal()
 
 // The Array struct. Conventionally, when a module primarily provides functions which operate on a single
 // struct, that struct is called `T`. This avoids redundant module-qualified struct names, like
@@ -11,22 +12,24 @@ T(a) : {
   capacity:     Int,
 }
 
+TPtr = Ptr(T(a))
+
 // -- Synopsis --
 
 // Construct an empty array with elements of type a.
 empty(a: Type) -> T(a)
 
 // Deallocate array buffer.
-free(self: Ptr(T(a))) -> Void
+free(self: TPtr) -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr(T(a)), count: Int) -> Void
+reserve(self: TPtr, count: Int) -> Void
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(a: Type, count: Int) -> T(a)
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr(T(a)), x: a) -> Void
+push(self: TPtr, x: a) -> Void
 
 
 
@@ -45,9 +48,10 @@ free(self) {
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 reserve(self: Ptr(T(a)), count: Int) {
+  // Note cannot use TPtr in param because `a` typevar is used in body of fun
   if self->capacity < count {
-    // TODO: assume no failure is possible
     p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+    if p == null { _tl_fatal_("oom") }
     self->v = p
   }
   void
@@ -59,6 +63,17 @@ with_capacity(a: Type, count: Int) {
   T ( v = p, capacity = count, size = 0 )
 }
 
+// -- Forward declarations are required if functions are referenced before their definitions.
+_grow      (self: TPtr, at_least: Int) -> Void
+_is_full   (self: TPtr)                -> Bool
+
+push(self, x) {
+  if _is_full(self) { _grow(self, self->capacity + 1) }
+  self->v[self->size] = x
+  self->size = self->size + 1
+  void
+}
+
 _grow(self, at_least) {
   if self->capacity >= at_least { return () }
   count := self->capacity
@@ -68,10 +83,3 @@ _grow(self, at_least) {
 }
 
 _is_full(self) { self->capacity == self->size }
-
-push(self, x) {
-  if _is_full(self) { _grow(self, self->capacity + 1) }
-  self->v[self->size] = x
-  self->size = self->size + 1
-  void
-}
