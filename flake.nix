@@ -1,5 +1,5 @@
 {
-  description = "Development environment for mos monorepo";
+  description = "Environment for Tess language development";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
@@ -19,23 +19,15 @@
             inherit system;
             inherit overlays;
           }));
-
-
     in
       {
         devShells = forAllSystems (pkgs:
           let
-
-            # python env for glad
-            pythonEnv = pkgs.python3.withPackages(ps: with ps; [
-              jinja2
-            ]);
-
             isDarwin = pkgs.stdenv.isDarwin;
-
           in
             {
               default = pkgs.mkShellNoCC {
+                # Seems necessary on my MacBook to make lldb work.
                 shellHook = ''
                   ${if isDarwin then ''
                     export LLDB_DEBUGSERVER_PATH=/Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver
@@ -48,12 +40,6 @@
                   cmake
                   tree
 
-                  libGL         # for GLFW
-
-                  ncurses       # for readline
-
-                  pythonEnv     # for glad
-
                 ] ++ (with pkgs.llvmPackages_20; [
 
                   clangUseLLVM
@@ -63,18 +49,6 @@
 
                 ]) ++ (pkgs.lib.optionals (!pkgs.stdenv.isDarwin) [
 
-                  # to build GLFW on linux
-                  libffi
-                  libxkbcommon
-                  pkg-config
-                  wayland
-                  wayland-scanner
-                  xorg.libX11
-                  xorg.libXrandr
-                  xorg.libXinerama
-                  xorg.libXcursor
-                  xorg.libXi
-
                   # gcc
                   gcc15
 
@@ -83,6 +57,7 @@
                   poop
 
                 ]) ++ (pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
+                  # I don't know why this is necessary
                   git
                 ]) ;
               };
