@@ -2437,7 +2437,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     ast_node    *infer_target = get_infer_target(node);
     ast_node    *name_node    = toplevel_name_node(node);
-    tl_polytype *provisional  = null;
+    tl_polytype *provisional  = name_node->symbol.annotation_type;
 
     str          name         = name_node->symbol.name;
     str          orig_name    = name_node->symbol.original;
@@ -2447,10 +2447,12 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // calculate provisional type, for recursive functions
     if (ast_node_is_let(node)) {
-        provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
+        if (!provisional)
+            provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
     } else if (ast_node_is_let_in_lambda(node)) {
-        provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
-                                 node->let_in.value->lambda_function.body);
+        if (!provisional)
+            provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),
+                                     node->let_in.value->lambda_function.body);
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
@@ -2474,7 +2476,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
     dbg(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
         str_buf(&orig_name));
 
-    process_annotation(self, name_node, null);
+    // FIXME: needed?
+    // process_annotation(self, name_node, null);
 
     if (!infer_target) {
         // no function body, so let's treat this as a type declaration
