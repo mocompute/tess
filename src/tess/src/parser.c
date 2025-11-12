@@ -1036,7 +1036,10 @@ static ast_node *parse_if_continue(parser *self) {
     // the "if" token has been seen
     ast_node *cond = parse_expression(self, INT_MIN);
     if (!cond) return null;
-    if (a_try(self, a_open_curly)) return null;
+    if (a_try(self, a_open_curly)) {
+        self->error.tag = tl_err_expected_if_then_arm;
+        return null;
+    }
 
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
@@ -1070,7 +1073,10 @@ static ast_node *parse_if_continue(parser *self) {
 }
 
 static ast_node *parse_if_expr(parser *self) {
-    if (a_try_s(self, the_symbol, "if")) return null;
+    if (a_try_s(self, the_symbol, "if")) {
+        self->error.tag = tl_err_ok;
+        return null;
+    }
     return parse_if_continue(self);
 }
 
@@ -1106,8 +1112,13 @@ static ast_node *parse_cond_arm(parser *self) {
 }
 
 static ast_node *parse_cond_expr(parser *self) {
-    if (a_try_s(self, the_symbol, "cond")) return null;
-    if (a_try(self, a_open_curly)) return null;
+    if (a_try_s(self, the_symbol, "cond")) {
+        self->error.tag = tl_err_ok;
+        return null;
+    }
+    if (a_try(self, a_open_curly)) {
+        return null;
+    }
     return parse_cond_arm(self);
 }
 
@@ -1139,6 +1150,7 @@ static ast_node *parse_base_expression(parser *self) {
     ast_node *node;
     node = parse_if_expr(self);
     if (node) return node;
+    if (self->error.tag != tl_err_ok) return null;
     node = parse_cond_expr(self);
     if (node) return node;
 
