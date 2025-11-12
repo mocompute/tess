@@ -38,8 +38,8 @@ empty(a: Type) {
 
 free(self) {
   c_free(self->v)
-  self->v = ()
-  ()
+  self->v = null
+  void
 }
 
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
@@ -50,7 +50,7 @@ reserve(self: Ptr(T(a)), count: Int) {
     p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
     self->v = p
   }
-  ()
+  void
 }
 
 with_capacity(a: Type, count: Int) {
@@ -73,5 +73,5 @@ push(self, x) {
   if _is_full(self) { _grow(self, self->capacity + 1) }
   self->v[self->size] = x
   self->size = self->size + 1
-  ()
+  void
 }
