@@ -1,4 +1,4 @@
 #module stdio
 #include <stdio.h>
 
-c_printf(fmt: String, args: ...) -> Nil
+c_printf(fmt: String, args: ...) -> Void

@@ -1608,7 +1608,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         } else if (str_eq(S("String"), cons_name)) {
             // return S("char const*");
             return S("char *");
-        } else if (str_eq(S("Nil"), cons_name)) {
+        } else if (str_eq(S("Void"), cons_name)) {
             return S("void");
         } else if (tl_monotype_is_ptr(mono)) {
             tl_monotype *arg   = tl_monotype_ptr_target(mono);

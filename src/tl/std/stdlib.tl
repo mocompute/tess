@@ -9,14 +9,14 @@ c_strtod       (nptr: String, endptr: Ptr(String)) -> Float
 c_getenv       (name: String)                      -> String
 c_system       (str: String)                       -> Int
 c_rand         ()                                  -> CInt
-c_srand        (seed: CUnsignedInt)                -> Nil
+c_srand        (seed: CUnsignedInt)                -> Void
 c_aligned_alloc(alignment: CSize, size: CSize)     -> Ptr(T)
 c_calloc       (num: CSize, size_each: CSize)      -> Ptr(T)
-c_free         (ptr: Ptr(T))                       -> Nil
+c_free         (ptr: Ptr(T))                       -> Void
 c_malloc       (size: CSize)                       -> Ptr(T)
 c_realloc      (ptr: Ptr(T), size: CSize)          -> Ptr(T)
-c_exit         (status: CInt)                      -> Nil
-c_abort        ()                                  -> Nil
+c_exit         (status: CInt)                      -> Void
+c_abort        ()                                  -> Void
 
 c_abs          (j: CInt)                           -> CInt
 c_labs         (j: CLong)                          -> CLong

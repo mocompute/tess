@@ -3,9 +3,9 @@
 
 #include <stdlib.h>
 
-PtrOrNull = Union(Ptr(a), Nil)
+PtrOrNull = Union(Ptr(a), Void)
 c_malloc    (count : Int)  -> PtrOrNull(a)
-c_free      (ptr : Ptr) -> Nil
+c_free      (ptr : Ptr) -> Void
 
 is_null     (p : PtrOrNull(a)) -> Bool
 

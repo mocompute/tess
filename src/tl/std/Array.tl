@@ -17,16 +17,16 @@ T(a) : {
 empty(a: Type) -> T(a)
 
 // Deallocate array buffer.
-free(self: Ptr(T(a))) -> Nil
+free(self: Ptr(T(a))) -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr(T(a)), count: Int) -> Nil
+reserve(self: Ptr(T(a)), count: Int) -> Void
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(a: Type, count: Int) -> T(a)
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr(T(a)), x: a) -> Nil
+push(self: Ptr(T(a)), x: a) -> Void
 
 
 

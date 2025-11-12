@@ -34,7 +34,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) 
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
     // Basic types
-    make_unary_inst(self, S("Nil"));
+    make_unary_inst(self, S("Void"));
     make_unary_inst(self, S("Int"));
     make_unary_inst(self, S("Bool"));
     make_unary_inst(self, S("Float"));
@@ -280,7 +280,7 @@ int tl_type_registry_exists(tl_type_registry *self, str name) {
 }
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Nil"));
+    return tl_type_registry_instantiate(self, S("Void"));
 }
 tl_monotype *tl_type_registry_int(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Int"));
@@ -805,7 +805,7 @@ int tl_monotype_is_inst_of(tl_monotype *self, str name) {
 }
 
 int tl_monotype_is_nil(tl_monotype *self) {
-    return tl_monotype_is_inst_of(self, S("Nil"));
+    return tl_monotype_is_inst_of(self, S("Void"));
 }
 
 int tl_monotype_is_list(tl_monotype *self) {

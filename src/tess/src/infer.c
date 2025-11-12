@@ -1336,7 +1336,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         } else {
 
             if (ast_node_is_std_application(node->let_in.value)) {
-                // Note: special case std_ functions and give them all a Nil return type
+                // Note: special case std_ functions and give them all a Void return type
                 node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
             }
 
@@ -2543,7 +2543,7 @@ void do_admit_generic_pointers(void *ctx, ast_node *node) {
 
 void admit_generic_pointers(tl_infer *self) {
 
-    // Note: special case for undecided Ptr(a) types: force them to Ptr(Nil) so that the transpiler will
+    // Note: special case for undecided Ptr(a) types: force them to Ptr(Void) so that the transpiler will
     // accept them as void*.
 
     tl_monotype     *nil = tl_type_registry_nil(self->registry);
