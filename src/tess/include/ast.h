@@ -209,6 +209,7 @@ nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, a
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str

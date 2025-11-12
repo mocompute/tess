@@ -56,6 +56,15 @@ ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized a
     self->named_application.is_specialized = 0;
     return self;
 }
+ast_node *ast_node_create_lfa(allocator *alloc, ast_node *lambda, ast_node_sized args) {
+    ast_node *self                          = ast_node_create(alloc, ast_lambda_function_application);
+    self->lambda_application.lambda         = lambda;
+    self->lambda_application.arguments      = args.v;
+    self->lambda_application.n_arguments    = args.size;
+    self->lambda_application.is_specialized = 0;
+    return self;
+}
+
 ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
     ast_node *self         = ast_node_create(alloc, ast_body);
     self->body.expressions = body;
