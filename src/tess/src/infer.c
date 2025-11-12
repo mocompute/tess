@@ -1363,16 +1363,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
     } break;
 
-    case ast_let: {
-
-        ast_arguments_iter iter  = ast_node_arguments_iter(node);
-        tl_polytype       *arrow = make_arrow(self, iter.nodes, node->let.body);
-        if (!arrow) return 1;
-        tl_polytype_substitute(self->arena, arrow, self->subs);
-        tl_type_env_insert(self->env, node->let.name->symbol.name, arrow);
-
-    } break;
-
     case ast_symbol: {
 
         tl_polytype *global = tl_type_env_lookup(self->env, node->symbol.name);
@@ -1618,6 +1608,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
     } break;
 
+    case ast_let:
     case ast_hash_command:
     case ast_arrow:
     case ast_ellipsis:
