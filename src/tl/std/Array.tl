@@ -64,7 +64,6 @@ _grow(self, at_least) {
   count := self->capacity
   while count < at_least { count = count * 2 }
   reserve(self, count)
-  ()
 }
 
 _is_full(self: Ptr(T(a))) { self->capacity == self->size }

@@ -2283,6 +2283,9 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
             ensure_tv(self, null, &args.v[i]->type);
             // tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
             tl_monotype *tmp = args.v[i]->type->type;
+
+            // make concrete if possible
+            tl_monotype_substitute(self->arena, tmp, self->subs, null);
             array_push(args_types, tmp);
         }
 
@@ -2291,6 +2294,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
         if (result) {
             // right = tl_monotype_clone(self->arena, result->type->type);
             right = result->type->type;
+            tl_monotype_substitute(self->arena, right, self->subs, null);
         } else {
             right = tl_type_registry_nil(self->registry);
         }
@@ -2703,12 +2707,17 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         return replace;
 
     case tl_arrow:
-    case tl_tuple:
+    case tl_tuple: {
+        int did_replace = 0;
         forall(i, mono->list.xs) {
             tl_monotype *replace = tl_infer_update_specialized_type(self, mono->list.xs.v[i]);
-            if (replace) mono->list.xs.v[i] = replace;
+            if (replace) {
+                mono->list.xs.v[i] = replace;
+                did_replace        = 1;
+            }
         }
-        break;
+        if (did_replace) return mono;
+    } break;
     }
     return null;
 }

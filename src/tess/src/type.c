@@ -258,9 +258,10 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     }
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
-    map_set_ptr(&self->specialized, &key, sizeof key, type);
 
     if (!str_is_empty(special_name)) {
+        // Important: don't cache in specialised table if there is no special_name
+        map_set_ptr(&self->specialized, &key, sizeof key, type);
         tl_type_constructor_def_create_ext(self, special_name, name, (tl_type_variable_sized){0},
                                            type->cons_inst->def->field_names, type->cons_inst->args);
     }

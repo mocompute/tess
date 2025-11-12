@@ -357,8 +357,11 @@ str ast_node_name_original(ast_node const *node) {
 
 void ast_node_name_replace(ast_node *node, str replace) {
     if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
-    node->symbol.original = node->symbol.name;
-    node->symbol.name     = replace;
+    // Important: don't replace original name more than once: original name is used for many things,
+    // including c_ prefixed function names. Type inference is sometimes repetitive, and will try to
+    // 'specialize' the name multiple times.
+    if (str_is_empty(node->symbol.original)) node->symbol.original = node->symbol.name;
+    node->symbol.name = replace;
 }
 
 ast_node *ast_node_lvalue(ast_node *self) {
@@ -886,25 +889,35 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
                          v2_ast_node_to_string(alloc, node->while_.body));
 
     case ast_symbol: {
-        str out = str_empty();
-        if (node->type) out = str_copy(alloc, S("(")); // wrap in () if type exists
+        str_build b = str_build_init(alloc, 64);
+
+        if (node->type) str_build_cat(&b, S("(")); // wrap in () if type exists
 
         str name     = ast_node_str(node);
         str original = ast_node_name_original(node);
-        out          = str_cat(alloc, out, str_is_empty(original) ? name : original);
+        // out          = str_cat(alloc, out, str_is_empty(original) ? name : original);
+        str_build_cat(&b, name);
+        if (!str_is_empty(original)) {
+            str_build_cat(&b, S(" ("));
+            str_build_cat(&b, original);
+            str_build_cat(&b, S(")"));
+        }
 
         if (node->symbol.annotation_type) {
-            out = str_cat_4(alloc, out, S(" (ann:"),
-                            tl_polytype_to_string(alloc, node->symbol.annotation_type), S(")"));
+            str_build_cat(&b, S(" (ann:"));
+            str_build_cat(&b, tl_polytype_to_string(alloc, node->symbol.annotation_type));
+            str_build_cat(&b, S(")"));
         } else if (node->symbol.annotation) {
-            out =
-              str_cat_4(alloc, out, S(" ("), v2_ast_node_to_string(alloc, node->symbol.annotation), S(")"));
+            str_build_cat(&b, S(" ("));
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->symbol.annotation));
+            str_build_cat(&b, S(")"));
         }
         if (node->type) {
-            out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type));
-            out = str_cat(alloc, out, S(")"));
+            str_build_cat(&b, S(" : "));
+            str_build_cat(&b, tl_polytype_to_string(alloc, node->type));
+            str_build_cat(&b, S(")"));
         }
-        return out;
+        return str_build_finish(&b);
     }
 
     case ast_let: {
