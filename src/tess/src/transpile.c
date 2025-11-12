@@ -1163,7 +1163,7 @@ static str generate_return(transpile *self, tl_monotype *type, ast_node const *n
         cat(self, value);
     }
 
-    // cat_semicolonln(self);
+    cat_semicolonln(self);
     return value;
 }
 
