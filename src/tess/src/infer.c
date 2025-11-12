@@ -359,6 +359,11 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
                 dbg(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
             }
         }
+
+        else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
+            // a symbol with an annotation: look for type variables
+            (void)tl_type_registry_parse(self->registry, arg->symbol.annotation, self->subs, map);
+        }
     }
 }
 
@@ -2307,7 +2312,8 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     // Note: arrow types in the environment are global functions and are not free variables. Note that
     // even local let-in-lambda functions are also in the environment, but their names will never clash
     // with function names.
-    if (is_arrow || (str_hset_contains(traverse_ctx->lex, node->symbol.name))) {
+    if (is_arrow || str_hset_contains(traverse_ctx->lex, node->symbol.name) ||
+        str_map_contains(traverse_ctx->type_arguments, node->symbol.name)) {
         ;
     } else {
         // a free variable
