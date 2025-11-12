@@ -950,7 +950,8 @@ done:
     ast_node *node                     = ast_node_create(self->ast_arena, ast_lambda_function_application);
     node->lambda_application.lambda    = lambda;
     node->lambda_application.arguments = args.v;
-    node->lambda_application.n_arguments = args.size;
+    node->lambda_application.n_arguments    = args.size;
+    node->lambda_application.is_specialized = 0;
     return result_ast_node(self, node);
 }
 

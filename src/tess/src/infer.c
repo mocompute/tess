@@ -1863,6 +1863,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     // or else the remainder of this function handles nfas and anon lambda applications
     if (!ast_node_is_nfa(node) && !ast_node_is_lambda_application(node)) return 0;
 
+    if (ast_node_is_specialized(node)) return 0;
+
     tl_polytype *callsite = null;
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
@@ -1898,6 +1900,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (specialize_one(self, ctx, traverse_ctx, node->named_application.name, callsite->type)) return 1;
         // and recurse over any arguments which are toplevel functions
         if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) return 1;
+
+        // remember this callsite is specialized
+        ast_node_set_is_specialized(node);
 
         // remove name from specials after recursing through arguments, so it doesn't shadow subsequent uses
         // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1

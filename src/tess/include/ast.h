@@ -21,7 +21,7 @@ typedef struct ast_node {
             str              original;
             struct ast_node *annotation;
             tl_polytype     *annotation_type;
-            int              is_mangled;
+            int              is_mangled; // by parser for module namespacing
         } symbol;
 
         struct ast_bool {
@@ -74,12 +74,14 @@ typedef struct ast_node {
             struct ast_node **arguments;
             u8                n_arguments;
             struct ast_node  *lambda;
+            int               is_specialized;
         } lambda_application;
 
         struct ast_named_application {
             struct ast_node **arguments;
             u8                n_arguments;
             struct ast_node  *name;
+            int               is_specialized;
         } named_application;
 
         struct ast_tuple {
@@ -280,6 +282,9 @@ int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
 int            ast_node_is_union_def(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
+int            ast_node_is_specialized(ast_node const *);
+
+void           ast_node_set_is_specialized(ast_node *);
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
 ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *);

@@ -49,10 +49,11 @@ ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
     return self;
 }
 ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized args) {
-    ast_node *self                      = ast_node_create(alloc, ast_named_function_application);
-    self->named_application.name        = name;
-    self->named_application.n_arguments = args.size;
-    self->named_application.arguments   = args.v;
+    ast_node *self                         = ast_node_create(alloc, ast_named_function_application);
+    self->named_application.name           = name;
+    self->named_application.n_arguments    = args.size;
+    self->named_application.arguments      = args.v;
+    self->named_application.is_specialized = 0;
     return self;
 }
 ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
@@ -269,12 +270,14 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_lambda_application *vclone = ast_node_lambda(clone),
                                       *vorig  = ast_node_lambda((ast_node *)orig);
         vclone->lambda                        = ast_node_clone(alloc, vorig->lambda);
+        vclone->is_specialized                = vorig->is_specialized;
     } break;
 
     case ast_named_function_application: {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
+        vclone->is_specialized               = vorig->is_specialized;
     } break;
 
     case ast_type_alias: {
@@ -1342,6 +1345,18 @@ int ast_node_is_ifc_block(ast_node const *self) {
 int ast_node_is_std_application(ast_node const *self) {
     if (!ast_node_is_nfa(self)) return 0;
     return (0 == str_cmp_nc(ast_node_str(self->named_application.name), "std_", 4));
+}
+
+int ast_node_is_specialized(ast_node const *self) {
+    if (ast_node_is_nfa(self) && self->named_application.is_specialized) return 1;
+    if (ast_node_is_lambda_application(self) && self->lambda_application.is_specialized) return 1;
+    return 0;
+}
+
+void ast_node_set_is_specialized(ast_node *self) {
+    if (ast_node_is_nfa(self)) self->named_application.is_specialized = 1;
+    else if (ast_node_is_lambda_application(self)) self->lambda_application.is_specialized = 1;
+    else fatal("logic error");
 }
 
 ast_node_sized ast_node_sized_from_ast_array(ast_node *node) {
