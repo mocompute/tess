@@ -42,8 +42,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     -Winline
     -Wimplicit-fallthrough
 
+    # allow GNU alignof extension
     -Wno-gnu-alignof-expression
-
   )
 
 else()
@@ -58,9 +58,9 @@ else()
     -Wimplicit-fallthrough
     -Wunused
 
+    # allow GNU alignof extension
     -Wno-gnu-alignof-expression
 
-    # FIXME
     # -Wno-unused-function
   )
 
@@ -110,25 +110,10 @@ if(MOS_ASAN)
   message(STATUS "Setting ASAN")
 endif()
 
-
-# -- static things --
-
-# if(UNIX AND NOT APPLE)
-#   set(MOS_LINK_OPTIONS -static -static-libgcc -static-libstdc++)
-# elseif(APPLE)
-#   set(MOS_LINK_OPTIONS -static-libstdc++)
-# endif()
-
 # -- zlib --
 
 option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
 CPMAddPackage("https://www.zlib.net/zlib-1.3.1.tar.gz")
-
-# -- doxygen --
-# must be provided by system, see flake.nix
-if(MOS_DOXY)
-  find_package(Doxygen REQUIRED)
-endif()
 
 # -- system specific -----------------------------------------------
 # -- Keep this AFTER including external packages --

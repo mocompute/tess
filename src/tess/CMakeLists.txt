@@ -155,14 +155,3 @@ tesslang_create_test(union_module_intermediate)
 tesslang_create_test(union_module_second_variant)
 tesslang_create_test(while_statement)
 tesslang_create_test(while_update_statement)
-
-
-# -- doxygen --
-
-if(MOS_DOXY)
-  set(DOXYGEN_GENERATE_HTML YES)
-  set(DOXYGEN_WARN_IF_UNDOCUMENTED NO)
-  set(DOXYGEN_QUIET YES)
-  doxygen_add_docs(docs_tess ${HEADERS})
-  add_dependencies(tess docs_tess)
-endif()

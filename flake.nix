@@ -48,8 +48,6 @@
                   cmake
                   tree
 
-                  doxygen
-
                   libGL         # for GLFW
 
                   ncurses       # for readline

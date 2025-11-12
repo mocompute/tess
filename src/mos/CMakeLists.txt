@@ -64,13 +64,3 @@ mos_create_test(types)
 mos_create_test(util)
 
 mos_create_exe(hash)
-
-# -- doxygen --
-
-if (MOS_DOXY)
-  set(DOXYGEN_GENERATE_HTML YES)
-  set(DOXYGEN_WARN_IF_UNDOCUMENTED NO)
-  set(DOXYGEN_QUIET YES)
-  doxygen_add_docs(docs_mos ${HEADERS})
-  add_dependencies(mos docs_mos)
-endif()
