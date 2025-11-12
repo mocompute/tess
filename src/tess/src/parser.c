@@ -1262,6 +1262,7 @@ static void mangle_name(parser *self, ast_node *name) {
     if (ast_node_is_nfa(name)) return mangle_name(self, name->named_application.name);
     if (!ast_node_is_symbol(name)) return;
     if (name->symbol.is_mangled) return;
+    if (is_intrinsic(name->symbol.name)) return;
 
     // Don't mangle names of known types
     str name_str = ast_node_str(name);
