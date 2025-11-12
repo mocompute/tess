@@ -553,6 +553,8 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_arrow:        op = "->"; break;
     case tok_ampersand:    op = "&"; break;
     case tok_open_square:  op = "["; break;
+    case tok_plus:         op = "+"; break;
+    case tok_minus:        op = "-"; break;
 
     case tok_bang:
     case tok_bar:
@@ -593,7 +595,9 @@ static int a_unary_operator(parser *self, int min_prec) {
     char const *op = null;
     switch (self->token.tag) {
 
-    case tok_bang: op = "!"; break;
+    case tok_bang:  op = "!"; break;
+    case tok_plus:  op = "+"; break;
+    case tok_minus: op = "-"; break;
 
     case tok_symbol:
         if (is_unary_operator(self->token.s)) op = self->token.s;
@@ -1008,6 +1012,7 @@ static int operator_precedence(char const *op, int is_prefix) {
 
     static struct item const prefix[] = {
       {"-", 100},
+      {"+", 100},
       {"!", 100},
       {"~", 100},
       //
@@ -1143,6 +1148,9 @@ static ast_node *parse_expression(parser *self, int min_prec) {
 
     ast_node *left = parse_base_expression(self);
     if (!left) return null;
+
+    int assoc = 1; // 1: left assoc, 0: right assoc
+
     while (1) {
         if (0 == a_try_int(self, a_binary_operator, min_prec)) {
             ast_node *op = self->result;
@@ -1164,8 +1172,23 @@ static ast_node *parse_expression(parser *self, int min_prec) {
 
             int prec = operator_precedence(str_cstr(&op->symbol.name), 0);
             assert(prec >= min_prec);
-            ast_node *right = parse_expression(self, prec + 1); // (prec+1): left-associative
+
+            // if opening an index expression, reset min prec to minimum
+            if (0 == str_cmp_c(op->symbol.name, "[")) prec = INT_MIN;
+
+            ast_node *right = parse_expression(self, prec + assoc);
             if (!right) return null;
+
+            // check for unary + and minus operators and convert to binary
+            if (ast_unary_op == right->tag) {
+                if (0 == str_cmp_c(right->unary_op.op->symbol.name, "+") ||
+                    0 == str_cmp_c(right->unary_op.op->symbol.name, "-")) {
+                    ast_node *binop = ast_node_create_binary_op(self->ast_arena, right->unary_op.op, left,
+                                                                right->unary_op.operand);
+                    left            = binop;
+                    continue;
+                }
+            }
 
             // Note: special case: mangle Module.foo and Module.bar() to simple expressions
             if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(left) &&

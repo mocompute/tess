@@ -24,6 +24,8 @@
     X(tok_logical_and, "logical_and")                                                                      \
     X(tok_star, "star")                                                                                    \
     X(tok_arrow, "arrow")                                                                                  \
+    X(tok_plus, "plus")                                                                                    \
+    X(tok_minus, "minus")                                                                                  \
     X(tok_ellipsis, "ellipsis")                                                                            \
     X(tok_open_round, "open_round")                                                                        \
     X(tok_close_round, "close_round")                                                                      \

@@ -3,7 +3,8 @@
 
 main() {
   p : Ptr(Int) := c_malloc(8 * sizeof(Int))
-  i := 1
-  p[i+2] = 0
-  p[3]
+  p[1+2] = 0 // Note: regression test simple binary op
+  res := p[3]
+  c_free(p)
+  res
 }

@@ -1299,6 +1299,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
         } else if (str_eq(op, S("~"))) {
             if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+        } else if (str_eq(op, S("-"))) {
+            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+        } else if (str_eq(op, S("+"))) {
+            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
         } else {
             fatal("unknown unary operator");
         }

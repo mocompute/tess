@@ -61,6 +61,8 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_logical_and:
     case tok_star:
     case tok_arrow:
+    case tok_plus:
+    case tok_minus:
     case tok_ellipsis:
     case tok_open_round:
     case tok_close_round:
@@ -107,6 +109,8 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_logical_and:
     case tok_star:
     case tok_arrow:
+    case tok_plus:
+    case tok_minus:
     case tok_ellipsis:
     case tok_open_round:
     case tok_close_round:

@@ -218,8 +218,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '-': state = in_minus; break;
 
             case '+':
-                reverse_pos(self);
-                state = start_number_sign;
+                replace_token(self->strings, &res, tok_plus);
+                state = stop;
                 continue;
 
             case '"':  state = start_string; continue;
@@ -405,8 +405,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 break;
             default:
                 reverse_pos(self);
-                reverse_pos(self); // minus 2
-                state = start_number_sign;
+                replace_token(self->strings, &res, tok_minus);
+                state = stop;
                 break;
             }
         } break;
@@ -489,21 +489,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
+            // TODO: expand number formats, e.g. 1e-6 etc
+
             char const c = next_char(self);
 
             if (c >= '0' && c <= '9') continue;
             switch (c) {
-            case 'e':
-            case 'E':
-            case 'p':
-            case 'P':
-            case 'x':
-            case 'X':
-            case '+':
-            case '-':
             case '.':
-            case '_':
-            case '|': continue;
+            case '_': continue;
 
             default:
                 // all other characters break a number
