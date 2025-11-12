@@ -4,7 +4,6 @@
 #include "array.h"
 #include "hash.h"
 #include "hashmap.h"
-#include "infer.h"
 #include "str.h"
 #include "util.h"
 
@@ -479,9 +478,11 @@ void tl_polytype_merge_quantifiers(allocator *alloc, tl_polytype *self, tl_polyt
 static void replace_tv(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
-    // TODO document the difference between this and following function
-    
-    
+    // map: tv -> tv
+
+    // Replaces all type variables in self with the matching type variable in map. Used during instantiation
+    // to convert quantified type variables to unquantified type variables.
+
     switch (self->tag) {
     case tl_any:
     case tl_ellipsis: break;
@@ -510,6 +511,11 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
 static void replace_tv_mono(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
+    // map: tv -> monotype
+
+    // Replaces all type variables in self with the matching monotypes in map. Used during instantiation
+    // to convert quantified type variables to arbitrary monotypes.
+
     switch (self->tag) {
     case tl_any:
     case tl_ellipsis: break;
@@ -536,9 +542,6 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
 }
 
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
-  
-  // FIXME: combine with following function _with
-  
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
 
@@ -556,15 +559,16 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
     return fresh;
 }
 
-tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, tl_monotype_sized tvs) {
+tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, tl_monotype_sized args) {
+    // Instantiate a quantified polytype with specific monotypes, which may or may not be type variables.
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
-    if (self->quantifiers.size != tvs.size) fatal("logic error");
+    if (self->quantifiers.size != args.size) fatal("logic error");
 
-    hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), tvs.size);
+    hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), args.size);
 
     forall(i, self->quantifiers) {
-        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tvs.v[i]);
+        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
     }
 
     replace_tv_mono(fresh, q_to_t);
