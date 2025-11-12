@@ -1195,11 +1195,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     // pointer
                     if (tl_monotype_is_tv(left->type->type)) {
 
-                        tl_monotype *target = tl_monotype_create_fresh_weak(self->subs);
-                        tl_monotype *ptr    = tl_type_registry_ptr(self->registry, target);
+                        // FIXME: needed?
 
-                        // Only thing we can infer right now
-                        return constrain_pm(self, ctx, left->type, ptr, left);
+                        // tl_monotype *target = tl_monotype_create_fresh_weak(self->subs);
+                        // tl_monotype *ptr    = tl_type_registry_ptr(self->registry, target);
+
+                        // // Only thing we can infer right now
+                        // return constrain_pm(self, ctx, left->type, ptr, left);
+
+                        return 0;
 
                     } else {
                         array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
