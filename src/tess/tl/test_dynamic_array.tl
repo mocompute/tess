@@ -21,7 +21,7 @@ main() {
   if (points.v[1].x != 2) { res = 1 }
   if (points.v[1].y != 3) { res = 1 }
 
-  Array.free(points)
-  Array.free(rects)
+  Array.free(points.&)
+  Array.free(rects.&)
   res
 }

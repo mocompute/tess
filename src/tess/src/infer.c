@@ -624,6 +624,7 @@ static int type_error(tl_infer *self, ast_node const *node) {
 }
 
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
+static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *);
 
@@ -640,6 +641,11 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
+
+    if (0) {
+        log_constraint_mono(self, left, right, node);
+    }
+
     return tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx);
 }
 
@@ -1182,13 +1188,26 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype *struct_type = null;
 
             // handle -> vs . access
-            if (0 == strcmp("->", op) && tl_polytype_is_concrete(left->type)) {
-                // Important: must check if type is concrete before requiring the type to be a pointer
+            if (0 == strcmp("->", op)) {
+                tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
                 if (!tl_monotype_has_ptr(left->type->type)) {
-                    array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
-                    return 1;
+                    // Important: must check if type is type variable before requiring the type to be a
+                    // pointer
+                    if (tl_monotype_is_tv(left->type->type)) {
+
+                        tl_monotype *target = tl_monotype_create_fresh_weak(self->subs);
+                        tl_monotype *ptr    = tl_type_registry_ptr(self->registry, target);
+
+                        // Only thing we can infer right now
+                        return constrain_pm(self, ctx, left->type, ptr, left);
+
+                    } else {
+                        array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+                        return 1;
+                    }
                 }
-                struct_type = (tl_monotype *)tl_monotype_ptr_target(left->type->type);
+                struct_type = tl_monotype_ptr_target(left->type->type);
+
             } else {
                 struct_type = (tl_monotype *)left->type->type;
             }
@@ -1229,13 +1248,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                             if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
                             if (constrain(self, ctx, node->type, right->type, node)) return 1;
                         }
+                    } else {
+                        // field not found?
+                        fatal("field not found"); // TODO error
                     }
 
                 } else {
                     fatal("unreachable");
                 }
             } else {
-                if (constrain(self, ctx, node->type, right->type, node)) return 1;
+                // FIXME: constrain pointer's target, if any?
+                // if (constrain(self, ctx, node->type, right->type, node)) return 1;
             }
         } else fatal("unknown operator type");
 
@@ -2638,6 +2661,7 @@ static int check_main_function(tl_infer *self, ast_node *main) {
 }
 
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
+
     tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
     if (!mono) {
         // not found, specialize it if all args are concrete
@@ -2676,7 +2700,6 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         str               type_name = mono->cons_inst->def->name;
         tl_monotype_sized type_args = mono->cons_inst->args;
         tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
-        if (!replace) return null;
         return replace;
 
     case tl_arrow:
@@ -2693,14 +2716,8 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
     if (!poly || !*poly) return; // not all ast nodes will have types
 
-    if (tl_polytype_is_type_constructor(*poly)) {
-        tl_monotype *replace = tl_infer_update_specialized_type(self, (*poly)->type);
-        if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
-
-    } else {
-        // otherwise walk through every monotype referenced by this polytype
-        tl_infer_update_specialized_type(self, (*poly)->type);
-    }
+    tl_monotype *replace = tl_infer_update_specialized_type(self, (*poly)->type);
+    if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
 }
 
 static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
@@ -2718,6 +2735,9 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
 static void update_types_arrow(tl_infer *self, ast_node *node) {
     if (ast_node_is_let_in(node)) {
         ast_node *ident = node->let_in.value;
+        fixup_arrow_name(self, ident);
+    } else if (ast_node_is_let(node)) {
+        ast_node *ident = node->let.name;
         fixup_arrow_name(self, ident);
     }
 }
@@ -2750,6 +2770,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_f64:
     case ast_i64:
     case ast_if_then_else:
+    case ast_let:
     case ast_return:
     case ast_string:
     case ast_char:
@@ -2759,7 +2780,6 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     case ast_while:
     case ast_lambda_function:
     case ast_lambda_function_application:
-    case ast_let:
     case ast_named_function_application:
     case ast_tuple:
     case ast_unary_op:
@@ -3084,6 +3104,15 @@ static void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
+    str node_str  = v2_ast_node_to_string(self->transient, node);
+    dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
+}
+
+static void log_constraint_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
+                                ast_node const *node) {
+    if (!self->verbose) return;
+    str left_str  = tl_monotype_to_string(self->transient, left);
+    str right_str = tl_monotype_to_string(self->transient, right);
     str node_str  = v2_ast_node_to_string(self->transient, node);
     dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }

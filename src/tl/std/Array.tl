@@ -17,7 +17,7 @@ T(a) : {
 empty(a: Type) -> T(a)
 
 // Deallocate array buffer.
-free(self: T(a)) -> Nil
+free(self: Ptr(T(a))) -> Nil
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
 reserve(self: Ptr(T(a)), count: Int) -> Nil
@@ -36,14 +36,18 @@ empty(a: Type) {
   T ( v = null, capacity = 0, size = 0 )
 }
 
-free(self) { c_free(self.v) }
+free(self) {
+  c_free(self->v)
+  self->v = ()
+  ()
+}
 
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 reserve(self: Ptr(T(a)), count: Int) {
   if self->capacity < count {
     // TODO: assume no failure is possible
-    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a)) // FIXME type argument
+    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
     self->v = p
   }
   ()
@@ -63,7 +67,7 @@ _grow(self, at_least) {
   ()
 }
 
-_is_full(self) { self->capacity == self->size }
+_is_full(self: Ptr(T(a))) { self->capacity == self->size }
 
 push(self, x) {
   if _is_full(self) { _grow(self, self->capacity + 1) }
