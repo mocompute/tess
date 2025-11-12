@@ -181,7 +181,14 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             return tl_monotype_create_any(self->alloc);
         } else if (str_eq(name, S("..."))) {
             return tl_monotype_create_ellipsis(self->alloc);
-        } else {
+        } else if (str_eq(name, S("Type"))) {
+            // Note: special case: support nullary `Type` as an alias of `Type(a)`
+            tl_monotype_sized args_mono = {.size = 1, .v = alloc_malloc(self->alloc, sizeof(void *))};
+            args_mono.v[0]              = tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(subs));
+            return tl_type_registry_instantiate_with(self, name, args_mono);
+        }
+
+        else {
             // or else check if it's a known nullary type
             if (tl_type_registry_is_nullary_type(self, name)) {
                 tl_polytype *poly = tl_type_registry_get(self, name);
