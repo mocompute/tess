@@ -262,7 +262,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         assert(ast_node_is_symbol(fields[i]));
         array_push(field_names, fields[i]->symbol.name);
 
-        // enum types have fields with no type information
+        // Note: enum types have fields with no type information
 
         // field type, could be type argument, or type constructor, or null
         if (annotations) {
@@ -1382,7 +1382,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ensure_tv(self, null, &node->type);
 
             // Note: special case: if symbol is the name of an enum, constraint it to an Int
-            // FIXME
+            // FIXME needed?
             ast_node *utd = toplevel_get(self, node->symbol.name);
             if (0 && utd && ast_node_is_enum_def(utd)) {
                 tl_monotype *int_ty = tl_type_registry_int(self->registry);

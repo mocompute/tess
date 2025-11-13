@@ -879,6 +879,11 @@ int tl_monotype_is_integer_convertible(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_integer_convertible;
 }
 
+void tl_monotype_set_integer_convertible(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) fatal("logic error");
+    self->cons_inst->def->is_integer_convertible = 1;
+}
+
 int tl_polytype_is_scheme(tl_polytype *poly) {
     return poly->quantifiers.size != 0;
 }
