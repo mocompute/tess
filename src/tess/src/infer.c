@@ -1348,8 +1348,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (name->symbol.annotation_type) name_type = node->let_in.name->symbol.annotation_type;
             }
 
+            // Note: name_type and node->let_in.name->type have possibly diverged, so we should constrain
+            // both.
+
             if (!escape_constraint(self, name_type, value_type) &&
                 constrain(self, ctx, name_type, value_type, node))
+                return 1;
+
+            if (!escape_constraint(self, node->let_in.name->type, value_type) &&
+                constrain(self, ctx, node->let_in.name->type, value_type, node))
                 return 1;
 
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, name_type);
