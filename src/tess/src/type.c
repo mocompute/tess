@@ -162,7 +162,7 @@ static void make_unary_inst(tl_type_registry *self, str name) {
 static void mark_integer_type(tl_type_registry *self, str name) {
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
-    poly->type->cons_inst->def->is_integer_convertible = 1;
+    tl_monotype_set_integer_convertible(poly->type);
 }
 
 // --
