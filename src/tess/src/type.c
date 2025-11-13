@@ -1446,7 +1446,7 @@ int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized ri
 
     forall(i, left) {
         if (tl_monotype_is_ellipsis(left.v[i])) goto success;
-        if (i + i < right.size && tl_monotype_is_ellipsis(right.v[i])) goto success;
+        if (i + 1 < right.size && tl_monotype_is_ellipsis(right.v[i])) goto success;
         if (tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user)) {
             if (cb) cb(user, lhs, rhs);
             return 1;
