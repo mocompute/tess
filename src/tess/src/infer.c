@@ -2296,8 +2296,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
         array_reserve(args_types, args.size);
         forall(i, args) {
             ensure_tv(self, null, &args.v[i]->type);
-            // tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
-            tl_monotype *tmp = args.v[i]->type->type;
+            tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
 
             // make concrete if possible
             tl_monotype_substitute(self->arena, tmp, self->subs, null);
@@ -2307,8 +2306,7 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
         tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
         tl_monotype *right = null;
         if (result) {
-            // right = tl_monotype_clone(self->arena, result->type->type);
-            right = result->type->type;
+            right = tl_monotype_clone(self->arena, result->type->type);
             tl_monotype_substitute(self->arena, right, self->subs, null);
         } else {
             right = tl_type_registry_nil(self->registry);
