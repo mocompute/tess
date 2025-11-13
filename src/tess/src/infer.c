@@ -1579,7 +1579,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         array_reserve(tup_types, arr.size);
         forall(i, arr) {
             if (tl_polytype_is_scheme(arr.v[i]->type)) fatal("generic type");
-            array_push(tup_types, arr.v[0]->type->type);
+            array_push(tup_types, arr.v[i]->type->type);
         }
 
         if (constrain(self, ctx, node->type,
