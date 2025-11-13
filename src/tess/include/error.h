@@ -80,6 +80,7 @@
     X(tl_err_expected_pointer, "expected_pointer")                                                         \
     X(tl_err_arity, "wrong_number_of_arguments")                                                           \
     X(tl_err_unknown_hash_command, "unknown_hash_command")                                                 \
+    X(tl_err_unknown_type, "unknown_type")                                                                 \
     X(tl_err_too_many_arguments, "too_many_arguments")                                                     \
     X(tl_err_function_exists, "function_exists")                                                           \
     X(tl_err_not_compatible, "not_compatible")                                                             \

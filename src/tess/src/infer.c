@@ -328,9 +328,16 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
     if (ctx) map = ctx->type_arguments;
     else map = map_new(self->transient, str, tl_monotype *, 8);
 
-    tl_monotype *ann  = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
-    tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
-    // tl_polytype_generalize(poly, self->env, self->subs);
+    tl_monotype *ann = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
+    if (tl_monotype_is_tv(ann)) {
+        str ann_str = v2_ast_node_to_string(self->arena, name->symbol.annotation);
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_unknown_type, .node = name, .message = ann_str}));
+        // no return because errors are not detected by caller, and we
+        // still want to continue with inference.
+    }
+
+    tl_polytype *poly            = tl_polytype_absorb_mono(self->arena, ann);
     name->symbol.annotation_type = poly;
 
     // str poly_str                 = tl_polytype_to_string(self->transient, poly);
