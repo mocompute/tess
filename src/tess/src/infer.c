@@ -2205,8 +2205,11 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
     body->type               = tl_polytype_clone_mono(self->arena, inst_result);
 }
 
-static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite) {
+static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite_) {
     str name = toplevel_name(node);
+
+    // safer to clone because we mutate the type, and it may be shared.
+    tl_monotype *callsite = tl_monotype_clone(self->arena, callsite_);
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
