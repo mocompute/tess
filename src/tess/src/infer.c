@@ -942,7 +942,8 @@ static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node) {
         // set node type to type literal
         tl_monotype *ty = tl_type_registry_type_literal(self->registry, inst);
         ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, ty));
-        return inst;
+
+        return ty;
     }
 
     else if (ast_node_is_nfa(node)) {
