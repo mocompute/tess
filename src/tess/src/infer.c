@@ -2515,6 +2515,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
     tl_polytype *arrow = null;
     if (name_node->symbol.annotation_type) {
         arrow = name_node->symbol.annotation_type;
+        // since arrow does not come from env, ensure it's fully substituted
+        tl_polytype_substitute(self->arena, arrow, self->subs);
     } else {
         tl_polytype *tmp = tl_type_env_lookup(self->env, name);
         if (!tmp) fatal("runtime error");
