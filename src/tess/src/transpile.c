@@ -295,6 +295,7 @@ static void generate_user_types(transpile *self) {
         generate_one_user_type(self, node);
     }
 
+    // Then emit specialized user types.
     forall(i, self->synthesized_nodes) {
         ast_node *node = self->synthesized_nodes.v[i];
         generate_one_user_type(self, node);
