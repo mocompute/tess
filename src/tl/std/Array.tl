@@ -10,7 +10,9 @@
 // Users of the Array module must `#import` it (see below) and must access its identifers by prepending
 // `Array.` before the identifier: e.g. `Array.reserve(arr, 16)` will call the reserve function in this
 // module. TL provides no way to avoid the use of the module prefix, except for the identifiers declared in
-// the `builtin` module, which must be used with no prefix.
+// the `builtin` module, which must be used with no prefix. Identifiers that are not qualified are
+// automatically scoped to the current module. Modules may not be nested: so `Foo.Bar.baz()` is not
+// permitted.
 #module Array
 
 // The `#import` directive includes the specified file and makes any modules and identifiers declared in the
@@ -62,8 +64,9 @@ T(a) : {
 
 // This syntax declares a type alias. `TPtr` may be used in place of `Ptr(T(a))` in all contexts. However,
 // since this is a generic type (using the type variable `a`), note that use of `TPtr` does NOT provide
-// access to `a`. Refer to the definition of `reserve()` below: notice that it must use `Ptr(T(a))` because
-// the body of the function needs to refer to the `a` type variable explicitly.
+// access to `a`. To understand the consequence of this, refer to the definition of `reserve()` below:
+// notice that it must use `Ptr(T(a))` because the body of the function needs to refer to the `a` type
+// variable explicitly.
 TPtr = Ptr(T(a))
 
 // -- Synopsis --
@@ -84,9 +87,9 @@ push(self: TPtr, x: a) -> Void
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
 reserve(self: TPtr, count: Int) -> Void
 
-// The declaration `(a: Type, ...)` in the next declaration demonstrates the use of a type argument. In C++,
-// the corresponding syntax would be `with_capacity<a>(...)` but in TL, type arguments are declared
-// alongside other formal parameters. Conventionally, they appear first. `Type` is a builtin type
+// The declaration `(a: Type, ...)` below demonstrates the use of a generic type argument. In C++, the
+// corresponding syntax would be `template<typename T> with_capacity<T>(...)` but in TL, type arguments are
+// declared alongside other formal parameters. Conventionally, they appear first. `Type` is a builtin type
 // constructor which takes a single argument being the identifier or type constructor of a type, but
 // conversion between callsite usage and consumer usage is handled automatically.
 
@@ -99,8 +102,8 @@ with_capacity(a: Type, count: Int) -> T(a)
 
 // -- Forward declarations are required if functions are referenced before their definitions.
 // Conventionally, a preceding `_` indicates a function intended to be private. However, all toplevel
-// identifiers may be access from any scope. For example, `Array._grow` can be used to access the function,
-// even though it is indicated to be private.
+// identifiers may be accessed from any scope. For example, `Array._grow` can be used to access the
+// function, even though it is indicated to be private.
 _grow               (self: TPtr, at_least: Int) -> Void
 _is_full            (self: TPtr)                -> Bool
 _type_width_aligned (a: Type)                   -> Int
