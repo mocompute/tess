@@ -2,6 +2,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "hash.h"
+#include "util.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -256,7 +257,12 @@ int str_is_empty(str self) {
 }
 
 int str_cmp(str lhs, str rhs) {
-    span left = str_span(&lhs), right = str_span(&rhs);
+    span   left = str_span(&lhs), right = str_span(&rhs);
+
+    size_t max_len = max(left.len, right.len);
+    int    res     = 0;
+    if ((res = memcmp(&left.buf[0], &right.buf[0], max_len))) return res;
+
     if (left.len < right.len) return -1;
     if (left.len > right.len) return 1;
 
