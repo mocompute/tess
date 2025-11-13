@@ -811,6 +811,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     if (is_c_symbol(name)) return generate_funcall_c(self, node, ctx);
 
     if (!type) {
+        // FIXME: file/line here is not accurate
         exit_error(node->file, node->line, "unknown function: %s", str_cstr(&name));
     }
 

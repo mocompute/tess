@@ -311,8 +311,8 @@ void load_user_type(tl_infer *self, ast_node *node) {
     arena_reset(self->transient);
 }
 
-static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx) {
-    ast_node const *name = toplevel_name_node(node);
+static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx *ctx) {
+    if (!ast_node_is_symbol(name)) fatal("logic error");
 
     if (!name->symbol.annotation) return;
     {
@@ -320,13 +320,9 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
         // log(self, "process_annotation: %.*s : ast:%s", str_ilen(name->symbol.name),
         //     str_buf(&name->symbol.name), str_cstr(&ann_str));
     }
-    if (name->symbol.annotation_type) {
-        // str poly_str = tl_polytype_to_string(self->transient, name->symbol.annotation_type);
-        // log(self, "process_annotation exists: %.*s : %s", str_ilen(name->symbol.name),
-        //     str_buf(&name->symbol.name), str_cstr(&poly_str));
 
-        return;
-    }
+    // Note: always process annotation even if repeating, because we have more concrete type information on
+    // later passes.
 
     hashmap *map;
     if (ctx) map = ctx->type_arguments;
@@ -335,13 +331,17 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     tl_monotype *ann  = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
     tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
     // tl_polytype_generalize(poly, self->env, self->subs);
-    node->symbol.annotation_type = poly;
+    name->symbol.annotation_type = poly;
 
     // str poly_str                 = tl_polytype_to_string(self->transient, poly);
     // log(self, "process_annotation: %.*s : %s", str_ilen(name->symbol.name), str_buf(&name->symbol.name),
     //     str_cstr(&poly_str));
 
     if (!ctx) map_destroy(&map);
+}
+
+static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx) {
+    process_name_annotation(self, toplevel_name_node(node), ctx);
 }
 
 static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map) {
@@ -1474,7 +1474,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     assert(found < (i32)inst->cons_inst->args.size);
                     if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[found], node)) return 1;
                 } else {
-
                     if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
                 }
                 ++i;
@@ -1592,6 +1591,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &node->assignment.name->type);
         ensure_tv(self, null, &node->assignment.value->type);
+
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
         if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
         break;
@@ -2113,7 +2113,14 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         // constructors. However, the type must be erased, because cloning generic functions relies on
         // rename_variables to erase types.
         if (!node->assignment.is_field_name) rename_variables(self, node->assignment.name, lex, level + 1);
-        else ast_node_type_set(node->assignment.name, null);
+        else {
+            // Note: however, field names may now be annotated, so the annotations have to be processed.
+            // This handles type variables in the field assignment annotation.
+            if (ast_node_is_symbol(node->assignment.name))
+                rename_variables(self, node->assignment.name->symbol.annotation, lex, level + 1);
+
+            ast_node_type_set(node->assignment.name, null);
+        }
 
         rename_variables(self, node->assignment.value, lex, level + 1);
         break;

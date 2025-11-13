@@ -1330,13 +1330,17 @@ static int a_field_assignment(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
 
+    ast_node *ann  = null;
+    if (0 == a_try(self, a_type_annotation)) ann = self->result;
+
     if (a_try(self, a_equal_sign)) return 1;
 
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a                 = ast_node_create_assignment(self->ast_arena, name, val);
-    a->assignment.is_field_name = 1;
+    ast_node *a                           = ast_node_create_assignment(self->ast_arena, name, val);
+    a->assignment.is_field_name           = 1;
+    a->assignment.name->symbol.annotation = ann;
     return result_ast_node(self, a);
 }
 
