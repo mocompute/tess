@@ -1,7 +1,7 @@
 // The Array module. Tutorial style comments are included for this module.
 //
 // The `#` symbol introduces a hash directive, similar to the C preprocessor, but TL does not include a
-// preprocessor.
+// C preprocessor.
 //
 // All code must reside in a module. Module names provide a namespace and are used while parsing for
 // deduplication: the first use of a module name takes precedence over later uses. This is similar to the C
@@ -16,8 +16,8 @@
 #module Array
 
 // The `#import` directive includes the specified file and makes any modules and identifiers declared in the
-// file available in the current scope (still namespaced, as described above). The search path is defined
-// using the `-I` option(s) on the compiler command line.
+// file available in the current scope (still namespaced, as described above). The search paths are defined
+// using `-I` options on the compiler command line.
 //
 // Any TL file may define one or more modules. While conventionally a single file defines a single module,
 // this is not required. However, multiple files may NOT be used to declare identifiers for the same module.
@@ -117,7 +117,8 @@ empty(a: Type) {
   // with named arguments, ordinary TL functions do NOT support named arguments.
   //
   // The field `v` includes a type annotation, which is required here in order to make use of the type
-  // argument in the parameters, and to ensure the returned struct has a non-generic (concrete) type.
+  // argument in the function parameters, and to ensure the returned struct has a non-generic (concrete)
+  // type.
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 
