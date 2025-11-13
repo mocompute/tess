@@ -83,8 +83,9 @@ void   hset_reset(hashmap *);
 size_t hset_size(hashmap const *);
 
 // -- utilities --
-int map_iter(hashmap const *, hashmap_iterator *);
-int hset_iter(hashmap const *, hashmap_iterator *);
+int       map_iter(hashmap const *, hashmap_iterator *);
+int       hset_iter(hashmap const *, hashmap_iterator *);
+str_array str_map_sorted_keys(allocator *, hashmap *);
 
 // To document key and value types at create callsite
 #define map_new(A, K, V, N) map_create((A), sizeof(V), N)

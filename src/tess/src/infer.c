@@ -3041,10 +3041,10 @@ static void log_str(tl_infer const *self, str str) {
 }
 
 static void log_toplevels(tl_infer const *self) {
-    hashmap_iterator iter = {0};
-    while (map_iter(self->toplevels, &iter)) {
-        ast_node const *node = *(ast_node **)iter.data;
-        str             str  = v2_ast_node_to_string(self->transient, node);
+    str_array sorted = str_map_sorted_keys(self->transient, self->toplevels);
+    forall(i, sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, sorted.v[i]);
+        str       str  = v2_ast_node_to_string(self->transient, node);
         log_str(self, str);
         str_deinit(self->transient, &str);
     }

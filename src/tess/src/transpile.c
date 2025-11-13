@@ -35,6 +35,8 @@ struct transpile {
     hashmap          *structs;           // u64 set
     hashmap          *context_generated; // str set
 
+    str_array         toplevels_sorted;
+
     str_build         build;
 
     u32               next_res;
@@ -117,11 +119,8 @@ static void  exit_error(char const *file, u32 line, char const *restrict fmt, ..
 //
 
 static void generate_prototypes(transpile *self, int decl_static) {
-
-    hashmap_iterator iter = {0};
-    ast_node        *node;
-    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
-
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
         if (ast_node_is_utd(node)) continue;
 
         str          name = toplevel_name(node);
@@ -435,9 +434,9 @@ static void generate_toplevel_contexts(transpile *self) {
 
 static void generate_toplevel_values(transpile *self) {
 
-    hashmap_iterator iter = {0};
-    ast_node        *node;
-    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
         str name = ast_node_str(node->let_in.name);
@@ -447,13 +446,14 @@ static void generate_toplevel_values(transpile *self) {
 
         generate_decl(self, name, type->type);
     }
+
     cat_nl(self);
 
     // tl_init function
-
     cat(self, S("static void tl_init(void) {\n"));
-    iter = (hashmap_iterator){0};
-    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
         str name = ast_node_str(node->let_in.name);
@@ -472,9 +472,9 @@ static void generate_toplevel_values(transpile *self) {
 }
 
 static void generate_toplevels(transpile *self) {
-    hashmap_iterator iter = {0};
-    ast_node        *node;
-    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+
         if (ast_node_is_utd(node)) continue;
         str          name = toplevel_name(node);
         tl_polytype *poly = tl_type_env_lookup(self->env, name);
@@ -485,7 +485,7 @@ static void generate_toplevels(transpile *self) {
 
         assert(poly->type->list.xs.size == 2);
         tl_monotype *return_type = tl_monotype_sized_last(poly->type->list.xs);
-        ast_node    *node        = ast_node_str_map_get(self->toplevels, name);
+        node                     = ast_node_str_map_get(self->toplevels, name);
         if (!node) continue; // e.g. std.tl funs that aren't used
 
         ast_node *body = ast_node_body(node);
@@ -1421,6 +1421,8 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->next_res          = 0;
 
     self->verbose           = !!opts->verbose;
+
+    self->toplevels_sorted  = str_map_sorted_keys(self->arena, self->toplevels);
 
     return self;
 }

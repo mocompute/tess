@@ -1,8 +1,10 @@
 #include "hashmap.h"
 
 #include "alloc.h"
+#include "array.h"
 #include "dbg.h"
 #include "hash.h"
+#include "str.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -393,6 +395,19 @@ void str_map_set(hashmap **self, str key, void const *data) {
 
 void str_map_set_ptr(hashmap **self, str key, void const *data) {
     return str_map_set(self, key, &data);
+}
+
+str_array str_map_sorted_keys(allocator *alloc, hashmap *self) {
+    str_array out = {.alloc = alloc};
+    array_reserve(out, self->n_occupied);
+    hashmap_iterator iter = {0};
+    while (map_iter(self, &iter)) {
+        str key = str_init_n(alloc, iter.key_ptr, iter.key_size);
+        array_push(out, key);
+    }
+    array_shrink(out);
+    str_sized_sort((str_sized)sized_all(out));
+    return out;
 }
 
 void *map_get(hashmap *map, void const *key, u8 key_len) {
