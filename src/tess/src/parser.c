@@ -531,10 +531,7 @@ static int a_close_square(parser *p) {
 }
 
 static int a_binary_operator(parser *self, int min_prec) {
-    if (next_token(self)) {
-        if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
-        return 1;
-    }
+    if (next_token(self)) return 1;
 
     char const *op = null;
     switch (self->token.tag) {
@@ -587,10 +584,7 @@ static int a_binary_operator(parser *self, int min_prec) {
 }
 
 static int a_unary_operator(parser *self, int min_prec) {
-    if (next_token(self)) {
-        if (is_eof(self)) return result_ast_str(self, ast_symbol, ";");
-        return 1;
-    }
+    if (next_token(self)) return 1;
 
     char const *op = null;
     switch (self->token.tag) {
@@ -809,18 +803,39 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     return 0;
 }
 
+static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right);
+
 static int a_type_identifier(parser *self) {
     // Callers expect name to be mangled.
     if (0 == a_try(self, a_funcall)) {
         mangle_name(self, self->result->named_application.name);
         return 0;
     }
-    if (0 == a_try(self, a_identifier)) {
-        mangle_name(self, self->result);
-        return 0;
-    }
     if (0 == a_try(self, a_ellipsis)) {
         return 0;
+    }
+    if (0 == a_try(self, a_identifier)) {
+        // Look for module-qualified identifier
+        ast_node *ident = self->result;
+
+        if (0 == a_try_int(self, a_binary_operator, INT_MIN)) {
+            ast_node *op = self->result;
+
+            if (str_cmp_c(op->symbol.name, ".")) return 1;
+            if (a_try(self, a_identifier)) return 1;
+            ast_node *right = self->result;
+
+            if (maybe_mangle_binop(self, op, &ident, right)) {
+                self->result = ident;
+                return 0;
+            } else {
+                mangle_name(self, self->result);
+                return 0;
+            }
+        } else {
+            mangle_name(self, self->result);
+            return 0;
+        }
     }
 
     return 1;
@@ -832,7 +847,7 @@ static int a_type_annotation(parser *self) {
         return res;
     }
 
-    self->error.tag = tl_err_expected_colon;
+    self->error.tag = tl_err_expected_type;
     return 1;
 }
 
@@ -1124,6 +1139,22 @@ static ast_node *parse_cond_expr(parser *self) {
 
 //
 
+static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
+        str_hset_contains(self->modules_seen, (*inout)->symbol.name)) {
+        ast_node *to_mangle = null;
+        if (ast_node_is_symbol(right)) to_mangle = right;
+        else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
+        if (to_mangle) {
+            unmangle_name(self, to_mangle);
+            mangle_name_for_module(self, to_mangle, (*inout)->symbol.name);
+            *inout = right;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static ast_node *parse_base_expression(parser *self) {
 
     if (0 == a_try_int(self, a_unary_operator, INT_MIN)) {
@@ -1205,18 +1236,7 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             }
 
             // Note: special case: mangle Module.foo and Module.bar() to simple expressions
-            if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(left) &&
-                str_hset_contains(self->modules_seen, left->symbol.name)) {
-                ast_node *to_mangle = null;
-                if (ast_node_is_symbol(right)) to_mangle = right;
-                else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
-                if (to_mangle) {
-                    unmangle_name(self, to_mangle);
-                    mangle_name_for_module(self, to_mangle, left->symbol.name);
-                    left = right;
-                    continue;
-                }
-            }
+            if (maybe_mangle_binop(self, op, &left, right)) continue;
 
             // Note: special case: [ as binary operator, need to close it with ] token
             if (0 == str_cmp_c(op->symbol.name, "["))

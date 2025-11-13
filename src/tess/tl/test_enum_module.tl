@@ -5,7 +5,9 @@ DupTag :  {tFoo, tBar, tZero }
 
 #module main
 
+f(x : Foo.EnumTag) { x }
+
 main() {
-  val := Foo.EnumTag.tZero
+  val := f(Foo.EnumTag.tZero)
   val
 }
