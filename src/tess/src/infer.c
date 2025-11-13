@@ -54,7 +54,6 @@ typedef struct {
 } name_and_type;
 
 typedef struct {
-    hashmap *call_chain;     // hset str
     hashmap *lex;            // hset str (names in local lexical scope)
     hashmap *type_arguments; // map str -> tl_monotype*: arguments which are type literals
     hashmap *seen_node;      // hset ast_node* FIXME: needed?
@@ -588,7 +587,6 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out   = new (alloc, traverse_ctx);
     out->seen_node      = hset_create(alloc, 1024);
-    out->call_chain     = hset_create(alloc, 16);
     out->lex            = hset_create(alloc, 16);
     out->type_arguments = map_create_ptr(alloc, 16);
     out->user           = null;
@@ -601,7 +599,6 @@ static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
     if ((*p)->seen_node) map_destroy(&(*p)->seen_node);
     if ((*p)->type_arguments) map_destroy(&(*p)->type_arguments);
     if ((*p)->lex) hset_destroy(&(*p)->lex);
-    if ((*p)->call_chain) hset_destroy(&(*p)->call_chain);
 
     alloc_free(alloc, *p);
     *p = null;
@@ -792,14 +789,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     } break;
 
     case ast_named_function_application: {
-
-        str name = node->named_application.name->symbol.name;
-
-        // do not process recursive calls
-        if (str_hset_contains(ctx->call_chain, name)) {
-            dbg(self, "detected recursive call to '%s'", str_cstr(&name));
-            return 0;
-        }
 
         // traverse arguments
 
