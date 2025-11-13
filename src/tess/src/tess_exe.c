@@ -91,13 +91,14 @@ void state_gather_single_options(state *self, char *str) {
         case 'h': self->help = 1; break;
         case 'v': self->verbose = 1; break;
         case 'O': self->optimize = 1; break;
-        default:  break;
+        default:  usage(1, self->argv0); break;
         }
     }
 }
 
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
+    else usage(1, self->argv0);
 }
 
 void state_gather_options(state *self, int argc, char *argv[]) {
