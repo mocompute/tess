@@ -2668,7 +2668,7 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     // remove free variables from main type if they are toplevel (e.g. lambda functions)
     str_sized *fvs = &type->type->list.fvs;
     if (tl_monotype_is_arrow(type->type)) {
-        for (u32 i = 0, n = fvs->size; i < n; ++i) {
+        for (u32 i = 0; i < fvs->size;) {
             str fv = fvs->v[i];
             if (toplevel_get(self, fv)) array_sized_erase(*fvs, i);
             else ++i;
