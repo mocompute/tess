@@ -201,6 +201,7 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
 
     size_t new_capacity = last_capacity * 2;
     if (new_capacity < needed) new_capacity = alloc_next_power_of_two(needed);
+    if (new_capacity == 0) return null; // overflow
 
     last->next = arena_header_create(arena->parent, new_capacity);
     if (null == last->next) return null;
@@ -303,7 +304,7 @@ void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
-    if (0 == sz) sz = 16;
+    if (0 == sz) sz = 16; // overflow (TODO)
 
     arena->head              = arena_header_create(parent, sz);
     arena->allocator.malloc  = &arena_malloc;
