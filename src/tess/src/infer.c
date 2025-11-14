@@ -1777,13 +1777,14 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
     if ((existing = str_map_get(ctx->specials, arg_name))) {
         str inst_name = *existing;
         ast_node_name_replace(arg, inst_name);
-        return -1;
+        dbg(self, "specialize_one 1: patched in name %s", str_cstr(&inst_name));
+        return 0;
     } else {
 
         // Important: resolve type variables before attempting to specialize.
         // FIXME: disable this even though it was marked "important" because no regression test failure
         // occurs.
-        // tl_monotype_substitute(self->arena, type, self->subs, null);
+        // tl_monotype_substitute(self->arena, callsite, self->subs, null);
 
         str inst_name = specialize_fun(self, top, callsite);
         str_map_set(&ctx->specials, arg_name, &inst_name);
