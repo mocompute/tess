@@ -889,6 +889,16 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_case: {
+        if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
+        forall(i, node->case_.conditions) {
+            if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
+        }
+        forall(i, node->case_.arms) {
+            if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+        }
+    } break;
+
     case ast_binary_op:
         // don't traverse op, it's just an operator
         if (traverse_ast(self, ctx, node->binary_op.left, cb)) return 1;
@@ -1172,6 +1182,45 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ast_node *last = node->body.expressions.v[sz - 1];
             ensure_tv(self, null, &last->type);
             if (constrain(self, ctx, node->type, last->type, node)) return 1;
+        }
+    } break;
+
+    case ast_case: {
+        ensure_tv(self, null, &node->type);
+        ensure_tv(self, null, &node->case_.expression->type);
+        tl_monotype *nil       = tl_type_registry_nil(self->registry);
+        tl_monotype *any_type  = tl_monotype_create_any(self->arena);
+        tl_polytype *expr_type = node->case_.expression->type;
+
+        if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+        // expression and all conditions must be same type so they can be compared for equality
+        forall(i, node->case_.conditions) {
+            ensure_tv(self, null, &node->case_.conditions.v[i]->type);
+            if (constrain(self, ctx, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+        }
+
+        // arms must all be the same.
+        // node type is either nil if this has a single arm, or the type of its arms if it has multiple.
+        // If it has a single arm, it's a statement. If it has multiple arms, it's an expression.
+        switch (node->case_.arms.size) {
+        case 0:
+            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+            break;
+        case 1:
+            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+
+            // with a single arm, this is equivalent to a single-arm if statement, so its type can be any.
+            if (constrain_pm(self, ctx, node->case_.arms.v[0]->type, any_type, node)) return 1;
+            break;
+
+        default: {
+            tl_polytype *arm_type = node->case_.arms.v[0]->type;
+            forall(i, node->case_.arms) {
+                ensure_tv(self, null, &node->case_.arms.v[i]->type);
+                if (constrain(self, ctx, node->case_.arms.v[i]->type, arm_type, node)) return 1;
+            }
+        } break;
         }
     } break;
 
@@ -1601,8 +1650,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 return 1;
             if (constrain(self, ctx, node->type, node->if_then_else.yes->type, node)) return 1;
         } else {
-            tl_monotype *nil = tl_type_registry_nil(self->registry);
+            tl_monotype *nil      = tl_type_registry_nil(self->registry);
+            tl_monotype *any_type = tl_monotype_create_any(self->arena);
             if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+
+            // with a single arm, its type can be any.
+            if (constrain_pm(self, ctx, node->if_then_else.yes->type, any_type, node)) return 1;
         }
     } break;
 
@@ -2194,6 +2247,16 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         //
         forall(i, node->body.expressions) {
             rename_variables(self, node->body.expressions.v[i], lex, level + 1);
+        }
+        break;
+
+    case ast_case:
+        rename_variables(self, node->case_.expression, lex, level + 1);
+        forall(i, node->case_.conditions) {
+            rename_variables(self, node->case_.conditions.v[i], lex, level + 1);
+        }
+        forall(i, node->case_.arms) {
+            rename_variables(self, node->case_.arms.v[i], lex, level + 1);
         }
         break;
 
@@ -2876,6 +2939,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (node->let_in.body) ast_node_type_set(node, node->let_in.body->type);
         break;
 
+    case ast_case:
     case ast_nil:
     case ast_arrow:
     case ast_binary_op:

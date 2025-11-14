@@ -95,6 +95,12 @@ typedef struct ast_node {
             ast_node_sized expressions;
         } body;
 
+        struct ast_case {
+            struct ast_node *expression;
+            ast_node_sized   conditions; // must be same size
+            ast_node_sized   arms;       // must be same size
+        } case_;
+
         struct ast_if_then_else {
             struct ast_node *condition;
             struct ast_node *yes;
@@ -198,6 +204,7 @@ nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
 nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
 nodiscard ast_node *ast_node_create_continue(allocator *) mallocfun;
 nodiscard ast_node *ast_node_create_nil(allocator *) mallocfun;

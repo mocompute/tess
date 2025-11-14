@@ -65,6 +65,8 @@ extern char const *embed_std_c;
 static str         next_res(transpile *);
 static str         next_label(transpile *);
 
+static str         generate_body(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
+static str         generate_case(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
 static void        generate_decl(transpile *, str, tl_monotype *);
 static void        generate_decl_pointer(transpile *, str, tl_monotype *);
 static str         generate_expr(transpile *, tl_monotype *, ast_node const *, eval_ctx *);
@@ -921,6 +923,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     str             cond_str    = generate_expr(self, null, cond, ctx);
     str             res         = next_res(self);
 
+    // FIXME: do not generate decls for if statements with no expression result
     generate_decl(self, res, result_type);
     cat(self, S("if ("));
     cat(self, cond_str);
@@ -928,6 +931,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
 
     str yes_str = generate_expr(self, null, yes, ctx);
     if (should_assign_result(ctx, result_type)) {
+        // if there is no 'no' case, this is an if statement and has no result
         generate_assign(self, res, yes_str);
     } else {
         cat(self, yes_str);
@@ -1007,6 +1011,88 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
         out = generate_expr(self, null, node->body.expressions.v[i], ctx);
     }
     return out;
+}
+
+static str generate_case(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+    assert(ast_case == node->tag);
+    if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+    switch (node->case_.conditions.size) {
+    case 0: (void)generate_expr(self, null, node->case_.expression, ctx); return str_empty();
+    case 1: {
+        // Identical to a single-arm if statement
+        // TODO: copied from generate_if_then_else
+        ast_node const *cond     = node->case_.expression;
+        ast_node const *yes      = node->case_.arms.v[0];
+
+        str             cond_str = generate_expr(self, null, cond, ctx);
+
+        cat(self, S("if ("));
+        cat(self, cond_str);
+        cat(self, S(") {\n"));
+
+        str yes_str = generate_expr(self, null, yes, ctx);
+        cat(self, yes_str);
+        cat_semicolonln(self);
+
+        cat(self, S("}\n"));
+        return str_empty();
+    } break;
+
+    default: {
+        ast_node const *cond        = node->case_.expression;
+        ast_node const *yes         = node->case_.arms.v[0];
+        tl_monotype    *result_type = yes->type->type;
+
+        str             cond_str    = generate_expr(self, null, cond, ctx);
+        str             res         = next_res(self);
+        str             end_label   = next_label(self);
+
+        generate_decl(self, res, result_type);
+
+        forall(i, node->case_.arms) {
+            if (ast_node_is_nil(node->case_.conditions.v[i])) {
+                // the else case: must be last
+                if (i + 1 != node->case_.arms.size) fatal("logic error");
+
+                str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
+                if (should_assign_result(ctx, result_type)) {
+                    generate_assign(self, res, arm_body);
+                }
+                cat(self, S("goto "));
+                cat(self, end_label);
+                cat_semicolonln(self);
+                break;
+            }
+
+            str arm_cond = generate_expr(self, null, node->case_.conditions.v[i], ctx);
+            cat(self, S("if ("));
+            cat(self, cond_str);
+            cat(self, S(" == "));
+            cat(self, arm_cond);
+            cat(self, S(") {\n"));
+
+            str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
+            if (should_assign_result(ctx, result_type)) {
+                generate_assign(self, res, arm_body);
+            }
+            cat(self, S("goto "));
+            cat(self, end_label);
+            cat_semicolonln(self);
+
+            cat_close_curlyln(self);
+        }
+
+        cat_nl(self);
+        cat(self, end_label);
+        cat(self, S(":"));
+        cat_semicolonln(self);
+
+        return res;
+
+    } break;
+    }
 }
 
 static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
@@ -1263,6 +1349,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_tuple:        return generate_tuple(self, type, node, ctx);
 
     case ast_body:         return generate_body(self, type, node, ctx);
+    case ast_case:         return generate_case(self, type, node, ctx);
 
     case ast_binary_op:    return generate_binary_op(self, type, node, ctx);
     case ast_unary_op:     return generate_unary_op(self, type, node, ctx);

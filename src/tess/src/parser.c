@@ -1124,11 +1124,7 @@ static ast_node *parse_if_expr(parser *self) {
 
 // -- cond expression
 
-static ast_node *parse_cond_arm(parser *self) {
-
-    ast_node *cond = parse_expression(self, INT_MIN);
-    if (!cond) return null;
-
+static ast_node *parse_body(parser *self) {
     if (a_try(self, a_open_curly)) return null;
 
     ast_node_array exprs = {.alloc = self->ast_arena};
@@ -1138,7 +1134,16 @@ static ast_node *parse_cond_arm(parser *self) {
         if (0 == a_try(self, a_close_curly)) break;
     }
 
-    ast_node *yes = create_body(self, exprs);
+    return create_body(self, exprs);
+}
+
+static ast_node *parse_cond_arm(parser *self) {
+
+    ast_node *cond = parse_expression(self, INT_MIN);
+    if (!cond) return null;
+
+    ast_node *yes = parse_body(self);
+    if (!yes) return null;
 
     if (0 == a_try(self, a_close_curly)) {
         // close the cond expr with no else case
@@ -1162,6 +1167,56 @@ static ast_node *parse_cond_expr(parser *self) {
         return null;
     }
     return parse_cond_arm(self);
+}
+
+//
+
+static ast_node *parse_case_expr(parser *self) {
+    if (a_try_s(self, the_symbol, "case")) {
+        self->error.tag = tl_err_ok;
+        return null;
+    }
+
+    ast_node *expr = parse_expression(self, INT_MIN);
+    if (!expr) return null;
+
+    if (a_try(self, a_open_curly)) return null;
+
+    ast_node_array conditions = {.alloc = self->ast_arena};
+    ast_node_array arms       = {.alloc = self->ast_arena};
+    ast_node      *else_arm   = null;
+    while (1) {
+        // check for else condition
+        if (0 == a_try_s(self, the_symbol, "else")) {
+            if (else_arm) {
+                self->error.tag = tl_err_unexpected_else;
+                return null;
+            }
+            else_arm = parse_body(self);
+            if (!else_arm) return null;
+            continue;
+        }
+        if (0 == a_try(self, a_close_curly)) break;
+
+        ast_node *cond = parse_expression(self, INT_MIN);
+        if (!cond) return null;
+        ast_node *body = parse_body(self);
+        if (!body) return null;
+
+        array_push(conditions, cond);
+        array_push(arms, body);
+    }
+
+    if (else_arm) {
+        // else arm always goes at the end
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        array_push(conditions, sentinel);
+        array_push(arms, else_arm);
+    }
+
+    ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
+                                          (ast_node_sized)array_sized(arms));
+    return node;
 }
 
 //
@@ -1209,8 +1264,14 @@ static ast_node *parse_base_expression(parser *self) {
     node = parse_if_expr(self);
     if (node) return node;
     if (self->error.tag != tl_err_ok) return null;
+
     node = parse_cond_expr(self);
     if (node) return node;
+    if (self->error.tag != tl_err_ok) return null;
+
+    node = parse_case_expr(self);
+    if (node) return node;
+    if (self->error.tag != tl_err_ok) return null;
 
     if (0 == a_try(self, a_value)) return self->result;
     return null;

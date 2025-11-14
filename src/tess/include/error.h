@@ -75,6 +75,7 @@
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \
     X(tl_err_type_exists, "type_exists")                                                                   \
     X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
+    X(tl_err_unexpected_else, "unexpected_else")                                                           \
                                                                                                            \
     /* analyzer */                                                                                         \
     X(tl_err_expected_pointer, "expected_pointer")                                                         \

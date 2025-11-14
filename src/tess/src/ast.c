@@ -70,6 +70,16 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
     self->body.expressions = body;
     return self;
 }
+
+ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds,
+                               ast_node_sized arms) {
+    ast_node *self         = ast_node_create(alloc, ast_case);
+    self->case_.expression = expr;
+    self->case_.conditions = conds;
+    self->case_.arms       = arms;
+    return self;
+}
+
 ast_node *ast_node_create_nil(allocator *alloc) {
     ast_node *self = ast_node_create(alloc, ast_nil);
     return self;
@@ -347,6 +357,18 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         }
     } break;
 
+    case ast_case: {
+        clone->case_.expression   = ast_node_clone(alloc, orig->case_.expression);
+        clone->case_.conditions.v = alloc_malloc(alloc, orig->case_.conditions.size * sizeof(ast_node *));
+        clone->case_.arms.v       = alloc_malloc(alloc, orig->case_.arms.size * sizeof(ast_node *));
+        forall(i, clone->case_.conditions) {
+            clone->case_.conditions.v[i] = ast_node_clone(alloc, orig->case_.conditions.v[i]);
+        }
+        forall(i, clone->case_.arms) {
+            clone->case_.arms.v[i] = ast_node_clone(alloc, orig->case_.arms.v[i]);
+        }
+    } break;
+
     case ast_unary_op: {
         clone->unary_op.operand = ast_node_clone(alloc, orig->unary_op.operand);
         clone->unary_op.op      = ast_node_clone(alloc, orig->unary_op.op);
@@ -521,9 +543,13 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     case ast_body:
         //
-        forall(i, node->body.expressions) {
-            fun(ctx, node->body.expressions.v[i]);
-        }
+        forall(i, node->body.expressions) fun(ctx, node->body.expressions.v[i]);
+        break;
+
+    case ast_case:
+        fun(ctx, node->case_.expression);
+        forall(i, node->case_.conditions) fun(ctx, node->case_.conditions.v[i]);
+        forall(i, node->case_.arms) fun(ctx, node->case_.arms.v[i]);
         break;
 
     case ast_binary_op:
@@ -642,8 +668,15 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_body:
         //
         forall(i, node->body.expressions) {
-            fun(ctx, node->body.expressions.v[i]);
+            node->body.expressions.v[i] = fun(ctx, node->body.expressions.v[i]);
         }
+        break;
+
+    case ast_case:
+        node->case_.expression = fun(ctx, node->case_.expression);
+        forall(i, node->case_.conditions) node->case_.conditions.v[i] =
+          fun(ctx, node->case_.conditions.v[i]);
+        forall(i, node->case_.arms) node->case_.arms.v[i] = fun(ctx, node->case_.arms.v[i]);
         break;
 
     case ast_binary_op:
@@ -864,6 +897,28 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             str_build_cat(&b, v2_ast_node_to_string(alloc, node->body.expressions.v[i]));
             str_build_cat(&b, S(" "));
         }
+        return str_build_finish(&b);
+    } break;
+
+    case ast_case: {
+        str_build b = str_build_init(alloc, 128);
+        str_build_cat(&b, S("(case "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.expression));
+        if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+        str_build_cat(&b, S("("));
+        forall(i, node->case_.conditions) {
+            str_build_cat(&b, S("("));
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.conditions.v[i]));
+            str_build_cat(&b, S(") "));
+
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.arms.v[i]));
+
+            if (i + 1 < node->case_.conditions.size) str_build_cat(&b, S(" "));
+        }
+        str_build_cat(&b, S(")"));
+
+        str_build_cat(&b, S(")"));
         return str_build_finish(&b);
     } break;
 
@@ -1255,6 +1310,12 @@ u64 ast_node_hash(ast_node const *self) {
         forall(i, self->body.expressions) {
             combine_node(self->body.expressions.v[i]);
         }
+        break;
+
+    case ast_case:
+        combine_node(self->case_.expression);
+        forall(i, self->case_.conditions) combine_node(self->case_.conditions.v[i]);
+        forall(i, self->case_.arms) combine_node(self->case_.arms.v[i]);
         break;
 
     case ast_binary_op:
