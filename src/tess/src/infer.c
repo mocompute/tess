@@ -1592,13 +1592,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         if (constrain_pm(self, ctx, node->if_then_else.condition->type, bool_type, node)) return 1;
 
-        // a nil type in else arm indicates the arm should not be generated, so don't type check it
-        if (node->if_then_else.no)
+        // a nil type in else arm indicates the arm should not be generated, so don't type check it. If
+        // there is no else arm, then the if statement as a whole has an Void type. Otherwise, the if
+        // statement takes the type of its arms.
+        ensure_tv(self, null, &node->type);
+        if (node->if_then_else.no) {
             if (constrain(self, ctx, node->if_then_else.yes->type, node->if_then_else.no->type, node))
                 return 1;
-
-        ensure_tv(self, null, &node->type);
-        if (constrain(self, ctx, node->type, node->if_then_else.yes->type, node)) return 1;
+            if (constrain(self, ctx, node->type, node->if_then_else.yes->type, node)) return 1;
+        } else {
+            tl_monotype *nil = tl_type_registry_nil(self->registry);
+            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+        }
     } break;
 
     case ast_tuple: {
