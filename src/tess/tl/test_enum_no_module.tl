@@ -13,6 +13,6 @@ c_enum_tag_to_int(x: EnumTag) -> CInt
 
 main() {
   val := EnumTag.tZero
-  val_int : CInt := c_enum_tag_to_int(val)
+  val_int := c_enum_tag_to_int(val)
   val_int
 }

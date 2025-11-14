@@ -17,6 +17,6 @@ f(x : Foo.EnumTag) { x }
 
 main() {
   val := f(Foo.EnumTag.tZero)
-  val_int: CInt := c_enum_tag_to_int(val)
+  val_int := c_enum_tag_to_int(val)
   val_int
 }
