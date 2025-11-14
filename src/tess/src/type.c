@@ -1704,15 +1704,17 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs *self) {
 // -- env --
 
 void tl_type_env_log(tl_type_env *self) {
-    hashmap_iterator iter = {0};
-    while (map_iter(self->map, &iter)) {
-        str          name     = str_init_n(self->transient, iter.key_ptr, iter.key_size);
-        tl_polytype *type     = *(tl_polytype **)iter.data;
+    str_array sorted = str_map_sorted_keys(self->transient, self->map);
+    forall(i, sorted) {
+        str          name     = sorted.v[i];
+        tl_polytype *type     = str_map_get_ptr(self->map, name);
         str          type_str = tl_polytype_to_string(self->transient, type);
 
         fprintf(stderr, "%.*s : %.*s\n", str_ilen(name), str_buf(&name), str_ilen(type_str),
                 str_buf(&type_str));
+        str_deinit(self->transient, &type_str);
     }
+    array_free(sorted);
 }
 
 //

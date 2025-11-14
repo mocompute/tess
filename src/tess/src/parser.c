@@ -46,6 +46,7 @@ struct parser {
 
     str                    current_module;
     hashmap               *current_module_symbols; // hset str
+    hashmap               *builtin_module_symbols; // hset str
 
     u32                    next_nil_name;
     int                    verbose;
@@ -154,6 +155,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->token                   = (struct token){0};
     self->current_module          = str_empty();
     self->current_module_symbols  = hset_create(self->parent_alloc, 32);
+    self->builtin_module_symbols  = hset_create(self->parent_alloc, 32);
     self->next_nil_name           = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
@@ -180,6 +182,7 @@ void parser_destroy(parser **self) {
 
     // arena
     allocator *alloc = (*self)->parent_alloc;
+    hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(alloc, &(*self)->transient);
@@ -196,8 +199,22 @@ static void add_module_symbol(parser *self, ast_node *name) {
     if (ast_node_is_symbol(name)) {
         str_hset_insert(&self->current_module_symbols,
                         name->symbol.is_mangled ? name->symbol.original : name->symbol.name);
+
+        if (str_eq(self->current_module, S("builtin")) && !name->symbol.is_mangled) {
+            str_hset_insert(&self->builtin_module_symbols, name->symbol.name);
+        }
+
     } else if (ast_node_is_nfa(name)) {
         add_module_symbol(self, name->named_application.name);
+    }
+}
+
+static void callsite_add_module_symbol(parser *self, ast_node *name) {
+    // Assumes an unmangled callsite name (funcall, type constructor) is a forward reference.
+    if (ast_node_is_symbol(name)) {
+        if (!name->symbol.is_mangled) add_module_symbol(self, name);
+    } else if (ast_node_is_nfa(name)) {
+        callsite_add_module_symbol(self, name->named_application.name);
     }
 }
 
@@ -882,8 +899,8 @@ static int a_funcall(parser *self) {
     }
 
 done:
-
     array_shrink(args);
+    callsite_add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
@@ -908,6 +925,7 @@ static int a_type_constructor(parser *self) {
 
 done:
     array_shrink(args);
+    callsite_add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
@@ -1282,6 +1300,7 @@ static void mangle_name(parser *self, ast_node *name) {
 
     // Don't mangle names in 'builtin' module
     if (str_eq(self->current_module, S("builtin"))) return;
+    if (str_hset_contains(self->builtin_module_symbols, name_str)) return;
 
     // Don't mangle names that haven't been defined in the current module
     if (!str_hset_contains(self->current_module_symbols, name_str)) return;
