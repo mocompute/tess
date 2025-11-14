@@ -197,12 +197,16 @@ void parser_destroy(parser **self) {
 
 static void add_module_symbol(parser *self, ast_node *name) {
     if (ast_node_is_symbol(name)) {
-        str_hset_insert(&self->current_module_symbols,
-                        name->symbol.is_mangled ? name->symbol.original : name->symbol.name);
+        str name_str = ast_node_str(name);
 
-        if (str_eq(self->current_module, S("builtin")) && !name->symbol.is_mangled) {
-            str_hset_insert(&self->builtin_module_symbols, name->symbol.name);
-        }
+        // don't add names which are builtin names
+        if (str_hset_contains(self->builtin_module_symbols, name_str)) return;
+
+        str_hset_insert(&self->current_module_symbols, name_str);
+
+        // Also copy builtin names to another hset
+        if (str_eq(self->current_module, S("builtin")))
+            str_hset_insert(&self->builtin_module_symbols, name_str);
 
     } else if (ast_node_is_nfa(name)) {
         add_module_symbol(self, name->named_application.name);
