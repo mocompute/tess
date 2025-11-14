@@ -869,9 +869,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_binary_op: {
         str_build b = str_build_init(alloc, 128);
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.left));
+        str_build_cat(&b, S("(binary_op "));
         str_build_cat(&b, node->binary_op.op->symbol.name);
+        str_build_cat(&b, S(" "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.left));
+        str_build_cat(&b, S(" "));
         str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.right));
+        str_build_cat(&b, S(")"));
         return str_build_finish(&b);
 
     } break;
@@ -1027,8 +1031,8 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     }
 
     case ast_unary_op:
-        return str_cat(alloc, v2_ast_node_to_string(alloc, node->unary_op.op),
-                       v2_ast_node_to_string(alloc, node->unary_op.operand));
+        return str_cat_5(alloc, S("(unary_op "), v2_ast_node_to_string(alloc, node->unary_op.op), S(" "),
+                         v2_ast_node_to_string(alloc, node->unary_op.operand), S(")"));
 
     case ast_assignment:
         return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" = "),

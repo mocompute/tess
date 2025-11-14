@@ -877,8 +877,9 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                            str_cstr(&value_str));
             } else {
                 // TODO: improve error
+                str original = ast_node_name_original(node->let_in.name);
                 exit_error(node->let_in.value->file, node->let_in.value->line,
-                           "value has incomplete type information");
+                           "value has incomplete type information: %s", str_cstr(&original));
             }
         } else if (tl_monotype_is_concrete(type)) {
             if (should_assign_result(ctx, type)) {

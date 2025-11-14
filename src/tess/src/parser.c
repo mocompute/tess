@@ -344,7 +344,7 @@ int is_struct_access_operator(char const *s) {
 }
 
 static int is_unary_operator(char const *s) {
-    static char const *strings[] = {"!", "~", null};
+    static char const *strings[] = {"!", "~", "+", "-", null};
     char const       **it        = strings;
     while (*it != null)
         if (0 == strcmp(*it++, s)) return 1;
