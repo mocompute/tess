@@ -706,6 +706,7 @@ static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static str          specialize_fun(tl_infer *, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, ast_node_sized, ast_node *);
+static tl_polytype *make_arrow_result_type(tl_infer *, ast_node_sized, tl_polytype *);
 static tl_polytype *make_arrow_with(tl_infer *, ast_node *, tl_polytype *);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
@@ -2276,14 +2277,11 @@ static void cancel_last_instantiation(tl_infer *self) {
     self->next_instantiation--;
 }
 
-static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
-
-    if (result) ensure_tv(self, null, &result->type);
-
+static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, tl_polytype *result_type) {
     if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
         // always use a tuple on the left side of arrow, even if zero elements
         tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
-        tl_monotype *rhs   = result ? tl_monotype_clone(self->arena, result->type->type) : null;
+        tl_monotype *rhs   = result_type ? tl_monotype_clone(self->arena, result_type->type) : null;
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
@@ -2308,8 +2306,8 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
 
         tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
         tl_monotype *right = null;
-        if (result) {
-            right = tl_monotype_clone(self->arena, result->type->type);
+        if (result_type) {
+            right = tl_monotype_clone(self->arena, result_type->type);
             tl_monotype_substitute(self->arena, right, self->subs, null);
         } else {
             right = tl_type_registry_nil(self->registry);
@@ -2325,6 +2323,11 @@ static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *re
 
         return tl_polytype_absorb_mono(self->arena, out);
     }
+}
+
+static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
+    if (result) ensure_tv(self, null, &result->type);
+    return make_arrow_result_type(self, args, result ? result->type : null);
 }
 
 static tl_polytype *make_arrow_with(tl_infer *self, ast_node *node, tl_polytype *type) {
@@ -2459,8 +2462,15 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // calculate provisional type, for recursive functions
     if (ast_node_is_let(node)) {
-        if (!provisional)
-            provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
+        if (!provisional) {
+            // Note: special case: force main() to have a CInt result type
+            if (str_eq(name, S("main"))) {
+                provisional = make_arrow_result_type(self, ast_node_sized_from_ast_array(node),
+                                                     tl_type_registry_get(self->registry, S("CInt")));
+            } else {
+                provisional = make_arrow(self, ast_node_sized_from_ast_array(node), node->let.body);
+            }
+        }
     } else if (ast_node_is_let_in_lambda(node)) {
         if (!provisional)
             provisional = make_arrow(self, ast_node_sized_from_ast_array(infer_target),

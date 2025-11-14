@@ -1,13 +1,8 @@
-#module Foo
-
-EnumTag : {tZero, tOne, tTwo}
-DupTag :  {tFoo, tBar, tZero }
-
 #module main
 
-f(x : XXX) { x }
-
 main() {
-  val := f(Foo.EnumTag.tZero)
-  val
+  ull: CUnsignedLongLong := 0
+  ci : CInt := ull
+  sc : CSignedChar := ull
+  sc
 }
