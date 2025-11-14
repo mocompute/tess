@@ -1224,17 +1224,6 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             ast_node *right = parse_expression(self, prec + assoc);
             if (!right) return null;
 
-            // check for unary + and minus operators and convert to binary
-            if (ast_unary_op == right->tag) {
-                if (0 == str_cmp_c(right->unary_op.op->symbol.name, "+") ||
-                    0 == str_cmp_c(right->unary_op.op->symbol.name, "-")) {
-                    ast_node *binop = ast_node_create_binary_op(self->ast_arena, right->unary_op.op, left,
-                                                                right->unary_op.operand);
-                    left            = binop;
-                    continue;
-                }
-            }
-
             // Note: special case: mangle Module.foo and Module.bar() to simple expressions
             if (maybe_mangle_binop(self, op, &left, right)) continue;
 
