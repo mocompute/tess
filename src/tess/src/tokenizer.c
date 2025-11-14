@@ -41,7 +41,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     self->strings   = arena_create(alloc, 4096);
     self->input     = input;
     self->pos       = 0;
-    self->file      = str_init(self->strings, file);
+    self->file      = str_init(self->parent, file); // parent's lifetime
     self->line      = 1;
     self->col       = 0;
 
@@ -649,6 +649,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             char const c = next_char(self);
             if (c == '\n') {
+                advance_line(self);
                 reverse_pos(self);
                 state = stop_hash_command;
                 continue;
@@ -673,7 +674,9 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
             }
-            self->pos++;
+            char const c = next_char(self);
+            if (c == '\n') advance_line(self);
+
         } break;
 
         case stop_hash_command:
@@ -842,6 +845,6 @@ void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 }
 
 void tokenizer_set_file(tokenizer *self, str file) {
-    self->file = str_copy(self->strings, file);
+    self->file = str_copy(self->parent, file);
     self->line = 0;
 }
