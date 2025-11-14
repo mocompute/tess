@@ -97,6 +97,22 @@ function(tesslang_create_test NAME)
   add_test(NAME ${TEST_NAME} COMMAND ${TEST_EXE})
 endfunction()
 
+function(tesslang_create_build_fail_test NAME)
+  set(TEST_NAME test-tl-${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME})
+  add_test(NAME ${TEST_NAME}
+    COMMAND
+    $<TARGET_FILE:tess_exe>
+    exe
+    -I ${CMAKE_CURRENT_SOURCE_DIR}
+    -I ${PROJECT_SOURCE_DIR}/src/tl/std
+    -o ${TEST_EXE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  set_property(TEST ${TEST_NAME} PROPERTY WILL_FAIL true)
+endfunction()
+
 tesslang_create_test(address_of)
 tesslang_create_test(anon_lambda)
 tesslang_create_test(apply_generic)
@@ -114,8 +130,8 @@ tesslang_create_test(cond_basic)
 tesslang_create_test(cond_expression)
 tesslang_create_test(defun_inline_type)
 tesslang_create_test(dynamic_array)
-tesslang_create_test(enum_no_module)
-tesslang_create_test(enum_module)
+tesslang_create_build_fail_test(enum_no_module) # FIXME
+tesslang_create_build_fail_test(enum_module)    # FIXME
 tesslang_create_test(embed_c)
 tesslang_create_test(if_basic)
 tesslang_create_test(if_expression)

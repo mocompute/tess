@@ -5,5 +5,6 @@ DupTag :  {tFoo, tBar, tZero }
 
 main() {
   val := EnumTag.tZero
-  val
+  val_int : CInt := val
+  val_int
 }
