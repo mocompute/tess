@@ -1626,8 +1626,6 @@ static int toplevel_type_alias(parser *self) {
     mangle_name(self, name);
     ast_node *node = ast_node_create_type_alias(self->ast_arena, name, target);
     return result_ast_node(self, node);
-
-    return 0;
 }
 
 static int toplevel_enum(parser *self) {
