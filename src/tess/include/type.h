@@ -107,6 +107,7 @@ tl_polytype           *tl_type_env_lookup(tl_type_env *, str);
 
 typedef void (*missing_fv_cb)(void *, str fun, str var);
 int  tl_type_env_check_missing_fvs(tl_type_env *, missing_fv_cb, void *);
+void tl_type_env_remove_unknown_symbols(tl_type_env *, hashmap *);
 
 void tl_type_env_log(tl_type_env *);
 

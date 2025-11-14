@@ -4,6 +4,7 @@
 #include "array.h"
 #include "hash.h"
 #include "hashmap.h"
+#include "infer.h"
 #include "str.h"
 #include "util.h"
 
@@ -373,6 +374,24 @@ int tl_type_env_check_missing_fvs(tl_type_env *self, missing_fv_cb cb, void *use
         }
     }
     return error;
+}
+
+void tl_type_env_remove_unknown_symbols(tl_type_env *self, hashmap *known) {
+    str_array        remove = {.alloc = self->transient};
+
+    hashmap_iterator iter   = {0};
+    while (map_iter(self->map, &iter)) {
+        str name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+        if (!str_hset_contains(known, name)) array_push(remove, name);
+    }
+
+    forall(i, remove) {
+        // Don't remove c_ symbols
+        if (is_c_symbol(remove.v[i])) continue;
+
+        str_map_erase(self->map, remove.v[i]);
+        // dbg(self, "tl_type_env_remove_unknown_symbols: removing '%s'", str_cstr(&remove.v[i]));
+    }
 }
 
 // -- polytype --

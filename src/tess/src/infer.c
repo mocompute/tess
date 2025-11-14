@@ -517,7 +517,8 @@ static ast_node *toplevel_get(tl_infer *, str);
 
 typedef struct {
     tl_infer *self;
-    hashmap  *names; // str set
+    hashmap  *names;  // str set
+    hashmap  *recurs; // str set
 } tree_shake_ctx;
 
 hashmap *tree_shake(tl_infer *, ast_node const *);
@@ -529,6 +530,9 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
     if (ast_node_is_nfa(node)) {
         str name = toplevel_name(node);
 
+        // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
+        str_hset_insert(&ctx->names, name);
+
         // add all symbol arguments because they could be function pointers
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
@@ -536,24 +540,31 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             if (ast_node_is_assignment(arg)) arg = arg->assignment.value;
             if (!ast_node_is_symbol(arg)) continue;
             if (str_eq(name, arg->symbol.name)) continue;
-            if (!str_hset_contains(ctx->names, arg->symbol.name)) {
-                str_hset_insert(&ctx->names, arg->symbol.name);
+            if (!str_hset_contains(ctx->recurs, arg->symbol.name)) {
+                str_hset_insert(&ctx->recurs, arg->symbol.name);
 
                 // if it is a toplevel, recurse through it
                 ast_node *next = toplevel_get(self, arg->symbol.name);
                 if (next) {
                     ast_node_dfs(ctx, next, do_tree_shake);
                 }
+
+                // and save the name
+                // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&arg->symbol.name));
+                str_hset_insert(&ctx->names, arg->symbol.name);
             }
         }
 
-        if (!str_hset_contains(ctx->names, name)) {
-            str_hset_insert(&ctx->names, name);
+        if (!str_hset_contains(ctx->recurs, name)) {
+            str_hset_insert(&ctx->recurs, name);
 
             ast_node *next = toplevel_get(ctx->self, name);
             if (next) {
                 ast_node_dfs(ctx, next, do_tree_shake);
             }
+
+            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
+            str_hset_insert(&ctx->names, name);
         }
     } else if (ast_node_is_let_in(node)) {
         ast_node *value = node->let_in.value;
@@ -565,6 +576,26 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             if (next) {
                 ast_node_dfs(ctx, next, do_tree_shake);
             }
+            str_hset_insert(&ctx->recurs, name);
+
+            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
+            str_hset_insert(&ctx->names, name);
+        }
+
+        // the let-in name
+        {
+            str name = ast_node_str(node->let_in.name);
+            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
+            str_hset_insert(&ctx->names, name);
+        }
+
+    } else if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *param;
+        while ((param = ast_arguments_next(&iter))) {
+            if (!ast_node_is_symbol(param)) continue;
+            str name = ast_node_str(param);
+            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
         }
     }
@@ -574,6 +605,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
     tree_shake_ctx ctx = {.self = self};
     ctx.names          = hset_create(self->transient, 1024);
+    ctx.recurs         = hset_create(self->transient, 1024);
 
     str_hset_insert(&ctx.names, toplevel_name(node));
 
@@ -2660,12 +2692,25 @@ void remove_generic_toplevels(tl_infer *self) {
 }
 
 void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
-    hashmap         *used   = tree_shake(self, start);
+    hashmap  *used   = tree_shake(self, start);
 
-    str_array        remove = {.alloc = self->transient};
+    str_array remove = {.alloc = self->transient};
 
-    hashmap_iterator iter   = {0};
+    // Add all toplevel let-in names (globals) and type names because we now use this process to determine
+    // all symbols used in the program. This helps us identify nonexistent free variables.
+    hashmap_iterator iter = {0};
     ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_let_in(node)) {
+            str name = ast_node_str(node->let_in.name);
+            str_hset_insert(&used, name);
+        } else if (ast_node_is_utd(node)) {
+            str name = ast_node_str(node->user_type_def.name);
+            str_hset_insert(&used, name);
+        }
+    }
+
+    iter = (hashmap_iterator){0};
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
 
@@ -2682,6 +2727,10 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
         toplevel_del(self, remove.v[i]);
     }
     array_free(remove);
+
+    // Note: also remove any unused name in the environment
+    tl_type_env_remove_unknown_symbols(self->env, used);
+
     map_destroy(&used);
 }
 
@@ -2992,9 +3041,14 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     remove_generic_toplevels(self);
     arena_reset(self->transient);
 
+    // tree shake
     if (main) {
         tree_shake_toplevels(self, main);
         arena_reset(self->transient);
+
+        // after tree shake, extraneous symbols will have been removed from environment
+        if (check_missing_free_variables(self)) return 1;
+        if (self->errors.size) return 1;
     }
 
     if (0) {
