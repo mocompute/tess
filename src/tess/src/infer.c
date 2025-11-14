@@ -2437,11 +2437,25 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
     return 0;
 }
 
-static int infer_one(tl_infer *self, ast_node *infer_target) {
+static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow) {
+    // arrow is non-null only for let nodes
+    if (arrow && !ast_node_is_let(infer_target) && !ast_node_is_lambda_function(infer_target))
+        fatal("logic error");
+
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     infer_ctx    *ctx      = infer_ctx_create(self->transient);
     traverse->user         = ctx;
     if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
+
+    // constrain arrow result type and infer target's type
+    if (arrow) {
+        if (tl_polytype_is_scheme(arrow)) fatal("logic error");
+        ast_node *body = null;
+        if (ast_node_is_let(infer_target)) body = infer_target->let.body;
+        else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
+        if (!body) fatal("logic error");
+        if (constrain_pm(self, ctx, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
+    }
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
     return 0;
@@ -2482,7 +2496,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         // already loaded from load_toplevel
         return 0;
     } else if (ast_node_is_let_in(node)) {
-        if (infer_one(self, infer_target)) {
+        if (infer_one(self, infer_target, null)) {
             dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
                 str_ilen(orig_name), str_buf(&orig_name));
         }
@@ -2513,7 +2527,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // run inference
-    if (infer_one(self, infer_target)) {
+    if (infer_one(self, infer_target, provisional)) {
         dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
             str_ilen(orig_name), str_buf(&orig_name));
         return 1;
