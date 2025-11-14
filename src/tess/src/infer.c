@@ -2899,6 +2899,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // check if free variables are present
     if (check_missing_free_variables(self)) return 1;
+    if (self->errors.size) return 1;
     arena_reset(self->transient);
 
     tl_type_subs_apply(self->subs, self->env);

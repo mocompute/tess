@@ -117,8 +117,7 @@ empty(a: Type) {
   // with named arguments, ordinary TL functions do NOT support named arguments.
   //
   // The field `v` includes a type annotation, which is required here in order to make use of the type
-  // argument in the function parameters, and to ensure the returned struct has a non-generic (concrete)
-  // type.
+  // argument in the function parameters, and to ensure the compiler knows what concrete type to specialize.
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 

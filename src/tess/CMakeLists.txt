@@ -154,6 +154,7 @@ tesslang_create_test(malloc_struct_basic)
 tesslang_create_test(module_basic)
 tesslang_create_test(mutual_recursion)
 tesslang_create_test(mutual_recursion_module)
+tesslang_create_build_fail_test(mutual_recursion_module_apply) # FIXME
 tesslang_create_test(mutual_recursion_both_referenced)
 tesslang_create_test(nested_struct_access)
 tesslang_create_test(nested_lambda_context)
