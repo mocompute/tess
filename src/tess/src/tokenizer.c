@@ -113,18 +113,27 @@ static void advance_pos(tokenizer *self) {
 }
 
 static void advance_pos_n(tokenizer *self, i32 n) {
-    self->col += n;
-    self->pos += n;
+    if (n < 0) {
+        if (self->col >= (u32)labs(n)) self->col += n;
+        if (self->pos >= (u32)labs(n)) self->pos += n;
+    } else {
+        self->col += n;
+        self->pos += n;
+    }
 }
 
 static void reverse_pos(tokenizer *self) {
-    self->col--;
-    self->pos--;
+    if (self->col > 0) self->col--;
+    else if (self->line > 0) self->line--; // reversing to previous line
+
+    if (self->pos > 0) self->pos--;
 }
 
 static char next_char(tokenizer *self) {
     self->col++;
-    return self->input.v[self->pos++];
+    char out = self->input.v[self->pos++];
+    if (out == '\n') advance_line(self);
+    return out;
 }
 
 static char peek_char(tokenizer *self, u32 pos) {
@@ -225,7 +234,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case '"':  state = start_string; continue;
             case '\'': state = start_char; continue;
 
-            case '\n': advance_line(self); continue;
+            case '\n': continue;
 
             case '/':  state = forward_slash; continue;
             case '.':  state = in_dot; continue;
@@ -649,7 +658,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             char const c = next_char(self);
             if (c == '\n') {
-                advance_line(self);
                 reverse_pos(self);
                 state = stop_hash_command;
                 continue;
@@ -674,8 +682,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
             }
-            char const c = next_char(self);
-            if (c == '\n') advance_line(self);
+            (void)next_char(self);
 
         } break;
 
