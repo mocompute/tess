@@ -130,8 +130,8 @@ tesslang_create_test(cond_basic)
 tesslang_create_test(cond_expression)
 tesslang_create_test(defun_inline_type)
 tesslang_create_test(dynamic_array)
-tesslang_create_build_fail_test(enum_no_module) # FIXME
-tesslang_create_build_fail_test(enum_module)    # FIXME
+tesslang_create_test(enum_no_module)
+tesslang_create_test(enum_module)
 tesslang_create_test(embed_c)
 tesslang_create_test(if_basic)
 tesslang_create_test(if_expression)

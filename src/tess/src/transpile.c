@@ -624,7 +624,7 @@ static int should_assign_result(eval_ctx *ctx, tl_monotype *type) {
     return !ctx->is_effective_void && !is_nil_result(type);
 }
 
-static str generate_funcall_result(transpile *self, tl_monotype *type, int do_assign_lhs) {
+static str generate_funcall_result(transpile *self, tl_monotype *type) {
     assert(tl_monotype_is_list(type));
     tl_monotype *funcall_result_type = tl_monotype_sized_last(type->list.xs);
     str          res                 = str_empty(); // empty signals void result
@@ -632,7 +632,6 @@ static str generate_funcall_result(transpile *self, tl_monotype *type, int do_as
     if (!is_nil_result(funcall_result_type)) {
         res = next_res(self);
         generate_decl(self, res, funcall_result_type);
-        if (do_assign_lhs) generate_assign_lhs(self, res);
     }
     return res;
 }
@@ -775,7 +774,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     // declare variable to hold funcall result if it's not nil
     tl_monotype *type = env_lookup(self, ast_node_str(node->named_application.name));
     str          res;
-    if (type) res = generate_funcall_result(self, type, 0);
+    if (type) res = generate_funcall_result(self, type);
     else res = str_empty();
 
     // function call
@@ -824,7 +823,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     str_array      args_res = generate_args(self, args, type, ctx);
 
     // declare variable to hold funcall result if it's not nil
-    str res = generate_funcall_result(self, type, 0);
+    str res = generate_funcall_result(self, type);
 
     assert(tl_monotype_is_list(type));
     str ctx_var = str_empty();
@@ -869,7 +868,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     if (type) {
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
-        if (tl_monotype_is_tv(type)) {
+        if (tl_monotype_is_tv(type) || str_is_empty(value)) {
             // The assignment target has an indeterminate type, most likely because `value` is an unknown
             // symbol.
             if (ast_node_is_symbol(node->let_in.value)) {
@@ -878,7 +877,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                            str_cstr(&value_str));
             } else {
                 // TODO: improve error
-                exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol");
+                exit_error(node->let_in.value->file, node->let_in.value->line,
+                           "value has incomplete type information");
             }
         } else if (tl_monotype_is_concrete(type)) {
             if (should_assign_result(ctx, type)) {
@@ -977,7 +977,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast
     }
 
     // declare variable to hold funcall result if it's not nil
-    str res = generate_funcall_result(self, arrow, 0);
+    str res = generate_funcall_result(self, arrow);
 
     // generate lambda body
     str lambda_res =
@@ -1058,7 +1058,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             str_array      args_res = generate_args(self, args, type, ctx);
 
             // declare variable to hold funcall result if it's not nil
-            str res = generate_funcall_result(self, type, 0);
+            str res = generate_funcall_result(self, type);
 
             assert(tl_monotype_is_list(type));
             str ctx_var = str_empty();
@@ -1373,12 +1373,12 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
 
     generate_hash_includes(self);
-    generate_ifc_blocks(self);
 
     generate_user_types(self);
     generate_structs(self);
     generate_toplevel_contexts(self);
 
+    generate_ifc_blocks(self);
     generate_prototypes(self, !self->opts.is_library);
     cat_nl(self);
 
