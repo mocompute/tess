@@ -229,15 +229,6 @@ static void add_module_symbol(parser *self, ast_node *name) {
     }
 }
 
-static void callsite_add_module_symbol(parser *self, ast_node *name) {
-    // Assumes an unmangled callsite name (funcall, type constructor) is a forward reference.
-    if (ast_node_is_symbol(name)) {
-        if (!name->symbol.is_mangled) add_module_symbol(self, name);
-    } else if (ast_node_is_nfa(name)) {
-        callsite_add_module_symbol(self, name->named_application.name);
-    }
-}
-
 // -- parser --
 
 static void set_result_file(parser *p) {
@@ -920,7 +911,6 @@ static int a_funcall(parser *self) {
 
 done:
     array_shrink(args);
-    callsite_add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
@@ -945,7 +935,6 @@ static int a_type_constructor(parser *self) {
 
 done:
     array_shrink(args);
-    callsite_add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
@@ -1963,6 +1952,8 @@ int parser_parse_all_symbols(parser *self) {
     while (0 == (res = parser_next(self))) {
         ;
     }
+
+    save_current_module_symbols(self);
 
     if (is_eof(self)) return 0;
 
