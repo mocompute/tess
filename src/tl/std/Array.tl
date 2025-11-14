@@ -66,7 +66,8 @@ T(a) : {
 // since this is a generic type (using the type variable `a`), note that use of `TPtr` does NOT provide
 // access to `a`. To understand the consequence of this, refer to the definition of `reserve()` below:
 // notice that it must use `Ptr(T(a))` because the body of the function needs to refer to the `a` type
-// variable explicitly.
+// variable explicitly. In practice, most generic function implementations do not need to refer explicitly
+// to its type argument. TL does not support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
 TPtr = Ptr(T(a))
 
 // -- Synopsis --
@@ -114,10 +115,14 @@ empty(a: Type) {
   // The syntax `T( ... )` indicates a type constructor. Here, the type `T` is defined earlier in the file.
   // A type constructor must include every field; it is not permitted to omit any field. The syntax `field =
   // value` is used exclusively for type constructors. Although the syntax is similar to a function call
-  // with named arguments, ordinary TL functions do NOT support named arguments.
+  // with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
+  // distinguish function calls from type constructors, and is an opinionated language design choice to
+  // exclude parameter names from the formal API of TL libraries.
   //
   // The field `v` includes a type annotation, which is required here in order to make use of the type
-  // argument in the function parameters, and to ensure the compiler knows what concrete type to specialize.
+  // argument in the function parameters, and to ensure the compiler knows what concrete type of `T(a)` to
+  // specialize. It determines the specialization by examining the type of the arguments provided to the
+  // generic `T` type constructor.
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 
@@ -126,14 +131,16 @@ free(self) {
   // context as the member access through pointer operator, identical to C.
   c_free(self->v)
 
-  // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type.
+  // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type, similar to C
+  // NULL or nullptr.
   self->v = null
 
   // All functions must return a value, and the value of the final expression in the body of the function is
   // used as the return value. For functions which return no value, they must return the pseudo-value
   // `void`. If this `void` expression was omitted, the return value of this function would be `null`, with
-  // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct. Since the type
-  // `Ptr(a)` is not compatible with the type `Void`, this would generate a type error.
+  // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct, due to the previous
+  // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void`, this would
+  // generate a type error at compile time.
   void
 }
 
@@ -144,8 +151,8 @@ with_capacity(a: Type, count: Int) {
   // The `:=` operator indicates a variable declaration. Variables must be declared at the point of their
   // first use. Subsequently, a new value may be assigned to the variable using the `=` operator.
   //
-  // This statement also introduces the use of a type variable as a type argument. Note that type arguments
-  // co-exist with other formal parameters. Conventionally, they appear first.
+  // This statement also introduces the use of a type variable (`a`) as a type argument to another function
+  // call.
   width      := _type_width_aligned(a)
 
   // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
@@ -158,7 +165,7 @@ with_capacity(a: Type, count: Int) {
 }
 
 reserve(self: Ptr(T(a)), count: Int) {
-  // Note cannot use TPtr in parameter because `a` typevar is used in body of function
+  // This is an if statement. Round braces are optional around the condition.
   if self->capacity < count {
     p := c_realloc(self->v, count * _type_width_aligned(a))
 
@@ -172,7 +179,11 @@ reserve(self: Ptr(T(a)), count: Int) {
 
 push(self, x) {
   if _is_full(self) { _grow(self, self->capacity + 1) }
+
+  // Assigning to an array element through a pointer is identical to C.
   self->v[self->size] = x
+
+  // It's a bit wordy compared to C, but there is no ++ operator.
   self->size = self->size + 1
   void
 }
@@ -190,12 +201,16 @@ _grow(self, at_least) {
   if count < 1 { count = 1 }
 
   // This statement introduces a `while` statement. There is a variation that includes an 'update'
-  // expression, similar to that of a C for loop, but that is not shown here.
+  // expression, similar to that of a C `for` loop, but that is not shown here. `break` and `continue` are
+  // also supported.
   while count < at_least { count = count * 2 }
 
-  // Notice that there is no need here to add a `void` expression, since the call to `reserve()` itself returns `void`.
+  // Notice that there is no need here to add a `void` expression, since the call to `reserve()` itself
+  // returns `void`.
   reserve(self, count)
 }
 
-
+// `a` is annotated as a type variable, which are handled carefully to interface with C's sizeof and alignof
+// builtins. If you examine the TL `builtin` module you'll see sizeof and alignof are implemented as
+// wrappers around TL intrinsic functions.
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
