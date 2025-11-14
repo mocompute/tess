@@ -30,7 +30,10 @@ typedef struct {
 nodiscard parser *parser_create(allocator *, parser_opts const *) mallocfun;
 void              parser_destroy(parser **);
 
-// -- access --
+// -- module symbols pass --
+
+hashmap *parser_take_module_symbols(parser *);
+void     parser_set_module_symbols(parser *, hashmap *);
 
 // -- parser --
 
@@ -38,6 +41,7 @@ int  parser_next(parser *);
 void parser_result(parser *, ast_node **);
 
 int  parser_parse_all(parser *, ast_node_array *out);
+int  parser_parse_all_symbols(parser *);
 int  parser_parse_all_verbose(parser *, ast_node_array *out);
 void parser_report_errors(parser *);
 

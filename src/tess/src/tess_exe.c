@@ -349,6 +349,17 @@ int compile(state *self) {
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
+    // parser first pass
+    if (parser_parse_all_symbols(parser)) {
+        ++error;
+        goto cleanup_parser;
+    }
+
+    hashmap *syms = parser_take_module_symbols(parser);
+    parser_destroy(&parser);
+    parser = parser_create(default_allocator(), &parser_opts);
+    parser_set_module_symbols(parser, syms);
+
     if (self->verbose_parse) {
         if (parser_parse_all_verbose(parser, &nodes)) {
             parser_report_errors(parser);

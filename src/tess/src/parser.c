@@ -47,6 +47,7 @@ struct parser {
     str                    current_module;
     hashmap               *current_module_symbols; // hset str
     hashmap               *builtin_module_symbols; // hset str
+    hashmap               *module_symbols;         // map str -> hashmap* of hset str
 
     u32                    next_nil_name;
     int                    verbose;
@@ -54,6 +55,7 @@ struct parser {
     int                    in_function_application; // enable greedy parsing
     int                    skip_module;             // skip parsing until next module or file
     int expect_module; // expect a module immediately after a #unity_file before any terms
+    int is_symbol_pass;
 };
 
 typedef int (*parse_fun)(parser *);
@@ -156,12 +158,14 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_module          = str_empty();
     self->current_module_symbols  = hset_create(self->parent_alloc, 32);
     self->builtin_module_symbols  = hset_create(self->parent_alloc, 32);
+    self->module_symbols          = map_create_ptr(self->parent_alloc, 32); // str -> hashmap*
     self->next_nil_name           = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
     self->in_function_application = 0;
     self->skip_module             = 0;
     self->expect_module           = 0;
+    self->is_symbol_pass          = 0;
 
     self->tokenizer               = null;
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
@@ -182,6 +186,7 @@ void parser_destroy(parser **self) {
 
     // arena
     allocator *alloc = (*self)->parent_alloc;
+    if ((*self)->module_symbols) hset_destroy(&(*self)->module_symbols);
     hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->modules_seen);
@@ -191,6 +196,17 @@ void parser_destroy(parser **self) {
     arena_destroy(alloc, &(*self)->file_arena);
     alloc_free(alloc, *self);
     *self = null;
+}
+
+hashmap *parser_take_module_symbols(parser *self) {
+    hashmap *out         = self->module_symbols;
+    self->module_symbols = null;
+    return out;
+}
+
+void parser_set_module_symbols(parser *self, hashmap *mod_syms) {
+    map_destroy(&self->module_symbols);
+    self->module_symbols = mod_syms;
 }
 
 // -- module --
@@ -1595,6 +1611,22 @@ static int toplevel_c_chunk(parser *self) {
     return 0;
 }
 
+static void save_current_module_symbols(parser *self) {
+    if (!self->is_symbol_pass) return;
+    str      module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
+    hashmap *copy        = map_copy(self->current_module_symbols);
+    str_map_set_ptr(&self->module_symbols, module_name, copy);
+}
+
+static void load_module_symbols(parser *self) {
+    if (self->is_symbol_pass) return;
+    str module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
+    if (str_map_contains(self->module_symbols, module_name)) {
+        map_destroy(&self->current_module_symbols);
+        self->current_module_symbols = str_map_get_ptr(self->module_symbols, module_name);
+    }
+}
+
 static int toplevel_hash(parser *self) {
     if (a_try(self, a_hash_command)) return 1;
     ast_node *command = self->result;
@@ -1621,10 +1653,17 @@ static int toplevel_hash(parser *self) {
             self->expect_module = 0;
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
             else {
+                // save current module symbols, if any
+                save_current_module_symbols(self);
+
                 str_hset_insert(&self->modules_seen, module);
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
                 else self->current_module = module;
+
                 hset_reset(self->current_module_symbols);
+
+                // load module symbols, if any
+                load_module_symbols(self);
             }
         }
     }
@@ -1914,6 +1953,18 @@ int parser_parse_all(parser *p, ast_node_array *out) {
     }
 
     if (is_eof(p)) return 0;
+
+    return res;
+}
+
+int parser_parse_all_symbols(parser *self) {
+    int res              = 0;
+    self->is_symbol_pass = 1;
+    while (0 == (res = parser_next(self))) {
+        ;
+    }
+
+    if (is_eof(self)) return 0;
 
     return res;
 }

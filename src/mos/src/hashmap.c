@@ -450,6 +450,7 @@ void str_map_erase(hashmap *self, str key) {
 }
 
 void map_reset(hashmap *map) {
+    if (!map) return;
     if (map->n_occupied) {
         memset(map->entries, 0, map->n_cells * hashmap_entry_size(map));
         map->n_occupied = 0;
