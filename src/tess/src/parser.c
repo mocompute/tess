@@ -1020,8 +1020,8 @@ static int operator_precedence(char const *op, int is_prefix) {
       {"/", 90},
       {"%", 90},
       //
-      {".", 120},
-      {"->", 120},
+      {".", 110},
+      {"->", 110},
       {"[", 110},
       //
       {null, 0},
