@@ -2036,6 +2036,12 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             ast_node_name_replace(node, *found);
             dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
+        } else if (node->symbol.is_mangled && (found = str_map_get(*lex, node->symbol.original))) {
+            // name was mangled because it conflicts with a toplevel name. But lexical rename is meant to
+            // take precedence over mangling to match toplevel names.
+            ast_node_name_replace(node, *found);
+            dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
+                str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
         } else {
             // a free variable
         }

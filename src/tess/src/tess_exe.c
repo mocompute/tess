@@ -351,6 +351,7 @@ int compile(state *self) {
 
     // parser first pass
     if (parser_parse_all_symbols(parser)) {
+        parser_report_errors(parser);
         ++error;
         goto cleanup_parser;
     }
