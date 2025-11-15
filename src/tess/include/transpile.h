@@ -9,6 +9,7 @@ typedef struct transpile transpile;
 typedef struct {
     tl_infer_result infer_result;
     int             verbose;
+    int             no_line_directive;
     int             is_library;
 } transpile_opts;
 

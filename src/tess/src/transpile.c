@@ -41,6 +41,7 @@ struct transpile {
 
     u32               next_res;
 
+    int               no_line_directive;
     int               verbose;
 };
 
@@ -1383,7 +1384,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     }
 
     // emit #line directive
-    if (ctx && node->file && node->file[0]) {
+    if (!self->no_line_directive && ctx && node->file && node->file[0]) {
         str line = str_fmt(self->transient, "#line %u \"%s\"\n", node->line, node->file);
         if (!str_eq(line, ctx->last_line_directive)) {
             ctx->last_line_directive = line;
@@ -1580,6 +1581,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
 
     self->next_res          = 0;
 
+    self->no_line_directive = !!opts->no_line_directive;
     self->verbose           = !!opts->verbose;
 
     self->toplevels_sorted  = str_map_sorted_keys(self->arena, self->toplevels);
