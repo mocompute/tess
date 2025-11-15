@@ -282,7 +282,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "beg", "begin", "else", "end", "false", "fun", "if", "in", "let", "then", "struct", "true", null,
+      "break",  "case", "continue", "else", "false", "if", "null",
+      "return", "then", "true",     "void", "while", null,
     };
     char const **it = strings;
     while (*it != null)
