@@ -1151,7 +1151,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_nil: {
         ensure_tv(self, null, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-        // tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
         if (constrain_pm(self, ctx, node->type, weak, node)) return 1;
     } break;
 
@@ -1522,11 +1521,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 return 1;
         }
 
-        // add to environment
+        // Add to environment
 
-        // Important: this is necessary in
-        // particular for formal parameters which are type literals,
-        // because the type is propagated via the environment.
+        // Important: this is necessary in particular for formal parameters which are type literals, because
+        // the type is propagated via the environment.
         if (!traverse_ctx->is_field_name)
             if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
 
