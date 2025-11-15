@@ -304,8 +304,13 @@ tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
 }
 
 tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
-    tl_monotype *out =
-      tl_type_registry_specialize(self, S("Ptr"), str_empty(), (tl_monotype_sized){.size = 1, .v = &arg});
+    tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
+    arr[0]            = arg;
+    tl_monotype *out  = tl_type_registry_specialize(self, S("Ptr"), str_empty(),
+                                                    (tl_monotype_sized){
+                                                      .size = 1,
+                                                      .v    = arr,
+                                                   });
     assert(out);
     return out;
 }
@@ -318,8 +323,13 @@ tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *self, tl_monotype *a
 }
 
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype *arg) {
-    tl_monotype *out =
-      tl_type_registry_specialize(self, S("Type"), str_empty(), (tl_monotype_sized){.size = 1, .v = &arg});
+    tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
+    arr[0]            = arg;
+    tl_monotype *out  = tl_type_registry_specialize(self, S("Type"), str_empty(),
+                                                    (tl_monotype_sized){
+                                                      .size = 1,
+                                                      .v    = arr,
+                                                   });
     assert(out);
     return out;
 }
@@ -635,7 +645,6 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
         if (!is_variable_args) {
             forall(i, *inst) inst->v[i] = args.v[i];
         } else {
-            // FIXME: need to clone?
             *inst = args;
         }
         fresh->cons_inst->special_name = str_copy(alloc, special_name);
