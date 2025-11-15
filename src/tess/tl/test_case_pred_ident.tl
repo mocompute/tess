@@ -7,7 +7,7 @@ main() {
   s1 := "hello"
   case s1, streq {
     "world"    { 1 }
-    "there"    { 1 }
     "hello"    { 0 }
+    "there"    { 1 }
   }
 }
