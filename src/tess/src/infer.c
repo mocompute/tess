@@ -140,7 +140,10 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
 
     tl_type_variable tv = tl_type_subs_fresh(subs);
     found               = tl_monotype_create_tv(self->alloc, tv);
-    if (map) str_map_set_ptr(map, name, found);
+    if (map) {
+        fprintf(stderr, "add type argument to map: %s\n", str_cstr(&name));
+        str_map_set_ptr(map, name, found);
+    }
     return found;
 }
 
@@ -1131,7 +1134,13 @@ error:
     return out;
 }
 
-static int add_generic(tl_infer *, ast_node *);
+static int          add_generic(tl_infer *, ast_node *);
+
+static tl_polytype *get_type_literal(tl_infer *self, traverse_ctx *ctx, str name) {
+    tl_monotype *ta = str_map_get_ptr(ctx->type_arguments, name);
+    if (ta) return tl_polytype_absorb_mono(self->arena, tl_type_registry_type_literal(self->registry, ta));
+    return null;
+}
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     infer_ctx *ctx = traverse_ctx->user;
@@ -1473,10 +1482,16 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_symbol: {
 
-        tl_polytype *global = tl_type_env_lookup(self->env, node->symbol.name);
+        // Is it a type argument?
+        str          name   = node->symbol.name;
+        tl_polytype *global = get_type_literal(self, traverse_ctx, name);
+        if (global) {
+            dbg(self, "found type argument %s", str_cstr(&name));
+        }
+        if (!global) global = tl_type_env_lookup(self->env, node->symbol.name);
 
         if (global) {
-            // tl_polytype *global_copy = tl_polytype_clone(self->arena, global);
+            global = tl_polytype_clone(self->arena, global);
             if (node->type) {
                 if (!escape_constraint(self, node->type, global) &&
                     constrain(self, ctx, node->type, global, node))
@@ -1982,9 +1997,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
 
-        dbg(self, "specialize_applications_cb: nfa '%.*s'",
-            str_ilen(node->named_application.name->symbol.name),
-            str_buf(&node->named_application.name->symbol.name));
+        dbg(self, "specialize_applications_cb: nfa '%s'",
+            str_cstr(&node->named_application.name->symbol.name));
 
         // do not process intrinsic calls or their arguments
         if (is_intrinsic(name)) return 0;
@@ -2021,7 +2035,11 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
         str_map_erase(ctx->specials, name);
 
+        dbg(self, "specialize_applications_cb done: nfa '%s'",
+            str_cstr(&node->named_application.name->symbol.name));
+
     } else {
+        dbg(self, "specialize_applications_cb: anon");
         callsite = make_arrow(self, ast_node_sized_from_ast_array(node), node);
 
         concretize_params(self, node, callsite->type);

@@ -1116,7 +1116,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     }
 
-    case ast_lambda_function_application: return str_copy(alloc, S("[not implemented]"));
+    case ast_lambda_function_application: return str_copy(alloc, S("[lambda function application]"));
     }
 
     fatal("unreachable");
