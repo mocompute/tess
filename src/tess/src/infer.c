@@ -1282,24 +1282,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (0 == strcmp("->", op)) {
                 tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
                 if (!tl_monotype_has_ptr(left->type->type)) {
-                    // Important: must check if type is type variable before requiring the type to be a
-                    // pointer
-                    if (tl_monotype_is_tv(left->type->type)) {
-
-                        // FIXME: needed?
-
-                        // tl_monotype *target = tl_monotype_create_fresh_weak(self->subs);
-                        // tl_monotype *ptr    = tl_type_registry_ptr(self->registry, target);
-
-                        // // Only thing we can infer right now
-                        // return constrain_pm(self, ctx, left->type, ptr, left);
-
-                        return 0;
-
-                    } else {
-                        array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
-                        return 1;
-                    }
+                    array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+                    return 1;
                 }
                 struct_type = tl_monotype_ptr_target(left->type->type);
 
