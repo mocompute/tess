@@ -212,6 +212,9 @@ void parser_set_module_symbols(parser *self, hashmap *mod_syms) {
 
 static void add_module_symbol(parser *self, ast_node *name) {
     if (ast_node_is_symbol(name)) {
+        // For safety, don't add symbols which have already been mangled.
+        if (name->symbol.is_mangled) return;
+
         str name_str = ast_node_str(name);
 
         // don't add names which are builtin names
@@ -1808,7 +1811,9 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
 
-    // FIXME check name mangling logic, already mangled?
+    // Note: mangle_name has several escapes, including not mangling names on their first usage in the
+    // module which defines them. So while it looks like type_ident is being mangled twice, that isn't
+    // happening.
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
     return result_ast_node(self, r);
@@ -1833,7 +1838,7 @@ static int toplevel_union(parser *self) {
         array_push(fields, self->result);
     }
     array_shrink(fields);
-    
+
     // TODO: combine with toplevel_struct
 
     ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
@@ -1857,8 +1862,10 @@ static int toplevel_union(parser *self) {
         r->user_type_def.field_names[i]       = fields.v[i];
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
-    
-    // FIXME check name mangling logic, already mangled?
+
+    // Note: mangle_name has several escapes, including not mangling names on their first usage in the
+    // module which defines them. So while it looks like type_ident is being mangled twice, that isn't
+    // happening.
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
     return result_ast_node(self, r);
