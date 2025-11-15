@@ -317,11 +317,6 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
     if (!ast_node_is_symbol(name)) fatal("logic error");
 
     if (!name->symbol.annotation) return;
-    {
-        // str ann_str = v2_ast_node_to_string(self->transient, name->symbol.annotation);
-        // log(self, "process_annotation: %.*s : ast:%s", str_ilen(name->symbol.name),
-        //     str_buf(&name->symbol.name), str_cstr(&ann_str));
-    }
 
     // Note: always process annotation even if repeating, because we have more concrete type information on
     // later passes.
@@ -341,10 +336,6 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
 
     tl_polytype *poly            = tl_polytype_absorb_mono(self->arena, ann);
     name->symbol.annotation_type = poly;
-
-    // str poly_str                 = tl_polytype_to_string(self->transient, poly);
-    // log(self, "process_annotation: %.*s : %s", str_ilen(name->symbol.name), str_buf(&name->symbol.name),
-    //     str_cstr(&poly_str));
 
     if (!ctx) map_destroy(&map);
 }
@@ -533,7 +524,6 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
     if (ast_node_is_nfa(node)) {
         str name = toplevel_name(node);
 
-        // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
         str_hset_insert(&ctx->names, name);
 
         // add all symbol arguments because they could be function pointers
@@ -553,7 +543,6 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
                 }
 
                 // and save the name
-                // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&arg->symbol.name));
                 str_hset_insert(&ctx->names, arg->symbol.name);
             }
         }
@@ -566,7 +555,6 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
                 ast_node_dfs(ctx, next, do_tree_shake);
             }
 
-            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
         }
     } else if (ast_node_is_let_in(node)) {
@@ -697,6 +685,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right) {
     // Note: special case: rather than teach the type system about this conversion, we turn a blind
     // eye to String : Ptr(CChar) things. Sadly this requires doing a substitution first.
+    // TODO: why isn't this just in constrain()?
     tl_polytype_substitute(self->arena, left, self->subs);
     tl_polytype_substitute(self->arena, right, self->subs);
     if ((tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
@@ -951,8 +940,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->while_.body, cb)) return 1;
         if (cb(self, ctx, node)) return 1;
         break;
-
-        // FIXME: complete the misisng traversals for the various ast types below
 
     case ast_hash_command:
     case ast_nil:
