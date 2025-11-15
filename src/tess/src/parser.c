@@ -1808,6 +1808,7 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
 
+    // FIXME check name mangling logic, already mangled?
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
     return result_ast_node(self, r);
@@ -1832,6 +1833,8 @@ static int toplevel_union(parser *self) {
         array_push(fields, self->result);
     }
     array_shrink(fields);
+    
+    // TODO: combine with toplevel_struct
 
     ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
     r->user_type_def.is_union = 1;
@@ -1854,7 +1857,8 @@ static int toplevel_union(parser *self) {
         r->user_type_def.field_names[i]       = fields.v[i];
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
-
+    
+    // FIXME check name mangling logic, already mangled?
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
     return result_ast_node(self, r);
