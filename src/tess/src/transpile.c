@@ -50,6 +50,9 @@ typedef struct {
     // inside a while statement body, update_label is used as the target of a continue statement.
     str update_label;
 
+    // to minimize repetitive #line noise in the output file
+    str last_line_directive;
+
     // instead of emitting output to evaluate an expression and push it on the result stack, return a str
     // which can be used as an lvalue for the expression.
     int want_lvalue;
@@ -1377,6 +1380,15 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     if (!type) {
         assert(node->type);
         type = node->type->type;
+    }
+
+    // emit #line directive
+    if (ctx && node->file && node->file[0]) {
+        str line = str_fmt(self->transient, "#line %u \"%s\"\n", node->line, node->file);
+        if (!str_eq(line, ctx->last_line_directive)) {
+            ctx->last_line_directive = line;
+            cat(self, line);
+        }
     }
 
     switch (node->tag) {
