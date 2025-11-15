@@ -315,13 +315,6 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     return out;
 }
 
-tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *self, tl_monotype *arg) {
-    tl_monotype *out = tl_type_registry_specialize(self, S("PtrOrNull"), str_empty(),
-                                                   (tl_monotype_sized){.size = 1, .v = &arg});
-    assert(out);
-    return out;
-}
-
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype *arg) {
     tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
     arr[0]            = arg;

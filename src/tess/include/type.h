@@ -145,7 +145,6 @@ int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // const
 int                    tl_monotype_is_arrow(tl_monotype *);
 int                    tl_monotype_is_ptr(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
-int                    tl_monotype_is_ptr_or_null(tl_monotype *);
 int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
 int                    tl_monotype_is_type_literal(tl_monotype *);
