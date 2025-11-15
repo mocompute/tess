@@ -732,14 +732,9 @@ static int constrain_pm(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_mo
     return constrain(self, ctx, left, &wrap, node);
 }
 
-static void ensure_tv(tl_infer *self, str const *name, tl_polytype **type) {
+static void ensure_tv(tl_infer *self, tl_polytype **type) {
     if (!type) return;
     if (*type) return;
-
-    if (name) *type = tl_type_env_lookup(self->env, *name);
-    // if (name) *type = tl_polytype_clone(self->arena, tl_type_env_lookup(self->env, *name));
-    if (*type) return;
-
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
@@ -774,7 +769,7 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
     while ((param = ast_arguments_next(&iter))) {
         assert(ast_node_is_symbol(param));
         str_hset_insert(&ctx->lex, param->symbol.name);
-        ensure_tv(self, null, &param->type);
+        ensure_tv(self, &param->type);
         if (cb(self, ctx, param)) return 1;
     }
     return 0;
@@ -863,7 +858,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_lambda_function_application: {
 
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
@@ -1149,61 +1144,61 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     switch (node->tag) {
     case ast_nil: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
         if (constrain_pm(self, ctx, node->type, weak, node)) return 1;
     } break;
 
     case ast_string: {
         tl_monotype *ty = tl_type_registry_string(self->registry);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_char: {
         tl_monotype *ty = tl_type_registry_char(self->registry);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_f64: {
         tl_monotype *ty = tl_type_registry_float(self->registry);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_i64: {
         tl_monotype *ty = tl_type_registry_int(self->registry);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_u64: {
         tl_monotype *ty = tl_type_registry_int(self->registry); // FIXME unsigned
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_bool: {
         tl_monotype *ty = tl_type_registry_bool(self->registry);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
     } break;
 
     case ast_body: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (node->body.expressions.size) {
             u32       sz   = node->body.expressions.size;
             ast_node *last = node->body.expressions.v[sz - 1];
-            ensure_tv(self, null, &last->type);
+            ensure_tv(self, &last->type);
             if (constrain(self, ctx, node->type, last->type, node)) return 1;
         }
     } break;
 
     case ast_case: {
-        ensure_tv(self, null, &node->type);
-        ensure_tv(self, null, &node->case_.expression->type);
-        ensure_tv(self, null, &node->case_.binary_predicate->type);
+        ensure_tv(self, &node->type);
+        ensure_tv(self, &node->case_.expression->type);
+        ensure_tv(self, &node->case_.binary_predicate->type);
         tl_monotype *nil       = tl_type_registry_nil(self->registry);
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         tl_monotype *any_type  = tl_monotype_create_any(self->arena);
@@ -1213,7 +1208,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // expression and all conditions must be same type so they can be compared for equality
         forall(i, node->case_.conditions) {
-            ensure_tv(self, null, &node->case_.conditions.v[i]->type);
+            ensure_tv(self, &node->case_.conditions.v[i]->type);
             if (constrain(self, ctx, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
         }
 
@@ -1234,7 +1229,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         default: {
             tl_polytype *arm_type = node->case_.arms.v[0]->type;
             forall(i, node->case_.arms) {
-                ensure_tv(self, null, &node->case_.arms.v[i]->type);
+                ensure_tv(self, &node->case_.arms.v[i]->type);
                 if (constrain(self, ctx, node->case_.arms.v[i]->type, arm_type, node)) return 1;
             }
         } break;
@@ -1254,15 +1249,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_return: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain(self, ctx, node->type, node->return_.value->type, node)) return 1;
     } break;
 
     case ast_binary_op: {
         ast_node *left = node->binary_op.left, *right = node->binary_op.right;
-        ensure_tv(self, null, &node->type);
-        ensure_tv(self, null, &left->type);
-        ensure_tv(self, null, &right->type);
+        ensure_tv(self, &node->type);
+        ensure_tv(self, &left->type);
+        ensure_tv(self, &right->type);
 
         char const *op = str_cstr(&node->binary_op.op->symbol.name);
         if (is_arithmetic_operator(op)) {
@@ -1334,7 +1329,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     nfa   = right;
                     right = right->named_application.name;
                 }
-                ensure_tv(self, null, &right->type);
+                ensure_tv(self, &right->type);
                 if (ast_node_is_symbol(right)) {
                     str                       field_name = right->symbol.name;
                     tl_type_constructor_inst *inst       = struct_type->cons_inst;
@@ -1379,8 +1374,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_unary_op: {
         ast_node *operand = node->unary_op.operand;
-        ensure_tv(self, null, &operand->type);
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &operand->type);
+        ensure_tv(self, &node->type);
 
         str op = ast_node_str(node->unary_op.op);
         if (str_eq(op, S("*"))) {
@@ -1419,10 +1414,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_let_in: {
-        ensure_tv(self, null, &node->type);
-        ensure_tv(self, null, &node->let_in.name->type);
-        ensure_tv(self, null, &node->let_in.value->type);
-        if (node->let_in.body) ensure_tv(self, null, &node->let_in.body->type);
+        ensure_tv(self, &node->type);
+        ensure_tv(self, &node->let_in.name->type);
+        ensure_tv(self, &node->let_in.value->type);
+        if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
         if (ast_node_is_lambda_function(node->let_in.value)) {
 
@@ -1501,15 +1496,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         else {
-            ensure_tv(self, null, &node->type);
-
-            // Note: special case: if symbol is the name of an enum, constraint it to an Int
-            // FIXME needed?
-            ast_node *utd = toplevel_get(self, node->symbol.name);
-            if (0 && utd && ast_node_is_enum_def(utd)) {
-                tl_monotype *int_ty = tl_type_registry_int(self->registry);
-                if (constrain_pm(self, ctx, node->type, int_ty, node)) return 1;
-            }
+            ensure_tv(self, &node->type);
         }
 
         // if symbol has a type annotation, constrain it
@@ -1532,7 +1519,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_named_function_application: {
 
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
 
         str          name     = ast_node_str(node->named_application.name);
         str          original = ast_node_name_original(node->named_application.name);
@@ -1556,7 +1543,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ast_arguments_iter iter = ast_node_arguments_iter(node);
             ast_node          *arg;
             while ((arg = ast_arguments_next(&iter))) {
-                ensure_tv(self, null, &arg->type);
+                ensure_tv(self, &arg->type);
                 assert(!tl_polytype_is_scheme(arg->type));
                 array_push(args, arg->type->type);
             }
@@ -1660,7 +1647,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_lambda_function: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
 
         tl_polytype *arrow =
           make_arrow(self, ast_node_sized_from_ast_array(node), node->lambda_function.body);
@@ -1678,7 +1665,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // a nil type in else arm indicates the arm should not be generated, so don't type check it. If
         // there is no else arm, then the if statement as a whole has an Void type. Otherwise, the if
         // statement takes the type of its arms.
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (node->if_then_else.no) {
             if (constrain(self, ctx, node->if_then_else.yes->type, node->if_then_else.no->type, node))
                 return 1;
@@ -1694,7 +1681,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_tuple: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         ast_node_sized arr = ast_node_sized_from_ast_array(node);
         assert(arr.size > 0);
 
@@ -1718,9 +1705,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_assignment:
-        ensure_tv(self, null, &node->type);
-        ensure_tv(self, null, &node->assignment.name->type);
-        ensure_tv(self, null, &node->assignment.value->type);
+        ensure_tv(self, &node->type);
+        ensure_tv(self, &node->assignment.name->type);
+        ensure_tv(self, &node->assignment.value->type);
 
         if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
         if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
@@ -1728,12 +1715,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_continue:
         // use 'any' for continue so it can unify with any other conditional arm
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         if (constrain_pm(self, ctx, node->type, tl_monotype_create_any(self->arena), node)) return 1;
         break;
 
     case ast_while: {
-        ensure_tv(self, null, &node->type);
+        ensure_tv(self, &node->type);
         tl_monotype *nil = tl_type_registry_nil(self->registry);
         if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
     } break;
@@ -2442,7 +2429,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, 
         tl_monotype_array args_types = {.alloc = self->arena};
         array_reserve(args_types, args.size);
         forall(i, args) {
-            ensure_tv(self, null, &args.v[i]->type);
+            ensure_tv(self, &args.v[i]->type);
             tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
 
             // make concrete if possible
@@ -2472,7 +2459,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, 
 }
 
 static tl_polytype *make_arrow(tl_infer *self, ast_node_sized args, ast_node *result) {
-    if (result) ensure_tv(self, null, &result->type);
+    if (result) ensure_tv(self, &result->type);
     return make_arrow_result_type(self, args, result ? result->type : null);
 }
 
