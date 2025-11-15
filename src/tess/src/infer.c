@@ -598,6 +598,12 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
         }
+    } else if (ast_case == node->tag && node->case_.binary_predicate) {
+        ast_node *pred = node->case_.binary_predicate;
+        if (ast_node_is_symbol(pred)) {
+            str name = ast_node_str(pred);
+            str_hset_insert(&ctx->names, name);
+        }
     }
 }
 
@@ -891,6 +897,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_case: {
         if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
+        if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
         forall(i, node->case_.conditions) {
             if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
         }
@@ -1188,7 +1195,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_case: {
         ensure_tv(self, null, &node->type);
         ensure_tv(self, null, &node->case_.expression->type);
+        ensure_tv(self, null, &node->case_.binary_predicate->type);
         tl_monotype *nil       = tl_type_registry_nil(self->registry);
+        tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         tl_monotype *any_type  = tl_monotype_create_any(self->arena);
         tl_polytype *expr_type = node->case_.expression->type;
 
@@ -1222,6 +1231,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             }
         } break;
         }
+
+        // predicate, if it exists, must be type (x, y) -> Bool
+        if (node->case_.binary_predicate && node->case_.conditions.size) {
+            ast_node_array args = {.alloc = self->arena};
+            array_push(args, node->case_.expression);
+            array_push(args, node->case_.conditions.v[0]);
+            tl_polytype *bool_poly = tl_polytype_absorb_mono(self->arena, bool_type);
+            tl_polytype *pred_arrow =
+              make_arrow_result_type(self, (ast_node_sized)array_sized(args), bool_poly);
+            if (constrain(self, ctx, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
+        }
+
     } break;
 
     case ast_return: {
@@ -2252,6 +2273,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
     case ast_case:
         rename_variables(self, node->case_.expression, lex, level + 1);
+        rename_variables(self, node->case_.binary_predicate, lex, level + 1);
         forall(i, node->case_.conditions) {
             rename_variables(self, node->case_.conditions.v[i], lex, level + 1);
         }

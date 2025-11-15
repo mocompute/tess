@@ -71,12 +71,13 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
     return self;
 }
 
-ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds,
-                               ast_node_sized arms) {
-    ast_node *self         = ast_node_create(alloc, ast_case);
-    self->case_.expression = expr;
-    self->case_.conditions = conds;
-    self->case_.arms       = arms;
+ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds, ast_node_sized arms,
+                               ast_node *bin_pred) {
+    ast_node *self               = ast_node_create(alloc, ast_case);
+    self->case_.expression       = expr;
+    self->case_.conditions       = conds;
+    self->case_.arms             = arms;
+    self->case_.binary_predicate = bin_pred; // may be null
     return self;
 }
 
@@ -358,7 +359,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     } break;
 
     case ast_case: {
-        clone->case_.expression   = ast_node_clone(alloc, orig->case_.expression);
+        clone->case_.expression       = ast_node_clone(alloc, orig->case_.expression);
+        clone->case_.binary_predicate = ast_node_clone(alloc, orig->case_.binary_predicate);
         clone->case_.conditions.v = alloc_malloc(alloc, orig->case_.conditions.size * sizeof(ast_node *));
         clone->case_.arms.v       = alloc_malloc(alloc, orig->case_.arms.size * sizeof(ast_node *));
         forall(i, clone->case_.conditions) {
@@ -548,6 +550,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     case ast_case:
         fun(ctx, node->case_.expression);
+        if (node->case_.binary_predicate) fun(ctx, node->case_.binary_predicate);
         forall(i, node->case_.conditions) fun(ctx, node->case_.conditions.v[i]);
         forall(i, node->case_.arms) fun(ctx, node->case_.arms.v[i]);
         break;
@@ -673,7 +676,8 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         break;
 
     case ast_case:
-        node->case_.expression = fun(ctx, node->case_.expression);
+        node->case_.expression       = fun(ctx, node->case_.expression);
+        node->case_.binary_predicate = fun(ctx, node->case_.binary_predicate);
         forall(i, node->case_.conditions) node->case_.conditions.v[i] =
           fun(ctx, node->case_.conditions.v[i]);
         forall(i, node->case_.arms) node->case_.arms.v[i] = fun(ctx, node->case_.arms.v[i]);
@@ -901,10 +905,17 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     } break;
 
     case ast_case: {
+        if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
         str_build b = str_build_init(alloc, 128);
         str_build_cat(&b, S("(case "));
         str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.expression));
-        if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+        if (node->case_.binary_predicate) {
+            str_build_cat(&b, S("(binary_predicate "));
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.binary_predicate));
+            str_build_cat(&b, S(") "));
+        }
 
         str_build_cat(&b, S("("));
         forall(i, node->case_.conditions) {
@@ -1206,6 +1217,7 @@ struct ast_user_type_def *ast_node_utd(ast_node *node) {
 //
 
 u64 ast_node_hash(ast_node const *self) {
+    if (!self) return hash64(null, 0);
     u64 hash = hash64((byte *)&self->tag, sizeof self->tag);
 
 #define combine_node(node)                                                                                 \
@@ -1287,20 +1299,15 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_lambda_function:
-        // for lambdas and let functions, its type is part of the hash
+        //
         combine_node(self->lambda_function.body);
-        // hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
-        // FIXME
         break;
 
     case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
 
     case ast_let:
-        // for lambdas and let functions, its type is part of the hash
         combine_node(self->let.name);
         combine_node(self->let.body);
-        // hash = hash64_combine(hash, (byte *)&self->type, sizeof(tl_type *));
-        // FIXME
         break;
 
     case ast_named_function_application: combine_node(self->named_application.name); break;
@@ -1314,6 +1321,7 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_case:
         combine_node(self->case_.expression);
+        combine_node(self->case_.binary_predicate);
         forall(i, self->case_.conditions) combine_node(self->case_.conditions.v[i]);
         forall(i, self->case_.arms) combine_node(self->case_.arms.v[i]);
         break;

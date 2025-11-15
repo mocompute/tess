@@ -125,8 +125,8 @@ tesslang_create_test(c_symbol_annotation)
 tesslang_create_test(c_timespec)
 tesslang_create_test(case_basic_else)
 tesslang_create_test(case_float)
-tesslang_create_build_fail_test(case_pred_ident) # FIXME
-tesslang_create_build_fail_test(case_pred_lambda)# FIXME
+tesslang_create_test(case_pred_ident)
+tesslang_create_test(case_pred_lambda)
 tesslang_create_test(cast_string_to_ptr)
 tesslang_create_test(cast_string_to_ptr_and_index)
 tesslang_create_test(char_literal)

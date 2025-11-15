@@ -793,6 +793,35 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     return res;
 }
 
+static str generate_funcall_with_args(transpile *self, ast_node const *node, eval_ctx *ctx,
+                                      str_array args_res) {
+
+    str          name = ast_node_str(node->named_application.name);
+    tl_monotype *type = env_lookup(self, name);
+
+    // declare variable to hold funcall result if it's not nil
+    str res = generate_funcall_result(self, type);
+
+    assert(tl_monotype_is_list(type));
+    str ctx_var = str_empty();
+    if (type->list.fvs.size) {
+        ctx_var = generate_context(self, type->list.fvs, ctx);
+    }
+
+    // function call
+    if (!str_is_empty(res)) generate_assign_lhs(self, res);
+    generate_funcall_head(self, name, ctx_var, args_res.size);
+
+    // args list
+    str_build b = str_build_init(self->transient, 128);
+    str_build_join_array(&b, S(", "), args_res);
+    cat(self, str_build_finish(&b));
+    cat_close_round(self);
+    cat_semicolonln(self);
+
+    return res;
+}
+
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Note: the main logic of this function is also duplicated in generate_binary_op.
 
@@ -824,27 +853,7 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
     str_array      args_res = generate_args(self, args, type, ctx);
 
-    // declare variable to hold funcall result if it's not nil
-    str res = generate_funcall_result(self, type);
-
-    assert(tl_monotype_is_list(type));
-    str ctx_var = str_empty();
-    if (type->list.fvs.size) {
-        ctx_var = generate_context(self, type->list.fvs, ctx);
-    }
-
-    // function call
-    if (!str_is_empty(res)) generate_assign_lhs(self, res);
-    generate_funcall_head(self, name, ctx_var, args_res.size);
-
-    // args list
-    str_build b = str_build_init(self->transient, 128);
-    str_build_join_array(&b, S(", "), args_res);
-    cat(self, str_build_finish(&b));
-    cat_close_round(self);
-    cat_semicolonln(self);
-
-    return res;
+    return generate_funcall_with_args(self, node, ctx, args_res);
 }
 
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
@@ -954,19 +963,20 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     return res;
 }
 
-static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
-                                  eval_ctx *ctx) {
+static str generate_inline_lambda_with_args(transpile *self, tl_monotype *result_type, ast_node const *node,
+                                            eval_ctx *ctx, str_array args_res) {
     assert(ast_node_is_lambda_application(node));
 
     ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
-    ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
-    assert(params.size == args.size);
 
     if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
-    tl_monotype *arrow    = node->lambda_application.lambda->type->type;
+    tl_monotype *arrow = node->lambda_application.lambda->type->type;
 
-    str_array    args_res = generate_args(self, args, arrow, ctx);
-    assert(args_res.size == params.size);
+    // declare variable to hold funcall result if it's not nil
+    str res = generate_funcall_result(self, arrow);
+
+    // establish lexical scope for parameters in case of repeated applications
+    cat_open_curlyln(self);
 
     // initialise parameters
     forall(i, params) {
@@ -981,16 +991,33 @@ static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast
         cat_semicolonln(self);
     }
 
-    // declare variable to hold funcall result if it's not nil
-    str res = generate_funcall_result(self, arrow);
-
     // generate lambda body
     str lambda_res =
       generate_expr(self, result_type, node->lambda_application.lambda->lambda_function.body, ctx);
     generate_assign_lhs(self, res);
     cat(self, lambda_res);
     cat_semicolonln(self);
+
+    // close lexical scope
+    cat_close_curlyln(self);
     return res;
+}
+
+static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
+                                  eval_ctx *ctx) {
+    assert(ast_node_is_lambda_application(node));
+
+    ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
+    ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
+    assert(params.size == args.size);
+
+    if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
+    tl_monotype *arrow    = node->lambda_application.lambda->type->type;
+
+    str_array    args_res = generate_args(self, args, arrow, ctx);
+    assert(args_res.size == params.size);
+
+    return generate_inline_lambda_with_args(self, result_type, node, ctx, args_res);
 }
 
 static str generate_str(transpile *self, str expr, tl_monotype *type) {
@@ -1018,27 +1045,38 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
     assert(ast_case == node->tag);
     if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
 
+    ast_node    *bin_pred   = null;
+    ast_node    *lfa_args[] = {null, null}; // ignored because we generate args manually
+    ast_node    *lfa        = null;
+    str_array    args_res   = {.alloc = self->transient};
+    ast_node    *nfa        = null;
+    tl_monotype *bool_type  = tl_type_registry_bool(self->registry);
+    if (node->case_.binary_predicate) {
+        bin_pred = node->case_.binary_predicate;
+        if (!ast_node_is_symbol(bin_pred) && !ast_node_is_lambda_function(bin_pred)) fatal("logic error");
+
+        if (ast_node_is_lambda_function(bin_pred)) {
+            // if predicate is a lambda function, construct an anon lambda application node for convenience
+            lfa =
+              ast_node_create_lfa(self->transient, bin_pred, (ast_node_sized){.size = 2, .v = lfa_args});
+
+        } else {
+            // predicate is an identifier, wrap it in a named function application
+            nfa =
+              ast_node_create_nfa(self->transient, bin_pred, (ast_node_sized){.size = 2, .v = lfa_args});
+        }
+
+        // allocate room for conditional arm arguments
+        array_reserve(args_res, 2);
+        array_push_val(args_res, str_empty());
+        array_push_val(args_res, str_empty());
+    }
+
     switch (node->case_.conditions.size) {
-    case 0: (void)generate_expr(self, null, node->case_.expression, ctx); return str_empty();
-    case 1: {
-        // Identical to a single-arm if statement
-        // TODO: copied from generate_if_then_else
-        ast_node const *cond     = node->case_.expression;
-        ast_node const *yes      = node->case_.arms.v[0];
-
-        str             cond_str = generate_expr(self, null, cond, ctx);
-
-        cat(self, S("if ("));
-        cat(self, cond_str);
-        cat(self, S(") {\n"));
-
-        str yes_str = generate_expr(self, null, yes, ctx);
-        cat(self, yes_str);
-        cat_semicolonln(self);
-
-        cat(self, S("}\n"));
+    case 0:
+        //
+        (void)generate_expr(self, null, node->case_.expression, ctx);
         return str_empty();
-    } break;
 
     default: {
         ast_node const *cond        = node->case_.expression;
@@ -1067,11 +1105,32 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
             }
 
             str arm_cond = generate_expr(self, null, node->case_.conditions.v[i], ctx);
-            cat(self, S("if ("));
-            cat(self, cond_str);
-            cat(self, S(" == "));
-            cat(self, arm_cond);
-            cat(self, S(") {\n"));
+
+            if (node->case_.binary_predicate) {
+                if (lfa) {
+                    args_res.v[0] = cond_str;
+                    args_res.v[1] = arm_cond;
+                    str cmp_res   = generate_inline_lambda_with_args(self, bool_type, lfa, ctx, args_res);
+                    cat(self, S("if ("));
+                    cat(self, cmp_res);
+                    cat(self, S(") {\n"));
+                } else {
+                    assert(nfa);
+
+                    args_res.v[0] = cond_str;
+                    args_res.v[1] = arm_cond;
+                    str cmp_res   = generate_funcall_with_args(self, nfa, ctx, args_res);
+                    cat(self, S("if ("));
+                    cat(self, cmp_res);
+                    cat(self, S(") {\n"));
+                }
+            } else {
+                cat(self, S("if ("));
+                cat(self, cond_str);
+                cat(self, S(" == "));
+                cat(self, arm_cond);
+                cat(self, S(") {\n"));
+            }
 
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
             if (should_assign_result(ctx, result_type)) {

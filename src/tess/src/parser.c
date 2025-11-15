@@ -1180,6 +1180,14 @@ static ast_node *parse_case_expr(parser *self) {
     ast_node *expr = parse_expression(self, INT_MIN);
     if (!expr) return null;
 
+    // look for optional predicate
+    ast_node *bin_pred = null;
+    if (0 == a_try(self, a_comma)) {
+        bin_pred = parse_expression(self, INT_MIN);
+        if (!bin_pred) return null;
+        if (!ast_node_is_symbol(bin_pred) && !ast_node_is_lambda_function(bin_pred)) return null;
+    }
+
     if (a_try(self, a_open_curly)) return null;
 
     ast_node_array conditions = {.alloc = self->ast_arena};
@@ -1215,7 +1223,7 @@ static ast_node *parse_case_expr(parser *self) {
     }
 
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms));
+                                          (ast_node_sized)array_sized(arms), bin_pred);
     return node;
 }
 
