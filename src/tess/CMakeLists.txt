@@ -131,8 +131,6 @@ tesslang_create_test(cast_string_to_ptr)
 tesslang_create_test(cast_string_to_ptr_and_index)
 tesslang_create_test(char_literal)
 tesslang_create_test(closure_polymorphism)
-tesslang_create_build_fail_test(cond_basic) # FIXME
-tesslang_create_build_fail_test(cond_expression) # FIXME
 tesslang_create_test(defun_inline_type)
 tesslang_create_test(dynamic_array)
 tesslang_create_test(enum_no_module)

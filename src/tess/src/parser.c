@@ -82,7 +82,6 @@ static int           operator_precedence(char const *op, int is_prefix);
 static ast_node     *parse_base_expression(parser *);
 static ast_node     *parse_expression(parser *, int min_preced);
 static ast_node     *parse_if_expr(parser *);
-static ast_node     *parse_cond_expr(parser *);
 static ast_node     *parse_lvalue(parser *);
 static int           toplevel_defun(parser *);
 
@@ -1138,38 +1137,6 @@ static ast_node *parse_body(parser *self) {
     return create_body(self, exprs);
 }
 
-static ast_node *parse_cond_arm(parser *self) {
-
-    ast_node *cond = parse_expression(self, INT_MIN);
-    if (!cond) return null;
-
-    ast_node *yes = parse_body(self);
-    if (!yes) return null;
-
-    if (0 == a_try(self, a_close_curly)) {
-        // close the cond expr with no else case
-        ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, null);
-        return n;
-    }
-
-    ast_node *no = parse_cond_arm(self);
-    if (!no) return null;
-
-    ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, no);
-    return n;
-}
-
-static ast_node *parse_cond_expr(parser *self) {
-    if (a_try_s(self, the_symbol, "cond")) {
-        self->error.tag = tl_err_ok;
-        return null;
-    }
-    if (a_try(self, a_open_curly)) {
-        return null;
-    }
-    return parse_cond_arm(self);
-}
-
 //
 
 static ast_node *parse_case_expr(parser *self) {
@@ -1271,10 +1238,6 @@ static ast_node *parse_base_expression(parser *self) {
 
     ast_node *node;
     node = parse_if_expr(self);
-    if (node) return node;
-    if (self->error.tag != tl_err_ok) return null;
-
-    node = parse_cond_expr(self);
     if (node) return node;
     if (self->error.tag != tl_err_ok) return null;
 
