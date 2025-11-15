@@ -301,18 +301,6 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     ast_node_type_set(node, poly);
 }
 
-void load_user_type(tl_infer *self, ast_node *node) {
-    if (!ast_node_is_utd(node)) return;
-    str name = ast_node_str(node->user_type_def.name);
-    if (tl_type_registry_exists(self->registry, name)) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
-        return;
-    }
-
-    create_type_constructor_from_user_type(self, node);
-    arena_reset(self->transient);
-}
-
 static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx *ctx) {
     if (!ast_node_is_symbol(name)) fatal("logic error");
 
