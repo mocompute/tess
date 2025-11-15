@@ -1013,7 +1013,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast
 
     ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
     ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
-    assert(params.size == args.size);
+    if (params.size != args.size) fatal("runtime error");
 
     if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
     tl_monotype *arrow    = node->lambda_application.lambda->type->type;

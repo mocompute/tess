@@ -141,7 +141,7 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
     tl_type_variable tv = tl_type_subs_fresh(subs);
     found               = tl_monotype_create_tv(self->alloc, tv);
     if (map) {
-        fprintf(stderr, "add type argument to map: %s\n", str_cstr(&name));
+        // fprintf(stderr, "add type argument to map: %s\n", str_cstr(&name));
         str_map_set_ptr(map, name, found);
     }
     return found;
