@@ -222,7 +222,8 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
 
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *self, str name,
                                                         tl_monotype_sized args) {
-    registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
+    registry_key key = {.name_hash = str_hash64(name),
+                        .args_hash = tl_monotype_sized_hash64(self->alloc, 0, args)}; // FIXME transient
     tl_monotype *out = map_get_ptr(self->specialized, &key, sizeof key);
     return out;
 }
@@ -247,7 +248,8 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     }
 
     tl_monotype *type = null;
-    registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
+    registry_key key  = {.name_hash = str_hash64(name),
+                         .args_hash = tl_monotype_sized_hash64(self->alloc, 0, args)}; // FIXME transient
     if ((type = map_get_ptr(self->specialized, &key, sizeof key))) return type;
 
     tl_polytype *poly = tl_type_registry_get(self, name);
@@ -1126,8 +1128,18 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     return hash;
 }
 
-u64 tl_monotype_hash64(tl_monotype *self) {
+u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
+
+u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
     u64 hash = hash64(&self->tag, sizeof self->tag);
+
+    if (ptr_hset_contains(*seen, self)) {
+        // recur, use reference identity
+        hash = hash64_combine(hash, &self, sizeof(void *));
+        return hash;
+    }
+    ptr_hset_insert(seen, self);
+
     switch (self->tag) {
     case tl_any:
     case tl_ellipsis:  break;
@@ -1137,19 +1149,27 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     case tl_cons_inst: {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
-        hash         = tl_monotype_sized_hash64(hash, self->cons_inst->args);
+        hash         = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
         // Important: do not include special_name as part of hash, because specialize_user_type uses
         // unspecialised name + hash to de-duplicate
     } break;
 
     case tl_arrow:
     case tl_tuple: {
-        hash = tl_monotype_sized_hash64(hash, self->list.xs);
+        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
 
+    ptr_hset_remove(*seen, self);
     return hash;
+}
+
+u64 tl_monotype_hash64(allocator *alloc, tl_monotype *self) {
+    hashmap *seen = hset_create(alloc, 32);
+    u64      out  = tl_monotype_hash64_(self, &seen);
+    hset_destroy(&seen);
+    return out;
 }
 
 str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
@@ -1891,13 +1911,20 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 
 //
 
-u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
+u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen) {
     u64 hash = seed;
     forall(i, arr) {
-        u64 h = tl_monotype_hash64(arr.v[i]);
+        u64 h = tl_monotype_hash64_(arr.v[i], seen);
         hash  = hash64_combine(hash, &h, sizeof h);
     }
     return hash;
+}
+
+u64 tl_monotype_sized_hash64(allocator *alloc, u64 seed, tl_monotype_sized arr) {
+    hashmap *seen = hset_create(alloc, 32);
+    u64      out  = tl_monotype_sized_hash64_(seed, arr, &seen);
+    hset_destroy(&seen);
+    return out;
 }
 
 tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in, hashmap **mapping) {

@@ -509,6 +509,10 @@ void hset_remove(hashmap *self, void const *key, u8 len) {
     map_erase(self, key, len);
 }
 
+void ptr_hset_remove(hashmap *self, void const *key) {
+    map_erase(self, &key, sizeof(void *));
+}
+
 void str_hset_remove(hashmap *self, str key) {
     span s = str_span(&key);
     assert(s.len < UINT8_MAX);

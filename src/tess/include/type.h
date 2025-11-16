@@ -128,7 +128,7 @@ void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_typ
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype *);
 void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
-u64                    tl_monotype_hash64(tl_monotype *);
+u64                    tl_monotype_hash64(allocator*, tl_monotype *);
 tl_monotype           *tl_monotype_arrow_result(tl_monotype *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype *);
@@ -216,7 +216,7 @@ void tl_type_subs_log(allocator *, tl_type_subs *);
 
 // -- utilities --
 
-u64               tl_monotype_sized_hash64(u64, tl_monotype_sized);
+u64               tl_monotype_sized_hash64(allocator*, u64, tl_monotype_sized);
 tl_monotype_sized tl_monotype_sized_clone(allocator *, tl_monotype_sized, hashmap **);
 tl_polytype_sized tl_monotype_sized_clone_poly(allocator *, tl_monotype_sized);
 tl_monotype      *tl_monotype_sized_last(tl_monotype_sized);

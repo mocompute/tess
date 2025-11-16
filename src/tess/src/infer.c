@@ -1733,7 +1733,8 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
     if (!inst) goto cancel;
 
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    name_and_type key      = {.name_hash = str_hash64(name),
+                              .type_hash = tl_monotype_hash64(self->transient, inst)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
         if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
@@ -2008,7 +2009,8 @@ static str lookup_arrow(tl_infer *self, str name, tl_monotype *arrow) {
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
+    name_and_type key      = {.name_hash = str_hash64(name),
+                              .type_hash = tl_monotype_hash64(self->transient, arrow)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
     return str_empty();
@@ -2313,7 +2315,8 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite_
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(callsite)};
+    name_and_type key      = {.name_hash = str_hash64(name),
+                              .type_hash = tl_monotype_hash64(self->transient, callsite)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
 

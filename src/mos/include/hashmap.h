@@ -80,6 +80,7 @@ int    str_hset_contains(hashmap const *, str);
 int    ptr_hset_contains(hashmap const *, void const *);
 int    hset_is_subset(hashmap const *super, hashmap const *sub);
 void   hset_remove(hashmap *, void const *, u8);
+void   ptr_hset_remove(hashmap *, void const *);
 void   str_hset_remove(hashmap *, str);
 void   hset_reset(hashmap *);
 size_t hset_size(hashmap const *);

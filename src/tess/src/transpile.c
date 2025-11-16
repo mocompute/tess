@@ -150,7 +150,7 @@ static void generate_prototypes(transpile *self, int decl_static) {
 }
 
 static str make_struct_name(allocator *alloc, tl_monotype *type, u64 *out_hash) {
-    u64  hash = tl_monotype_hash64(type);
+    u64  hash = tl_monotype_hash64(alloc, type);
 
     char buf[128];
     snprintf(buf, sizeof buf, "tl_struct_%" PRIu64, hash);
