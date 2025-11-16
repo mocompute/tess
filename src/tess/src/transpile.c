@@ -238,6 +238,14 @@ static void generate_ifc_blocks(transpile *self) {
     cat_nl(self);
 }
 
+static int should_skip_user_type(transpile *self, str name) {
+    tl_monotype *env_type = env_lookup(self, name);
+    if (!env_type) return 1;
+    if (!tl_monotype_is_inst(env_type)) return 1;
+    if (!str_eq(name, env_type->cons_inst->special_name)) return 1;
+    return 0;
+}
+
 static void generate_one_user_type(transpile *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
     str          name = toplevel_name(node);
@@ -247,6 +255,9 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
 
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
+
+    // type inference leaves unspecialized types in the environment. Don't emit them.
+    if (should_skip_user_type(self, name)) return;
 
     // enums have no instance arguments. They have only field names.
     if (!tl_monotype_is_enum(poly->type)) {
@@ -285,9 +296,51 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     }
 }
 
+static void generate_one_user_type_forward(transpile *self, ast_node *node) {
+    if (!ast_node_is_utd(node)) return;
+    str          name = toplevel_name(node);
+    tl_polytype *poly = node->type;
+    if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
+    if (!tl_polytype_is_concrete(self->transient, poly)) return;
+
+    tl_type_constructor_def *def = poly->type->cons_inst->def;
+    if (!def) fatal("missing type def");
+
+    // type inference leaves unspecialized types in the environment. Don't emit them.
+    if (should_skip_user_type(self, name)) return;
+
+    // enums have no instance arguments. They have only field names.
+    if (!tl_monotype_is_enum(poly->type)) {
+        if (node->user_type_def.is_union) cat(self, S("typedef union "));
+        else cat(self, S("typedef struct "));
+        cat(self, name);
+        cat_sp(self);
+        cat(self, name);
+        cat_semicolonln(self);
+    } else {
+        // an enum
+        cat(self, S("typedef enum"));
+        cat_sp(self);
+        cat(self, def->name);
+        cat_semicolonln(self);
+    }
+}
+
 static void generate_user_types(transpile *self) {
 
-    // First emit enums in program nodes.
+    // Emit forward declarations for concrete and specialized types.
+    forall(i, self->nodes) {
+        ast_node *node = self->nodes.v[i];
+        if (ast_node_is_enum_def(node)) continue;
+        generate_one_user_type_forward(self, node);
+    }
+    forall(i, self->synthesized_nodes) {
+        ast_node *node = self->synthesized_nodes.v[i];
+        generate_one_user_type_forward(self, node);
+    }
+    cat_nl(self);
+
+    // Emit enums in program nodes.
     forall(i, self->nodes) {
         ast_node *node = self->nodes.v[i];
         if (!ast_node_is_enum_def(node)) continue;
