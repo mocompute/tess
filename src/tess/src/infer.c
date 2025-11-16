@@ -194,8 +194,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             // or else check if it's a known nullary type
             if (tl_type_registry_is_nullary_type(self, name)) {
                 tl_polytype *poly = tl_type_registry_get(self, name);
-                // return tl_monotype_clone(self->alloc, poly->type);
-                return poly->type;
+                return tl_monotype_clone(self->alloc, poly->type);
             }
         }
 
@@ -1044,6 +1043,8 @@ static tl_monotype *type_literal_specialize(tl_infer *self, ast_node *node) {
         tl_monotype_sized arg_types_ = array_sized(arg_types);
         str               name_inst  = specialize_type_identifier_na(self, name, arg_types_, &out_poly);
 
+        // if (!out_poly) return tl_monotype_create_fresh_weak(self->subs); // FIXME
+
         if (!out_poly) fatal("runtime error");
         ast_node_type_set(node, out_poly);
 
@@ -1087,6 +1088,7 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
 
     tl_polytype *special_type = null;
     str          name_inst = specialize_type_constructor(self, name, inst->cons_inst->args, &special_type);
+
     if (str_is_empty(name_inst)) fatal("runtime error");
     if (!special_type) fatal("runtime error");
 
@@ -1719,6 +1721,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     }
 
     // do not specialize if args are not concrete
+
     if (!tl_monotype_sized_is_concrete(args)) {
         if (out_type) *out_type = null;
         return str_empty();
@@ -2639,8 +2642,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     } else {
         tl_polytype *tmp = tl_type_env_lookup(self->env, name);
         if (!tmp) fatal("runtime error");
-        // arrow = tl_polytype_clone(self->arena, tmp);
-        arrow = tmp;
+        arrow = tl_polytype_clone(self->arena, tmp);
 
         if (!arrow) fatal("runtime error");
     }
@@ -2831,8 +2833,7 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
         mono = specialized->type;
     }
 
-    // return tl_monotype_clone(self->arena, mono);
-    return mono;
+    return tl_monotype_clone(self->arena, mono);
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
