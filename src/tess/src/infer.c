@@ -1489,7 +1489,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (tl_polytype_is_type_constructor(type)) {
             // a type constructor or type literal
 
-            tl_monotype *literal = type_literal_instantiate(self, node);
+            tl_monotype *literal = type_literal_instantiate(self, node, 0);
             if (literal) {
                 if (constrain_pm(self, ctx, node->type, literal, node)) return 1;
                 // set node type directly after constraint
