@@ -1134,14 +1134,16 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
 u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
 
 u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
-    u64 hash = hash64(&self->tag, sizeof self->tag);
+
+    u64 hash     = hash64(&self->tag, sizeof self->tag);
+    int ok_recur = 1;
 
     if (ptr_hset_contains(*seen, self)) {
-        // recur, use reference identity
-        hash = hash64_combine(hash, &self, sizeof(void *));
-        return hash;
+        ok_recur = 0;
+    } else {
+        ok_recur = 1;
+        ptr_hset_insert(seen, self);
     }
-    ptr_hset_insert(seen, self);
 
     switch (self->tag) {
     case tl_any:
@@ -1152,14 +1154,16 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
     case tl_cons_inst: {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
-        hash         = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
+
+        if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
+
         // Important: do not include special_name as part of hash, because specialize_user_type uses
         // unspecialised name + hash to de-duplicate
     } break;
 
     case tl_arrow:
     case tl_tuple: {
-        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
+        if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
