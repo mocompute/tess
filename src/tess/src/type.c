@@ -1074,8 +1074,10 @@ void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
     self->list.fvs = fvs;
 }
 
-void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
+void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil, hashmap **seen) {
     if (!self) return;
+    if (ptr_hset_contains(*seen, self)) return;
+    ptr_hset_insert(seen, self);
     switch (self->tag) {
     case tl_any:
     case tl_ellipsis: break;
@@ -1084,12 +1086,12 @@ void tl_monotype_force_tv_to_nil(tl_monotype *self, tl_monotype *nil) {
     case tl_weak:     *self = *nil; break;
 
     case tl_cons_inst:
-        forall(i, self->cons_inst->args) tl_monotype_force_tv_to_nil(self->cons_inst->args.v[i], nil);
+        forall(i, self->cons_inst->args) tl_monotype_force_tv_to_nil(self->cons_inst->args.v[i], nil, seen);
         break;
 
     case tl_arrow:
     case tl_tuple: {
-        forall(i, self->list.xs) tl_monotype_force_tv_to_nil(self->list.xs.v[i], nil);
+        forall(i, self->list.xs) tl_monotype_force_tv_to_nil(self->list.xs.v[i], nil, seen);
         break;
     }
     }
