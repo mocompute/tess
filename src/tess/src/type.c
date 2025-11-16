@@ -1152,9 +1152,13 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     return hash;
 }
 
-str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
+str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
 
     if (!self) return S("[null]");
+    str *found = map_get(*map, &self, sizeof(void *));
+    if (found) return *found;
+    str provisional = str_init(alloc, "[recur]");
+    map_set(map, &self, sizeof(void *), &provisional);
 
     str_build b = str_build_init(alloc, 64);
 
@@ -1188,7 +1192,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
         if (self->cons_inst->args.size) {
             str_build_cat(&b, S("("));
             forall(i, self->cons_inst->args) {
-                str_build_cat(&b, tl_monotype_to_string(alloc, self->cons_inst->args.v[i]));
+                str_build_cat(&b, tl_monotype_to_string_(alloc, self->cons_inst->args.v[i], map));
                 if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(", "));
             }
             str_build_cat(&b, S(")"));
@@ -1206,7 +1210,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
         }
         str_build_cat(&b, S("("));
         forall(i, self->list.xs) {
-            str_build_cat(&b, tl_monotype_to_string(alloc, self->list.xs.v[i]));
+            str_build_cat(&b, tl_monotype_to_string_(alloc, self->list.xs.v[i], map));
             if (i + 1 < self->list.xs.size) str_build_cat(&b, S(" -> "));
         }
         str_build_cat(&b, S(")"));
@@ -1215,7 +1219,7 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
     case tl_tuple: {
         str_build_cat(&b, S("("));
         forall(i, self->list.xs) {
-            str_build_cat(&b, tl_monotype_to_string(alloc, self->list.xs.v[i]));
+            str_build_cat(&b, tl_monotype_to_string_(alloc, self->list.xs.v[i], map));
             if (i + 1 < self->list.xs.size) str_build_cat(&b, S(", "));
         }
         str_build_cat(&b, S(")"));
@@ -1223,7 +1227,16 @@ str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
     } break;
     }
 
-    return str_build_finish(&b);
+    str out = str_build_finish(&b);
+    map_set(map, &self, sizeof(void *), &out);
+    return out;
+}
+
+str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
+    hashmap *map = map_create(alloc, sizeof(str), 32);
+    str      out = tl_monotype_to_string_(alloc, self, &map);
+    map_destroy(&map);
+    return out;
 }
 
 str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
