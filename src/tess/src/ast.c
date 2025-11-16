@@ -714,7 +714,7 @@ ast_arguments_iter ast_node_arguments_iter(ast_node *node) {
 ast_node *ast_arguments_next(ast_arguments_iter *iter) {
     if (iter->index >= iter->nodes.size) return null;
     ast_node *node = iter->nodes.v[iter->index++];
-    return ast_node_is_nil(node) ? null : node;
+    return node;
 }
 
 ast_node *ast_node_body(ast_node *self) {
