@@ -1791,6 +1791,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
         array_push(arr, mono);
     }
 
+    assert(arr.size == node->named_application.n_arguments);
+
     tl_monotype_sized arr_sized    = array_sized(arr);
     tl_polytype      *special_type = null;
     str               name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);

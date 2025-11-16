@@ -191,7 +191,10 @@ tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name,
     tl_monotype *type = null;
 
     tl_polytype *poly = tl_type_registry_get(self, name);
-    if (!poly) return null;
+    if (!poly) {
+        // unknown type, possibly due to recursive types: return a weak type variable rather than null
+        return tl_monotype_create_fresh_weak(self->subs);
+    }
 
     u32 arity = poly->quantifiers.size;
     if (args.size != arity) fatal("runtime error");
@@ -423,6 +426,10 @@ tl_polytype *tl_polytype_create_tv(allocator *alloc, tl_type_variable tv) {
 tl_polytype *tl_polytype_create_weak(allocator *alloc, tl_type_variable tv) {
     tl_monotype *mono = tl_monotype_create_weak(alloc, tv);
     return tl_polytype_absorb_mono(alloc, mono);
+}
+
+tl_polytype *tl_polytype_create_fresh_weak(allocator *alloc, tl_type_subs *subs) {
+    return tl_polytype_create_weak(alloc, tl_type_subs_fresh(subs));
 }
 
 tl_polytype *tl_polytype_create_fresh_qv(allocator *alloc, tl_type_subs *subs) {
