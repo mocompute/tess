@@ -666,7 +666,10 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
         log_constraint_mono(self, left, right, node);
     }
 
-    return tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx);
+    hashmap *seen = hset_create(self->transient, 32);
+    int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
+    hset_destroy(&seen);
+    return res;
 }
 
 static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right) {

@@ -78,6 +78,11 @@ typedef struct {
     hashmap      *type_aliases; // str => polytype*
 } tl_type_registry;
 
+typedef struct {
+    tl_monotype *left;
+    tl_monotype *right;
+} tl_monotype_pair;
+
 // -- type constructor and registry --
 
 nodiscard tl_type_registry *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
@@ -214,8 +219,10 @@ void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
 
-int  tl_type_subs_unify(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *);
-int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *);
+int  tl_type_subs_unify(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,
+                        hashmap **);
+int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
+                             hashmap **);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
 void tl_type_subs_log(allocator *, tl_type_subs *);
 
