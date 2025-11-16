@@ -804,8 +804,13 @@ int tl_monotype_is_concrete(tl_monotype *self) {
     switch (self->tag) {
     case tl_any:
     case tl_var:
-    case tl_weak:
     case tl_ellipsis: return 0;
+
+    case tl_weak:
+        // consider weak type variables as concrete, which is *usually* what type inference client wants.
+        // There are _no_weak variants, otherwise.
+        return 1;
+
     case tl_cons_inst:
         forall(i, self->cons_inst->args) if (!tl_monotype_is_concrete(self->cons_inst->args.v[i])) return 0;
         return 1;
@@ -818,13 +823,43 @@ int tl_monotype_is_concrete(tl_monotype *self) {
     fatal("unreachable");
 }
 
+int tl_monotype_is_weak(tl_monotype *self) {
+    if (!self) return 0;
+    switch (self->tag) {
+    case tl_any:
+    case tl_var:
+    case tl_ellipsis: return 0;
+
+    case tl_weak:     return 1;
+
+    case tl_cons_inst:
+        forall(i, self->cons_inst->args) if (tl_monotype_is_weak(self->cons_inst->args.v[i])) return 1;
+        return 0;
+    case tl_arrow:
+    case tl_tuple: {
+        forall(i, self->list.xs) if (tl_monotype_is_weak(self->list.xs.v[i])) return 1;
+        return 0;
+    }
+    }
+    fatal("unreachable");
+}
+
 int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
     forall(i, arr) if (!tl_monotype_is_concrete(arr.v[i])) return 0;
     return 1;
 }
 
+int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete_no_weak(arr.v[i])) return 0;
+    return 1;
+}
+
 int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
-    return self && tl_cons_inst == self->tag;
+    return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(self);
+}
+
+int tl_monotype_is_concrete_no_weak(tl_monotype *self) {
+    return tl_monotype_is_concrete(self) && !tl_monotype_is_weak(self);
 }
 
 int tl_monotype_is_any(tl_monotype *self) {
@@ -1656,7 +1691,7 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *s
             //
             // FIXME: we have no regression test indicating a failure when tries == 1.
             int tries = 5;
-            while (tries-- && !tl_monotype_is_concrete(resolved)) {
+            while (tries-- && !tl_monotype_is_concrete_no_weak(resolved)) {
                 tl_monotype *copy = tl_monotype_clone(alloc, resolved);
                 tl_monotype_substitute(alloc, copy, subs, exclude);
                 resolved = copy;
