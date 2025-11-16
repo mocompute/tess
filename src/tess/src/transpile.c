@@ -256,11 +256,12 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
 
-    // type inference leaves unspecialized types in the environment. Don't emit them.
-    if (should_skip_user_type(self, name)) return;
-
     // enums have no instance arguments. They have only field names.
     if (!tl_monotype_is_enum(poly->type)) {
+
+        // type inference leaves unspecialized types in the environment. Don't emit them.
+        if (should_skip_user_type(self, name)) return;
+
         if (node->user_type_def.is_union) cat(self, S("typedef union "));
         else cat(self, S("typedef struct "));
         cat(self, name);
@@ -306,11 +307,12 @@ static void generate_one_user_type_forward(transpile *self, ast_node *node) {
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
 
-    // type inference leaves unspecialized types in the environment. Don't emit them.
-    if (should_skip_user_type(self, name)) return;
-
     // enums have no instance arguments. They have only field names.
     if (!tl_monotype_is_enum(poly->type)) {
+
+        // type inference leaves unspecialized types in the environment. Don't emit them.
+        if (should_skip_user_type(self, name)) return;
+
         if (node->user_type_def.is_union) cat(self, S("typedef union "));
         else cat(self, S("typedef struct "));
         cat(self, name);
@@ -676,7 +678,8 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 }
 
 static int is_nil_result(tl_monotype *type) {
-    return tl_monotype_is_nil(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type);
+    return tl_monotype_is_nil(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type) ||
+           tl_monotype_is_weak(type);
 }
 
 static int should_assign_result(eval_ctx *ctx, tl_monotype *type) {
@@ -934,6 +937,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     tl_monotype *type = env_lookup(self, name); // may be null
 
     if (type) {
+
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
         if (tl_monotype_is_tv(type) || str_is_empty(value)) {
@@ -987,10 +991,13 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     tl_monotype    *result_type = yes->type->type;
 
     str             cond_str    = generate_expr(self, null, cond, ctx);
-    str             res         = next_res(self);
 
-    // FIXME: do not generate decls for if statements with no expression result
-    generate_decl(self, res, result_type);
+    str             res         = str_empty();
+    if (should_assign_result(ctx, result_type)) {
+        res = next_res(self);
+        generate_decl(self, res, result_type);
+    }
+
     cat(self, S("if ("));
     cat(self, cond_str);
     cat(self, S(") {\n"));

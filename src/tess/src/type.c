@@ -875,7 +875,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     fatal("unreachable");
 }
 
-int tl_monotype_is_weak(allocator *alloc, tl_monotype *self) {
+int tl_monotype_is_weak_deep(allocator *alloc, tl_monotype *self) {
     hashmap *seen = hset_create(alloc, 32);
 
     int      res  = tl_monotype_is_weak_(self, &seen);
@@ -898,11 +898,14 @@ int tl_monotype_is_concrete_no_arrow(allocator *alloc, tl_monotype *self) {
 }
 
 int tl_monotype_is_concrete_no_weak(allocator *alloc, tl_monotype *self) {
-    return tl_monotype_is_concrete(alloc, self) && !tl_monotype_is_weak(alloc, self);
+    return tl_monotype_is_concrete(alloc, self) && !tl_monotype_is_weak_deep(alloc, self);
 }
 
 int tl_monotype_is_any(tl_monotype *self) {
     return self && tl_any == self->tag;
+}
+int tl_monotype_is_weak(tl_monotype *self) {
+    return self && tl_weak == self->tag;
 }
 int tl_monotype_is_ellipsis(tl_monotype *self) {
     return self && tl_ellipsis == self->tag;

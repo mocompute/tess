@@ -150,7 +150,8 @@ int                    tl_monotype_is_inst_of(tl_monotype *, str);
 int                    tl_monotype_is_enum(tl_monotype *);
 int                    tl_monotype_is_tuple(tl_monotype *);
 int                    tl_monotype_is_concrete(allocator *, tl_monotype *);
-int                    tl_monotype_is_weak(allocator *, tl_monotype *);
+int                    tl_monotype_is_weak(tl_monotype *);
+int                    tl_monotype_is_weak_deep(allocator *, tl_monotype *);
 int                    tl_monotype_sized_is_concrete(allocator *, tl_monotype_sized);
 int          tl_monotype_is_concrete_no_arrow(allocator *, tl_monotype *); // constructed non-arrow type
 int          tl_monotype_is_concrete_no_weak(allocator *, tl_monotype *);
