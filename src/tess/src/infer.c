@@ -2724,6 +2724,10 @@ void resolve_unions(tl_infer *self) {
     // Note: Union types may remain unresolved during type checking: resolve them by arbitrarily picking a
     // variant.
 
+    // FIXME: skip this for now because it doesn't support recursion. May not be needed anyway.
+    (void)self;
+    return;
+
     {
         ast_node        *node;
         hashmap_iterator iter = {0};
@@ -2851,7 +2855,7 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
         mono = specialized->type;
     }
 
-    return tl_monotype_clone(self->arena, mono);
+    return mono;
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
