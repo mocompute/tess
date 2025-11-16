@@ -480,6 +480,10 @@ void str_hset_insert(hashmap **self, str key) {
     return hset_insert(self, s.buf, s.len);
 }
 
+void ptr_hset_insert(hashmap **self, void const *key) {
+    return hset_insert(self, &key, sizeof(void *));
+}
+
 int hset_contains(hashmap const *self, void const *key, u8 len) {
     return map_contains(self, key, len);
 }
@@ -488,6 +492,9 @@ int str_hset_contains(hashmap const *self, str key) {
     span s = str_span(&key);
     assert(s.len < UINT8_MAX);
     return map_contains(self, s.buf, s.len);
+}
+int ptr_hset_contains(hashmap const *self, void const *key) {
+    return map_contains(self, &key, sizeof(void *));
 }
 
 int hset_is_subset(hashmap const *super, hashmap const *sub) {

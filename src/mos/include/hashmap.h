@@ -74,8 +74,10 @@ void   map_reset(hashmap *);
 
 void   hset_insert(hashmap **, void const *, u8);
 void   str_hset_insert(hashmap **, str);
+void   ptr_hset_insert(hashmap **, void const *);
 int    hset_contains(hashmap const *, void const *, u8);
 int    str_hset_contains(hashmap const *, str);
+int    ptr_hset_contains(hashmap const *, void const *);
 int    hset_is_subset(hashmap const *super, hashmap const *sub);
 void   hset_remove(hashmap *, void const *, u8);
 void   str_hset_remove(hashmap *, str);
