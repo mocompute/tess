@@ -597,7 +597,8 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), args.size);
 
     forall(i, self->quantifiers) {
-        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
+        tl_monotype *clone = tl_monotype_clone(alloc, args.v[i]);
+        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &clone);
     }
 
     replace_tv_mono(fresh, q_to_t);
@@ -695,8 +696,9 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *s
     self->quantifiers.v    = quant.v;
 }
 
-tl_monotype *tl_polytype_concrete(tl_polytype *self) {
-    if (!tl_polytype_is_concrete(self)) fatal("runtime error");
+tl_monotype *tl_polytype_concrete(allocator *alloc, tl_polytype *self) {
+    // FIXME yes it's annoying this needs to allocate
+    if (!tl_polytype_is_concrete(alloc, self)) fatal("runtime error");
     return self->type;
 }
 
@@ -765,10 +767,15 @@ tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst 
     return self;
 }
 
-tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
+static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hashmap **mapping) {
 
     if (!orig) return null;
+
+    tl_monotype *found = map_get_ptr(*mapping, &orig, sizeof(void *));
+    if (found) return found;
+
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
+    map_set_ptr(mapping, &orig, sizeof(void *), clone);
 
     switch (orig->tag) {
     case tl_any:      *clone = (tl_monotype){.tag = tl_any}; return clone;
@@ -783,15 +790,15 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
         *clone->cons_inst = *orig->cons_inst;
 
         // clone the args list
-        clone->cons_inst->args         = tl_monotype_sized_clone(alloc, orig->cons_inst->args);
+        clone->cons_inst->args         = tl_monotype_sized_clone(alloc, orig->cons_inst->args, mapping);
         clone->cons_inst->special_name = str_copy(alloc, orig->cons_inst->special_name);
 
         break;
 
     case tl_arrow:
     case tl_tuple:
-        *clone =
-          (tl_monotype){.tag = orig->tag, .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs)}};
+        *clone          = (tl_monotype){.tag  = orig->tag,
+                                        .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs, mapping)}};
         clone->list.fvs = orig->list.fvs; // shallow copy
         break;
     }
@@ -799,8 +806,18 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
     return clone;
 }
 
-int tl_monotype_is_concrete(tl_monotype *self) {
+tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
+    hashmap     *mapping = map_create_ptr(alloc, 32);
+    tl_monotype *out     = tl_monotype_clone_(alloc, orig, &mapping);
+    map_destroy(&mapping);
+    return out;
+}
+
+int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
+    if (ptr_hset_contains(*seen, self)) return 1;
+    ptr_hset_insert(seen, self);
+
     switch (self->tag) {
     case tl_any:
     case tl_var:
@@ -812,19 +829,30 @@ int tl_monotype_is_concrete(tl_monotype *self) {
         return 1;
 
     case tl_cons_inst:
-        forall(i, self->cons_inst->args) if (!tl_monotype_is_concrete(self->cons_inst->args.v[i])) return 0;
+        forall(i, self->cons_inst->args) if (!tl_monotype_is_concrete_(self->cons_inst->args.v[i],
+                                                                       seen)) return 0;
         return 1;
     case tl_arrow:
     case tl_tuple: {
-        forall(i, self->list.xs) if (!tl_monotype_is_concrete(self->list.xs.v[i])) return 0;
+        forall(i, self->list.xs) if (!tl_monotype_is_concrete_(self->list.xs.v[i], seen)) return 0;
         return 1;
     }
     }
     fatal("unreachable");
 }
 
-int tl_monotype_is_weak(tl_monotype *self) {
+int tl_monotype_is_concrete(allocator *alloc, tl_monotype *self) {
+    hashmap *seen = hset_create(alloc, 32);
+    int      res  = tl_monotype_is_concrete_(self, &seen);
+    hset_destroy(&seen);
+    return res;
+}
+
+int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
+    if (ptr_hset_contains(*seen, self)) return 0;
+    ptr_hset_insert(seen, self);
+
     switch (self->tag) {
     case tl_any:
     case tl_var:
@@ -833,33 +861,42 @@ int tl_monotype_is_weak(tl_monotype *self) {
     case tl_weak:     return 1;
 
     case tl_cons_inst:
-        forall(i, self->cons_inst->args) if (tl_monotype_is_weak(self->cons_inst->args.v[i])) return 1;
+        forall(i,
+               self->cons_inst->args) if (tl_monotype_is_weak_(self->cons_inst->args.v[i], seen)) return 1;
         return 0;
     case tl_arrow:
     case tl_tuple: {
-        forall(i, self->list.xs) if (tl_monotype_is_weak(self->list.xs.v[i])) return 1;
+        forall(i, self->list.xs) if (tl_monotype_is_weak_(self->list.xs.v[i], seen)) return 1;
         return 0;
     }
     }
     fatal("unreachable");
 }
 
-int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
-    forall(i, arr) if (!tl_monotype_is_concrete(arr.v[i])) return 0;
+int tl_monotype_is_weak(allocator *alloc, tl_monotype *self) {
+    hashmap *seen = hset_create(alloc, 32);
+
+    int      res  = tl_monotype_is_weak_(self, &seen);
+    hset_destroy(&seen);
+    return res;
+}
+
+int tl_monotype_sized_is_concrete(allocator *alloc, tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete(alloc, arr.v[i])) return 0;
     return 1;
 }
 
-int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized arr) {
-    forall(i, arr) if (!tl_monotype_is_concrete_no_weak(arr.v[i])) return 0;
+int tl_monotype_sized_is_concrete_no_weak(allocator *alloc, tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete_no_weak(alloc, arr.v[i])) return 0;
     return 1;
 }
 
-int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
-    return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(self);
+int tl_monotype_is_concrete_no_arrow(allocator *alloc, tl_monotype *self) {
+    return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(alloc, self);
 }
 
-int tl_monotype_is_concrete_no_weak(tl_monotype *self) {
-    return tl_monotype_is_concrete(self) && !tl_monotype_is_weak(self);
+int tl_monotype_is_concrete_no_weak(allocator *alloc, tl_monotype *self) {
+    return tl_monotype_is_concrete(alloc, self) && !tl_monotype_is_weak(alloc, self);
 }
 
 int tl_monotype_is_any(tl_monotype *self) {
@@ -951,8 +988,8 @@ int tl_polytype_is_scheme(tl_polytype *poly) {
     return poly->quantifiers.size != 0;
 }
 
-int tl_polytype_is_concrete(tl_polytype *self) {
-    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(self->type);
+int tl_polytype_is_concrete(allocator *alloc, tl_polytype *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(alloc, self->type);
 }
 
 int tl_polytype_is_type_constructor(tl_polytype *self) {
@@ -1527,8 +1564,11 @@ success:
     return 0;
 }
 
-int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
+static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
+                                         hashmap **seen) {
     if (!mono) return 0;
+    if (hset_contains(*seen, &mono, sizeof(void *))) return 0;
+    hset_insert(seen, &mono, sizeof(void *));
 
     switch (mono->tag) {
     case tl_any:
@@ -1539,7 +1579,7 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) return 1;
         tl_monotype *resolved = self->v[root].type;
-        if (resolved) return tl_type_subs_monotype_occurs(self, tv, resolved);
+        if (resolved) return tl_type_subs_monotype_occurs_(self, tv, resolved, seen);
 
     } break;
 
@@ -1550,12 +1590,20 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
         if (tl_cons_inst == mono->tag) arr = mono->cons_inst->args;
         else arr = mono->list.xs;
         forall(i, arr) {
-            if (tl_type_subs_monotype_occurs(self, tv, arr.v[i])) return 1;
+            if (tl_type_subs_monotype_occurs_(self, tv, arr.v[i], seen)) return 1;
         }
     } break;
     }
 
     return 0;
+}
+
+int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
+    // TODO: use transient for map
+    hashmap *seen = hset_create(self->alloc, 32);
+    int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
+    hset_destroy(&seen);
+    return res;
 }
 
 static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
@@ -1668,9 +1716,12 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
     return 0;
 }
 
-void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
+static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type_subs *subs,
+                                    hashmap *exclude, hashmap **seen) {
     // exclude may be null.
     if (!self) return;
+    if (hset_contains(*seen, &self, sizeof(void *))) return;
+    hset_insert(seen, &self, sizeof(void *));
 
     switch (self->tag) {
     case tl_any:
@@ -1690,14 +1741,15 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *s
             // practice.
             //
             // FIXME: we have no regression test indicating a failure when tries == 1.
-            int tries = 5;
-            while (tries-- && !tl_monotype_is_concrete_no_weak(resolved)) {
-                tl_monotype *copy = tl_monotype_clone(alloc, resolved);
-                tl_monotype_substitute(alloc, copy, subs, exclude);
-                resolved = copy;
+            int tries = 1;
+            while (tries-- && !tl_monotype_is_concrete_no_weak(alloc, resolved)) {
+                // tl_monotype *copy = tl_monotype_clone(alloc, resolved);
+                tl_monotype_substitute_(alloc, resolved, subs, exclude, seen);
+                // resolved = copy;
             }
 
             *self = *resolved;
+            hset_insert(seen, &self, sizeof(void *));
         } else {
             // update to representative tv
             self->var = root;
@@ -1712,11 +1764,18 @@ void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *s
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
         else arr = self->list.xs;
         forall(i, arr) {
-            tl_monotype_substitute(alloc, arr.v[i], subs, exclude);
+            tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, seen);
         }
 
     } break;
     }
+}
+
+void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
+    // TODO: use a transient allocator
+    hashmap *seen = hset_create(alloc, 32);
+    tl_monotype_substitute_(alloc, self, subs, exclude, &seen);
+    hset_destroy(&seen);
 }
 
 static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
@@ -1828,11 +1887,11 @@ u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
     return hash;
 }
 
-tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in) {
+tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in, hashmap **mapping) {
     tl_monotype_array arr = {.alloc = alloc};
     array_reserve(arr, in.size);
     forall(i, in) {
-        tl_monotype *ty = tl_monotype_clone(alloc, in.v[i]);
+        tl_monotype *ty = tl_monotype_clone_(alloc, in.v[i], mapping);
         array_push(arr, ty);
     }
     array_shrink(arr);
@@ -1870,7 +1929,7 @@ tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized
     tl_monotype_array arr = {.alloc = alloc};
     array_reserve(arr, polys.size);
     forall(i, polys) {
-        tl_monotype *mono = tl_polytype_concrete(polys.v[i]);
+        tl_monotype *mono = tl_polytype_concrete(alloc, polys.v[i]);
         array_push(arr, mono);
     }
     array_shrink(arr);
