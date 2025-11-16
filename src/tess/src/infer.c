@@ -954,7 +954,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     return 0;
 }
 
-static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node) {
+static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int level) {
     // Parse an ast into a Type(...) wrapper type or return null.
     if (ast_node_is_symbol(node)) {
 
@@ -962,10 +962,9 @@ static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node) {
         tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
         if (!inst) return null;
 
-        // set node type to type literal
-        tl_monotype *ty = tl_type_registry_type_literal(self->registry, inst);
+        // set node type to type literal if this is the outermost node
+        tl_monotype *ty = 0 == level ? tl_type_registry_type_literal(self->registry, inst) : inst;
         ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, ty));
-
         return ty;
     }
 
@@ -983,7 +982,7 @@ static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node) {
 
         tl_monotype_array arg_types = {.alloc = self->transient};
         forall(i, node_args) {
-            tl_monotype *arg_ty = type_literal_instantiate(self, node_args.v[i]);
+            tl_monotype *arg_ty = type_literal_instantiate(self, node_args.v[i], level + 1);
             if (!arg_ty) return null;
             array_push(arg_types, arg_ty);
         }
@@ -1018,7 +1017,7 @@ static tl_monotype *type_literal_specialize(tl_infer *self, ast_node *node) {
 
         tl_monotype *inst =
           tl_type_registry_get_cached_specialization(self->registry, name, (tl_monotype_sized){0});
-        if (!inst) return type_literal_instantiate(self, node);
+        if (!inst) return type_literal_instantiate(self, node, 0);
     }
 
     else if (ast_node_is_nfa(node)) {
