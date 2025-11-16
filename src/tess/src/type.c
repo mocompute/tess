@@ -242,10 +242,9 @@ int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
 
 tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                          tl_monotype_sized args) {
-    if (!args.size) {
-        // no args, no need to specialize
-        return null;
-    }
+
+    // Note: empty structs have zero arguments but must still be specialized. We can't really
+    // distinguish these from nullary type constructors at the moment.
 
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name),
@@ -349,12 +348,11 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
     dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 
-    tl_polytype *clone = tl_polytype_clone(self->alloc, type);
-    str_map_set_ptr(&self->map, str_copy(self->alloc, name), clone);
+    str_map_set_ptr(&self->map, str_copy(self->alloc, name), type);
 }
 
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
-    tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, tl_monotype_clone(self->alloc, type));
+    tl_polytype *clone    = tl_polytype_absorb_mono(self->alloc, type);
     str          type_str = tl_polytype_to_string(self->transient, clone);
     dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
@@ -1700,7 +1698,7 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *self, tl_type_variable left,
     }
 
     // store the weak type at the root
-    self->data.v[left_root].type = tl_monotype_clone(self->data.alloc, right);
+    self->data.v[left_root].type = right;
 
     return 0;
 }
@@ -1722,7 +1720,7 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     }
 
     // store the weak type at the root
-    self->data.v[weak_root].type = tl_monotype_clone(self->data.alloc, right);
+    self->data.v[weak_root].type = right;
 
     return 0;
 }
@@ -1758,7 +1756,7 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
         }
 
         // store the type at the root
-        self->data.v[tv_root].type = tl_monotype_clone(self->data.alloc, mono);
+        self->data.v[tv_root].type = mono;
 
     } break;
     }

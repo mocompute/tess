@@ -194,7 +194,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             // or else check if it's a known nullary type
             if (tl_type_registry_is_nullary_type(self, name)) {
                 tl_polytype *poly = tl_type_registry_get(self, name);
-                return tl_monotype_clone(self->alloc, poly->type);
+                return poly->type;
             }
         }
 
@@ -1020,6 +1020,7 @@ static tl_monotype *type_literal_specialize(tl_infer *self, ast_node *node) {
         tl_monotype *inst =
           tl_type_registry_get_cached_specialization(self->registry, name, (tl_monotype_sized){0});
         if (!inst) return type_literal_instantiate(self, node, 0);
+        return inst;
     }
 
     else if (ast_node_is_nfa(node)) {
@@ -1449,7 +1450,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (!global) global = tl_type_env_lookup(self->env, node->symbol.name);
 
         if (global) {
-            global = tl_polytype_clone(self->arena, global);
             if (node->type) {
                 if (!escape_constraint(self, node->type, global) &&
                     constrain(self, ctx, node->type, global, node))
@@ -2303,18 +2303,15 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
 
     forall(i, params) {
         ast_node *param = params.v[i];
-        param->type     = tl_polytype_clone_mono(self->arena, callsite_args.v[i]);
+        param->type     = tl_polytype_absorb_mono(self->arena, callsite_args.v[i]);
     }
 
     tl_monotype *inst_result = tl_monotype_sized_last(callsite->list.xs);
-    body->type               = tl_polytype_clone_mono(self->arena, inst_result);
+    body->type               = tl_polytype_absorb_mono(self->arena, inst_result);
 }
 
-static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite_) {
+static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite) {
     str name = toplevel_name(node);
-
-    // safer to clone because we mutate the type, and it may be shared.
-    tl_monotype *callsite = tl_monotype_clone(self->arena, callsite_);
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
@@ -2386,7 +2383,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, 
     if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
         // always use a tuple on the left side of arrow, even if zero elements
         tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
-        tl_monotype *rhs   = result_type ? tl_monotype_clone(self->arena, result_type->type) : null;
+        tl_monotype *rhs   = result_type ? result_type->type : null;
         tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
 
         {
@@ -2402,7 +2399,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, 
         array_reserve(args_types, args.size);
         forall(i, args) {
             ensure_tv(self, &args.v[i]->type);
-            tl_monotype *tmp = tl_monotype_clone(self->arena, args.v[i]->type->type);
+            tl_monotype *tmp = args.v[i]->type->type;
 
             // make concrete if possible
             tl_monotype_substitute(self->arena, tmp, self->subs, null);
@@ -2412,7 +2409,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, ast_node_sized args, 
         tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
         tl_monotype *right = null;
         if (result_type) {
-            right = tl_monotype_clone(self->arena, result_type->type);
+            right = result_type->type;
             tl_monotype_substitute(self->arena, right, self->subs, null);
         } else {
             right = tl_type_registry_nil(self->registry);
@@ -2651,7 +2648,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     } else {
         tl_polytype *tmp = tl_type_env_lookup(self->env, name);
         if (!tmp) fatal("runtime error");
-        arrow = tl_polytype_clone(self->arena, tmp);
+        arrow = tmp;
 
         if (!arrow) fatal("runtime error");
     }
@@ -2685,7 +2682,8 @@ typedef struct {
 
 void do_admit_generic_pointers(void *ctx_, ast_node *node) {
     admit_generic_pointers_ctx *ctx = ctx_;
-    if (node->type) tl_monotype_force_tv_to_nil(node->type->type, ctx->nil, &ctx->seen);
+    if (node->type && tl_monotype_is_ptr(node->type->type))
+        tl_monotype_force_tv_to_nil(node->type->type, ctx->nil, &ctx->seen);
 }
 
 void admit_generic_pointers(tl_infer *self) {
