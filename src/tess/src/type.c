@@ -732,7 +732,7 @@ tl_monotype *tl_monotype_create_weak(allocator *alloc, tl_type_variable tv) {
 
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *self) {
     tl_type_variable tv = tl_type_subs_fresh(self);
-    return tl_monotype_create_weak(self->alloc, tv);
+    return tl_monotype_create_weak(self->data.alloc, tv);
 }
 
 tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype *lhs, tl_monotype *rhs) {
@@ -1286,48 +1286,52 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
 
 // -- substitutions --
 
-tl_type_subs *tl_type_subs_create(allocator *alloc) {
+tl_type_subs *tl_type_subs_create(allocator *alloc, allocator *transient) {
+
     tl_type_subs *self = new (alloc, tl_type_subs);
-    *self              = (tl_type_subs){.alloc = alloc};
-    array_reserve(*self, 1024);
+    *self              = (tl_type_subs){
+                   .transient = transient,
+                   .data      = (tl_type_uf_node_array){.alloc = alloc},
+    };
+    array_reserve(self->data, 1024);
     return self;
 }
 
 void tl_type_subs_destroy(allocator *alloc, tl_type_subs **p) {
     if (!p || !*p) return;
-    array_free(**p);
+    array_free((*p)->data);
     alloc_free(alloc, *p);
     *p = null;
 }
 
 tl_type_variable tl_type_subs_fresh(tl_type_subs *self) {
-    tl_type_uf_node x = {.parent = self->size};
-    array_push(*self, x);
+    tl_type_uf_node x = {.parent = self->data.size};
+    array_push(self->data, x);
     return x.parent;
 }
 
 static tl_type_variable uf_find(tl_type_subs *self, tl_type_variable tv) {
-    assert(tv < self->size);
-    if (self->v[tv].parent != tv) {
+    assert(tv < self->data.size);
+    if (self->data.v[tv].parent != tv) {
         // path compression
-        self->v[tv].parent = uf_find(self, self->v[tv].parent);
+        self->data.v[tv].parent = uf_find(self, self->data.v[tv].parent);
     }
-    return self->v[tv].parent;
+    return self->data.v[tv].parent;
 }
 
 static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable tv2) {
     tl_type_variable x = uf_find(self, tv1);
     tl_type_variable y = uf_find(self, tv2);
-    assert(max(x, y) < self->size);
+    assert(max(x, y) < self->data.size);
 
     if (x == y) return;
 
     // merge by rank
-    if (self->v[x].rank < self->v[y].rank) swap(x, y);
+    if (self->data.v[x].rank < self->data.v[y].rank) swap(x, y);
 
     // make x the new root, with rank >= y rank
-    self->v[y].parent = x;
-    if (self->v[x].rank == self->v[y].rank) self->v[x].rank++;
+    self->data.v[y].parent = x;
+    if (self->data.v[x].rank == self->data.v[y].rank) self->data.v[x].rank++;
 }
 
 static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
@@ -1611,7 +1615,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
     case tl_weak:     {
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) return 1;
-        tl_monotype *resolved = self->v[root].type;
+        tl_monotype *resolved = self->data.v[root].type;
         if (resolved) return tl_type_subs_monotype_occurs_(self, tv, resolved, seen);
 
     } break;
@@ -1633,7 +1637,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
     // TODO: use transient for map
-    hashmap *seen = hset_create(self->alloc, 32);
+    hashmap *seen = hset_create(self->data.alloc, 32);
     int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
     hset_destroy(&seen);
     return res;
@@ -1648,8 +1652,8 @@ static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_t
     tl_type_variable right_root = uf_find(self, right);
     if (left_root == right_root) return 0; // already in same equivalence class
 
-    tl_monotype *left_type  = self->v[left_root].type;
-    tl_monotype *right_type = self->v[right_root].type;
+    tl_monotype *left_type  = self->data.v[left_root].type;
+    tl_monotype *right_type = self->data.v[right_root].type;
     if (left_type && right_type) {
         // both are resolved: must unify
         if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user)) {
@@ -1661,8 +1665,8 @@ static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_t
     uf_union(self, left_root, right_root);
 
     // preserve the resolved type, if any
-    tl_type_variable union_root = uf_find(self, left_root);
-    self->v[union_root].type    = left_type ? left_type : right_type;
+    tl_type_variable union_root   = uf_find(self, left_root);
+    self->data.v[union_root].type = left_type ? left_type : right_type;
     return 0;
 }
 
@@ -1673,7 +1677,7 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *self, tl_type_variable left,
 
     tl_type_variable left_root  = uf_find(self, left);
 
-    tl_monotype     *left_type  = self->v[left_root].type;
+    tl_monotype     *left_type  = self->data.v[left_root].type;
     tl_monotype     *right_type = right;
     if (left_type && right_type) {
         // both are resolved: must unify
@@ -1683,7 +1687,7 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *self, tl_type_variable left,
     }
 
     // store the weak type at the root
-    self->v[left_root].type = tl_monotype_clone(self->alloc, right);
+    self->data.v[left_root].type = tl_monotype_clone(self->data.alloc, right);
 
     return 0;
 }
@@ -1695,7 +1699,7 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
 
     tl_type_variable weak_root  = uf_find(self, weak->var);
 
-    tl_monotype     *weak_type  = self->v[weak_root].type;
+    tl_monotype     *weak_type  = self->data.v[weak_root].type;
     tl_monotype     *right_type = right;
     if (weak_type && right_type) {
         // both are resolved: must unify
@@ -1705,7 +1709,7 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     }
 
     // store the weak type at the root
-    self->v[weak_root].type = tl_monotype_clone(self->alloc, right);
+    self->data.v[weak_root].type = tl_monotype_clone(self->data.alloc, right);
 
     return 0;
 }
@@ -1734,14 +1738,14 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
     case tl_arrow:
     case tl_tuple:     {
         // case 3: tv = concrete type or arrow or tuple
-        tl_monotype *tv_type = self->v[tv_root].type;
+        tl_monotype *tv_type = self->data.v[tv_root].type;
         if (tv_type) {
             // must unify
             return tl_type_subs_unify_mono(self, tv_type, mono, cb, user);
         }
 
         // store the type at the root
-        self->v[tv_root].type = tl_monotype_clone(self->alloc, mono);
+        self->data.v[tv_root].type = tl_monotype_clone(self->data.alloc, mono);
 
     } break;
     }
@@ -1767,7 +1771,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);
         if (exclude && hset_contains(exclude, &root, sizeof root)) return;
 
-        tl_monotype *resolved = subs->v[root].type;
+        tl_monotype *resolved = subs->data.v[root].type;
         if (resolved) {
             // Note: due to transitive and cycle issues, we need to shake/repeat a few times. Rather than
             // formally prove we have exhausted all cycles, we just pick a number that seems to work in
@@ -1838,12 +1842,12 @@ tl_polytype tl_polytype_wrap(tl_monotype *mono) {
 
 void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
 
-    hashmap         *exclude = map_create(subs->alloc, sizeof(tl_type_variable), 8);
+    hashmap         *exclude = map_create(subs->data.alloc, sizeof(tl_type_variable), 8);
 
     hashmap_iterator iter    = {0};
     while (map_iter(env->map, &iter)) {
         tl_polytype *poly = *(tl_polytype **)iter.data;
-        tl_polytype_substitute_ext(subs->alloc, poly, subs, &exclude);
+        tl_polytype_substitute_ext(subs->data.alloc, poly, subs, &exclude);
     }
 
     map_destroy(&exclude);
@@ -1878,13 +1882,13 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
     hashmap               *seen        = hset_create(alloc, 128);
     tl_type_variable_array equiv_class = {.alloc = alloc};
 
-    forall(i, *self) {
+    forall(i, self->data) {
         tl_type_variable root = uf_find(self, i);
         if (hset_contains(seen, &root, sizeof root)) continue;
         hset_insert(&seen, &root, sizeof root);
 
         equiv_class.size = 0;
-        forall(j, *self) {
+        forall(j, self->data) {
             if (uf_find(self, j) == root) array_push(equiv_class, j);
         }
 
@@ -1895,7 +1899,7 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
         }
         fprintf(stderr, "}");
 
-        tl_monotype *type = self->v[root].type;
+        tl_monotype *type = self->data.v[root].type;
         if (type) {
             fprintf(stderr, " = ");
             str s = tl_monotype_to_string(alloc, type);

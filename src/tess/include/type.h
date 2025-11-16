@@ -63,7 +63,12 @@ typedef struct {
     u32              rank;
 } tl_type_uf_node;
 
-defarray(tl_type_subs, tl_type_uf_node);
+defarray(tl_type_uf_node_array, tl_type_uf_node);
+
+typedef struct {
+    allocator            *transient;
+    tl_type_uf_node_array data;
+} tl_type_subs;
 
 typedef struct {
     allocator    *alloc;        // manages lifetime of all type constructors
@@ -128,7 +133,7 @@ void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_typ
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype *);
 void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
-u64                    tl_monotype_hash64(allocator*, tl_monotype *);
+u64                    tl_monotype_hash64(allocator *, tl_monotype *);
 tl_monotype           *tl_monotype_arrow_result(tl_monotype *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype *);
@@ -204,7 +209,7 @@ int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
 
 typedef void (*type_error_cb_fun)(void *ctx, tl_monotype *, tl_monotype *);
 
-nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
+nodiscard tl_type_subs *tl_type_subs_create(allocator *, allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
@@ -216,7 +221,7 @@ void tl_type_subs_log(allocator *, tl_type_subs *);
 
 // -- utilities --
 
-u64               tl_monotype_sized_hash64(allocator*, u64, tl_monotype_sized);
+u64               tl_monotype_sized_hash64(allocator *, u64, tl_monotype_sized);
 tl_monotype_sized tl_monotype_sized_clone(allocator *, tl_monotype_sized, hashmap **);
 tl_polytype_sized tl_monotype_sized_clone_poly(allocator *, tl_monotype_sized);
 tl_monotype      *tl_monotype_sized_last(tl_monotype_sized);
