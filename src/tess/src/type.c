@@ -1131,9 +1131,65 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     return hash;
 }
 
-u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
+static u64 hash_inst_name(u64 hash, tl_monotype *target) {
+    assert(tl_monotype_is_inst(target));
+    hash = str_hash64_combine(hash, target->cons_inst->def->name);
+    return hash;
+}
 
-u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
+static u64 tl_monotype_hash64_ptr_shallow(u64 seed, tl_monotype *self);
+
+static u64 tl_monotype_hash64_shallow(u64 seed, tl_monotype *self) {
+
+    u64 hash = seed;
+
+    // For this shallow hash, if the target is a type constructor, we use the specialised name if possible.
+    // Otherwise we use the constructor name.
+    switch (self->tag) {
+    case tl_any:
+    case tl_ellipsis:  break;
+    case tl_var:
+    case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
+
+    case tl_cons_inst: {
+        if (tl_monotype_is_ptr(self)) {
+            hash = tl_monotype_hash64_ptr_shallow(hash, self);
+        } else {
+            hash = hash_inst_name(hash, self);
+
+            forall(i, self->cons_inst->args) {
+                tl_monotype *arg = self->cons_inst->args.v[i];
+                if (tl_monotype_is_ptr(arg)) {
+                    // this terminates the recursion
+                    tl_monotype *target = tl_monotype_ptr_target(arg);
+                    u64          hash   = str_hash64_combine(seed, S("Ptr"));
+                    if (tl_monotype_is_inst(target)) hash = hash_inst_name(hash, target);
+                    else hash = tl_monotype_hash64_shallow(hash, target);
+                } else {
+                    hash = hash_inst_name(hash, arg);
+                }
+            }
+        }
+    } break;
+
+    case tl_arrow:
+    case tl_tuple: {
+        fatal("logic error");
+    } break;
+    }
+
+    return hash;
+}
+
+static u64 tl_monotype_hash64_ptr_shallow(u64 seed, tl_monotype *self) {
+    tl_monotype *target = tl_monotype_ptr_target(self);
+    u64          hash   = str_hash64_combine(seed, S("Ptr"));
+    return tl_monotype_hash64_shallow(hash, target);
+}
+
+static u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
+
+static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
 
     u64 hash     = hash64(&self->tag, sizeof self->tag);
     int ok_recur = 1;
@@ -1152,13 +1208,18 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
     case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_cons_inst: {
-        u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
-        hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
+        if (tl_monotype_is_ptr(self)) {
+            // Note: special case: use Ptr to break recursion: the target is shallow-hashed.
+            hash = tl_monotype_hash64_ptr_shallow(hash, self);
+        } else {
+            u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
+            hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
 
-        if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
+            if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
 
-        // Important: do not include special_name as part of hash, because specialize_user_type uses
-        // unspecialised name + hash to de-duplicate
+            // Important: do not include special_name as part of hash, because specialize_user_type uses
+            // unspecialised name + hash to de-duplicate
+        }
     } break;
 
     case tl_arrow:
