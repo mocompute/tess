@@ -1324,8 +1324,26 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
 static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_unary_op == node->tag);
-    str operand = generate_expr(self, type, node->unary_op.operand, ctx);
     str op      = ast_node_str(node->unary_op.op);
+
+    // Note: special case: the address-of operator is special because its operand must not be evaluated in the usual way.
+    if (str_eq(op, S("&"))) {
+        str res = next_res(self);
+
+        int save = ctx->want_lvalue;
+        ctx->want_lvalue = 1;
+        str operand = generate_expr(self, type, node->unary_op.operand, ctx);
+        ctx->want_lvalue = save;
+
+        generate_decl(self, res, type);
+        generate_assign_lhs(self, res);
+        cat(self, op);
+        cat(self, operand);
+        cat_semicolonln(self);
+        return res;
+    }
+
+    str operand = generate_expr(self, type, node->unary_op.operand, ctx);
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);
