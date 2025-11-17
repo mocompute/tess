@@ -874,7 +874,6 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
 
 int tl_monotype_is_weak_deep(allocator *alloc, tl_monotype *self) {
     hashmap *seen = hset_create(alloc, 32);
-
     int      res  = tl_monotype_is_weak_(self, &seen);
     hset_destroy(&seen);
     return res;

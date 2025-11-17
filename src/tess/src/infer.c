@@ -1266,20 +1266,34 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (tl_monotype_has_ptr(left->type->type)) {
                     tl_monotype *target = tl_monotype_ptr_target(left->type->type);
                     if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+                } else {
+                    fatal("not implemented");
                 }
-            }
-        } else if (is_struct_access_operator(op)) {
+            } else fatal("unreachable");
+        }
+
+        else if (is_struct_access_operator(op)) {
             // TODO: move this to utility function
             tl_monotype *struct_type = null;
 
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
                 tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-                if (!tl_monotype_has_ptr(left->type->type)) {
-                    array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
-                    return 1;
+
+                // if type is not concrete, we can't do anything
+                if (tl_monotype_is_concrete_no_weak(self->transient, left->type->type)) {
+
+                    if (!tl_monotype_has_ptr(left->type->type)) {
+                        array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+                        return 1;
+                    }
+                    struct_type = tl_monotype_ptr_target(left->type->type);
+                } else {
+                    tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+                    tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
+                    if (constrain_pm(self, ctx, left->type, ptr, node)) return 1;
+                    struct_type = weak;
                 }
-                struct_type = tl_monotype_ptr_target(left->type->type);
 
             } else {
                 struct_type = (tl_monotype *)left->type->type;
@@ -1299,6 +1313,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     str                       field_name = right->symbol.name;
                     tl_type_constructor_inst *inst       = struct_type->cons_inst;
                     i32 found = tl_monotype_type_constructor_field_index(struct_type, field_name);
+
+                    dbg(self, "searched field name %s", str_cstr(&field_name));
 
                     if (found != -1) {
                         if (!inst->args.size) {
@@ -1331,7 +1347,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 }
             } else {
                 // FIXME: constrain pointer's target, if any?
-                // if (constrain(self, ctx, node->type, right->type, node)) return 1;
+                // if (constrain_pm(self, ctx, left->type, struct_type, node)) return 1;
             }
         } else fatal("unknown operator type");
 

@@ -17,6 +17,7 @@ main() {
   if (points.v[0].y != 1) { res = 1 }
   if (points.v[1].x != 2) { res = 1 }
   if (points.v[1].y != 3) { res = 1 }
+  if (points.v[1].next->x) != 0 { res = 1 }
 
   Array.free(points.&)
   res
