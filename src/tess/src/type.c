@@ -171,7 +171,6 @@ static void mark_integer_type(tl_type_registry *self, str name) {
 typedef struct {
     u64 name_hash;
     u64 args_hash;
-
 } registry_key;
 
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {

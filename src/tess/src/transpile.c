@@ -1852,7 +1852,16 @@ static str type_to_c(transpile *self, tl_polytype *type) {
                                    remove_c_struct_prefix(self->transient, cons_name));
                 return remove_c_prefix(self->transient, cons_name);
             }
-            if (!str_is_empty(mono->cons_inst->special_name)) return mono->cons_inst->special_name;
+
+            // Note: special handling of user types. Due to recursive types, we want to use canonical type
+            // names. This means we need to do an additional lookup on special_name in the type environment,
+            // and use the name of the found type. tl_infer's canonicalize_types ensures that user types are
+            // canonicalized.
+            if (!str_is_empty(mono->cons_inst->special_name)) {
+                tl_monotype *found = env_lookup(self, mono->cons_inst->special_name);
+                if (found) return found->cons_inst->special_name;
+                return mono->cons_inst->special_name;
+            }
             return cons_name;
         }
     }

@@ -2843,6 +2843,39 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     return error;
 }
 
+static void canonicalize_types(tl_infer *self) {
+    // This function is required due to the processing of recursive types: types which include Ptrs to
+    // themselves. During type inference, the system creates additional specializations of the same user
+    // type. They are interchangeable from the type system's perspective, but this confuses the transpiler,
+    // because multiple names are used to refer to the same type. This function therefore performs a bit of
+    // surgery, ensuring every type in the environment refers to the same monotype if it ought to. Then, the
+    // transpiler must perform an additional lookup before rendering the name of user type. Rather than use
+    // the specialized name in the environment, it uses the specialized name of the canonical type.
+
+    str_array names = str_map_sorted_keys(self->transient, self->env->map);
+
+    forall(i, names) {
+        str          name = names.v[i];
+        tl_polytype *poly = str_map_get_ptr(self->env->map, name);
+        if (tl_polytype_is_scheme(poly)) continue;
+        if (!tl_monotype_is_inst(poly->type)) continue;
+
+        tl_monotype *cached = tl_type_registry_get_cached_specialization(
+          self->registry, poly->type->cons_inst->def->generic_name, poly->type->cons_inst->args);
+
+        if (!cached) {
+            str poly_str = tl_polytype_to_string(self->transient, poly);
+            dbg(self, "canonicalize_types missing: %s : %s", str_cstr(&name), str_cstr(&poly_str));
+        } else {
+            str mono_str = tl_monotype_to_string(self->transient, cached);
+            dbg(self, "canonicalize_types found: %s : %s", str_cstr(&name), str_cstr(&mono_str));
+
+            // Note: surgery on shared polytypes, may be unsafe?
+            poly->type = cached;
+        }
+    }
+}
+
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
 
     tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
@@ -2999,8 +3032,8 @@ static void update_specialized_types(tl_infer *self) {
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
-    // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
-    // preserving lexical scope. This simplifies later passes by removing name collision concerns.
+    // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names
+    // while preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
         hashmap *lex = map_new(self->transient, str, str, 16);
         // rename toplevel let-in symbols and keep them in global lexical scope
@@ -3062,9 +3095,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         main = *found_main;
     }
 
-    // Final phase: communiate type information top-down by following applications. This contrasts with the
-    // bottom-up inference we just completed. At this point the program is well-typed and we are setting up
-    // for the transpiler.
+    // Final phase: communiate type information top-down by following applications. This contrasts with
+    // the bottom-up inference we just completed. At this point the program is well-typed and we are
+    // setting up for the transpiler.
     dbg(self, "-- specialize phase");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
@@ -3074,8 +3107,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (main) {
         traverse_ast(self, traverse, main, specialize_applications_cb);
     } else {
-        // TODO: this isn't really the full story for building libraries. For now, we must stay will full
-        // program analysis.
+        // TODO: this isn't really the full story for building libraries. For now, we must stay will
+        // full program analysis.
         ast_node *node = null;
         forall(i, nodes) {
             node = nodes.v[i];
@@ -3127,6 +3160,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         if (check_missing_free_variables(self)) return 1;
         if (self->errors.size) return 1;
     }
+
+    canonicalize_types(self);
+    arena_reset(self->transient);
 
     if (0) {
         dbg(self, "-- final subs");
