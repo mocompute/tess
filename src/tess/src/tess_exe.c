@@ -102,6 +102,7 @@ void state_gather_single_options(state *self, char *str) {
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
+    else if (0 == strcmp("--", str)) /* ignore */;
     else usage(1, self->argv0);
 }
 

@@ -192,10 +192,8 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
 
         else {
             // or else check if it's a known nullary type
-            if (tl_type_registry_is_nullary_type(self, name)) {
-                tl_polytype *poly = tl_type_registry_get(self, name);
-                return poly->type;
-            }
+            tl_polytype *poly = tl_type_registry_get_nullary(self, name);
+            if (poly) return poly->type;
         }
 
         // otherwise assign a fresh type variable
@@ -1118,6 +1116,25 @@ static tl_polytype *get_type_literal(tl_infer *self, traverse_ctx *ctx, str name
     return null;
 }
 
+static tl_polytype *resolve_symbol(tl_infer *self, traverse_ctx *ctx, str name) {
+    // Is it a type argument?
+    tl_polytype *out = get_type_literal(self, ctx, name);
+    if (out) {
+        dbg(self, "found type argument %s", str_cstr(&name));
+    }
+
+    // Check for nullary type lierals: wrap in Type(a) if found.
+    if (!out) {
+        out = tl_type_registry_get_nullary_wrapped(self->registry, name);
+        if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
+    }
+
+    // Otherwise check for known name
+    if (!out) out = tl_type_env_lookup(self->env, name);
+
+    return out;
+}
+
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     infer_ctx *ctx = traverse_ctx->user;
 
@@ -1257,7 +1274,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
             if (constrain(self, ctx, left->type, right->type, node)) return 1;
         } else if (is_index_operator(op)) {
-            // index must be integral and result must be Ptr's type argument
+            // index must be integral, and if accessing through a pointer, the result must be Ptr's type
+            // argument
             tl_monotype *int_type = tl_type_registry_int(self->registry);
             if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
 
@@ -1267,8 +1285,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (tl_monotype_has_ptr(left->type->type)) {
                 tl_monotype *target = tl_monotype_ptr_target(left->type->type);
                 if (constrain_pm(self, ctx, node->type, target, node)) return 1;
-            } else {
-                fatal("not implemented");
             }
 
         }
@@ -1302,6 +1318,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             } else {
                 struct_type = (tl_monotype *)left->type->type;
             }
+
+            struct_type = tl_monotype_maybe_unwrap_literal(struct_type);
 
             // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
             tl_monotype_substitute(self->arena, struct_type, self->subs, null);
@@ -1472,32 +1490,21 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_symbol: {
 
-        // Is it a type argument?
+        ensure_tv(self, &node->type);
+
+        // resolve the symbol's type
         str          name   = node->symbol.name;
-        tl_polytype *global = get_type_literal(self, traverse_ctx, name);
-        if (global) {
-            dbg(self, "found type argument %s", str_cstr(&name));
-        }
-        if (!global) global = tl_type_env_lookup(self->env, node->symbol.name);
+        tl_polytype *global = resolve_symbol(self, traverse_ctx, name);
 
         if (global) {
-            if (node->type) {
-                if (!escape_constraint(self, node->type, global) &&
-                    constrain(self, ctx, node->type, global, node))
-                    return 1;
-            } else {
-                ast_node_type_set(node, global);
-            }
-        }
-
-        else {
-            ensure_tv(self, &node->type);
+            if (!escape_constraint(self, node->type, global) &&
+                constrain(self, ctx, node->type, global, node))
+                return 1;
         }
 
         // if symbol has a type annotation, constrain it
         if (node->symbol.annotation) {
             process_annotation(self, node, traverse_ctx);
-
             if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
                 constrain(self, ctx, node->symbol.annotation_type, node->type, node))
                 return 1;
@@ -1505,8 +1512,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // Add to environment
 
-        // Important: this is necessary in particular for formal parameters which are type literals, because
-        // the type is propagated via the environment.
+        // Immediately apply substitutions for symbols.
+        tl_polytype_substitute(self->arena, node->type, self->subs);
+
         if (!traverse_ctx->is_field_name)
             if (!global) tl_type_env_insert(self->env, node->symbol.name, node->type);
 

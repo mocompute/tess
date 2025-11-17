@@ -233,9 +233,14 @@ void tl_type_registry_type_alias_insert(tl_type_registry *self, str name, tl_pol
 
 int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
     tl_polytype *poly = tl_type_registry_get(self, name);
+    return tl_polytype_is_nullary(poly);
+}
+
+int tl_polytype_is_nullary(tl_polytype *poly) {
     if (!poly) return 0;
     if (tl_polytype_is_scheme(poly)) return 0;
     if (!tl_monotype_is_inst(poly->type)) return 0;
+    if (poly->quantifiers.size) return 0;
     return 1;
 }
 
@@ -276,6 +281,20 @@ tl_polytype *tl_type_registry_get(tl_type_registry *self, str name) {
     tl_polytype *poly = str_map_get_ptr(self->type_aliases, name);
     if (!poly) poly = str_map_get_ptr(self->definitions, name);
     return poly;
+}
+
+tl_polytype *tl_type_registry_get_nullary(tl_type_registry *self, str name) {
+    tl_polytype *out = tl_type_registry_get(self, name);
+    if (!tl_polytype_is_nullary(out)) out = null;
+    return out;
+}
+
+tl_polytype *tl_type_registry_get_nullary_wrapped(tl_type_registry *self, str name) {
+    tl_polytype *nullary = tl_type_registry_get_nullary(self, name);
+    if (nullary) {
+        nullary = tl_polytype_absorb_mono(self->alloc, tl_type_registry_type_literal(self, nullary->type));
+    }
+    return nullary;
 }
 
 int tl_type_registry_exists(tl_type_registry *self, str name) {
@@ -1041,6 +1060,11 @@ tl_monotype *tl_monotype_type_literal_target(tl_monotype *self) {
     assert(tl_monotype_is_type_literal(self));
     assert(self->cons_inst->args.size == 1);
     return self->cons_inst->args.v[0];
+}
+
+tl_monotype *tl_monotype_maybe_unwrap_literal(tl_monotype *self) {
+    if (tl_monotype_is_type_literal(self)) return tl_monotype_type_literal_target(self);
+    else return self;
 }
 
 tl_monotype *tl_monotype_arrow_args(tl_monotype *self) {

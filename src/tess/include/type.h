@@ -28,8 +28,7 @@ typedef struct {
 typedef struct {
     tl_type_constructor_def *def;
     tl_monotype_sized        args;
-    // name of specialized instance, e.g. Point a => Point_0 Int. Nullary types like Int are never
-    // specialized.
+    // name of specialized instance, e.g. Point(a) => Point_0(Int).
     str special_name;
 } tl_type_constructor_inst;
 
@@ -106,6 +105,8 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *, tl_monotype *);
 tl_polytype *tl_type_registry_get(tl_type_registry *, str);
+tl_polytype *tl_type_registry_get_nullary(tl_type_registry *, str);
+tl_polytype *tl_type_registry_get_nullary_wrapped(tl_type_registry *, str);
 int          tl_type_registry_exists(tl_type_registry *, str);
 int          tl_type_registry_is_nullary_type(tl_type_registry *, str);
 
@@ -167,6 +168,7 @@ int          tl_monotype_is_integer_convertible(tl_monotype *);
 void         tl_monotype_set_integer_convertible(tl_monotype *);
 tl_monotype *tl_monotype_ptr_target(tl_monotype *);
 tl_monotype *tl_monotype_type_literal_target(tl_monotype *);
+tl_monotype *tl_monotype_maybe_unwrap_literal(tl_monotype *);
 tl_monotype *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
 void              tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *, hashmap **);
@@ -210,6 +212,7 @@ str         tl_polytype_to_string(allocator *, tl_polytype *);
 int         tl_polytype_is_scheme(tl_polytype *);
 int         tl_polytype_is_concrete(allocator *, tl_polytype *);
 int         tl_polytype_is_type_constructor(tl_polytype *);
+int         tl_polytype_is_nullary(tl_polytype *);
 int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
 
 // -- substitution --
