@@ -249,6 +249,8 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
 
     // Note: empty structs have zero arguments but must still be specialized. We can't really
     // distinguish these from nullary type constructors at the moment.
+    // FIXME: why must they be specialized?
+    // if (!args.size) return null;
 
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name),
@@ -1155,17 +1157,23 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
 
 static u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
 
+static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen);
+
+static u64 combine_seen(u64 hash, tl_monotype *self, hashmap **seen) {
+    // Types in C are all type constructors. For hashing, use the hash of their defs and ignore their args.
+    if (ptr_hset_contains(*seen, self)) {
+        u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
+        hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
+    } else {
+        u64 h = tl_monotype_hash64_(self, seen);
+        hash  = hash64_combine(hash, &h, sizeof h);
+    }
+    return hash;
+}
+
 static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
 
-    u64 hash     = hash64(&self->tag, sizeof self->tag);
-    int ok_recur = 1;
-
-    if (ptr_hset_contains(*seen, self)) {
-        ok_recur = 0;
-    } else {
-        ok_recur = 1;
-        ptr_hset_insert(seen, self);
-    }
+    u64 hash = hash64(&self->tag, sizeof self->tag);
 
     switch (self->tag) {
     case tl_any:
@@ -1177,7 +1185,20 @@ static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
 
-        if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->cons_inst->args, seen);
+        ptr_hset_insert(seen, self);
+
+        tl_monotype_sized args = self->cons_inst->args;
+        forall(i, args) {
+            tl_monotype *arg = args.v[i];
+            // Look through Ptr specializations to the target
+            if (tl_monotype_is_ptr(arg)) {
+                tl_monotype *target = tl_monotype_ptr_target(arg);
+                hash                = str_hash64_combine(hash, S("Ptr"));
+                hash                = combine_seen(hash, target, seen);
+            } else {
+                hash = combine_seen(hash, arg, seen);
+            }
+        }
 
         // Important: do not include special_name as part of hash, because specialize_user_type uses
         // unspecialised name + hash to de-duplicate
@@ -1186,7 +1207,7 @@ static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
 
     case tl_arrow:
     case tl_tuple: {
-        if (ok_recur) hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
+        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }

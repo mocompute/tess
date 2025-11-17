@@ -2925,6 +2925,8 @@ static void canonicalize_types(tl_infer *self) {
             dbg(self, "canonicalize_types missing: %s : %s", str_cstr(&name), str_cstr(&poly_str));
         } else {
             // Note: surgery on shared polytypes, since this is done after type inference, no problem.
+            dbg(self, "canonicalize_types replace: %s => %s",
+                str_cstr(&poly->type->cons_inst->special_name), str_cstr(&cached->cons_inst->special_name));
             poly->type = cached;
         }
     }
