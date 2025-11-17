@@ -1298,6 +1298,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             } else {
                 struct_type = (tl_monotype *)left->type->type;
             }
+
             // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
             tl_monotype_substitute(self->arena, struct_type, self->subs, null);
             if (tl_monotype_is_inst(struct_type)) {
@@ -1343,11 +1344,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     }
 
                 } else {
+                    // not a symbol
                     fatal("unreachable");
                 }
             } else {
+                // struct type is not a type constructor
                 // FIXME: constrain pointer's target, if any?
                 // if (constrain_pm(self, ctx, left->type, struct_type, node)) return 1;
+                dbg(self, "error: infer struct access without a struct type");
             }
         } else fatal("unknown operator type");
 
@@ -1370,7 +1374,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 return 1;
             }
         } else if (str_eq(op, S("&"))) {
-            // TODO: do we need a weak type variable here?
             if (!tl_polytype_is_scheme(operand->type)) {
                 tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
                 if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
@@ -2883,10 +2886,7 @@ static void canonicalize_types(tl_infer *self) {
             str poly_str = tl_polytype_to_string(self->transient, poly);
             dbg(self, "canonicalize_types missing: %s : %s", str_cstr(&name), str_cstr(&poly_str));
         } else {
-            str mono_str = tl_monotype_to_string(self->transient, cached);
-            dbg(self, "canonicalize_types found: %s : %s", str_cstr(&name), str_cstr(&mono_str));
-
-            // Note: surgery on shared polytypes, may be unsafe?
+            // Note: surgery on shared polytypes, since this is done after type inference, no problem.
             poly->type = cached;
         }
     }
