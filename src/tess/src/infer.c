@@ -662,7 +662,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (0) {
+    if (1) {
         log_constraint_mono(self, left, right, node);
     }
 
@@ -1280,7 +1280,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (0 == strcmp("->", op)) {
                 tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
 
-                // if type is not concrete, we can't do anything
+                // if type is not concrete, all we can assert is that the left side must be a pointer
                 if (tl_monotype_is_concrete_no_weak(self->transient, left->type->type)) {
 
                     if (!tl_monotype_has_ptr(left->type->type)) {
@@ -1508,7 +1508,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str          original = ast_node_name_original(node->named_application.name);
         tl_polytype *type     = tl_type_env_lookup(self->env, name);
         if (!type) {
-            return 0; // mututal recursion, undeclared std_* functions, etc
+            break; // mututal recursion, undeclared std_* functions, etc
         }
 
         if (tl_polytype_is_type_constructor(type)) {
@@ -1732,22 +1732,33 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
         if (utd && ast_node_is_enum_def(utd)) return str_empty();
     }
 
+    // To keep track of monotypes that are recursive references to the type being specialized.
+    tl_monotype_ptr_array recur_refs = {.alloc = self->transient};
+
     // specialize args first
     forall(i, args) {
         if (tl_monotype_is_inst(args.v[i]) && str_is_empty(args.v[i]->cons_inst->special_name)) {
-            tl_polytype *poly = null;
+            tl_polytype *poly         = null;
+            str          generic_name = args.v[i]->cons_inst->def->generic_name;
 
-            (void)specialize_type_constructor(self, args.v[i]->cons_inst->def->generic_name,
-                                              args.v[i]->cons_inst->args, &poly);
+            // Do not recurse: fixup after
+            if (str_eq(name, generic_name)) {
+                array_push_val(recur_refs, &args.v[i]);
+                continue;
+            }
+
+            // // Do not recurse into pointer target: fixup after
+            if (tl_monotype_is_ptr(args.v[i])) {
+                tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
+                if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
+                    array_push_val(recur_refs, &args.v[i]->cons_inst->args.v[0]);
+                    continue;
+                }
+            }
+
+            (void)specialize_type_constructor(self, generic_name, args.v[i]->cons_inst->args, &poly);
             if (poly) args.v[i] = tl_polytype_concrete(self->transient, poly);
         }
-    }
-
-    // do not specialize if args are not concrete
-
-    if (!tl_monotype_sized_is_concrete(self->transient, args)) {
-        if (out_type) *out_type = null;
-        return str_empty();
     }
 
     str          out_str   = str_empty();
@@ -1777,6 +1788,13 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     array_push(self->synthesized_nodes, utd);
 
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
+
+    // fixup recur refs
+    forall(i, recur_refs) {
+        *recur_refs.v[i] = utd->type->type;
+    }
+    array_free(recur_refs);
+
     return name_inst;
 
 cancel:
@@ -2922,8 +2940,22 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         // already specialized?
         if (!str_is_empty(mono->cons_inst->special_name)) return null;
 
+        // To keep track of monotypes that are recursive references to the type being specialized.
+        tl_monotype_ptr_array recur_refs = {.alloc = self->transient};
+
         // first recurse through the type args
         forall(i, mono->cons_inst->args) {
+            tl_monotype *arg_ty = mono->cons_inst->args.v[i];
+            if (mono == arg_ty) {
+                array_push_val(recur_refs, &mono->cons_inst->args.v[i]);
+                continue;
+            }
+
+            if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) {
+                array_push_val(recur_refs, &arg_ty->cons_inst->args.v[0]);
+                continue;
+            }
+
             tl_monotype *replace = tl_infer_update_specialized_type(self, mono->cons_inst->args.v[i]);
             if (replace) mono->cons_inst->args.v[i] = replace;
         }
@@ -2931,12 +2963,23 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         str               type_name = mono->cons_inst->def->name;
         tl_monotype_sized type_args = mono->cons_inst->args;
         tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
+
+        forall(i, recur_refs) {
+            *recur_refs.v[i] = replace;
+        }
+
         return replace;
 
     case tl_arrow:
     case tl_tuple: {
         int did_replace = 0;
         forall(i, mono->list.xs) {
+            tl_monotype *arg_ty = mono->list.xs.v[i];
+
+            // FIXME: incomplete support for recursive type (see above cons_inst case)
+            if (mono == arg_ty) continue;
+            if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) continue;
+
             tl_monotype *replace = tl_infer_update_specialized_type(self, mono->list.xs.v[i]);
             if (replace) {
                 mono->list.xs.v[i] = replace;
