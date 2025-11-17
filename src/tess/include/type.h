@@ -13,6 +13,7 @@ defarray(tl_type_variable_array, tl_type_variable);
 defsized(tl_type_variable_sized, tl_type_variable);
 defarray(tl_monotype_array, struct tl_monotype *);
 defsized(tl_monotype_sized, struct tl_monotype *);
+defarray(tl_monotype_ptr_array, struct tl_monotype **);
 defarray(tl_polytype_array, struct tl_polytype *);
 defsized(tl_polytype_sized, struct tl_polytype *);
 

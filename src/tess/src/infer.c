@@ -1261,27 +1261,31 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype *int_type = tl_type_registry_int(self->registry);
             if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
 
-            if (left->type) {
-                tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-                if (tl_monotype_has_ptr(left->type->type)) {
-                    tl_monotype *target = tl_monotype_ptr_target(left->type->type);
-                    if (constrain_pm(self, ctx, node->type, target, node)) return 1;
-                } else {
-                    fatal("not implemented");
-                }
-            } else fatal("unreachable");
+            tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+            tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+
+            if (tl_monotype_has_ptr(left->type->type)) {
+                tl_monotype *target = tl_monotype_ptr_target(left->type->type);
+                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+            } else {
+                fatal("not implemented");
+            }
+
         }
 
         else if (is_struct_access_operator(op)) {
             // TODO: move this to utility function
             tl_monotype *struct_type = null;
 
+            // tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+            // tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
-                tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
 
-                // if type is not concrete, all we can assert is that the left side must be a pointer
-                if (tl_monotype_is_concrete_no_weak(self->transient, left->type->type)) {
+                // if type is not a constructor instance, all we can assert is that the left side must be a
+                // pointer
+                if (tl_monotype_is_inst(left->type->type)) {
 
                     if (!tl_monotype_has_ptr(left->type->type)) {
                         array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
@@ -1319,10 +1323,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
                     if (found != -1) {
                         if (!inst->args.size) {
+                            // empty struct
                             if (constrain_pm(self, ctx, right->type, struct_type, node)) return 1;
                             if (constrain_pm(self, ctx, node->type, struct_type, node)) return 1;
                             if (constrain(self, ctx, node->type, right->type, node)) return 1;
-                            break;
+                            goto end_struct_access_op;
                         }
 
                         if ((u32)found >= inst->args.size) fatal("out of range");
@@ -1351,8 +1356,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 // struct type is not a type constructor
                 // FIXME: constrain pointer's target, if any?
                 // if (constrain_pm(self, ctx, left->type, struct_type, node)) return 1;
+
                 dbg(self, "error: infer struct access without a struct type");
             }
+
+        end_struct_access_op:
+            // always substitute operands immediately
+            tl_polytype_substitute(self->arena, node->binary_op.left->type, self->subs);
+            tl_polytype_substitute(self->arena, node->binary_op.right->type, self->subs);
+
         } else fatal("unknown operator type");
 
     } break;
