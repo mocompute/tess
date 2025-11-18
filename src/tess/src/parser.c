@@ -1610,6 +1610,9 @@ decl_done:
         assert(params.v[i]->symbol.annotation);
 
         // replace param with its annotation
+        // FIXME: for type arguments, this loses the symbol. E.g. `a : Type` loses `a`, so we can't use `a`
+        // in the return type, e.g. `foo(a: Type) -> T(a)`.
+
         params.v[i] = params.v[i]->symbol.annotation;
     }
 
