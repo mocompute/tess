@@ -1686,6 +1686,12 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
         if (tl_cons_inst == mono->tag) arr = mono->cons_inst->args;
         else arr = mono->list.xs;
         forall(i, arr) {
+            // Allow Ptr(tv): this is explicit support for recursive types where a field with a Ptr type is
+            // used to refer to itself.
+            if (tl_monotype_is_ptr(arr.v[i])) {
+                tl_monotype *target = tl_monotype_ptr_target(arr.v[i]);
+                if (tl_monotype_is_tv(target) && target->var == tv) continue;
+            }
             if (tl_type_subs_monotype_occurs_(self, tv, arr.v[i], seen)) return 1;
         }
     } break;
