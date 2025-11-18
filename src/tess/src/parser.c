@@ -233,10 +233,14 @@ static void add_module_symbol(parser *self, ast_node *name) {
 
 // -- parser --
 
-static void set_result_file(parser *p) {
-    p->result->file = p->token.file;
-    p->result->line = p->token.line;
-    p->result->col  = p->token.col;
+static void set_node_file(parser *self, ast_node *node) {
+    node->file = self->token.file;
+    node->line = self->token.line;
+    node->col  = self->token.col;
+}
+
+static void set_result_file(parser *self) {
+    set_node_file(self, self->result);
 }
 
 static int result_ast(parser *p, ast_tag tag) {
@@ -971,8 +975,9 @@ decl_done:
 
     array_shrink(exprs);
     ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
+    set_node_file(self, body);
 
-    ast_node *l    = ast_node_create(self->ast_arena, ast_lambda_function);
+    ast_node *l = ast_node_create(self->ast_arena, ast_lambda_function);
     set_node_parameters(self, l, &params);
     l->lambda_function.body = body;
     return result_ast_node(self, l);
@@ -1114,6 +1119,7 @@ static ast_node *parse_if_continue(parser *self) {
     if (!no) no = null; // ok to have no case null
 
     ast_node *n = ast_node_create_if_then_else(self->ast_arena, cond, yes, no);
+    set_node_file(self, n);
     return n;
 }
 
@@ -1189,12 +1195,14 @@ static ast_node *parse_case_expr(parser *self) {
     if (else_arm) {
         // else arm always goes at the end
         ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
         array_push(conditions, sentinel);
         array_push(arms, else_arm);
     }
 
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
                                           (ast_node_sized)array_sized(arms), bin_pred);
+    set_node_file(self, node);
     return node;
 }
 
@@ -1224,6 +1232,7 @@ static ast_node *parse_base_expression(parser *self) {
         ast_node *expr = parse_expression(self, prec);
         if (!expr) return null;
         ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, expr);
+        set_node_file(self, unary);
         return unary;
     }
 
@@ -1268,12 +1277,14 @@ static ast_node *parse_expression(parser *self, int min_prec) {
                 if (0 == a_try(self, a_star)) {
                     op              = self->result;
                     ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
-                    left            = unary;
+                    set_node_file(self, unary);
+                    left = unary;
                     continue;
                 } else if (0 == a_try(self, a_ampersand)) {
                     op              = self->result;
                     ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
-                    left            = unary;
+                    set_node_file(self, unary);
+                    left = unary;
                     continue;
                 }
             }
@@ -1295,7 +1306,8 @@ static ast_node *parse_expression(parser *self, int min_prec) {
                 if (a_try(self, a_close_square)) return null;
 
             ast_node *binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
-            left            = binop;
+            set_node_file(self, binop);
+            left = binop;
 
         } else break;
     }
@@ -1510,6 +1522,7 @@ static int a_body_element(parser *self) {
 static ast_node *create_body(parser *self, ast_node_array exprs) {
     array_shrink(exprs);
     ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
+    set_node_file(self, body);
     return body;
 }
 
@@ -1603,9 +1616,11 @@ decl_done:
     // make tuple
     array_shrink(params);
     ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)sized_all(params));
+    set_node_file(self, tup);
 
     // make arrow
     ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
+    set_node_file(self, arrow);
 
     // attach to name
     name->symbol.annotation = arrow;
