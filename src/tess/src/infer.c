@@ -342,22 +342,15 @@ static void collect_type_arguments(tl_type_registry *registry, ast_node const *n
 
         tl_monotype *mono = arg->type->type;
         if (tl_monotype_is_type_literal(mono)) {
-            str          arg_name     = ast_node_str(arg);
-            str          arg_original = ast_node_name_original(arg);
+            str          arg_name = ast_node_str(arg);
 
-            tl_monotype *target       = tl_monotype_type_literal_target(mono);
+            tl_monotype *target   = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
-
-            // also use original name, if any
-            if (!str_is_empty(arg_original)) str_map_set_ptr(map, arg_original, target);
 
             if (1) {
                 str target_str = tl_monotype_to_string(registry->alloc, target); // FIXME transient
                 fprintf(stderr, "collect_type_argument: %s : %s\n", str_cstr(&arg_name),
                         str_cstr(&target_str));
-                if (!str_is_empty(arg_original))
-                    fprintf(stderr, "collect_type_argument: %s : %s\n", str_cstr(&arg_original),
-                            str_cstr(&target_str));
             }
         }
 

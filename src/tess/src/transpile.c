@@ -1324,15 +1324,16 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
 static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_unary_op == node->tag);
-    str op      = ast_node_str(node->unary_op.op);
+    str op = ast_node_str(node->unary_op.op);
 
-    // Note: special case: the address-of operator is special because its operand must not be evaluated in the usual way.
+    // Note: special case: the address-of operator is special because its operand must not be evaluated in
+    // the usual way.
     if (str_eq(op, S("&"))) {
-        str res = next_res(self);
+        str res          = next_res(self);
 
-        int save = ctx->want_lvalue;
+        int save         = ctx->want_lvalue;
         ctx->want_lvalue = 1;
-        str operand = generate_expr(self, type, node->unary_op.operand, ctx);
+        str operand      = generate_expr(self, type, node->unary_op.operand, ctx);
         ctx->want_lvalue = save;
 
         generate_decl(self, res, type);
@@ -2038,7 +2039,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     } else if (ast_node_is_nfa(arg)) {
         // type constructor
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
-        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        tl_monotype *type = tl_type_registry_parse(self->registry, arg, &map);
         if (!type) fatal("missing type");
         update_type(self, &type);
 
@@ -2072,7 +2073,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     } else if (ast_node_is_nfa(arg)) {
         // type constructor
         hashmap     *map  = map_new(self->transient, str, tl_monotype *, 8);
-        tl_monotype *type = tl_type_registry_parse(self->registry, arg, self->subs, &map);
+        tl_monotype *type = tl_type_registry_parse(self->registry, arg, &map);
         if (!type) fatal("missing type");
         update_type(self, &type);
 
