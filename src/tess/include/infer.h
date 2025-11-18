@@ -34,12 +34,12 @@ void                tl_infer_report_errors(tl_infer *);
 str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
-tl_monotype *tl_type_registry_parse(tl_type_registry *, ast_node const *, tl_type_subs *, hashmap **);
+tl_monotype        *tl_type_registry_parse(tl_type_registry *, ast_node const *, hashmap **);
 
-tl_monotype *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
+tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
 
-int          is_c_symbol(str);
-int          is_c_struct_symbol(str);
-int          is_intrinsic(str);
+int                 is_c_symbol(str);
+int                 is_c_struct_symbol(str);
+int                 is_intrinsic(str);
 
 #endif

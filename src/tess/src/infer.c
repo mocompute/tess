@@ -147,21 +147,18 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
     return found;
 }
 
-tl_monotype      *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
-                                         hashmap **map);
+static void       collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map);
 
-tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, tl_type_subs *subs,
-                              hashmap **map) {
+tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, hashmap **map) {
     // See tl_type_registry_parse.
 
     tl_monotype_array arr = {.alloc = self->alloc};
     array_reserve(arr, args.size);
-    forall(i, args) array_push_val(arr, tl_type_registry_parse(self, args.v[i], subs, map));
+    forall(i, args) array_push_val(arr, tl_type_registry_parse(self, args.v[i], map));
     return (tl_monotype_sized)array_sized(arr);
 }
 
-tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, tl_type_subs *subs,
-                                    hashmap **map) {
+tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, hashmap **map) {
     // map : map_new(self->transient, str, tl_monotype*, 8);
     // used to ensure same symbol gets same type variable.
     // map may be null in which case type arguments are not supported, as in the case of simple type
@@ -186,7 +183,7 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         } else if (str_eq(name, S("Type"))) {
             // Note: special case: support nullary `Type` as an alias of `Type(a)`
             tl_monotype_sized args_mono = {.size = 1, .v = alloc_malloc(self->alloc, sizeof(void *))};
-            args_mono.v[0]              = tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(subs));
+            args_mono.v[0] = tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs));
             return tl_type_registry_instantiate_with(self, name, args_mono);
         }
 
@@ -196,15 +193,15 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
             if (poly) return poly->type;
         }
 
-        // otherwise assign a fresh type variable
-        tl_monotype *tv = get_tv_or_fresh(self, name, map, subs);
+        // otherwise assign a fresh type variable or use a type argument from map
+        tl_monotype *tv = get_tv_or_fresh(self, name, map, self->subs);
         return tv;
     }
 
     if (ast_node_is_nfa(node)) {
 
         ast_node_sized    args      = ast_node_sized_from_ast_array_const(node);
-        tl_monotype_sized args_mono = parse_types(self, args, subs, map);
+        tl_monotype_sized args_mono = parse_types(self, args, map);
 
         if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
             return tl_type_registry_instantiate_union(self, args_mono);
@@ -220,10 +217,15 @@ tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node
         // arrow types are always ([{ a }]) -> b
         ast_node const *tup = node->arrow.left;
         assert(ast_node_is_tuple(tup));
+
+        // collect type arguments from arrow params
+        collect_type_arguments(self, tup, map);
+
         ast_node_sized    tuple     = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
-        tl_monotype_sized arr_sized = parse_types(self, tuple, subs, map);
+        tl_monotype_sized arr_sized = parse_types(self, tuple, map);
         tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
-        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, subs, map);
+
+        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, map);
         return tl_monotype_create_arrow(self->alloc, left, right);
     }
 
@@ -273,9 +275,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                 if (found) field = found;
             }
 
-            if (!field)
-                field =
-                  tl_type_registry_parse(self->registry, field_type_node, self->subs, &type_argument_map);
+            if (!field) field = tl_type_registry_parse(self->registry, field_type_node, &type_argument_map);
 
             if (!field) {
                 array_push(self->errors,
@@ -310,7 +310,7 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
     if (ctx) map = ctx->type_arguments;
     else map = map_new(self->transient, str, tl_monotype *, 8);
 
-    tl_monotype *ann = tl_type_registry_parse(self->registry, name->symbol.annotation, self->subs, &map);
+    tl_monotype *ann = tl_type_registry_parse(self->registry, name->symbol.annotation, &map);
     if (tl_monotype_is_tv(ann)) {
         str ann_str = v2_ast_node_to_string(self->arena, name->symbol.annotation);
         array_push(self->errors,
@@ -329,13 +329,12 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     process_name_annotation(self, toplevel_name_node(node), ctx);
 }
 
-static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map) {
+static void collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map) {
     // Note: collects names and target types of arguments which are type literal arguments. This map is used
     // by tl_type_registry_parse.
-    (void)self;
     // map : map_new(self->transient, str, tl_monotype*, 8);
 
-    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
     ast_node          *arg;
     while ((arg = ast_arguments_next(&iter))) {
         if (!arg->type) continue;
@@ -343,18 +342,28 @@ static void collect_type_arguments(tl_infer *self, ast_node *node, hashmap **map
 
         tl_monotype *mono = arg->type->type;
         if (tl_monotype_is_type_literal(mono)) {
-            str          arg_name = ast_node_str(arg);
-            tl_monotype *target   = tl_monotype_type_literal_target(mono);
+            str          arg_name     = ast_node_str(arg);
+            str          arg_original = ast_node_name_original(arg);
+
+            tl_monotype *target       = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
+
+            // also use original name, if any
+            if (!str_is_empty(arg_original)) str_map_set_ptr(map, arg_original, target);
+
             if (1) {
-                str target_str = tl_monotype_to_string(self->transient, target);
-                dbg(self, "collect_type_argument: %s : %s", str_cstr(&arg_name), str_cstr(&target_str));
+                str target_str = tl_monotype_to_string(registry->alloc, target); // FIXME transient
+                fprintf(stderr, "collect_type_argument: %s : %s\n", str_cstr(&arg_name),
+                        str_cstr(&target_str));
+                if (!str_is_empty(arg_original))
+                    fprintf(stderr, "collect_type_argument: %s : %s\n", str_cstr(&arg_original),
+                            str_cstr(&target_str));
             }
         }
 
         else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
             // a symbol with an annotation: look for type variables
-            (void)tl_type_registry_parse(self->registry, arg->symbol.annotation, self->subs, map);
+            (void)tl_type_registry_parse(registry, arg->symbol.annotation, map);
         }
     }
 }
@@ -416,8 +425,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
         else if (ast_node_is_type_alias(node)) {
             str          name = toplevel_name(node);
-            tl_monotype *ann =
-              tl_type_registry_parse(self->registry, node->type_alias.target, self->subs, null);
+            tl_monotype *ann  = tl_type_registry_parse(self->registry, node->type_alias.target, null);
             assert(ann);
             tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
             tl_polytype_generalize(poly, self->env, self->subs);
@@ -683,9 +691,7 @@ static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *rig
     return 0;
 }
 
-static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_polytype *right,
-                     ast_node const *node) {
-    (void)ctx;
+static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
 
     if (left == right) return 0;
     if (0) {
@@ -702,11 +708,10 @@ static int constrain(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_polyt
     return constrain_mono(self, lhs, rhs, node);
 }
 
-static int constrain_pm(tl_infer *self, infer_ctx *ctx, tl_polytype *left, tl_monotype *right,
-                        ast_node const *node) {
+static int constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node) {
 
     tl_polytype wrap = tl_polytype_wrap(right);
-    return constrain(self, ctx, left, &wrap, node);
+    return constrain(self, left, &wrap, node);
 }
 
 static void ensure_tv(tl_infer *self, tl_polytype **type) {
@@ -767,7 +772,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
 
         // collect type arguments after traversing/inferring parameters
-        collect_type_arguments(self, node, &ctx->type_arguments);
+        collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
@@ -789,7 +794,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
 
         // collect type arguments after traversing/inferring arguments
-        if (ast_node_is_let_in_lambda(node)) collect_type_arguments(self, node, &ctx->type_arguments);
+        if (ast_node_is_let_in_lambda(node))
+            collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
@@ -822,7 +828,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
 
         // collect type arguments after traversing/inferring arguments
-        collect_type_arguments(self, node, &ctx->type_arguments);
+        collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
 
@@ -1136,7 +1142,6 @@ static tl_polytype *resolve_symbol(tl_infer *self, traverse_ctx *ctx, str name) 
 }
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-    infer_ctx *ctx = traverse_ctx->user;
 
     if (null == node) return 0;
 
@@ -1144,43 +1149,43 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_nil: {
         ensure_tv(self, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-        if (constrain_pm(self, ctx, node->type, weak, node)) return 1;
+        if (constrain_pm(self, node->type, weak, node)) return 1;
     } break;
 
     case ast_string: {
         tl_monotype *ty = tl_type_registry_string(self->registry);
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_char: {
         tl_monotype *ty = tl_type_registry_char(self->registry);
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_f64: {
         tl_monotype *ty = tl_type_registry_float(self->registry);
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_i64: {
         tl_monotype *ty = tl_type_registry_int(self->registry);
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_u64: {
         tl_monotype *ty = tl_type_registry_int(self->registry); // FIXME unsigned
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_bool: {
         tl_monotype *ty = tl_type_registry_bool(self->registry);
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, ty, node)) return 1;
+        if (constrain_pm(self, node->type, ty, node)) return 1;
     } break;
 
     case ast_body: {
@@ -1189,7 +1194,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             u32       sz   = node->body.expressions.size;
             ast_node *last = node->body.expressions.v[sz - 1];
             ensure_tv(self, &last->type);
-            if (constrain(self, ctx, node->type, last->type, node)) return 1;
+            if (constrain(self, node->type, last->type, node)) return 1;
         }
     } break;
 
@@ -1207,7 +1212,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // expression and all conditions must be same type so they can be compared for equality
         forall(i, node->case_.conditions) {
             ensure_tv(self, &node->case_.conditions.v[i]->type);
-            if (constrain(self, ctx, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
         }
 
         // arms must all be the same.
@@ -1215,20 +1220,20 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // If it has a single arm, it's a statement. If it has multiple arms, it's an expression.
         switch (node->case_.arms.size) {
         case 0:
-            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+            if (constrain_pm(self, node->type, nil, node)) return 1;
             break;
         case 1:
-            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+            if (constrain_pm(self, node->type, nil, node)) return 1;
 
             // with a single arm, this is equivalent to a single-arm if statement, so its type can be any.
-            if (constrain_pm(self, ctx, node->case_.arms.v[0]->type, any_type, node)) return 1;
+            if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node)) return 1;
             break;
 
         default: {
             tl_polytype *arm_type = node->case_.arms.v[0]->type;
             forall(i, node->case_.arms) {
                 ensure_tv(self, &node->case_.arms.v[i]->type);
-                if (constrain(self, ctx, node->case_.arms.v[i]->type, arm_type, node)) return 1;
+                if (constrain(self, node->case_.arms.v[i]->type, arm_type, node)) return 1;
             }
         } break;
         }
@@ -1241,14 +1246,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype *bool_poly = tl_polytype_absorb_mono(self->arena, bool_type);
             tl_polytype *pred_arrow =
               make_arrow_result_type(self, (ast_node_sized)array_sized(args), bool_poly);
-            if (constrain(self, ctx, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
+            if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
         }
 
     } break;
 
     case ast_return: {
         ensure_tv(self, &node->type);
-        if (constrain(self, ctx, node->type, node->return_.value->type, node)) return 1;
+        if (constrain(self, node->type, node->return_.value->type, node)) return 1;
     } break;
 
     case ast_binary_op: {
@@ -1260,41 +1265,40 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         char const *op = str_cstr(&node->binary_op.op->symbol.name);
         if (is_arithmetic_operator(op)) {
             // operands and result must all be same type
-            if (constrain(self, ctx, node->type, left->type, node)) return 1;
-            if (constrain(self, ctx, left->type, right->type, node)) return 1;
+            if (constrain(self, node->type, left->type, node)) return 1;
+            if (constrain(self, left->type, right->type, node)) return 1;
         } else if (is_bitwise_operator(op)) {
             // operands and result must be integer
             tl_monotype *int_type = tl_type_registry_int(self->registry);
-            if (constrain_pm(self, ctx, left->type, int_type, node)) return 1;
-            if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
-            if (constrain_pm(self, ctx, node->type, int_type, node)) return 1;
+            if (constrain_pm(self, left->type, int_type, node)) return 1;
+            if (constrain_pm(self, right->type, int_type, node)) return 1;
+            if (constrain_pm(self, node->type, int_type, node)) return 1;
         } else if (is_logical_operator(op) || is_relational_operator(op)) {
             // operands must be same type, and result must be boolean
             tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-            if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
-            if (constrain(self, ctx, left->type, right->type, node)) return 1;
+            if (constrain_pm(self, node->type, bool_type, node)) return 1;
+            if (constrain(self, left->type, right->type, node)) return 1;
         } else if (is_index_operator(op)) {
             // index must be integral, and if accessing through a pointer, the result must be Ptr's type
             // argument
             tl_monotype *int_type = tl_type_registry_int(self->registry);
-            if (constrain_pm(self, ctx, right->type, int_type, node)) return 1;
+            if (constrain_pm(self, right->type, int_type, node)) return 1;
 
             tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
             tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
             if (tl_monotype_has_ptr(left->type->type)) {
                 tl_monotype *target = tl_monotype_ptr_target(left->type->type);
-                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+                if (constrain_pm(self, node->type, target, node)) return 1;
             }
 
         }
 
         else if (is_struct_access_operator(op)) {
-            // TODO: move this to utility function
             tl_monotype *struct_type = null;
 
-            // tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-            // tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+            tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+            tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
@@ -1311,7 +1315,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 } else {
                     tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
                     tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-                    if (constrain_pm(self, ctx, left->type, ptr, node)) return 1;
+                    if (constrain_pm(self, left->type, ptr, node)) return 1;
                     struct_type = weak;
                 }
 
@@ -1342,9 +1346,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     if (found != -1) {
                         if (!inst->args.size) {
                             // empty struct
-                            if (constrain_pm(self, ctx, right->type, struct_type, node)) return 1;
-                            if (constrain_pm(self, ctx, node->type, struct_type, node)) return 1;
-                            if (constrain(self, ctx, node->type, right->type, node)) return 1;
+                            if (constrain_pm(self, right->type, struct_type, node)) return 1;
+                            if (constrain_pm(self, node->type, struct_type, node)) return 1;
+                            if (constrain(self, node->type, right->type, node)) return 1;
                             goto end_struct_access_op;
                         }
 
@@ -1353,13 +1357,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                         if (nfa) {
                             tl_monotype *result_type = tl_monotype_arrow_result(field_type);
                             // right = nfa's name
-                            if (constrain_pm(self, ctx, right->type, field_type, node)) return 1;
-                            if (constrain_pm(self, ctx, nfa->type, result_type, node)) return 1;
-                            if (constrain_pm(self, ctx, node->type, result_type, node)) return 1;
+                            if (constrain_pm(self, right->type, field_type, node)) return 1;
+                            if (constrain_pm(self, nfa->type, result_type, node)) return 1;
+                            if (constrain_pm(self, node->type, result_type, node)) return 1;
                         } else {
-                            if (constrain_pm(self, ctx, right->type, field_type, node)) return 1;
-                            if (constrain_pm(self, ctx, node->type, field_type, node)) return 1;
-                            if (constrain(self, ctx, node->type, right->type, node)) return 1;
+                            if (constrain_pm(self, right->type, field_type, node)) return 1;
+                            if (constrain_pm(self, node->type, field_type, node)) return 1;
+                            if (constrain(self, node->type, right->type, node)) return 1;
                         }
                     } else {
                         // field not found?
@@ -1373,7 +1377,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             } else {
                 // struct type is not a type constructor
                 // FIXME: constrain pointer's target, if any?
-                // if (constrain_pm(self, ctx, left->type, struct_type, node)) return 1;
+                // if (constrain_pm(self, left->type, struct_type, node)) return 1;
 
                 dbg(self, "error: infer struct access without a struct type");
             }
@@ -1397,7 +1401,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (tl_monotype_has_ptr(operand->type->type)) {
                 assert(!tl_polytype_is_scheme(operand->type));
                 tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
-                if (constrain_pm(self, ctx, node->type, target, node)) return 1;
+                if (constrain_pm(self, node->type, target, node)) return 1;
             } else {
                 // pointer required
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
@@ -1406,21 +1410,21 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         } else if (str_eq(op, S("&"))) {
             if (!tl_polytype_is_scheme(operand->type)) {
                 tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
-                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+                if (constrain_pm(self, node->type, ptr, node)) return 1;
             } else {
                 tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
                 tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-                if (constrain_pm(self, ctx, node->type, ptr, node)) return 1;
+                if (constrain_pm(self, node->type, ptr, node)) return 1;
             }
         } else if (str_eq(op, S("!"))) {
             tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-            if (constrain_pm(self, ctx, node->type, bool_type, node)) return 1;
+            if (constrain_pm(self, node->type, bool_type, node)) return 1;
         } else if (str_eq(op, S("~"))) {
-            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+            if (constrain(self, node->type, operand->type, node)) return 1;
         } else if (str_eq(op, S("-"))) {
-            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+            if (constrain(self, node->type, operand->type, node)) return 1;
         } else if (str_eq(op, S("+"))) {
-            if (constrain(self, ctx, node->type, operand->type, node)) return 1;
+            if (constrain(self, node->type, operand->type, node)) return 1;
         } else {
             fatal("unknown unary operator");
         }
@@ -1449,7 +1453,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             node->let_in.name->type = null;
 
             if (node->let_in.body)
-                if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
+                if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
 
         } else {
 
@@ -1474,17 +1478,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // both.
 
             if (!escape_constraint(self, name_type, value_type) &&
-                constrain(self, ctx, name_type, value_type, node))
+                constrain(self, name_type, value_type, node))
                 return 1;
 
             if (!escape_constraint(self, node->let_in.name->type, value_type) &&
-                constrain(self, ctx, node->let_in.name->type, value_type, node))
+                constrain(self, node->let_in.name->type, value_type, node))
                 return 1;
 
             tl_type_env_insert(self->env, node->let_in.name->symbol.name, name_type);
 
             if (node->let_in.body)
-                if (constrain(self, ctx, node->type, node->let_in.body->type, node)) return 1;
+                if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
         }
     } break;
 
@@ -1497,8 +1501,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_polytype *global = resolve_symbol(self, traverse_ctx, name);
 
         if (global) {
-            if (!escape_constraint(self, node->type, global) &&
-                constrain(self, ctx, node->type, global, node))
+            if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global, node))
                 return 1;
         }
 
@@ -1506,7 +1509,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (node->symbol.annotation) {
             process_annotation(self, node, traverse_ctx);
             if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
-                constrain(self, ctx, node->symbol.annotation_type, node->type, node))
+                constrain(self, node->symbol.annotation_type, node->type, node))
                 return 1;
         }
 
@@ -1536,7 +1539,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             tl_monotype *literal = type_literal_instantiate(self, node, 0);
             if (literal) {
-                if (constrain_pm(self, ctx, node->type, literal, node)) return 1;
+                if (constrain_pm(self, node->type, literal, node)) return 1;
                 // set node type directly after constraint
                 ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, literal));
                 break;
@@ -1583,14 +1586,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                         return 1;
                     }
                     assert(found < (i32)inst->cons_inst->args.size);
-                    if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
                 } else {
-                    if (constrain_pm(self, ctx, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[i], node)) return 1;
                 }
                 ++i;
             }
 
-            if (constrain_pm(self, ctx, node->type, inst, node)) return 1;
+            if (constrain_pm(self, node->type, inst, node)) return 1;
 
         } else {
             // a function type
@@ -1615,7 +1618,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype wrap = tl_polytype_wrap(inst);
 
             // and constrain it with the callsite types (arguments -> result)
-            if (constrain(self, ctx, &wrap, app, node)) return 1;
+            if (constrain(self, &wrap, app, node)) return 1;
         }
 
     } break;
@@ -1640,11 +1643,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         tl_polytype wrap = tl_polytype_wrap(inst);
-        if (constrain(self, ctx, &wrap, app, node)) return 1;
+        if (constrain(self, &wrap, app, node)) return 1;
 
         // constain node type to the lambda body type
-        if (constrain(self, ctx, node->type, node->lambda_application.lambda->lambda_function.body->type,
-                      node))
+        if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node))
             return 1;
 
     } break;
@@ -1656,30 +1658,29 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
           make_arrow(self, ast_node_sized_from_ast_array(node), node->lambda_function.body);
         if (!arrow) return 1;
         tl_polytype_generalize(arrow, self->env, self->subs);
-        if (constrain(self, ctx, node->type, arrow, node)) return 1;
+        if (constrain(self, node->type, arrow, node)) return 1;
 
     } break;
 
     case ast_if_then_else: {
 
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-        if (constrain_pm(self, ctx, node->if_then_else.condition->type, bool_type, node)) return 1;
+        if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node)) return 1;
 
         // a nil type in else arm indicates the arm should not be generated, so don't type check it. If
         // there is no else arm, then the if statement as a whole has an Void type. Otherwise, the if
         // statement takes the type of its arms.
         ensure_tv(self, &node->type);
         if (node->if_then_else.no) {
-            if (constrain(self, ctx, node->if_then_else.yes->type, node->if_then_else.no->type, node))
-                return 1;
-            if (constrain(self, ctx, node->type, node->if_then_else.yes->type, node)) return 1;
+            if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node)) return 1;
+            if (constrain(self, node->type, node->if_then_else.yes->type, node)) return 1;
         } else {
             tl_monotype *nil      = tl_type_registry_nil(self->registry);
             tl_monotype *any_type = tl_monotype_create_any(self->arena);
-            if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+            if (constrain_pm(self, node->type, nil, node)) return 1;
 
             // with a single arm, its type can be any.
-            if (constrain_pm(self, ctx, node->if_then_else.yes->type, any_type, node)) return 1;
+            if (constrain_pm(self, node->if_then_else.yes->type, any_type, node)) return 1;
         }
     } break;
 
@@ -1695,7 +1696,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             array_push(tup_types, arr.v[i]->type->type);
         }
 
-        if (constrain(self, ctx, node->type,
+        if (constrain(self, node->type,
                       tl_polytype_absorb_mono(
                         self->arena,
                         tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types))),
@@ -1712,20 +1713,20 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, &node->assignment.name->type);
         ensure_tv(self, &node->assignment.value->type);
 
-        if (constrain(self, ctx, node->type, node->assignment.value->type, node)) return 1;
-        if (constrain(self, ctx, node->type, node->assignment.name->type, node)) return 1;
+        if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
+        if (constrain(self, node->type, node->assignment.name->type, node)) return 1;
         break;
 
     case ast_continue:
         // use 'any' for continue so it can unify with any other conditional arm
         ensure_tv(self, &node->type);
-        if (constrain_pm(self, ctx, node->type, tl_monotype_create_any(self->arena), node)) return 1;
+        if (constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node)) return 1;
         break;
 
     case ast_while: {
         ensure_tv(self, &node->type);
         tl_monotype *nil = tl_type_registry_nil(self->registry);
-        if (constrain_pm(self, ctx, node->type, nil, node)) return 1;
+        if (constrain_pm(self, node->type, nil, node)) return 1;
     } break;
 
     case ast_let:
@@ -1978,7 +1979,7 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
         if (!ast_node_is_symbol(arg)) goto next;
 
         assert(i < app_args.size);
-        if (constrain_pm(self, ctx, arg->type, app_args.v[i], arg)) return 1;
+        if (constrain_pm(self, arg->type, app_args.v[i], arg)) return 1;
 
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (specialize_one(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
@@ -2613,7 +2614,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         if (ast_node_is_let(infer_target)) body = infer_target->let.body;
         else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
         if (!body) fatal("logic error");
-        if (constrain_pm(self, ctx, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
+        if (constrain_pm(self, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
     }
     infer_ctx_destroy(self->transient, &ctx);
     traverse_ctx_destroy(self->transient, &traverse);
@@ -3158,7 +3159,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     dbg(self, "");
     dbg(self, "-- toplevels");
     log_toplevels(self);
-    if (0) {
+    if (1) {
         dbg(self, "-- subs");
         log_subs(self);
     }
