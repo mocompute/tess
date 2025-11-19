@@ -756,6 +756,8 @@ static void replace_tv(tl_monotype *self, hashmap *map) {
     }
 }
 
+static int  is_same_cons(tl_monotype *self, tl_monotype *other);
+
 static void replace_tv_mono(tl_monotype *self, hashmap *map) {
     if (!self) return;
 
@@ -784,7 +786,13 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
         tl_monotype_sized arr;
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
         else arr = self->list.xs;
-        forall(i, arr) replace_tv_mono(arr.v[i], map);
+        forall(i, arr) {
+            // detect recursion through Ptr
+            if (tl_monotype_is_ptr(arr.v[i])) {
+                if (is_same_cons(self, tl_monotype_ptr_target(arr.v[i]))) continue;
+            }
+            replace_tv_mono(arr.v[i], map);
+        }
     } break;
     }
 }
@@ -812,6 +820,8 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (!self->quantifiers.size) return fresh;
     if (self->quantifiers.size != args.size) fatal("logic error");
+
+    // FIXME detect recursion
 
     hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), args.size);
 
@@ -1359,6 +1369,11 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     return hash;
 }
 
+static int is_same_cons(tl_monotype *self, tl_monotype *other) {
+    if (!tl_monotype_is_inst(self) || !tl_monotype_is_inst(other)) return 0;
+    return str_eq(self->cons_inst->def->generic_name, other->cons_inst->def->generic_name);
+}
+
 u64 tl_monotype_hash64(tl_monotype *self) {
 
     u64 hash = hash64(&self->tag, sizeof self->tag);
@@ -1370,11 +1385,10 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_cons_inst: {
-        u64 def_hash                   = tl_type_constructor_def_hash64(self->cons_inst->def);
-        hash                           = hash64_combine(hash, &def_hash, sizeof def_hash);
+        u64 def_hash           = tl_type_constructor_def_hash64(self->cons_inst->def);
+        hash                   = hash64_combine(hash, &def_hash, sizeof def_hash);
 
-        tl_monotype_sized args         = self->cons_inst->args;
-        str               generic_name = self->cons_inst->def->generic_name;
+        tl_monotype_sized args = self->cons_inst->args;
         forall(i, args) {
             tl_monotype *arg = args.v[i];
 
@@ -1382,8 +1396,7 @@ u64 tl_monotype_hash64(tl_monotype *self) {
             // constructor as ourselves, we simply tag it as "Self" and go no further.
             if (tl_monotype_is_ptr(arg)) {
                 tl_monotype *target = tl_monotype_ptr_target(arg);
-                if (tl_monotype_is_inst(target) &&
-                    str_eq(generic_name, target->cons_inst->def->generic_name)) {
+                if (is_same_cons(target, self)) {
                     hash = str_hash64_combine(hash, S("SELF"));
                 } else {
                     hash  = str_hash64_combine(hash, S("Ptr"));

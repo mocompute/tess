@@ -142,7 +142,6 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
     tl_type_variable tv = tl_type_subs_fresh(subs);
     found               = tl_monotype_create_tv(self->alloc, tv);
     if (map) {
-        // fprintf(stderr, "add type argument to map: %s\n", str_cstr(&name));
         str_map_set_ptr(map, name, found);
     }
     return found;
@@ -347,11 +346,6 @@ static void collect_type_arguments(tl_type_registry *registry, ast_node const *n
             tl_monotype *target   = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
 
-            if (1) {
-                str target_str = tl_monotype_to_string(registry->alloc, target); // FIXME transient
-                fprintf(stderr, "collect_type_argument: %s : %s\n", str_cstr(&arg_name),
-                        str_cstr(&target_str));
-            }
         }
 
         else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
@@ -661,7 +655,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (1) {
+    if (0) {
         log_constraint_mono(self, left, right, node);
     }
 
