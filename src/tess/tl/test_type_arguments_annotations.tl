@@ -1,7 +1,7 @@
 #module main
 #import <stdlib.tl>
 
-Point(a) : {x : a, y : a }
+Point(a) : { x: a, y: a }
 Rect(a)  : { topleft: Point(a), botright: Point(a) }
 
 Array(a) : {

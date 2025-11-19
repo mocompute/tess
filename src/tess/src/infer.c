@@ -55,11 +55,12 @@ typedef struct {
 } name_and_type;
 
 typedef struct {
-    hashmap *lex;            // hset str (names in local lexical scope)
+    hashmap *param_types;    // exists only during traverse_ast: str => monotype_pair
     hashmap *type_arguments; // map str -> tl_monotype*: arguments which are type literals
     hashmap *seen_node;      // hset ast_node* FIXME: needed?
     void    *user;
     int      is_field_name;
+    int      is_annotation;
 } traverse_ctx;
 
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
@@ -219,7 +220,8 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
     str name_str = ast_node_str(name);
     dbg(self, "process_name_annotation: %s", str_cstr(&name_str));
 
-    tl_polytype *poly = tl_type_registry_parse_type(self->registry, name->symbol.annotation);
+    tl_polytype *poly = tl_type_registry_parse_type_lexical(self->registry, name->symbol.annotation,
+                                                            ctx ? ctx->param_types : null);
     if (!poly) {
         str ann_str = v2_ast_node_to_string(self->arena, name->symbol.annotation);
         array_push(self->errors,
@@ -238,34 +240,35 @@ static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx
     process_name_annotation(self, toplevel_name_node(node), ctx);
 }
 
-static void collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map) {
-    // Note: collects names and target types of arguments which are type literal arguments. This map is used
-    // by tl_type_registry_parse.
-    // map : map_new(self->transient, str, tl_monotype*, 8);
+// static void collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map) {
+//     // Note: collects names and target types of arguments which are type literal arguments. This map is
+//     used
+//     // by tl_type_registry_parse.
+//     // map : map_new(self->transient, str, tl_monotype*, 8);
 
-    ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
-    ast_node          *arg;
-    while ((arg = ast_arguments_next(&iter))) {
-        if (!arg->type) continue;
-        assert(arg->type);
+//     ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
+//     ast_node          *arg;
+//     while ((arg = ast_arguments_next(&iter))) {
+//         if (!arg->type) continue;
+//         assert(arg->type);
 
-        tl_monotype *mono = arg->type->type;
-        if (tl_monotype_is_type_literal(mono)) {
-            str          arg_name = ast_node_str(arg);
+//         tl_monotype *mono = arg->type->type;
+//         if (tl_monotype_is_type_literal(mono)) {
+//             str          arg_name = ast_node_str(arg);
 
-            tl_monotype *target   = tl_monotype_type_literal_target(mono);
-            str_map_set_ptr(map, arg_name, target);
-        }
+//             tl_monotype *target   = tl_monotype_type_literal_target(mono);
+//             str_map_set_ptr(map, arg_name, target);
+//         }
 
-        else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
-            // a symbol with an annotation: look for type variables
-            tl_polytype *poly = tl_type_registry_parse_type(registry, arg->symbol.annotation);
-            if (tl_monotype_is_type_literal(poly->type)) {
-                ;
-            }
-        }
-    }
-}
+//         else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
+//             // a symbol with an annotation: look for type variables
+//             tl_polytype *poly = tl_type_registry_parse_type(registry, arg->symbol.annotation);
+//             if (tl_monotype_is_type_literal(poly->type)) {
+//                 ;
+//             }
+//         }
+//     }
+// }
 
 static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     assert(ast_node_is_hash_command(node));
@@ -345,6 +348,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
                 // ignore prior type annotation if the current symbol is annotated: later
                 // declaration overrides
+                // FIXME: this conditional seems not to follow the logic of the comment
                 if (!node->let.name->symbol.annotation) {
                     // apply annotation
                     node->let.name->symbol.annotation = (*p)->symbol.annotation;
@@ -504,11 +508,12 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out   = new (alloc, traverse_ctx);
+    out->param_types    = map_create(alloc, sizeof(tl_monotype_pair), 32);
     out->seen_node      = hset_create(alloc, 1024);
-    out->lex            = hset_create(alloc, 16);
     out->type_arguments = map_create_ptr(alloc, 16);
     out->user           = null;
     out->is_field_name  = 0;
+    out->is_annotation  = 0;
 
     return out;
 }
@@ -516,10 +521,14 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
     if ((*p)->seen_node) map_destroy(&(*p)->seen_node);
     if ((*p)->type_arguments) map_destroy(&(*p)->type_arguments);
-    if ((*p)->lex) hset_destroy(&(*p)->lex);
+    if ((*p)->param_types) map_destroy(&(*p)->param_types);
 
     alloc_free(alloc, *p);
     *p = null;
+}
+
+static int traverse_ctx_is_param(traverse_ctx *self, str name) {
+    return str_map_contains(self->param_types, name);
 }
 
 typedef struct {
@@ -642,11 +651,14 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
 }
 
 static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+
+    hashmap *types = tl_type_registry_parse_parameters(self->registry, self->transient, node);
+    map_merge(&ctx->param_types, types);
+
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *param;
     while ((param = ast_arguments_next(&iter))) {
         assert(ast_node_is_symbol(param));
-        str_hset_insert(&ctx->lex, param->symbol.name);
         ensure_tv(self, &param->type);
         if (cb(self, ctx, param)) return 1;
     }
@@ -663,25 +675,30 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
         map_reset(ctx->type_arguments);
 
-        hashmap *save = map_copy(ctx->lex);
+        hashmap *save = map_copy(ctx->param_types);
 
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
 
-        // collect type arguments after traversing/inferring parameters
-        collect_type_arguments(self->registry, node, &ctx->type_arguments);
+        // // collect type arguments after traversing/inferring parameters
+        // collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
+        map_destroy(&ctx->param_types);
+        ctx->param_types = save;
 
     } break;
 
     case ast_let_in: {
 
-        hashmap *save = map_copy(ctx->lex);
+        hashmap *save = map_copy(ctx->param_types);
         assert(ast_node_is_symbol(node->let_in.name));
-        str_hset_insert(&ctx->lex, node->let_in.name->symbol.name);
+
+        // just insert the name in param_types, no type information needed at this point
+        {
+            tl_monotype_pair pair = {0};
+            str_map_set(&ctx->param_types, node->let_in.name->symbol.name, &pair);
+        }
 
         // process node first, because there may be side effects required before traversing body.
         if (cb(self, ctx, node)) return 1;
@@ -690,8 +707,10 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
 
         // collect type arguments after traversing/inferring arguments
-        if (ast_node_is_let_in_lambda(node))
-            collect_type_arguments(self->registry, node, &ctx->type_arguments);
+        // FIXME: needed? the lambda function is traversed by the previous statement, and it collects type
+        // arguments.
+        // if (ast_node_is_let_in_lambda(node))
+        //     collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
@@ -699,8 +718,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // process node again: for specialised types, typing the name depends on typing the value.
         if (cb(self, ctx, node)) return 1;
 
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
+        map_destroy(&ctx->param_types);
+        ctx->param_types = save;
 
     } break;
 
@@ -719,19 +738,19 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_lambda_function: {
 
-        hashmap *save = map_copy(ctx->lex);
+        hashmap *save = map_copy(ctx->param_types);
 
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
 
-        // collect type arguments after traversing/inferring arguments
-        collect_type_arguments(self->registry, node, &ctx->type_arguments);
+        // // collect type arguments after traversing/inferring arguments
+        // collect_type_arguments(self->registry, node, &ctx->type_arguments);
 
         if (traverse_ast(self, ctx, node->lambda_function.body, cb)) return 1;
 
         if (cb(self, ctx, node)) return 1;
 
-        map_destroy(&ctx->lex);
-        ctx->lex = save;
+        map_destroy(&ctx->param_types);
+        ctx->param_types = save;
 
     } break;
 
@@ -1010,20 +1029,38 @@ error:
     return out;
 }
 
-static int          add_generic(tl_infer *, ast_node *);
+static int add_generic(tl_infer *, ast_node *);
 
-static tl_polytype *get_type_literal(tl_infer *self, traverse_ctx *ctx, str name) {
-    tl_monotype *ta = str_map_get_ptr(ctx->type_arguments, name);
-    if (ta) return tl_polytype_absorb_mono(self->arena, tl_type_registry_type_literal(self->registry, ta));
-    return null;
-}
+// static tl_polytype *get_type_literal(tl_infer *self, traverse_ctx *ctx, str name) {
+//     tl_monotype *ta = str_map_get_ptr(ctx->type_arguments, name);
+//     if (ta) return tl_polytype_absorb_mono(self->arena, tl_type_registry_type_literal(self->registry,
+//     ta)); return null;
+// }
 
 static tl_polytype *resolve_symbol(tl_infer *self, traverse_ctx *ctx, str name) {
-    // Is it a type argument?
-    tl_polytype *out = get_type_literal(self, ctx, name);
-    if (out) {
-        dbg(self, "found type argument %s", str_cstr(&name));
+
+    tl_polytype *out = null;
+
+    // find symbol in context param_types
+    tl_monotype_pair *pair = str_map_get(ctx->param_types, name);
+    if (pair && pair->right) {
+        dbg(self, "found param %s", str_cstr(&name));
+
+        // resolve_symbol is only called in the context of values, not annotations. So pair->right is the
+        // type.
+        out = tl_polytype_absorb_mono(self->arena, pair->right);
+    } else pair = null;
+
+    if (!pair) {
+        out = tl_type_registry_get_nullary_wrapped(self->registry, name);
+        if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
     }
+
+    // Is it a type argument?
+    // tl_polytype *out = get_type_literal(self, ctx, name);
+    // if (out) {
+    //     dbg(self, "found type argument %s", str_cstr(&name));
+    // }
 
     // Check for nullary type lierals: wrap in Type(a) if found.
     if (!out) {
@@ -2418,8 +2455,7 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     // Note: arrow types in the environment are global functions and are not free variables. Note that
     // even local let-in-lambda functions are also in the environment, but their names will never clash
     // with function names.
-    if (is_arrow || str_hset_contains(traverse_ctx->lex, node->symbol.name) ||
-        str_map_contains(traverse_ctx->type_arguments, node->symbol.name)) {
+    if (is_arrow || traverse_ctx_is_param(traverse_ctx, node->symbol.name)) {
         ;
     } else {
         // a free variable
@@ -2430,7 +2466,7 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     if (is_arrow && !tl_polytype_is_scheme(type)) {
         str_sized type_fvs = tl_monotype_fvs(type->type);
         forall(i, type_fvs) {
-            if (!str_hset_contains(traverse_ctx->lex, type_fvs.v[i]))
+            if (!traverse_ctx_is_param(traverse_ctx, type_fvs.v[i]))
                 str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
         }
     }

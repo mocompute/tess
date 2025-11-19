@@ -1,9 +1,13 @@
 #module main
 
-XXX(a) : { x : a }
+Point(a) : { x: a, y: a }
 
-foo(a : Type) -> XXX(a)
+array_new(T : Type, count) {
+  p : Ptr(T) := c_malloc(count * sizeof(T))
+  p
+}
 
 main() {
+  arr := array_new(Int, 8)
   0
 }

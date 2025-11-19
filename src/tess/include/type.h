@@ -75,6 +75,8 @@ typedef struct {
     tl_monotype *right;
 } tl_monotype_pair;
 
+defarray(tl_monotype_pair_array, tl_monotype_pair);
+
 // -- type environment --
 
 nodiscard tl_type_env *tl_type_env_create(allocator *, allocator *) mallocfun;

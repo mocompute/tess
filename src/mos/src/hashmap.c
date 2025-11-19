@@ -457,6 +457,14 @@ void map_reset(hashmap *map) {
     }
 }
 
+void map_merge(hashmap **dst, hashmap *src) {
+    assert((*dst)->value_size == src->value_size);
+    hashmap_iterator iter = {0};
+    while (map_iter(src, &iter)) {
+        map_set(dst, iter.key_ptr, iter.key_size, iter.data);
+    }
+}
+
 // -- hash set --
 
 //

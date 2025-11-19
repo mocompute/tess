@@ -72,6 +72,8 @@ void   map_erase(hashmap *, void const *key, u8 key_len);
 void   str_map_erase(hashmap *, str key);
 void   map_reset(hashmap *);
 
+void   map_merge(hashmap **dst, hashmap *src);
+
 void   hset_insert(hashmap **, void const *, u8);
 void   str_hset_insert(hashmap **, str);
 void   ptr_hset_insert(hashmap **, void const *);
