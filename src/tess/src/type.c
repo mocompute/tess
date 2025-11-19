@@ -1,4 +1,6 @@
 #include "type.h"
+#include "ast.h"
+#include "type_registry.h"
 
 #include "alloc.h"
 #include "array.h"
@@ -25,9 +27,10 @@ static void                      mark_integer_type(tl_type_registry *, str);
 
 // -- type constructor --
 
-tl_type_registry *tl_type_registry_create(allocator *alloc, tl_type_subs *subs) {
+tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
     self->alloc            = alloc;
+    self->transient        = transient;
     self->subs             = subs;
     self->definitions      = map_new(self->alloc, str, tl_polytype *, 64);       // key: str
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
@@ -351,6 +354,181 @@ tl_monotype *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype *
     return out;
 }
 
+typedef struct {
+    hashmap *type_arguments;
+
+} parse_type_ctx;
+
+static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *node) {
+
+    tl_monotype *mono = null;
+
+    if (ast_node_is_symbol(node)) {
+        str name = ast_node_str(node);
+        if (str_eq(name, S("any"))) mono = tl_monotype_create_any(self->alloc);
+        else if (str_eq(name, S("..."))) mono = tl_monotype_create_ellipsis(self->alloc);
+        else if (str_eq(name, S("Type"))) {
+            // nullary `Type` is an alias of `Type(a)`, so return forall t0. Type(t0)
+            return tl_monotype_generalize(
+              self->alloc, tl_type_registry_type_literal(
+                             self, tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs))));
+        }
+    }
+
+    if (mono) return tl_polytype_absorb_mono(self->alloc, mono);
+    else return null;
+}
+
+static tl_polytype *maybe_extract_type_argument(tl_type_registry *self, tl_polytype *type_argument) {
+    // forall t0. Type(t0) => t0
+    // forall t0. Cons(t0) => forall t0. Cons(t0)
+    if (tl_monotype_is_type_literal(type_argument->type))
+        return tl_polytype_absorb_mono(self->alloc, tl_monotype_type_literal_target(type_argument->type));
+    else return type_argument;
+}
+
+static tl_polytype *type_variable_sugar(tl_type_registry *self, parse_type_ctx *ctx, ast_node const *node) {
+    tl_polytype *result = null;
+    result              = tl_polytype_absorb_mono(self->alloc,
+                                                  tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs)));
+
+    str ta              = ast_node_str(node);
+    str_map_set_ptr(&ctx->type_arguments, ta, result);
+    return result;
+}
+
+static tl_polytype *tl_type_registry_parse_type_(tl_type_registry *self, parse_type_ctx *ctx,
+                                                 ast_node const *node) {
+    tl_polytype *result = null;
+
+    if (ast_node_is_nil(node)) return tl_type_registry_get(self, S("Nil"));
+
+    else if (ast_node_is_symbol(node)) {
+
+        // Note: `(x : T)` is sugar for `(T: Type, x: T)` but no type argument is accepted. `T` is assigned
+        // a type variable.
+
+        // is it a special: any, ..., Type
+        result = parse_type_specials(self, node);
+        if (result) return result;
+
+        // or is it a nullary: Int, Float, String, etc, including user type constructors
+        str name = ast_node_str(node);
+        result   = tl_type_registry_get_nullary(self, name);
+        if (result) return result;
+
+        // or else is it a type argument previously defined?
+        result = str_map_get_ptr(ctx->type_arguments, name);
+
+        if (result) {
+            // unquantify the type argument so it doesn't get instantiated to a new type when it's used:
+            // FIXME: a better approach might be to instantiate it on first use, and ensure the same
+            // instantiation is used throughout parsing the same outermost type.
+            result->quantifiers.size = 0;
+        }
+
+        if (result) return result;
+
+        // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
+        if (node->symbol.annotation) {
+            result = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
+
+            // If the annotation produces a Type(tv), then save the symbol as a type argument.
+            if (result && tl_monotype_is_type_literal(result->type) &&
+                tl_monotype_is_tv(tl_monotype_type_literal_target(result->type))) {
+                // the type literal target is a type variable
+                tl_polytype *instance = maybe_extract_type_argument(self, result);
+                str          ta       = ast_node_str(node);
+
+                str_map_set_ptr(&ctx->type_arguments, ta, instance);
+
+                // and the resulting type is still the wrapped Type(tv)
+            }
+            // If the annotation produces nothing, and it's a symbol, it's sugar
+            else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
+                // nullary `Type` is an alias of `Type(a)`, so return forall t0. Type(t0)
+                result = type_variable_sugar(self, ctx, node->symbol.annotation);
+            }
+        }
+
+        return result;
+    }
+
+    else if (ast_node_is_nfa(node)) {
+        // a type constructor with args: Array(Float), Map(String, String), etc.
+        // Note: `Ptr(T)` is sugar for `Ptr(T: Type, T)`
+
+        str          name             = ast_node_str(node->named_application.name);
+        tl_polytype *type_constructor = tl_type_registry_get(self, name);
+        if (!type_constructor) return null;
+
+        tl_monotype_array args  = {.alloc = self->alloc};
+        ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node);
+        forall(i, nodes) {
+            tl_polytype *poly = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+
+            // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
+            // variable - not a type argument
+            if (!poly && ast_node_is_symbol(nodes.v[i])) {
+                poly = type_variable_sugar(self, ctx, nodes.v[i]);
+            }
+
+            // TODO: creates unnecessary clone
+
+            // Arguments to type constructor are extracted from Type(tv) wrapper
+            poly = maybe_extract_type_argument(self, poly);
+            array_push_val(args, tl_polytype_instantiate(self->alloc, poly, self->subs));
+        }
+
+        // Note: special case for parsing a Union(a, b, ...)
+        if (str_eq(name, S("Union"))) {
+            tl_monotype *mono =
+              tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
+            result = tl_polytype_absorb_mono(self->alloc, mono);
+        } else {
+            tl_monotype *mono = tl_polytype_instantiate_with(self->alloc, type_constructor,
+                                                             (tl_monotype_sized)array_sized(args));
+            result            = tl_polytype_absorb_mono(self->alloc, mono);
+        }
+    }
+
+    else if (ast_node_is_arrow(node)) {
+        // An arrow annotation: left is always a tuple in our system, even with 0 or 1 params, and right is
+        // any type. Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
+        assert(ast_node_is_tuple(node->arrow.left));
+
+        tl_monotype_array args  = {.alloc = self->alloc};
+        ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
+        forall(i, nodes) {
+            tl_polytype *poly = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+
+            // Unquantify the parsed type here because it will be generalized later.
+            poly->quantifiers.size = 0;
+            array_push_val(args, tl_polytype_instantiate(self->alloc, poly, self->subs));
+        }
+        tl_monotype *left_mono =
+          tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
+
+        tl_polytype *right_poly = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
+        tl_monotype *right_mono = tl_polytype_instantiate(self->alloc, right_poly, self->subs);
+        tl_monotype *arrow      = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
+        result                  = tl_monotype_generalize(self->alloc, arrow);
+    }
+
+    return result;
+}
+
+tl_polytype *tl_type_registry_parse_type(tl_type_registry *self, ast_node *node) {
+    // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
+    parse_type_ctx ctx    = {.type_arguments = map_new(self->transient, str, tl_polytype *, 16)};
+    tl_polytype   *result = null;
+
+    result                = tl_type_registry_parse_type_(self, &ctx, node);
+
+    map_destroy(&ctx.type_arguments);
+    return result;
+}
+
 // -- type environment --
 
 tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
@@ -428,6 +606,12 @@ tl_polytype *tl_polytype_absorb_mono(allocator *alloc, tl_monotype *mono) {
     self->type        = mono;
     return self;
 }
+
+tl_polytype *tl_polytype_create(allocator *alloc, tl_type_variable_sized quantifiers, tl_monotype *mono) {
+    tl_polytype *self = tl_polytype_absorb_mono(alloc, mono);
+    self->quantifiers = quantifiers;
+    return self;
+};
 
 tl_polytype *tl_polytype_create_qv(allocator *alloc, tl_type_variable qv) {
     tl_polytype *self = alloc_malloc(alloc, sizeof *self);
@@ -522,6 +706,23 @@ void tl_polytype_merge_quantifiers(allocator *alloc, tl_polytype *self, tl_polyt
         self->quantifiers.size = arr.size;
         self->quantifiers.v    = arr.v;
     }
+}
+
+void tl_polytype_merge_quantifiers_sized(allocator *alloc, tl_polytype *self, tl_polytype_sized arr) {
+    tl_type_variable_array tv_array = {.alloc = alloc};
+    u32                    sum      = 0;
+    forall(i, arr) sum += arr.v[i]->quantifiers.size;
+    array_reserve(tv_array, self->quantifiers.size + sum);
+    array_push_many(tv_array, self->quantifiers.v, self->quantifiers.size);
+
+    forall(i, arr) {
+        tl_polytype *in = arr.v[i];
+        forall(i, in->quantifiers) array_set_insert(tv_array, in->quantifiers.v[i]);
+    }
+
+    alloc_free(alloc, self->quantifiers.v);
+    self->quantifiers.size = tv_array.size;
+    self->quantifiers.v    = tv_array.v;
 }
 
 static void replace_tv(tl_monotype *self, hashmap *map) {
@@ -720,6 +921,12 @@ tl_monotype *tl_polytype_concrete(allocator *alloc, tl_polytype *self) {
     // FIXME yes it's annoying this needs to allocate
     if (!tl_polytype_is_concrete(alloc, self)) fatal("runtime error");
     return self->type;
+}
+
+tl_polytype *tl_monotype_generalize(allocator *alloc, tl_monotype *mono) {
+    tl_type_variable_array quantifiers = {.alloc = alloc};
+    generalize(mono, &quantifiers);
+    return tl_polytype_create(alloc, (tl_type_variable_sized)array_sized(quantifiers), mono);
 }
 
 // -- monotype --

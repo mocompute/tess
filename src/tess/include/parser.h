@@ -8,6 +8,7 @@
 
 #include "alloc.h"
 #include "type.h"
+#include "type_registry.h"
 
 typedef struct parser parser;
 

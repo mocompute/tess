@@ -1612,13 +1612,11 @@ decl_done:
         // replace param with its annotation
         // FIXME: for type arguments, this loses the symbol. E.g. `a : Type` loses `a`, so we can't use `a`
         // in the return type, e.g. `foo(a: Type) -> T(a)`.
-
-        params.v[i] = params.v[i]->symbol.annotation;
+        // params.v[i] = params.v[i]->symbol.annotation;
     }
 
     // make tuple
-    array_shrink(params);
-    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)sized_all(params));
+    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
     set_node_file(self, tup);
 
     // make arrow

@@ -29,6 +29,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/infer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/transpile.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
 )
 
 set(SOURCES

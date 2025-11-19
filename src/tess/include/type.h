@@ -71,44 +71,9 @@ typedef struct {
 } tl_type_subs;
 
 typedef struct {
-    allocator    *alloc;        // manages lifetime of all type constructors
-    tl_type_subs *subs;         // needed for instantiation
-    hashmap      *definitions;  // str => tl_polytype*
-    hashmap      *specialized;  // registry_key => tl_monotype*
-    hashmap      *type_aliases; // str => polytype*
-} tl_type_registry;
-
-typedef struct {
     tl_monotype *left;
     tl_monotype *right;
 } tl_monotype_pair;
-
-// -- type constructor and registry --
-
-nodiscard tl_type_registry *tl_type_registry_create(allocator *, tl_type_subs *) mallocfun;
-tl_polytype *tl_type_constructor_def_create(tl_type_registry *, str name, tl_type_variable_sized tvs,
-                                            str_sized fields, tl_monotype_sized) mallocfun;
-tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);
-tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
-tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *, tl_monotype_sized);
-tl_monotype *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
-tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str, tl_monotype_sized);
-void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
-
-tl_monotype *tl_type_registry_nil(tl_type_registry *);
-tl_monotype *tl_type_registry_int(tl_type_registry *);
-tl_monotype *tl_type_registry_float(tl_type_registry *);
-tl_monotype *tl_type_registry_bool(tl_type_registry *);
-tl_monotype *tl_type_registry_string(tl_type_registry *);
-tl_monotype *tl_type_registry_char(tl_type_registry *);
-tl_monotype *tl_type_registry_ptr(tl_type_registry *, tl_monotype *);
-tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *, tl_monotype *);
-tl_monotype *tl_type_registry_type_literal(tl_type_registry *, tl_monotype *);
-tl_polytype *tl_type_registry_get(tl_type_registry *, str);
-tl_polytype *tl_type_registry_get_nullary(tl_type_registry *, str);
-tl_polytype *tl_type_registry_get_nullary_wrapped(tl_type_registry *, str);
-int          tl_type_registry_exists(tl_type_registry *, str);
-int          tl_type_registry_is_nullary_type(tl_type_registry *, str);
 
 // -- type environment --
 
@@ -135,6 +100,7 @@ nodiscard tl_monotype *tl_monotype_create_tuple(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype *, tl_monotype *);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype *) mallocfun;
+nodiscard tl_polytype *tl_monotype_generalize(allocator *, tl_monotype *) mallocfun;
 
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs *, hashmap *);
 void                   tl_monotype_sort_fvs(tl_monotype *);
@@ -181,6 +147,7 @@ int               tl_monotype_is_ptr_to_char(tl_monotype *);
 
 nodiscard tl_polytype *tl_polytype_absorb_mono(allocator *,
                                                tl_monotype *) mallocfun; // no clone
+nodiscard tl_polytype *tl_polytype_create(allocator *, tl_type_variable_sized, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_qv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_weak(allocator *, tl_type_variable) mallocfun;
@@ -194,17 +161,14 @@ void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_po
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype *, tl_type_subs *);
 nodiscard tl_monotype *tl_polytype_instantiate_with(allocator *, tl_polytype *, tl_monotype_sized);
 nodiscard tl_monotype *tl_polytype_specialize(allocator *, tl_polytype *, tl_monotype_sized);
-nodiscard tl_monotype *tl_polytype_specialize_cons(allocator *, tl_polytype *, tl_monotype_sized,
-                                                   tl_type_registry *, str);
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
 void                   tl_polytype_generalize(tl_polytype *, tl_type_env *, tl_type_subs *);
 
 tl_monotype           *tl_polytype_concrete(allocator *, tl_polytype *);
 
-tl_polytype           *tl_polytype_nil(allocator *, tl_type_registry *);
-
 // Warning: must use same allocator as that which created self's array.
 void        tl_polytype_merge_quantifiers(allocator *, tl_polytype *, tl_polytype *);
+void        tl_polytype_merge_quantifiers_sized(allocator *, tl_polytype *, tl_polytype_sized);
 
 tl_polytype tl_polytype_wrap(tl_monotype *);
 str         tl_polytype_to_string(allocator *, tl_polytype *);

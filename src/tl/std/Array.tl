@@ -83,7 +83,7 @@ empty(a: Type) -> T(a)
 free(self: TPtr) -> Void
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: TPtr, x: a) -> Void
+push(self: Ptr(T(a)), x: a) -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
 reserve(self: TPtr, count: Int) -> Void

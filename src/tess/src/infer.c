@@ -10,6 +10,7 @@
 #include "ast.h"
 #include "hashmap.h"
 
+#include "type_registry.h"
 #include "types.h"
 
 #include <stdarg.h>
@@ -89,7 +90,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->arena              = arena_create(alloc, 16 * 1024);
     self->env                = tl_type_env_create(self->arena, self->transient);
     self->subs               = tl_type_subs_create(self->arena, self->transient);
-    self->registry           = tl_type_registry_create(self->arena, self->subs);
+    self->registry           = tl_type_registry_create(self->arena, self->transient, self->subs);
 
     self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
 
@@ -300,29 +301,28 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
 static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx *ctx) {
     if (!ast_node_is_symbol(name)) fatal("logic error");
-
     if (!name->symbol.annotation) return;
+    (void)ctx; // FIXME
 
     // Note: always process annotation even if repeating, because we have more concrete type information on
     // later passes.
 
-    hashmap *map;
-    if (ctx) map = ctx->type_arguments;
-    else map = map_new(self->transient, str, tl_monotype *, 8);
+    str name_str = ast_node_str(name);
+    dbg(self, "process_name_annotation: %s", str_cstr(&name_str));
 
-    tl_monotype *ann = tl_type_registry_parse(self->registry, name->symbol.annotation, &map);
-    if (tl_monotype_is_tv(ann)) {
+    tl_polytype *poly = tl_type_registry_parse_type(self->registry, name->symbol.annotation);
+    if (!poly) {
         str ann_str = v2_ast_node_to_string(self->arena, name->symbol.annotation);
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_unknown_type, .node = name, .message = ann_str}));
         // no return because errors are not detected by caller, and we
         // still want to continue with inference.
+    } else {
+        str tmp = tl_polytype_to_string(self->transient, poly);
+        dbg(self, "process_name_annotation: %s => %s", str_cstr(&name_str), str_cstr(&tmp));
     }
 
-    tl_polytype *poly            = tl_polytype_absorb_mono(self->arena, ann);
     name->symbol.annotation_type = poly;
-
-    if (!ctx) map_destroy(&map);
 }
 
 static void process_annotation(tl_infer *self, ast_node *node, traverse_ctx *ctx) {
@@ -2666,7 +2666,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
         str_buf(&orig_name));
 
     // FIXME: needed?
-    // process_annotation(self, name_node, null);
+    process_annotation(self, name_node, null);
 
     if (!infer_target) {
         // no function body, so let's treat this as a type declaration

@@ -5,6 +5,7 @@
 #include "ast.h"
 #include "str.h"
 #include "type.h"
+#include "type_registry.h"
 
 typedef struct tl_infer tl_infer;
 
