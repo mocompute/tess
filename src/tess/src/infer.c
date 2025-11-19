@@ -130,110 +130,6 @@ tl_type_registry *tl_infer_get_registry(tl_infer *self) {
     return self->registry;
 }
 
-static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **map, tl_type_subs *subs) {
-    // map may be null, in which case type arguments are not supported
-    tl_monotype *found = null;
-    if (map) found = str_map_get_ptr(*map, name);
-
-    if (found) {
-        return found;
-    }
-
-    tl_type_variable tv = tl_type_subs_fresh(subs);
-    found               = tl_monotype_create_tv(self->alloc, tv);
-    if (map) {
-        str_map_set_ptr(map, name, found);
-    }
-    return found;
-}
-
-static void       collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map);
-
-// FIXME delete
-tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, hashmap **map) {
-    // See tl_type_registry_parse.
-
-    tl_monotype_array arr = {.alloc = self->alloc};
-    array_reserve(arr, args.size);
-    forall(i, args) array_push_val(arr, tl_type_registry_parse(self, args.v[i], map));
-    return (tl_monotype_sized)array_sized(arr);
-}
-
-// FIXME delete function
-tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, hashmap **map) {
-    // map : map_new(self->transient, str, tl_monotype*, 8);
-    // used to ensure same symbol gets same type variable.
-    // map may be null in which case type arguments are not supported, as in the case of simple type
-    // aliases, which alias an identifier to a type
-
-    // TODO: it's weird that this is here, but it depends on type_registry, which does not exist until the
-    // inference stage.
-
-    if (ast_node_is_nil(node)) {
-        return tl_type_registry_nil(self);
-    }
-
-    if (ast_node_is_symbol(node)) {
-        // Note: special case the symbol 'any' to return an any type. And special case symbol '...' to
-        // return ellipsis type.
-        str name = ast_node_str(node);
-
-        if (str_eq(name, S("any"))) {
-            return tl_monotype_create_any(self->alloc);
-        } else if (str_eq(name, S("..."))) {
-            return tl_monotype_create_ellipsis(self->alloc);
-        } else if (str_eq(name, S("Type"))) {
-            // Note: special case: support nullary `Type` as an alias of `Type(a)`
-            tl_monotype_sized args_mono = {.size = 1, .v = alloc_malloc(self->alloc, sizeof(void *))};
-            args_mono.v[0] = tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs));
-            return tl_type_registry_instantiate_with(self, name, args_mono);
-        }
-
-        else {
-            // or else check if it's a known nullary type
-            tl_polytype *poly = tl_type_registry_get_nullary(self, name);
-            if (poly) return poly->type;
-        }
-
-        // otherwise assign a fresh type variable or use a type argument from map
-        tl_monotype *tv = get_tv_or_fresh(self, name, map, self->subs);
-        return tv;
-    }
-
-    if (ast_node_is_nfa(node)) {
-
-        ast_node_sized    args      = ast_node_sized_from_ast_array_const(node);
-        tl_monotype_sized args_mono = parse_types(self, args, map);
-
-        if (str_eq(ast_node_str(node->named_application.name), S("Union"))) {
-            return tl_type_registry_instantiate_union(self, args_mono);
-        } else {
-            // args includes fresh type variables, e.g. for polymorphic types, or the nfa is a type
-            // literal, e.g. Point(Int).
-            return tl_type_registry_instantiate_with(self, ast_node_str(node->named_application.name),
-                                                     args_mono);
-        }
-    }
-
-    if (ast_node_is_arrow(node)) {
-        // arrow types are always ([{ a }]) -> b
-        ast_node const *tup = node->arrow.left;
-        assert(ast_node_is_tuple(tup));
-
-        // collect type arguments from arrow params
-        collect_type_arguments(self, tup, map);
-
-        ast_node_sized    tuple     = {.size = tup->tuple.n_elements, .v = tup->tuple.elements};
-        tl_monotype_sized arr_sized = parse_types(self, tuple, map);
-        tl_monotype      *left      = tl_monotype_create_tuple(self->alloc, arr_sized);
-
-        tl_monotype      *right     = tl_type_registry_parse(self, node->arrow.right, map);
-        return tl_monotype_create_arrow(self->alloc, left, right);
-    }
-
-    fatal("logic error");
-}
-
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
     str                    name              = node->user_type_def.name->symbol.name;
@@ -277,8 +173,19 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                 if (found) field = found;
             }
 
-			// FIXME using wrong parse function
-            if (!field) field = tl_type_registry_parse(self->registry, field_type_node, &type_argument_map);
+            // FIXME using wrong parse function
+            if (!field) {
+                tl_polytype *poly = tl_type_registry_parse_type(self->registry, field_type_node);
+                if (!poly) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_expected_type, .node = field_type_node}));
+                    return;
+                }
+                if (tl_polytype_is_scheme(poly)) {
+                    fatal("expected concrete type");
+                }
+                field = poly->type;
+            }
 
             if (!field) {
                 array_push(self->errors,
@@ -348,12 +255,14 @@ static void collect_type_arguments(tl_type_registry *registry, ast_node const *n
 
             tl_monotype *target   = tl_monotype_type_literal_target(mono);
             str_map_set_ptr(map, arg_name, target);
-
         }
 
         else if (ast_node_is_symbol(arg) && arg->symbol.annotation) {
             // a symbol with an annotation: look for type variables
-            (void)tl_type_registry_parse(registry, arg->symbol.annotation, map);
+            tl_polytype *poly = tl_type_registry_parse_type(registry, arg->symbol.annotation);
+            if (tl_monotype_is_type_literal(poly->type)) {
+                ;
+            }
         }
     }
 }
@@ -415,10 +324,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
         else if (ast_node_is_type_alias(node)) {
             str          name = toplevel_name(node);
-            tl_monotype *ann  = tl_type_registry_parse(self->registry, node->type_alias.target, null);
-            assert(ann);
-            tl_polytype *poly = tl_polytype_absorb_mono(self->arena, ann);
-            tl_polytype_generalize(poly, self->env, self->subs);
+            tl_polytype *poly = tl_type_registry_parse_type(self->registry, node->type_alias.target);
             {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
                 dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
