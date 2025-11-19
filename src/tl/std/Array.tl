@@ -101,16 +101,6 @@ with_capacity(a: Type, count: Int) -> T(a)
 
 // -- Implementation --
 
-// -- Forward declarations are required if functions are referenced before their definitions.
-// Conventionally, a preceding `_` indicates a function intended to be private. However, all toplevel
-// identifiers may be accessed from any scope. For example, `Array._grow` can be used to access the
-// function, even though it is indicated to be private.
-_grow               (self: TPtr, at_least: Int) -> Void
-_is_full            (self: TPtr)                -> Bool
-_type_width_aligned (a: Type)                   -> Int
-
-// --
-
 empty(a: Type) {
   // The syntax `T( ... )` indicates a type constructor. Here, the type `T` is defined earlier in the file.
   // A type constructor must include every field; it is not permitted to omit any field. The syntax `field =
@@ -189,6 +179,19 @@ push(self, x) {
 }
 
 // -- Private functions --
+
+// Conventionally, a preceding `_` indicates a function intended to be private. However, all toplevel
+// identifiers may be accessed from any scope. For example, `Array._grow` can be used to access the
+// function, even though it is indicated to be private.
+
+// Forward declarations are not required, but they can be useful for documentation.
+
+_grow               (self: TPtr, at_least: Int) -> Void
+_is_full            (self: TPtr)                -> Bool
+_type_width_aligned (a: Type)                   -> Int
+
+// --
+
 
 _is_full(self) { self->capacity == self->size }
 
