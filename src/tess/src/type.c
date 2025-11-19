@@ -1356,9 +1356,6 @@ void tl_monotype_force_union_resolve(tl_monotype *self) {
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     u64 hash = str_hash64(self->generic_name);
-
-    // not necessary to hash field names
-    // hash     = str_array_hash64(hash, self->field_names);
     return hash;
 }
 
@@ -1373,10 +1370,8 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_cons_inst: {
-        u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
-        hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
-
-        // ptr_hset_insert(seen, self);
+        u64 def_hash                   = tl_type_constructor_def_hash64(self->cons_inst->def);
+        hash                           = hash64_combine(hash, &def_hash, sizeof def_hash);
 
         tl_monotype_sized args         = self->cons_inst->args;
         str               generic_name = self->cons_inst->def->generic_name;
@@ -1392,7 +1387,6 @@ u64 tl_monotype_hash64(tl_monotype *self) {
                     hash = str_hash64_combine(hash, S("SELF"));
                 } else {
                     hash  = str_hash64_combine(hash, S("Ptr"));
-
                     u64 h = tl_monotype_hash64(target);
                     hash  = hash64_combine(hash, &h, sizeof h);
                 }
@@ -1414,7 +1408,6 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     } break;
     }
 
-    // ptr_hset_remove(*seen, self);
     return hash;
 }
 
