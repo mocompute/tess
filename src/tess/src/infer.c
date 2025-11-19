@@ -149,6 +149,7 @@ static tl_monotype *get_tv_or_fresh(tl_type_registry *self, str name, hashmap **
 
 static void       collect_type_arguments(tl_type_registry *registry, ast_node const *node, hashmap **map);
 
+// FIXME delete
 tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, hashmap **map) {
     // See tl_type_registry_parse.
 
@@ -158,6 +159,7 @@ tl_monotype_sized parse_types(tl_type_registry *self, ast_node_sized args, hashm
     return (tl_monotype_sized)array_sized(arr);
 }
 
+// FIXME delete function
 tl_monotype *tl_type_registry_parse(tl_type_registry *self, ast_node const *node, hashmap **map) {
     // map : map_new(self->transient, str, tl_monotype*, 8);
     // used to ensure same symbol gets same type variable.
@@ -275,6 +277,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                 if (found) field = found;
             }
 
+			// FIXME using wrong parse function
             if (!field) field = tl_type_registry_parse(self->registry, field_type_node, &type_argument_map);
 
             if (!field) {
