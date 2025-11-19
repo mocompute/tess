@@ -516,7 +516,7 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry *self, parse_t
     return result;
 }
 
-tl_polytype *tl_type_registry_parse_type(tl_type_registry *self, ast_node *node) {
+tl_polytype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
     parse_type_ctx ctx    = {.type_arguments = map_new(self->transient, str, tl_polytype *, 16)};
     tl_polytype   *result = null;

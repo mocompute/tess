@@ -22,7 +22,7 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *, tl_monotype_
 tl_monotype *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str, tl_monotype_sized);
 void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
-tl_polytype *tl_type_registry_parse_type(tl_type_registry *, ast_node *);
+tl_polytype *tl_type_registry_parse_type(tl_type_registry *, ast_node const *);
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *);
 tl_monotype *tl_type_registry_int(tl_type_registry *);
