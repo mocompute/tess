@@ -1780,8 +1780,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
     if (!inst) goto cancel;
 
-    name_and_type key      = {.name_hash = str_hash64(name),
-                              .type_hash = tl_monotype_hash64(self->transient, inst)};
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
         if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
@@ -2063,8 +2062,7 @@ static str lookup_arrow(tl_infer *self, str name, tl_monotype *arrow) {
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name),
-                              .type_hash = tl_monotype_hash64(self->transient, arrow)};
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
     return str_empty();
@@ -2366,8 +2364,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name),
-                              .type_hash = tl_monotype_hash64(self->transient, callsite)};
+    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(callsite)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) return *existing;
 
@@ -2911,16 +2908,19 @@ static void canonicalize_types(tl_infer *self) {
         if (tl_polytype_is_scheme(poly)) continue;
         if (!tl_monotype_is_inst(poly->type)) continue;
 
-        tl_monotype *cached = tl_type_registry_get_cached_specialization(
-          self->registry, poly->type->cons_inst->def->generic_name, poly->type->cons_inst->args);
+        str               generic_name = poly->type->cons_inst->def->generic_name;
+        tl_monotype_sized args         = poly->type->cons_inst->args;
+        tl_monotype      *cached =
+          tl_type_registry_get_cached_specialization(self->registry, generic_name, args);
 
         if (!cached) {
             str poly_str = tl_polytype_to_string(self->transient, poly);
-            dbg(self, "canonicalize_types missing: %s : %s", str_cstr(&name), str_cstr(&poly_str));
+            dbg(self, "canonicalize_types missing: %s (%s) : %s", str_cstr(&name), str_cstr(&generic_name),
+                str_cstr(&poly_str));
         } else {
             // Note: surgery on shared polytypes, since this is done after type inference, no problem.
-            dbg(self, "canonicalize_types replace: %s => %s",
-                str_cstr(&poly->type->cons_inst->special_name), str_cstr(&cached->cons_inst->special_name));
+            dbg(self, "canonicalize_types replace: %s (%s) => %s", str_cstr(&name), str_cstr(&generic_name),
+                str_cstr(&cached->cons_inst->special_name));
             poly->type = cached;
         }
     }

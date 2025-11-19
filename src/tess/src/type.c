@@ -224,8 +224,7 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
 
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *self, str name,
                                                         tl_monotype_sized args) {
-    registry_key key = {.name_hash = str_hash64(name),
-                        .args_hash = tl_monotype_sized_hash64(self->alloc, 0, args)}; // FIXME transient
+    registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     tl_monotype *out = map_get_ptr(self->specialized, &key, sizeof key);
     return out;
 }
@@ -256,8 +255,7 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
     // if (!args.size) return null;
 
     tl_monotype *type = null;
-    registry_key key  = {.name_hash = str_hash64(name),
-                         .args_hash = tl_monotype_sized_hash64(self->alloc, 0, args)}; // FIXME transient
+    registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
     if ((type = map_get_ptr(self->specialized, &key, sizeof key))) return type;
 
     tl_polytype *poly = tl_type_registry_get(self, name);
@@ -1357,28 +1355,14 @@ void tl_monotype_force_union_resolve(tl_monotype *self) {
 }
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
-    u64 hash = str_hash64(self->name);
-    hash     = str_array_hash64(hash, self->field_names);
+    u64 hash = str_hash64(self->generic_name);
+
+    // not necessary to hash field names
+    // hash     = str_array_hash64(hash, self->field_names);
     return hash;
 }
 
-static u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen);
-
-static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen);
-
-static u64 combine_seen(u64 hash, tl_monotype *self, hashmap **seen) {
-    // Types in C are all type constructors. For hashing, use the hash of their defs and ignore their args.
-    if (ptr_hset_contains(*seen, self)) {
-        u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
-        hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
-    } else {
-        u64 h = tl_monotype_hash64_(self, seen);
-        hash  = hash64_combine(hash, &h, sizeof h);
-    }
-    return hash;
-}
-
-static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
+u64 tl_monotype_hash64(tl_monotype *self) {
 
     u64 hash = hash64(&self->tag, sizeof self->tag);
 
@@ -1392,18 +1376,29 @@ static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
         u64 def_hash = tl_type_constructor_def_hash64(self->cons_inst->def);
         hash         = hash64_combine(hash, &def_hash, sizeof def_hash);
 
-        ptr_hset_insert(seen, self);
+        // ptr_hset_insert(seen, self);
 
-        tl_monotype_sized args = self->cons_inst->args;
+        tl_monotype_sized args         = self->cons_inst->args;
+        str               generic_name = self->cons_inst->def->generic_name;
         forall(i, args) {
             tl_monotype *arg = args.v[i];
-            // Look through Ptr specializations to the target
+
+            // Look through Ptr specializations to the target. If the target is the same generic type
+            // constructor as ourselves, we simply tag it as "Self" and go no further.
             if (tl_monotype_is_ptr(arg)) {
                 tl_monotype *target = tl_monotype_ptr_target(arg);
-                hash                = str_hash64_combine(hash, S("Ptr"));
-                hash                = combine_seen(hash, target, seen);
+                if (tl_monotype_is_inst(target) &&
+                    str_eq(generic_name, target->cons_inst->def->generic_name)) {
+                    hash = str_hash64_combine(hash, S("SELF"));
+                } else {
+                    hash  = str_hash64_combine(hash, S("Ptr"));
+
+                    u64 h = tl_monotype_hash64(target);
+                    hash  = hash64_combine(hash, &h, sizeof h);
+                }
             } else {
-                hash = combine_seen(hash, arg, seen);
+                u64 h = tl_monotype_hash64(arg);
+                hash  = hash64_combine(hash, &h, sizeof h);
             }
         }
 
@@ -1414,20 +1409,13 @@ static u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen) {
 
     case tl_arrow:
     case tl_tuple: {
-        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen);
+        hash = tl_monotype_sized_hash64(hash, self->list.xs);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
 
-    ptr_hset_remove(*seen, self);
+    // ptr_hset_remove(*seen, self);
     return hash;
-}
-
-u64 tl_monotype_hash64(allocator *alloc, tl_monotype *self) {
-    hashmap *seen = hset_create(alloc, 32);
-    u64      out  = tl_monotype_hash64_(self, &seen);
-    hset_destroy(&seen);
-    return out;
 }
 
 str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
@@ -2187,20 +2175,13 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 
 //
 
-u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen) {
+u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
     u64 hash = seed;
     forall(i, arr) {
-        u64 h = tl_monotype_hash64_(arr.v[i], seen);
+        u64 h = tl_monotype_hash64(arr.v[i]);
         hash  = hash64_combine(hash, &h, sizeof h);
     }
     return hash;
-}
-
-u64 tl_monotype_sized_hash64(allocator *alloc, u64 seed, tl_monotype_sized arr) {
-    hashmap *seen = hset_create(alloc, 32);
-    u64      out  = tl_monotype_sized_hash64_(seed, arr, &seen);
-    hset_destroy(&seen);
-    return out;
 }
 
 tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in, hashmap **mapping) {

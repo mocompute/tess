@@ -165,7 +165,7 @@ tesslang_create_test(number_separators)
 tesslang_create_test(printf)
 tesslang_create_test(pointer_deref)
 tesslang_create_test(reassign_into_stack_lambda)
-tesslang_create_build_fail_test(recursive_type) # FIXME
+tesslang_create_test(recursive_type)
 tesslang_create_test(recursive_type_basic)
 tesslang_create_test(relational_basic)
 tesslang_create_test(return_statement)
