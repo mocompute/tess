@@ -43,10 +43,9 @@ tl_monotype *tl_type_registry_string(tl_type_registry *);
 tl_monotype *tl_type_registry_char(tl_type_registry *);
 tl_monotype *tl_type_registry_ptr(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *, tl_monotype *);
-tl_monotype *tl_type_registry_type_literal(tl_type_registry *, tl_monotype *);
+tl_monotype *tl_type_registry_type_literal(tl_type_registry *);
 tl_polytype *tl_type_registry_get(tl_type_registry *, str);
 tl_polytype *tl_type_registry_get_nullary(tl_type_registry *, str);
-tl_polytype *tl_type_registry_get_nullary_wrapped(tl_type_registry *, str);
 int          tl_type_registry_exists(tl_type_registry *, str);
 int          tl_type_registry_is_nullary_type(tl_type_registry *, str);
 

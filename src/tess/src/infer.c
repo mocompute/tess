@@ -174,7 +174,6 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                 if (found) field = found;
             }
 
-            // FIXME using wrong parse function
             if (!field) {
                 tl_polytype *poly = tl_type_registry_parse_type(self->registry, field_type_node);
                 if (!poly) {
@@ -233,6 +232,13 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
         dbg(self, "process_name_annotation: %s => %s", str_cstr(&name_str), str_cstr(&tmp));
     }
 
+    // If the parsed type is a Type(), set the annotation's type to an instantiation of the target. In
+    // practice this means giving it a unique tv. It should not hold a Type wrapper, because the annotation
+    // type will be constrained against other values.
+    // if (tl_monotype_is_type_literal(poly->type))
+    //     poly = tl_polytype_absorb_mono(self->arena,
+    //     tl_monotype_type_literal_target(tl_polytype_instantiate(
+    //                                                   self->arena, poly, self->subs)));
     name->symbol.annotation_type = poly;
 }
 
@@ -573,7 +579,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (0) {
+    if (1) {
         log_constraint_mono(self, left, right, node);
     }
 
@@ -593,6 +599,7 @@ static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *rig
         (tl_monotype_is_ptr_to_char(right->type) && tl_monotype_is_string(left->type))) {
         return 1;
     }
+
     return 0;
 }
 
@@ -876,6 +883,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 }
 
 static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int level) {
+    // FIXME: why does this exist? Use tl_type_registry_parse_type?
+
     // Parse an ast into a Type(...) wrapper type or return null.
     if (ast_node_is_symbol(node)) {
 
@@ -884,7 +893,7 @@ static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int
         if (!inst) return null;
 
         // set node type to type literal if this is the outermost node
-        tl_monotype *ty = 0 == level ? tl_type_registry_type_literal(self->registry, inst) : inst;
+        tl_monotype *ty = 0 == level ? tl_type_registry_type_literal(self->registry) : inst;
         ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, ty));
         return ty;
     }
@@ -913,7 +922,7 @@ static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int
         tl_monotype      *inst       = tl_type_registry_instantiate_with(self->registry, name, arg_types_);
         if (!inst) fatal("runtime error");
 
-        return tl_type_registry_type_literal(self->registry, inst);
+        return tl_type_registry_type_literal(self->registry);
     }
 
     else
@@ -985,9 +994,6 @@ static tl_monotype *specialize_type_identifer_unwrap(tl_infer *self, ast_node *n
     if ((type_id = type_literal_specialize(self, node))) {
         // unwrap Type literal
         tl_monotype *mono = type_id;
-        if (tl_monotype_is_type_literal(mono)) {
-            mono = tl_monotype_type_literal_target(mono);
-        }
         return mono;
     }
     return null;
@@ -997,6 +1003,9 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
                                        tl_polytype **out_type);
 static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_sized args,
                                          tl_polytype **out_type) {
+
+    // FIXME why does this exist? Use tl_type_registry_parse_type
+
     str out = str_empty();
     if (out_type) *out_type = null;
 
@@ -1017,8 +1026,9 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
 
     // set out type to type literal
     if (out_type) {
-        tl_monotype *ty = tl_type_registry_type_literal(
-          self->registry, tl_polytype_concrete(self->transient, special_type));
+        tl_monotype *ty = tl_type_registry_type_literal(self->registry);
+        // tl_monotype *ty = tl_type_registry_type_literal(
+        //   self->registry, tl_polytype_concrete(self->transient, special_type));
         *out_type = tl_polytype_absorb_mono(self->arena, ty);
     }
 
@@ -1051,20 +1061,9 @@ static tl_polytype *resolve_symbol(tl_infer *self, traverse_ctx *ctx, str name) 
         out = tl_polytype_absorb_mono(self->arena, pair->right);
     } else pair = null;
 
+    // Check for nullary type lierals
     if (!pair) {
-        out = tl_type_registry_get_nullary_wrapped(self->registry, name);
-        if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
-    }
-
-    // Is it a type argument?
-    // tl_polytype *out = get_type_literal(self, ctx, name);
-    // if (out) {
-    //     dbg(self, "found type argument %s", str_cstr(&name));
-    // }
-
-    // Check for nullary type lierals: wrap in Type(a) if found.
-    if (!out) {
-        out = tl_type_registry_get_nullary_wrapped(self->registry, name);
+        out = tl_type_registry_get_nullary(self->registry, name);
         if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
     }
 
@@ -1256,8 +1255,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 struct_type = (tl_monotype *)left->type->type;
             }
 
-            struct_type = tl_monotype_maybe_unwrap_literal(struct_type);
-
             // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
             tl_monotype_substitute(self->arena, struct_type, self->subs, null);
             if (tl_monotype_is_inst(struct_type)) {
@@ -1404,7 +1401,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (ast_node_is_symbol(node->let_in.name)) {
                 ast_node *name = node->let_in.name;
                 if (name->symbol.annotation) process_annotation(self, name, traverse_ctx);
-                if (name->symbol.annotation_type) name_type = node->let_in.name->symbol.annotation_type;
+                if (name->symbol.annotation_type) name_type = name->symbol.annotation_type;
             }
 
             // Note: name_type and node->let_in.name->type have possibly diverged, so we should constrain
@@ -1433,16 +1430,19 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str          name   = node->symbol.name;
         tl_polytype *global = resolve_symbol(self, traverse_ctx, name);
 
-        if (global) {
-            if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global, node))
-                return 1;
-        }
-
         // if symbol has a type annotation, constrain it
         if (node->symbol.annotation) {
             process_annotation(self, node, traverse_ctx);
             if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
                 constrain(self, node->symbol.annotation_type, node->type, node))
+                return 1;
+
+            // substitute in so we can check if the node type is a Type literal
+            // tl_polytype_substitute(self->arena, node->type, self->subs);
+        }
+
+        if (global) {
+            if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global, node))
                 return 1;
         }
 
@@ -1470,11 +1470,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (tl_polytype_is_type_constructor(type)) {
             // a type constructor or type literal
 
-            tl_monotype *literal = type_literal_instantiate(self, node, 0);
-            if (literal) {
-                if (constrain_pm(self, node->type, literal, node)) return 1;
-                // set node type directly after constraint
-                ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, literal));
+            tl_polytype *poly =
+              tl_type_registry_parse_type_lexical(self->registry, node, traverse_ctx->param_types);
+            if (poly) {
+                if (constrain(self, node->type, poly, node)) return 1;
+                ast_node_type_set(node, poly);
                 break;
             }
 

@@ -19,7 +19,7 @@ static void                      make_variable_arity_tc(tl_type_registry *, str)
 static tl_type_constructor_def  *make_tc_def(tl_type_registry *, str);
 static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *, tl_type_constructor_def *,
                                                    tl_monotype_sized);
-static void                      make_unary_inst(tl_type_registry *, str);
+static void                      make_nullary_inst(tl_type_registry *, str);
 static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_constructor_inst *,
                                                    tl_type_variable_sized);
 
@@ -37,31 +37,31 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
 
     // Basic types
-    make_unary_inst(self, S("Void"));
-    make_unary_inst(self, S("Int"));
-    make_unary_inst(self, S("Bool"));
-    make_unary_inst(self, S("Float"));
-    make_unary_inst(self, S("String"));
+    make_nullary_inst(self, S("Void"));
+    make_nullary_inst(self, S("Int"));
+    make_nullary_inst(self, S("Bool"));
+    make_nullary_inst(self, S("Float"));
+    make_nullary_inst(self, S("String"));
+    make_nullary_inst(self, S("Type"));
 
     // Ptr and Type are unary type constructors
     make_unary_tc(self, S("Ptr"));
-    make_unary_tc(self, S("Type"));
 
     // Union has variable arity
     make_variable_arity_tc(self, S("Union"));
 
     // C Integer types
-    make_unary_inst(self, S("CChar"));
-    make_unary_inst(self, S("CUnsignedChar"));
-    make_unary_inst(self, S("CSignedChar"));
-    make_unary_inst(self, S("CInt"));
-    make_unary_inst(self, S("CUnsignedInt"));
-    make_unary_inst(self, S("CLong"));
-    make_unary_inst(self, S("CUnsignedLong"));
-    make_unary_inst(self, S("CLongLong"));
-    make_unary_inst(self, S("CUnsignedLongLong"));
-    make_unary_inst(self, S("CSize"));
-    make_unary_inst(self, S("CPtrDiff"));
+    make_nullary_inst(self, S("CChar"));
+    make_nullary_inst(self, S("CUnsignedChar"));
+    make_nullary_inst(self, S("CSignedChar"));
+    make_nullary_inst(self, S("CInt"));
+    make_nullary_inst(self, S("CUnsignedInt"));
+    make_nullary_inst(self, S("CLong"));
+    make_nullary_inst(self, S("CUnsignedLong"));
+    make_nullary_inst(self, S("CLongLong"));
+    make_nullary_inst(self, S("CUnsignedLongLong"));
+    make_nullary_inst(self, S("CSize"));
+    make_nullary_inst(self, S("CPtrDiff"));
 
     // Integer convertible types
     mark_integer_type(self, S("Int"));
@@ -152,7 +152,7 @@ static tl_polytype *make_generic_inst(tl_type_registry *self, tl_type_constructo
     return poly;
 }
 
-static void make_unary_inst(tl_type_registry *self, str name) {
+static void make_nullary_inst(tl_type_registry *self, str name) {
 
     str_sized              empty    = {0};
     tl_type_variable_sized empty_tv = {0};
@@ -292,14 +292,6 @@ tl_polytype *tl_type_registry_get_nullary(tl_type_registry *self, str name) {
     return out;
 }
 
-tl_polytype *tl_type_registry_get_nullary_wrapped(tl_type_registry *self, str name) {
-    tl_polytype *nullary = tl_type_registry_get_nullary(self, name);
-    if (nullary) {
-        nullary = tl_polytype_absorb_mono(self->alloc, tl_type_registry_type_literal(self, nullary->type));
-    }
-    return nullary;
-}
-
 int tl_type_registry_exists(tl_type_registry *self, str name) {
     return str_map_contains(self->type_aliases, name) || str_map_contains(self->definitions, name);
 }
@@ -340,16 +332,8 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     return out;
 }
 
-tl_monotype *tl_type_registry_type_literal(tl_type_registry *self, tl_monotype *arg) {
-    tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
-    arr[0]            = arg;
-    tl_monotype *out  = tl_type_registry_specialize(self, S("Type"), str_empty(),
-                                                    (tl_monotype_sized){
-                                                      .size = 1,
-                                                      .v    = arr,
-                                                   });
-    assert(out);
-    return out;
+tl_monotype *tl_type_registry_type_literal(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("Type"));
 }
 
 static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *node) {
@@ -361,10 +345,7 @@ static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *
         if (str_eq(name, S("any"))) mono = tl_monotype_create_any(self->alloc);
         else if (str_eq(name, S("..."))) mono = tl_monotype_create_ellipsis(self->alloc);
         else if (str_eq(name, S("Type"))) {
-            // nullary `Type` is an alias of `Type(a)`, so return forall t0. Type(t0)
-            return tl_monotype_generalize(
-              self->alloc, tl_type_registry_type_literal(
-                             self, tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs))));
+            return tl_monotype_generalize(self->alloc, tl_type_registry_type_literal(self));
         }
     }
 
@@ -372,20 +353,10 @@ static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *
     else return null;
 }
 
-static tl_polytype *maybe_extract_type_argument(tl_type_registry *self, tl_polytype *type_argument) {
-    // forall t0. Type(t0) => t0
-    // forall t0. Cons(t0) => forall t0. Cons(t0)
-    if (tl_monotype_is_type_literal(type_argument->type))
-        return tl_polytype_absorb_mono(self->alloc, tl_monotype_type_literal_target(type_argument->type));
-    else return type_argument;
-}
-
 static tl_polytype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
     tl_polytype *result = null;
-    result              = tl_polytype_absorb_mono(self->alloc,
-                                                  tl_monotype_create_tv(self->alloc, tl_type_subs_fresh(self->subs)));
-
+    result              = tl_polytype_create_fresh_tv(self->alloc, self->subs);
     str ta              = ast_node_str(node);
     str_map_set_ptr(&ctx->type_arguments, ta, result);
     return result;
@@ -412,14 +383,19 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         result   = tl_type_registry_get_nullary(self, name);
         if (result) return result;
 
-        // or else is it a type argument previously defined?
+        // or else is it a type argument previously defined, being referenced in a value context? If so, on
+        // first reference create a fresh tv, and use it on subsequent references.
         result = str_map_get_ptr(ctx->type_arguments, name);
+        if (result && ctx->is_value_context && tl_monotype_is_type_literal(result->type)) {
+            result = tl_polytype_create_fresh_tv(self->alloc, self->subs);
+            // store it for subsequent references
+            str_map_set_ptr(&ctx->type_arguments, name, result);
+        }
 
         // or else is it a type in the lexical environment?
-        if (ctx->lexical_monotypes) {
+        if (!result && ctx->lexical_monotypes) {
             tl_monotype_pair *pair = str_map_get(ctx->lexical_monotypes, name);
             if (pair && pair->left) {
-
                 // type parsing is by default in the 'annotation' context, unless parsing arguments to type
                 // constructors in annotations, e.g. `Ptr(T)`
                 result =
@@ -440,20 +416,16 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         if (node->symbol.annotation) {
             result = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
 
-            // If the annotation produces a Type(tv), then save the symbol as a type argument.
-            if (result && tl_monotype_is_type_literal(result->type) &&
-                tl_monotype_is_tv(tl_monotype_type_literal_target(result->type))) {
+            // If the annotation produces a Type, then save the symbol as a type argument.
+            if (result && tl_monotype_is_type_literal(result->type)) {
                 // the type literal target is a type variable
-                tl_polytype *instance = maybe_extract_type_argument(self, result);
-                str          ta       = ast_node_str(node);
-
-                str_map_set_ptr(&ctx->type_arguments, ta, instance);
+                str ta = ast_node_str(node);
+                str_map_set_ptr(&ctx->type_arguments, ta, result);
 
                 // and the resulting type is still the wrapped Type(tv)
             }
             // If the annotation produces nothing, and it's a symbol, it's sugar
             else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
-                // nullary `Type` is an alias of `Type(a)`, so return forall t0. Type(t0)
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
             }
         }
@@ -473,10 +445,11 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node);
 
         // when we parse argument types, we are in a value context
-        ctx->is_value_context = 1;
         forall(i, nodes) {
-
-            tl_polytype *poly = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            int save              = ctx->is_value_context;
+            ctx->is_value_context = 1;
+            tl_polytype *poly     = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            ctx->is_value_context = save;
 
             // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
             // variable - not a type argument
@@ -485,10 +458,11 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
             }
 
             // Arguments to type constructor are extracted from Type(tv) wrapper
-            poly = maybe_extract_type_argument(self, poly);
+            // FIXME this extract should not be needed, since parse_type now understands value_context
+            // versus annotation context.
+            // poly = maybe_extract_type_argument(self, poly);
             array_push_val(args, tl_polytype_instantiate(self->alloc, poly, self->subs));
         }
-        ctx->is_value_context = 0;
 
         // Note: special case for parsing a Union(a, b, ...)
         if (str_eq(name, S("Union"))) {
@@ -510,7 +484,10 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
-            tl_polytype *poly = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            int save              = ctx->is_value_context;
+            ctx->is_value_context = 0;
+            tl_polytype *poly     = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            ctx->is_value_context = save;
 
             // Unquantify the parsed type here because it will be generalized later.
             poly->quantifiers.size = 0;
@@ -519,7 +496,11 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         tl_monotype *left_mono =
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
 
+        int save                = ctx->is_value_context;
+        ctx->is_value_context   = 1;
         tl_polytype *right_poly = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
+        ctx->is_value_context   = save;
+
         tl_monotype *right_mono = tl_polytype_instantiate(self->alloc, right_poly, self->subs);
         tl_monotype *arrow      = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
         result                  = tl_monotype_generalize(self->alloc, arrow);
@@ -593,7 +574,7 @@ hashmap *tl_type_registry_parse_parameters(tl_type_registry *self, allocator *al
             pair.right = tl_polytype_instantiate(self->alloc, poly, self->subs);
             if (tl_monotype_is_type_literal(pair.right)) {
                 pair.left  = pair.right;
-                pair.right = tl_monotype_type_literal_target(pair.left);
+                pair.right = tl_monotype_create_fresh_tv(self->alloc, self->subs);
             }
         }
         str_map_set(&out, name, &pair);
@@ -1042,6 +1023,11 @@ tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     return self;
 }
 
+tl_monotype *tl_monotype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
+    tl_type_variable tv = tl_type_subs_fresh(subs);
+    return tl_monotype_create_tv(alloc, tv);
+}
+
 tl_monotype *tl_monotype_create_weak(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_weak, .var = tv};
@@ -1356,17 +1342,6 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
 
     else
         fatal("unreachable");
-}
-
-tl_monotype *tl_monotype_type_literal_target(tl_monotype *self) {
-    assert(tl_monotype_is_type_literal(self));
-    assert(self->cons_inst->args.size == 1);
-    return self->cons_inst->args.v[0];
-}
-
-tl_monotype *tl_monotype_maybe_unwrap_literal(tl_monotype *self) {
-    if (tl_monotype_is_type_literal(self)) return tl_monotype_type_literal_target(self);
-    else return self;
 }
 
 tl_monotype *tl_monotype_arrow_args(tl_monotype *self) {
@@ -1775,28 +1750,15 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
                        void *user, hashmap **seen) {
 
     assert(tl_monotype_is_type_literal(left));
+    (void)subs;
+    (void)right;
+    (void)cb;
+    (void)user;
+    (void)seen;
 
-    // unify with any Type specialisation
-    switch (right->tag) {
-    case tl_any:
-    case tl_ellipsis: return 0;
-
-    case tl_var:      return tl_type_subs_unify(subs, right->var, left, cb, user, seen);
-    case tl_weak:     return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
-
-    case tl_cons_inst:
-        if (!tl_monotype_is_type_literal(right)) {
-            if (cb) cb(user, left, right);
-            return 1;
-        }
-        return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user, seen);
-
-    case tl_arrow:
-    case tl_tuple:
-        if (cb) cb(user, left, right);
-        return 1;
-    }
-    fatal("unreachable");
+    // A Type literal is any type, so it unifies with everything except a weak type variable
+    if (tl_monotype_is_weak(right)) return 1;
+    return 0;
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
