@@ -975,6 +975,7 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
     assert(tl_monotype_is_inst(poly->type));
     if (args.size != poly->quantifiers.size) goto error;
 
+    // instantiate the type with the given args
     tl_monotype *inst = tl_type_registry_instantiate_with(self->registry, name, args);
     if (!inst) fatal("runtime error");
 
@@ -2849,7 +2850,8 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     case tl_any:
     case tl_ellipsis:
     case tl_var:
-    case tl_weak:     break;
+    case tl_weak:
+    case tl_literal:  break;
 
     case tl_cons_inst:
         // already specialized?

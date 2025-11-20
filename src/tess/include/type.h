@@ -36,12 +36,13 @@ typedef struct tl_monotype {
     union {
         tl_type_variable          var;
         tl_type_constructor_inst *cons_inst;
+        struct tl_monotype       *literal;
         struct {
             tl_monotype_sized xs;
             str_sized         fvs;
         } list;
     };
-    enum { tl_any, tl_ellipsis, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple } tag;
+    enum { tl_any, tl_ellipsis, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple, tl_literal } tag;
 } tl_monotype;
 
 typedef struct tl_polytype {
@@ -96,6 +97,7 @@ nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype_sized);
@@ -155,6 +157,7 @@ nodiscard tl_polytype *tl_polytype_create_weak(allocator *, tl_type_variable) ma
 nodiscard tl_polytype *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_weak(allocator *, tl_type_subs *) mallocfun;
+nodiscard tl_polytype *tl_polytype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone_mono(allocator *, tl_monotype *) mallocfun;
 
