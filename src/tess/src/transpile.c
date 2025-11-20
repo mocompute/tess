@@ -2032,7 +2032,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
 
-        tl_monotype *type = arg->type->type->cons_inst->args.v[0];
+        tl_monotype *type = arg->type->type;
         update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
@@ -2067,7 +2067,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     ast_node const *arg = node->named_application.arguments[0];
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
-        tl_monotype *type = arg->type->type->cons_inst->args.v[0];
+        tl_monotype *type = arg->type->type;
         update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));

@@ -10,6 +10,6 @@ array_new(T : Type, count) {
 }
 
 main() {
-  arr := array_new(Int, 8)
+  arr := array_new(Point(Int), 8)
   0
 }

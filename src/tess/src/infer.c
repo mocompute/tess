@@ -884,49 +884,11 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
 static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int level) {
     // FIXME: why does this exist? Use tl_type_registry_parse_type?
+    (void)level; // FIXME
 
-    // Parse an ast into a Type(...) wrapper type or return null.
-    if (ast_node_is_symbol(node)) {
-
-        str          name = ast_node_str(node);
-        tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
-        if (!inst) return null;
-
-        // set node type to type literal if this is the outermost node
-        tl_monotype *ty = 0 == level ? tl_type_registry_type_literal(self->registry) : inst;
-        ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, ty));
-        return ty;
-    }
-
-    else if (ast_node_is_nfa(node)) {
-        // FIXME: portion duplicated with specialize_type_identifier()
-
-        str            name      = ast_node_str(node->named_application.name);
-        ast_node_sized node_args = ast_node_sized_from_ast_array(node);
-        // zero argument nfa cannot be a type identifier
-        if (!node_args.size) return null;
-        tl_polytype *poly = tl_type_registry_get(self->registry, name);
-        if (!poly) return null;
-        assert(tl_monotype_is_inst(poly->type));
-        if (node_args.size != poly->quantifiers.size) return null;
-
-        tl_monotype_array arg_types = {.alloc = self->transient};
-        forall(i, node_args) {
-            tl_monotype *arg_ty = type_literal_instantiate(self, node_args.v[i], level + 1);
-            if (!arg_ty) return null;
-            array_push(arg_types, arg_ty);
-        }
-
-        // e.g. Point(Int)
-        tl_monotype_sized arg_types_ = array_sized(arg_types);
-        tl_monotype      *inst       = tl_type_registry_instantiate_with(self->registry, name, arg_types_);
-        if (!inst) fatal("runtime error");
-
-        return tl_type_registry_type_literal(self->registry);
-    }
-
-    else
-        return null;
+    tl_polytype *poly = tl_type_registry_parse_type(self->registry, node);
+    if (poly) return poly->type;
+    else return null;
 }
 
 static tl_monotype *specialize_type_identifer_unwrap(tl_infer *self, ast_node *node);
@@ -990,11 +952,9 @@ static tl_monotype *type_literal_specialize(tl_infer *self, ast_node *node) {
 }
 
 static tl_monotype *specialize_type_identifer_unwrap(tl_infer *self, ast_node *node) {
-    tl_monotype *type_id = null;
-    if ((type_id = type_literal_specialize(self, node))) {
-        // unwrap Type literal
-        tl_monotype *mono = type_id;
-        return mono;
+    tl_polytype *poly = tl_type_registry_parse_type(self->registry, node);
+    if (poly) {
+        return poly->type;
     }
     return null;
 }
