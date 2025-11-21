@@ -232,13 +232,6 @@ static void process_name_annotation(tl_infer *self, ast_node *name, traverse_ctx
         dbg(self, "process_name_annotation: %s => %s", str_cstr(&name_str), str_cstr(&tmp));
     }
 
-    // If the parsed type is a Type(), set the annotation's type to an instantiation of the target. In
-    // practice this means giving it a unique tv. It should not hold a Type wrapper, because the annotation
-    // type will be constrained against other values.
-    // if (tl_monotype_is_type_literal(poly->type))
-    //     poly = tl_polytype_absorb_mono(self->arena,
-    //     tl_monotype_type_literal_target(tl_polytype_instantiate(
-    //                                                   self->arena, poly, self->subs)));
     name->symbol.annotation_type = poly;
 }
 
@@ -987,10 +980,9 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
 
     // set out type to type literal
     if (out_type) {
-        tl_monotype *ty = tl_type_registry_type_literal(self->registry);
-        // tl_monotype *ty = tl_type_registry_type_literal(
-        //   self->registry, tl_polytype_concrete(self->transient, special_type));
-        *out_type = tl_polytype_absorb_mono(self->arena, ty);
+
+        tl_monotype *ty = tl_monotype_create_fresh_literal(self->arena, self->subs);
+        *out_type       = tl_polytype_absorb_mono(self->arena, ty);
     }
 
     return name_inst;

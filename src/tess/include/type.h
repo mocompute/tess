@@ -96,6 +96,7 @@ void tl_type_env_log(tl_type_env *);
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_literal(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
@@ -158,6 +159,7 @@ nodiscard tl_polytype *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) 
 nodiscard tl_polytype *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_weak(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
+nodiscard tl_polytype *tl_polytype_create_literal_with(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone_mono(allocator *, tl_monotype *) mallocfun;
 
@@ -192,8 +194,8 @@ void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
 
-int  tl_type_subs_unify(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,
-                        hashmap **);
+int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,
+                                hashmap **);
 int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
                              hashmap **);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);

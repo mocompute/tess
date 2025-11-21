@@ -376,7 +376,9 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         // or is it a nullary: Int, Float, String, etc, including user type constructors
         str name = ast_node_str(node);
         result   = tl_type_registry_get_nullary(self, name);
-        if (result) return result;
+        if (result) {
+            return tl_polytype_create_literal_with(self->alloc, result->type);
+        }
 
         // or else is it a type argument previously defined, being referenced in a value context? If so, on
         // first reference create a fresh tv, and use it on subsequent references.
@@ -465,9 +467,10 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
               tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
             result = tl_polytype_absorb_mono(self->alloc, mono);
         } else {
-            tl_monotype *mono = tl_polytype_instantiate_with(self->alloc, type_constructor,
-                                                             (tl_monotype_sized)array_sized(args));
-            result            = tl_polytype_absorb_mono(self->alloc, mono);
+            tl_monotype *target = tl_polytype_instantiate_with(self->alloc, type_constructor,
+                                                               (tl_monotype_sized)array_sized(args));
+            // FIXME: create literal with target
+            result = tl_polytype_create_literal_with(self->alloc, target);
         }
     }
 
@@ -705,6 +708,11 @@ tl_polytype *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
 
 tl_polytype *tl_polytype_create_fresh_literal(allocator *alloc, tl_type_subs *subs) {
     return tl_polytype_absorb_mono(alloc, tl_monotype_create_fresh_literal(alloc, subs));
+}
+
+tl_polytype *tl_polytype_create_literal_with(allocator *alloc, tl_monotype *target) {
+    tl_monotype *literal = tl_monotype_create_literal(alloc, target);
+    return tl_polytype_absorb_mono(alloc, literal);
 }
 
 tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype *orig) {
@@ -1035,6 +1043,12 @@ tl_monotype *tl_monotype_create_ellipsis(allocator *alloc) {
 tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_var, .var = tv};
+    return self;
+}
+
+tl_monotype *tl_monotype_create_literal(allocator *alloc, tl_monotype *target) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_literal, .literal = target};
     return self;
 }
 
@@ -1710,12 +1724,14 @@ static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_si
 static int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right,
                        tl_monotype *lhs, tl_monotype *rhs, type_error_cb_fun cb, void *user,
                        hashmap **seen);
-static int tl_type_subs_unify_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
-                                 void *, hashmap **seen);
+static int tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
+                                    void *, hashmap **seen);
 static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
                                       void *, hashmap **seen);
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype *weak, tl_monotype *, type_error_cb_fun,
                                    void *, hashmap            **seen);
+int        tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
+                                      type_error_cb_fun cb, void *user, hashmap **seen);
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
                             void *user, hashmap **);
 
@@ -1740,7 +1756,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_any:
     case tl_ellipsis:  return 0;
 
-    case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user, seen);
+    case tl_var:       return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
 
     case tl_cons_inst: {
@@ -1787,7 +1803,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_any:
     case tl_ellipsis:  return 0;
 
-    case tl_var:       return tl_type_subs_unify(subs, right->var, left, cb, user, seen);
+    case tl_var:       return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
 
     case tl_cons_inst: {
@@ -1814,19 +1830,23 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
 
     assert(tl_monotype_is_type_literal(left));
 
-    // A type literal starts life with a type variable target. It will unify with any other literal by unify
-    // its targets. It will not unify with any other type. In particular, note that it does NOT unify with
-    // any or ellipsis.
+    // A type literal starts life with a type variable target. It will unify with any other literal by
+    // unifying its targets. It will also unify with type variables. It will not unify with any other type.
+    // In particular, note that it does NOT unify with any or ellipsis.
 
     switch (right->tag) {
-    case tl_literal:   return tl_type_subs_unify_mono(subs, left->literal, right->literal, cb, user, seen);
+    case tl_literal:  return tl_type_subs_unify_mono(subs, left->literal, right->literal, cb, user, seen);
     case tl_any:
-    case tl_ellipsis:
-    case tl_var:
-    case tl_weak:
+    case tl_ellipsis: return 1;
+
+    case tl_var:      return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
+    case tl_weak:     return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:     return 1; break;
+    case tl_tuple:
+        // // unify type literal target with the monotype
+        // return tl_type_subs_unify_mono(subs, left->literal, right, cb, user, seen);
+        return 1;
     }
 }
 
@@ -1867,13 +1887,13 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         case tl_ellipsis:
         case tl_literal:   fatal("unreachable");
 
-        case tl_var:       return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user, seen);
+        case tl_var:       return tl_type_subs_unity_tv_tv(subs, left->var, right->var, cb, user, seen);
         case tl_weak:      return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user, seen);
 
         case tl_cons_inst:
 
         case tl_arrow:
-        case tl_tuple:     return tl_type_subs_unify(subs, left->var, right, cb, user, seen);
+        case tl_tuple:     return tl_type_subs_unify_tv_mono(subs, left->var, right, cb, user, seen);
         }
         break;
 
@@ -1887,7 +1907,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_weak:
             // unify two weak variables: put them in same equivalence class
-            return tl_type_subs_unify_tv(subs, left->var, right->var, cb, user, seen);
+            return tl_type_subs_unity_tv_tv(subs, left->var, right->var, cb, user, seen);
 
         case tl_cons_inst:
         case tl_arrow:
@@ -1903,7 +1923,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         case tl_ellipsis:
         case tl_literal:  fatal("unreachable");
 
-        case tl_var:      return tl_type_subs_unify(subs, right->var, left, cb, user, seen);
+        case tl_var:      return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
         case tl_weak:     return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
 
         case tl_cons_inst:
@@ -1922,7 +1942,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         case tl_ellipsis:
         case tl_literal:  fatal("unreachable");
 
-        case tl_var:      return tl_type_subs_unify(subs, right->var, left, cb, user, seen);
+        case tl_var:      return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
         case tl_weak:     return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
 
         case tl_cons_inst:
@@ -2034,8 +2054,8 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     return res;
 }
 
-static int tl_type_subs_unify_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
-                                 type_error_cb_fun cb, void *user, hashmap **seen) {
+static int tl_type_subs_unity_tv_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
+                                    type_error_cb_fun cb, void *user, hashmap **seen) {
 
     if (left == right) return 0;
 
@@ -2105,8 +2125,8 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     return 0;
 }
 
-int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono, type_error_cb_fun cb,
-                       void *user, hashmap **seen) {
+int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
+                               type_error_cb_fun cb, void *user, hashmap **seen) {
 
     if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
 
@@ -2118,20 +2138,17 @@ int tl_type_subs_unify(tl_type_subs *self, tl_type_variable tv, tl_monotype *mon
         // unifies with everything, but does not resolve
         return 0;
 
-    case tl_literal:
-        // a type variable CANNOT unify with a type literal
-        return 1;
-
     case tl_var:
         // case 1: both are tvs
-        return tl_type_subs_unify_tv(self, tv, mono->var, cb, user, seen);
+        return tl_type_subs_unity_tv_tv(self, tv, mono->var, cb, user, seen);
     case tl_weak:
         // case 2: one is weak type variable
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user, seen);
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:     {
+    case tl_tuple:
+    case tl_literal:   {
         // case 3: tv = concrete type or arrow or tuple
         tl_monotype *tv_type = self->data.v[tv_root].type;
         if (tv_type) {
