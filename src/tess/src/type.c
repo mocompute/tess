@@ -331,7 +331,17 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     return out;
 }
 
-static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *node) {
+// -- parse_type
+
+typedef struct {
+    // Type arguments discovered during recursive parsing
+    hashmap *type_arguments; // str => tl_monotype*
+
+    // Type arguments that exist in the outer environment during parsing
+    hashmap *lexical_monotypes; // str => tl_monotype_pair
+} tl_type_registry_parse_type_ctx;
+
+static tl_monotype *parse_type_specials(tl_type_registry *self, ast_node const *node) {
 
     tl_monotype *mono = null;
 
@@ -344,61 +354,58 @@ static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *
         }
     }
 
-    if (mono) return tl_polytype_absorb_mono(self->alloc, mono);
-    else return null;
+    return mono;
 }
 
-static tl_polytype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
+static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
-    tl_polytype *result = null;
-    result              = tl_polytype_create_fresh_tv(self->alloc, self->subs);
+    tl_monotype *result = null;
+    result              = tl_monotype_create_fresh_tv(self->alloc, self->subs);
     str ta              = ast_node_str(node);
     str_map_set_ptr(&ctx->type_arguments, ta, result);
     return result;
 }
 
-static tl_polytype *tl_type_registry_parse_type_(tl_type_registry                *self,
+static tl_monotype *tl_type_registry_parse_type_(tl_type_registry                *self,
                                                  tl_type_registry_parse_type_ctx *ctx,
                                                  ast_node const                  *node) {
-    tl_polytype *result = null;
+    tl_monotype *result = null;
 
-    if (ast_node_is_nil(node)) return tl_type_registry_get(self, S("Nil"));
+    if (ast_node_is_nil(node)) return tl_type_registry_get(self, S("Nil"))->type;
 
     else if (ast_node_is_symbol(node)) {
 
-        // Note: `(x : T)` is sugar for `(T: Type, x: T)` but no type argument is accepted. `T` is assigned
-        // a type variable.
+        // Note: `(x : T)` is sugar for `(T: Type, x: T)`. `T` is assigned a type variable.
 
         // is it a special: any, ..., Type
         result = parse_type_specials(self, node);
         if (result) return result;
 
         // or is it a nullary: Int, Float, String, etc, including user type constructors
-        str name = ast_node_str(node);
-        result   = tl_type_registry_get_nullary(self, name);
-        if (result) {
-            return result;
+        str          name = ast_node_str(node);
+        tl_polytype *poly = tl_type_registry_get_nullary(self, name);
+        if (poly) {
+            return poly->type;
         }
 
-        // or else is it a type argument previously defined, being referenced in a value context? If so, on
-        // first reference create a fresh tv, and use it on subsequent references.
-        // result = str_map_get_ptr(ctx->type_arguments, name);
-        // if (result && ctx->is_value_context && tl_monotype_is_type_literal(result->type)) {
-        //     result = tl_polytype_create_fresh_tv(self->alloc, self->subs);
+        // or else is it a type argument previously defined?
+        result = str_map_get_ptr(ctx->type_arguments, name);
+        // if (result) {
+        //     result = tl_monotype_create_fresh_tv(self->alloc, self->subs);
         //     // store it for subsequent references
         //     str_map_set_ptr(&ctx->type_arguments, name, result);
         // }
 
         // or else is it a type in the lexical environment?
-        if (!result && ctx->lexical_monotypes) {
-            tl_monotype_pair *pair = str_map_get(ctx->lexical_monotypes, name);
-            if (pair && pair->left) {
-                // type parsing is by default in the 'annotation' context, unless parsing arguments to type
-                // constructors in annotations, e.g. `Ptr(T)`
-                result =
-                  tl_polytype_absorb_mono(self->alloc, ctx->is_value_context ? pair->right : pair->left);
-            }
-        }
+        // if (!result && ctx->lexical_monotypes) {
+        //     tl_monotype_pair *pair = str_map_get(ctx->lexical_monotypes, name);
+        //     if (pair && pair->left) {
+        //         // type parsing is by default in the 'annotation' context, unless parsing arguments to
+        //         type
+        //         // constructors in annotations, e.g. `Ptr(T)`
+        //         result = pair->left;
+        //     }
+        // }
 
         if (result) {
             // unquantify the type argument so it doesn't get instantiated to a new type when it's used:
@@ -413,13 +420,13 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         if (node->symbol.annotation) {
             result = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
 
-            // If the annotation produces a Type, then save the symbol as a type argument.
-            if (result) {
+            // If the annotation produces a type variable, then save the symbol as a type argument.
+            if (result && tl_monotype_is_tv(result)) {
                 // the type literal target is a type variable
                 str ta = ast_node_str(node);
                 str_map_set_ptr(&ctx->type_arguments, ta, result);
             }
-            // If the annotation produces nothing, and it's a symbol, it's sugar
+            // If the annotation produces nothing, and it's a symbol, it's sugar for a type variable
             else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
             }
@@ -439,36 +446,26 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node);
 
-        // when we parse argument types, we are in a value context
         forall(i, nodes) {
-            int save              = ctx->is_value_context;
-            ctx->is_value_context = 1;
-            tl_polytype *poly     = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
-            ctx->is_value_context = save;
+            tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
 
             // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
             // variable - not a type argument
-            if (!poly && ast_node_is_symbol(nodes.v[i])) {
-                poly = type_variable_sugar(self, ctx, nodes.v[i]);
+            if (!mono && ast_node_is_symbol(nodes.v[i])) {
+                mono = type_variable_sugar(self, ctx, nodes.v[i]);
             }
 
-            // Arguments to type constructor are extracted from Type(tv) wrapper
-            // FIXME this extract should not be needed, since parse_type now understands value_context
-            // versus annotation context.
-            // poly = maybe_extract_type_argument(self, poly);
-            array_push_val(args, tl_polytype_instantiate(self->alloc, poly, self->subs));
+            array_push_val(args, mono);
         }
 
         // Note: special case for parsing a Union(a, b, ...)
         if (str_eq(name, S("Union"))) {
             tl_monotype *mono =
               tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
-            result = tl_polytype_absorb_mono(self->alloc, mono);
+            result = mono;
         } else {
-            tl_monotype *target = tl_polytype_instantiate_with(self->alloc, type_constructor,
-                                                               (tl_monotype_sized)array_sized(args));
-
-            result              = tl_polytype_absorb_mono(self->alloc, target);
+            result = tl_polytype_instantiate_with(self->alloc, type_constructor,
+                                                  (tl_monotype_sized)array_sized(args));
         }
     }
 
@@ -480,115 +477,103 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
-            int save              = ctx->is_value_context;
-            ctx->is_value_context = 0;
-            tl_polytype *poly     = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
-            ctx->is_value_context = save;
-
-            // Unquantify the parsed type here because it will be generalized later.
-            poly->quantifiers.size = 0;
-            array_push_val(args, tl_polytype_instantiate(self->alloc, poly, self->subs));
+            tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            array_push_val(args, mono);
         }
         tl_monotype *left_mono =
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
 
-        int save                = ctx->is_value_context;
-        ctx->is_value_context   = 1;
-        tl_polytype *right_poly = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
-        ctx->is_value_context   = save;
-
-        tl_monotype *right_mono = tl_polytype_instantiate(self->alloc, right_poly, self->subs);
+        tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
         tl_monotype *arrow      = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
-        result                  = tl_monotype_generalize(self->alloc, arrow);
+        result                  = arrow;
     }
 
     return result;
 }
 
-static tl_polytype *polytype_to_wrapped_literal(allocator *alloc, tl_polytype *self) {
-    // Perform a bit of surgery to convert a polytype (possibly a type scheme) into a tl_literal.
-    if (!self) return null;
-
-    tl_monotype *mono = tl_monotype_create_literal(alloc, self->type);
-    return tl_polytype_create(alloc, self->quantifiers, mono);
-}
-
-tl_polytype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
+tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
     tl_type_registry_parse_type_ctx ctx    = {.type_arguments =
-                                                map_new(self->transient, str, tl_polytype *, 16)};
-    tl_polytype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
-    result                                 = polytype_to_wrapped_literal(self->alloc, result);
+                                                map_new(self->transient, str, tl_monotype *, 16)};
+    tl_monotype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
+
+    // wrap valid result in literal
+    if (result) result = tl_monotype_create_literal(self->alloc, result);
     map_destroy(&ctx.type_arguments);
     return result;
 }
 
-tl_polytype *tl_type_registry_parse_type_lexical(tl_type_registry *self, ast_node const *node,
-                                                 hashmap *lexical_monotypes) {
-    tl_type_registry_parse_type_ctx ctx = {
-      .type_arguments    = map_new(self->transient, str, tl_polytype *, 16),
-      .lexical_monotypes = lexical_monotypes,
-    };
-    tl_polytype *result = tl_type_registry_parse_type_(self, &ctx, node);
-    result              = polytype_to_wrapped_literal(self->alloc, result);
-    map_destroy(&ctx.type_arguments);
-    return result;
-}
+// tl_monotype *tl_type_registry_parse_type_lexical(tl_type_registry *self, ast_node const *node,
+//                                                  hashmap *lexical_monotypes) {
+//     tl_type_registry_parse_type_ctx ctx = {
+//       .type_arguments    = map_new(self->transient, str, tl_monotype *, 16),
+//       .lexical_monotypes = lexical_monotypes,
+//     };
+//     tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
+//     map_destroy(&ctx.type_arguments);
+//     return result;
+// }
 
-tl_polytype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
+tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
                                                  allocator                       *alloc,
                                                  tl_type_registry_parse_type_ctx *out_ctx) {
     // alloc is used to allocate the parse context's buffers/maps, and the struct is copied into out_ctx.
     assert(out_ctx);
-    tl_type_registry_parse_type_ctx ctx    = {.type_arguments = map_new(alloc, str, tl_polytype *, 16)};
-    tl_polytype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
+    tl_type_registry_parse_type_ctx ctx    = {.type_arguments = map_new(alloc, str, tl_monotype *, 16)};
+    tl_monotype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
     *out_ctx                               = ctx;
-    result                                 = polytype_to_wrapped_literal(self->alloc, result);
+
     return result;
 }
 
-hashmap *tl_type_registry_parse_parameters(tl_type_registry *self, allocator *alloc, ast_node const *node) {
-    // Given a node with parameters, return a map that can be used to determine the type of all lexical
-    // symbols which appear in the scope of the node. This includes type arguments. Example: `foo(T: Type,
-    // val: T, count: Int)` returns `T => (Type(t1), t1); val => (null, t1); count => (null, Int)` where the
-    // pair keyed by the symbol is a pair of monotypes, the first being the monotype to use in an annotation
-    // context, and the second being the monotype to use in an evaluated context, such as an argument to a
-    // function etc.
-    //
-    // alloc specifies the allocator to use for the returned hashmap, which becomes the responsibility of
-    // the caller.
-    //
-    // map value is a pair of monotypes for use in specific contexts: (annotation context, value context).
-    // a null value means no type annotation exists for the parameter.
+// hashmap *tl_type_registry_parse_parameters(tl_type_registry *self, allocator *alloc, ast_node const
+// *node) {
+//     // Given a node with parameters, return a map that can be used to determine the type of all lexical
+//     // symbols which appear in the scope of the node. This includes type arguments. Example: `foo(T:
+//     Type,
+//     // val: T, count: Int)` returns `T => (Type(t1), t1); val => (null, t1); count => (null, Int)` where
+//     the
+//     // pair keyed by the symbol is a pair of monotypes, the first being the monotype to use in an
+//     annotation
+//     // context, and the second being the monotype to use in an evaluated context, such as an argument to
+//     a
+//     // function etc.
+//     //
+//     // alloc specifies the allocator to use for the returned hashmap, which becomes the responsibility of
+//     // the caller.
+//     //
+//     // map value is a pair of monotypes for use in specific contexts: (annotation context, value
+//     context).
+//     // a null value means no type annotation exists for the parameter.
 
-    if (!ast_node_is_let(node) && !ast_node_is_let_in(node) && !ast_node_is_lambda_function(node))
-        fatal("logic error");
+//     if (!ast_node_is_let(node) && !ast_node_is_let_in(node) && !ast_node_is_lambda_function(node))
+//         fatal("logic error");
 
-    if (ast_node_is_let_in(node) && !ast_node_is_lambda_function(node->let_in.value)) {
-        // The value of a let_in node is like a parameter in this context
-    }
+//     if (ast_node_is_let_in(node) && !ast_node_is_lambda_function(node->let_in.value)) {
+//         // The value of a let_in node is like a parameter in this context
+//     }
 
-    hashmap       *out  = map_create(alloc, sizeof(tl_monotype_pair), 16);
-    ast_node_sized args = ast_node_sized_from_ast_array_const(node);
+//     hashmap       *out  = map_create(alloc, sizeof(tl_monotype_pair), 16);
+//     ast_node_sized args = ast_node_sized_from_ast_array_const(node);
 
-    forall(i, args) {
-        if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
-        str              name = ast_node_str(args.v[i]);
-        tl_polytype     *poly = tl_type_registry_parse_type(self, args.v[i]);
-        tl_monotype_pair pair = {0};
+//     forall(i, args) {
+//         if (!ast_node_is_symbol(args.v[i])) fatal("logic error");
+//         str              name = ast_node_str(args.v[i]);
+//         tl_polytype     *poly = tl_type_registry_parse_type(self, args.v[i]);
+//         tl_monotype_pair pair = {0};
 
-        if (poly) {
-            pair.right = tl_polytype_instantiate(self->alloc, poly, self->subs);
-            if (tl_monotype_is_type_literal(pair.right)) {
-                pair.left  = pair.right;
-                pair.right = tl_monotype_create_fresh_tv(self->alloc, self->subs);
-            }
-        }
-        str_map_set(&out, name, &pair);
-    }
+//         if (poly) {
+//             pair.right = tl_polytype_instantiate(self->alloc, poly, self->subs);
+//             if (tl_monotype_is_type_literal(pair.right)) {
+//                 pair.left  = pair.right;
+//                 pair.right = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+//             }
+//         }
+//         str_map_set(&out, name, &pair);
+//     }
 
-    return out;
-}
+//     return out;
+// }
 
 // tl_polytype* tl_type_registry_ast_node_to_arrow(tl_type_registry *self, ast_node const *node) {
 //     if (!ast_node_is_let(node) && !ast_node_is_let_in_lambda(node) && !ast_node_is_lambda_function(node))

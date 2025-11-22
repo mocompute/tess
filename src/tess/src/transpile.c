@@ -2039,9 +2039,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     } else if (ast_node_is_nfa(arg)) {
         // type constructor
-        tl_polytype *poly = tl_type_registry_parse_type(self->registry, arg);
-        if (!poly || tl_polytype_is_scheme(poly)) fatal("expected concrete type");
-        tl_monotype *type = poly->type;
+        tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
         update_type(self, &type);
 
@@ -2074,10 +2072,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
 
     } else if (ast_node_is_nfa(arg)) {
         // type constructor
-        tl_polytype *poly = tl_type_registry_parse_type(self->registry, arg);
-        if (!poly || tl_polytype_is_scheme(poly)) fatal("expected concrete type");
-
-        tl_monotype *type = poly->type;
+        tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
         update_type(self, &type);
 
