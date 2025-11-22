@@ -139,6 +139,7 @@ int          tl_monotype_is_type_literal(tl_monotype *);
 int          tl_monotype_is_integer_convertible(tl_monotype *);
 void         tl_monotype_set_integer_convertible(tl_monotype *);
 tl_monotype *tl_monotype_ptr_target(tl_monotype *);
+tl_monotype *tl_monotype_literal_target(tl_monotype *);
 tl_monotype *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
 void              tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *, hashmap **);

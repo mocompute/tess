@@ -1,8 +1,9 @@
 #module main
 
+Point : { x : Int, y : Int }
 
 main() {
-  sizeof(Int)
+  sizeof(Point)
 }
 
 // Point(a) : { x: a, y: a }

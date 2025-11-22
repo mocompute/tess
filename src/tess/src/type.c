@@ -381,11 +381,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = parse_type_specials(self, node);
         if (result) return result;
 
-        // or is it a nullary: Int, Float, String, etc, including user type constructors
+        // or is it a nullary literal: Int, Float, String, etc, including user type constructors
         str          name = ast_node_str(node);
         tl_polytype *poly = tl_type_registry_get_nullary(self, name);
         if (poly) {
-            return poly->type;
+            return tl_monotype_create_literal(self->alloc, poly->type);
         }
 
         // or else is it a type argument previously defined?
@@ -430,6 +430,10 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
             }
+            // If the annotation produces a type literal, unwrap it
+            else if (result && tl_monotype_is_type_literal(result)) {
+                result = tl_monotype_literal_target(result);
+            }
         }
 
         return result;
@@ -455,6 +459,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 mono = type_variable_sugar(self, ctx, nodes.v[i]);
             }
 
+            // else if it's a type literal, unwrap it
+            else if (mono && tl_monotype_is_type_literal(mono)) {
+                mono = tl_monotype_literal_target(mono);
+            }
+
             array_push_val(args, mono);
         }
 
@@ -467,6 +476,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             result = tl_polytype_instantiate_with(self->alloc, type_constructor,
                                                   (tl_monotype_sized)array_sized(args));
         }
+
+        // all NFAs are type literals, so wrap it
+        result = tl_monotype_create_literal(self->alloc, result);
     }
 
     else if (ast_node_is_arrow(node)) {
@@ -478,14 +490,22 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            // if it's a type literal, unwrap it
+            if (mono && tl_monotype_is_type_literal(mono)) {
+                mono = tl_monotype_literal_target(mono);
+            }
             array_push_val(args, mono);
         }
         tl_monotype *left_mono =
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
 
         tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
-        tl_monotype *arrow      = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
-        result                  = arrow;
+        if (right_mono && tl_monotype_is_type_literal(right_mono)) {
+            right_mono = tl_monotype_literal_target(right_mono);
+        }
+
+        tl_monotype *arrow = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
+        result             = arrow;
     }
 
     return result;
@@ -497,8 +517,6 @@ tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const 
                                                 map_new(self->transient, str, tl_monotype *, 16)};
     tl_monotype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
 
-    // wrap valid result in literal
-    if (result) result = tl_monotype_create_literal(self->alloc, result);
     map_destroy(&ctx.type_arguments);
     return result;
 }
@@ -1387,6 +1405,11 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
 
     else
         fatal("unreachable");
+}
+
+tl_monotype *tl_monotype_literal_target(tl_monotype *self) {
+    if (tl_monotype_is_type_literal(self)) return self->literal;
+    fatal("logic error");
 }
 
 tl_monotype *tl_monotype_arrow_args(tl_monotype *self) {

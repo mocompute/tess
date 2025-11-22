@@ -180,11 +180,10 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
         // field type, could be type argument, or type constructor, or null
         if (annotations) {
-            tl_monotype const *field           = null;
-            ast_node const    *field_type_node = annotations[i];
+            tl_monotype    *field           = null;
+            ast_node const *field_type_node = annotations[i];
             if (ast_node_is_symbol(field_type_node)) {
-                tl_monotype const *found =
-                  str_map_get_ptr(type_argument_map, ast_node_str(field_type_node));
+                tl_monotype *found = str_map_get_ptr(type_argument_map, ast_node_str(field_type_node));
                 if (found) field = found;
             }
 
@@ -195,6 +194,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
                                ((tl_infer_error){.tag = tl_err_expected_type, .node = field_type_node}));
                     return;
                 }
+
+                if (tl_monotype_is_type_literal(field)) field = tl_monotype_literal_target(field);
             }
 
             if (!field) {
@@ -1091,30 +1092,31 @@ static int resolve_symbol(tl_infer *self, ast_node *sym, traverse_ctx *ctx, symb
     return 0;
 }
 
-static tl_polytype *resolve_symbol_type(tl_infer *self, traverse_ctx *ctx, str name) {
-    tl_polytype *out = null;
+// static tl_polytype *resolve_symbol_type(tl_infer *self, traverse_ctx *ctx, str name) {
+//     tl_polytype *out = null;
 
-    // find symbol in context param_types
-    tl_monotype_pair *pair = str_map_get(ctx->lexical_names, name);
-    if (pair && pair->right) {
-        dbg(self, "found param %s", str_cstr(&name));
+//     // find symbol in context param_types
+//     tl_monotype_pair *pair = str_map_get(ctx->lexical_names, name);
+//     if (pair && pair->right) {
+//         dbg(self, "found param %s", str_cstr(&name));
 
-        // resolve_symbol_type is only called in the context of values, not annotations. So pair->right is
-        // the type.
-        out = tl_polytype_absorb_mono(self->arena, pair->right);
-    } else pair = null;
+//         // resolve_symbol_type is only called in the context of values, not annotations. So pair->right
+//         is
+//         // the type.
+//         out = tl_polytype_absorb_mono(self->arena, pair->right);
+//     } else pair = null;
 
-    // Check for nullary type lierals
-    if (!pair) {
-        out = tl_type_registry_get_nullary(self->registry, name);
-        if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
-    }
+//     // Check for nullary type lierals
+//     if (!pair) {
+//         out = tl_type_registry_get_nullary(self->registry, name);
+//         if (out) dbg(self, "found nullary type: %s", str_cstr(&name));
+//     }
 
-    // Otherwise check for known name
-    if (!out) out = tl_type_env_lookup(self->env, name);
+//     // Otherwise check for known name
+//     if (!out) out = tl_type_env_lookup(self->env, name);
 
-    return out;
-}
+//     return out;
+// }
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
@@ -1483,24 +1485,27 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, &node->type);
 
         // resolve the symbol's type
-        str          name   = node->symbol.name;
-        tl_polytype *global = resolve_symbol_type(self, traverse_ctx, name);
+        str name = node->symbol.name;
+        // tl_polytype *global = resolve_symbol_type(self, traverse_ctx, name);
 
-        // if symbol has a type annotation, constrain it
-        if (node->symbol.annotation) {
-            process_annotation(self, node, traverse_ctx);
-            if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
-                constrain(self, node->symbol.annotation_type, node->type, node))
-                return 1;
+        tl_polytype *global = tl_type_env_lookup(self->env, name);
 
-            // substitute in so we can check if the node type is a Type literal
-            // tl_polytype_substitute(self->arena, node->type, self->subs);
-        }
+        // // if symbol has a type annotation, constrain it
+        // if (node->symbol.annotation) {
+        //     process_annotation(self, node, traverse_ctx);
+        //     if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
+        //         constrain(self, node->symbol.annotation_type, node->type, node))
+        //         return 1;
 
-        if (global) {
-            if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global, node))
-                return 1;
-        }
+        //     // substitute in so we can check if the node type is a Type literal
+        //     // tl_polytype_substitute(self->arena, node->type, self->subs);
+        // }
+
+        // if (global) {
+        //     if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global,
+        //     node))
+        //         return 1;
+        // }
 
         // Add to environment
 
@@ -2446,11 +2451,14 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         forall(i, args) {
             if (resolve_symbol(self, args.v[i], ctx, spos_function_argument)) return null;
             ensure_tv(self, &args.v[i]->type);
-            tl_monotype *tmp = args.v[i]->type->type;
+            tl_monotype *mono = args.v[i]->type->type;
+
+            if (tl_monotype_is_type_literal(mono))
+                args.v[i]->type = tl_polytype_absorb_mono(self->arena, tl_monotype_literal_target(mono));
 
             // make concrete if possible
-            tl_monotype_substitute(self->arena, tmp, self->subs, null);
-            array_push(args_types, tmp);
+            tl_monotype_substitute(self->arena, mono, self->subs, null);
+            array_push(args_types, mono);
         }
 
         tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
@@ -2601,6 +2609,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         if (ast_node_is_let(infer_target)) body = infer_target->let.body;
         else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
         if (!body) fatal("logic error");
+        dbg(self, "infer_one constrain");
         if (constrain_pm(self, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
     }
     infer_ctx_destroy(self->transient, &ctx);

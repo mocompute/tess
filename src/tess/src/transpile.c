@@ -423,6 +423,12 @@ static str remove_c_prefix(allocator *alloc, str name);
 static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, str original_name,
                                 eval_ctx *ctx) {
     str name = symbol_name;
+
+    // if type is undetermined, look up in environment
+    // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
+    //     type = env_lookup(self, name);
+    // }
+
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
 
     if (tl_monotype_is_type_literal(type)) {
@@ -1861,8 +1867,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             str          typec = type_to_c(self, &wrap);
             // if (str_eq(typec, S("void*"))) fatal("oops");
             return str_cat(self->transient, typec, S("*"));
-        } else if (str_eq(S("Type"), cons_name)) {
-            return S("/*Type*/int");
         }
 
         else {
@@ -1877,12 +1881,12 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             // names. This means we need to do an additional lookup on special_name in the type environment,
             // and use the name of the found type. tl_infer's canonicalize_types ensures that user types are
             // canonicalized.
-            if (!str_is_empty(mono->cons_inst->special_name)) {
-                tl_monotype *found = env_lookup(self, mono->cons_inst->special_name);
-                if (found) return found->cons_inst->special_name;
-                return mono->cons_inst->special_name;
-            }
-            return cons_name;
+            str name = mono->cons_inst->special_name;
+            if (str_is_empty(name)) name = cons_name;
+
+            tl_monotype *found = env_lookup(self, name);
+            if (found) return found->cons_inst->special_name;
+            return name;
         }
     }
 
@@ -1892,6 +1896,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
+    } else if (tl_monotype_is_type_literal(mono)) {
+        return S("/*Type Literal*/int");
     } else {
         // do not fatal here: instead return a valid type, but caller will probably not use it.
         return S("/*untyped*/void*");
@@ -2029,10 +2035,17 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
+
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
 
-        tl_monotype *type = arg->type->type;
+        tl_monotype *type = tl_monotype_literal_target(arg->type->type);
+
+        // if type is undetermined, look up in environment
+        // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
+        //     type = env_lookup(self, ast_node_str(arg));
+        // }
+
         update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
@@ -2065,7 +2078,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     ast_node const *arg = node->named_application.arguments[0];
     if (tl_monotype_is_type_literal(arg->type->type)) {
         // type literal
-        tl_monotype *type = arg->type->type;
+        tl_monotype *type = tl_monotype_literal_target(arg->type->type);
         update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
