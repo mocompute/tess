@@ -122,6 +122,7 @@ static str   type_to_c_mono(transpile *, tl_monotype *);
 static str   arrow_rhs_to_c(transpile *, tl_polytype *);
 static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
+static str   type_literal_name(tl_monotype *type);
 
 //
 
@@ -892,7 +893,8 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Note: the main logic of this function is also duplicated in generate_binary_op.
 
-    // A funcall can be a standard tl funcall, a c_ funcall, a type constructor, or a c_ type constructor.
+    // A funcall can be a standard tl funcall, a c_ funcall, a type constructor, or a c_ type
+    // constructor.
 
     assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
@@ -948,8 +950,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
         if (tl_monotype_is_tv(type) || str_is_empty(value)) {
-            // The assignment target has an indeterminate type, most likely because `value` is an unknown
-            // symbol.
+            // The assignment target has an indeterminate type, most likely because `value` is an
+            // unknown symbol.
             if (ast_node_is_symbol(node->let_in.value)) {
                 str value_str = ast_node_str(node->let_in.value);
                 exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
@@ -966,9 +968,9 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
             }
         } else {
-            // Note: do not emit values that are not concrete. These can come out of type inference if the
-            // variable is never referenced, so it is safe to avoid emitting them. Conversely, we can't
-            // correctly emit them because the type information is incomplete. However, there are
+            // Note: do not emit values that are not concrete. These can come out of type inference if
+            // the variable is never referenced, so it is safe to avoid emitting them. Conversely, we
+            // can't correctly emit them because the type information is incomplete. However, there are
             // exceptions: return value type information is not always available for c_ functions, so we
             // emit all non-arrow values and c_* arrow values.
             if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
@@ -1127,7 +1129,8 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
         if (!ast_node_is_symbol(bin_pred) && !ast_node_is_lambda_function(bin_pred)) fatal("logic error");
 
         if (ast_node_is_lambda_function(bin_pred)) {
-            // if predicate is a lambda function, construct an anon lambda application node for convenience
+            // if predicate is a lambda function, construct an anon lambda application node for
+            // convenience
             lfa =
               ast_node_create_lfa(self->transient, bin_pred, (ast_node_sized){.size = 2, .v = lfa_args});
 
@@ -1229,7 +1232,8 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     assert(ast_binary_op == node->tag);
     str op = ast_node_str(node->binary_op.op);
 
-    // Note: Special case enum field access to mangle the name rather than use a . field access operator.
+    // Note: Special case enum field access to mangle the name rather than use a . field access
+    // operator.
     if (ast_node_is_symbol(node->binary_op.left) && ast_node_is_symbol(node->binary_op.right) &&
         is_dot_operator(str_cstr(&op))) {
         tl_monotype *left_type = env_lookup(self, ast_node_str(node->binary_op.left));
@@ -1245,8 +1249,8 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
     // Note: special case if right hand is a funcall of a struct member
     if (ast_node_is_nfa(node->binary_op.right) && is_struct_access_operator(str_cstr(&op))) {
-        // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`, then
-        // invoke the funcall logic. The named_application.name node holds the function type.
+        // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`,
+        // then invoke the funcall logic. The named_application.name node holds the function type.
 
         str          fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
         tl_monotype *fun_type = node->binary_op.right->named_application.name->type->type;
@@ -1333,8 +1337,8 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
     assert(ast_unary_op == node->tag);
     str op = ast_node_str(node->unary_op.op);
 
-    // Note: special case: the address-of operator is special because its operand must not be evaluated in
-    // the usual way.
+    // Note: special case: the address-of operator is special because its operand must not be evaluated
+    // in the usual way.
     if (str_eq(op, S("&"))) {
         str res          = next_res(self);
 
@@ -1457,10 +1461,34 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
     return str_empty();
 }
 
+static str type_literal_name(tl_monotype *type) {
+    if (tl_monotype_is_type_literal(type)) {
+        tl_monotype *target = tl_monotype_literal_target(type);
+        if (tl_monotype_is_inst(target)) {
+            if (!str_is_empty(target->cons_inst->special_name)) return target->cons_inst->special_name;
+            return target->cons_inst->def->name;
+        }
+        return S("[not a type constructor]");
+    }
+    return S("[not a type literal]");
+}
+
+static str generate_type_literal(transpile *self, eval_ctx *ctx, tl_monotype *type) {
+    (void)ctx;
+
+    str res = next_res(self);
+    cat(self, S("int "));
+    cat(self, res);
+    cat(self, S(" = 0; /*Type literal: "));
+    cat(self, type_literal_name(type));
+    cat(self, S("*/;\n"));
+    return res;
+}
+
 static str generate_expr(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
-    // This function is used to generate output to evaluate an expression with a given type, for example for
-    // function arguments. If type is null, then the type is taken from the expression. The str returned is
-    // the name of the variable which holds the evaluated value.
+    // This function is used to generate output to evaluate an expression with a given type, for example
+    // for function arguments. If type is null, then the type is taken from the expression. The str
+    // returned is the name of the variable which holds the evaluated value.
 
     if (ctx) ctx->is_effective_void = 0;
 
@@ -1476,6 +1504,11 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
             ctx->last_line_directive = line;
             cat(self, line);
         }
+    }
+
+    // if type is a type literal, generate it
+    if (tl_monotype_is_type_literal(type)) {
+        return generate_type_literal(self, ctx, type);
     }
 
     switch (node->tag) {
@@ -1564,7 +1597,10 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
+    }
 
+    else if (tl_monotype_is_type_literal(type)) {
+        return generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
     else {
@@ -1877,10 +1913,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
                 return remove_c_prefix(self->transient, cons_name);
             }
 
-            // Note: special handling of user types. Due to recursive types, we want to use canonical type
-            // names. This means we need to do an additional lookup on special_name in the type environment,
-            // and use the name of the found type. tl_infer's canonicalize_types ensures that user types are
-            // canonicalized.
+            // Note: special handling of user types. Due to recursive types, we want to use canonical
+            // type names. This means we need to do an additional lookup on special_name in the type
+            // environment, and use the name of the found type. tl_infer's canonicalize_types ensures
+            // that user types are canonicalized.
             str name = mono->cons_inst->special_name;
             if (str_is_empty(name)) name = cons_name;
 
@@ -1897,7 +1933,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
     } else if (tl_monotype_is_type_literal(mono)) {
-        return S("/*Type Literal*/int");
+        return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else {
         // do not fatal here: instead return a valid type, but caller will probably not use it.
         return S("/*untyped*/void*");
@@ -2036,10 +2072,15 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
 
-    if (tl_monotype_is_type_literal(arg->type->type)) {
+    // Note: The environment contains the most current type for a symbol argument.
+    tl_polytype *poly = arg->type;
+    if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(self->transient, poly))
+        poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+
+    if (tl_monotype_is_type_literal(poly->type)) {
         // type literal
 
-        tl_monotype *type = tl_monotype_literal_target(arg->type->type);
+        tl_monotype *type = tl_monotype_literal_target(poly->type);
 
         // if type is undetermined, look up in environment
         // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
@@ -2075,11 +2116,16 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
 
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
-    ast_node const *arg = node->named_application.arguments[0];
-    if (tl_monotype_is_type_literal(arg->type->type)) {
+    ast_node const *arg  = node->named_application.arguments[0];
+
+    tl_polytype    *poly = arg->type;
+    if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(self->transient, poly))
+        poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+
+    if (tl_monotype_is_type_literal(poly->type)) {
         // type literal
-        tl_monotype *type = tl_monotype_literal_target(arg->type->type);
-        update_type(self, &type);
+        tl_monotype *type = tl_monotype_literal_target(poly->type);
+        // update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
 

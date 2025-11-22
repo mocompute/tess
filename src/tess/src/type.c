@@ -339,9 +339,13 @@ typedef struct {
 
     // Type arguments that exist in the outer environment during parsing
     hashmap *lexical_monotypes; // str => tl_monotype_pair
+
+    // When parsing an annotation, this is the node which is being annotated.
+    ast_node const *annotation_target;
 } tl_type_registry_parse_type_ctx;
 
-static tl_monotype *parse_type_specials(tl_type_registry *self, ast_node const *node) {
+static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
+                                        ast_node const *node) {
 
     tl_monotype *mono = null;
 
@@ -350,7 +354,13 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, ast_node const *
         if (str_eq(name, S("any"))) mono = tl_monotype_create_any(self->alloc);
         else if (str_eq(name, S("..."))) mono = tl_monotype_create_ellipsis(self->alloc);
         else if (str_eq(name, S("Type"))) {
-            mono = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+            // Create a fresh type literal (target is a fresh type variable)
+            assert(ctx->annotation_target);
+            mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+
+            // Add to context type arguments
+            str ta = ast_node_str(ctx->annotation_target);
+            str_map_set_ptr(&ctx->type_arguments, ta, mono);
         }
     }
 
@@ -378,7 +388,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         // Note: `(x : T)` is sugar for `(T: Type, x: T)`. `T` is assigned a type variable.
 
         // is it a special: any, ..., Type
-        result = parse_type_specials(self, node);
+        result = parse_type_specials(self, ctx, node);
         if (result) return result;
 
         // or is it a nullary literal: Int, Float, String, etc, including user type constructors
@@ -407,27 +417,17 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         //     }
         // }
 
-        if (result) {
-            // unquantify the type argument so it doesn't get instantiated to a new type when it's used:
-            // FIXME: a better approach might be to instantiate it on first use, and ensure the same
-            // instantiation is used throughout parsing the same outermost type.
-            // result->quantifiers.size = 0;
-        }
-
         if (result) return result;
 
         // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
         if (node->symbol.annotation) {
-            result = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
+            ctx->annotation_target = node;
+            result                 = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
+            ctx->annotation_target = null;
 
-            // If the annotation produces a type variable, then save the symbol as a type argument.
-            if (result && tl_monotype_is_tv(result)) {
-                // the type literal target is a type variable
-                str ta = ast_node_str(node);
-                str_map_set_ptr(&ctx->type_arguments, ta, result);
-            }
-            // If the annotation produces nothing, and it's a symbol, it's sugar for a type variable
-            else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
+            // If the annotation produces nothing, and the annotation is a symbol, it's sugar for a type
+            // variable.
+            if (!result && ast_node_is_symbol(node->symbol.annotation)) {
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
             }
             // If the annotation produces a type literal, unwrap it
@@ -454,13 +454,17 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
 
             // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
-            // variable - not a type argument
-            if (!mono && ast_node_is_symbol(nodes.v[i])) {
-                mono = type_variable_sugar(self, ctx, nodes.v[i]);
+            // variable - not a type argument. Otherwise, it's an error
+            if (!mono) {
+                if (ast_node_is_symbol(nodes.v[i])) {
+                    mono = type_variable_sugar(self, ctx, nodes.v[i]);
+                } else {
+                    return null;
+                }
             }
 
             // else if it's a type literal, unwrap it
-            else if (mono && tl_monotype_is_type_literal(mono)) {
+            else if (tl_monotype_is_type_literal(mono)) {
                 mono = tl_monotype_literal_target(mono);
             }
 
@@ -490,6 +494,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+            if (!mono) return null;
+
             // if it's a type literal, unwrap it
             if (mono && tl_monotype_is_type_literal(mono)) {
                 mono = tl_monotype_literal_target(mono);
@@ -500,7 +506,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
 
         tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
-        if (right_mono && tl_monotype_is_type_literal(right_mono)) {
+        if (!right_mono) return null;
+        if (tl_monotype_is_type_literal(right_mono)) {
             right_mono = tl_monotype_literal_target(right_mono);
         }
 
