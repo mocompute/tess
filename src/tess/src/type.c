@@ -340,7 +340,7 @@ static tl_polytype *parse_type_specials(tl_type_registry *self, ast_node const *
         if (str_eq(name, S("any"))) mono = tl_monotype_create_any(self->alloc);
         else if (str_eq(name, S("..."))) mono = tl_monotype_create_ellipsis(self->alloc);
         else if (str_eq(name, S("Type"))) {
-            return tl_polytype_create_fresh_literal(self->alloc, self->subs);
+            mono = tl_monotype_create_fresh_tv(self->alloc, self->subs);
         }
     }
 
@@ -377,17 +377,17 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         str name = ast_node_str(node);
         result   = tl_type_registry_get_nullary(self, name);
         if (result) {
-            return tl_polytype_create_literal_with(self->alloc, result->type);
+            return result;
         }
 
         // or else is it a type argument previously defined, being referenced in a value context? If so, on
         // first reference create a fresh tv, and use it on subsequent references.
-        result = str_map_get_ptr(ctx->type_arguments, name);
-        if (result && ctx->is_value_context && tl_monotype_is_type_literal(result->type)) {
-            result = tl_polytype_create_fresh_tv(self->alloc, self->subs);
-            // store it for subsequent references
-            str_map_set_ptr(&ctx->type_arguments, name, result);
-        }
+        // result = str_map_get_ptr(ctx->type_arguments, name);
+        // if (result && ctx->is_value_context && tl_monotype_is_type_literal(result->type)) {
+        //     result = tl_polytype_create_fresh_tv(self->alloc, self->subs);
+        //     // store it for subsequent references
+        //     str_map_set_ptr(&ctx->type_arguments, name, result);
+        // }
 
         // or else is it a type in the lexical environment?
         if (!result && ctx->lexical_monotypes) {
@@ -404,7 +404,7 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
             // unquantify the type argument so it doesn't get instantiated to a new type when it's used:
             // FIXME: a better approach might be to instantiate it on first use, and ensure the same
             // instantiation is used throughout parsing the same outermost type.
-            result->quantifiers.size = 0;
+            // result->quantifiers.size = 0;
         }
 
         if (result) return result;
@@ -414,12 +414,10 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
             result = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
 
             // If the annotation produces a Type, then save the symbol as a type argument.
-            if (result && tl_monotype_is_type_literal(result->type)) {
+            if (result) {
                 // the type literal target is a type variable
                 str ta = ast_node_str(node);
                 str_map_set_ptr(&ctx->type_arguments, ta, result);
-
-                // and the resulting type is still the wrapped Type(tv)
             }
             // If the annotation produces nothing, and it's a symbol, it's sugar
             else if (!result && ast_node_is_symbol(node->symbol.annotation)) {
@@ -469,8 +467,8 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
         } else {
             tl_monotype *target = tl_polytype_instantiate_with(self->alloc, type_constructor,
                                                                (tl_monotype_sized)array_sized(args));
-            // FIXME: create literal with target
-            result = tl_polytype_create_literal_with(self->alloc, target);
+
+            result              = tl_polytype_absorb_mono(self->alloc, target);
         }
     }
 
@@ -507,11 +505,20 @@ static tl_polytype *tl_type_registry_parse_type_(tl_type_registry               
     return result;
 }
 
+static tl_polytype *polytype_to_wrapped_literal(allocator *alloc, tl_polytype *self) {
+    // Perform a bit of surgery to convert a polytype (possibly a type scheme) into a tl_literal.
+    if (!self) return null;
+
+    tl_monotype *mono = tl_monotype_create_literal(alloc, self->type);
+    return tl_polytype_create(alloc, self->quantifiers, mono);
+}
+
 tl_polytype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
     tl_type_registry_parse_type_ctx ctx    = {.type_arguments =
                                                 map_new(self->transient, str, tl_polytype *, 16)};
     tl_polytype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
+    result                                 = polytype_to_wrapped_literal(self->alloc, result);
     map_destroy(&ctx.type_arguments);
     return result;
 }
@@ -523,6 +530,7 @@ tl_polytype *tl_type_registry_parse_type_lexical(tl_type_registry *self, ast_nod
       .lexical_monotypes = lexical_monotypes,
     };
     tl_polytype *result = tl_type_registry_parse_type_(self, &ctx, node);
+    result              = polytype_to_wrapped_literal(self->alloc, result);
     map_destroy(&ctx.type_arguments);
     return result;
 }
@@ -535,6 +543,7 @@ tl_polytype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_nod
     tl_type_registry_parse_type_ctx ctx    = {.type_arguments = map_new(alloc, str, tl_polytype *, 16)};
     tl_polytype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
     *out_ctx                               = ctx;
+    result                                 = polytype_to_wrapped_literal(self->alloc, result);
     return result;
 }
 
