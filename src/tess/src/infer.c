@@ -486,6 +486,7 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     out->seen_node      = hset_create(alloc, 1024);
     out->type_arguments = map_create_ptr(alloc, 16);
     out->user           = null;
+    out->node_pos       = npos_operand;
     out->is_field_name  = 0;
     out->is_annotation  = 0;
 
@@ -601,8 +602,9 @@ static void ensure_tv(tl_infer *self, tl_polytype **type) {
 static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static str          specialize_fun(tl_infer *, ast_node *, tl_monotype *);
-static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *);
-static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *);
+static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
+static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *,
+                                           int is_params);
 static tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
@@ -951,6 +953,8 @@ static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_s
                                          tl_polytype **out_type) {
     // FIXME why does this exist? Use tl_type_registry_parse_type
 
+    fatal("oops");
+
     str out = str_empty();
     if (out_type) *out_type = null;
 
@@ -1011,10 +1015,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             // as a formal parameter, a symbol with a : Type annotation creates a type argument
             str name = ast_node_str(node);
             if (node->symbol.annotation && !node->symbol.annotation_type) {
-                tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->symbol.annotation);
-                if (mono) node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
-                else node->symbol.annotation_type = null;
+                // resolve annotation in the correct context and copy its resolved type to annotation_type
+                if (resolve_node(self, node->symbol.annotation, ctx, npos_annotation)) return 1;
+                node->symbol.annotation_type = node->symbol.annotation->type;
             }
+
             if (node->symbol.annotation_type) {
                 if (node->type) {
                     if (constrain(self, node->type, node->symbol.annotation_type, node)) return 1;
@@ -1067,7 +1072,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 }
                 node->type = tl_polytype_absorb_mono(self->arena, mono);
             }
-        } else return expected_symbol(self, node);
+        }
         break;
 
     case npos_let_in_lhs:
@@ -1098,8 +1103,13 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!mono) {
                 mono = tl_type_registry_parse_type(self->registry, node);
             }
-        } else if (ast_node_is_nfa(node)) {
+        } else {
             mono = tl_type_registry_parse_type(self->registry, node);
+        }
+
+        // If the annotation produces a type literal, unwrap it
+        if (mono && tl_monotype_is_type_literal(mono)) {
+            mono = tl_monotype_literal_target(mono);
         }
 
         if (mono) {
@@ -1243,7 +1253,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             array_push(args, node->case_.conditions.v[0]);
             tl_polytype *bool_poly = tl_polytype_absorb_mono(self->arena, bool_type);
             tl_polytype *pred_arrow =
-              make_arrow_result_type(self, traverse_ctx, (ast_node_sized)array_sized(args), bool_poly);
+              make_arrow_result_type(self, traverse_ctx, (ast_node_sized)array_sized(args), bool_poly, 0);
             if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
         }
 
@@ -1490,54 +1500,19 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
     } break;
 
-    case ast_symbol: {
-
+    case ast_symbol:
+        // When resolving a symbol, we need to know what context it's in. This is specified by its parent
+        // node, and is communicated via the `node_pos` field in traverse_ctx.
         if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
         assert(node->type);
         break;
-        // FIXME skip rest of block
-
-        ensure_tv(self, &node->type);
-
-        // resolve the symbol's type
-        str name = node->symbol.name;
-        // tl_polytype *global = resolve_symbol_type(self, traverse_ctx, name);
-
-        tl_polytype *global = tl_type_env_lookup(self->env, name);
-
-        // // if symbol has a type annotation, constrain it
-        // if (node->symbol.annotation) {
-        //     process_annotation(self, node, traverse_ctx);
-        //     if (!escape_constraint(self, node->symbol.annotation_type, node->type) &&
-        //         constrain(self, node->symbol.annotation_type, node->type, node))
-        //         return 1;
-
-        //     // substitute in so we can check if the node type is a Type literal
-        //     // tl_polytype_substitute(self->arena, node->type, self->subs);
-        // }
-
-        // if (global) {
-        //     if (!escape_constraint(self, node->type, global) && constrain(self, node->type, global,
-        //     node))
-        //         return 1;
-        // }
-
-        // Add to environment
-
-        // Immediately apply substitutions for symbols.
-        tl_polytype_substitute(self->arena, node->type, self->subs);
-
-        if (!traverse_ctx->is_field_name)
-            if (!global) env_insert_constrain(self, node->symbol.name, node->type, node);
-
-    } break;
 
     case ast_named_function_application: {
 
         if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
             return 1;
 
-        ensure_tv(self, &node->type);
+        // ensure_tv(self, &node->type);
 
         str          name     = ast_node_str(node->named_application.name);
         str          original = ast_node_name_original(node->named_application.name);
@@ -1578,7 +1553,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             {
                 str          inst_str = tl_monotype_to_string(self->transient, inst);
-                tl_polytype *app      = make_arrow(self, traverse_ctx, iter.nodes, null);
+                tl_polytype *app      = make_arrow(self, traverse_ctx, iter.nodes, null, 0);
                 if (!app) return 1;
                 str app_str = tl_polytype_to_string(self->transient, app);
                 dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
@@ -1630,7 +1605,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ast_arguments_iter iter     = ast_node_arguments_iter(node);
             tl_monotype       *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
             str                inst_str = tl_monotype_to_string(self->transient, inst);
-            tl_polytype       *app      = make_arrow(self, traverse_ctx, iter.nodes, node);
+            tl_polytype       *app      = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
             if (!app) return 1;
             str app_str = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
@@ -1652,7 +1627,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // constrain arrow types
         ast_arguments_iter iter = ast_node_arguments_iter(node);
-        tl_polytype       *app  = make_arrow(self, traverse_ctx, iter.nodes, node);
+        tl_polytype       *app  = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
         if (!app) return 1;
 
         {
@@ -1674,8 +1649,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_lambda_function: {
         ensure_tv(self, &node->type);
 
-        tl_polytype *arrow =
-          make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node->lambda_function.body);
+        tl_polytype *arrow = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node),
+                                        node->lambda_function.body, 1);
         if (!arrow) return 1;
         tl_polytype_generalize(arrow, self->env, self->subs);
         if (constrain(self, node->type, arrow, node)) return 1;
@@ -2070,7 +2045,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     } else {
         dbg(self, "specialize_applications_cb: anon");
-        callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node);
+        callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
         concretize_params(self, node, callsite->type);
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda)) return 1;
@@ -2452,7 +2427,7 @@ static void cancel_last_instantiation(tl_infer *self) {
 }
 
 static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_sized args,
-                                           tl_polytype *result_type) {
+                                           tl_polytype *result_type, int is_parameters) {
     if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
         // always use a tuple on the left side of arrow, even if zero elements
         tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
@@ -2471,7 +2446,10 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         tl_monotype_array args_types = {.alloc = self->arena};
         array_reserve(args_types, args.size);
         forall(i, args) {
-            if (resolve_node(self, args.v[i], ctx, npos_function_argument)) return null;
+            // FIXME: param or argument?
+            if (resolve_node(self, args.v[i], ctx,
+                             is_parameters ? npos_formal_parameter : npos_function_argument))
+                return null;
             ensure_tv(self, &args.v[i]->type);
             tl_monotype *mono = args.v[i]->type->type;
 
@@ -2504,14 +2482,15 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
     }
 }
 
-static tl_polytype *make_arrow(tl_infer *self, traverse_ctx *ctx, ast_node_sized args, ast_node *result) {
+static tl_polytype *make_arrow(tl_infer *self, traverse_ctx *ctx, ast_node_sized args, ast_node *result,
+                               int is_parameters) {
     if (result) ensure_tv(self, &result->type);
-    return make_arrow_result_type(self, ctx, args, result ? result->type : null);
+    return make_arrow_result_type(self, ctx, args, result ? result->type : null, is_parameters);
 }
 
 static tl_polytype *make_arrow_with(tl_infer *self, traverse_ctx *ctx, ast_node *node, tl_polytype *type) {
     ast_arguments_iter iter = ast_node_arguments_iter(node); // not used for iter, just for args
-    tl_polytype       *out  = make_arrow(self, ctx, iter.nodes, node);
+    tl_polytype       *out  = make_arrow(self, ctx, iter.nodes, node, 0);
 
     if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
@@ -2526,6 +2505,8 @@ typedef struct {
 
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
+
+    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
 
     str name = ast_node_str(node);
 
@@ -2658,15 +2639,18 @@ static int add_generic(tl_infer *self, ast_node *node) {
             // Note: special case: force main() to have a CInt result type
             if (str_eq(name, S("main"))) {
                 provisional = make_arrow_result_type(self, null, ast_node_sized_from_ast_array(node),
-                                                     tl_type_registry_get(self->registry, S("CInt")));
-            } else {
-                provisional = make_arrow(self, null, ast_node_sized_from_ast_array(node), node->let.body);
+                                                     tl_type_registry_get(self->registry, S("CInt")), 1);
+            }
+
+            else {
+                provisional =
+                  make_arrow(self, null, ast_node_sized_from_ast_array(node), node->let.body, 1);
             }
         }
     } else if (ast_node_is_let_in_lambda(node)) {
         if (!provisional)
             provisional = make_arrow(self, null, ast_node_sized_from_ast_array(infer_target),
-                                     node->let_in.value->lambda_function.body);
+                                     node->let_in.value->lambda_function.body, 1);
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful

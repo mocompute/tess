@@ -1,11 +1,11 @@
 #module main
 
+id (x) { x }
 
 main() {
-  a := 1
-  b := a
-  c := b - 1
-  c
+  val := id("hello")
+  res := id(0)
+  res
 }
 
 // Point(a) : { x: a, y: a }

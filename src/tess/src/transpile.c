@@ -1921,7 +1921,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             if (str_is_empty(name)) name = cons_name;
 
             tl_monotype *found = env_lookup(self, name);
-            if (found) return found->cons_inst->special_name;
+            if (found) {
+                if (str_is_empty(found->cons_inst->special_name)) return found->cons_inst->def->name;
+                else return found->cons_inst->special_name;
+            }
             return name;
         }
     }
