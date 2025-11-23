@@ -912,7 +912,8 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
 
     if (!type) {
         // FIXME: file/line here is not accurate
-        exit_error(node->file, node->line, "unknown function or function type: %s", str_cstr(&name));
+        exit_error(node->file, node->line, "unknown function or function type: %s (%s:%i)", str_cstr(&name),
+                   __FILE__, __LINE__);
     }
 
     // type constructor?

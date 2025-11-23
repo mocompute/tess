@@ -248,10 +248,11 @@ int tl_polytype_is_nullary(tl_polytype *poly) {
 tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                          tl_monotype_sized args) {
 
-    // Note: empty structs have zero arguments but must still be specialized. We can't really
-    // distinguish these from nullary type constructors at the moment.
-    // FIXME: why must they be specialized?
-    // if (!args.size) return null;
+    // FIXME: empty structs might have a problem here
+
+    // Don't specialize nullary type constructors: they should always exist with their canonical generic
+    // name, because they're not generic.
+    if (!args.size) return null;
 
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};

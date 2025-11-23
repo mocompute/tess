@@ -881,111 +881,55 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     return 0;
 }
 
-static tl_monotype *type_literal_instantiate(tl_infer *self, ast_node *node, int level) {
-    // FIXME: why does this exist? Use tl_type_registry_parse_type?
-    (void)level; // FIXME
-
-    return tl_type_registry_parse_type(self->registry, node);
-}
-
-static str          specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_sized args,
-                                                  tl_polytype **out_type);
-
-static tl_monotype *type_literal_specialize(tl_infer *self, ast_node *node) {
-    // specialize a type id, e.g. `Point(Int)`. Contrast to specialize_type_constructor, which specialises
-    // based on a callsite like `Point(1, 2)`. Assuming Point(a) { x : a, y : a }.
-    // return null if node is not a type identifier or other error occurs.
-
-    tl_polytype *out_poly = null;
-
-    if (ast_node_is_symbol(node)) {
-
-        str name = ast_node_str(node);
-        if (str_eq(name, S("Type"))) fatal("runtime error");
-
-        tl_monotype *inst =
-          tl_type_registry_get_cached_specialization(self->registry, name, (tl_monotype_sized){0});
-        if (!inst) return type_literal_instantiate(self, node, 0);
-        return inst;
-    }
-
-    else if (ast_node_is_nfa(node)) {
-
-        // FIXME: portion duplicated with type_literal_instantiate()
-
-        str            name      = ast_node_name_original(node->named_application.name);
-        ast_node_sized node_args = ast_node_sized_from_ast_array(node);
-        // zero argument nfa cannot be a type identifier
-        if (!node_args.size) return null;
-
-        tl_polytype *poly = tl_type_registry_get(self->registry, name);
-        if (!poly) return null;
-        assert(tl_monotype_is_inst(poly->type));
-        if (node_args.size != poly->quantifiers.size) return null;
-
-        tl_monotype_array arg_types = {.alloc = self->transient};
-        forall(i, node_args) {
-            tl_monotype *arg_ty = tl_type_registry_parse_type(self->registry, node_args.v[i]);
-            if (!arg_ty) return null;
-            array_push(arg_types, arg_ty);
-        }
-
-        tl_monotype_sized arg_types_ = array_sized(arg_types);
-        str               name_inst  = specialize_type_identifier_na(self, name, arg_types_, &out_poly);
-
-        // if (!out_poly) return tl_monotype_create_fresh_weak(self->subs); // FIXME
-
-        if (!out_poly) fatal("runtime error");
-        ast_node_type_set(node, out_poly);
-
-        // update callsite
-        ast_node_name_replace(node->named_application.name, name_inst);
-
-        return out_poly->type;
-    }
-
-    return null;
-}
-
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype **out_type);
-static str specialize_type_identifier_na(tl_infer *self, str name, tl_monotype_sized args,
-                                         tl_polytype **out_type) {
-    // FIXME why does this exist? Use tl_type_registry_parse_type
 
-    fatal("oops");
+static int type_literal_specialize(tl_infer *self, ast_node *node) {
+    // specialize a type id, e.g. `Point(Int)`. Contrast to specialize_type_constructor, which specialises
+    // based on a callsite like `Point(1, 2)`. Assuming Point(a) { x : a, y : a }.
+    // return 1 if node is not a type identifier or other error occurs.
 
-    str out = str_empty();
-    if (out_type) *out_type = null;
+    tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
+    if (parsed && tl_monotype_is_type_literal(parsed)) {
+        tl_monotype *target = tl_monotype_literal_target(parsed);
+        assert(tl_monotype_is_inst(target));
+        str               name = target->cons_inst->def->generic_name;
 
-    // number of type arguments must match type definition
-    tl_polytype *poly = tl_type_registry_get(self->registry, name);
-    if (!poly) goto error;
-    assert(tl_monotype_is_inst(poly->type));
-    if (args.size != poly->quantifiers.size) goto error;
+        tl_monotype_sized args = target->cons_inst->args;
+        tl_monotype      *inst = tl_type_registry_get_cached_specialization(self->registry, name, args);
+        str               name_inst    = str_empty();
+        tl_polytype      *special_type = null;
+        if (!inst) {
+            name_inst = specialize_type_constructor(self, name, args, &special_type);
+            // ok to fail: enums, nullary builtins, etc
+            if (str_is_empty(name_inst)) return 0;
+            if (!special_type) return 0;
+        } else {
+            name_inst    = inst->cons_inst->special_name;
+            special_type = tl_polytype_absorb_mono(self->arena, inst);
+        }
 
-    // instantiate the type with the given args
-    tl_monotype *inst = tl_type_registry_instantiate_with(self->registry, name, args);
-    if (!inst) fatal("runtime error");
+        if (ast_node_is_symbol(node)) {
+            ast_node_name_replace(node, name_inst);
+            if (node->type) {
+                if (constrain(self, node->type, special_type, node)) return 1;
+            } else {
+                ast_node_type_set(node, special_type);
+            }
+        } else if (ast_node_is_nfa(node)) {
+            ast_node_name_replace(node->named_application.name, name_inst);
+            if (node->named_application.name->type) {
+                if (constrain(self, node->named_application.name->type, special_type, node)) return 1;
+            } else {
+                ast_node_type_set(node->named_application.name, special_type);
+            }
 
-    tl_polytype *special_type = null;
-    str          name_inst = specialize_type_constructor(self, name, inst->cons_inst->args, &special_type);
+        } else fatal("logic error");
 
-    if (str_is_empty(name_inst)) fatal("runtime error");
-    if (!special_type) fatal("runtime error");
-
-    // set out type to type literal
-    if (out_type) {
-
-        tl_monotype *ty = tl_monotype_create_fresh_literal(self->arena, self->subs);
-        *out_type       = tl_polytype_absorb_mono(self->arena, ty);
+        return 0;
     }
 
-    return name_inst;
-
-error:
-
-    return out;
+    return 1;
 }
 
 static int          add_generic(tl_infer *, ast_node *);
@@ -1512,6 +1456,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
             return 1;
 
+        // traverse_ast is depth-first: arguments are traversed before the nfa node itself.
+        if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
+
         // ensure_tv(self, &node->type);
 
         str          name     = ast_node_str(node->named_application.name);
@@ -1820,7 +1767,7 @@ cancel:
 
 static int specialize_user_type(tl_infer *self, ast_node *node) {
     // divert if type constructor application is actually a type literal
-    if (type_literal_specialize(self, node)) return 0;
+    if (0 == type_literal_specialize(self, node)) return 0;
 
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -1971,8 +1918,8 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     while ((arg = ast_arguments_next(&iter))) {
         if (!ast_node_is_symbol(arg)) goto next;
 
-        assert(i < app_args.size);
-        if (constrain_pm(self, arg->type, app_args.v[i], arg)) return 1;
+        // assert(i < app_args.size);
+        // if (constrain_pm(self, arg->type, app_args.v[i], arg)) return 1;
 
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (specialize_one(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
@@ -2446,7 +2393,6 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         tl_monotype_array args_types = {.alloc = self->arena};
         array_reserve(args_types, args.size);
         forall(i, args) {
-            // FIXME: param or argument?
             if (resolve_node(self, args.v[i], ctx,
                              is_parameters ? npos_formal_parameter : npos_function_argument))
                 return null;
