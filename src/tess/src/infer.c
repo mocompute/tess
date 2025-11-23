@@ -66,18 +66,18 @@ typedef struct {
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
 
 typedef enum {
-    spos_formal_parameter,
-    spos_function_argument,
-    spos_function_application,
-    spos_let_in_lhs,
-    spos_let_in_rhs,
-    spos_assign_lhs,
-    spos_assign_rhs,
-    spos_operand,
-    spos_annotation,
-} symbol_position;
+    npos_formal_parameter,
+    npos_function_argument,
+    npos_function_application,
+    npos_let_in_lhs,
+    npos_let_in_rhs,
+    npos_assign_lhs,
+    npos_assign_rhs,
+    npos_operand,
+    npos_annotation,
+} node_position;
 
-static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, symbol_position pos);
+static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
 
 //
 
@@ -145,6 +145,10 @@ tl_type_registry *tl_infer_get_registry(tl_infer *self) {
     return self->registry;
 }
 
+static void expected_type(tl_infer *self, ast_node const *node) {
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+}
+
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
     str                    name              = node->user_type_def.name->symbol.name;
@@ -189,19 +193,9 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
             if (!field) {
                 field = tl_type_registry_parse_type(self->registry, field_type_node);
-                if (!field) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_expected_type, .node = field_type_node}));
-                    return;
-                }
-
+                if (!field) return expected_type(self, field_type_node);
                 if (tl_monotype_is_type_literal(field)) field = tl_monotype_literal_target(field);
-            }
-
-            if (!field) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_expected_type, .node = field_type_node}));
-                return;
+                assert(field);
             }
 
             array_push(field_types, field);
@@ -228,7 +222,7 @@ static void do_resolve_annotation_symbols(void *ctx_, ast_node *node) {
     resolve_annotation_symbols_ctx *ctx          = ctx_;
     tl_infer                       *self         = ctx->self;
     traverse_ctx                   *traverse_ctx = ctx->traverse_ctx;
-    resolve_node(self, node, traverse_ctx, spos_annotation);
+    resolve_node(self, node, traverse_ctx, npos_annotation);
 }
 
 static void resolve_annotation_symbols(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
@@ -683,7 +677,7 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
     ast_node          *param;
     while ((param = ast_arguments_next(&iter))) {
         assert(ast_node_is_symbol(param));
-        if (resolve_node(self, param, ctx, spos_formal_parameter)) return 1;
+        if (resolve_node(self, param, ctx, npos_formal_parameter)) return 1;
         ensure_tv(self, &param->type);
         if (cb(self, ctx, param)) return 1;
     }
@@ -716,7 +710,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         assert(ast_node_is_symbol(node->let_in.name));
 
         // insert the name in lexical_names
-        if (resolve_node(self, node->let_in.name, ctx, spos_let_in_lhs)) return 1;
+        if (resolve_node(self, node->let_in.name, ctx, npos_let_in_lhs)) return 1;
 
         // process node first, because there may be side effects required before traversing body.
         if (cb(self, ctx, node)) return 1;
@@ -1020,10 +1014,10 @@ static int expected_symbol(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
-static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, symbol_position pos) {
+static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_position pos) {
 
     switch (pos) {
-    case spos_formal_parameter:
+    case npos_formal_parameter:
         if (ast_node_is_symbol(node)) {
             // as a formal parameter, a symbol with a : Type annotation creates a type argument
             str name = ast_node_str(node);
@@ -1047,7 +1041,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, symbo
         } else return expected_symbol(self, node);
         break;
 
-    case spos_function_argument:
+    case npos_function_argument:
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             // A type literal in argument position must be wrapped in literal
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node);
@@ -1057,7 +1051,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, symbo
         }
         break;
 
-    case spos_function_application:
+    case npos_function_application:
         if (ast_node_is_symbol(node)) {
             // A type literal in function name position must be a type constructor
             str          name = ast_node_str(node);
@@ -1073,24 +1067,24 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, symbo
         } else return expected_symbol(self, node);
         break;
 
-    case spos_let_in_lhs:
-    case spos_let_in_rhs:
-    case spos_assign_lhs:
-    case spos_assign_rhs:
-    case spos_operand:
+    case npos_let_in_lhs:
+        // The lhs of a let-in can be treated the same as a formal parameter.
+        return resolve_node(self, node, ctx, npos_formal_parameter);
+        break;
+
+    case npos_let_in_rhs:
+    case npos_assign_lhs:
+    case npos_assign_rhs:
+    case npos_operand:
         // A type literal in these positions is an error
         if (node->type && tl_monotype_is_type_literal(node->type->type)) {
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
             return 1;
         }
-
-        if (ast_node_is_symbol(node) && spos_let_in_lhs == pos) {
-            str_hset_insert(&ctx->lexical_names, node->symbol.name);
-        }
         break;
 
-    case spos_annotation: {
+    case npos_annotation: {
         tl_monotype *mono = null;
         if (ast_node_is_symbol(node)) {
             // Annotation symbol could be a type argument
@@ -1110,10 +1104,15 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, symbo
     } break;
     }
 
-    // Add to environment if it is a symbol with a type
-    if (node->type && ast_node_is_symbol(node)) {
+    // If it's a symbol, if it has a type, add it to the environment. If it doesn't have a type, look it up
+    // from the environment.
+    if (ast_node_is_symbol(node)) {
         str name = ast_node_str(node);
-        tl_type_env_insert(self->env, name, node->type);
+        if (node->type) {
+            tl_type_env_insert(self->env, name, node->type);
+        } else {
+            node->type = tl_type_env_lookup(self->env, name);
+        }
     }
 
     return 0;
@@ -1194,7 +1193,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_let: {
         ast_node_sized params = ast_node_sized_from_ast_array(node);
         forall(i, params) {
-            if (resolve_node(self, params.v[i], traverse_ctx, spos_formal_parameter)) return 1;
+            if (resolve_node(self, params.v[i], traverse_ctx, npos_formal_parameter)) return 1;
         }
     } break;
 
@@ -1209,6 +1208,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_case: {
+        if (resolve_node(self, node->case_.expression, traverse_ctx, npos_operand)) return 1;
+        if (resolve_node(self, node->case_.binary_predicate, traverse_ctx, npos_operand)) return 1;
+
         ensure_tv(self, &node->type);
         ensure_tv(self, &node->case_.expression->type);
         ensure_tv(self, &node->case_.binary_predicate->type);
@@ -1221,6 +1223,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // expression and all conditions must be same type so they can be compared for equality
         forall(i, node->case_.conditions) {
+            if (resolve_node(self, node->case_.conditions.v[i], traverse_ctx, npos_operand)) return 1;
             ensure_tv(self, &node->case_.conditions.v[i]->type);
             if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
         }
@@ -1236,12 +1239,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain_pm(self, node->type, nil, node)) return 1;
 
             // with a single arm, this is equivalent to a single-arm if statement, so its type can be any.
+            if (resolve_node(self, node->case_.arms.v[0], traverse_ctx, npos_operand)) return 1;
             if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node)) return 1;
             break;
 
         default: {
+            if (resolve_node(self, node->case_.arms.v[0], traverse_ctx, npos_operand)) return 1;
             tl_polytype *arm_type = node->case_.arms.v[0]->type;
+            if (constrain(self, node->type, arm_type, node->case_.arms.v[0])) return 1;
+
             forall(i, node->case_.arms) {
+                if (resolve_node(self, node->case_.arms.v[i], traverse_ctx, npos_operand)) return 1;
                 ensure_tv(self, &node->case_.arms.v[i]->type);
                 if (constrain(self, node->case_.arms.v[i]->type, arm_type, node)) return 1;
             }
@@ -1262,14 +1270,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_return: {
+        if (resolve_node(self, node->return_.value, traverse_ctx, npos_operand)) return 1;
         ensure_tv(self, &node->type);
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
     } break;
 
     case ast_binary_op: {
         ast_node *left = node->binary_op.left, *right = node->binary_op.right;
-        if (resolve_node(self, left, traverse_ctx, spos_operand)) return 1;
-        if (resolve_node(self, right, traverse_ctx, spos_operand)) return 1;
+        if (resolve_node(self, left, traverse_ctx, npos_operand)) return 1;
+        if (resolve_node(self, right, traverse_ctx, npos_operand)) return 1;
 
         ensure_tv(self, &node->type);
         ensure_tv(self, &left->type);
@@ -1403,7 +1412,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_unary_op: {
-        if (resolve_node(self, node->unary_op.operand, traverse_ctx, spos_operand)) return 1;
+        if (resolve_node(self, node->unary_op.operand, traverse_ctx, npos_operand)) return 1;
         ast_node *operand = node->unary_op.operand;
         ensure_tv(self, &operand->type);
         ensure_tv(self, &node->type);
@@ -1444,8 +1453,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_let_in: {
-        if (resolve_node(self, node->let_in.name, traverse_ctx, spos_let_in_lhs)) return 1;
-        if (resolve_node(self, node->let_in.value, traverse_ctx, spos_let_in_rhs)) return 1;
+        if (resolve_node(self, node->let_in.name, traverse_ctx, npos_let_in_lhs)) return 1;
+        if (resolve_node(self, node->let_in.value, traverse_ctx, npos_let_in_rhs)) return 1;
 
         ensure_tv(self, &node->type);
         ensure_tv(self, &node->let_in.name->type);
@@ -1483,11 +1492,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_polytype *value_type = node->let_in.value->type;
 
             // process annotation here because we haven't traversed to the name ast_symbol case yet
-            if (ast_node_is_symbol(node->let_in.name)) {
-                ast_node *name = node->let_in.name;
-                if (name->symbol.annotation) process_annotation(self, name, traverse_ctx);
-                if (name->symbol.annotation_type) name_type = name->symbol.annotation_type;
-            }
+            // if (ast_node_is_symbol(node->let_in.name)) {
+            //     ast_node *name = node->let_in.name;
+            //     if (name->symbol.annotation) process_annotation(self, name, traverse_ctx);
+            //     if (name->symbol.annotation_type) name_type = name->symbol.annotation_type;
+            // }
 
             // Note: name_type and node->let_in.name->type have possibly diverged, so we should constrain
             // both.
@@ -1510,7 +1519,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_symbol: {
 
         // FIXME skip block
-        break;
 
         ensure_tv(self, &node->type);
 
@@ -1549,7 +1557,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_named_function_application: {
 
-        if (resolve_node(self, node->named_application.name, traverse_ctx, spos_function_application))
+        if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
             return 1;
 
         ensure_tv(self, &node->type);
@@ -1578,7 +1586,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ast_arguments_iter iter = ast_node_arguments_iter(node);
             ast_node          *arg;
             while ((arg = ast_arguments_next(&iter))) {
-                if (resolve_node(self, arg, traverse_ctx, spos_function_argument)) return 1;
+                if (resolve_node(self, arg, traverse_ctx, npos_function_argument)) return 1;
                 ensure_tv(self, &arg->type);
                 assert(!tl_polytype_is_scheme(arg->type));
                 array_push(args, arg->type->type);
@@ -1744,8 +1752,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_assignment:
-        if (resolve_node(self, node->assignment.name, traverse_ctx, spos_assign_lhs)) return 1;
-        if (resolve_node(self, node->assignment.value, traverse_ctx, spos_assign_rhs)) return 1;
+        if (resolve_node(self, node->assignment.name, traverse_ctx, npos_assign_lhs)) return 1;
+        if (resolve_node(self, node->assignment.value, traverse_ctx, npos_assign_rhs)) return 1;
 
         ensure_tv(self, &node->type);
         ensure_tv(self, &node->assignment.name->type);
@@ -2486,7 +2494,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         tl_monotype_array args_types = {.alloc = self->arena};
         array_reserve(args_types, args.size);
         forall(i, args) {
-            if (resolve_node(self, args.v[i], ctx, spos_function_argument)) return null;
+            if (resolve_node(self, args.v[i], ctx, npos_function_argument)) return null;
             ensure_tv(self, &args.v[i]->type);
             tl_monotype *mono = args.v[i]->type->type;
 
