@@ -166,63 +166,13 @@ static void expected_type(tl_infer *self, ast_node const *node) {
 
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
-    str                    name              = node->user_type_def.name->symbol.name;
-    u32                    n_type_arguments  = node->user_type_def.n_type_arguments;
-    u32                    n_fields          = node->user_type_def.n_fields;
-    ast_node             **type_arguments    = node->user_type_def.type_arguments;
-    ast_node             **fields            = node->user_type_def.field_names;
 
-    hashmap               *type_argument_map = map_new(self->transient, str, tl_monotype *, 8);
-    tl_type_variable_array type_argument_tvs = {.alloc = self->arena};
-    for (u32 i = 0; i < n_type_arguments; ++i) {
-        ast_node const *ta = type_arguments[i];
-        assert(ast_node_is_symbol(ta));
-        str                ta_name = ast_node_str(ta);
-        tl_type_variable   fresh   = tl_type_subs_fresh(self->subs);
-        tl_monotype const *mono    = tl_monotype_create_tv(self->arena, fresh);
-        str_map_set_ptr(&type_argument_map, ta_name, mono);
+    tl_monotype *mono = tl_type_registry_parse_type(self->registry, node);
+    if (!mono) return expected_type(self, node);
 
-        array_push(type_argument_tvs, fresh);
-    }
-
-    str_array field_names = {.alloc = self->arena};
-    array_reserve(field_names, node->user_type_def.n_fields);
-
-    ast_node        **annotations = node->user_type_def.field_annotations;
-    tl_monotype_array field_types = {.alloc = self->arena};
-    for (u32 i = 0; i < n_fields; ++i) {
-        // field name
-        assert(ast_node_is_symbol(fields[i]));
-        array_push(field_names, fields[i]->symbol.name);
-
-        // Note: enum types have fields with no type information
-
-        // field type, could be type argument, or type constructor, or null
-        if (annotations) {
-            tl_monotype    *field           = null;
-            ast_node const *field_type_node = annotations[i];
-            if (ast_node_is_symbol(field_type_node)) {
-                tl_monotype *found = str_map_get_ptr(type_argument_map, ast_node_str(field_type_node));
-                if (found) field = found;
-            }
-
-            if (!field) {
-                field = tl_type_registry_parse_type(self->registry, field_type_node);
-                if (!field) return expected_type(self, field_type_node);
-                if (tl_monotype_is_type_literal(field)) field = tl_monotype_literal_target(field);
-                assert(field);
-            }
-
-            array_push(field_types, field);
-        }
-    }
-
-    str_sized              field_names_       = array_sized(field_names);
-    tl_monotype_sized      field_types_       = array_sized(field_types);
-    tl_type_variable_sized type_argument_tvs_ = array_sized(type_argument_tvs);
-
-    tl_polytype           *poly =
-      tl_type_constructor_def_create(self->registry, name, type_argument_tvs_, field_names_, field_types_);
+    str name = node->user_type_def.name->symbol.name;
+    tl_type_registry_insert_mono(self->registry, name, mono);
+    tl_polytype *poly = tl_type_registry_get(self->registry, name);
 
     env_insert_constrain(self, name, poly, node);
     ast_node_type_set(node, poly);

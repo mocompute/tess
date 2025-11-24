@@ -1,5 +1,4 @@
 #module main
-#import <stdlib.tl>
 
 Point(a) : { x : a, y : a, next: Ptr(Point(a)) }
 

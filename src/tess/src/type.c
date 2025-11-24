@@ -80,9 +80,9 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     return self;
 }
 
-tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name, str generic_name,
-                                                tl_type_variable_sized type_variables,
-                                                str_sized field_names, tl_monotype_sized field_types) {
+static tl_polytype *tl_type_constructor_create_ext(tl_type_registry *self, str name, str generic_name,
+                                                   tl_type_variable_sized type_variables,
+                                                   str_sized field_names, tl_monotype_sized field_types) {
 
     tl_type_constructor_def *def   = make_tc_def(self, name);
     def->field_names               = field_names;
@@ -91,7 +91,33 @@ tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name
     tl_type_constructor_inst *inst = make_tc_inst_args(self, def, field_types);
     tl_polytype              *poly = make_generic_inst(self, inst, type_variables);
 
-    str_map_set_ptr(&self->definitions, def->name, poly);
+    return poly;
+}
+
+static tl_polytype *tl_type_constructor_create(tl_type_registry *self, str name,
+                                               tl_type_variable_sized type_variables, str_sized field_names,
+                                               tl_monotype_sized field_types) {
+
+    return tl_type_constructor_create_ext(self, name, name, type_variables, field_names, field_types);
+}
+
+void tl_type_registry_insert(tl_type_registry *self, str name, tl_polytype *poly) {
+    str_map_set_ptr(&self->definitions, name, poly);
+}
+
+void tl_type_registry_insert_mono(tl_type_registry *self, str name, tl_monotype *mono) {
+    tl_polytype *poly = tl_monotype_generalize(self->alloc, mono);
+    str_map_set_ptr(&self->definitions, name, poly);
+}
+
+tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name, str generic_name,
+                                                tl_type_variable_sized type_variables,
+                                                str_sized field_names, tl_monotype_sized field_types) {
+
+    tl_polytype *poly =
+      tl_type_constructor_create_ext(self, name, generic_name, type_variables, field_names, field_types);
+
+    tl_type_registry_insert(self, name, poly);
     return poly;
 }
 
@@ -341,6 +367,9 @@ typedef struct {
     // Type arguments that exist in the outer environment during parsing
     hashmap *lexical_monotypes; // str => tl_monotype_pair
 
+    // Nodes which are deferred in first pass of parse.
+    hashmap *deferred_parse; // str => ast_node*
+
     // When parsing an annotation, this is the node which is being annotated.
     ast_node const *annotation_target;
 } tl_type_registry_parse_type_ctx;
@@ -442,9 +471,29 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
     else if (ast_node_is_nfa(node)) {
         // a type constructor with args: Array(Float), Map(String, String), etc.
-        // Note: `Ptr(T)` is sugar for `Ptr(T: Type, T)`
+        // Note: `Ptr(T)` (if T is not a registered type name) is sugar for `Ptr(T: Type, T)`
 
-        str          name             = ast_node_str(node->named_application.name);
+        str name = ast_node_str(node->named_application.name);
+
+        // Recursive types: check for indirection through Ptr and defer it
+        if (str_eq(name, S("Ptr"))) {
+            assert(1 == node->named_application.n_arguments);
+            ast_node const *target      = node->named_application.arguments[0];
+
+            ast_node const *target_name = null;
+            if (ast_node_is_symbol(target)) target_name = target;
+            else if (ast_node_is_nfa(target)) target_name = target->named_application.name;
+            else fatal("logic error");
+
+            str target_name_str = ast_node_str(target_name);
+            if (!tl_type_registry_get(self, target_name_str)) {
+                // target cannot be parsed yet: create a placeholder type for it
+                result = tl_monotype_create_any(self->alloc);
+                str_map_set_ptr(&ctx->deferred_parse, target_name_str, target);
+                return result;
+            }
+        }
+
         tl_polytype *type_constructor = tl_type_registry_get(self, name);
         if (!type_constructor) return null;
 
@@ -519,38 +568,132 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result             = arrow;
     }
 
+    else if (ast_node_is_utd(node)) {
+        // FIXME: in progress, partial support for struct types
+        str        name             = node->user_type_def.name->symbol.name;
+        u32        n_type_arguments = node->user_type_def.n_type_arguments;
+        u32        n_fields         = node->user_type_def.n_fields;
+        ast_node **type_arguments   = node->user_type_def.type_arguments;
+        ast_node **fields           = node->user_type_def.field_names;
+        ast_node **annotations      = node->user_type_def.field_annotations;
+
+        // Add type arguments to parse context, and save for the type constructor.
+        tl_type_variable_array type_argument_tvs = {.alloc = self->alloc};
+
+        for (u32 i = 0, n = n_type_arguments; i < n; ++i) {
+            assert(ast_node_is_symbol(type_arguments[i]));
+            tl_monotype *mono = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+            str_map_set_ptr(&ctx->type_arguments, ast_node_str(type_arguments[i]), mono);
+
+            array_push(type_argument_tvs, mono->var);
+        }
+
+        str_array         field_names = {.alloc = self->alloc};
+        tl_monotype_array field_types = {.alloc = self->alloc};
+        array_reserve(field_names, n_fields);
+        array_reserve(field_types, n_fields);
+        for (u32 i = 0; i < n_fields; ++i) {
+            assert(ast_node_is_symbol(fields[i]));
+            array_push(field_names, fields[i]->symbol.name);
+
+            // Note: enum types have no annotations
+            if (annotations) {
+                tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, annotations[i]);
+                if (!mono) return null; // TODO: better error
+
+                // unwrap
+                if (mono && tl_monotype_is_type_literal(mono)) {
+                    mono = tl_monotype_literal_target(mono);
+                }
+
+                array_push(field_types, mono);
+            }
+        }
+
+        tl_polytype *poly = tl_type_constructor_create(
+          self, name, (tl_type_variable_sized)array_sized(type_argument_tvs),
+          (str_sized)array_sized(field_names), (tl_monotype_sized)array_sized(field_types));
+
+        if (map_size(ctx->deferred_parse)) {
+            // Do second pass: add poly to type registry temporarily
+            str_map_set_ptr(&self->definitions, name, poly);
+
+            for (u32 i = 0; i < n_fields; ++i) {
+                ast_node const *node = fields[i];
+                if (!ast_node_is_nfa(node)) continue;
+                str name = ast_node_str(node->named_application.name);
+
+                // Recursive types: check for indirection through Ptr and defer it
+                if (str_eq(name, S("Ptr"))) {
+                    assert(1 == node->named_application.n_arguments);
+                    ast_node const *target      = node->named_application.arguments[0];
+
+                    ast_node const *target_name = null;
+                    if (ast_node_is_symbol(target)) target_name = target;
+                    else if (ast_node_is_nfa(target)) target_name = target->named_application.name;
+                    else fatal("logic error");
+
+                    str target_name_str = ast_node_str(target_name);
+                    if (!tl_type_registry_get(self, target_name_str)) {
+                        fatal("runtime error"); // it should be in the registry now
+
+                        str_map_erase(ctx->deferred_parse, target_name_str);
+
+                        tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, target);
+                        if (!mono) fatal("runtime error");
+
+                        // unwrap
+                        if (mono && tl_monotype_is_type_literal(mono)) {
+                            mono = tl_monotype_literal_target(mono);
+                        }
+                        assert(i < field_types.size);
+                        field_types.v[i] = mono;
+                    }
+                }
+            }
+
+            // remove from type registry
+            str_map_erase(self->definitions, name);
+
+            // create new polytype with new field_types
+            poly = tl_type_constructor_create(
+              self, name, (tl_type_variable_sized)array_sized(type_argument_tvs),
+              (str_sized)array_sized(field_names), (tl_monotype_sized)array_sized(field_types));
+        }
+
+        result = poly->type;
+    }
+
     return result;
+}
+
+static void init_parse_ctx(allocator *alloc, tl_type_registry_parse_type_ctx *ctx) {
+    *ctx = (tl_type_registry_parse_type_ctx){
+      .type_arguments = map_new(alloc, str, tl_monotype *, 16),
+      .deferred_parse = map_new(alloc, str, ast_node *, 8),
+    };
 }
 
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
-    tl_type_registry_parse_type_ctx ctx    = {.type_arguments =
-                                                map_new(self->transient, str, tl_monotype *, 16)};
-    tl_monotype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
+    tl_type_registry_parse_type_ctx ctx;
+    init_parse_ctx(self->transient, &ctx);
+
+    tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
 
     map_destroy(&ctx.type_arguments);
     return result;
 }
-
-// tl_monotype *tl_type_registry_parse_type_lexical(tl_type_registry *self, ast_node const *node,
-//                                                  hashmap *lexical_monotypes) {
-//     tl_type_registry_parse_type_ctx ctx = {
-//       .type_arguments    = map_new(self->transient, str, tl_monotype *, 16),
-//       .lexical_monotypes = lexical_monotypes,
-//     };
-//     tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
-//     map_destroy(&ctx.type_arguments);
-//     return result;
-// }
 
 tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
                                                  allocator                       *alloc,
                                                  tl_type_registry_parse_type_ctx *out_ctx) {
     // alloc is used to allocate the parse context's buffers/maps, and the struct is copied into out_ctx.
     assert(out_ctx);
-    tl_type_registry_parse_type_ctx ctx    = {.type_arguments = map_new(alloc, str, tl_monotype *, 16)};
-    tl_monotype                    *result = tl_type_registry_parse_type_(self, &ctx, node);
-    *out_ctx                               = ctx;
+    tl_type_registry_parse_type_ctx ctx;
+    init_parse_ctx(alloc, &ctx);
+    tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
+    *out_ctx            = ctx;
 
     return result;
 }

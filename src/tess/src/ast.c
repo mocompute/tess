@@ -1300,17 +1300,30 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_lambda_function:
         //
+        for (u32 i = 0, n = self->lambda_function.n_parameters; i < n; ++i) {
+            combine_node(self->lambda_function.parameters[i]);
+        }
         combine_node(self->lambda_function.body);
         break;
 
-    case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
+    case ast_lambda_function_application:
+        combine_node(self->lambda_application.lambda);
+        for (u32 i = 0, n = self->lambda_application.n_arguments; i < n; ++i) {
+            combine_node(self->lambda_application.arguments[i]);
+        }
+        break;
 
     case ast_let:
         combine_node(self->let.name);
         combine_node(self->let.body);
         break;
 
-    case ast_named_function_application: combine_node(self->named_application.name); break;
+    case ast_named_function_application:
+        combine_node(self->named_application.name);
+        for (u32 i = 0, n = self->named_application.n_arguments; i < n; ++i) {
+            combine_node(self->named_application.arguments[i]);
+        }
+        break;
 
     case ast_body:
         //
