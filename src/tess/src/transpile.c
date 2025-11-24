@@ -722,9 +722,15 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
         ast_node const *arg = node->named_application.arguments[i];
         if (!ast_node_is_assignment(arg)) fatal("expected named assignment node");
 
-        // FIXME: no syntax check to see if the field name in the assignment is valid
+        // Find field index matching name
+        str field_name = ast_node_str(arg->assignment.name);
+        i32 found      = tl_monotype_type_constructor_field_index(type, field_name);
+        if (found == -1) {
+            exit_error(node->file, node->line, "field '%s' not found in type '%s'", str_cstr(&field_name),
+                       str_cstr(&name));
+        }
 
-        str arg_value = generate_expr(self, type->cons_inst->args.v[i], arg->assignment.value, ctx);
+        str arg_value = generate_expr(self, type->cons_inst->args.v[found], arg->assignment.value, ctx);
 
         cat(self, res);
         cat_dot(self);

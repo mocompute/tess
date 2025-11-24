@@ -1091,6 +1091,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     return 0;
 }
 
+int        is_union_struct(tl_infer *self, str name);
+
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
 
@@ -1520,13 +1522,16 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     str_cstr(&inst_str), str_cstr(&app_str));
             }
 
-            iter = ast_node_arguments_iter(node);
-            if (iter.nodes.size != inst->cons_inst->args.size) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
-                return 1;
+            if (!is_union_struct(self, name)) {
+                iter = ast_node_arguments_iter(node);
+                if (iter.nodes.size != inst->cons_inst->args.size) {
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+                    return 1;
+                }
             }
 
             u32 i = 0;
+            iter  = ast_node_arguments_iter(node);
             while ((arg = ast_arguments_next(&iter))) {
                 if (i >= inst->cons_inst->args.size) fatal("runtime error");
 
@@ -1778,6 +1783,12 @@ cancel:
     return out_str;
 }
 
+int is_union_struct(tl_infer *self, str name) {
+    ast_node *utd = toplevel_get(self, name);
+    if (utd && ast_node_is_union_def(utd)) return 1;
+    return 0;
+}
+
 static int specialize_user_type(tl_infer *self, ast_node *node) {
     // divert if type constructor application is actually a type literal
     if (0 == type_literal_specialize(self, node)) return 0;
@@ -1787,11 +1798,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // Check if type being constructed is a C union. If so, do not specialize. We don't support polymorphic
     // unions.
     str name = node->named_application.name->symbol.name;
-
-    {
-        ast_node *utd = toplevel_get(self, name);
-        if (utd && ast_node_is_union_def(utd)) return 0;
-    }
+    if (is_union_struct(self, name)) return 0;
 
     tl_monotype_array  arr  = {.alloc = self->transient};
     ast_arguments_iter iter = ast_node_arguments_iter(node);
