@@ -416,23 +416,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         // or else is it a type argument previously defined?
         result = str_map_get_ptr(ctx->type_arguments, name);
-        // if (result) {
-        //     result = tl_monotype_create_fresh_tv(self->alloc, self->subs);
-        //     // store it for subsequent references
-        //     str_map_set_ptr(&ctx->type_arguments, name, result);
-        // }
-
-        // or else is it a type in the lexical environment?
-        // if (!result && ctx->lexical_monotypes) {
-        //     tl_monotype_pair *pair = str_map_get(ctx->lexical_monotypes, name);
-        //     if (pair && pair->left) {
-        //         // type parsing is by default in the 'annotation' context, unless parsing arguments to
-        //         type
-        //         // constructors in annotations, e.g. `Ptr(T)`
-        //         result = pair->left;
-        //     }
-        // }
-
         if (result) return result;
 
         // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
