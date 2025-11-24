@@ -65,6 +65,7 @@ typedef enum {
     npos_assign_rhs,
     npos_operand,
     npos_annotation,
+    npos_field_name,
 } node_position;
 
 typedef struct {
@@ -155,6 +156,10 @@ static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast
     tl_polytype *exist = tl_type_env_lookup(self->env, name);
     if (exist) {
         if (constrain(self, exist, type, node)) return 1;
+    }
+    dbg(self, "env_insert_constrain: '%s'", str_cstr(&name));
+    if (str_eq(name, S("v"))) {
+        ;
     }
     tl_type_env_insert(self->env, name, type);
     return 0;
@@ -888,10 +893,10 @@ static tl_monotype *ctx_get_type_argument(traverse_ctx *ctx, str name) {
     if (!ctx) return null;
     return str_map_get_ptr(ctx->type_arguments, name);
 }
-static void ctx_set_type_argument(traverse_ctx *ctx, str name, tl_monotype *mono) {
-    if (!ctx) return;
-    str_map_set_ptr(&ctx->type_arguments, name, mono);
-}
+// static void ctx_set_type_argument(traverse_ctx *ctx, str name, tl_monotype *mono) {
+//     if (!ctx) return;
+//     str_map_set_ptr(&ctx->type_arguments, name, mono);
+// }
 
 static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
     if (node->type) {
@@ -907,6 +912,31 @@ static int expected_symbol(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
+static void update_env(tl_infer *self, ast_node *node) {
+    // If it's a symbol, if it has a type, add it to the environment. If it doesn't have a type, look it up
+    // from the environment. In all cases, ensure it has a type, possibly a fresh tv.
+
+    if (ast_node_is_symbol(node)) {
+        str name = ast_node_str(node);
+
+        if (node->type) {
+            env_insert_constrain(self, name, node->type, node);
+        } else {
+            ast_node_type_set(node, tl_type_env_lookup(self->env, name));
+        }
+    }
+
+    ensure_tv(self, &node->type);
+}
+
+static int reject_type_literal(tl_infer *self, ast_node const *node) {
+    if (node->type && tl_monotype_is_type_literal(node->type->type)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
+        return 1;
+    }
+    return 0;
+}
+
 static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_position pos) {
 
     // ctx may be null if this processing is initiated from load_toplevel()
@@ -916,11 +946,23 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_formal_parameter:
         if (ast_node_is_symbol(node)) {
             // as a formal parameter, a symbol with a : Type annotation creates a type argument
-            str name = ast_node_str(node);
-            if (node->symbol.annotation && !node->symbol.annotation_type) {
-                // resolve annotation in the correct context and copy its resolved type to annotation_type
-                if (resolve_node(self, node->symbol.annotation, ctx, npos_annotation)) return 1;
-                node->symbol.annotation_type = node->symbol.annotation->type;
+            // str name = ast_node_str(node);
+            if (node->symbol.annotation) {
+
+                // parse annotation type: parse_type needs to start at the symbol node being annotated so it
+                // knows how to managed its type arguments. Then we merge the parse context's type arguments
+                // into our own.
+
+                tl_type_registry_parse_type_ctx parse_ctx;
+                tl_monotype                    *mono = tl_type_registry_parse_type_out_ctx(
+                  self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+                if (!mono) {
+                    expected_type(self, node);
+                    return 1;
+                }
+                if (ctx) map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+
+                node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
             }
 
             if (node->symbol.annotation_type) {
@@ -930,20 +972,12 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             }
 
             if (ctx) {
-                // During inference, also modify context to add type arguments and lexical names.
-                tl_polytype *poly = node->symbol.annotation_type;
-                if (poly && tl_monotype_is_tv(poly->type)) {
-                    // It is a Type, so add the tv to type arguments. No instantiation needed because
-                    // parse_type does not generalize.
-                    str poly_str = tl_polytype_to_string(self->transient, poly);
-                    dbg(self, "resolve_symbol: '%s' is a type argument of type '%s'", str_cstr(&name),
-                        str_cstr(&poly_str));
-                    ctx_set_type_argument(ctx, name, poly->type);
-                }
-
+                // During inference, also add lexical names.
                 str_hset_insert(&ctx->lexical_names, node->symbol.name);
             }
         } else return expected_symbol(self, node);
+
+        update_env(self, node);
         break;
 
     case npos_function_argument:
@@ -956,6 +990,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 ensure_tv(self, &node->type);
             }
         }
+        update_env(self, node);
         break;
 
     case npos_function_application:
@@ -972,23 +1007,28 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 node->type = tl_polytype_absorb_mono(self->arena, mono);
             }
         }
+        update_env(self, node);
         break;
 
     case npos_let_in_lhs:
         // The lhs of a let-in can be treated the same as a formal parameter.
-        return resolve_node(self, node, ctx, npos_formal_parameter);
+        if (resolve_node(self, node, ctx, npos_formal_parameter)) return 1;
+        break;
+
+    case npos_assign_lhs:
+    case npos_field_name:
+        if (reject_type_literal(self, node)) return 1;
+        // Note: do not add symbol node to env from this position: field names, or reassignments.
+        break;
+
+    case npos_operand:
+        if (reject_type_literal(self, node)) return 1;
+        update_env(self, node);
         break;
 
     case npos_let_in_rhs:
-    case npos_assign_lhs:
     case npos_assign_rhs:
-    case npos_operand:
-        // A type literal in these positions is an error
-        if (node->type && tl_monotype_is_type_literal(node->type->type)) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
-            return 1;
-        }
+        if (reject_type_literal(self, node)) return 1;
 
         // FIXME: needed?
         // if (ast_node_is_symbol(node)) {
@@ -998,7 +1038,9 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         //     if (constrain_or_set(self, node, poly)) return 1;
         // }
 
+        // Note: ensure a fresh type for any node in rhs position, because it could be a generic name.
         ensure_tv(self, &node->type);
+        update_env(self, node);
         break;
 
     case npos_annotation: {
@@ -1023,21 +1065,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             node->type = tl_polytype_absorb_mono(self->arena, mono);
         }
 
+        update_env(self, node);
     } break;
     }
 
-    // If it's a symbol, if it has a type, add it to the environment. If it doesn't have a type, look it up
-    // from the environment.
-    if (ast_node_is_symbol(node)) {
-        str name = ast_node_str(node);
-        if (node->type) {
-            env_insert_constrain(self, name, node->type, node);
-        } else {
-            ast_node_type_set(node, tl_type_env_lookup(self->env, name));
-        }
-    }
-
-    assert(node->type);
+    ensure_tv(self, &node->type);
     return 0;
 }
 
@@ -1175,15 +1207,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_binary_op: {
-        ast_node *left = node->binary_op.left, *right = node->binary_op.right;
+        ast_node   *left = node->binary_op.left, *right = node->binary_op.right;
+        char const *op = str_cstr(&node->binary_op.op->symbol.name);
         if (resolve_node(self, left, traverse_ctx, npos_operand)) return 1;
-        if (resolve_node(self, right, traverse_ctx, npos_operand)) return 1;
+        if (resolve_node(self, right, traverse_ctx,
+                         is_struct_access_operator(op) ? npos_field_name : npos_operand))
+            return 1;
 
         ensure_tv(self, &node->type);
         ensure_tv(self, &left->type);
         ensure_tv(self, &right->type);
 
-        char const *op = str_cstr(&node->binary_op.op->symbol.name);
         if (is_arithmetic_operator(op)) {
             // operands and result must all be same type
             if (constrain(self, node->type, left->type, node)) return 1;
@@ -1260,7 +1294,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     tl_type_constructor_inst *inst       = struct_type->cons_inst;
                     i32 found = tl_monotype_type_constructor_field_index(struct_type, field_name);
 
-                    dbg(self, "searched field name %s", str_cstr(&field_name));
+                    dbg(self, "searched struct '%s' field name %s", str_cstr(&inst->def->name),
+                        str_cstr(&field_name));
 
                     if (found != -1) {
                         if (!inst->args.size) {
@@ -2093,7 +2128,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
         } else {
-            // a free variable
+            // a free variable, a field name, a toplevel function name, etc
         }
 
         // ensure renamed symbols do not carry a type

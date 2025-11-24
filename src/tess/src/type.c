@@ -360,20 +360,6 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
 
 // -- parse_type
 
-typedef struct {
-    // Type arguments discovered during recursive parsing
-    hashmap *type_arguments; // str => tl_monotype*
-
-    // Type arguments that exist in the outer environment during parsing
-    hashmap *lexical_monotypes; // str => tl_monotype_pair
-
-    // Nodes which are deferred in first pass of parse.
-    hashmap *deferred_parse; // str => ast_node*
-
-    // When parsing an annotation, this is the node which is being annotated.
-    ast_node const *annotation_target;
-} tl_type_registry_parse_type_ctx;
-
 static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
 
@@ -486,7 +472,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             else fatal("logic error");
 
             str target_name_str = ast_node_str(target_name);
-            if (!tl_type_registry_get(self, target_name_str)) {
+
+            // If target name is a type argument, we are ok to proceed. If the type exists in the registry,
+            // we are ok to proceed.
+            if (!str_map_get_ptr(ctx->type_arguments, target_name_str) &&
+                !tl_type_registry_get(self, target_name_str)) {
                 // target cannot be parsed yet: create a placeholder type for it
                 result = tl_monotype_create_any(self->alloc);
                 str_map_set_ptr(&ctx->deferred_parse, target_name_str, target);
@@ -667,9 +657,10 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
     return result;
 }
 
-static void init_parse_ctx(allocator *alloc, tl_type_registry_parse_type_ctx *ctx) {
+static void init_parse_ctx(allocator *alloc, tl_type_registry_parse_type_ctx *ctx,
+                           hashmap *type_arguments) {
     *ctx = (tl_type_registry_parse_type_ctx){
-      .type_arguments = map_new(alloc, str, tl_monotype *, 16),
+      .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 16),
       .deferred_parse = map_new(alloc, str, ast_node *, 8),
     };
 }
@@ -677,7 +668,7 @@ static void init_parse_ctx(allocator *alloc, tl_type_registry_parse_type_ctx *ct
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const *node) {
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
     tl_type_registry_parse_type_ctx ctx;
-    init_parse_ctx(self->transient, &ctx);
+    init_parse_ctx(self->transient, &ctx, null);
 
     tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
 
@@ -686,12 +677,12 @@ tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const 
 }
 
 tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
-                                                 allocator                       *alloc,
+                                                 allocator *alloc, hashmap *outer_type_arguments,
                                                  tl_type_registry_parse_type_ctx *out_ctx) {
     // alloc is used to allocate the parse context's buffers/maps, and the struct is copied into out_ctx.
     assert(out_ctx);
     tl_type_registry_parse_type_ctx ctx;
-    init_parse_ctx(alloc, &ctx);
+    init_parse_ctx(alloc, &ctx, outer_type_arguments);
     tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
     *out_ctx            = ctx;
 

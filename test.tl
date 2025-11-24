@@ -1,23 +1,8 @@
 #module main
 
-id (x) { x }
+Foo : { | int : Int | float : Float }
 
 main() {
-  val := id("hello")
-  res := id(0)
-  res
+  i := Foo(int = 1)
+  i.int - 1
 }
-
-// Point(a) : { x: a, y: a }
-
-// c_malloc(size: CSize) -> Ptr(T)
-
-// array_new(T : Type, count) {
-//   p : Ptr(T) := c_malloc(count * sizeof(T))
-//   p
-// }
-
-// main() {
-//   arr := array_new(Point(Int), 8)
-//   0
-// }

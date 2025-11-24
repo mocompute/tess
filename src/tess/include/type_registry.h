@@ -13,6 +13,17 @@ typedef struct {
     hashmap      *type_aliases; // str => polytype*
 } tl_type_registry;
 
+typedef struct {
+    // Type arguments discovered during recursive parsing
+    hashmap *type_arguments; // str => tl_monotype*
+
+    // Nodes which are deferred in first pass of parse.
+    hashmap *deferred_parse; // str => ast_node*
+
+    // When parsing an annotation, this is the node which is being annotated.
+    ast_node const *annotation_target;
+} tl_type_registry_parse_type_ctx;
+
 nodiscard tl_type_registry *tl_type_registry_create(allocator *, allocator *, tl_type_subs *) mallocfun;
 tl_polytype *tl_type_constructor_def_create(tl_type_registry *, str name, tl_type_variable_sized tvs,
                                             str_sized fields, tl_monotype_sized) mallocfun;
@@ -24,10 +35,9 @@ tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str,
 void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
 
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *, ast_node const *);
-// tl_monotype *tl_type_registry_parse_type_lexical(tl_type_registry *, ast_node const *, hashmap *);
-// tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *, ast_node const *, allocator *,
-//                                                  tl_type_registry_parse_type_ctx *out);
-// hashmap     *tl_type_registry_parse_parameters(tl_type_registry *, allocator *, ast_node const *);
+tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
+                                                 allocator *alloc, hashmap *outer_type_arguments,
+                                                 tl_type_registry_parse_type_ctx *out_ctx);
 
 void         tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);
 void         tl_type_registry_insert_mono(tl_type_registry *, str, tl_monotype *);
