@@ -1526,8 +1526,12 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
     case ast_symbol: {
-
-        return generate_expr_symbol(self, type, ast_node_str(node), ast_node_name_original(node), ctx);
+        // For symbols, it's type in the environment is the most correct, versus its type in the ast.
+        // Override any provided type with the environment type, if it exists.
+        str          name     = ast_node_str(node);
+        tl_monotype *env_type = env_lookup(self, name);
+        if (env_type) type = env_type;
+        return generate_expr_symbol(self, type, name, ast_node_name_original(node), ctx);
     }
 
     case ast_if_then_else: return generate_if_then_else(self, node, ctx);
@@ -2078,8 +2082,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     // Note: The environment contains the most current type for a symbol argument.
     tl_polytype *poly = arg->type;
-    if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(self->transient, poly))
-        poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+    if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
     if (tl_monotype_is_type_literal(poly->type)) {
         // type literal

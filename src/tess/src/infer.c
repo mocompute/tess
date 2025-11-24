@@ -943,6 +943,15 @@ static void ctx_set_type_argument(traverse_ctx *ctx, str name, tl_monotype *mono
     str_map_set_ptr(&ctx->type_arguments, name, mono);
 }
 
+static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
+    if (node->type) {
+        if (constrain(self, node->type, type, node)) return 1;
+    } else {
+        ast_node_type_set(node, type);
+    }
+    return 0;
+}
+
 static int expected_symbol(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_symbol, .node = node}));
     return 1;
@@ -965,11 +974,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             }
 
             if (node->symbol.annotation_type) {
-                if (node->type) {
-                    if (constrain(self, node->type, node->symbol.annotation_type, node)) return 1;
-                } else {
-                    ast_node_type_set(node, node->symbol.annotation_type);
-                }
+                if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
             } else {
                 ensure_tv(self, &node->type);
             }
@@ -1034,6 +1039,14 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                        ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
             return 1;
         }
+
+        // FIXME: needed?
+        // if (ast_node_is_symbol(node)) {
+        //     // lookup symbol in environment
+        //     str          name = ast_node_str(node);
+        //     tl_polytype *poly = tl_type_env_lookup(self->env, name);
+        //     if (constrain_or_set(self, node, poly)) return 1;
+        // }
 
         ensure_tv(self, &node->type);
         break;
