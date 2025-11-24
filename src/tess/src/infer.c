@@ -156,8 +156,9 @@ static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast
     tl_polytype *exist = tl_type_env_lookup(self->env, name);
     if (exist) {
         if (constrain(self, exist, type, node)) return 1;
+    } else {
+        tl_type_env_insert(self->env, name, type);
     }
-    tl_type_env_insert(self->env, name, type);
     return 0;
 }
 
@@ -2473,6 +2474,7 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
         ;
     } else {
         // a free variable
+        dbg(self, "collect_free_variables_cb: add '%s'", str_cstr(&node->symbol.name));
         str_array_set_insert(&ctx->fvs, node->symbol.name);
     }
 
