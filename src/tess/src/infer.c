@@ -157,10 +157,6 @@ static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast
     if (exist) {
         if (constrain(self, exist, type, node)) return 1;
     }
-    dbg(self, "env_insert_constrain: '%s'", str_cstr(&name));
-    if (str_eq(name, S("v"))) {
-        ;
-    }
     tl_type_env_insert(self->env, name, type);
     return 0;
 }
@@ -983,10 +979,13 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_function_argument:
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             // A type literal in argument position must be wrapped in literal
-            tl_monotype *mono = tl_type_registry_parse_type(self->registry, node);
-            if (mono && tl_monotype_is_type_literal(mono)) {
+            tl_type_registry_parse_type_ctx parse_ctx;
+            tl_monotype                    *mono = tl_type_registry_parse_type_out_ctx(
+              self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+
+            if (mono) {
                 node->type = tl_polytype_absorb_mono(self->arena, mono);
-            } else if (!mono) {
+            } else {
                 ensure_tv(self, &node->type);
             }
         }
@@ -1044,17 +1043,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_annotation: {
-        tl_monotype *mono = null;
-        if (ast_node_is_symbol(node)) {
-            // Annotation symbol could be a type argument
-            str name = ast_node_str(node);
-            mono     = ctx_get_type_argument(ctx, name);
-            if (!mono) {
-                mono = tl_type_registry_parse_type(self->registry, node);
-            }
-        } else {
-            mono = tl_type_registry_parse_type(self->registry, node);
-        }
+
+        tl_type_registry_parse_type_ctx parse_ctx;
+        tl_monotype                    *mono = tl_type_registry_parse_type_out_ctx(
+          self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
 
         // If the annotation produces a type literal, unwrap it
         if (mono && tl_monotype_is_type_literal(mono)) {
