@@ -896,7 +896,7 @@ static tl_monotype *ctx_get_type_argument(traverse_ctx *ctx, str name) {
 
 static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
     if (node->type) {
-        if (constrain(self, node->type, type, node)) return 1;
+        if (constrain(self, node->type, type, node)) return type_error(self, node);
     } else {
         ast_node_type_set(node, type);
     }
@@ -984,6 +984,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
               self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
 
             if (mono) {
+                // Note: do not attempt to constrain with existing type: the same symbol may be a different
+                // type in different contexts, when it represents a type argument.
                 node->type = tl_polytype_absorb_mono(self->arena, mono);
             } else {
                 ensure_tv(self, &node->type);
@@ -1003,7 +1005,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                                ((tl_infer_error){.tag = tl_err_expected_type_constructor, .node = node}));
                     return 1;
                 }
-                node->type = tl_polytype_absorb_mono(self->arena, mono);
+                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
             }
         }
         update_env(self, node);
@@ -1054,7 +1056,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         }
 
         if (mono) {
-            node->type = tl_polytype_absorb_mono(self->arena, mono);
+            if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
         }
 
         update_env(self, node);
