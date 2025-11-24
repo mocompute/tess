@@ -244,7 +244,6 @@ static int should_skip_user_type(transpile *self, str name) {
     tl_monotype *env_type = env_lookup(self, name);
     if (!env_type) return 1;
     if (!tl_monotype_is_inst(env_type)) return 1;
-    if (!str_eq(name, env_type->cons_inst->special_name)) return 1;
     return 0;
 }
 
@@ -261,7 +260,6 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     // enums have no instance arguments. They have only field names.
     if (!tl_monotype_is_enum(poly->type)) {
 
-        // type inference leaves unspecialized types in the environment. Don't emit them.
         if (should_skip_user_type(self, name)) return;
 
         if (node->user_type_def.is_union) cat(self, S("typedef union "));
