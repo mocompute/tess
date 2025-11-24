@@ -1,8 +1,7 @@
 #module main
 
-Foo : { | int : Int | float : Float }
+foo(x: Type) { sizeof(x) }
 
 main() {
-  i := Foo(int = 1)
-  i.int - 1
+  foo(Int) - 8
 }

@@ -140,6 +140,7 @@ int          tl_monotype_is_integer_convertible(tl_monotype *);
 void         tl_monotype_set_integer_convertible(tl_monotype *);
 tl_monotype *tl_monotype_ptr_target(tl_monotype *);
 tl_monotype *tl_monotype_literal_target(tl_monotype *);
+void         tl_monotype_literal_flatten_outer(tl_monotype *);
 tl_monotype *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
 void              tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *, hashmap **);
@@ -194,6 +195,7 @@ nodiscard tl_type_subs *tl_type_subs_create(allocator *, allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
+int                     tl_type_subs_monotype_occurs(tl_type_subs *, tl_type_variable, tl_monotype *);
 
 int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,
                                 hashmap **);
