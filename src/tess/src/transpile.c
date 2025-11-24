@@ -244,6 +244,13 @@ static int should_skip_user_type(transpile *self, str name) {
     tl_monotype *env_type = env_lookup(self, name);
     if (!env_type) return 1;
     if (!tl_monotype_is_inst(env_type)) return 1;
+
+    // Check canonicalised user type via the environment. If this node defines a type that is to be replaced
+    // by a different name, don't emit it.
+    str canonical = env_type->cons_inst->special_name;
+    if (str_is_empty(canonical)) canonical = env_type->cons_inst->def->name;
+    if (!str_eq(name, canonical)) return 1;
+
     return 0;
 }
 
