@@ -2638,6 +2638,12 @@ static int add_generic(tl_infer *self, ast_node *node) {
         return generic_declaration(self, name, name_node, node);
     }
 
+    // ensure provisional type is not quantified. If it is, instantiate it
+    if (tl_polytype_is_scheme(provisional)) {
+        provisional = tl_polytype_absorb_mono(
+          self->arena, tl_polytype_instantiate(self->arena, provisional, self->subs));
+    }
+
     // add provisional type to environment (for polymorphic recursion)
     if (provisional) {
         // Note: ensure this is not quantified until after inference

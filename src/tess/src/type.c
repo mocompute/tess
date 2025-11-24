@@ -477,13 +477,16 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             tl_monotype *mono =
               tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
             result = mono;
+
+            // FIXME: we don't support literal Union types.
         } else {
             result = tl_polytype_instantiate_with(self->alloc, type_constructor,
                                                   (tl_monotype_sized)array_sized(args));
+
+            // all NFAs with at least one argument are type literals, so wrap it.
+            if (args.size) result = tl_monotype_create_literal(self->alloc, result);
         }
 
-        // all NFAs with at least one argument are type literals, so wrap it
-        if (args.size) result = tl_monotype_create_literal(self->alloc, result);
     }
 
     else if (ast_node_is_arrow(node)) {
