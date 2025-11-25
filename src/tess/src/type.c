@@ -1929,7 +1929,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
     // In particular, note that it does NOT unify with any or ellipsis.
 
     switch (right->tag) {
-    case tl_literal:   return tl_type_subs_unify_mono(subs, left, right, cb, user, seen);
+    case tl_literal:   return tl_type_subs_unify_mono(subs, left->literal, right->literal, cb, user, seen);
 
     case tl_var:       return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
