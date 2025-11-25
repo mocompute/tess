@@ -64,7 +64,6 @@ typedef enum {
     npos_assign_lhs,
     npos_assign_rhs,
     npos_operand,
-    npos_annotation,
     npos_field_name,
 } node_position;
 
@@ -895,10 +894,12 @@ static tl_monotype *ctx_get_type_argument(traverse_ctx *ctx, str name) {
 // }
 
 static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
+    str name     = ast_node_is_symbol(node) ? ast_node_str(node) : str_empty();
     str poly_str = tl_polytype_to_string(self->transient, type);
     if (node->type) {
         str node_type_str = tl_polytype_to_string(self->transient, node->type);
-        dbg(self, "constrain_or_set: %s :: %s", str_cstr(&node_type_str), str_cstr(&poly_str));
+        dbg(self, "constrain_or_set: '%s' : %s :: %s", str_cstr(&name), str_cstr(&node_type_str),
+            str_cstr(&poly_str));
 
         if (tl_monotype_is_tv(node->type->type) && !tl_monotype_is_tv(type->type) &&
             tl_type_subs_monotype_occurs(self->subs, node->type->type->var, type->type)) {
@@ -906,7 +907,7 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
         }
         if (constrain(self, node->type, type, node)) return type_error(self, node);
     } else {
-        dbg(self, "constrain_or_set: %s", str_cstr(&poly_str));
+        dbg(self, "constrain_or_set: '%s': %s", str_cstr(&name), str_cstr(&poly_str));
         ast_node_type_set(node, type);
     }
     return 0;
@@ -949,7 +950,9 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_formal_parameter:
         if (ast_node_is_symbol(node)) {
             // as a formal parameter, a symbol with a : Type annotation creates a type argument
-            // str name = ast_node_str(node);
+            str name = ast_node_str(node);
+            (void)name;
+
             if (node->symbol.annotation) {
 
                 // parse annotation type: parse_type needs to start at the symbol node being annotated so it
@@ -965,21 +968,25 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 }
                 if (ctx) map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
 
-                // if (!tl_monotype_is_tv(mono))
                 node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
                 assert(node->symbol.annotation_type);
             }
 
             if (node->symbol.annotation_type) {
-
-                // if annotation is a type literal, unwrap it
-                if (tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
-                    tl_monotype *target = tl_monotype_literal_target(node->symbol.annotation_type->type);
-                    tl_polytype *poly   = tl_polytype_absorb_mono(self->arena, target);
-                    if (constrain_or_set(self, node, poly)) return 1;
-                } else {
-                    if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
+                // Note: Type arguments cannot be constrained at the usage point the way normal types would
+                // be in the value context, because they operate in the type context.
+                if (ctx && !str_map_contains(ctx->type_arguments, name)) {
+                    // if annotation is a type literal, unwrap it
+                    if (tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
+                        tl_monotype *target =
+                          tl_monotype_literal_target(node->symbol.annotation_type->type);
+                        tl_polytype *poly = tl_polytype_absorb_mono(self->arena, target);
+                        if (constrain_or_set(self, node, poly)) return 1;
+                    } else {
+                        if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
+                    }
                 }
+
             } else {
                 ensure_tv(self, &node->type);
             }
@@ -1052,26 +1059,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         ensure_tv(self, &node->type);
         update_env(self, node);
         break;
-
-    case npos_annotation: {
-
-        tl_type_registry_parse_type_ctx parse_ctx;
-        tl_monotype                    *mono = tl_type_registry_parse_type_out_ctx(
-          self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
-
-        // FIXME: needed?
-        // If the annotation produces a type literal, unwrap it
-
-        // if (mono && tl_monotype_is_type_literal(mono)) {
-        //     mono = tl_monotype_literal_target(mono);
-        // }
-
-        if (mono) {
-            if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
-        }
-
-        update_env(self, node);
-    } break;
     }
 
     ensure_tv(self, &node->type);
@@ -2417,7 +2404,6 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
 
             // make concrete if possible
             tl_monotype_substitute(self->arena, mono, self->subs, null);
-            tl_monotype_literal_flatten_outer(mono);
             array_push(args_types, mono);
         }
 

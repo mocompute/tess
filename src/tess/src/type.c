@@ -417,17 +417,19 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         // or else is it a type argument previously defined?
         result = str_map_get_ptr(ctx->type_arguments, name);
         if (result) {
-            // if (result && tl_monotype_is_type_literal(result)) {
-            //     result = tl_monotype_literal_target(result);
-            // }
+            // Note: type arguments will need to be handled in a context-sensitive way by the caller.
+
+            // str tmp = tl_monotype_to_string(self->transient, result);
+            // fprintf(stderr, "type_argument: '%s' :: %s\n", str_cstr(&name), str_cstr(&tmp));
             return result;
         }
 
         // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
         if (node->symbol.annotation) {
+            ast_node const *save   = ctx->annotation_target;
             ctx->annotation_target = node;
             result                 = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
-            ctx->annotation_target = null;
+            ctx->annotation_target = save;
 
             // If the annotation produces nothing, and the annotation is a symbol, it's sugar for a type
             // variable.
@@ -528,8 +530,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
             if (!mono) return null;
 
-            // FIXME: needed?
-            // if it's a type literal, unwrap it
             if (mono && tl_monotype_is_type_literal(mono)) {
                 mono = tl_monotype_literal_target(mono);
             }
@@ -800,9 +800,6 @@ tl_polytype *tl_polytype_create_fresh_literal(allocator *alloc, tl_type_subs *su
 }
 
 tl_polytype *tl_polytype_create_literal_with(allocator *alloc, tl_monotype *target) {
-    // unwrap all inner literal layers, if any
-    while (tl_monotype_is_type_literal(target)) target = tl_monotype_literal_target(target);
-
     tl_monotype *literal = tl_monotype_create_literal(alloc, target);
     return tl_polytype_absorb_mono(alloc, literal);
 }
@@ -1932,11 +1929,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
     // In particular, note that it does NOT unify with any or ellipsis.
 
     switch (right->tag) {
-    case tl_literal:
-        // unwrap arbitrary number of outer literal layers on both sides
-        while (tl_monotype_is_type_literal(left)) left = tl_monotype_literal_target(left);
-        while (tl_monotype_is_type_literal(right)) right = tl_monotype_literal_target(right);
-        return tl_type_subs_unify_mono(subs, left, right, cb, user, seen);
+    case tl_literal:   return tl_type_subs_unify_mono(subs, left, right, cb, user, seen);
 
     case tl_var:       return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:      return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
@@ -2325,14 +2318,6 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         }
 
     } break;
-    }
-}
-
-void tl_monotype_literal_flatten_outer(tl_monotype *self) {
-    if (tl_monotype_is_type_literal(self)) {
-        tl_monotype *target = tl_monotype_literal_target(self);
-        while (tl_monotype_is_type_literal(target)) target = tl_monotype_literal_target(target);
-        self->literal = target;
     }
 }
 
