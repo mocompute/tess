@@ -10,7 +10,8 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <string.h>
+
+#define DEBUG_TYPE_SET 1
 
 ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // FIXME this should probably be called alloc, because it doesn't
@@ -414,6 +415,17 @@ ast_node *ast_node_op_rightmost(ast_node *self) {
 }
 
 void ast_node_type_set(ast_node *self, tl_polytype *type) {
+#if DEBUG_TYPE_SET
+    if (self->type && tl_monotype_is_tv(self->type->type)) {
+        str node_str = v2_ast_node_to_string(default_allocator(), self);
+        str poly_str = tl_polytype_to_string(default_allocator(), self->type);
+        fprintf(stderr, "warning: ast_node_type_set: abandon type variable '%s': '%s'\n",
+                str_cstr(&poly_str), str_cstr(&node_str));
+
+        str_deinit(default_allocator(), &poly_str);
+        str_deinit(default_allocator(), &node_str);
+    }
+#endif
     self->type = type;
 }
 

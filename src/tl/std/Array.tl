@@ -86,7 +86,7 @@ free(self: TPtr) -> Void
 push(self: Ptr(T(a)), x: a) -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: TPtr, count: Int) -> Void
+reserve(self: Ptr(T(a)), count: Int) -> Void
 
 // The declaration `(a: Type, ...)` below demonstrates the use of a generic type argument. In C++, the
 // corresponding syntax would be `template<typename T> with_capacity<T>(...)` but in TL, type arguments are

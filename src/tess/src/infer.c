@@ -605,7 +605,13 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
 
+        ctx->node_pos = npos_toplevel;
+        if (traverse_ast(self, ctx, node->let.name, cb)) return 1;
+
+        ctx->node_pos = npos_formal_parameter;
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
+
+        ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
     } break;
@@ -842,7 +848,7 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
     if (parsed && tl_monotype_is_type_literal(parsed)) {
         tl_monotype *target = tl_monotype_literal_target(parsed);
-        assert(tl_monotype_is_inst(target));
+        if (!tl_monotype_is_inst(target)) return 1;
         str               name = target->cons_inst->def->generic_name;
 
         tl_monotype_sized args = target->cons_inst->args;
@@ -941,9 +947,14 @@ static int reject_type_literal(tl_infer *self, ast_node const *node) {
     return 0;
 }
 
+// static tl_monotype *unwrap_literal(tl_monotype *self) {
+//     if (self && tl_monotype_is_type_literal(self)) return tl_monotype_literal_target(self);
+//     return self;
+// }
+
 static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_position pos) {
 
-    // ctx may be null if this processing is initiated from load_toplevel()
+    // Note: ctx may be null if this processing is initiated from load_toplevel()
 
     switch (pos) {
     case npos_toplevel:
@@ -951,7 +962,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node)) {
             // as a formal parameter, a symbol with a : Type annotation creates a type argument
             str name = ast_node_str(node);
-            (void)name;
 
             if (node->symbol.annotation) {
 
@@ -966,15 +976,20 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                     expected_type(self, node);
                     return 1;
                 }
-                if (ctx) map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+                if (ctx) {
+                    map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+
+                    // Also add type arguments to lexical names. Especially for free variables process.
+                    str_array arr = str_map_sorted_keys(self->transient, parse_ctx.type_arguments);
+                    forall(i, arr) str_hset_insert(&ctx->lexical_names, arr.v[i]);
+                }
 
                 node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
                 assert(node->symbol.annotation_type);
-            }
 
-            if (node->symbol.annotation_type) {
                 // Note: Type arguments cannot be constrained at the usage point the way normal types would
                 // be in the value context, because they operate in the type context.
+
                 if (ctx && !str_map_contains(ctx->type_arguments, name)) {
                     // if annotation is a type literal, unwrap it
                     if (tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
@@ -1010,7 +1025,12 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (mono) {
                 // Note: do not attempt to constrain with existing type: the same symbol may be a different
                 // type in different contexts, when it represents a type argument.
-                node->type = tl_polytype_absorb_mono(self->arena, mono);
+
+                // FIXME: here we only set the node type if it's empty to avoid potenially abandoning a type
+                // variable.
+                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
+                // if (!node->type) ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, mono));
+
             } else {
                 ensure_tv(self, &node->type);
                 update_env(self, node);
@@ -1062,6 +1082,14 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     }
 
     ensure_tv(self, &node->type);
+
+    if (ast_node_is_symbol(node)) {
+        str name = ast_node_str(node);
+        str tmp  = tl_polytype_to_string(self->transient, node->type);
+
+        dbg(self, "resolve_node '%s' : %s", str_cstr(&name), str_cstr(&tmp));
+    }
+
     return 0;
 }
 
@@ -1467,7 +1495,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
             if (parsed) {
                 if (constrain_pm(self, node->type, parsed, node)) return 1;
-                ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, parsed));
+                // FIXME: needed? don't set node type
+                // ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, parsed));
                 break;
             }
 
@@ -1552,9 +1581,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             str app_str = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
                 str_cstr(&app_str));
-            tl_polytype wrap = tl_polytype_wrap(inst);
 
             // and constrain it with the callsite types (arguments -> result)
+            tl_polytype wrap = tl_polytype_wrap(inst);
             if (constrain(self, &wrap, app, node)) return 1;
         }
 
@@ -2446,9 +2475,9 @@ typedef struct {
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
-    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
-
     str name = ast_node_str(node);
+
+    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
 
     // don't collect symbols which are nullary type literals
     if (tl_type_registry_is_nullary_type(self->registry, name)) return 0;
@@ -2659,6 +2688,11 @@ static int add_generic(tl_infer *self, ast_node *node) {
     tl_polytype_generalize(arrow, self->env, self->subs);
 
     // collect free variables from infer target and add to the generic's arrow type
+
+    if (str_eq(name, S("Array_reserve"))) {
+        ;
+    }
+
     add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 

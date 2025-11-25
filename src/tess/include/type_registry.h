@@ -17,6 +17,9 @@ typedef struct {
     // Type arguments discovered during recursive parsing
     hashmap *type_arguments; // str => tl_monotype*
 
+    // Type arguments' type variable when used in a value context
+    hashmap *type_argument_tvs; // tl_monotype* => tl_monotype*
+
     // Nodes which are deferred in first pass of parse.
     hashmap *deferred_parse; // str => ast_node*
 
