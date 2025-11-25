@@ -2396,12 +2396,6 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
 
             tl_monotype *mono = args.v[i]->type->type;
 
-            if (tl_monotype_is_type_literal(mono)) {
-                str mono_str = tl_monotype_to_string(self->transient, mono);
-                dbg(self, "make_arrow_result_type: mono = %s", str_cstr(&mono_str));
-                args.v[i]->type = tl_polytype_absorb_mono(self->arena, tl_monotype_literal_target(mono));
-            }
-
             // make concrete if possible
             tl_monotype_substitute(self->arena, mono, self->subs, null);
             array_push(args_types, mono);
@@ -3199,7 +3193,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     canonicalize_types(self);
     arena_reset(self->transient);
 
-    if (0) {
+    if (1) {
         dbg(self, "-- final subs");
         log_subs(self);
     }
