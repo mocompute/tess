@@ -2937,7 +2937,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
             if (replace) mono->cons_inst->args.v[i] = replace;
         }
 
-        str               type_name = mono->cons_inst->def->name;
+        str               type_name = mono->cons_inst->def->generic_name;
         tl_monotype_sized type_args = mono->cons_inst->args;
         tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
 
