@@ -905,10 +905,6 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
         dbg(self, "constrain_or_set: '%s' : %s :: %s", str_cstr(&name), str_cstr(&node_type_str),
             str_cstr(&poly_str));
 
-        if (tl_monotype_is_tv(node->type->type) && !tl_monotype_is_tv(type->type) &&
-            tl_type_subs_monotype_occurs(self->subs, node->type->type->var, type->type)) {
-            fatal("oops"); // FIXME
-        }
         if (constrain(self, node->type, type, node)) return type_error(self, node);
     } else {
         dbg(self, "constrain_or_set: '%s': %s", str_cstr(&name), str_cstr(&poly_str));
