@@ -2617,9 +2617,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     str          name         = name_node->symbol.name;
     str          orig_name    = name_node->symbol.original;
 
-    // do not process a second time
-    // if (tl_type_env_lookup(self->env, name)) return 0;
-
     // calculate provisional type, for recursive functions
     if (ast_node_is_let(node)) {
         if (!provisional) {
@@ -2706,10 +2703,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // collect free variables from infer target and add to the generic's arrow type
 
-    if (str_eq(name, S("Array_reserve"))) {
-        ;
-    }
-
     add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 
@@ -2762,40 +2755,6 @@ void admit_generic_pointers(tl_infer *self) {
     }
 
     hset_destroy(&ctx.seen);
-}
-
-void do_resolve_unions(void *ctx, ast_node *node) {
-    (void)ctx;
-
-    if (!node->type) return;
-    tl_monotype_force_union_resolve(node->type->type);
-    if (ast_node_is_symbol(node) && node->symbol.annotation_type)
-        tl_monotype_force_union_resolve(node->symbol.annotation_type->type);
-}
-
-void resolve_unions(tl_infer *self) {
-    // Note: Union types may remain unresolved during type checking: resolve them by arbitrarily picking a
-    // variant.
-
-    // FIXME: skip this for now because it doesn't support recursion. May not be needed anyway.
-    (void)self;
-    return;
-
-    {
-        ast_node        *node;
-        hashmap_iterator iter = {0};
-        while ((node = toplevel_iter(self, &iter))) {
-            ast_node_dfs(null, node, do_resolve_unions);
-        }
-    }
-    {
-        hashmap_iterator iter = {0};
-        while (map_iter(self->env->map, &iter)) {
-            tl_polytype **poly = iter.data;
-            if (!poly || !(*poly)->type) continue;
-            tl_monotype_force_union_resolve((*poly)->type);
-        }
-    }
 }
 
 void remove_generic_toplevels(tl_infer *self) {
@@ -3222,9 +3181,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     admit_generic_pointers(self);
-    arena_reset(self->transient);
-
-    resolve_unions(self);
     arena_reset(self->transient);
 
     remove_generic_toplevels(self);
