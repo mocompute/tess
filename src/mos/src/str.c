@@ -413,7 +413,7 @@ void str_array_set_insert(str_array *arr, str str) {
 }
 
 void str_sized_sort(str_sized arr) {
-    qsort(arr.v, arr.size, sizeof arr.v[0], str_cmp_v);
+    if (arr.size) qsort(arr.v, arr.size, sizeof arr.v[0], str_cmp_v);
 }
 
 int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {

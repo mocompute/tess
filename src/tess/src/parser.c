@@ -11,7 +11,6 @@
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
-#include "type.h"
 
 #include <assert.h>
 #include <stdarg.h>

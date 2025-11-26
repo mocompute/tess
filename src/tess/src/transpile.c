@@ -430,11 +430,6 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
                                 eval_ctx *ctx) {
     str name = symbol_name;
 
-    // if type is undetermined, look up in environment
-    // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
-    //     type = env_lookup(self, name);
-    // }
-
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
 
     if (tl_monotype_is_type_literal(type)) {

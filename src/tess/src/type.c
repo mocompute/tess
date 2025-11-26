@@ -1000,7 +1000,7 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
     }
 
-    hashmap *seen = map_create(transient_allocator, sizeof(void *), 8);
+    hashmap *seen = hset_create(transient_allocator, 8);
     replace_tv(fresh, q_to_t, &seen);
     map_destroy(&seen);
 
@@ -1023,7 +1023,7 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &clone);
     }
 
-    hashmap *seen = map_create(transient_allocator, sizeof(void *), 8);
+    hashmap *seen = hset_create(transient_allocator, 8);
     replace_tv_mono(fresh, q_to_t, &seen);
     map_destroy(&seen);
 

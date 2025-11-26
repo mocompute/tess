@@ -102,7 +102,8 @@ void state_gather_single_options(state *self, char *str) {
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
-    else if (0 == strcmp("--", str)) /* ignore */;
+    else if (0 == strcmp("--", str)) /* ignore */
+        ;
     else usage(1, self->argv0);
 }
 
@@ -415,9 +416,11 @@ int compile(state *self) {
             printf("%.*s", str_ilen(program), str_buf(&program));
         }
     }
+
     str_deinit(default_allocator(), &program);
 
 done:
+    // is_executable: Caller will take over program
 cleanup_tp:
     transpile_destroy(default_allocator(), &transpile);
 
@@ -498,6 +501,9 @@ int compile_c(state *self) {
 
         write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
         close(stdin_pipe[1]);
+
+        // free self->program
+        str_deinit(default_allocator(), &self->program);
 
         // read stderr
         char  buf[1024];
