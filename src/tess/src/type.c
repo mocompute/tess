@@ -375,7 +375,9 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
             mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
 
             // Add to context type arguments
-            str ta = ast_node_str(ctx->annotation_target);
+            str ta  = ast_node_str(ctx->annotation_target);
+            str tmp = tl_monotype_to_string(self->transient, mono);
+            fprintf(stderr, "parse_type: add type argument '%s' : %s\n", str_cstr(&ta), str_cstr(&tmp));
             str_map_set_ptr(&ctx->type_arguments, ta, mono);
 
             // Add a fresh tv as value context for the literal
@@ -390,10 +392,14 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
 static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
     tl_monotype *result = null;
-    result              = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+    result              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
     str ta              = ast_node_str(node);
+    str tmp             = tl_monotype_to_string(self->transient, result);
+
+    fprintf(stderr, "parse_type: add type argument sugar '%s' : %s\n", str_cstr(&ta), str_cstr(&tmp));
     str_map_set_ptr(&ctx->type_arguments, ta, result);
-    return result;
+
+    return tl_monotype_literal_target(result);
 }
 
 static tl_monotype *type_literal_value(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
@@ -529,7 +535,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             }
             // else if it's a type literal, unwrap it
             else {
-                mono = maybe_unwrap_literal(self, ctx, nodes.v[i], mono);
+                // Note: unwrap even if it is a type argument, because it's an argument to another type
+                // constructor.
+                mono = type_literal_value(self, ctx, mono);
             }
             array_push_val(args, mono);
         }
