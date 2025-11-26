@@ -460,8 +460,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
     tl_monotype *result = null;
 
     if (ast_node_is_nil(node)) {
-        // "null" parses to ast_nil. Treat null as Ptr(any) so it unifies with any pointer.
-        return tl_type_registry_ptr(self, tl_monotype_create_any(self->alloc));
+        // "null" parses to ast_nil. Treat null as Ptr(weak) so it unifies with any pointer.
+        return tl_type_registry_ptr(self, tl_monotype_create_fresh_weak(self->subs));
     }
 
     else if (ast_node_is_symbol(node)) {
