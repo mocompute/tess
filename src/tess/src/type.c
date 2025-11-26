@@ -381,11 +381,6 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
 
             // Add to context type arguments
             str ta = ast_node_str(ctx->annotation_target);
-            {
-                // str tmp = tl_monotype_to_string(self->transient, mono);
-                // fprintf(stderr, "parse_type: add type argument '%s' : %s\n", str_cstr(&ta),
-                // str_cstr(&tmp));
-            }
             str_map_set_ptr(&ctx->type_arguments, ta, mono);
 
             // Add a fresh tv as value context for the literal
@@ -402,11 +397,6 @@ static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry
     tl_monotype *result = null;
     result              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
     str ta              = ast_node_str(node);
-    // {
-    //     str tmp = tl_monotype_to_string(self->transient, result);
-    //     fprintf(stderr, "parse_type: add type argument sugar '%s' : %s\n", str_cstr(&ta),
-    //     str_cstr(&tmp));
-    // }
     str_map_set_ptr(&ctx->type_arguments, ta, result);
 
     return tl_monotype_literal_target(result);
@@ -418,12 +408,6 @@ static tl_monotype *type_literal_value(tl_type_registry *self, tl_type_registry_
     (void)ctx;
 
     if (tl_monotype_is_type_literal(mono)) {
-
-        // Type arguments have a separate fresh type variable for use in value context
-        // tl_monotype *exist = map_get_ptr(ctx->type_argument_tvs, &mono, sizeof(tl_monotype *));
-        // if (exist) return exist;
-
-        // Otherwise a simple unwrap
         return tl_monotype_literal_target(mono);
     }
     return mono;
@@ -451,7 +435,6 @@ static void recur_ptr_targets(tl_type_registry *self, tl_type_registry_parse_typ
     }
 
     switch (mono->tag) {
-
     case tl_cons_inst:
         forall(i, mono->cons_inst->args)
           recur_ptr_targets(self, ctx, mono->cons_inst->args.v[i], sentinel, new_target);
@@ -490,12 +473,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         if (result) return result;
 
         // or is it a nullary literal: Int, Float, String, etc, including user type constructors
-        str name = ast_node_str(node);
-
-        if (str_eq(name, S("Array_reserve"))) {
-            ;
-        }
-
+        str          name = ast_node_str(node);
         tl_polytype *poly = tl_type_registry_get_nullary(self, name);
         if (poly) {
             return tl_monotype_create_literal(self->alloc, poly->type);
@@ -505,8 +483,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = str_map_get_ptr(ctx->type_arguments, name);
         if (result) {
             // Note: type arguments will need to be handled in a context-sensitive way by the caller.
-            // str tmp = tl_monotype_to_string(self->transient, result);
-            // fprintf(stderr, "parse_type: type argument '%s' : %s\n", str_cstr(&name), str_cstr(&tmp));
             return result;
         }
 
@@ -683,7 +659,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         }
 
         result = tl_polytype_instantiate(self->alloc, poly, self->subs);
-        // result = poly->type;
     }
 
     return result;
@@ -968,8 +943,9 @@ static void replace_tv(tl_monotype *self, hashmap *map, hashmap **seen) {
 
 static int  is_same_cons(tl_monotype *self, tl_monotype *other);
 
-static void replace_tv_mono(tl_monotype *self, hashmap *map) {
-    if (!self) return;
+static void replace_tv_mono(tl_monotype *self, hashmap *map, hashmap **seen) {
+    if (!self || ptr_hset_contains(*seen, self)) return;
+    ptr_hset_insert(seen, self);
 
     // map: tv -> monotype
 
@@ -992,7 +968,7 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
 
     case tl_literal:
         //
-        replace_tv_mono(self->literal, map);
+        replace_tv_mono(self->literal, map, seen);
         break;
 
     case tl_cons_inst:
@@ -1006,7 +982,7 @@ static void replace_tv_mono(tl_monotype *self, hashmap *map) {
             if (tl_monotype_is_ptr(arr.v[i])) {
                 if (is_same_cons(self, tl_monotype_ptr_target(arr.v[i]))) continue;
             }
-            replace_tv_mono(arr.v[i], map);
+            replace_tv_mono(arr.v[i], map, seen);
         }
     } break;
     }
@@ -1047,7 +1023,9 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &clone);
     }
 
-    replace_tv_mono(fresh, q_to_t);
+    hashmap *seen = map_create(transient_allocator, sizeof(void *), 8);
+    replace_tv_mono(fresh, q_to_t, &seen);
+    map_destroy(&seen);
 
     map_destroy(&q_to_t);
     return fresh;
@@ -1153,7 +1131,6 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *s
 }
 
 tl_monotype *tl_polytype_concrete(tl_polytype *self) {
-    // FIXME yes it's annoying this needs to allocate
     if (!tl_polytype_is_concrete(self)) fatal("runtime error");
     return self->type;
 }
@@ -1295,7 +1272,7 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
 }
 
 tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
-    hashmap     *mapping = map_create_ptr(alloc, 32);
+    hashmap     *mapping = map_create_ptr(transient_allocator, 32);
     tl_monotype *out     = tl_monotype_clone_(alloc, orig, &mapping);
     map_destroy(&mapping);
     return out;
