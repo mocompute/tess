@@ -271,7 +271,6 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
                 // ignore prior type annotation if the current symbol is annotated: later
                 // declaration overrides
-                // FIXME: this conditional seems not to follow the logic of the comment
 
                 if (node->let.name->symbol.annotation) {
                     resolve_node(self, node->let.name, null, npos_toplevel);
@@ -752,7 +751,11 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
                 save               = ctx->is_field_name;
                 ctx->is_field_name = 1;
             }
-            ctx->node_pos = npos_operand; // FIXME: what about is_field_name??
+
+            char const *op = str_cstr(&node->binary_op.op->symbol.name);
+            if (is_struct_access_operator(op)) ctx->node_pos = npos_field_name;
+            else ctx->node_pos = npos_operand;
+
             if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
             if (is_symbol) ctx->is_field_name = save;
         }
