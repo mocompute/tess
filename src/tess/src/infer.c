@@ -1082,10 +1082,14 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         }
         break;
 
-    case npos_operand:
-        if (reject_type_literal(self, node)) return 1;
+    case npos_operand: {
+        // Accept type literal in operand position
+        tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
+        if (parsed && tl_monotype_is_type_literal(parsed)) {
+            if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
+        }
         update_env(self, node);
-        break;
+    } break;
 
     case npos_let_in_rhs:
     case npos_assign_rhs:
@@ -1495,8 +1499,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // traverse_ast is depth-first: arguments are traversed before the nfa node itself.
         if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
 
-        // ensure_tv(self, &node->type);
-
         str          name     = ast_node_str(node->named_application.name);
         str          original = ast_node_name_original(node->named_application.name);
         tl_polytype *type     = tl_type_env_lookup(self->env, name);
@@ -1507,30 +1509,18 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (tl_polytype_is_type_constructor(type)) {
             // a type constructor or type literal
 
-            // Try to parse it as a type literal
-          // FIXME: need to parse again? what about resolve-node above? Just check if type is literal
-            tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
-            if (parsed) {
-                if (constrain_pm(self, node->type, parsed, node)) return 1;
-                // FIXME: needed? don't set node type
-                // ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, parsed));
+            // Is it a type literal: node was parsed in operand context by resolve_node
+            if (tl_monotype_is_type_literal(node->type->type)) {
                 break;
             }
 
             // Otherwise it's a type constructor
 
-            tl_monotype_array  args = {.alloc = self->arena};
             ast_arguments_iter iter = ast_node_arguments_iter(node);
             ast_node          *arg;
             while ((arg = ast_arguments_next(&iter))) {
                 if (resolve_node(self, arg, traverse_ctx, npos_function_argument)) return 1;
-                ensure_tv(self, &arg->type); // FIXME remove 
-                assert(!tl_polytype_is_scheme(arg->type));
-                array_push(args, arg->type->type);
             }
-            array_shrink(args);
-            
-            // FIXME: args is unused? instantiate-with?
 
             tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
             if (!inst) {
