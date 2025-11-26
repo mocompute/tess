@@ -909,7 +909,7 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
 
         if (tl_monotype_is_tv(node->type->type) && !tl_monotype_is_tv(type->type) &&
             tl_type_subs_monotype_occurs(self->subs, node->type->type->var, type->type)) {
-            fatal("oops");
+            fatal("oops"); // FIXME
         }
         if (constrain(self, node->type, type, node)) return type_error(self, node);
     } else {
@@ -2153,7 +2153,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
 
         // ensure renamed symbols do not carry a type
-        node->type                   = null;
+        ast_node_type_set(node, null);
         node->symbol.annotation_type = null;
 
         // traverse into annotation too, to support type arguments.
@@ -2198,6 +2198,9 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         }
 
         rename_variables(self, node->let.body, lex, level + 1);
+
+        // For the name, just erase its type
+        ast_node_type_set(node->let.name, null);
 
         map_destroy(lex);
         *lex = save;
