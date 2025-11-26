@@ -27,10 +27,15 @@ static void                      mark_integer_type(tl_type_registry *, str);
 
 // -- type constructor --
 
+static _Thread_local allocator *transient_allocator; // initialized by tl_type_registry_create
+
 tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
     self->alloc            = alloc;
     self->transient        = transient;
+
+    transient_allocator    = transient;
+
     self->subs             = subs;
     self->definitions      = map_new(self->alloc, str, tl_polytype *, 64);       // key: str
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
@@ -1019,7 +1024,7 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
     }
 
-    hashmap *seen = map_create(alloc, sizeof(void *), 8);
+    hashmap *seen = map_create(transient_allocator, sizeof(void *), 8);
     replace_tv(fresh, q_to_t, &seen);
     map_destroy(&seen);
 
@@ -1129,7 +1134,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
 void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *subs) {
     tl_polytype_substitute(env->alloc, self, subs);
 
-    hashmap               *seen  = hset_create(env->transient, 8);
+    hashmap               *seen  = hset_create(transient_allocator, 8);
     tl_type_variable_array quant = {.alloc = env->transient}; // transient
     generalize(self->type, &quant, &seen);
     self->quantifiers.size = quant.size;
@@ -1147,15 +1152,15 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *s
     hset_destroy(&seen);
 }
 
-tl_monotype *tl_polytype_concrete(allocator *alloc, tl_polytype *self) {
+tl_monotype *tl_polytype_concrete(tl_polytype *self) {
     // FIXME yes it's annoying this needs to allocate
-    if (!tl_polytype_is_concrete(alloc, self)) fatal("runtime error");
+    if (!tl_polytype_is_concrete(self)) fatal("runtime error");
     return self->type;
 }
 
 tl_polytype *tl_monotype_generalize(allocator *alloc, tl_monotype *mono) {
     tl_type_variable_array quantifiers = {.alloc = alloc};
-    hashmap               *seen        = hset_create(alloc, 8);
+    hashmap               *seen        = hset_create(transient_allocator, 8);
     generalize(mono, &quantifiers, &seen);
     return tl_polytype_create(alloc, (tl_type_variable_sized)array_sized(quantifiers), mono);
     hset_destroy(&seen);
@@ -1328,8 +1333,8 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     fatal("unreachable");
 }
 
-int tl_monotype_is_concrete(allocator *alloc, tl_monotype *self) {
-    hashmap *seen = hset_create(alloc, 32);
+int tl_monotype_is_concrete(tl_monotype *self) {
+    hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_monotype_is_concrete_(self, &seen);
     hset_destroy(&seen);
     return res;
@@ -1364,29 +1369,29 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     fatal("unreachable");
 }
 
-int tl_monotype_is_weak_deep(allocator *alloc, tl_monotype *self) {
-    hashmap *seen = hset_create(alloc, 32);
+int tl_monotype_is_weak_deep(tl_monotype *self) {
+    hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_monotype_is_weak_(self, &seen);
     hset_destroy(&seen);
     return res;
 }
 
-int tl_monotype_sized_is_concrete(allocator *alloc, tl_monotype_sized arr) {
-    forall(i, arr) if (!tl_monotype_is_concrete(alloc, arr.v[i])) return 0;
+int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete(arr.v[i])) return 0;
     return 1;
 }
 
-int tl_monotype_sized_is_concrete_no_weak(allocator *alloc, tl_monotype_sized arr) {
-    forall(i, arr) if (!tl_monotype_is_concrete_no_weak(alloc, arr.v[i])) return 0;
+int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized arr) {
+    forall(i, arr) if (!tl_monotype_is_concrete_no_weak(arr.v[i])) return 0;
     return 1;
 }
 
-int tl_monotype_is_concrete_no_arrow(allocator *alloc, tl_monotype *self) {
-    return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(alloc, self);
+int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
+    return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(self);
 }
 
-int tl_monotype_is_concrete_no_weak(allocator *alloc, tl_monotype *self) {
-    return tl_monotype_is_concrete(alloc, self) && !tl_monotype_is_weak_deep(alloc, self);
+int tl_monotype_is_concrete_no_weak(tl_monotype *self) {
+    return tl_monotype_is_concrete(self) && !tl_monotype_is_weak_deep(self);
 }
 
 int tl_monotype_is_any(tl_monotype *self) {
@@ -1481,8 +1486,8 @@ int tl_polytype_is_scheme(tl_polytype *poly) {
     return poly->quantifiers.size != 0;
 }
 
-int tl_polytype_is_concrete(allocator *alloc, tl_polytype *self) {
-    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(alloc, self->type);
+int tl_polytype_is_concrete(tl_polytype *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(self->type);
 }
 
 int tl_polytype_is_type_constructor(tl_polytype *self) {
@@ -2187,8 +2192,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 }
 
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
-    // TODO: use transient for map
-    hashmap *seen = hset_create(self->data.alloc, 32);
+    hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
     hset_destroy(&seen);
     return res;
@@ -2327,7 +2331,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
             //
             // FIXME: we have no regression test indicating a failure when tries == 1.
             int tries = 1;
-            while (tries-- && !tl_monotype_is_concrete_no_weak(alloc, resolved)) {
+            while (tries-- && !tl_monotype_is_concrete_no_weak(resolved)) {
                 // tl_monotype *copy = tl_monotype_clone(alloc, resolved);
                 tl_monotype_substitute_(alloc, resolved, subs, exclude, seen);
                 // resolved = copy;
@@ -2362,8 +2366,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 }
 
 void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
-    // TODO: use a transient allocator
-    hashmap *seen = hset_create(alloc, 32);
+    hashmap *seen = hset_create(transient_allocator, 32);
     tl_monotype_substitute_(alloc, self, subs, exclude, &seen);
     hset_destroy(&seen);
 }
@@ -2431,7 +2434,7 @@ void tl_type_env_log(tl_type_env *self) {
 //
 
 void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
-    hashmap               *seen        = hset_create(alloc, 128);
+    hashmap               *seen        = hset_create(transient_allocator, 128);
     tl_type_variable_array equiv_class = {.alloc = alloc};
 
     forall(i, self->data) {
@@ -2518,7 +2521,7 @@ tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized
     tl_monotype_array arr = {.alloc = alloc};
     array_reserve(arr, polys.size);
     forall(i, polys) {
-        tl_monotype *mono = tl_polytype_concrete(alloc, polys.v[i]);
+        tl_monotype *mono = tl_polytype_concrete(polys.v[i]);
         array_push(arr, mono);
     }
     array_shrink(arr);

@@ -213,7 +213,7 @@ static void generate_structs(transpile *self) {
 
         if (type->type->tag == tl_tuple) {
             if (tl_polytype_is_scheme(type)) fatal("type is scheme");
-            if (!tl_polytype_is_concrete(self->transient, type)) fatal("struct type is not concrete");
+            if (!tl_polytype_is_concrete(type)) fatal("struct type is not concrete");
             generate_struct(self, type->type);
         }
     }
@@ -259,7 +259,7 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
-    if (!tl_polytype_is_concrete(self->transient, poly)) return;
+    if (!tl_polytype_is_concrete(poly)) return;
 
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
@@ -309,7 +309,7 @@ static void generate_one_user_type_forward(transpile *self, ast_node *node) {
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
-    if (!tl_polytype_is_concrete(self->transient, poly)) return;
+    if (!tl_polytype_is_concrete(poly)) return;
 
     tl_type_constructor_def *def = poly->type->cons_inst->def;
     if (!def) fatal("missing type def");
@@ -390,7 +390,7 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
         str          field      = fvs.v[i];
         tl_polytype *field_type = tl_type_env_lookup(self->env, field);
         if (!field_type) return;
-        if (!tl_polytype_is_concrete(self->transient, field_type)) return;
+        if (!tl_polytype_is_concrete(field_type)) return;
     }
 
     cat(self, S("typedef struct "));
@@ -517,7 +517,7 @@ static void generate_toplevel_values(transpile *self) {
         str name = ast_node_str(node->let_in.name);
         if (is_c_symbol(name)) continue;
         tl_polytype *type = node->let_in.value->type;
-        if (!tl_polytype_is_concrete(self->transient, type)) continue;
+        if (!tl_polytype_is_concrete(type)) continue;
 
         generate_decl(self, name, type->type);
     }
@@ -534,7 +534,7 @@ static void generate_toplevel_values(transpile *self) {
         str name = ast_node_str(node->let_in.name);
         if (is_c_symbol(name)) continue;
         tl_polytype *type = node->let_in.value->type;
-        if (!tl_polytype_is_concrete(self->transient, type)) continue;
+        if (!tl_polytype_is_concrete(type)) continue;
 
         str value = generate_expr(self, type->type, node->let_in.value, null);
         generate_assign_lhs(self, name);
@@ -974,7 +974,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 exit_error(node->let_in.value->file, node->let_in.value->line,
                            "value has incomplete type information: %s", str_cstr(&original));
             }
-        } else if (tl_monotype_is_concrete(self->transient, type)) {
+        } else if (tl_monotype_is_concrete(type)) {
             if (should_assign_result(ctx, type)) {
                 generate_decl(self, name, type);
                 if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
@@ -1876,7 +1876,7 @@ static int should_generate(str name, tl_polytype *type) {
 static str type_to_c(transpile *self, tl_polytype *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype *mono = type->type;
-    if (tl_monotype_is_concrete_no_arrow(self->transient, mono)) {
+    if (tl_monotype_is_concrete_no_arrow(mono)) {
         str cons_name = mono->cons_inst->def->name;
         if (str_eq(S("Int"), cons_name)) {
             return S("long long");
@@ -2137,7 +2137,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     ast_node const *arg  = node->named_application.arguments[0];
 
     tl_polytype    *poly = arg->type;
-    if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(self->transient, poly))
+    if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(poly))
         poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
     if (tl_monotype_is_type_literal(poly->type)) {

@@ -1581,7 +1581,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // a function type
 
             // if the type is not generic, try to recover the generic one
-            if (tl_polytype_is_concrete(self->transient, type)) {
+            if (tl_polytype_is_concrete(type)) {
                 if (!str_is_empty(original)) {
                     tl_polytype *found = tl_type_env_lookup(self->env, original);
                     if (found) type = found;
@@ -1761,7 +1761,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
             }
 
             (void)specialize_type_constructor(self, generic_name, args.v[i]->cons_inst->args, &poly);
-            if (poly) args.v[i] = tl_polytype_concrete(self->transient, poly);
+            if (poly) args.v[i] = tl_polytype_concrete(poly);
         }
     }
 
@@ -1927,9 +1927,7 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
     tl_polytype *value_type = node->let_in.value->type;
 
     if (!name_type || !value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
-    if (!tl_polytype_is_concrete(self->transient, name_type) ||
-        !tl_polytype_is_concrete(self->transient, value_type))
-        return 0;
+    if (!tl_polytype_is_concrete(name_type) || !tl_polytype_is_concrete(value_type)) return 0;
     if (!ast_node_is_symbol(node->let_in.value)) return 0;
 
     str value_name = ast_node_str(node->let_in.value);
@@ -2046,7 +2044,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
 static str lookup_arrow(tl_infer *self, str name, tl_monotype *arrow) {
     str inst_name = str_empty();
-    if (!tl_monotype_is_concrete(self->transient, arrow)) return inst_name;
+    if (!tl_monotype_is_concrete(arrow)) return inst_name;
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
@@ -2061,7 +2059,7 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
     // TODO: cleanup combine with specialize_one
 
     str inst_name = str_empty();
-    if (!tl_monotype_is_concrete(self->transient, arrow)) return inst_name;
+    if (!tl_monotype_is_concrete(arrow)) return inst_name;
     else {
         // does a specialized toplevel with this name and concrete type already exist?
         if (str_hset_contains(self->instance_names, name)) return name;
@@ -2373,7 +2371,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
     add_free_variables_to_arrow(self, generic_node, &wrap);
 
     // add to type environment
-    if (!tl_monotype_is_concrete(self->transient, callsite)) {
+    if (!tl_monotype_is_concrete(callsite)) {
         // Note: functions like c_malloc etc will not have concrete types but still need to exist in the
         // environment.
         str arrow_str = tl_monotype_to_string(self->transient, callsite);
@@ -2760,8 +2758,7 @@ void admit_generic_pointers(tl_infer *self) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
-        if (!tl_polytype_is_concrete(self->transient, type))
-            tl_monotype_force_tv_to_nil(type->type, ctx.nil, &ctx.seen);
+        if (!tl_polytype_is_concrete(type)) tl_monotype_force_tv_to_nil(type->type, ctx.nil, &ctx.seen);
     }
 
     hset_destroy(&ctx.seen);
@@ -2814,7 +2811,7 @@ void remove_generic_toplevels(tl_infer *self) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
-        if (!tl_polytype_is_concrete(self->transient, type)) array_push(names, name);
+        if (!tl_polytype_is_concrete(type)) array_push(names, name);
     }
 
     forall(i, names) {
@@ -2939,7 +2936,7 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
     if (!mono) {
         // not found, specialize it if all args are concrete
         tl_polytype *specialized = null;
-        if (!tl_monotype_sized_is_concrete(self->transient, args)) return null;
+        if (!tl_monotype_sized_is_concrete(args)) return null;
         specialize_type_constructor(self, type_name, args, &specialized);
         if (!specialized) return null;
         mono = specialized->type;

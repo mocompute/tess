@@ -123,31 +123,31 @@ int                    tl_monotype_is_inst(tl_monotype *);
 int                    tl_monotype_is_inst_of(tl_monotype *, str);
 int                    tl_monotype_is_enum(tl_monotype *);
 int                    tl_monotype_is_tuple(tl_monotype *);
-int                    tl_monotype_is_concrete(allocator *, tl_monotype *);
+int                    tl_monotype_is_concrete(tl_monotype *);
 int                    tl_monotype_is_weak(tl_monotype *);
-int                    tl_monotype_is_weak_deep(allocator *, tl_monotype *);
-int                    tl_monotype_sized_is_concrete(allocator *, tl_monotype_sized);
-int          tl_monotype_is_concrete_no_arrow(allocator *, tl_monotype *); // constructed non-arrow type
-int          tl_monotype_is_concrete_no_weak(allocator *, tl_monotype *);
-int          tl_monotype_sized_is_concrete_no_weak(allocator *, tl_monotype_sized);
-int          tl_monotype_is_arrow(tl_monotype *);
-int          tl_monotype_is_ptr(tl_monotype *);
-int          tl_monotype_has_ptr(tl_monotype *);
-int          tl_monotype_is_union(tl_monotype *);
-int          tl_monotype_is_tv(tl_monotype *);
-int          tl_monotype_is_type_literal(tl_monotype *);
-int          tl_monotype_is_integer_convertible(tl_monotype *);
-void         tl_monotype_set_integer_convertible(tl_monotype *);
-tl_monotype *tl_monotype_ptr_target(tl_monotype *);
-void         tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
-tl_monotype *tl_monotype_literal_target(tl_monotype *);
-tl_monotype *tl_monotype_arrow_args(tl_monotype *);
-tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
-void              tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *, hashmap **);
-void              tl_monotype_force_union_resolve(tl_monotype *);
-i32               tl_monotype_type_constructor_field_index(tl_monotype *, str);
-int               tl_monotype_is_string(tl_monotype *);
-int               tl_monotype_is_ptr_to_char(tl_monotype *);
+int                    tl_monotype_is_weak_deep(tl_monotype *);
+int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
+int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // constructed non-arrow type
+int                    tl_monotype_is_concrete_no_weak(tl_monotype *);
+int                    tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
+int                    tl_monotype_is_arrow(tl_monotype *);
+int                    tl_monotype_is_ptr(tl_monotype *);
+int                    tl_monotype_has_ptr(tl_monotype *);
+int                    tl_monotype_is_union(tl_monotype *);
+int                    tl_monotype_is_tv(tl_monotype *);
+int                    tl_monotype_is_type_literal(tl_monotype *);
+int                    tl_monotype_is_integer_convertible(tl_monotype *);
+void                   tl_monotype_set_integer_convertible(tl_monotype *);
+tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
+void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
+tl_monotype           *tl_monotype_literal_target(tl_monotype *);
+tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
+tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
+void                   tl_monotype_force_tv_to_nil(tl_monotype *, tl_monotype *, hashmap **);
+void                   tl_monotype_force_union_resolve(tl_monotype *);
+i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
+int                    tl_monotype_is_string(tl_monotype *);
+int                    tl_monotype_is_ptr_to_char(tl_monotype *);
 
 // -- polytype --
 
@@ -172,7 +172,7 @@ nodiscard tl_monotype *tl_polytype_specialize(allocator *, tl_polytype *, tl_mon
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
 void                   tl_polytype_generalize(tl_polytype *, tl_type_env *, tl_type_subs *);
 
-tl_monotype           *tl_polytype_concrete(allocator *, tl_polytype *);
+tl_monotype           *tl_polytype_concrete(tl_polytype *);
 
 // Warning: must use same allocator as that which created self's array.
 void        tl_polytype_merge_quantifiers(allocator *, tl_polytype *, tl_polytype *);
@@ -182,7 +182,7 @@ tl_polytype tl_polytype_wrap(tl_monotype *);
 str         tl_polytype_to_string(allocator *, tl_polytype *);
 
 int         tl_polytype_is_scheme(tl_polytype *);
-int         tl_polytype_is_concrete(allocator *, tl_polytype *);
+int         tl_polytype_is_concrete(tl_polytype *);
 int         tl_polytype_is_type_constructor(tl_polytype *);
 int         tl_polytype_is_nullary(tl_polytype *);
 int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
