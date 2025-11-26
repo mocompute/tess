@@ -1508,6 +1508,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // a type constructor or type literal
 
             // Try to parse it as a type literal
+          // FIXME: need to parse again? what about resolve-node above? Just check if type is literal
             tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
             if (parsed) {
                 if (constrain_pm(self, node->type, parsed, node)) return 1;
@@ -1523,11 +1524,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             ast_node          *arg;
             while ((arg = ast_arguments_next(&iter))) {
                 if (resolve_node(self, arg, traverse_ctx, npos_function_argument)) return 1;
-                ensure_tv(self, &arg->type);
+                ensure_tv(self, &arg->type); // FIXME remove 
                 assert(!tl_polytype_is_scheme(arg->type));
                 array_push(args, arg->type->type);
             }
             array_shrink(args);
+            
+            // FIXME: args is unused? instantiate-with?
 
             tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
             if (!inst) {
