@@ -2,7 +2,7 @@
 #import <stdlib.tl>
 #import <Array.tl>
 
-Point : { x : a, y : a, next: Ptr(Point) }
+Point : { x : Int, y : Int, next: Ptr(Point) }
 
 make_points(count) { Array.with_capacity(Point, count) }
 

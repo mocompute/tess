@@ -157,7 +157,7 @@ with_capacity(a: Type, count: Int) {
 reserve(self: Ptr(T(a)), count: Int) {
   // This is an if statement. Round braces are optional around the condition.
   if self->capacity < count {
-    p := c_realloc(self->v, count * _type_width_aligned(a))
+    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
 
     // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
     if p == null { _tl_fatal_("oom") }
