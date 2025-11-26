@@ -90,6 +90,7 @@ size_t hset_size(hashmap const *);
 // -- utilities --
 int       map_iter(hashmap const *, hashmap_iterator *);
 int       hset_iter(hashmap const *, hashmap_iterator *);
+str_array str_map_keys(allocator *, hashmap *);
 str_array str_map_sorted_keys(allocator *, hashmap *);
 
 // To document key and value types at create callsite

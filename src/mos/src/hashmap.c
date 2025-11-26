@@ -397,7 +397,7 @@ void str_map_set_ptr(hashmap **self, str key, void const *data) {
     return str_map_set(self, key, &data);
 }
 
-str_array str_map_sorted_keys(allocator *alloc, hashmap *self) {
+str_array str_map_keys(allocator *alloc, hashmap *self) {
     str_array out = {.alloc = alloc};
     array_reserve(out, self->n_occupied);
     hashmap_iterator iter = {0};
@@ -406,6 +406,11 @@ str_array str_map_sorted_keys(allocator *alloc, hashmap *self) {
         array_push(out, key);
     }
     array_shrink(out);
+    return out;
+}
+
+str_array str_map_sorted_keys(allocator *alloc, hashmap *self) {
+    str_array out = str_map_keys(alloc, self);
     str_sized_sort((str_sized)sized_all(out));
     return out;
 }
