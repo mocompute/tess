@@ -413,6 +413,16 @@ static tl_monotype *type_literal_value(tl_type_registry *self, tl_type_registry_
     return mono;
 }
 
+static tl_monotype *maybe_unwrap_literal(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
+                                         ast_node const *node, tl_monotype *mono) {
+    if (!mono) return null;
+
+    if (!ast_node_is_symbol(node) || !str_map_contains(ctx->type_arguments, ast_node_str(node))) {
+        mono = type_literal_value(self, ctx, mono);
+    }
+    return mono;
+}
+
 static tl_monotype *tl_type_registry_parse_type_(tl_type_registry                *self,
                                                  tl_type_registry_parse_type_ctx *ctx,
                                                  ast_node const                  *node) {
@@ -444,6 +454,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = str_map_get_ptr(ctx->type_arguments, name);
         if (result) {
             // Note: type arguments will need to be handled in a context-sensitive way by the caller.
+            str tmp = tl_monotype_to_string(self->transient, result);
+            fprintf(stderr, "parse_type: type argument '%s' : %s\n", str_cstr(&name), str_cstr(&tmp));
             return result;
         }
 
@@ -458,11 +470,10 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // variable.
             if (!result && ast_node_is_symbol(node->symbol.annotation)) {
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
-            }
-            // If the annotation is not a type variable and produces a type literal, unwrap it to return a
-            // type variable for the type of the symbol.
-            else if (result && !str_map_contains(ctx->type_arguments, name)) {
-                result = type_literal_value(self, ctx, result);
+            } else {
+                // If the annotation is not a type variable and produces a type literal, unwrap it to return
+                // a type variable for the type of the symbol.
+                result = maybe_unwrap_literal(self, ctx, node, result);
             }
         }
 
@@ -516,13 +527,10 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     return null;
                 }
             }
-
             // else if it's a type literal, unwrap it
-            else if (tl_monotype_is_type_literal(mono)) {
-                mono = type_literal_value(self, ctx, mono);
-                // mono = tl_monotype_literal_target(mono);
+            else {
+                mono = maybe_unwrap_literal(self, ctx, nodes.v[i], mono);
             }
-
             array_push_val(args, mono);
         }
 
@@ -553,11 +561,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
             if (!mono) return null;
 
-            // if (mono && tl_monotype_is_type_literal(mono)) {
-            //     mono = type_literal_value(self, ctx, mono);
-            //     // mono = tl_monotype_literal_target(mono);
-            // }
-
+            mono = maybe_unwrap_literal(self, ctx, nodes.v[i], mono);
             array_push_val(args, mono);
         }
         tl_monotype *left_mono =
@@ -565,11 +569,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
         if (!right_mono) return null;
-        if (tl_monotype_is_type_literal(right_mono)) {
-            right_mono = type_literal_value(self, ctx, right_mono);
-            // right_mono = tl_monotype_literal_target(right_mono);
-        }
-
+        right_mono         = maybe_unwrap_literal(self, ctx, node->arrow.right, right_mono);
         tl_monotype *arrow = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
         result             = arrow;
     }
@@ -607,12 +607,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, annotations[i]);
                 if (!mono) return null; // TODO: better error
 
-                // unwrap
-                if (mono && tl_monotype_is_type_literal(mono)) {
-                    mono = type_literal_value(self, ctx, mono);
-                    // mono = tl_monotype_literal_target(mono);
-                }
-
+                mono = maybe_unwrap_literal(self, ctx, annotations[i], mono);
                 array_push(field_types, mono);
             }
         }
@@ -649,12 +644,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                         tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, target);
                         if (!mono) fatal("runtime error");
 
-                        // FIXME: needed?
-                        // unwrap
-                        if (mono && tl_monotype_is_type_literal(mono)) {
-                            mono = type_literal_value(self, ctx, mono);
-                            // mono = tl_monotype_literal_target(mono);
-                        }
+                        mono = maybe_unwrap_literal(self, ctx, target, mono);
+
                         assert(i < field_types.size);
                         field_types.v[i] = mono;
                     }

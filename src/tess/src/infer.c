@@ -980,6 +980,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                     map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
 
                     // Also add type arguments to lexical names. Especially for free variables process.
+
+                    // TODO sort not needed
                     str_array arr = str_map_sorted_keys(self->transient, parse_ctx.type_arguments);
                     forall(i, arr) str_hset_insert(&ctx->lexical_names, arr.v[i]);
                 }
@@ -990,16 +992,23 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 // Note: Type arguments cannot be constrained at the usage point the way normal types would
                 // be in the value context, because they operate in the type context.
 
-                if (ctx && !str_map_contains(ctx->type_arguments, name)) {
-                    // if annotation is a type literal, unwrap it
-                    if (tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
-                        tl_monotype *target =
-                          tl_monotype_literal_target(node->symbol.annotation_type->type);
-                        tl_polytype *poly = tl_polytype_absorb_mono(self->arena, target);
-                        if (constrain_or_set(self, node, poly)) return 1;
+                if (ctx) {
+                    tl_polytype *poly = node->symbol.annotation_type;
+                    if (!str_map_contains(ctx->type_arguments, name)) {
+                        // not a type argument: unwrap literal, if any, to constrain the symbol
+
+                        if (tl_monotype_is_type_literal(poly->type)) {
+                            tl_monotype *target = tl_monotype_literal_target(poly->type);
+                            poly                = tl_polytype_absorb_mono(self->arena, target);
+                        }
+
                     } else {
-                        if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
+                        // a type argument: constrain the symbol to the type literal argument, rather than
+                        // its annotated type
+                        tl_monotype *mono = str_map_get_ptr(ctx->type_arguments, name);
+                        poly              = tl_polytype_absorb_mono(self->arena, mono);
                     }
+                    if (constrain_or_set(self, node, poly)) return 1;
                 }
 
             } else {
