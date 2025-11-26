@@ -2143,7 +2143,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     if (tl_monotype_is_type_literal(poly->type)) {
         // type literal
         tl_monotype *type = tl_monotype_literal_target(poly->type);
-        // update_type(self, &type);
+        update_type(self, &type);
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
 
