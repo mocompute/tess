@@ -1070,9 +1070,18 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_assign_lhs:
+        if (reject_type_literal(self, node)) return 1;
+        // Note: do not add symbol to env from this position: could be a generic re-use with prior type
+        // information.
+        break;
+
     case npos_field_name:
         if (reject_type_literal(self, node)) return 1;
-        // Note: do not add symbol node to env from this position: field names, or reassignments.
+        // Note: do not add symbol node to env from this position: field names. Rather,
+        // ensure any existing non-type-variable type is replaced by a new type variable.
+        if (node->type) {
+            ast_node_type_set(node, tl_polytype_create_fresh_tv(self->arena, self->subs));
+        }
         break;
 
     case npos_operand:
