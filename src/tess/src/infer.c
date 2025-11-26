@@ -70,7 +70,6 @@ typedef enum {
 typedef struct {
     hashmap      *lexical_names;  // exists only during traverse_ast: hset str
     hashmap      *type_arguments; // map str -> tl_monotype*: arguments which are type literals
-    hashmap      *seen_node;      // hset ast_node* FIXME: needed?
     void         *user;
     node_position node_pos; // set by traverse_ast based on parent node
     int           is_field_name;
@@ -435,7 +434,6 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 static traverse_ctx *traverse_ctx_create(allocator *alloc) {
     traverse_ctx *out   = new (alloc, traverse_ctx);
     out->lexical_names  = hset_create(alloc, 32);
-    out->seen_node      = hset_create(alloc, 1024);
     out->type_arguments = map_create_ptr(alloc, 16);
     out->user           = null;
     out->node_pos       = npos_operand;
@@ -446,7 +444,6 @@ static traverse_ctx *traverse_ctx_create(allocator *alloc) {
 }
 
 static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
-    if ((*p)->seen_node) map_destroy(&(*p)->seen_node);
     if ((*p)->type_arguments) map_destroy(&(*p)->type_arguments);
     if ((*p)->lexical_names) hset_destroy(&(*p)->lexical_names);
 
@@ -596,8 +593,6 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
 
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
-
-    hset_insert(&ctx->seen_node, &node, sizeof(ast_node *));
 
     switch (node->tag) {
     case ast_let: {
