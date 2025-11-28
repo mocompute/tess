@@ -595,7 +595,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     switch (node->tag) {
     case ast_let: {
-
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
 
@@ -1067,6 +1066,19 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (reject_type_literal(self, node)) return 1;
         // Note: do not add symbol to env from this position: could be a generic re-use with prior type
         // information.
+
+        // Support annotations on lhs of assignments, such as field names
+        if (ast_node_is_symbol(node) && node->symbol.annotation) {
+            tl_type_registry_parse_type_ctx parse_ctx;
+            tl_monotype                    *parsed =
+              tl_type_registry_parse_type_out_ctx(self->registry, node->symbol.annotation, self->transient,
+                                                  ctx ? ctx->type_arguments : null, &parse_ctx);
+
+            if (parsed) {
+                if (tl_monotype_is_type_literal(parsed)) parsed = tl_monotype_literal_target(parsed);
+                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
+            }
+        }
         break;
 
     case npos_field_name:
@@ -1715,14 +1727,20 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
-static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
-                                       tl_polytype **out_type) {
+static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_sized args,
+                                        tl_polytype **out_type, hashmap **seen) {
     if (out_type) *out_type = null;
 
     // do not specialize if it's an enum
     {
         ast_node *utd = toplevel_get(self, name);
         if (utd && ast_node_is_enum_def(utd)) return str_empty();
+    }
+
+    if (1) {
+        name_and_type key = {.name_hash = str_hash64(name), .type_hash = tl_monotype_sized_hash64(0, args)};
+        if (hset_contains(*seen, &key, sizeof key)) return str_empty();
+        hset_insert(seen, &key, sizeof key);
     }
 
     // To keep track of monotypes that are recursive references to the type being specialized.
@@ -1749,7 +1767,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
                 }
             }
 
-            (void)specialize_type_constructor(self, generic_name, args.v[i]->cons_inst->args, &poly);
+            (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
             if (poly) args.v[i] = tl_polytype_concrete(poly);
         }
     }
@@ -1792,6 +1810,15 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 cancel:
     cancel_last_instantiation(self);
     return out_str;
+}
+
+static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
+                                       tl_polytype **out_type) {
+
+    hashmap *seen = hset_create(self->transient, 8);
+    str      out  = specialize_type_constructor_(self, name, args, out_type, &seen);
+    hset_destroy(&seen);
+    return out;
 }
 
 int is_union_struct(tl_infer *self, str name) {
@@ -1837,7 +1864,10 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
-    if (special_type) ast_node_type_set(node, special_type); // Note: this helps the transpiler
+    if (special_type) {
+        fprintf(stderr, "specialize_user_type: replacing node type.\n");
+        ast_node_type_set(node, special_type); // Note: this helps the transpiler
+    }
 
     return 0;
 }
@@ -2560,7 +2590,7 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 static int generic_declaration(tl_infer *self, str name, ast_node const *name_node, ast_node *node) {
     // no function body, so let's treat this as a type declaration
     if (!name_node->symbol.annotation_type) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+        expected_type(self, node);
         return 1;
     }
 
@@ -2893,50 +2923,85 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
     return mono;
 }
 
-tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
+tl_monotype        *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono);
+
+static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, hashmap **seen,
+                                           hashmap **in_progress) {
+
+    tl_monotype *out = null;
+
+    assert(tl_monotype_is_inst(mono));
+    if (!tl_monotype_is_concrete(mono)) return null;
+
+    int tries = 10;
+    while (tries--) {
+        int did_fail = 0;
+
+        forall(i, mono->cons_inst->args) {
+            tl_monotype *arg = mono->cons_inst->args.v[i];
+
+            if (tl_monotype_is_inst(arg)) {
+                if (arg->cons_inst->args.size) {
+                    str generic_name = arg->cons_inst->def->generic_name;
+
+                    if (str_hset_contains(*in_progress, generic_name)) continue;
+
+                    str_hset_insert(in_progress, generic_name);
+                    tl_monotype *replace = get_or_specialize_inst(self, arg, seen, in_progress);
+                    str_hset_remove(*in_progress, generic_name);
+
+                    if (replace) mono->cons_inst->args.v[i] = replace;
+                    else did_fail = 1;
+                }
+            } else {
+                tl_monotype *replace = tl_infer_update_specialized_type(self, arg);
+                if (replace) mono->cons_inst->args.v[i] = replace;
+                // ok if it returns null
+            }
+        }
+
+        if (did_fail) continue;
+
+        if (mono->cons_inst->args.size) {
+            str               type_name = mono->cons_inst->def->generic_name;
+            tl_monotype_sized type_args = mono->cons_inst->args;
+            tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
+            if (replace) out = replace;
+            else did_fail = 1;
+        }
+
+        if (!did_fail) break;
+    }
+
+    if (tries == -1) fatal("loop exhausted");
+    return out;
+}
+
+tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
+                                               hashmap **in_progress) {
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
+
+    // FIXME
+    (void)seen;
 
     switch (mono->tag) {
 
     case tl_any:
     case tl_ellipsis:
     case tl_var:
-    case tl_weak:
-    case tl_literal:  break;
+    case tl_weak:     break;
+
+    case tl_literal:  {
+        tl_monotype *target  = tl_monotype_literal_target(mono);
+        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, seen, in_progress);
+        if (replace) return tl_monotype_create_literal(self->arena, replace);
+    } break;
 
     case tl_cons_inst:
         // already specialized?
         if (!str_is_empty(mono->cons_inst->special_name)) return null;
-
-        // To keep track of monotypes that are recursive references to the type being specialized.
-        tl_monotype_ptr_array recur_refs = {.alloc = self->transient};
-
-        // first recurse through the type args
-        forall(i, mono->cons_inst->args) {
-            tl_monotype *arg_ty = mono->cons_inst->args.v[i];
-            if (mono == arg_ty) {
-                array_push_val(recur_refs, &mono->cons_inst->args.v[i]);
-                continue;
-            }
-
-            if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) {
-                array_push_val(recur_refs, &arg_ty->cons_inst->args.v[0]);
-                continue;
-            }
-
-            tl_monotype *replace = tl_infer_update_specialized_type(self, mono->cons_inst->args.v[i]);
-            if (replace) mono->cons_inst->args.v[i] = replace;
-        }
-
-        str               type_name = mono->cons_inst->def->generic_name;
-        tl_monotype_sized type_args = mono->cons_inst->args;
-        tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
-
-        forall(i, recur_refs) {
-            *recur_refs.v[i] = replace;
-        }
-
+        tl_monotype *replace = get_or_specialize_inst(self, mono, seen, in_progress);
         return replace;
 
     case tl_arrow:
@@ -2949,16 +3014,28 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
             if (mono == arg_ty) continue;
             if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) continue;
 
-            tl_monotype *replace = tl_infer_update_specialized_type(self, mono->list.xs.v[i]);
+            tl_monotype *replace =
+              tl_infer_update_specialized_type_(self, mono->list.xs.v[i], seen, in_progress);
             if (replace) {
+                // map_set_ptr(seen, &mono->list.xs.v[i], sizeof(tl_monotype *), replace);
                 mono->list.xs.v[i] = replace;
                 did_replace        = 1;
             }
         }
         if (did_replace) return mono;
+
     } break;
     }
     return null;
+}
+
+tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
+    hashmap     *seen        = map_new(self->transient, tl_monotype *, tl_monotype *, 8);
+    hashmap     *in_progress = hset_create(self->transient, 8);
+    tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &seen, &in_progress);
+    map_destroy(&in_progress);
+    map_destroy(&seen);
+    return out;
 }
 
 static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
@@ -2983,9 +3060,6 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
 static void update_types_arrow(tl_infer *self, ast_node *node) {
     if (ast_node_is_let_in(node)) {
         ast_node *ident = node->let_in.value;
-        fixup_arrow_name(self, ident);
-    } else if (ast_node_is_let(node)) {
-        ast_node *ident = node->let.name;
         fixup_arrow_name(self, ident);
     }
 }
@@ -3051,6 +3125,7 @@ static void update_specialized_types(tl_infer *self) {
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
         traverse_ast(self, traverse, node, update_types_cb);
+        // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
     traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);

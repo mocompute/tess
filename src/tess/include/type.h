@@ -149,6 +149,8 @@ i32                    tl_monotype_type_constructor_field_index(tl_monotype *, s
 int                    tl_monotype_is_string(tl_monotype *);
 int                    tl_monotype_is_ptr_to_char(tl_monotype *);
 
+u64                    tl_type_constructor_def_hash64(tl_type_constructor_def *);
+
 // -- polytype --
 
 nodiscard tl_polytype *tl_polytype_absorb_mono(allocator *,

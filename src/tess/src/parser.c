@@ -856,7 +856,9 @@ static int a_type_identifier(parser *self) {
             ast_node *op = self->result;
 
             if (str_cmp_c(op->symbol.name, ".")) return 1;
-            if (a_try(self, a_identifier)) return 1;
+
+            // FIXME: recurses, but ellipsis should not be accepted
+            if (a_try(self, a_type_identifier)) return 1;
             ast_node *right = self->result;
 
             if (maybe_mangle_binop(self, op, &ident, right)) {
@@ -2047,7 +2049,7 @@ static void tokens_shrink(struct parser *p, u32 n) {
 void parser_report_errors(parser *self) {
     if (tl_err_ok == self->error.tag) return;
 
-    fprintf(stderr, "%s:%u:%u: %s\n", self->error.file, self->error.line, self->error.col,
+    fprintf(stderr, "%s:%u:%u: syntax error: %s\n", self->error.file, self->error.line, self->error.col,
             tl_error_tag_to_string(self->error.tag));
 }
 static int too_many_arguments(parser *self) {

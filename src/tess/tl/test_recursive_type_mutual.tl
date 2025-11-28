@@ -1,8 +1,8 @@
 #module main
 #import <Array.tl>
 
-Tree(a) : { value : a, children : Ptr(Forest(a)) }
-Forest(a) : { trees : Array(Tree(a)) }
+Tree(a)   : { value : a, children : Ptr(Forest(a)) }
+Forest(a) : { trees : Array.T(Tree(a)) }
 
 main() {
   t1 := Tree(value = 1, children = null)

@@ -530,6 +530,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             if (!str_map_get_ptr(ctx->type_arguments, target_name_str) &&
                 !tl_type_registry_get(self, target_name_str)) {
                 // target cannot be parsed yet: create a placeholder type for it
+
+                // FIXME: this conditional is catching type variable sugar targets, e.g. Ptr(T).
+
                 tl_monotype *sentinel = tl_monotype_create_any(self->alloc);
                 result                = tl_type_registry_ptr(self, sentinel);
                 str_map_set_ptr(&ctx->deferred_parse, target_name_str, sentinel);
@@ -605,7 +608,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
     }
 
     else if (ast_node_is_utd(node)) {
-        // FIXME: in progress, partial support for struct types
         str        name             = node->user_type_def.name->symbol.name;
         u32        n_type_arguments = node->user_type_def.n_type_arguments;
         u32        n_fields         = node->user_type_def.n_fields;
@@ -654,7 +656,16 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             forall(i, keys) {
                 tl_monotype *sentinel = str_map_get_ptr(ctx->deferred_parse, keys.v[i]);
                 tl_monotype *mono     = poly->type;
-                recur_ptr_targets(self, ctx, mono, sentinel, mono);
+                if (tl_monotype_is_inst(mono)) {
+                    if (str_eq(mono->cons_inst->def->generic_name, keys.v[i])) {
+                        recur_ptr_targets(self, ctx, mono, sentinel, mono);
+                    } else {
+                        tl_monotype *fresh = tl_monotype_create_fresh_weak(self->subs);
+                        recur_ptr_targets(self, ctx, mono, sentinel, fresh);
+                    }
+                } else {
+                    fatal("logic error");
+                }
             }
         }
 
@@ -1170,8 +1181,9 @@ tl_monotype *tl_monotype_create_literal(allocator *alloc, tl_monotype *target) {
 }
 
 tl_monotype *tl_monotype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
+    (void)alloc; // FIXME
     tl_type_variable tv = tl_type_subs_fresh(subs);
-    return tl_monotype_create_tv(alloc, tv);
+    return tl_monotype_create_tv(subs->data.alloc, tv);
 }
 
 tl_monotype *tl_monotype_create_fresh_literal(allocator *alloc, tl_type_subs *subs) {
@@ -1284,9 +1296,12 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     ptr_hset_insert(seen, self);
 
     switch (self->tag) {
-    case tl_any:
     case tl_var:
     case tl_ellipsis: return 0;
+
+    case tl_any:
+        //
+        return 1;
 
     case tl_weak:
         // consider weak type variables as concrete, which is *usually* what type inference client wants.
@@ -1513,6 +1528,7 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
 
 void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
     assert(tl_monotype_is_ptr(ptr));
+    assert(target);
     ptr->cons_inst->args.v[0] = target;
     assert(tl_monotype_ptr_target(ptr) == target);
 }
@@ -1622,7 +1638,16 @@ static int is_same_cons(tl_monotype *self, tl_monotype *other) {
     return str_eq(self->cons_inst->def->generic_name, other->cons_inst->def->generic_name);
 }
 
-u64 tl_monotype_hash64(tl_monotype *self) {
+u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, hashmap **, hashmap **);
+
+u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress) {
+    if (!self) return 0;
+
+    u64 *found = map_get(*seen, &self, sizeof(tl_monotype *));
+    if (found) {
+        return *found;
+    }
+
     u64 hash = hash64(&self->tag, sizeof self->tag);
 
     switch (self->tag) {
@@ -1632,8 +1657,12 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     case tl_weak:      hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_cons_inst: {
-        u64 def_hash           = tl_type_constructor_def_hash64(self->cons_inst->def);
-        hash                   = hash64_combine(hash, &def_hash, sizeof def_hash);
+        tl_type_constructor_def *def      = self->cons_inst->def;
+        u64                      def_hash = tl_type_constructor_def_hash64(def);
+        hash                              = hash64_combine(hash, &def_hash, sizeof def_hash);
+
+        // Recursive types: mark this in-progress
+        map_set(in_progress, &def_hash, sizeof def_hash, &def_hash);
 
         tl_monotype_sized args = self->cons_inst->args;
         forall(i, args) {
@@ -1643,38 +1672,61 @@ u64 tl_monotype_hash64(tl_monotype *self) {
             // constructor as ourselves, we simply tag it as "Self" and go no further.
             if (tl_monotype_is_ptr(arg)) {
                 tl_monotype *target = tl_monotype_ptr_target(arg);
-                if (is_same_cons(target, self)) {
-                    hash = str_hash64_combine(hash, S("SELF"));
+
+                // Check if target is an ancestor in progress
+                u64 *ancestor = null;
+                if (tl_monotype_is_inst(target)) {
+                    u64 ancestor_hash = tl_type_constructor_def_hash64(target->cons_inst->def);
+                    ancestor          = map_get(*in_progress, &ancestor_hash, sizeof ancestor_hash);
+                }
+                if (ancestor) {
+                    // back-reference: use the def hash as a stable hash
+                    hash = hash64_combine(hash, ancestor, sizeof *ancestor);
                 } else {
                     hash  = str_hash64_combine(hash, S("Ptr"));
-                    u64 h = tl_monotype_hash64(target);
+                    u64 h = tl_monotype_hash64_(target, seen, in_progress);
                     hash  = hash64_combine(hash, &h, sizeof h);
                 }
+
             } else {
-                u64 h = tl_monotype_hash64(arg);
+                u64 h = tl_monotype_hash64_(arg, seen, in_progress);
                 hash  = hash64_combine(hash, &h, sizeof h);
             }
         }
 
-        // Important: do not include special_name as part of hash, because specialize_user_type uses
+        // Remove from in-progress
+        map_erase(*in_progress, &def_hash, sizeof def_hash);
+
+        // important: do not include special_name as part of hash, because specialize_user_type uses
         // unspecialised name + hash to de-duplicate
 
     } break;
 
     case tl_arrow:
     case tl_tuple: {
-        hash = tl_monotype_sized_hash64(hash, self->list.xs);
+        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen, in_progress);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
 
     case tl_literal: {
         hash  = str_hash64_combine(hash, S("Literal"));
-        u64 h = tl_monotype_hash64(self->literal);
+        u64 h = tl_monotype_hash64_(self->literal, seen, in_progress);
         hash  = hash64_combine(hash, &h, sizeof h);
     } break;
     }
 
+    map_set(seen, &self, sizeof(tl_monotype *), &hash); // memoise
     return hash;
+}
+
+u64 tl_monotype_hash64(tl_monotype *self) {
+
+    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    u64      out         = tl_monotype_hash64_(self, &seen, &in_progress);
+    map_destroy(&in_progress);
+    map_destroy(&seen);
+    return out;
 }
 
 str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
@@ -2447,13 +2499,22 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
 
 //
 
-u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
+u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen, hashmap **in_progress) {
     u64 hash = seed;
     forall(i, arr) {
-        u64 h = tl_monotype_hash64(arr.v[i]);
+        u64 h = tl_monotype_hash64_(arr.v[i], seen, in_progress);
         hash  = hash64_combine(hash, &h, sizeof h);
     }
     return hash;
+}
+
+u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
+    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    u64      out         = tl_monotype_sized_hash64_(seed, arr, &seen, &in_progress);
+    map_destroy(&in_progress);
+    map_destroy(&seen);
+    return out;
 }
 
 tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in, hashmap **mapping) {
