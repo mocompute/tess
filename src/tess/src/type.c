@@ -531,8 +531,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 !tl_type_registry_get(self, target_name_str)) {
                 // target cannot be parsed yet: create a placeholder type for it
 
-                // FIXME: this conditional is catching type variable sugar targets, e.g. Ptr(T), when `T` is
-                // not known to be a type_argument yet.
+                // FIXME: this conditional is catching type variable sugar targets, e.g. Ptr(T(a)), when `a`
+                // is not known to be a type_argument yet. E.g.: `reserve(self: Ptr(T(a)), count: Int)`
 
                 tl_monotype *sentinel = tl_monotype_create_any(self->alloc);
                 result                = tl_type_registry_ptr(self, sentinel);
