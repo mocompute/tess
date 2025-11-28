@@ -35,9 +35,6 @@ void                tl_infer_report_errors(tl_infer *);
 str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
-// FIXME delete
-tl_monotype        *tl_type_registry_parse(tl_type_registry *, ast_node const *, hashmap **);
-
 tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
 
 int                 is_c_symbol(str);

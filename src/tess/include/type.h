@@ -97,7 +97,7 @@ nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_literal(allocator *, tl_monotype *) mallocfun;
-nodiscard tl_monotype *tl_monotype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;

@@ -1605,17 +1605,6 @@ decl_done:
     if (a_try(self, a_type_identifier)) return 1;
     ast_node *ann = self->result;
 
-    // convert param type annotations into an ast tuple so we can make an ast arrow
-    forall(i, params) {
-        assert(ast_node_is_symbol(params.v[i]));
-        assert(params.v[i]->symbol.annotation);
-
-        // replace param with its annotation
-        // FIXME: for type arguments, this loses the symbol. E.g. `a : Type` loses `a`, so we can't use `a`
-        // in the return type, e.g. `foo(a: Type) -> T(a)`.
-        // params.v[i] = params.v[i]->symbol.annotation;
-    }
-
     // make tuple
     ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
     set_node_file(self, tup);

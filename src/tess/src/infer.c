@@ -1025,13 +1025,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
               self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
 
             if (mono) {
-                // Note: do not attempt to constrain with existing type: the same symbol may be a different
-                // type in different contexts, when it represents a type argument.
-
-                // FIXME: here we only set the node type if it's empty to avoid potenially abandoning a type
-                // variable.
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
-                // if (!node->type) ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, mono));
 
             } else {
                 ensure_tv(self, &node->type);
@@ -2982,9 +2976,6 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
-    // FIXME
-    (void)seen;
-
     switch (mono->tag) {
 
     case tl_any:
@@ -3010,14 +3001,12 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         forall(i, mono->list.xs) {
             tl_monotype *arg_ty = mono->list.xs.v[i];
 
-            // FIXME: incomplete support for recursive type (see above cons_inst case)
             if (mono == arg_ty) continue;
             if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) continue;
 
             tl_monotype *replace =
               tl_infer_update_specialized_type_(self, mono->list.xs.v[i], seen, in_progress);
             if (replace) {
-                // map_set_ptr(seen, &mono->list.xs.v[i], sizeof(tl_monotype *), replace);
                 mono->list.xs.v[i] = replace;
                 did_replace        = 1;
             }

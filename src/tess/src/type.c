@@ -384,7 +384,7 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
             str_map_set_ptr(&ctx->type_arguments, ta, mono);
 
             // Add a fresh tv as value context for the literal
-            tl_monotype *tv = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+            tl_monotype *tv = tl_monotype_create_fresh_tv(self->subs);
             map_set_ptr(&ctx->type_argument_tvs, &mono, sizeof(tl_monotype *), tv);
         }
     }
@@ -531,7 +531,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 !tl_type_registry_get(self, target_name_str)) {
                 // target cannot be parsed yet: create a placeholder type for it
 
-                // FIXME: this conditional is catching type variable sugar targets, e.g. Ptr(T).
+                // FIXME: this conditional is catching type variable sugar targets, e.g. Ptr(T), when `T` is
+                // not known to be a type_argument yet.
 
                 tl_monotype *sentinel = tl_monotype_create_any(self->alloc);
                 result                = tl_type_registry_ptr(self, sentinel);
@@ -620,7 +621,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         for (u32 i = 0, n = n_type_arguments; i < n; ++i) {
             assert(ast_node_is_symbol(type_arguments[i]));
-            tl_monotype *mono = tl_monotype_create_fresh_tv(self->alloc, self->subs);
+            tl_monotype *mono = tl_monotype_create_fresh_tv(self->subs);
             str_map_set_ptr(&ctx->type_arguments, ast_node_str(type_arguments[i]), mono);
 
             array_push(type_argument_tvs, mono->var);
@@ -1025,8 +1026,6 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     if (!self->quantifiers.size) return fresh;
     if (self->quantifiers.size != args.size) fatal("logic error");
 
-    // FIXME detect recursion
-
     hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), args.size);
 
     forall(i, self->quantifiers) {
@@ -1180,8 +1179,7 @@ tl_monotype *tl_monotype_create_literal(allocator *alloc, tl_monotype *target) {
     return self;
 }
 
-tl_monotype *tl_monotype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
-    (void)alloc; // FIXME
+tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *subs) {
     tl_type_variable tv = tl_type_subs_fresh(subs);
     return tl_monotype_create_tv(subs->data.alloc, tv);
 }
