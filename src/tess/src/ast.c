@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#define DEBUG_TYPE_SET 1
+#define DEBUG_TYPE_SET 0
 
 ast_node *ast_node_create(allocator *alloc, ast_tag tag) {
     // FIXME this should probably be called alloc, because it doesn't

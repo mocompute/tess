@@ -250,6 +250,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         else if (ast_node_is_type_alias(node)) {
             str          name = toplevel_name(node);
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->type_alias.target);
+            if (tl_monotype_is_type_literal(mono)) mono = tl_monotype_literal_target(mono);
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);
             {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
