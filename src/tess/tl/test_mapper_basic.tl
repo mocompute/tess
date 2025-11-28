@@ -15,10 +15,9 @@ map(f: (a) -> b, arr: T(a)) {
   out := T(v = out_p, size = arr.size, capacity = arr.size)
 
   i := 0
-  while i < arr.size {
+  while i < arr.size, i = i + 1 {
     mapped := f(arr.v[i])
     out.v[i] = mapped
-    i = i + 1
   }
   out
 }
