@@ -573,6 +573,10 @@ str str_build_str(allocator *alloc, str_build self) {
 }
 
 str str_build_finish(str_build *p) {
+    // grow buffer to make room for \0 for str_cstr
+    array_push_val(*p, '\0');
+    p->size--;
+
     str out = str_init_move_n(&p->v, p->size);
     // move will leave p->v unchanged if it's copying into small
     // string storage, so we have to free it.
