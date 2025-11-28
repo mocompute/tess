@@ -7,6 +7,7 @@ T(a) : {
   capacity:     Int,
 }
 
+// FIXME: this foward decl should not interfere with type inference
 // map(f: (a) -> b, arr: T(a)) -> T(b)
 
 map(f: (a) -> b, arr: T(a)) {
