@@ -14,6 +14,7 @@ main() {
 
   Array.push(points.&, Point(0, 1))
   Array.push(points.&, Point(2, 3))
+  Array.push(rects.&, Rect(topleft = points.v[0], botright = points.v[1]))
 
   res := points.v[0].x
   if (points.v[0].x != 0) { res = 1 }

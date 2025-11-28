@@ -63,18 +63,18 @@ T(a) : {
 }
 
 // This syntax declares a type alias. `TPtr` may be used in place of `Ptr(T(a))` in all contexts. However,
-// since this is a generic type (using the type variable `a`), note that use of `TPtr` does NOT provide
-// access to `a`. To understand the consequence of this, refer to the definition of `reserve()` below:
-// notice that it must use `Ptr(T(a))` because the body of the function needs to refer to the `a` type
-// variable explicitly. In practice, most generic function implementations do not need to refer explicitly
-// to its type argument. TL does not support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
+// since this is a generic type (using the type variable `a`), note that use of `TPtr` in a type annotation
+// does NOT provide access to `a`. To understand the consequence of this, refer to the definition of
+// `reserve()` below: notice that it must use `Ptr(T(a))` because the body of the function needs to refer to
+// the `a` type variable explicitly. In practice, most generic function implementations do not need to refer
+// explicitly to its type argument. TL does not support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
 TPtr = Ptr(T(a))
 
 // -- Synopsis --
 
 // This is an optional section which introduces the public API of this module and their type definitions. It
-// demonstrates the syntax used for forward declarations. Functions (and identifiers in general) must be
-// declared before their use.
+// demonstrates the syntax used for forward declarations. Forward declarations for functions are NOT
+// required, but they can provide useful documentation.
 
 // Construct an empty array with elements of type a.
 empty(a: Type) -> T(a)
