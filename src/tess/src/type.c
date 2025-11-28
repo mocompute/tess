@@ -551,13 +551,12 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // variable - not a type argument. Otherwise, it's an error
             if (!mono) {
                 if (ast_node_is_symbol(nodes.v[i])) {
+                    assert(ctx);
                     mono = type_variable_sugar(self, ctx, nodes.v[i]);
                 } else {
                     return null;
                 }
-            }
-            // else if it's a type literal, unwrap it
-            else {
+            } else {
                 // Note: unwrap even if it is a type argument, because it's an argument to another type
                 // constructor.
                 mono = type_literal_value(self, ctx, mono);
@@ -590,8 +589,14 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
-            if (!mono) return null;
-
+            if (!mono) {
+                assert(ctx);
+                if (ast_node_is_symbol(nodes.v[i])) {
+                    mono = type_variable_sugar(self, ctx, nodes.v[i]);
+                } else {
+                    return null;
+                }
+            }
             mono = maybe_unwrap_literal(self, ctx, nodes.v[i], mono);
             array_push_val(args, mono);
         }
@@ -599,7 +604,13 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));
 
         tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
-        if (!right_mono) return null;
+        if (!right_mono) {
+            if (ast_node_is_symbol(node->arrow.right)) {
+                right_mono = type_variable_sugar(self, ctx, node->arrow.right);
+            } else {
+                return null;
+            }
+        }
         right_mono         = maybe_unwrap_literal(self, ctx, node->arrow.right, right_mono);
         tl_monotype *arrow = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
         result             = arrow;

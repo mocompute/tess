@@ -1,6 +1,9 @@
 #module main
 
-// Declaration order does not matter
-foo(x) { bar(x) }
-bar(x) { 42 }
-main() { foo(999) - 40 }
+T(a) : {
+  v:            Ptr(a),
+  size:         Int,
+  capacity:     Int,
+}
+
+map(f: (a) -> b, arr: T(a)) -> T(b)
