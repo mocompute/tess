@@ -4,10 +4,10 @@
 #include <stdlib.h>
 
 PtrOrNull = Union(Ptr(a), Void)
-c_malloc    (count : Int)  -> PtrOrNull(a)
+c_malloc    (count : Int)  -> PtrOrNull
 c_free      (ptr : Ptr) -> Void
 
-is_null     (p : PtrOrNull(a)) -> Bool
+is_null     (p : PtrOrNull) -> Bool
 
 is_null(p) {
   if p == null { true } else { false }

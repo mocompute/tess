@@ -7,7 +7,7 @@ T(a) : {
   capacity:     Int,
 }
 
-// map(f: (a) -> b, arr: T(a)) -> T(b)
+map(f: (a) -> b, arr: T(a)) -> T(b)
 
 map(f: (a) -> b, arr: T(a)) {
   out_p : Ptr(b) := c_malloc(sizeof(b) * arr.size)

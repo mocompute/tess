@@ -23,6 +23,9 @@ typedef struct {
     // Nodes which are deferred in first pass of parse.
     hashmap *deferred_parse; // str => ast_node*
 
+    // Type names which are in progress of being parsed
+    hashmap *in_progress; // str hset
+
     // When parsing an annotation, this is the node which is being annotated.
     ast_node const *annotation_target;
 } tl_type_registry_parse_type_ctx;
@@ -38,9 +41,15 @@ tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str,
 void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
 
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *, ast_node const *);
+tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *, ast_node const *,
+                                                  tl_type_registry_parse_type_ctx *);
 tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,
                                                  allocator *alloc, hashmap *outer_type_arguments,
                                                  tl_type_registry_parse_type_ctx *out_ctx);
+
+void         tl_type_registry_parse_type_ctx_init(allocator *, tl_type_registry_parse_type_ctx *,
+                                                  hashmap *type_arguments);
+void         tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *);
 
 void         tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);
 void         tl_type_registry_insert_mono(tl_type_registry *, str, tl_monotype *);
@@ -56,8 +65,10 @@ tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *);
 tl_polytype *tl_type_registry_get(tl_type_registry *, str);
 tl_polytype *tl_type_registry_get_nullary(tl_type_registry *, str);
+tl_polytype *tl_type_registry_get_unary(tl_type_registry *, str);
 int          tl_type_registry_exists(tl_type_registry *, str);
 int          tl_type_registry_is_nullary_type(tl_type_registry *, str);
+int          tl_type_registry_is_unary_type(tl_type_registry *, str);
 
 // TODO: rename these
 nodiscard tl_monotype *tl_polytype_specialize_cons(allocator *, tl_polytype *, tl_monotype_sized,

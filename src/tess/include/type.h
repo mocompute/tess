@@ -42,7 +42,17 @@ typedef struct tl_monotype {
             str_sized         fvs;
         } list;
     };
-    enum { tl_any, tl_ellipsis, tl_var, tl_weak, tl_cons_inst, tl_arrow, tl_tuple, tl_literal } tag;
+    enum {
+        tl_any,
+        tl_ellipsis,
+        tl_var,
+        tl_weak,
+        tl_cons_inst,
+        tl_arrow,
+        tl_tuple,
+        tl_literal,
+        tl_placeholder
+    } tag;
 } tl_monotype;
 
 typedef struct tl_polytype {
@@ -169,7 +179,8 @@ nodiscard tl_polytype *tl_polytype_clone_mono(allocator *, tl_monotype *) malloc
 
 void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_polytype *);
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype *, tl_type_subs *);
-nodiscard tl_monotype *tl_polytype_instantiate_with(allocator *, tl_polytype *, tl_monotype_sized);
+nodiscard tl_monotype *tl_polytype_instantiate_with(allocator *, tl_polytype *, tl_monotype_sized,
+                                                    tl_type_subs *);
 nodiscard tl_monotype *tl_polytype_specialize(allocator *, tl_polytype *, tl_monotype_sized);
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
 void                   tl_polytype_generalize(tl_polytype *, tl_type_env *, tl_type_subs *);
@@ -187,6 +198,7 @@ int         tl_polytype_is_scheme(tl_polytype *);
 int         tl_polytype_is_concrete(tl_polytype *);
 int         tl_polytype_is_type_constructor(tl_polytype *);
 int         tl_polytype_is_nullary(tl_polytype *);
+int         tl_polytype_is_unary(tl_polytype *);
 int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
 
 // -- substitution --

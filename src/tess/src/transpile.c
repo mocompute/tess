@@ -1949,7 +1949,9 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     } else if (tl_monotype_is_type_literal(mono)) {
         return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else {
+        // FIXME: it seems this should always be an error, no? TODO: better error reporting.
         // do not fatal here: instead return a valid type, but caller will probably not use it.
+        fatal("can't render a type variable");
         return S("/*untyped*/void*");
     }
 

@@ -42,11 +42,15 @@ struct tl_infer {
     str_array            hash_includes;
     tl_infer_error_array errors;
 
-    u32                  next_var_name;
-    u32                  next_instantiation;
+    // Context for single-pass parsing of user type definitions
+    tl_type_registry_parse_type_ctx type_parse_ctx;
 
-    int                  verbose;
-    int                  indent_level;
+    //
+    u32 next_var_name;
+    u32 next_instantiation;
+
+    int verbose;
+    int indent_level;
 };
 
 typedef struct {
@@ -58,7 +62,6 @@ typedef enum {
     npos_toplevel,
     npos_formal_parameter,
     npos_function_argument,
-    npos_function_application,
     npos_let_in_lhs,
     npos_let_in_rhs,
     npos_assign_lhs,
@@ -122,6 +125,8 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->verbose            = 0;
     self->indent_level       = 0;
 
+    tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
+
     return self;
 }
 
@@ -168,7 +173,8 @@ static void expected_type(tl_infer *self, ast_node const *node) {
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
 
-    tl_monotype *mono = tl_type_registry_parse_type(self->registry, node);
+    tl_type_registry_parse_type_ctx_reset(&self->type_parse_ctx);
+    tl_monotype *mono = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->type_parse_ctx);
     if (!mono) return expected_type(self, node);
 
     str name = node->user_type_def.name->symbol.name;
@@ -250,7 +256,6 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         else if (ast_node_is_type_alias(node)) {
             str          name = toplevel_name(node);
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->type_alias.target);
-            if (tl_monotype_is_type_literal(mono)) mono = tl_monotype_literal_target(mono);
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);
             {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
@@ -600,7 +605,11 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_reset(ctx->lexical_names);
 
         ctx->node_pos = npos_toplevel;
-        if (traverse_ast(self, ctx, node->let.name, cb)) return 1;
+        // FIXME: traversing the name as a symbol currently causes invalid constraints to be applied when
+        // specializing generic functions. The name's node->type should not in any case be relied upon: the
+        // canonical arrow type of a function name is in the environment, not the ast.
+
+        // if (traverse_ast(self, ctx, node->let.name, cb)) return 1;
 
         ctx->node_pos = npos_formal_parameter;
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
@@ -843,9 +852,11 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
     // based on a callsite like `Point(1, 2)`. Assuming Point(a) { x : a, y : a }.
     // return 1 if node is not a type identifier or other error occurs.
 
+    if (ast_node_is_symbol(node)) return 1;
+
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
-    if (parsed && tl_monotype_is_type_literal(parsed)) {
-        tl_monotype *target = tl_monotype_literal_target(parsed);
+    if (parsed) {
+        tl_monotype *target = parsed;
         if (!tl_monotype_is_inst(target)) return 1;
         str               name = target->cons_inst->def->generic_name;
 
@@ -886,16 +897,7 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
     return 1;
 }
 
-static int          add_generic(tl_infer *, ast_node *);
-
-static tl_monotype *ctx_get_type_argument(traverse_ctx *ctx, str name) {
-    if (!ctx) return null;
-    return str_map_get_ptr(ctx->type_arguments, name);
-}
-// static void ctx_set_type_argument(traverse_ctx *ctx, str name, tl_monotype *mono) {
-//     if (!ctx) return;
-//     str_map_set_ptr(&ctx->type_arguments, name, mono);
-// }
+static int add_generic(tl_infer *, ast_node *);
 
 static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
     str name     = ast_node_is_symbol(node) ? ast_node_str(node) : str_empty();
@@ -987,30 +989,19 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                     }
                 }
 
+                (void)name;
+                // If annotation is a type argument, ensure it is wrapped in a literal.
+                // FIXME: special case
+                if (ast_node_is_symbol(node->symbol.annotation) &&
+                    str_eq(node->symbol.annotation->symbol.name, S("Type"))) {
+                    if (!tl_monotype_is_type_literal(mono))
+                        mono = tl_monotype_create_literal(self->arena, mono);
+                }
+
                 node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
                 assert(node->symbol.annotation_type);
 
-                // Note: Type arguments cannot be constrained at the usage point the way normal types would
-                // be in the value context, because they operate in the type context.
-
-                if (ctx) {
-                    tl_polytype *poly = node->symbol.annotation_type;
-                    if (!str_map_contains(ctx->type_arguments, name)) {
-                        // not a type argument: unwrap literal, if any, to constrain the symbol
-
-                        if (tl_monotype_is_type_literal(poly->type)) {
-                            tl_monotype *target = tl_monotype_literal_target(poly->type);
-                            poly                = tl_polytype_absorb_mono(self->arena, target);
-                        }
-
-                    } else {
-                        // a type argument: constrain the symbol to the type literal argument, rather than
-                        // its annotated type
-                        tl_monotype *mono = str_map_get_ptr(ctx->type_arguments, name);
-                        poly              = tl_polytype_absorb_mono(self->arena, mono);
-                    }
-                    if (constrain_or_set(self, node, poly)) return 1;
-                }
+                if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
 
             } else {
                 ensure_tv(self, &node->type);
@@ -1029,6 +1020,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
 
+            str node_str = v2_ast_node_to_string(self->transient, node);
+
             // A type literal in argument position must be wrapped in literal
             tl_type_registry_parse_type_ctx parse_ctx;
             tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
@@ -1036,6 +1029,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
 
             if (mono) {
+
+                mono         = tl_monotype_create_literal(self->arena, mono);
+                str mono_str = tl_monotype_to_string(self->transient, mono);
+                dbg(self, "npos_function_argument %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
+
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
 
             } else {
@@ -1043,23 +1041,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 update_env(self, ctx, node);
             }
         }
-        break;
-
-    case npos_function_application:
-        if (ast_node_is_symbol(node)) {
-            // A type literal in function name position must be a type constructor
-            str          name = ast_node_str(node);
-            tl_monotype *mono = ctx_get_type_argument(ctx, name);
-            if (mono) {
-                if (!tl_monotype_is_inst(mono)) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_expected_type_constructor, .node = node}));
-                    return 1;
-                }
-                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
-            }
-        }
-        update_env(self, ctx, node);
         break;
 
     case npos_let_in_lhs:
@@ -1082,7 +1063,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
 
             if (parsed) {
-                if (tl_monotype_is_type_literal(parsed)) parsed = tl_monotype_literal_target(parsed);
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
             }
         }
@@ -1106,7 +1086,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                                                                   ctx->type_arguments, &parse_ctx);
         map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
 
-        if (parsed && tl_monotype_is_type_literal(parsed)) {
+        if (parsed) {
+            parsed = tl_monotype_create_literal(self->arena, parsed);
             if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
         }
         update_env(self, ctx, node);
@@ -1131,13 +1112,28 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         dbg(self, "resolve_node '%s' : %s", str_cstr(&name), str_cstr(&tmp));
     }
 
+    str node_str = v2_ast_node_to_string(self->transient, node);
+
+    str mono_str = tl_monotype_to_string(self->transient, node->type->type);
+    dbg(self, "resolve_node pos %i:  %s : %s", pos, str_cstr(&node_str), str_cstr(&mono_str));
+
     return 0;
+}
+
+static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node const *node) {
+    tl_type_registry_parse_type_ctx parse_ctx;
+    tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
+                                                            ctx->type_arguments, &parse_ctx);
+    return !!mono;
 }
 
 int        is_union_struct(tl_infer *self, str name);
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
+
+    str node_str = v2_ast_node_to_string(self->transient, node);
+    dbg(self, "infer_traverse_cb: %s:  %s", ast_tag_to_string(node->tag), str_cstr(&node_str));
 
     switch (node->tag) {
     case ast_nil: {
@@ -1514,11 +1510,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_named_function_application: {
 
-        if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
-            return 1;
+        // FIXME: disabled this
+        // if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
+        //     return 1;
 
         // traverse_ast is depth-first: arguments are traversed before the nfa node itself.
-        if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
+        // if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
+        if (resolve_node(self, node, traverse_ctx, npos_function_argument)) return 1;
 
         str          name     = ast_node_str(node->named_application.name);
         str          original = ast_node_name_original(node->named_application.name);
@@ -1527,15 +1525,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             break; // mututal recursion, undeclared std_* functions, etc
         }
 
+        // Is it a type literal: node was parsed in operand context by resolve_node
+        if (is_type_literal(self, traverse_ctx, node)) break;
+
         if (tl_polytype_is_type_constructor(type)) {
-            // a type constructor or type literal
-
-            // Is it a type literal: node was parsed in operand context by resolve_node
-            if (tl_monotype_is_type_literal(node->type->type)) {
-                break;
-            }
-
-            // Otherwise it's a type constructor
+            // a type constructor
 
             ast_arguments_iter iter = ast_node_arguments_iter(node);
             ast_node          *arg;
@@ -1781,7 +1775,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             }
 
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
-            if (poly) args.v[i] = tl_polytype_concrete(poly);
+            if (poly) {
+                // if (!tl_polytype_is_concrete(poly)) return str_empty();
+                args.v[i] = tl_polytype_concrete(poly);
+            }
         }
     }
 
@@ -1858,11 +1855,14 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
         tl_monotype *type_id = null;
         if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
-            array_push(arr, type_id);
+            // a literal type
+            array_push_val(arr, tl_monotype_create_literal(self->arena, type_id));
             continue;
         }
 
         tl_monotype *mono = tl_polytype_instantiate(self->arena, arg->type, self->subs);
+
+        // FIXME: needed?
         tl_monotype_substitute(self->arena, mono, self->subs, null);
 
         array_push(arr, mono);
@@ -1910,8 +1910,14 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     // Do this after creating a specialised function
     ast_node *infer_target = get_infer_target(special);
     if (infer_target) {
-        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) return 1;
-        if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) return 1;
+        if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
+            dbg(self, "note: post_specialize failed infer");
+            return 1;
+        }
+        if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
+            dbg(self, "note: post_specialize failed specialize");
+            return 1;
+        }
     }
     return 0;
 }
@@ -2053,9 +2059,15 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         }
 
         // try to specialize
-        if (specialize_one(self, ctx, traverse_ctx, node->named_application.name, callsite->type)) return 1;
+        if (specialize_one(self, ctx, traverse_ctx, node->named_application.name, callsite->type)) {
+            dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
+            return 1;
+        }
         // and recurse over any arguments which are toplevel functions
-        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) return 1;
+        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) {
+            dbg(self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
+            return 1;
+        }
 
         // remember this callsite is specialized
         ast_node_set_is_specialized(node);
@@ -2072,8 +2084,12 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
         concretize_params(self, node, callsite->type);
-        if (post_specialize(self, traverse_ctx, node->lambda_application.lambda)) return 1;
-        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) return 1;
+        if (post_specialize(self, traverse_ctx, node->lambda_application.lambda)) {
+            return 1;
+        }
+        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) {
+            return 1;
+        }
     }
 
     return 0;
@@ -2613,8 +2629,9 @@ static int generic_declaration(tl_infer *self, str name, ast_node const *name_no
     }
 
     // must quantify arrow types
-    if (tl_monotype_is_arrow(node->symbol.annotation_type->type))
+    if (tl_monotype_is_arrow(node->symbol.annotation_type->type)) {
         tl_polytype_generalize(node->symbol.annotation_type, self->env, self->subs);
+    }
     tl_type_env_insert(self->env, name, node->symbol.annotation_type);
     return 0;
 }
@@ -2650,7 +2667,6 @@ static int add_generic(tl_infer *self, ast_node *node) {
     ast_node    *infer_target = get_infer_target(node);
     ast_node    *name_node    = toplevel_name_node(node);
     tl_polytype *provisional  = name_node->symbol.annotation_type;
-
     str          name         = name_node->symbol.name;
     str          orig_name    = name_node->symbol.original;
 
@@ -2736,6 +2752,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
         if (!arrow) fatal("runtime error");
     }
+
     tl_polytype_generalize(arrow, self->env, self->subs);
 
     // collect free variables from infer target and add to the generic's arrow type
@@ -3001,13 +3018,13 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
     switch (mono->tag) {
-
+    case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
     case tl_var:
-    case tl_weak:     break;
+    case tl_weak:        break;
 
-    case tl_literal:  {
+    case tl_literal:     {
         tl_monotype *target  = tl_monotype_literal_target(mono);
         tl_monotype *replace = tl_infer_update_specialized_type_(self, target, seen, in_progress);
         if (replace) return tl_monotype_create_literal(self->arena, replace);
