@@ -1878,7 +1878,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
     if (special_type) {
-        fprintf(stderr, "specialize_user_type: replacing node type.\n");
+        // fprintf(stderr, "specialize_user_type: replacing node type.\n");
         ast_node_type_set(node, special_type); // Note: this helps the transpiler
     }
 

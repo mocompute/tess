@@ -428,7 +428,7 @@ static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_t
 
         // target cannot be parsed yet: create a placeholder type for it: Ptr(any)
 
-        fprintf(stderr, "parse_type: defer %s\n", str_cstr(&name));
+        // fprintf(stderr, "parse_type: defer %s\n", str_cstr(&name));
 
         tl_monotype *placeholder = str_map_get_ptr(ctx->deferred_parse, name);
         if (!placeholder) {
@@ -436,7 +436,7 @@ static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_t
             str_map_set_ptr(&ctx->deferred_parse, name, placeholder);
         }
 
-        fprintf(stderr, "parse_type: defer %s : %p\n", str_cstr(&name), placeholder);
+        // fprintf(stderr, "parse_type: defer %s : %p\n", str_cstr(&name), placeholder);
         return placeholder;
     }
     return null;
@@ -652,7 +652,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
           self, name, (tl_type_variable_sized)array_sized(type_argument_tvs),
           (str_sized)array_sized(field_names), (tl_monotype_sized)array_sized(field_types));
 
-        fprintf(stderr, "parse_type: registered %s\n", str_cstr(&name));
+        // fprintf(stderr, "parse_type: registered %s\n", str_cstr(&name));
 
         if (map_size(ctx->deferred_parse)) {
             // Resolve placeholders
@@ -664,7 +664,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     if (str_eq(poly->type->cons_inst->def->generic_name, keys.v[i])) {
                         // mutate placeholder to resolved type: dependent types which retained the
                         // placeholder pointer will automatically get resolved type
-                        fprintf(stderr, "parse_type: defer resolve %s\n", str_cstr(&keys.v[i]));
+                        // fprintf(stderr, "parse_type: defer resolve %s\n", str_cstr(&keys.v[i]));
                         *placeholder = *poly->type;
                         str_map_erase(ctx->deferred_parse, keys.v[i]);
                     }
@@ -675,11 +675,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         }
 
         result = tl_polytype_instantiate(self->alloc, poly, self->subs);
-        fprintf(stderr, "parse_type success: %s\n", str_cstr(&name));
+        // fprintf(stderr, "parse_type success: %s\n", str_cstr(&name));
         goto utd_success;
 
     utd_error:
-        fprintf(stderr, "parse_type error: %s\n", str_cstr(&name));
+        // fprintf(stderr, "parse_type error: %s\n", str_cstr(&name));
         result = null;
 
     utd_success:
@@ -1049,10 +1049,11 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
 }
 
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
-    {
-        str tmp = tl_polytype_to_string(transient_allocator, self);
-        fprintf(stderr, "tl_polytype_instantiate: %s\n", str_cstr(&tmp));
-    }
+    // {
+    //     str tmp = tl_polytype_to_string(transient_allocator, self);
+    //     fprintf(stderr, "tl_polytype_instantiate: %s\n", str_cstr(&tmp));
+    // }
+
     tl_monotype *fresh  = tl_monotype_clone(alloc, self->type);
 
     hashmap     *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
