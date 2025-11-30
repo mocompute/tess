@@ -1,6 +1,11 @@
 #module stdlib
 #include <stdlib.h>
+#include <assert.h>
 
+// assert.h
+c_assert       (condition: Bool)                   -> Void
+
+// stdlib.h
 c_atof         (nptr: String)                      -> Float
 c_atoi         (nptr: String)                      -> Int
 c_atol         (nptr: String)                      -> Int

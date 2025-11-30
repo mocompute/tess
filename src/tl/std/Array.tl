@@ -67,7 +67,7 @@ T(a) : {
 // does NOT provide access to `a`. To understand the consequence of this, refer to the definition of
 // `reserve()` below: notice that it must use `Ptr(T(a))` because the body of the function needs to refer to
 // the `a` type variable explicitly. In practice, most generic function implementations do not need to refer
-// explicitly to its type argument. TL does not support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
+// explicitly to its type argument. TL does NOT support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
 TPtr = Ptr(T(a))
 
 // -- Synopsis --

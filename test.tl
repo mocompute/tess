@@ -1,5 +1,6 @@
 #module main
 #import <stdlib.tl>
+#import <stdio.tl>
 
 T(a) : {
   v:            Ptr(a),
@@ -26,20 +27,31 @@ add1(x) { x + 1 }
 
 main() {
 
-  p : Ptr(Int) := c_malloc(sizeof(Int) * 4)
-  vals := T(v = p, size = 0, capacity = 4)
+  vals := T(v  = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
 
-  // FIXME: this should work, not needing intermediate value
-  // vals := T(v : Ptr(Int) = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
-
-  p[0] = 0
-  p[1] = 1
-  p[2] = 2
-  p[3] = 3
+  vals.v[0] = 0
+  vals.v[1] = 1
+  vals.v[2] = 2
+  vals.v[3] = 3
   vals.size = 4
 
   res := map(add1, vals)
 
-  res.v[0] - 1
+  // verify that map does not mutate its argument
+  sum := 0
+  i := 0
+  while i < vals.size, i = i + 1 {
+    sum = sum + vals.v[i]
+  }
+  c_assert(sum == 6)
 
+  // verify that map returns an array with mapped values
+  sum := 0
+  i := 0
+  while i < vals.size, i = i + 1 {
+    sum = sum + res.v[i]
+  }
+  c_assert(sum == 10)
+
+  sum - 10
 }
