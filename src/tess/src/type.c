@@ -402,10 +402,6 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
             // Add to context type arguments
             str ta = ast_node_str(ctx->annotation_target);
             str_map_set_ptr(&ctx->type_arguments, ta, mono);
-
-            // Add a fresh tv as value context for the literal
-            tl_monotype *tv = tl_monotype_create_fresh_tv(self->subs);
-            map_set_ptr(&ctx->type_argument_tvs, &mono, sizeof(tl_monotype *), tv);
         }
     }
 
@@ -692,10 +688,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_parse_type_ctx *ctx,
                                           hashmap *type_arguments) {
     *ctx = (tl_type_registry_parse_type_ctx){
-      .type_arguments    = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 16),
-      .type_argument_tvs = map_new(alloc, tl_monotype *, tl_monotype *, 16),
-      .deferred_parse    = map_new(alloc, str, ast_node *, 8),
-      .in_progress       = hset_create(alloc, 8),
+      .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 16),
+      .deferred_parse = map_new(alloc, str, ast_node *, 8),
+      .in_progress    = hset_create(alloc, 8),
     };
 }
 
@@ -703,7 +698,6 @@ void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *ctx)
     // Note: does not reset deferred_parse, which is the whole point: to support single-pass fixups for
     // mutually recursive types.
     map_reset(ctx->type_arguments);
-    map_reset(ctx->type_argument_tvs);
     hset_reset(ctx->in_progress);
     ctx->annotation_target = null;
 }

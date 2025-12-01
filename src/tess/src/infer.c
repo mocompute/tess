@@ -941,7 +941,7 @@ static void update_env(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 ast_node_type_set(node, tl_type_env_lookup(self->env, name));
             }
         } else {
-            // FIXME: type argument
+            // a type argument: do nothing
             ;
         }
     }
