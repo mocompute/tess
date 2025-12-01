@@ -1210,8 +1210,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (resolve_node(self, node->case_.binary_predicate, traverse_ctx, npos_operand)) return 1;
 
         ensure_tv(self, &node->type);
-        ensure_tv(self, &node->case_.expression->type);
-        ensure_tv(self, &node->case_.binary_predicate->type);
         tl_monotype *nil       = tl_type_registry_nil(self->registry);
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         tl_monotype *any_type  = tl_monotype_create_any(self->arena);
@@ -1282,8 +1280,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             return 1;
 
         ensure_tv(self, &node->type);
-        ensure_tv(self, &left->type);
-        ensure_tv(self, &right->type);
 
         if (is_arithmetic_operator(op)) {
             // operands and result must all be same type
@@ -1397,10 +1393,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 }
             } else {
                 // struct type is not a type constructor
-                // FIXME: constrain pointer's target, if any?
-                // if (constrain_pm(self, left->type, struct_type, node)) return 1;
-
-                dbg(self, "error: infer struct access without a struct type");
+                dbg(self, "warning: infer struct access without a struct type");
             }
 
         end_struct_access_op:
@@ -1415,7 +1408,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_unary_op: {
         if (resolve_node(self, node->unary_op.operand, traverse_ctx, npos_operand)) return 1;
         ast_node *operand = node->unary_op.operand;
-        ensure_tv(self, &operand->type);
         ensure_tv(self, &node->type);
 
         str op = ast_node_str(node->unary_op.op);
@@ -1459,8 +1451,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (resolve_node(self, node->let_in.value, traverse_ctx, npos_let_in_rhs)) return 1;
 
         ensure_tv(self, &node->type);
-        ensure_tv(self, &node->let_in.name->type);
-        ensure_tv(self, &node->let_in.value->type);
         if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
         if (ast_node_is_lambda_function(node->let_in.value)) {
@@ -1520,13 +1510,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_named_function_application: {
 
-        // FIXME: disabled this
-        // if (resolve_node(self, node->named_application.name, traverse_ctx, npos_function_application))
-        //     return 1;
+        // Note: do not attempt to resolve name, due to polymorphism
 
         // traverse_ast is depth-first: arguments are traversed before the nfa node itself.
-        // if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
-        if (resolve_node(self, node, traverse_ctx, npos_function_argument)) return 1;
+        if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
 
         str          name     = ast_node_str(node->named_application.name);
         str          original = ast_node_name_original(node->named_application.name);
@@ -1713,8 +1700,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (resolve_node(self, node->assignment.value, traverse_ctx, npos_assign_rhs)) return 1;
 
         ensure_tv(self, &node->type);
-        ensure_tv(self, &node->assignment.name->type);
-        ensure_tv(self, &node->assignment.value->type);
 
         if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
         if (constrain(self, node->type, node->assignment.name->type, node)) return 1;
@@ -1739,8 +1724,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_type_alias:   break;
     }
 
-    // apply newly created constraint substitutions
-    tl_type_subs_apply(self->subs, self->env);
     return 0;
 }
 
