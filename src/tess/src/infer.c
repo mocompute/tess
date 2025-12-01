@@ -439,24 +439,17 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 // -- inference --
 
-static traverse_ctx *traverse_ctx_create(allocator *alloc) {
-    traverse_ctx *out   = new (alloc, traverse_ctx);
-    out->lexical_names  = hset_create(alloc, 32);
-    out->type_arguments = map_create_ptr(alloc, 16);
+static traverse_ctx *traverse_ctx_create(allocator *transient) {
+    // Use a transient allocator because the destroy function leaks the maps.
+    traverse_ctx *out   = new (transient, traverse_ctx);
+    out->lexical_names  = hset_create(transient, 32);
+    out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
     out->node_pos       = npos_operand;
     out->is_field_name  = 0;
     out->is_annotation  = 0;
 
     return out;
-}
-
-static void traverse_ctx_destroy(allocator *alloc, traverse_ctx **p) {
-    if ((*p)->type_arguments) map_destroy(&(*p)->type_arguments);
-    if ((*p)->lexical_names) hset_destroy(&(*p)->lexical_names);
-
-    alloc_free(alloc, *p);
-    *p = null;
 }
 
 static int traverse_ctx_is_param(traverse_ctx *self, str name) {
@@ -472,13 +465,6 @@ static infer_ctx *infer_ctx_create(allocator *alloc) {
     out->specials  = map_new(alloc, str, str, 16);
 
     return out;
-}
-
-static void infer_ctx_destroy(allocator *alloc, infer_ctx **p) {
-    if ((*p)->specials) map_destroy(&(*p)->specials);
-
-    alloc_free(alloc, *p);
-    *p = null;
 }
 
 static int type_error(tl_infer *self, ast_node const *node) {
@@ -2599,7 +2585,6 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
     traverse_ctx->user         = &ctx;
     int res                    = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
     if (res) fatal("runtime error");
-    traverse_ctx_destroy(self->transient, &traverse_ctx);
 
     array_shrink(ctx.fvs);
     dbg(self, "-- free variables: %u --", ctx.fvs.size);
@@ -2654,8 +2639,6 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
 
         if (constrain_pm(self, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
     }
-    infer_ctx_destroy(self->transient, &ctx);
-    traverse_ctx_destroy(self->transient, &traverse);
     return 0;
 }
 
@@ -3086,7 +3069,6 @@ static void update_specialized_types(tl_infer *self) {
         traverse_ast(self, traverse, node, update_types_cb);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
-    traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);
 }
 

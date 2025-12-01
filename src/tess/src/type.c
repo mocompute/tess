@@ -740,7 +740,6 @@ tl_monotype *tl_type_registry_parse_type(tl_type_registry *self, ast_node const 
 
     tl_monotype *result = tl_type_registry_parse_type_(self, &ctx, node);
 
-    map_destroy(&ctx.type_arguments);
     return result;
 }
 
@@ -1078,7 +1077,7 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
 
     tl_monotype *fresh  = tl_monotype_clone(alloc, self->type);
 
-    hashmap     *q_to_t = map_create(alloc, sizeof(tl_type_variable), 8);
+    hashmap     *q_to_t = map_create(transient_allocator, sizeof(tl_type_variable), 8);
 
     forall(i, self->quantifiers) {
         // make a fresh variable for each quantified type variable
@@ -1089,8 +1088,6 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
     hashmap *seen = hset_create(transient_allocator, 8);
     replace_tv(fresh, subs, q_to_t, &seen);
 
-    map_destroy(&seen);
-    map_destroy(&q_to_t);
     return fresh;
 }
 
@@ -1101,7 +1098,7 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
     if (self->quantifiers.size != args.size) fatal("logic error");
 
-    hashmap *q_to_t = map_create(alloc, sizeof(tl_monotype *), args.size);
+    hashmap *q_to_t = map_create(transient_allocator, sizeof(tl_monotype *), args.size);
 
     forall(i, self->quantifiers) {
         map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
@@ -1120,8 +1117,6 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     if (1 == fresh->cons_inst->args.size) assert(args.v[0] == fresh->cons_inst->args.v[0]);
 #endif
 
-    map_destroy(&seen);
-    map_destroy(&q_to_t);
     return fresh;
 }
 
@@ -1379,7 +1374,6 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
 tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
     hashmap     *mapping = map_create_ptr(transient_allocator, 32);
     tl_monotype *out     = tl_monotype_clone_(alloc, orig, &mapping);
-    map_destroy(&mapping);
     return out;
 }
 
@@ -1788,8 +1782,6 @@ u64 tl_monotype_hash64(tl_monotype *self) {
     hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
     hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
     u64      out         = tl_monotype_hash64_(self, &seen, &in_progress);
-    map_destroy(&in_progress);
-    map_destroy(&seen);
     return out;
 }
 
@@ -1883,9 +1875,8 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
 }
 
 str tl_monotype_to_string(allocator *alloc, tl_monotype *self) {
-    hashmap *map = map_create(alloc, sizeof(str), 32);
+    hashmap *map = map_create(transient_allocator, sizeof(str), 32);
     str      out = tl_monotype_to_string_(alloc, self, &map);
-    map_destroy(&map);
     return out;
 }
 
@@ -2506,15 +2497,13 @@ tl_polytype tl_polytype_wrap(tl_monotype *mono) {
 }
 
 void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
-    hashmap         *exclude = map_create(subs->data.alloc, sizeof(tl_type_variable), 8);
+    hashmap         *exclude = map_create(transient_allocator, sizeof(tl_type_variable), 8);
 
     hashmap_iterator iter    = {0};
     while (map_iter(env->map, &iter)) {
         tl_polytype *poly = *(tl_polytype **)iter.data;
         tl_polytype_substitute_ext(subs->data.alloc, poly, subs, &exclude);
     }
-
-    map_destroy(&exclude);
 }
 
 // --------------------------------------------------------------------------
@@ -2592,8 +2581,6 @@ u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
     hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
     hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
     u64      out         = tl_monotype_sized_hash64_(seed, arr, &seen, &in_progress);
-    map_destroy(&in_progress);
-    map_destroy(&seen);
     return out;
 }
 
