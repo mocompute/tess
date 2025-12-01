@@ -13,6 +13,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#define DEBUG_ENV 1
+
 static void                      dbg(tl_type_env *, char const *restrict fmt, ...);
 static void                      make_unary_tc(tl_type_registry *, str);
 static void                      make_variable_arity_tc(tl_type_registry *, str);
@@ -749,21 +751,22 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
 }
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
+#if DEBUG_ENV
     str type_str = tl_polytype_to_string(self->transient, type);
     dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
-
-    // FIXME: str_copy needed?
-    str_map_set_ptr(&self->map, str_copy(self->alloc, name), type);
+#endif
+    str_map_set_ptr(&self->map, name, type);
 }
 
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
-    tl_polytype *poly     = tl_polytype_absorb_mono(self->alloc, type);
-    str          type_str = tl_polytype_to_string(self->transient, poly);
+    tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, type);
+#if DEBUG_ENV
+    str type_str = tl_polytype_to_string(self->transient, poly);
     dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
-    // FIXME: str_copy needed?
-    str_map_set_ptr(&self->map, str_copy(self->alloc, name), poly);
+#endif
+    str_map_set_ptr(&self->map, name, poly);
 }
 
 tl_polytype *tl_type_env_lookup(tl_type_env *self, str name) {
@@ -1043,10 +1046,6 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
 }
 
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
-    // {
-    //     str tmp = tl_polytype_to_string(transient_allocator, self);
-    //     fprintf(stderr, "tl_polytype_instantiate: %s\n", str_cstr(&tmp));
-    // }
 
     tl_monotype *fresh  = tl_monotype_clone(alloc, self->type);
 
