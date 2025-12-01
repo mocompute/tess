@@ -497,7 +497,6 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 
     hashmap *seen = hset_create(self->transient, 32);
     int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
-    hset_destroy(&seen);
     return res;
 }
 
@@ -1810,7 +1809,6 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 
     hashmap *seen = hset_create(self->transient, 8);
     str      out  = specialize_type_constructor_(self, name, args, out_type, &seen);
-    hset_destroy(&seen);
     return out;
 }
 
@@ -3395,5 +3393,5 @@ static void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *ri
 }
 
 static void log_subs(tl_infer *self) {
-    if (self->verbose) tl_type_subs_log(self->transient, self->subs);
+    if (self->verbose) tl_type_subs_log(self->subs);
 }

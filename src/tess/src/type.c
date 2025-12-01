@@ -1216,8 +1216,6 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *s
     generalize(self->type, &quant, &seen);
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
-
-    hset_destroy(&seen);
 }
 
 tl_monotype *tl_polytype_concrete(tl_polytype *self) {
@@ -1230,7 +1228,6 @@ tl_polytype *tl_monotype_generalize(allocator *alloc, tl_monotype *mono) {
     hashmap               *seen        = hset_create(transient_allocator, 8);
     generalize(mono, &quantifiers, &seen);
     return tl_polytype_create(alloc, (tl_type_variable_sized)array_sized(quantifiers), mono);
-    hset_destroy(&seen);
 }
 
 // -- monotype --
@@ -1416,7 +1413,6 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
 int tl_monotype_is_concrete(tl_monotype *self) {
     hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_monotype_is_concrete_(self, &seen);
-    hset_destroy(&seen);
     return res;
 }
 
@@ -1453,7 +1449,6 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
 int tl_monotype_is_weak_deep(tl_monotype *self) {
     hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_monotype_is_weak_(self, &seen);
-    hset_destroy(&seen);
     return res;
 }
 
@@ -2291,7 +2286,6 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
     hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
-    hset_destroy(&seen);
     return res;
 }
 
@@ -2468,7 +2462,6 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
     hashmap *seen = hset_create(transient_allocator, 32);
     tl_monotype_substitute_(alloc, self, subs, exclude, &seen);
-    hset_destroy(&seen);
 }
 
 static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
@@ -2531,9 +2524,9 @@ void tl_type_env_log(tl_type_env *self) {
 
 //
 
-void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
+void tl_type_subs_log(tl_type_subs *self) {
     hashmap               *seen        = hset_create(transient_allocator, 128);
-    tl_type_variable_array equiv_class = {.alloc = alloc};
+    tl_type_variable_array equiv_class = {.alloc = transient_allocator};
 
     forall(i, self->data) {
         tl_type_variable root = uf_find(self, i);
@@ -2555,15 +2548,12 @@ void tl_type_subs_log(allocator *alloc, tl_type_subs *self) {
         tl_monotype *type = self->data.v[root].type;
         if (type) {
             fprintf(stderr, " = ");
-            str s = tl_monotype_to_string(alloc, type);
+            str s = tl_monotype_to_string(transient_allocator, type);
             fprintf(stderr, "%.*s", str_ilen(s), str_buf(&s));
         }
 
         fprintf(stderr, "\n");
     }
-
-    array_free(equiv_class);
-    hset_destroy(&seen);
 }
 
 //

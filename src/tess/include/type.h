@@ -215,7 +215,7 @@ int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *,
 int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
                              hashmap **);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
-void tl_type_subs_log(allocator *, tl_type_subs *);
+void tl_type_subs_log(tl_type_subs *);
 
 // -- utilities --
 
