@@ -48,7 +48,7 @@ struct parser {
     hashmap               *builtin_module_symbols; // hset str
     hashmap               *module_symbols;         // map str -> hashmap* of hset str
 
-    u32                    next_nil_name;
+    u32                    next_var_name;
     int                    verbose;
     int                    indent_level;
     int                    in_function_application; // enable greedy parsing
@@ -125,6 +125,7 @@ static int           string_to_number(parser *, char const *const);
 static void          mangle_name_for_module(parser *, ast_node *, str);
 static void          mangle_name(parser *, ast_node *);
 static void          unmangle_name(parser *, ast_node *);
+static str           next_var_name(parser *);
 
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
@@ -157,7 +158,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_module_symbols  = hset_create(self->parent_alloc, 32);
     self->builtin_module_symbols  = hset_create(self->parent_alloc, 32);
     self->module_symbols          = map_create_ptr(self->parent_alloc, 32); // str -> hashmap*
-    self->next_nil_name           = 0;
+    self->next_var_name           = 0;
     self->verbose                 = 0;
     self->indent_level            = 0;
     self->in_function_application = 0;
@@ -936,6 +937,24 @@ static int a_param(parser *self) {
     return result_ast_node(self, ident);
 }
 
+static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *node) {
+    // Note: special case to handle anonymous lambdas as function arguments: the transpiler requires every
+    // lambda to be named, because the function is hoisted to a toplevel function. So here we wrap a lambda
+    // function in a simple `let gen_name = f in f` form.
+    if (!ast_node_is_lambda_function(node)) return node;
+
+    ast_node *lval = ast_node_create_sym(self->ast_arena, next_var_name(self));
+    ast_node *val  = node;
+
+    // body of let: just the symbol referring to the lambda's name
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    array_push(exprs, lval);
+    ast_node *body = create_body(self, exprs);
+
+    ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
+    return a;
+}
+
 static int a_funcall(parser *self) {
     if (a_try(self, a_identifier)) return 1;
     ast_node *name = self->result;
@@ -944,13 +963,14 @@ static int a_funcall(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_round)) goto done;
-    if (0 == a_try(self, a_expression)) array_push(args, self->result);
+    if (0 == a_try(self, a_expression))
+        array_push_val(args, maybe_wrap_lambda_function_in_let_in(self, self->result));
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
         if (a_try(self, a_expression)) return 1;
-        array_push(args, self->result);
+        array_push_val(args, maybe_wrap_lambda_function_in_let_in(self, self->result));
     }
 
 done:
@@ -2070,6 +2090,16 @@ static void tokens_push_back(struct parser *p, struct token *tok) {
 static void tokens_shrink(struct parser *p, u32 n) {
     p->tokens.size = n;
 }
+
+//
+
+static str next_var_name(parser *self) {
+    char buf[64];
+    int  len = snprintf(buf, sizeof buf, "parser_var_%u", self->next_var_name++);
+    return str_init_n(self->transient, buf, len);
+}
+
+//
 
 void parser_report_errors(parser *self) {
     if (tl_err_ok == self->error.tag) return;

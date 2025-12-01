@@ -22,8 +22,6 @@ map(f: (a) -> b, arr: T(a)) {
   out
 }
 
-add1(x) { x + 1 }
-
 main() {
 
   vals := T(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
@@ -34,7 +32,7 @@ main() {
   vals.v[3] = 3
   vals.size = 4
 
-  res := map(add1, vals)
+  res := map((x) { x + 1 }, vals)
 
   // verify that map does not mutate its argument
   sum := 0
