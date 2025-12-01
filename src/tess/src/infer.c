@@ -3185,8 +3185,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
             traverse_ast(self, traverse, node, specialize_applications_cb);
         }
     }
-    infer_ctx_destroy(self->transient, &ctx);
-    traverse_ctx_destroy(self->transient, &traverse);
     arena_reset(self->transient);
 
     // apply subs to global environment
