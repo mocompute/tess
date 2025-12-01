@@ -2775,40 +2775,6 @@ int check_missing_free_variables(tl_infer *self) {
     return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, self);
 }
 
-typedef struct {
-    hashmap     *seen;
-    tl_monotype *nil;
-} admit_generic_pointers_ctx;
-
-void do_admit_generic_pointers(void *ctx_, ast_node *node) {
-    admit_generic_pointers_ctx *ctx = ctx_;
-    if (node->type && tl_monotype_is_ptr(node->type->type))
-        tl_monotype_force_tv_to_nil(node->type->type, ctx->nil, &ctx->seen);
-}
-
-void admit_generic_pointers(tl_infer *self) {
-    // Note: special case for undecided Ptr(a) types: force them to Ptr(Void) so that the transpiler will
-    // accept them as void*.
-
-    admit_generic_pointers_ctx ctx = {
-      .nil  = tl_type_registry_nil(self->registry),
-      .seen = hset_create(self->transient, 32),
-    };
-    ast_node        *node;
-    hashmap_iterator iter = {0};
-    while ((node = toplevel_iter(self, &iter))) {
-        ast_node_dfs(&ctx, node, do_admit_generic_pointers);
-
-        str          name = ast_node_str(toplevel_name_node(node));
-        tl_polytype *type = tl_type_env_lookup(self->env, name);
-        if (!type) fatal("runtime error");
-
-        if (!tl_polytype_is_concrete(type)) tl_monotype_force_tv_to_nil(type->type, ctx.nil, &ctx.seen);
-    }
-
-    hset_destroy(&ctx.seen);
-}
-
 void remove_generic_toplevels(tl_infer *self) {
     str_array        names = {.alloc = self->transient};
 
@@ -3230,15 +3196,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // update type specialisations: replace generic constructors with specialised constructors.
     update_specialized_types(self);
+    arena_reset(self->transient);
 
     // ensure main function has the correct type
     if (main) {
         if (check_main_function(self, main)) return 1;
         arena_reset(self->transient);
     }
-
-    admit_generic_pointers(self);
-    arena_reset(self->transient);
 
     remove_generic_toplevels(self);
     arena_reset(self->transient);
