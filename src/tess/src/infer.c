@@ -2907,41 +2907,6 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     return error;
 }
 
-static void canonicalize_types(tl_infer *self) {
-    // This function is required due to the processing of recursive types: types which include Ptrs to
-    // themselves. During type inference, the system creates additional specializations of the same user
-    // type. They are interchangeable from the type system's perspective, but this confuses the transpiler,
-    // because multiple names are used to refer to the same type. This function therefore performs a bit of
-    // surgery, ensuring every type in the environment refers to the same monotype if it ought to. Then, the
-    // transpiler must perform an additional lookup before rendering the name of user type. Rather than use
-    // the specialized name in the environment, it uses the specialized name of the canonical type.
-
-    str_array names = str_map_sorted_keys(self->transient, self->env->map);
-
-    forall(i, names) {
-        str          name = names.v[i];
-        tl_polytype *poly = str_map_get_ptr(self->env->map, name);
-        if (tl_polytype_is_scheme(poly)) continue;
-        if (!tl_monotype_is_inst(poly->type)) continue;
-
-        str               generic_name = poly->type->cons_inst->def->generic_name;
-        tl_monotype_sized args         = poly->type->cons_inst->args;
-        tl_monotype      *cached =
-          tl_type_registry_get_cached_specialization(self->registry, generic_name, args);
-
-        if (!cached) {
-            str poly_str = tl_polytype_to_string(self->transient, poly);
-            dbg(self, "canonicalize_types missing: %s (%s) : %s", str_cstr(&name), str_cstr(&generic_name),
-                str_cstr(&poly_str));
-        } else {
-            // Note: surgery on shared polytypes, since this is done after type inference, no problem.
-            dbg(self, "canonicalize_types replace: %s (%s) => %s", str_cstr(&name), str_cstr(&generic_name),
-                str_cstr(&cached->cons_inst->special_name));
-            poly->type = cached;
-        }
-    }
-}
-
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
     tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
     if (!mono) {
@@ -3287,9 +3252,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         if (check_missing_free_variables(self)) return 1;
         if (self->errors.size) return 1;
     }
-
-    canonicalize_types(self);
-    arena_reset(self->transient);
 
     if (1) {
         dbg(self, "-- final subs");
