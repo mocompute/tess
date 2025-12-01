@@ -773,10 +773,9 @@ tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_nod
 
 // -- type environment --
 
-tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
+tl_type_env *tl_type_env_create(allocator *alloc) {
     tl_type_env *self = alloc_malloc(alloc, sizeof *self);
     self->alloc       = alloc;
-    self->transient   = transient;
     self->map         = map_create(self->alloc, sizeof(tl_polytype *), 64); // key: str
     self->verbose     = 0;
 
@@ -785,7 +784,7 @@ tl_type_env *tl_type_env_create(allocator *alloc, allocator *transient) {
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
 #if DEBUG_ENV
-    str type_str = tl_polytype_to_string(self->transient, type);
+    str type_str = tl_polytype_to_string(transient_allocator, type);
     dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 #endif
@@ -795,7 +794,7 @@ void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
     tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, type);
 #if DEBUG_ENV
-    str type_str = tl_polytype_to_string(self->transient, poly);
+    str type_str = tl_polytype_to_string(transient_allocator, poly);
     dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
         str_buf(&type_str));
 #endif
@@ -811,7 +810,7 @@ int tl_type_env_check_missing_fvs(tl_type_env *self, missing_fv_cb cb, void *use
 
     hashmap_iterator iter  = {0};
     while (map_iter(self->map, &iter)) {
-        str          name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+        str          name = str_init_n(transient_allocator, iter.key_ptr, iter.key_size);
         tl_polytype *type = *(tl_polytype **)iter.data;
 
         str_sized    fvs  = tl_monotype_fvs(type->type);
@@ -826,11 +825,11 @@ int tl_type_env_check_missing_fvs(tl_type_env *self, missing_fv_cb cb, void *use
 }
 
 void tl_type_env_remove_unknown_symbols(tl_type_env *self, hashmap *known) {
-    str_array        remove = {.alloc = self->transient};
+    str_array        remove = {.alloc = transient_allocator};
 
     hashmap_iterator iter   = {0};
     while (map_iter(self->map, &iter)) {
-        str name = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+        str name = str_init_n(transient_allocator, iter.key_ptr, iter.key_size);
         if (!str_hset_contains(known, name)) array_push(remove, name);
     }
 
@@ -1208,7 +1207,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
 void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *subs) {
 
     hashmap               *seen  = hset_create(transient_allocator, 8);
-    tl_type_variable_array quant = {.alloc = env->transient}; // transient
+    tl_type_variable_array quant = {.alloc = transient_allocator};
     generalize(self->type, &quant, &seen);
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
@@ -1878,11 +1877,10 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
 
 // -- substitutions --
 
-tl_type_subs *tl_type_subs_create(allocator *alloc, allocator *transient) {
+tl_type_subs *tl_type_subs_create(allocator *alloc) {
     tl_type_subs *self = new (alloc, tl_type_subs);
     *self              = (tl_type_subs){
-                   .transient = transient,
-                   .data      = (tl_type_uf_node_array){.alloc = alloc},
+                   .data = (tl_type_uf_node_array){.alloc = alloc},
     };
     array_reserve(self->data, 1024);
     return self;
@@ -2485,15 +2483,15 @@ str tl_type_subs_to_string(allocator *alloc, tl_type_subs *self) {
 // -- env --
 
 void tl_type_env_log(tl_type_env *self) {
-    str_array sorted = str_map_sorted_keys(self->transient, self->map);
+    str_array sorted = str_map_sorted_keys(transient_allocator, self->map);
     forall(i, sorted) {
         str          name     = sorted.v[i];
         tl_polytype *type     = str_map_get_ptr(self->map, name);
-        str          type_str = tl_polytype_to_string(self->transient, type);
+        str          type_str = tl_polytype_to_string(transient_allocator, type);
 
         fprintf(stderr, "%.*s : %.*s\n", str_ilen(name), str_buf(&name), str_ilen(type_str),
                 str_buf(&type_str));
-        str_deinit(self->transient, &type_str);
+        str_deinit(transient_allocator, &type_str);
     }
     array_free(sorted);
 }

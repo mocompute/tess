@@ -63,7 +63,6 @@ typedef struct tl_polytype {
 typedef struct {
     // A map of name : type assignments. Manages lifetimes of its elements.
     allocator *alloc;
-    allocator *transient;
     hashmap   *map; // str => tl_polytype*
     int        verbose;
 } tl_type_env;
@@ -77,7 +76,6 @@ typedef struct {
 defarray(tl_type_uf_node_array, tl_type_uf_node);
 
 typedef struct {
-    allocator            *transient;
     tl_type_uf_node_array data;
 } tl_type_subs;
 
@@ -90,7 +88,7 @@ defarray(tl_monotype_pair_array, tl_monotype_pair);
 
 // -- type environment --
 
-nodiscard tl_type_env *tl_type_env_create(allocator *, allocator *) mallocfun;
+nodiscard tl_type_env *tl_type_env_create(allocator *) mallocfun;
 void                   tl_type_env_insert(tl_type_env *, str, tl_polytype *);
 void                   tl_type_env_insert_mono(tl_type_env *, str, tl_monotype *);
 tl_polytype           *tl_type_env_lookup(tl_type_env *, str);
@@ -205,7 +203,7 @@ int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
 
 typedef void (*type_error_cb_fun)(void *ctx, tl_monotype *, tl_monotype *);
 
-nodiscard tl_type_subs *tl_type_subs_create(allocator *, allocator *) mallocfun;
+nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);

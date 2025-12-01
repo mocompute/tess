@@ -110,8 +110,8 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
 
     self->transient          = arena_create(alloc, 4096);
     self->arena              = arena_create(alloc, 16 * 1024);
-    self->env                = tl_type_env_create(self->arena, self->transient);
-    self->subs               = tl_type_subs_create(self->arena, self->transient);
+    self->env                = tl_type_env_create(self->arena);
+    self->subs               = tl_type_subs_create(self->arena);
     self->registry           = tl_type_registry_create(self->arena, self->transient, self->subs);
 
     self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
