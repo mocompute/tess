@@ -1,4 +1,7 @@
 #module main
 main() {
-  (x) { x } (0)
+  // Note: this is hard to read but it is sensible:
+  // lambda    arg    lambda   arg
+  // vvvvvvvvv vvvv   vvvvvvvv vv
+     (x) { x } (-1) + () { 1 } ()
 }
