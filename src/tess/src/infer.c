@@ -17,7 +17,7 @@
 #include <stdio.h>
 
 #define DEBUG_RESOLVE 0
-#define DEBUG_RENAME  1
+#define DEBUG_RENAME  0
 
 typedef struct {
     enum tl_error_tag tag;
@@ -260,7 +260,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             str          name = toplevel_name(node);
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->type_alias.target);
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);
-            {
+            if (0) {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
                 dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
@@ -563,7 +563,6 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
     // rename variables: also erases type information
     hashmap *rename_lex = map_new(self->transient, str, str, 16);
     rename_variables(self, clone, &rename_lex, 0);
-    map_destroy(&rename_lex);
 
     return clone;
 }
@@ -1531,9 +1530,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 str          inst_str = tl_monotype_to_string(self->transient, inst);
                 tl_polytype *app      = make_arrow(self, traverse_ctx, iter.nodes, null, 0);
                 if (!app) return 1;
-                str app_str = tl_polytype_to_string(self->transient, app);
-                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
-                    str_cstr(&inst_str), str_cstr(&app_str));
+
+                if (self->verbose) {
+                    str app_str = tl_polytype_to_string(self->transient, app);
+                    dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                        str_cstr(&inst_str), str_cstr(&app_str));
+                }
             }
 
             if (!is_union_struct(self, name)) {
@@ -1586,10 +1588,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             str                inst_str = tl_monotype_to_string(self->transient, inst);
             tl_polytype       *app      = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
             if (!app) return 1;
-            str app_str = tl_polytype_to_string(self->transient, app);
-            dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
-                str_cstr(&app_str));
-
+            if (self->verbose) {
+                str app_str = tl_polytype_to_string(self->transient, app);
+                dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
+                    str_cstr(&app_str));
+            }
             // and constrain it with the callsite types (arguments -> result)
             tl_polytype wrap = tl_polytype_wrap(inst);
             if (constrain(self, &wrap, app, node)) return 1;
@@ -1609,7 +1612,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_polytype       *app  = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
         if (!app) return 1;
 
-        {
+        if (self->verbose) {
             str inst_str = tl_monotype_to_string(self->transient, inst);
             str app_str  = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
@@ -2029,7 +2032,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         callsite = make_arrow_with(self, traverse_ctx, node, type);
         if (!callsite) return 1;
 
-        if (1) {
+        if (self->verbose) {
             str app_str = tl_polytype_to_string(self->transient, callsite);
             dbg(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
                 str_ilen(app_str), str_buf(&app_str));
@@ -2975,8 +2978,6 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     hashmap     *seen        = map_new(self->transient, tl_monotype *, tl_monotype *, 8);
     hashmap     *in_progress = hset_create(self->transient, 8);
     tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &seen, &in_progress);
-    map_destroy(&in_progress);
-    map_destroy(&seen);
     return out;
 }
 
@@ -3281,6 +3282,7 @@ static void log_str(tl_infer const *self, str str) {
 }
 
 static void log_toplevels(tl_infer const *self) {
+    if (!self->verbose) return;
     str_array sorted = str_map_sorted_keys(self->transient, self->toplevels);
     forall(i, sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, sorted.v[i]);
