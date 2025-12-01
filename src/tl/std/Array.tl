@@ -157,6 +157,7 @@ with_capacity(a: Type, count: Int) {
 reserve(self: Ptr(T(a)), count: Int) {
   // This is an if statement. Round braces are optional around the condition.
   if self->capacity < count {
+    // The `: Ptr(a)` annotation is required here, so the compiler knows what concrete type to assign to `p`
     p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
 
     // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
@@ -173,7 +174,7 @@ push(self, x) {
   // Assigning to an array element through a pointer is identical to C.
   self->v[self->size] = x
 
-  // It's a bit wordy compared to C, but there is no ++ operator.
+  // It's a bit wordy compared to C, but there are no ++ operators or += operators.
   self->size = self->size + 1
   void
 }
@@ -184,7 +185,7 @@ push(self, x) {
 // identifiers may be accessed from any scope. For example, `Array._grow` can be used to access the
 // function, even though it is indicated to be private.
 
-// Forward declarations are not required, but they can be useful for documentation.
+// Forward declarations are NOT required, but they can be useful for documentation.
 
 _grow               (self: TPtr, at_least: Int) -> Void
 _is_full            (self: TPtr)                -> Bool
@@ -193,6 +194,7 @@ _type_width_aligned (a: Type)                   -> Int
 // --
 
 
+// The type annotation above carries forward to the function definition.
 _is_full(self) { self->capacity == self->size }
 
 _grow(self, at_least) {
