@@ -17,6 +17,7 @@
 #include <stdio.h>
 
 #define DEBUG_RESOLVE 0
+#define DEBUG_RENAME  1
 
 typedef struct {
     enum tl_error_tag tag;
@@ -1989,9 +1990,6 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     while ((arg = ast_arguments_next(&iter))) {
         if (!ast_node_is_symbol(arg)) goto next;
 
-        // assert(i < app_args.size);
-        // if (constrain_pm(self, arg->type, app_args.v[i], arg)) return 1;
-
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (specialize_one(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
 
@@ -2144,9 +2142,12 @@ static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
 
     str newvar = next_variable_name(self);
     ast_node_name_replace(node->let_in.name, newvar);
+
+#if DEBUG_RENAME
     dbg(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
         str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
         str_buf(&node->let_in.name->symbol.name));
+#endif
 
     str_map_set(lex, name, &newvar);
 }
@@ -2200,14 +2201,18 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         str *found;
         if ((found = str_map_get(*lex, node->symbol.name))) {
             ast_node_name_replace(node, *found);
+#if DEBUG_RENAME
             dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
+#endif
         } else if (node->symbol.is_mangled && (found = str_map_get(*lex, node->symbol.original))) {
             // name was mangled because it conflicts with a toplevel name. But lexical rename is meant to
             // take precedence over mangling to match toplevel names.
             ast_node_name_replace(node, *found);
+#if DEBUG_RENAME
             dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
+#endif
         } else {
             // a free variable, a field name, a toplevel function name, etc
         }
@@ -2447,7 +2452,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
 }
 
 static str next_variable_name(tl_infer *self) {
-    char buf[40];
+    char buf[64];
     snprintf(buf, sizeof buf, "tl_v%u", self->next_var_name++);
     return str_init(self->arena, buf);
 }
@@ -2646,7 +2651,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         if (ast_node_is_let(infer_target)) body = infer_target->let.body;
         else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
         if (!body) fatal("logic error");
-        dbg(self, "infer_one constrain");
+
         if (constrain_pm(self, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
     }
     infer_ctx_destroy(self->transient, &ctx);
