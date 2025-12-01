@@ -443,7 +443,9 @@ static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_t
 static tl_monotype *tl_type_registry_parse_type_(tl_type_registry                *self,
                                                  tl_type_registry_parse_type_ctx *ctx,
                                                  ast_node const                  *node) {
-    tl_monotype *result = null;
+
+    tl_monotype *result = map_get_ptr(ctx->memoize, &node, sizeof(ast_node *));
+    if (result) return result;
 
     if (ast_node_is_symbol(node)) {
 
@@ -454,13 +456,14 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         // is it a special: any, ..., Type
         result = parse_type_specials(self, ctx, node);
-        if (result) return result;
+        if (result) goto top_success;
 
         // or is it a nullary literal: Int, Float, String, etc, including user type constructors
         str          name = ast_node_str(node);
         tl_polytype *poly = tl_type_registry_get_nullary(self, name);
         if (poly) {
-            return poly->type;
+            result = poly->type;
+            goto top_success;
         }
 
         // or else is it a type argument previously defined?
@@ -469,7 +472,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // Note: type arguments will need to be handled in a context-sensitive way by the caller.
 
             if (tl_monotype_is_type_literal(result)) result = tl_monotype_literal_target(result);
-            return result;
+            goto top_success;
         }
 
         // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
@@ -486,7 +489,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             }
         }
 
-        return result;
+        goto top_success;
     }
 
     else if (ast_node_is_nfa(node)) {
@@ -504,13 +507,19 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // Note: returning null is valid, because this function may be called to try to parse things
             // which look like type literals for a while, but are actually type constructors.
 
-            if (1 != node->named_application.n_arguments) return null; // possibly not a type literal
+            if (1 != node->named_application.n_arguments) {
+                result = null; // possibly not a type literal
+                goto top_success;
+            }
             ast_node const *target      = node->named_application.arguments[0];
 
             ast_node const *target_name = null;
             if (ast_node_is_symbol(target)) target_name = target;
             else if (ast_node_is_nfa(target)) target_name = target->named_application.name;
-            else return null;
+            else {
+                result = null;
+                goto top_success;
+            }
 
             str target_name_str = ast_node_str(target_name);
 
@@ -532,14 +541,26 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 tl_monotype_sized args = {.v = alloc_malloc(self->alloc, sizeof(tl_monotype *)), .size = 1};
                 args.v[0]              = result;
                 tl_monotype *inst      = tl_polytype_instantiate_with(self->alloc, unary, args, self->subs);
-                return inst;
+                result                 = inst;
+                goto top_success;
             }
         }
 
         tl_polytype *type_constructor = tl_type_registry_get(self, name);
-        if (!type_constructor) return null;
-        if (!tl_monotype_is_inst(type_constructor->type)) return null;
-        if (tl_polytype_is_nullary(type_constructor)) return null; // invalid syntax
+        if (!type_constructor) {
+            result = null;
+            goto top_success;
+        }
+
+        if (!tl_monotype_is_inst(type_constructor->type)) {
+            result = null;
+            goto top_success;
+        }
+        if (tl_polytype_is_nullary(type_constructor)) {
+            // invalid syntax
+            result = null;
+            goto top_success;
+        };
 
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node);
@@ -554,7 +575,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     assert(ctx);
                     mono = type_variable_sugar(self, ctx, nodes.v[i]);
                 } else {
-                    return null;
+                    result = null;
+                    goto top_success;
                 }
             }
             array_push_val(args, mono);
@@ -587,7 +609,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 if (ast_node_is_symbol(nodes.v[i])) {
                     mono = type_variable_sugar(self, ctx, nodes.v[i]);
                 } else {
-                    return null;
+                    result = null;
+                    goto top_success;
                 }
             }
             array_push_val(args, mono);
@@ -600,7 +623,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             if (ast_node_is_symbol(node->arrow.right)) {
                 right_mono = type_variable_sugar(self, ctx, node->arrow.right);
             } else {
-                return null;
+                result = null;
+                goto top_success;
             }
         }
         tl_monotype *arrow = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
@@ -684,12 +708,15 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         str_hset_remove(ctx->in_progress, name);
     }
 
+top_success:
+    map_set_ptr(&ctx->memoize, &node, sizeof(ast_node *), result);
     return result;
 }
 
 void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_parse_type_ctx *ctx,
                                           hashmap *type_arguments) {
     *ctx = (tl_type_registry_parse_type_ctx){
+      .memoize        = map_new(alloc, ast_node *, tl_monotype *, 64),
       .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 16),
       .deferred_parse = map_new(alloc, str, ast_node *, 8),
       .in_progress    = hset_create(alloc, 8),
@@ -699,6 +726,8 @@ void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_par
 void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *ctx) {
     // Note: does not reset deferred_parse, which is the whole point: to support single-pass fixups for
     // mutually recursive types.
+
+    // Note: does not reset memoize
     map_reset(ctx->type_arguments);
     hset_reset(ctx->in_progress);
     ctx->annotation_target = null;

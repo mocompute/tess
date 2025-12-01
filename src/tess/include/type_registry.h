@@ -14,6 +14,8 @@ typedef struct {
 } tl_type_registry;
 
 typedef struct {
+    hashmap *memoize;
+
     // Type arguments discovered during recursive parsing
     hashmap *type_arguments; // str => tl_monotype*
 
