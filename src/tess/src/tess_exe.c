@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 #include <string.h>
+#include <time.h>
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -36,6 +37,7 @@ typedef struct {
     int             no_line_directive;
     int             verbose;
     int             verbose_parse;
+    int             report_time; // --time option
     int             help;
     int             optimize;
 
@@ -57,6 +59,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
+    printf("    --time                 report elapsed time of compilation process\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
     exit(status);
 }
@@ -74,6 +77,7 @@ void state_init(state *self) {
     self->program           = str_empty();
     self->verbose           = 0;
     self->verbose_parse     = 0;
+    self->report_time       = 0;
     self->no_line_directive = 0;
     self->help              = 0;
     self->optimize          = 0;
@@ -102,6 +106,7 @@ void state_gather_single_options(state *self, char *str) {
 void state_gather_long_option(state *self, char *str) {
     if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
+    else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--", str)) /* ignore */
         ;
     else usage(1, self->argv0);
@@ -195,7 +200,8 @@ static int is_angle_quoted(str arg) {
 }
 
 static str strip_quotes(allocator *alloc, str quoted) {
-    // TODO: would be better to operate on spans so we don't needlessly copy strings
+    // TODO: would be better to operate on spans so we don't needlessly copy
+    // strings
     if (!is_quoted(quoted) && !is_angle_quoted(quoted)) return str_empty();
 
     span s = str_span(&quoted);
@@ -518,9 +524,13 @@ int compile_c(state *self) {
 
 int main(int argc, char *argv[]) {
 
-    int  result = 0;
-    char buf[256];
-    span buf_s = {.buf = buf, .len = sizeof buf};
+    int             result = 0;
+    char            buf[256];
+    span            buf_s = {.buf = buf, .len = sizeof buf};
+
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     if (!file_current_working_directory(buf_s)) {
         fprintf(stderr, "failed to determine current working directory.\n");
@@ -533,8 +543,8 @@ int main(int argc, char *argv[]) {
 
     get_c_compiler(&self);
     if (str_is_empty(self.cc)) {
-        fprintf(stderr,
-                "Could not locate a working C compiler. Set CC environment variable and try again.");
+        fprintf(stderr, "Could not locate a working C compiler. Set CC environment "
+                        "variable and try again.");
         exit(1);
     }
 
@@ -550,10 +560,12 @@ int main(int argc, char *argv[]) {
     if (self.words.size == 0) usage(0, argv[0]);
 
     if (0 == strcmp("c", self.words.v[0])) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
         result = compile(&self);
     }
 
     else if (0 == strcmp("exe", self.words.v[0])) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
         if (!self.out_path) {
             fprintf(stderr, "error: -o option is missing\n");
             exit(1);
@@ -566,11 +578,22 @@ int main(int argc, char *argv[]) {
     }
 
     else if (0 == strcmp("lib", self.words.v[0])) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
         self.is_library = 1;
         result          = compile(&self);
     }
 
 done:
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+
+    if (self.report_time) {
+        double elapsed = (double)(end_time.tv_sec - start_time.tv_sec) +
+                         (double)(end_time.tv_nsec - start_time.tv_nsec) / 1e9;
+
+        double ms = elapsed * 1000;
+        fprintf(stderr, "Elapsed time: %0.6fms\n", ms);
+    }
+
     state_deinit(&self);
     return result;
 }

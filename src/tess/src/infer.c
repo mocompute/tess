@@ -607,11 +607,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_reset(ctx->lexical_names);
 
         ctx->node_pos = npos_toplevel;
-        // FIXME: traversing the name as a symbol currently causes invalid constraints to be applied when
+        // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
         // specializing generic functions. The name's node->type should not in any case be relied upon: the
         // canonical arrow type of a function name is in the environment, not the ast.
-
-        // if (traverse_ast(self, ctx, node->let.name, cb)) return 1;
 
         ctx->node_pos = npos_formal_parameter;
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;
