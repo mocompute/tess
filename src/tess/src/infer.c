@@ -1000,13 +1000,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 }
 
                 (void)name;
-                // If annotation is a type argument, ensure it is wrapped in a literal.
-                // FIXME: special case
-                if (ast_node_is_symbol(node->symbol.annotation) &&
-                    str_eq(node->symbol.annotation->symbol.name, S("Type"))) {
-                    if (!tl_monotype_is_type_literal(mono))
-                        mono = tl_monotype_create_literal(self->arena, mono);
-                }
+                // If annotation is a type argument, grab its wrapped type from the type arguments map. We
+                // need it to be wrapped in a literal.
+                tl_monotype *found;
+                if ((found = str_map_get_ptr(parse_ctx.type_arguments, name))) mono = found;
 
                 node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
                 assert(node->symbol.annotation_type);
