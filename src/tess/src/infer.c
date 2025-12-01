@@ -16,6 +16,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#define DEBUG_RESOLVE 0
+
 typedef struct {
     enum tl_error_tag tag;
     ast_node const   *node;
@@ -900,16 +902,24 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
 static int add_generic(tl_infer *, ast_node *);
 
 static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
+#if DEBUG_RESOLVE
     str name     = ast_node_is_symbol(node) ? ast_node_str(node) : str_empty();
     str poly_str = tl_polytype_to_string(self->transient, type);
+#endif
+
     if (node->type) {
+#if DEBUG_RESOLVE
         str node_type_str = tl_polytype_to_string(self->transient, node->type);
         dbg(self, "constrain_or_set: '%s' : %s :: %s", str_cstr(&name), str_cstr(&node_type_str),
             str_cstr(&poly_str));
-
+#endif
         if (constrain(self, node->type, type, node)) return type_error(self, node);
-    } else {
+    }
+
+    else {
+#if DEBUG_RESOLVE
         dbg(self, "constrain_or_set: '%s': %s", str_cstr(&name), str_cstr(&poly_str));
+#endif
         ast_node_type_set(node, type);
     }
     return 0;
@@ -983,8 +993,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
                     str_array arr = str_map_keys(self->transient, parse_ctx.type_arguments);
                     forall(i, arr) {
+#if DEBUG_RESOLVE
                         dbg(self, "resolve_node: adding type argument to lexicals: '%s'",
                             str_cstr(&arr.v[i]));
+#endif
                         str_hset_insert(&ctx->lexical_names, arr.v[i]);
                     }
                 }
@@ -1020,8 +1032,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
 
-            str node_str = v2_ast_node_to_string(self->transient, node);
-
             // A type literal in argument position must be wrapped in literal
             tl_type_registry_parse_type_ctx parse_ctx;
             tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
@@ -1030,10 +1040,12 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
             if (mono) {
 
-                mono         = tl_monotype_create_literal(self->arena, mono);
+                mono = tl_monotype_create_literal(self->arena, mono);
+#if DEBUG_RESOLVE
+                str node_str = v2_ast_node_to_string(self->transient, node);
                 str mono_str = tl_monotype_to_string(self->transient, mono);
                 dbg(self, "npos_function_argument %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
-
+#endif
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
 
             } else {
@@ -1105,6 +1117,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     ensure_tv(self, &node->type);
 
+#if DEBUG_RESOLVE
     if (ast_node_is_symbol(node)) {
         str name = ast_node_str(node);
         str tmp  = tl_polytype_to_string(self->transient, node->type);
@@ -1113,9 +1126,9 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     }
 
     str node_str = v2_ast_node_to_string(self->transient, node);
-
     str mono_str = tl_monotype_to_string(self->transient, node->type->type);
     dbg(self, "resolve_node pos %i:  %s : %s", pos, str_cstr(&node_str), str_cstr(&mono_str));
+#endif
 
     return 0;
 }
@@ -1132,8 +1145,10 @@ int        is_union_struct(tl_infer *self, str name);
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
 
+#if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
     dbg(self, "infer_traverse_cb: %s:  %s", ast_tag_to_string(node->tag), str_cstr(&node_str));
+#endif
 
     switch (node->tag) {
     case ast_nil: {
