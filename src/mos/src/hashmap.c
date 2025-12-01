@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR 0.75
+#define DEFAULT_LOAD_FACTOR 0.70
 #define DEFAULT_N_BUCKETS   64
 #define MAX_PROBE_LEN       (1 << 6) - 1
 
