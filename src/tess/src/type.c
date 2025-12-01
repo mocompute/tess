@@ -287,8 +287,13 @@ int tl_polytype_is_nullary(tl_polytype *poly) {
 
 int tl_polytype_is_unary(tl_polytype *poly) {
     if (!poly) return 0;
-    if (!tl_monotype_is_inst(poly->type)) return 0;
-    if (1 != poly->quantifiers.size) return 0;
+    return tl_monotype_is_unary(poly->type);
+}
+
+int tl_monotype_is_unary(tl_monotype *mono) {
+    if (!mono) return 0;
+    if (!tl_monotype_is_inst(mono)) return 0;
+    if (1 != mono->cons_inst->args.size) return 0;
     return 1;
 }
 
@@ -1299,8 +1304,7 @@ tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype *lhs, tl_mon
     } else {
         array_push(arr, left);
     }
-    array_shrink(arr);
-    return tl_monotype_create_list(alloc, (tl_monotype_sized)sized_all(arr));
+    return tl_monotype_create_list(alloc, (tl_monotype_sized)array_sized(arr));
 }
 
 tl_monotype *tl_monotype_create_list(allocator *alloc, tl_monotype_sized xs) {
@@ -1324,7 +1328,7 @@ tl_monotype *tl_monotype_create_cons(allocator *alloc, tl_type_constructor_inst 
 static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hashmap **mapping) {
     if (!orig) return null;
 
-    // Note: never clone a placeholder type, because they need to retain identical pointer identity.
+    // Note: never clone a placeholder type, because they need to retain their pointer identity.
     if (tl_placeholder == orig->tag) return orig;
 
     tl_monotype *found = map_get_ptr(*mapping, &orig, sizeof(void *));
@@ -1590,6 +1594,11 @@ i32 tl_monotype_type_constructor_field_index(tl_monotype *self, str name) {
     return found;
 }
 
+tl_monotype *tl_monotype_unary_target(tl_monotype *self) {
+    if (!self || !tl_monotype_is_inst(self) || 1 != self->cons_inst->args.size) return null;
+    return self->cons_inst->args.v[0];
+}
+
 tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
     if (tl_monotype_is_ptr(self)) {
         assert(self->cons_inst->args.size == 1);
@@ -1652,39 +1661,6 @@ void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
     self->list.fvs = fvs;
 }
 
-void tl_monotype_force_union_resolve(tl_monotype *self) {
-    if (!self) return;
-    if (tl_monotype_is_union(self)) {
-        if (!self->cons_inst->args.size) fatal("runtime error");
-
-        *self = *self->cons_inst->args.v[0];
-        return;
-    }
-
-    switch (self->tag) {
-    case tl_placeholder:
-    case tl_any:
-    case tl_ellipsis:
-    case tl_var:
-    case tl_weak:        break;
-
-    case tl_cons_inst:
-        forall(i, self->cons_inst->args) tl_monotype_force_union_resolve(self->cons_inst->args.v[i]);
-        break;
-
-    case tl_arrow:
-    case tl_tuple: {
-        forall(i, self->list.xs) tl_monotype_force_union_resolve(self->list.xs.v[i]);
-        break;
-    }
-
-    case tl_literal:
-        //
-        tl_monotype_force_union_resolve(self->literal);
-        break;
-    }
-}
-
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     u64 hash = str_hash64(self->generic_name);
     return hash;
@@ -1721,10 +1697,10 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
         forall(i, args) {
             tl_monotype *arg = args.v[i];
 
-            // Look through Ptr specializations to the target. If the target is the same generic type
-            // constructor as ourselves, we simply tag it as "Self" and go no further.
-            if (tl_monotype_is_ptr(arg)) {
-                tl_monotype *target = tl_monotype_ptr_target(arg);
+            // Look through unary (e.g. Ptr) specializations to the target. If the target is the same
+            // generic type constructor as ourselves, we simply tag it as "Self" and go no further.
+            if (tl_monotype_is_unary(arg)) {
+                tl_monotype *target = tl_monotype_unary_target(arg);
 
                 // Check if target is an ancestor in progress
                 u64 *ancestor = null;
@@ -1736,7 +1712,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
                     // back-reference: use the def hash as a stable hash
                     hash = hash64_combine(hash, ancestor, sizeof *ancestor);
                 } else {
-                    hash  = str_hash64_combine(hash, S("Ptr"));
+                    hash  = str_hash64_combine(hash, S("Unary"));
                     u64 h = tl_monotype_hash64_(target, seen, in_progress);
                     hash  = hash64_combine(hash, &h, sizeof h);
                 }
