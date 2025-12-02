@@ -590,7 +590,7 @@ static void generate_toplevels(transpile *self) {
         assert(tl_monotype_is_list(poly->type));
         eval_ctx ctx      = {.free_variables = poly->type->list.fvs};
         str      body_res = generate_expr(self, return_type, body, &ctx);
-        if (!res_is_void) {
+        if (!res_is_void && !str_is_empty(body_res)) {
             generate_decl(self, res, return_type);
             generate_assign(self, res, body_res);
             cat_return(self, res);
@@ -989,7 +989,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     }
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
-    if (should_assign_result(ctx, result_type)) {
+    if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {
         str res = next_res(self);
         generate_decl(self, res, result_type);
         if (!ast_node_is_nil(node->let_in.body)) generate_assign(self, res, body);
