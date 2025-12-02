@@ -1921,6 +1921,12 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("uint64_t");
         }
 
+        else if (str_eq(S("CFloat"), cons_name)) {
+            return S("float");
+        } else if (str_eq(S("CDouble"), cons_name)) {
+            return S("double");
+        }
+
         else if (str_eq(S("Float"), cons_name)) {
             return S("double");
         } else if (str_eq(S("Bool"), cons_name)) {
