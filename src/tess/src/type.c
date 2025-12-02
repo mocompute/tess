@@ -25,6 +25,7 @@ static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *, tl_type_c
 static void                      make_nullary_inst(tl_type_registry *, str);
 static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_constructor_inst *,
                                                    tl_type_variable_sized);
+static void                      make_carray(tl_type_registry *);
 
 static void                      mark_integer_type(tl_type_registry *, str);
 static void                      mark_float_type(tl_type_registry *, str);
@@ -121,6 +122,9 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     mark_float_type(self, S("CFloat"));
     mark_float_type(self, S("CDouble"));
     mark_float_type(self, S("CLongDouble"));
+
+    // CArray type
+    make_carray(self);
 
     return self;
 }
@@ -246,6 +250,22 @@ static void mark_float_type(tl_type_registry *self, str name) {
     tl_monotype_set_float_convertible(poly->type);
 }
 
+static void make_carray(tl_type_registry *self) {
+    str       name                = S("CArray");
+    str_sized field_names         = {.size = 2, .v = alloc_malloc(self->alloc, 2 * sizeof(str))};
+    field_names.v[0]              = str_init(self->alloc, "type");
+    field_names.v[1]              = str_init(self->alloc, "count");
+
+    tl_monotype_sized field_types = {.size = 2, .v = alloc_malloc(self->alloc, 2 * sizeof(tl_monotype *))};
+    field_types.v[0]              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+    field_types.v[1]              = tl_type_registry_int(self);
+
+    tl_type_variable_sized tvs    = {.size = 1, .v = alloc_malloc(self->alloc, sizeof(tl_type_variable))};
+    tvs.v[0]                      = tl_monotype_tv(tl_monotype_literal_target(field_types.v[0]));
+
+    tl_type_constructor_def_create(self, name, tvs, field_names, field_types);
+}
+
 // --
 
 typedef struct {
@@ -342,8 +362,6 @@ int tl_monotype_is_unary(tl_monotype *mono) {
 
 tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
                                          tl_monotype_sized args) {
-
-    // FIXME: empty structs might have a problem here
 
     // Don't specialize nullary type constructors: they should always exist with their canonical generic
     // name, because they're not generic.
