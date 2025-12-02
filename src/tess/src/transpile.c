@@ -1881,6 +1881,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("unsigned char");
         } else if (str_eq(S("CSignedChar"), cons_name)) {
             return S("signed char");
+        } else if (str_eq(S("CShort"), cons_name)) {
+            return S("short");
+        } else if (str_eq(S("CUnsignedShort"), cons_name)) {
+            return S("unsigned short");
         } else if (str_eq(S("CInt"), cons_name)) {
             return S("int");
         } else if (str_eq(S("CUnsignedInt"), cons_name)) {
@@ -1897,6 +1901,24 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("size_t");
         } else if (str_eq(S("CPtrDiff"), cons_name)) {
             return S("ptrdiff_t");
+        }
+
+        else if (str_eq(S("CInt8"), cons_name)) {
+            return S("int8_t");
+        } else if (str_eq(S("CUInt8"), cons_name)) {
+            return S("uint8_t");
+        } else if (str_eq(S("CInt16"), cons_name)) {
+            return S("int16_t");
+        } else if (str_eq(S("CUInt16"), cons_name)) {
+            return S("uint16_t");
+        } else if (str_eq(S("CInt32"), cons_name)) {
+            return S("int32_t");
+        } else if (str_eq(S("CUInt32"), cons_name)) {
+            return S("uint32_t");
+        } else if (str_eq(S("CInt64"), cons_name)) {
+            return S("int64_t");
+        } else if (str_eq(S("CUInt64"), cons_name)) {
+            return S("uint64_t");
         }
 
         else if (str_eq(S("Float"), cons_name)) {

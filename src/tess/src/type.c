@@ -11,6 +11,7 @@
 #include "util.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define DEBUG_ENV 1
@@ -62,6 +63,8 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     make_nullary_inst(self, S("CChar"));
     make_nullary_inst(self, S("CUnsignedChar"));
     make_nullary_inst(self, S("CSignedChar"));
+    make_nullary_inst(self, S("CShort"));
+    make_nullary_inst(self, S("CUnsignedShort"));
     make_nullary_inst(self, S("CInt"));
     make_nullary_inst(self, S("CUnsignedInt"));
     make_nullary_inst(self, S("CLong"));
@@ -71,6 +74,16 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     make_nullary_inst(self, S("CSize"));
     make_nullary_inst(self, S("CPtrDiff"));
 
+    // Fixed size C Integers
+    make_nullary_inst(self, S("CInt8"));
+    make_nullary_inst(self, S("CUInt8"));
+    make_nullary_inst(self, S("CInt16"));
+    make_nullary_inst(self, S("CUInt16"));
+    make_nullary_inst(self, S("CInt32"));
+    make_nullary_inst(self, S("CUInt32"));
+    make_nullary_inst(self, S("CInt64"));
+    make_nullary_inst(self, S("CUInt64"));
+
     // Integer convertible types
     mark_integer_type(self, S("Int"));
     mark_integer_type(self, S("Bool"));
@@ -79,12 +92,23 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     mark_integer_type(self, S("CSignedChar"));
     mark_integer_type(self, S("CInt"));
     mark_integer_type(self, S("CUnsignedInt"));
+    mark_integer_type(self, S("CShort"));
+    mark_integer_type(self, S("CUnsignedShort"));
     mark_integer_type(self, S("CLong"));
     mark_integer_type(self, S("CUnsignedLong"));
     mark_integer_type(self, S("CLongLong"));
     mark_integer_type(self, S("CUnsignedLongLong"));
     mark_integer_type(self, S("CSize"));
     mark_integer_type(self, S("CPtrDiff"));
+
+    mark_integer_type(self, S("CInt8"));
+    mark_integer_type(self, S("CUInt8"));
+    mark_integer_type(self, S("CInt16"));
+    mark_integer_type(self, S("CUInt16"));
+    mark_integer_type(self, S("CInt32"));
+    mark_integer_type(self, S("CUInt32"));
+    mark_integer_type(self, S("CInt64"));
+    mark_integer_type(self, S("CUInt64"));
 
     return self;
 }
