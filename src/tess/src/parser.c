@@ -77,6 +77,7 @@ static int           a_reassignment(parser *);
 static int           a_statement(parser *);
 static int           a_value(parser *);
 static ast_node     *create_body(parser *self, ast_node_array exprs);
+static ast_node     *create_body_fallback(parser *self, ast_node_array exprs, ast_node *);
 static int           operator_precedence(char const *op, int is_prefix);
 static ast_node     *parse_base_expression(parser *);
 static ast_node     *parse_expression(parser *, int min_preced);
@@ -1487,6 +1488,7 @@ static int a_field_assignment(parser *self) {
 }
 
 static int a_assignment(parser *self) {
+    // Note: this is a let-in expression
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
@@ -1501,7 +1503,7 @@ static int a_assignment(parser *self) {
         array_push(exprs, self->result);
     }
 
-    ast_node *body = create_body(self, exprs);
+    ast_node *body = create_body_fallback(self, exprs, val);
 
     ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
     return result_ast_node(self, a);
@@ -1581,6 +1583,11 @@ static ast_node *create_body(parser *self, ast_node_array exprs) {
     ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
     set_node_file(self, body);
     return body;
+}
+
+static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_node *fallback) {
+    if (0 == exprs.size && fallback) array_push(exprs, fallback);
+    return create_body(self, exprs);
 }
 
 static int toplevel_defun(parser *self) {
