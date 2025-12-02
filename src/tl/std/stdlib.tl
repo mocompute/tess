@@ -35,16 +35,26 @@ c_strtoul      (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLong
 c_strtoull     (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLongLong
 c_atexit       (f: () -> Void)                                 -> Void
 c__Exit        (status: CInt)                                  -> Void
+c_bsearch      (key: Ptr(Void),
+                base: Ptr(Void),
+                nmemb: CSize,
+                size: CSize,
+                compar: (a: Ptr(Void), b: Ptr(Void)) -> CInt)  -> CInt
+c_qsort        (base: Ptr(Void),
+                nmemb: CSize,
+                size: CSize,
+                compar: (a: Ptr(Void), b: Ptr(Void)) -> CInt)  -> Void
 
-// void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
-//               int (*compar)(const void *, const void *));
-// void qsort(void* base, size_t nmemb, size_t size,
-//            int (*compar)(const void *, const void *));
-// div_t     div(      int numer,       int denom);
-// ldiv_t    div(     long numer,      long denom);
-// lldiv_t   div(long long numer, long long denom);                          // C++0X
-// ldiv_t   ldiv(     long numer,      long denom);
-// lldiv_t lldiv(long long numer, long long denom);                          // C99
+
+c_div_t   : { quot: CInt,      rem: CInt      }
+c_ldiv_t  : { quot: CLong,     rem: CLong     }
+c_lldiv_t : { quot: CLongLong, rem: CLongLong }
+
+c_div          (numer: CInt,      denom: CInt)                 -> c_div_t
+c_ldiv         (numer: CLong,     denom: CLong)                -> c_ldiv_t
+c_lldiv        (numer: CLongLong, denom: CLongLong)            -> c_lldiv_t
+
+
 // int mblen(const char* s, size_t n);
 // int mbtowc(wchar_t* restrict pwc, const char* restrict s, size_t n);
 // int wctomb(char* s, wchar_t wchar);
