@@ -34,9 +34,7 @@ c_strtoll      (nptr: String, endptr: Ptr(String), base: CInt) -> CLongLong
 c_strtoul      (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLong
 c_strtoull     (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLongLong
 c_atexit       (f: () -> Void)                                 -> Void
-
-// void _Exit(int status);
-// void _Exit(int status);
+c__Exit        (status: CInt)                                  -> Void
 
 // void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
 //               int (*compar)(const void *, const void *));
