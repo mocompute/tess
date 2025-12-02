@@ -1384,14 +1384,15 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 
 static str generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
+    str value        = generate_expr(self, type, node->assignment.value, ctx);
+
     int save         = ctx->want_lvalue;
     ctx->want_lvalue = 1;
-
-    str value        = generate_expr(self, type, node->assignment.value, ctx);
     str lhs          = generate_expr(self, null, node->assignment.name, ctx);
+    ctx->want_lvalue = save;
+
     if (!is_nil_result(type)) generate_assign(self, lhs, value);
 
-    ctx->want_lvalue = save;
     return value;
 }
 
