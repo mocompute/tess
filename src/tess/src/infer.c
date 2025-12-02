@@ -474,8 +474,8 @@ static int type_error(tl_infer *self, ast_node const *node) {
 
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
-static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *);
-static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *);
+static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
+static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
 typedef struct {
     tl_infer       *self;
@@ -484,7 +484,7 @@ typedef struct {
 
 static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     type_error_cb_ctx *ctx = ctx_;
-    log_type_error_mm(ctx->self, left, right);
+    log_type_error_mm(ctx->self, left, right, ctx->node);
     type_error(ctx->self, ctx->node);
 }
 
@@ -3380,16 +3380,17 @@ static void log_constraint_mono(tl_infer *self, tl_monotype *left, tl_monotype *
     dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
 
-static void log_type_error(tl_infer *self, tl_polytype *left, tl_polytype *right) {
-    if (!self->verbose) return;
+static void log_type_error(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
+    // Note: always print err to stderr
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
-    dbg(self, "error: constraints are not compatible:  %s versus %s", str_cstr(&left_str),
-        str_cstr(&right_str));
+
+    fprintf(stderr, "%s:%i: error: conflicting types: %s versus %s\n", node->file, node->line,
+            str_cstr(&left_str), str_cstr(&right_str));
 }
-static void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *right) {
+static void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     tl_polytype l = tl_polytype_wrap((tl_monotype *)left), r = tl_polytype_wrap((tl_monotype *)right);
-    return log_type_error(self, &l, &r);
+    return log_type_error(self, &l, &r, node);
 }
 
 static void log_subs(tl_infer *self) {
