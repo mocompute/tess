@@ -1351,7 +1351,7 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 
         int save         = ctx->want_lvalue;
         ctx->want_lvalue = 1;
-        str operand      = generate_expr(self, type, node->unary_op.operand, ctx);
+        str operand      = generate_expr(self, null, node->unary_op.operand, ctx);
         ctx->want_lvalue = save;
 
         generate_decl(self, res, type);
@@ -1362,7 +1362,7 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
         return res;
     }
 
-    str operand = generate_expr(self, type, node->unary_op.operand, ctx);
+    str operand = generate_expr(self, null, node->unary_op.operand, ctx);
 
     if (!ctx->want_lvalue) {
         str res = next_res(self);
