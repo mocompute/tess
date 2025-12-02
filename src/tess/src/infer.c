@@ -2931,6 +2931,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
     switch (mono->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:

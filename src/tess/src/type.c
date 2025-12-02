@@ -973,6 +973,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     array_push_many(arr, left->list.xs.v, left->list.xs.size);
 
     switch (right->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1032,6 +1033,7 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap *map, hash
     // to convert quantified type variables to unquantified type variables.
 
     switch (self->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:    break;
@@ -1079,6 +1081,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
     // to convert quantified type variables to arbitrary monotypes.
 
     switch (self->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1219,6 +1222,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
     ptr_hset_insert(seen, self);
 
     switch (self->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:    break;
@@ -1303,6 +1307,12 @@ tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
     return self;
 }
 
+tl_monotype *tl_monotype_create_integer(allocator *alloc, i32 integer) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_integer, .integer = integer};
+    return self;
+}
+
 tl_monotype *tl_monotype_create_literal(allocator *alloc, tl_monotype *target) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_literal, .literal = target};
@@ -1383,6 +1393,7 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
     case tl_placeholder: fatal("unreachable");
     case tl_any:         *clone = (tl_monotype){.tag = tl_any}; return clone;
     case tl_ellipsis:    *clone = (tl_monotype){.tag = tl_ellipsis}; return clone;
+    case tl_integer:     *clone = (tl_monotype){.tag = tl_integer, .integer = orig->integer}; return clone;
     case tl_var:         *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
     case tl_weak:        *clone = (tl_monotype){.tag = tl_weak, .var = orig->var}; return clone;
 
@@ -1426,10 +1437,12 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     ptr_hset_insert(seen, self);
 
     switch (self->tag) {
+
     case tl_placeholder:
     case tl_var:
     case tl_ellipsis:    return 0;
 
+    case tl_integer:
     case tl_any:
         //
         return 1;
@@ -1468,6 +1481,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     ptr_hset_insert(seen, self);
 
     switch (self->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_var:
@@ -1518,6 +1532,9 @@ int tl_monotype_is_concrete_no_weak(tl_monotype *self) {
 
 int tl_monotype_is_any(tl_monotype *self) {
     return self && tl_any == self->tag;
+}
+int tl_monotype_is_integer(tl_monotype *self) {
+    return self && tl_integer == self->tag;
 }
 int tl_monotype_is_weak(tl_monotype *self) {
     return self && tl_weak == self->tag;
@@ -1610,6 +1627,15 @@ void tl_monotype_set_integer_convertible(tl_monotype *self) {
 void tl_monotype_set_float_convertible(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) fatal("logic error");
     self->cons_inst->def->is_float_convertible = 1;
+}
+
+i32 tl_monotype_integer(tl_monotype *self) {
+    if (tl_monotype_is_integer(self)) return self->integer;
+    fatal("runtime error");
+}
+tl_type_variable tl_monotype_tv(tl_monotype *self) {
+    if (tl_monotype_is_tv(self)) return self->var;
+    fatal("runtime error");
 }
 
 int tl_polytype_is_scheme(tl_polytype *poly) {
@@ -1735,6 +1761,8 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
     case tl_var:
     case tl_weak:        hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
+    case tl_integer:     hash = hash64_combine(hash, &self->integer, sizeof self->integer); break;
+
     case tl_cons_inst:   {
         tl_type_constructor_def *def      = self->cons_inst->def;
         u64                      def_hash = tl_type_constructor_def_hash64(def);
@@ -1830,6 +1858,12 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
         //
         str_build_cat(&b, S("..."));
         break;
+
+    case tl_integer: {
+        char buf[64];
+        snprintf(buf, sizeof buf, "i%i", self->integer);
+        str_build_cat(&b, str_init(alloc, buf));
+    } break;
 
     case tl_var: {
         char buf[64];
@@ -2006,6 +2040,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     tl_monotype_sized unions = left->cons_inst->args;
 
     switch (right->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_literal:     return 1;
 
@@ -2054,6 +2089,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         return unify_type_constructor_union(subs, left, right, cb, user, seen);
 
     switch (right->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_literal:     return 1;
 
@@ -2096,6 +2132,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
     case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
 
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -2139,8 +2176,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     case tl_ellipsis:
     case tl_literal:     fatal("unreachable");
 
+    case tl_integer:     return tl_integer == right->tag && left->integer == right->integer;
+
     case tl_var:
         switch (right->tag) {
+        case tl_integer:     return 1;
+
         case tl_placeholder:
         case tl_any:
         case tl_ellipsis:
@@ -2158,6 +2199,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_weak:
         switch (right->tag) {
+        case tl_integer:     return 1;
+
         case tl_placeholder:
         case tl_any:
         case tl_ellipsis:
@@ -2179,6 +2222,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_arrow:
         switch (right->tag) {
+        case tl_integer:     return 1;
+
         case tl_placeholder:
         case tl_any:
         case tl_ellipsis:
@@ -2199,6 +2244,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     case tl_tuple:
         switch (right->tag) {
+        case tl_integer:     return 1;
+
         case tl_placeholder:
         case tl_any:
         case tl_ellipsis:
@@ -2269,6 +2316,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
     hset_insert(seen, &mono, sizeof(void *));
 
     switch (mono->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:    return 0;
@@ -2406,6 +2454,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
         // case 2: one is weak type variable
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user, seen);
 
+    case tl_integer:
     case tl_cons_inst:
     case tl_arrow:
     case tl_tuple:
@@ -2434,6 +2483,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
     hset_insert(seen, &self, sizeof(void *));
 
     switch (self->tag) {
+    case tl_integer:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:    break;

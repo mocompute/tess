@@ -42,10 +42,13 @@ typedef struct tl_monotype {
             tl_monotype_sized xs;
             str_sized         fvs;
         } list;
+
+        i32 integer;
     };
     enum {
         tl_any,
         tl_ellipsis,
+        tl_integer,
         tl_var,
         tl_weak,
         tl_cons_inst,
@@ -104,6 +107,7 @@ void tl_type_env_log(tl_type_env *);
 
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_literal(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
@@ -126,6 +130,7 @@ tl_monotype           *tl_monotype_arrow_result(tl_monotype *);
 
 str                    tl_monotype_to_string(allocator *, tl_monotype *);
 int                    tl_monotype_is_any(tl_monotype *);
+int                    tl_monotype_is_integer(tl_monotype *);
 int                    tl_monotype_is_nil(tl_monotype *);
 int                    tl_monotype_is_list(tl_monotype *);
 int                    tl_monotype_is_inst(tl_monotype *);
@@ -159,6 +164,8 @@ tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
 int                    tl_monotype_is_string(tl_monotype *);
 int                    tl_monotype_is_ptr_to_char(tl_monotype *);
+i32                    tl_monotype_integer(tl_monotype *);
+tl_type_variable       tl_monotype_tv(tl_monotype *);
 
 u64                    tl_type_constructor_def_hash64(tl_type_constructor_def *);
 
