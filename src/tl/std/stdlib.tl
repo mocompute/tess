@@ -3,39 +3,41 @@
 #include <assert.h>
 
 // assert.h
-c_assert       (condition: Bool)                   -> Void
+c_assert       (condition: Bool)                               -> Void
 
 // stdlib.h
-c_atof         (nptr: String)                      -> Float
-c_atoi         (nptr: String)                      -> Int
-c_atol         (nptr: String)                      -> Int
-c_atoll        (nptr: String)                      -> Int
-c_strtod       (nptr: String, endptr: Ptr(String)) -> Float
-c_getenv       (name: String)                      -> String
-c_system       (str: String)                       -> Int
-c_rand         ()                                  -> CInt
-c_srand        (seed: CUnsignedInt)                -> Void
-c_aligned_alloc(alignment: CSize, size: CSize)     -> Ptr(T)
-c_calloc       (num: CSize, size_each: CSize)      -> Ptr(T)
-c_free         (ptr: Ptr(T))                       -> Void
-c_malloc       (size: CSize)                       -> Ptr(T)
-c_realloc      (ptr: Ptr(T), size: CSize)          -> Ptr(T)
-c_exit         (status: CInt)                      -> Void
-c_abort        ()                                  -> Void
+c_atof         (nptr: String)                                  -> Float
+c_atoi         (nptr: String)                                  -> Int
+c_atol         (nptr: String)                                  -> Int
+c_atoll        (nptr: String)                                  -> Int
+c_strtod       (nptr: String, endptr: Ptr(String))             -> Float
+c_getenv       (name: String)                                  -> String
+c_system       (str: String)                                   -> Int
+c_rand         ()                                              -> CInt
+c_srand        (seed: CUnsignedInt)                            -> Void
+c_aligned_alloc(alignment: CSize, size: CSize)                 -> Ptr(T)
+c_calloc       (num: CSize, size_each: CSize)                  -> Ptr(T)
+c_free         (ptr: Ptr(T))                                   -> Void
+c_malloc       (size: CSize)                                   -> Ptr(T)
+c_realloc      (ptr: Ptr(T), size: CSize)                      -> Ptr(T)
+c_exit         (status: CInt)                                  -> Void
+c_abort        ()                                              -> Void
 
-c_abs          (j: CInt)                           -> CInt
-c_labs         (j: CLong)                          -> CLong
-c_llabs        (j: CLongLong)                      -> CLongLong
+c_abs          (j: CInt)                                       -> CInt
+c_labs         (j: CLong)                                      -> CLong
+c_llabs        (j: CLongLong)                                  -> CLongLong
 
+c_strtof       (nptr: String, endptr: Ptr(String))             -> CFloat
+c_strtold      (nptr: String, endptr: Ptr(String))             -> CLongDouble
+c_strtol       (nptr: String, endptr: Ptr(String), base: CInt) -> CLong
+c_strtoll      (nptr: String, endptr: Ptr(String), base: CInt) -> CLongLong
+c_strtoul      (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLong
+c_strtoull     (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLongLong
+c_atexit       (f: () -> Void)                                 -> Void
 
-// float              strtof  (const char* restrict nptr, char** restrict endptr); // C99
-// long double        strtold (const char* restrict nptr, char** restrict endptr); // C99
-// long               strtol  (const char* restrict nptr, char** restrict endptr, int base);
-// long long          strtoll (const char* restrict nptr, char** restrict endptr, int base); // C99
-// unsigned long      strtoul (const char* restrict nptr, char** restrict endptr, int base);
-// unsigned long long strtoull(const char* restrict nptr, char** restrict endptr, int base); // C99
-// int atexit(void (*func)(void));
 // void _Exit(int status);
+// void _Exit(int status);
+
 // void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
 //               int (*compar)(const void *, const void *));
 // void qsort(void* base, size_t nmemb, size_t size,
