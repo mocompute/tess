@@ -11,6 +11,6 @@ main() {
   d : CDouble := f
   error = error + if sizeof(d) == sizeof(CDouble) {0} else {1}
 
-  // return error
-  error
+  ld : CLongDouble := f
+  error = error + if sizeof(ld) > sizeof(CDouble) {0} else {1}
 }

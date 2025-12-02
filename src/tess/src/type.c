@@ -114,11 +114,13 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     // C float types
     make_nullary_inst(self, S("CFloat"));
     make_nullary_inst(self, S("CDouble"));
+    make_nullary_inst(self, S("CLongDouble"));
 
     // Float convertible types
     mark_float_type(self, S("Float"));
     mark_float_type(self, S("CFloat"));
     mark_float_type(self, S("CDouble"));
+    mark_float_type(self, S("CLongDouble"));
 
     return self;
 }

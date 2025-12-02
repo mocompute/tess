@@ -1926,6 +1926,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("float");
         } else if (str_eq(S("CDouble"), cons_name)) {
             return S("double");
+        } else if (str_eq(S("CLongDouble"), cons_name)) {
+            return S("long double");
         }
 
         else if (str_eq(S("Float"), cons_name)) {
