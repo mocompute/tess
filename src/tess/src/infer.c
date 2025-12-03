@@ -806,6 +806,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_hash_command:
     case ast_nil:
+    case ast_void:
     case ast_continue:
     case ast_arrow:
     case ast_bool:
@@ -1132,6 +1133,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     switch (node->tag) {
     case ast_nil: {
+        ensure_tv(self, &node->type);
+        tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+        // tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
+        if (constrain_pm(self, node->type, weak, node)) return 1;
+    } break;
+
+    case ast_void: {
         ensure_tv(self, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
         if (constrain_pm(self, node->type, weak, node)) return 1;
@@ -2373,6 +2381,7 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     case ast_string:
     case ast_char:
     case ast_nil:
+    case ast_void:
     case ast_arrow:
     case ast_bool:
     case ast_ellipsis:
@@ -3062,6 +3071,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     case ast_case:
     case ast_nil:
+    case ast_void:
     case ast_arrow:
     case ast_binary_op:
     case ast_bool:

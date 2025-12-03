@@ -210,6 +210,7 @@ nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized
 nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
 nodiscard ast_node *ast_node_create_continue(allocator *) mallocfun;
 nodiscard ast_node *ast_node_create_nil(allocator *) mallocfun;
+nodiscard ast_node *ast_node_create_void(allocator *) mallocfun;
 nodiscard ast_node *ast_node_create_if_then_else(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_binary_op(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *) mallocfun;
@@ -285,6 +286,8 @@ int            ast_node_is_let_in(ast_node const *);
 int            ast_node_is_let_in_lambda(ast_node const *);
 int            ast_node_is_nfa(ast_node const *);
 int            ast_node_is_nil(ast_node const *);
+int            ast_node_is_void(ast_node const *);
+int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);

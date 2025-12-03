@@ -131,7 +131,7 @@ tl_monotype           *tl_monotype_arrow_result(tl_monotype *);
 str                    tl_monotype_to_string(allocator *, tl_monotype *);
 int                    tl_monotype_is_any(tl_monotype *);
 int                    tl_monotype_is_integer(tl_monotype *);
-int                    tl_monotype_is_nil(tl_monotype *);
+int                    tl_monotype_is_void(tl_monotype *);
 int                    tl_monotype_is_list(tl_monotype *);
 int                    tl_monotype_is_inst(tl_monotype *);
 int                    tl_monotype_is_inst_of(tl_monotype *, str);

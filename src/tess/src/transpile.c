@@ -686,7 +686,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 }
 
 static int is_nil_result(tl_monotype *type) {
-    return tl_monotype_is_nil(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type) ||
+    return tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type) ||
            tl_monotype_is_weak(type);
 }
 
@@ -980,36 +980,41 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             }
         }
 
-        str value = generate_expr(self, type, node->let_in.value, ctx);
-
-        if (tl_monotype_is_tv(type) || str_is_empty(value)) {
-            // The assignment target has an indeterminate type, most likely because `value` is an
-            // unknown symbol.
-            if (ast_node_is_symbol(node->let_in.value)) {
-                str value_str = ast_node_str(node->let_in.value);
-                exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
-                           str_cstr(&value_str));
-            } else {
-                // TODO: improve error
-                str original = ast_node_name_original(node->let_in.name);
-                exit_error(node->let_in.value->file, node->let_in.value->line,
-                           "value has incomplete type information: %s", str_cstr(&original));
-            }
-        } else if (tl_monotype_is_concrete(type)) {
-            if (should_assign_result(ctx, type)) {
-                generate_decl(self, name, type);
-                if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
-            }
+        if (ast_node_is_void(node->let_in.value)) {
+            // binding a symbol to void means to declare it without initialising it
+            generate_decl(self, name, type);
         } else {
-            // Note: do not emit values that are not concrete. These can come out of type inference if
-            // the variable is never referenced, so it is safe to avoid emitting them. Conversely, we
-            // can't correctly emit them because the type information is incomplete. However, there are
-            // exceptions: return value type information is not always available for c_ functions, so we
-            // emit all non-arrow values and c_* arrow values.
-            if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
+            str value = generate_expr(self, type, node->let_in.value, ctx);
 
-                generate_decl(self, name, type);
-                if (!ast_node_is_nil(node->let_in.value)) generate_assign(self, name, value);
+            if (tl_monotype_is_tv(type) || str_is_empty(value)) {
+                // The assignment target has an indeterminate type, most likely because `value` is an
+                // unknown symbol.
+                if (ast_node_is_symbol(node->let_in.value)) {
+                    str value_str = ast_node_str(node->let_in.value);
+                    exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
+                               str_cstr(&value_str));
+                } else {
+                    // TODO: improve error
+                    str original = ast_node_name_original(node->let_in.name);
+                    exit_error(node->let_in.value->file, node->let_in.value->line,
+                               "value has incomplete type information: %s", str_cstr(&original));
+                }
+            } else if (tl_monotype_is_concrete(type)) {
+                if (should_assign_result(ctx, type)) {
+                    generate_decl(self, name, type);
+                    if (!ast_node_is_nil_or_void(node->let_in.value)) generate_assign(self, name, value);
+                }
+            } else {
+                // Note: do not emit values that are not concrete. These can come out of type inference if
+                // the variable is never referenced, so it is safe to avoid emitting them. Conversely, we
+                // can't correctly emit them because the type information is incomplete. However, there are
+                // exceptions: return value type information is not always available for c_ functions, so we
+                // emit all non-arrow values and c_* arrow values.
+                if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
+
+                    generate_decl(self, name, type);
+                    if (!ast_node_is_nil_or_void(node->let_in.value)) generate_assign(self, name, value);
+                }
             }
         }
     }
@@ -1020,7 +1025,7 @@ continue_body:;
     if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {
         str res = next_res(self);
         generate_decl(self, res, result_type);
-        if (!ast_node_is_nil(node->let_in.body)) generate_assign(self, res, body);
+        if (!ast_node_is_nil_or_void(node->let_in.body)) generate_assign(self, res, body);
         return res;
     } else {
         return body;
@@ -1056,7 +1061,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     }
     cat(self, S("}\n"));
 
-    if (no && !ast_node_is_nil(no)) {
+    if (no && !ast_node_is_nil_or_void(no)) {
         cat(self, S("else {\n"));
         str no_str = generate_expr(self, null, no, ctx);
         if (should_assign_result(ctx, no->type->type)) {
@@ -1089,7 +1094,7 @@ static str generate_inline_lambda_with_args(transpile *self, tl_monotype *result
     // initialise parameters
     forall(i, params) {
         ast_node const *param = params.v[i];
-        // if (ast_node_is_nil(param)) break;
+        // if (ast_node_is_nil_or_void(param)) break;
         assert(ast_node_is_symbol(param));
         assert(!param->type->quantifiers.size);
 
@@ -1199,7 +1204,7 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
         generate_decl(self, res, result_type);
 
         forall(i, node->case_.arms) {
-            if (ast_node_is_nil(node->case_.conditions.v[i])) {
+            if (ast_node_is_nil_or_void(node->case_.conditions.v[i])) {
                 // the else case: must be last
                 if (i + 1 != node->case_.arms.size) fatal("logic error");
 
@@ -1427,7 +1432,7 @@ static str generate_reassignment(transpile *self, tl_monotype *type, ast_node co
 static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // Note: handles return [expr] and break
 
-    int has_value = !!node->return_.value && !ast_node_is_nil(node->return_.value);
+    int has_value = !!node->return_.value && !ast_node_is_nil_or_void(node->return_.value);
     int is_break  = node->return_.is_break_statement;
 
     str value     = str_empty();
@@ -1576,6 +1581,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_continue:     return generate_continue(self, type, node, ctx);
 
     case ast_nil:          return S("NULL");
+    case ast_void:         return str_empty();
 
     case ast_tuple:        return generate_tuple(self, type, node, ctx);
 
@@ -1618,7 +1624,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
     else if (tl_cons_inst == type->tag) {
         str typec;
-        if (tl_monotype_is_nil(type)) {
+        if (tl_monotype_is_void(type)) {
             typec = str_init(self->transient, "/*nil*/ void*");
         } else {
             typec = type_to_c_mono(self, type);
@@ -1643,8 +1649,12 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         return generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
-    else {
+    else if (tl_monotype_is_tv(type)) {
         fatal("got a type variable");
+    }
+
+    else {
+        fatal("unexpected type");
     }
 }
 
@@ -1660,7 +1670,7 @@ static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) 
     }
 
     else if (tl_cons_inst == type->tag) {
-        if (tl_monotype_is_nil(type)) fatal("can't declare a void type");
+        if (tl_monotype_is_void(type)) fatal("can't declare a void type");
 
         str typec = type_to_c_mono(self, type);
         cat(self, typec);

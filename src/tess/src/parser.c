@@ -815,8 +815,8 @@ static int a_arrow(parser *p) {
 
 static int a_nil(parser *self) {
 
-    if (0 == a_try_s(self, the_symbol, "void")) return result_ast(self, ast_nil);
-    if ((0 == a_open_round(self)) && (0 == a_close_round(self))) return result_ast(self, ast_nil);
+    if (0 == a_try_s(self, the_symbol, "void")) return result_ast(self, ast_void);
+    if ((0 == a_open_round(self)) && (0 == a_close_round(self))) return result_ast(self, ast_void);
 
     self->error.tag = tl_err_expected_nil;
     return 1;

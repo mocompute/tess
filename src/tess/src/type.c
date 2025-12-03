@@ -1578,7 +1578,7 @@ int tl_monotype_is_inst_of(tl_monotype *self, str name) {
     return self && tl_cons_inst == self->tag && str_eq(self->cons_inst->def->generic_name, name);
 }
 
-int tl_monotype_is_nil(tl_monotype *self) {
+int tl_monotype_is_void(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("Void"));
 }
 

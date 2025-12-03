@@ -14,6 +14,7 @@
 
 typedef enum ast_tag : u16 {
     ast_nil,
+    ast_void,
     ast_hash_command,
 
     ast_arrow,

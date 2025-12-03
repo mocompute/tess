@@ -86,6 +86,11 @@ ast_node *ast_node_create_nil(allocator *alloc) {
     ast_node *self = ast_node_create(alloc, ast_nil);
     return self;
 }
+ast_node *ast_node_create_void(allocator *alloc) {
+    ast_node *self = ast_node_create(alloc, ast_void);
+    return self;
+}
+
 ast_node *ast_node_create_if_then_else(allocator *alloc, ast_node *cond, ast_node *yes, ast_node *no) {
     ast_node *self               = ast_node_create(alloc, ast_if_then_else);
     self->if_then_else.condition = cond;
@@ -217,6 +222,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_void:
     case ast_tuple:    break;
 
     case ast_bool:     clone->bool_.val = orig->bool_.val; break;
@@ -471,6 +477,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_void:
     case ast_bool:
     case ast_symbol:
     case ast_hash_command:
@@ -597,6 +604,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
+    case ast_void:
     case ast_bool:
     case ast_symbol:
     case ast_hash_command:
@@ -964,6 +972,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_char:     return str_cat_3(alloc, S("'"), node->symbol.name, S("'"));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
     case ast_nil:      return S("()");
+    case ast_void:     return S("void");
     case ast_continue: return S("continue");
 
     case ast_return:
@@ -1240,6 +1249,7 @@ u64 ast_node_hash(ast_node const *self) {
     switch (self->tag) {
     case ast_continue:
     case ast_nil:
+    case ast_void:
     case ast_ellipsis:
     case ast_eof:      break;
 
@@ -1391,6 +1401,12 @@ int ast_node_is_nfa(ast_node const *self) {
 
 int ast_node_is_nil(ast_node const *self) {
     return ast_nil == self->tag;
+}
+int ast_node_is_void(ast_node const *self) {
+    return ast_void == self->tag;
+}
+int ast_node_is_nil_or_void(ast_node const *self) {
+    return ast_node_is_nil(self) || ast_node_is_void(self);
 }
 int ast_node_is_symbol(ast_node const *self) {
     return ast_symbol == self->tag;
