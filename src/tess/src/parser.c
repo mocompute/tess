@@ -289,8 +289,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "break",  "case", "continue", "else", "false", "if", "null",
-      "return", "then", "true",     "void", "while", null,
+      "break", "case",   "continue", "else", "false", "if",    "in",
+      "null",  "return", "then",     "true", "void",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -782,6 +782,10 @@ static int a_star(parser *p) {
     if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
     p->error.tag = tl_err_expected_star;
     return 1;
+}
+
+static int is_ampersand(ast_node const *node) {
+    return (ast_node_is_symbol(node) && str_eq(ast_node_str(node), S("&")));
 }
 
 static int a_ampersand(parser *p) {
@@ -1561,10 +1565,179 @@ static int a_while_statement(parser *self) {
     return result_ast_node(self, r);
 }
 
+static int a_for_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "for")) return 1;
+    ast_node *variable = parse_expression(self, INT_MIN);
+    if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return 1;
+
+    int is_pointer = 0;
+    if (ast_node_is_unary_op(variable)) {
+        if (is_ampersand(variable->unary_op.op)) is_pointer = 1;
+        else return 1; // no other unary op is valid
+
+        // reset variable to the actual symbol
+        variable = variable->unary_op.operand;
+        if (!ast_node_is_symbol(variable)) return 1;
+    }
+
+    if (a_try_s(self, the_symbol, "in")) return 1;
+
+    // one or two expressions can follow before the open brace
+
+    ast_node *first     = parse_expression(self, INT_MIN);
+    ast_node *second    = null;
+
+    int       saw_curly = 0;
+    if (a_try(self, a_open_curly)) second = parse_expression(self, INT_MIN);
+    else saw_curly = 1;
+
+    ast_node *module   = null;
+    ast_node *iterable = null;
+    if (!second) {
+        // either second failed to parse, or we saw a curly
+        if (!saw_curly) return 1;
+        iterable = first;
+    } else {
+        // we saw two expressions, make sure they meet our requirements
+
+        // first expression must be a symbol because it's a module name
+        if (!ast_node_is_symbol(first)) return 1;
+        module = first;
+
+        // second can be anything
+        iterable = second;
+    }
+
+    if (module) {
+        assert(!saw_curly);
+        // Now we need the open curly
+        if (a_try(self, a_open_curly)) return 1;
+    }
+
+    // Read body of for loop
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (a_try(self, a_body_element)) return 1;
+        array_push(exprs, self->result);
+        if (0 == a_try(self, a_close_curly)) break;
+    }
+    ast_node *user_body = create_body(self, exprs);
+
+    // Construct enclosing let-in(s) for the body of the loop. For value iteration, we need two let-ins:
+    // first to grab the iterator pointer, and second to set the value variable. For pointer iteration, we
+    // just need one let-in: to grab the iterator pointer and set the value variable.
+
+    // First, we need a name for the hidden iterator variable
+    ast_node *iterator = ast_node_create_sym_c(self->ast_arena, "gen_iter");
+
+    // Do we use default Array module, or a user-provided module?
+    str module_name;
+    if (module) module_name = ast_node_str(module);
+    else module_name = S("Array");
+
+    // Create the nfa for iter_value
+    ast_node *call_iter_value = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterator;
+        ast_node *iter_value     = ast_node_create_sym_c(self->ast_arena, "iter_value");
+        mangle_name_for_module(self, iter_value, module_name);
+        call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, iter_args);
+    }
+
+    // Create the nfa for iter_init
+    ast_node *call_iter_init = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterable;
+        ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init");
+        mangle_name_for_module(self, iter_init, module_name);
+        call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
+    }
+
+    // Create the nfa for iter_cond
+    ast_node *call_iter_cond = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterator;
+        ast_node *iter_cond      = ast_node_create_sym_c(self->ast_arena, "iter_cond");
+        mangle_name_for_module(self, iter_cond, module_name);
+        call_iter_cond = ast_node_create_nfa(self->ast_arena, iter_cond, iter_args);
+    }
+
+    // Create the nfa for iter_update
+    ast_node *call_iter_update = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterator;
+        ast_node *iter_update    = ast_node_create_sym_c(self->ast_arena, "iter_update");
+        mangle_name_for_module(self, iter_update, module_name);
+        call_iter_update = ast_node_create_nfa(self->ast_arena, iter_update, iter_args);
+    }
+
+    // Create the nfa for iter_free
+    ast_node *call_iter_free = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterator;
+        ast_node *iter_free      = ast_node_create_sym_c(self->ast_arena, "iter_free");
+        mangle_name_for_module(self, iter_free, module_name);
+        call_iter_free = ast_node_create_nfa(self->ast_arena, iter_free, iter_args);
+    }
+
+    ast_node *while_body = null;
+    if (is_pointer) {
+        ast_node *lhs      = variable;
+        ast_node *rhs      = call_iter_value; // iter_value(iter)
+        ast_node *for_body = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
+        while_body         = for_body;
+    } else {
+        // For value iteration, we need two let-ins. Build them inside-out.
+
+        // First, we need a name for the hidden iterator value (the pointer) and the deref operator (star)
+        ast_node *ptr   = ast_node_create_sym_c(self->ast_arena, "gen_iter_ptr");
+        ast_node *deref = ast_node_create_sym_c(self->ast_arena, "*");
+
+        // The inner let-in
+        ast_node *lhs   = variable;
+        ast_node *rhs   = ast_node_create_unary_op(self->ast_arena, deref, ptr);
+        ast_node *inner = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
+
+        // The outer let-in
+        lhs             = ptr;
+        rhs             = call_iter_value;
+        ast_node *outer = ast_node_create_let_in(self->ast_arena, lhs, rhs, inner);
+        while_body      = outer;
+    }
+
+    // Now we need to construct the while statement. It will be enclosed in a let-in which initializes the
+    // iterator. And it will be followed by a funcall to free the iterator. So we will have: let iter = init
+    // in body (while, free).
+
+    ast_node_array while_statement_exprs = {.alloc = self->ast_arena};
+
+    ast_node      *condition             = call_iter_cond;
+    ast_node      *update                = call_iter_update;
+    ast_node      *while_statement = ast_node_create_while(self->ast_arena, condition, update, while_body);
+
+    // The body of the let-in: the while statement followed by the iter_free
+    array_push(while_statement_exprs, while_statement);
+    array_push(while_statement_exprs, call_iter_free);
+    ast_node *while_statement_exprs_body = create_body(self, while_statement_exprs);
+
+    ast_node *lhs                        = iterator;
+    ast_node *rhs                        = call_iter_init;
+    ast_node *let_iter_init = ast_node_create_let_in(self->ast_arena, lhs, rhs, while_statement_exprs_body);
+
+    // The resulting node is a let-in:
+    return result_ast_node(self, let_iter_init);
+}
+
 static int a_statement(parser *self) {
     if (0 == a_try(self, a_assignment)) return 0;
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
+    if (0 == a_try(self, a_for_statement)) return 0;
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;

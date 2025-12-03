@@ -1,15 +1,18 @@
 #module main
-#import <stdlib.tl>
+#import <Array.tl>
 
 main() {
-  // we automatically decay array to pointer, unlike C
-  p := CArray(Int, 16)
-  p[0] = 123
 
-  // this gives a Int**, unlike C
-  pp := p.&
+  xs := Array.with_capacity(Int, 4)
+  i := 1
+  for x.& in xs {
+    x.* = i
+    i = i + 1
+  }
 
-  // double dereference
-  val := pp.*.*
-  val - 123
+  sum := 0
+  for x in xs {
+    sum = sum + x
+  }
+  sum - 10
 }

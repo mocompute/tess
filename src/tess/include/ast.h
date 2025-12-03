@@ -290,6 +290,7 @@ int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
+int            ast_node_is_unary_op(ast_node const *);
 int            ast_node_is_union_def(ast_node const *);
 int            ast_node_is_std_application(ast_node const *);
 int            ast_node_is_specialized(ast_node const *);
