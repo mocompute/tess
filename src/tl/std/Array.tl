@@ -202,9 +202,10 @@ Iter(a) : {
 }
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
-// implements the `for` statement.
+// implements the `for` statement. Note that iter_value is declared to return a value of any type. It is
+// usually a pointer to the element type, but need not be, for example in the cases of a IndexedIter.
 iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_value   (iter: Ptr(Iter(a))) -> Ptr(a)
+iter_value   (iter: Ptr(Iter(a))) -> b
 iter_cond    (iter: Ptr(Iter(a))) -> Bool
 iter_update  (iter: Ptr(Iter(a))) -> Void
 iter_free    (iter: Ptr(Iter(a))) -> Void
