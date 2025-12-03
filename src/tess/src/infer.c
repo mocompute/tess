@@ -1402,7 +1402,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 assert(!tl_polytype_is_scheme(operand->type));
                 tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
                 if (constrain_pm(self, node->type, target, node)) return 1;
-            } else {
+            } else if(tl_polytype_is_concrete(operand->type)) {
                 // pointer required
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
                 return 1;
