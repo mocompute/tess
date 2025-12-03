@@ -203,9 +203,10 @@ Iter(a) : {
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
 // implements the `for` statement. Note that iter_value is declared to return a value of any type. It is
-// usually a pointer to the element type, but need not be, for example in the cases of a IndexedIter.
+// usually a pointer to the element type, but need not be, for example in the cases of a IndexedIter. See
+// the bottom of this file.
 iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_value   (iter: Ptr(Iter(a))) -> b
+iter_value   (iter: Ptr(Iter(a))) -> Ptr(a)
 iter_cond    (iter: Ptr(Iter(a))) -> Bool
 iter_update  (iter: Ptr(Iter(a))) -> Void
 iter_free    (iter: Ptr(Iter(a))) -> Void
@@ -258,3 +259,30 @@ _grow(self, at_least) {
 // builtins. If you examine the TL `builtin` module you'll see sizeof and alignof are implemented as
 // wrappers around TL intrinsic functions.
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
+
+
+
+
+// Start a new module. A single file may contain multiple modules, but the same module cannot be implemented
+// using multiple #module sections. That is, once we start a new module, we cannot re-open a previously
+// defined module.
+#module IndexedArray
+
+// -- Indexed iterator interface --
+
+IterValue(a) : {
+  value: Ptr(a),
+  index: Int,
+}
+
+iter_init    (arr:  Ptr(Array.T(a)))    -> Array.Iter(a)
+iter_value   (iter: Ptr(Array.Iter(a))) -> IterValue(a)
+iter_cond    (iter: Ptr(Array.Iter(a))) -> Bool
+iter_update  (iter: Ptr(Array.Iter(a))) -> Void
+iter_free    (iter: Ptr(Array.Iter(a))) -> Void
+
+iter_init(arr)    { Array.Iter ( v = arr->v, size = arr->size, index = 0 )          }
+iter_value(iter)  { IterValue (value = iter->v[iter->index].&, index = iter->index) }
+iter_cond(iter)   { iter->index < iter->size                                        }
+iter_update(iter) { iter->index = iter->index + 1              void                 }
+iter_free(iter)   {                                                                 }
