@@ -57,10 +57,11 @@
 // Int is a builtin type, corresponding to C `long long`, which is guaranteed by the C standard to be a
 // signed integer at least 64 bits long.
 T(a) : {
-  v:            Ptr(a),
-  size:         Int,
-  capacity:     Int,
+  v:        Ptr(a),
+  size:     Int,
+  capacity: Int,
 }
+
 
 // This syntax declares a type alias. `TPtr` may be used in place of `Ptr(T(a))` in all contexts. However,
 // since this is a generic type (using the type variable `a`), note that use of `TPtr` in a type annotation
@@ -98,7 +99,6 @@ reserve(self: Ptr(T(a)), count: Int) -> Void
 with_capacity(a: Type, count: Int) -> T(a)
 
 
-
 // -- Implementation --
 
 empty(a: Type) {
@@ -109,10 +109,9 @@ empty(a: Type) {
   // distinguish function calls from type constructors, and is an opinionated language design choice to
   // exclude parameter names from the formal API of TL libraries.
   //
-  // The field `v` includes a type annotation, which is required here in order to make use of the type
-  // argument in the function parameters, and to ensure the compiler knows what concrete type of `T(a)` to
-  // specialize. It determines the specialization by examining the type of the arguments provided to the
-  // generic `T` type constructor.
+  // The field `v` includes a type annotation, which is required here to ensure the compiler knows what
+  // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
+  // arguments provided to the generic `T` type constructor.
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 
@@ -129,8 +128,9 @@ free(self) {
   // used as the return value. For functions which return no value, they must return the pseudo-value
   // `void`. If this `void` expression was omitted, the return value of this function would be `null`, with
   // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct, due to the previous
-  // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void`, this would
-  // generate a type error at compile time.
+  // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void` which appeared as
+  // the result in the forward declaration for `free` at the top of this file, this would generate a type
+  // error at compile time.
   void
 }
 
@@ -179,6 +179,32 @@ push(self, x) {
   void
 }
 
+// -- Iterator interface --
+
+// The iterator struct. This is used to provide a public iterator interface over an Array using the `for`
+// statement.
+Iter(a) : {
+  v:        Ptr(a),
+  size:     Int,
+  index:    Int,
+}
+
+// The required iterator functions. They are called automatically by the compiler-generated code which
+// implements the `for` statement.
+iter_init    (arr: T(a))     -> Iter(a)
+iter_value   (iter: Iter(a)) -> Ptr(a)
+iter_cond    (iter: Iter(a)) -> Bool
+iter_update  (iter: Iter(a)) -> Void
+iter_free    (iter: Iter(a)) -> Void
+
+iter_init(arr)    { Iter ( v = arr.v, size = arr.size, index = 0 ) }
+iter_value(iter)  { iter.v[iter.index].&                           }
+iter_cond(iter)   { iter.index < iter.size                         }
+iter_update(iter) { iter.index = iter.index + 1              void  }
+iter_free(iter)   {                                                }
+
+
+
 // -- Private functions --
 
 // Conventionally, a preceding `_` indicates a function intended to be private. However, all toplevel
@@ -215,7 +241,7 @@ _grow(self, at_least) {
   reserve(self, count)
 }
 
-// `a` is annotated as a type variable, which are handled carefully to interface with C's sizeof and alignof
+// `a` is annotated as a type argument, which are handled carefully to interface with C's sizeof and alignof
 // builtins. If you examine the TL `builtin` module you'll see sizeof and alignof are implemented as
 // wrappers around TL intrinsic functions.
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
