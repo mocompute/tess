@@ -1438,7 +1438,38 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ensure_tv(self, &node->type);
         if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
-        if (ast_node_is_lambda_function(node->let_in.value)) {
+        // Note: special case CArray
+        if (ast_node_is_nfa(node->let_in.value) &&
+            str_eq(ast_node_str(node->let_in.value->named_application.name), S("CArray"))) {
+            ast_node *nfa = node->let_in.value;
+            if (2 != nfa->named_application.n_arguments) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = nfa}));
+                return 1;
+            }
+            ast_node **args = nfa->named_application.arguments;
+            if (ast_i64 != args[1]->tag) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_expected_integer, .node = args[1]}));
+                return 1;
+            }
+
+            tl_monotype *parsed_type = tl_type_registry_parse_type(self->registry, args[0]);
+            if (!parsed_type) {
+                expected_type(self, args[0]);
+                return 1;
+            }
+
+            tl_monotype *inst =
+              tl_type_registry_instantiate_carray(self->registry, parsed_type, (i32)args[1]->i64.val);
+            if (constrain_pm(self, node->let_in.value->type, inst, node)) return 1;
+
+            // node name is a Ptr(type)
+            tl_monotype *ptr = tl_type_registry_ptr(self->registry, parsed_type);
+            if (constrain_pm(self, node->let_in.name->type, ptr, node->let_in.name)) return 1;
+            break;
+        }
+
+        else if (ast_node_is_lambda_function(node->let_in.value)) {
 
             str name = node->let_in.name->symbol.name;
 

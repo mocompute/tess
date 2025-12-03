@@ -954,6 +954,32 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
     if (type) {
 
+        // Note: special case: handle CArray and automatic decay to pointer: we do not support C
+        // pointer-to-array
+        {
+            ast_node *nfa = node->let_in.value;
+            if (ast_node_is_nfa(nfa) && str_eq(ast_node_str(nfa->named_application.name), S("CArray"))) {
+                tl_monotype *array_type = tl_polytype_concrete(nfa->type);
+                assert(tl_monotype_is_inst(array_type) && 2 == array_type->cons_inst->args.size);
+                tl_monotype *element_type = array_type->cons_inst->args.v[0];
+                i32          count        = tl_monotype_integer(array_type->cons_inst->args.v[1]);
+                if (count < 0) fatal("runtime error");
+
+                str typec    = type_to_c_mono(self, element_type);
+                str arr_name = str_fmt(self->transient, "%s_array_", str_cstr(&name));
+                str line =
+                  str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&arr_name), count);
+                cat(self, line);
+
+                // decay array to pointer:
+                line = str_fmt(self->transient, "%s* %s = %s;\n", str_cstr(&typec), str_cstr(&name),
+                               str_cstr(&arr_name));
+                cat(self, line);
+
+                goto continue_body;
+            }
+        }
+
         str value = generate_expr(self, type, node->let_in.value, ctx);
 
         if (tl_monotype_is_tv(type) || str_is_empty(value)) {
@@ -987,6 +1013,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             }
         }
     }
+
+continue_body:;
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
     if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {

@@ -319,6 +319,15 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
     return type;
 }
 
+tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *self, tl_monotype *type, i32 count) {
+    if (count < 0) return null;
+    tl_polytype *poly          = str_map_get_ptr(self->definitions, S("CArray"));
+    tl_monotype *inst          = tl_polytype_instantiate(self->alloc, poly, self->subs);
+    inst->cons_inst->args.v[0] = type;
+    inst->cons_inst->args.v[1] = tl_monotype_create_integer(self->alloc, count);
+    return inst;
+}
+
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *self, str name,
                                                         tl_monotype_sized args) {
     registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
@@ -2194,7 +2203,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     case tl_ellipsis:
     case tl_literal:     fatal("unreachable");
 
-    case tl_integer:     return tl_integer == right->tag && left->integer == right->integer;
+    case tl_integer:     return !(tl_integer == right->tag && left->integer == right->integer);
 
     case tl_var:
         switch (right->tag) {
