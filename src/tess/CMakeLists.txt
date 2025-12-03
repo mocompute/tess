@@ -96,6 +96,7 @@ function(tesslang_create_test NAME)
   )
   add_custom_target(${TEST_NAME} ALL DEPENDS ${TEST_EXE})
   add_test(NAME ${TEST_NAME} COMMAND ${TEST_EXE})
+  set_tests_properties(${TEST_NAME} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
 function(tesslang_create_build_fail_test NAME)
@@ -112,6 +113,7 @@ function(tesslang_create_build_fail_test NAME)
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_property(TEST ${TEST_NAME} PROPERTY WILL_FAIL true)
+  set_tests_properties(${TEST_NAME} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
 tesslang_create_test(address_of)

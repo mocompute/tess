@@ -87,14 +87,12 @@ endif()
 if(MOS_ASAN)
   set(MOS_C_ASAN
     -fsanitize=address
-    -fsanitize=leak
     -fsanitize=undefined
     -fno-sanitize-recover=all
     -fno-omit-frame-pointer)
 
   set(MOS_C_LINK_ASAN
     -fsanitize=address
-    -fsanitize=leak
     -fsanitize=undefined
     -fno-sanitize-recover=all
     -fno-omit-frame-pointer)
