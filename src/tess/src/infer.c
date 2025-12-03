@@ -1889,6 +1889,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     // update callsite
     ast_node_name_replace(node->named_application.name, name_inst);
+    ast_node_set_is_specialized(node);
     if (special_type) {
         // fprintf(stderr, "specialize_user_type: replacing node type.\n");
         ast_node_type_set(node, special_type); // Note: this helps the transpiler
@@ -2044,6 +2045,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         dbg(self, "specialize_applications_cb: nfa '%s'",
             str_cstr(&node->named_application.name->symbol.name));
 
+        // do not process a second time
+        if (ast_node_is_specialized(node)) return 0;
+
         // do not process intrinsic calls or their arguments
         if (is_intrinsic(name)) return 0;
 
@@ -2055,6 +2059,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
         // divert if this is a type constructor
         if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
+
+        // remember this callsite is specialized
+        ast_node_set_is_specialized(node);
 
         // Important: use _with variant to copy free variables info to the arrow, which is added to the
         // environment further down.
@@ -2077,9 +2084,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             dbg(self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
             return 1;
         }
-
-        // remember this callsite is specialized
-        ast_node_set_is_specialized(node);
 
         // remove name from specials after recursing through arguments, so it doesn't shadow subsequent uses
         // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
