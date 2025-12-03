@@ -191,17 +191,17 @@ Iter(a) : {
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
 // implements the `for` statement.
-iter_init    (arr: T(a))     -> Iter(a)
-iter_value   (iter: Iter(a)) -> Ptr(a)
-iter_cond    (iter: Iter(a)) -> Bool
-iter_update  (iter: Iter(a)) -> Void
-iter_free    (iter: Iter(a)) -> Void
+iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
+iter_value   (iter: Ptr(Iter(a))) -> Ptr(a)
+iter_cond    (iter: Ptr(Iter(a))) -> Bool
+iter_update  (iter: Ptr(Iter(a))) -> Void
+iter_free    (iter: Ptr(Iter(a))) -> Void
 
-iter_init(arr)    { Iter ( v = arr.v, size = arr.size, index = 0 ) }
-iter_value(iter)  { iter.v[iter.index].&                           }
-iter_cond(iter)   { iter.index < iter.size                         }
-iter_update(iter) { iter.index = iter.index + 1              void  }
-iter_free(iter)   {                                                }
+iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
+iter_value(iter)  { iter->v[iter->index].&                           }
+iter_cond(iter)   { iter->index < iter->size                         }
+iter_update(iter) { iter->index = iter->index + 1              void  }
+iter_free(iter)   {                                                  }
 
 
 

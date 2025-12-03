@@ -4,6 +4,7 @@
 main() {
 
   xs := Array.with_capacity(Int, 4)
+  xs.size = 4
   i := 1
   for x.& in xs {
     x.* = i

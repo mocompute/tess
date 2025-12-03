@@ -1630,6 +1630,11 @@ static int a_for_statement(parser *self) {
     // First, we need a name for the hidden iterator variable
     ast_node *iterator = ast_node_create_sym_c(self->ast_arena, "gen_iter");
 
+    // And we need an address-of operation for the iterator and the iterable
+    ast_node *address_of       = ast_node_create_sym_c(self->ast_arena, "&");
+    ast_node *iterator_address = ast_node_create_unary_op(self->ast_arena, address_of, iterator);
+    ast_node *iterable_address = ast_node_create_unary_op(self->ast_arena, address_of, iterable);
+
     // Do we use default Array module, or a user-provided module?
     str module_name;
     if (module) module_name = ast_node_str(module);
@@ -1639,7 +1644,7 @@ static int a_for_statement(parser *self) {
     ast_node *call_iter_value = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterator;
+        iter_args.v[0]           = iterator_address;
         ast_node *iter_value     = ast_node_create_sym_c(self->ast_arena, "iter_value");
         mangle_name_for_module(self, iter_value, module_name);
         call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, iter_args);
@@ -1649,7 +1654,7 @@ static int a_for_statement(parser *self) {
     ast_node *call_iter_init = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterable;
+        iter_args.v[0]           = iterable_address;
         ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init");
         mangle_name_for_module(self, iter_init, module_name);
         call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
@@ -1659,7 +1664,7 @@ static int a_for_statement(parser *self) {
     ast_node *call_iter_cond = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterator;
+        iter_args.v[0]           = iterator_address;
         ast_node *iter_cond      = ast_node_create_sym_c(self->ast_arena, "iter_cond");
         mangle_name_for_module(self, iter_cond, module_name);
         call_iter_cond = ast_node_create_nfa(self->ast_arena, iter_cond, iter_args);
@@ -1669,7 +1674,7 @@ static int a_for_statement(parser *self) {
     ast_node *call_iter_update = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterator;
+        iter_args.v[0]           = iterator_address;
         ast_node *iter_update    = ast_node_create_sym_c(self->ast_arena, "iter_update");
         mangle_name_for_module(self, iter_update, module_name);
         call_iter_update = ast_node_create_nfa(self->ast_arena, iter_update, iter_args);
@@ -1679,7 +1684,7 @@ static int a_for_statement(parser *self) {
     ast_node *call_iter_free = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterator;
+        iter_args.v[0]           = iterator_address;
         ast_node *iter_free      = ast_node_create_sym_c(self->ast_arena, "iter_free");
         mangle_name_for_module(self, iter_free, module_name);
         call_iter_free = ast_node_create_nfa(self->ast_arena, iter_free, iter_args);
