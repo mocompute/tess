@@ -98,6 +98,10 @@ reserve(self: Ptr(T(a)), count: Int) -> Void
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(a: Type, count: Int) -> T(a)
 
+// Allocate an empty array with elements of type a and an initial capacity of count, and set the size to the
+// capacity, leaving the contents undefined.
+with_capacity_undefined(a: Type, count: Int) -> T(a)
+
 
 // -- Implementation --
 
@@ -153,6 +157,14 @@ with_capacity(a: Type, count: Int) {
   p : Ptr(a) := c_malloc(count * width)
   T ( v = p, capacity = count, size = 0 )
 }
+
+// The type annotations can be left off, and the previous declaration at the top of the file will be used.
+with_capacity_undefined(a, count) {
+  result := with_capacity(a, count)
+  result.size = count
+  result
+}
+
 
 reserve(self: Ptr(T(a)), count: Int) {
   // This is an if statement. Round braces are optional around the condition.
