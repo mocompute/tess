@@ -202,17 +202,17 @@ Iter(a) : {
 }
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
-// implements the `for` statement. Note that iter_value is declared to return a value of any type. It is
-// usually a pointer to the element type, but need not be, for example in the cases of a IndexedIter. See
-// the bottom of this file.
+// implements the `for` statement. See the bottom of this file for another iterator module, IndexedArray.
 iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_value   (iter: Ptr(Iter(a))) -> Ptr(a)
+iter_ptr     (iter: Ptr(Iter(a))) -> Ptr(a)
+iter_value   (iter: Ptr(Iter(a))) -> a
 iter_cond    (iter: Ptr(Iter(a))) -> Bool
 iter_update  (iter: Ptr(Iter(a))) -> Void
 iter_deinit  (iter: Ptr(Iter(a))) -> Void
 
 iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
-iter_value(iter)  { iter->v[iter->index].&                           }
+iter_ptr(iter)    { iter->v[iter->index].&                           }
+iter_value(iter)  { iter->v[iter->index]                             }
 iter_cond(iter)   { iter->index < iter->size                         }
 iter_update(iter) { iter->index = iter->index + 1              void  }
 iter_deinit(iter) {                                                  }
@@ -270,8 +270,13 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 // -- Indexed iterator interface --
 
+IterValuePtr(a) : {
+  ptr:   Ptr(a),
+  index: Int,
+}
+
 IterValue(a) : {
-  value: Ptr(a),
+  value: a,
   index: Int,
 }
 
@@ -280,17 +285,24 @@ Iter(a) : {
   size:     Int,
   index:    Int,
   iv:       IterValue(a),
+  ivp:      IterValuePtr(a),
 }
 
 
 iter_init    (arr:  Ptr(Array.T(a))) -> Iter(a)
-iter_value   (iter: Ptr(Iter(a)))    -> Ptr(IterValue(a))
+iter_ptr     (iter: Ptr(Iter(a)))    -> IterValuePtr(a)
+iter_value   (iter: Ptr(Iter(a)))    -> IterValue(a)
 iter_cond    (iter: Ptr(Iter(a)))    -> Bool
 iter_update  (iter: Ptr(Iter(a)))    -> Void
 iter_deinit  (iter: Ptr(Iter(a)))    -> Void
 
-iter_init(arr)    { Iter (v = arr->v, size = arr->size, index = 0, iv = IterValue(value = null, index = 0)) }
-iter_value(iter)  { iter->iv.value = iter->v[iter->index].& iter->iv.index = iter->index iter->iv.&         }
-iter_cond(iter)   { iter->index < iter->size                                                                }
-iter_update(iter) { iter->index = iter->index + 1                                                  void     }
-iter_deinit(iter) {                                                                                         }
+iter_init(arr)    { Iter (v = arr->v, size = arr->size, index = 0,
+                          iv  = IterValue   (value = void, index = 0),
+                          ivp = IterValuePtr(ptr   = null, index = 0))
+                  }
+
+iter_ptr(iter)    { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp     }
+iter_value(iter)  { iter->iv.value = iter->v[iter->index]   iter->iv.index  = iter->index iter->iv      }
+iter_cond(iter)   { iter->index < iter->size                                                            }
+iter_update(iter) { iter->index = iter->index + 1                                                  void }
+iter_deinit(iter) {                                                                                     }

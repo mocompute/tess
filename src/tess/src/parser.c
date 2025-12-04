@@ -1566,6 +1566,46 @@ static int a_while_statement(parser *self) {
 }
 
 static int a_for_statement(parser *self) {
+    // The `for` statement is sugar over a while statement which uses a defined iterator interface. It has
+    // four forms: with or without a Module specifier, and with or without a pointer specifier. If the
+    // module specifier is omitted, Array is used as the default. The pointer specifier (using the &
+    // operator) indicates the loop variable is a pointer which provides access to the underlying storage.
+    //
+    //     for x in xs { ... }
+    //     for x.& in xs { ... }
+    //     for x in Module xs { ... }
+    //     for x.& in Module xs { ... }
+    //
+    // The iterator interface requires modules to implement the following functions:
+    //
+    //     iter_init    (iterable: Ptr(T)) -> Iter // T is the iterable, and Iter is any type.
+    //     iter_value   (Ptr(Iter))        -> TValue
+    //     iter_ptr     (Ptr(Iter))        -> Ptr(TValue)
+    //     iter_cond    (Ptr(Iter))        -> Bool
+    //     iter_update  (Ptr(Iter))        -> Void
+    //     iter_deinit  (Ptr(Iter))        -> Void
+    //
+    // See <Array.tl> for a sample implementation
+    //
+    // The statement `for x in Module xs { ... }` desugars into:
+    //
+    //     iter := Module.iter_init(xs.&)
+    //     while Module.iter_cond(iter.&), Module.iter_update(iter.&) {
+    //       x := Module.iter_value(iter.&)
+    //       ...
+    //     }
+    //     Module.iter_deinit(iter.&)
+    //
+    // The statement `for x.& in Module xs { ... }` desugars into:
+    //
+    //     iter := Module.iter_init(xs.&)
+    //     while Module.iter_cond(iter.&), Module.iter_update(iter.&) {
+    //       x := Module.iter_ptr(iter.&)
+    //       ...
+    //     }
+    //     Module.iter_deinit(iter.&)
+    //
+
     if (a_try_s(self, the_symbol, "for")) return 1;
     ast_node *variable = parse_expression(self, INT_MIN);
     if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return 1;
@@ -1640,6 +1680,16 @@ static int a_for_statement(parser *self) {
     if (module) module_name = ast_node_str(module);
     else module_name = S("Array");
 
+    // Create the nfa for iter_init
+    ast_node *call_iter_init = null;
+    {
+        ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+        iter_args.v[0]           = iterable_address;
+        ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init");
+        mangle_name_for_module(self, iter_init, module_name);
+        call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
+    }
+
     // Create the nfa for iter_value
     ast_node *call_iter_value = null;
     {
@@ -1650,14 +1700,14 @@ static int a_for_statement(parser *self) {
         call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, iter_args);
     }
 
-    // Create the nfa for iter_init
-    ast_node *call_iter_init = null;
+    // Create the nfa for iter_ptr
+    ast_node *call_iter_ptr = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-        iter_args.v[0]           = iterable_address;
-        ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init");
-        mangle_name_for_module(self, iter_init, module_name);
-        call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
+        iter_args.v[0]           = iterator_address;
+        ast_node *iter_ptr       = ast_node_create_sym_c(self->ast_arena, "iter_ptr");
+        mangle_name_for_module(self, iter_ptr, module_name);
+        call_iter_ptr = ast_node_create_nfa(self->ast_arena, iter_ptr, iter_args);
     }
 
     // Create the nfa for iter_cond
@@ -1691,29 +1741,36 @@ static int a_for_statement(parser *self) {
     }
 
     ast_node *while_body = null;
-    if (is_pointer) {
+    {
         ast_node *lhs      = variable;
-        ast_node *rhs      = call_iter_value; // iter_value(iter)
+        ast_node *rhs      = is_pointer ? call_iter_ptr : call_iter_value;
         ast_node *for_body = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
         while_body         = for_body;
-    } else {
-        // For value iteration, we need two let-ins. Build them inside-out.
-
-        // First, we need a name for the hidden iterator value (the pointer) and the deref operator (star)
-        ast_node *ptr   = ast_node_create_sym_c(self->ast_arena, "gen_iter_ptr");
-        ast_node *deref = ast_node_create_sym_c(self->ast_arena, "*");
-
-        // The inner let-in
-        ast_node *lhs   = variable;
-        ast_node *rhs   = ast_node_create_unary_op(self->ast_arena, deref, ptr);
-        ast_node *inner = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
-
-        // The outer let-in
-        lhs             = ptr;
-        rhs             = call_iter_value;
-        ast_node *outer = ast_node_create_let_in(self->ast_arena, lhs, rhs, inner);
-        while_body      = outer;
     }
+
+    // if (is_pointer) {
+    //     ast_node *lhs      = variable;
+    //     ast_node *rhs      = call_iter_value; // iter_value(iter)
+    //     ast_node *for_body = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
+    //     while_body         = for_body;
+    // } else {
+    //     // For value iteration, we need two let-ins. Build them inside-out.
+
+    //     // First, we need a name for the hidden iterator value (the pointer) and the deref operator
+    //     (star) ast_node *ptr   = ast_node_create_sym_c(self->ast_arena, "gen_iter_ptr"); ast_node *deref
+    //     = ast_node_create_sym_c(self->ast_arena, "*");
+
+    //     // The inner let-in
+    //     ast_node *lhs   = variable;
+    //     ast_node *rhs   = ast_node_create_unary_op(self->ast_arena, deref, ptr);
+    //     ast_node *inner = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
+
+    //     // The outer let-in
+    //     lhs             = ptr;
+    //     rhs             = call_iter_value;
+    //     ast_node *outer = ast_node_create_let_in(self->ast_arena, lhs, rhs, inner);
+    //     while_body      = outer;
+    // }
 
     // Now we need to construct the while statement. It will be enclosed in a let-in which initializes the
     // iterator. And it will be followed by a funcall to free the iterator. So we will have: let iter = init

@@ -734,12 +734,14 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
 
         str arg_value = generate_expr(self, type->cons_inst->args.v[found], arg->assignment.value, ctx);
 
-        cat(self, res);
-        cat_dot(self);
-        cat(self, ast_node_str(arg->assignment.name));
-        cat_assign(self);
-        cat(self, arg_value);
-        cat_semicolonln(self);
+        if (!str_is_empty(arg_value)) {
+            cat(self, res);
+            cat_dot(self);
+            cat(self, ast_node_str(arg->assignment.name));
+            cat_assign(self);
+            cat(self, arg_value);
+            cat_semicolonln(self);
+        }
     }
 
     return res;
@@ -773,12 +775,14 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
         str arg_value =
           generate_expr(self, type->cons_inst->args.v[i], node->named_application.arguments[i], ctx);
 
-        cat(self, res);
-        cat_dot(self);
-        cat(self, def->field_names.v[i]);
-        cat_assign(self);
-        cat(self, arg_value);
-        cat_semicolonln(self);
+        if (!str_is_empty(arg_value)) {
+            cat(self, res);
+            cat_dot(self);
+            cat(self, def->field_names.v[i]);
+            cat_assign(self);
+            cat(self, arg_value);
+            cat_semicolonln(self);
+        }
     }
 
     return res;
