@@ -77,23 +77,17 @@ TPtr = Ptr(T(a))
 // demonstrates the syntax used for forward declarations. Forward declarations for functions are NOT
 // required, but they can provide useful documentation.
 
-// Construct an empty array with elements of type a.
-empty(a: Type) -> T(a)
-
-// Deallocate array buffer.
-free(self: TPtr) -> Void
-
-// Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr(T(a)), x: a) -> Void
-
-// Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr(T(a)), count: Int) -> Void
-
 // The declaration `(a: Type, ...)` below demonstrates the use of a generic type argument. In C++, the
 // corresponding syntax would be `template<typename T> with_capacity<T>(...)` but in TL, type arguments are
 // declared alongside other formal parameters. Conventionally, they appear first. `Type` is a builtin type
 // constructor which takes a single argument being the identifier or type constructor of a type, but
 // conversion between callsite usage and consumer usage is handled automatically.
+
+// Construct an empty array with elements of type a.
+empty(a: Type) -> T(a)
+
+// Construct an array with count elements of type a, each initialised to val.
+init(val: a, count: Int) -> T(a)
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(a: Type, count: Int) -> T(a)
@@ -103,13 +97,25 @@ with_capacity(a: Type, count: Int) -> T(a)
 with_capacity_undefined(a: Type, count: Int) -> T(a)
 
 
+// Push an item to the back of the array, allocating to expand capacity if necessary.
+push(self: Ptr(T(a)), x: a) -> Void
+
+// Ensure the array's capacity is large enough for count items, allocating if necessary.
+reserve(self: Ptr(T(a)), count: Int) -> Void
+
+// Deallocate array buffer.
+free(self: TPtr) -> Void
+
+
+
+
 // -- Implementation --
 
 empty(a: Type) {
-  // The syntax `T( ... )` indicates a type constructor. Here, the type `T` is defined earlier in the file.
-  // A type constructor must include every field; it is not permitted to omit any field. The syntax `field =
-  // value` is used exclusively for type constructors. Although the syntax is similar to a function call
-  // with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
+  // The syntax `T( ... )` below indicates a type constructor. Here, the type `T` is defined earlier in the
+  // file. A type constructor must include every field; it is not permitted to omit any field. The syntax
+  // `field = value` is used exclusively for type constructors. Although the syntax is similar to a function
+  // call with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
   // distinguish function calls from type constructors, and is an opinionated language design choice to
   // exclude parameter names from the formal API of TL libraries.
   //
@@ -117,6 +123,16 @@ empty(a: Type) {
   // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
   // arguments provided to the generic `T` type constructor.
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
+}
+
+init(val: a, count: Int) {
+  // Note that `a` in the annotation of the `val` parameter is a type argument. It can be supplied as an
+  // argument to `with_capacity`, which is expecting a type argument. Type arguments to a function expecting
+  // a type argument may be type literals, such as `Int`, or another type argument.
+  arr := with_capacity(a, count)
+  arr.size = count
+  for p.& in arr { p.* = val }
+  arr
 }
 
 free(self) {

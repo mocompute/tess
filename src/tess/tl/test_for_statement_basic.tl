@@ -1,11 +1,11 @@
 #module main
 #import <Array.tl>
 
-// FIXME: need a test for module-qualified for statement:
-// for x in MyModule xs { ... }
-
 main() {
-  xs := Array.with_capacity_undefined(Int, 4)
+
+  // xs := Array.with_capacity_undefined(Int, 4)
+  xs := Array.init(0, 4)
+
   i := 1
   for x.& in xs {
     x.* = i
