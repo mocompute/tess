@@ -275,14 +275,22 @@ IterValue(a) : {
   index: Int,
 }
 
-iter_init    (arr:  Ptr(Array.T(a)))    -> Array.Iter(a)
-iter_value   (iter: Ptr(Array.Iter(a))) -> IterValue(a)
-iter_cond    (iter: Ptr(Array.Iter(a))) -> Bool
-iter_update  (iter: Ptr(Array.Iter(a))) -> Void
-iter_free    (iter: Ptr(Array.Iter(a))) -> Void
+Iter(a) : {
+  v:        Ptr(a),
+  size:     Int,
+  index:    Int,
+  iv:       IterValue(a),
+}
 
-iter_init(arr)    { Array.Iter ( v = arr->v, size = arr->size, index = 0 )          }
-iter_value(iter)  { IterValue (value = iter->v[iter->index].&, index = iter->index) }
-iter_cond(iter)   { iter->index < iter->size                                        }
-iter_update(iter) { iter->index = iter->index + 1              void                 }
-iter_free(iter)   {                                                                 }
+
+iter_init    (arr:  Ptr(Array.T(a))) -> Iter(a)
+iter_value   (iter: Ptr(Iter(a)))    -> Ptr(IterValue(a))
+iter_cond    (iter: Ptr(Iter(a)))    -> Bool
+iter_update  (iter: Ptr(Iter(a)))    -> Void
+iter_free    (iter: Ptr(Iter(a)))    -> Void
+
+iter_init(arr)    { Iter (v = arr->v, size = arr->size, index = 0, iv = IterValue(value = null, index = 0)) }
+iter_value(iter)  { iter->iv.value = iter->v[iter->index].& iter->iv.index = iter->index iter->iv.&         }
+iter_cond(iter)   { iter->index < iter->size                                                                }
+iter_update(iter) { iter->index = iter->index + 1                                                  void     }
+iter_free(iter)   {                                                                                         }

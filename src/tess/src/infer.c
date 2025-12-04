@@ -941,6 +941,19 @@ static int reject_type_literal(tl_infer *self, ast_node const *node) {
     return 0;
 }
 
+static void maybe_handle_null(tl_infer *self, ast_node *node) {
+    // Note: special case: if `null` appears and there is no node type yet, or if it's not a Ptr, assign a
+    // Ptr(tv)
+    if (ast_node_is_nil(node)) {
+        if (!node->type || !tl_monotype_is_ptr(node->type->type)) {
+            ast_node_type_set(
+              node, tl_polytype_absorb_mono(
+                      self->arena,
+                      tl_type_registry_ptr(self->registry, tl_monotype_create_fresh_tv(self->subs))));
+        }
+    }
+}
+
 // static tl_monotype *unwrap_literal(tl_monotype *self) {
 //     if (self && tl_monotype_is_type_literal(self)) return tl_monotype_literal_target(self);
 //     return self;
@@ -1034,6 +1047,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 update_env(self, ctx, node);
             }
         }
+        maybe_handle_null(self, node);
         break;
 
     case npos_let_in_lhs:
@@ -1082,6 +1096,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (parsed) {
             parsed = tl_monotype_create_literal(self->arena, parsed);
             if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
+        } else {
+            maybe_handle_null(self, node);
         }
         update_env(self, ctx, node);
     } break;
@@ -1089,6 +1105,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_let_in_rhs:
     case npos_assign_rhs:
         if (reject_type_literal(self, node)) return 1;
+        maybe_handle_null(self, node);
 
         // Note: ensure a fresh type for any node in rhs position, because it could be a generic name.
         ensure_tv(self, &node->type);

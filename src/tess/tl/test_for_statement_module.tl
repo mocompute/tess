@@ -3,7 +3,7 @@
 
 main() {
   xs := Array.with_capacity_undefined(Int, 4)
-  for it.& in IndexedArray xs {
+  for it in IndexedArray xs {
     it.value.* = it.index + 1
   }
 
