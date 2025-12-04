@@ -1819,6 +1819,24 @@ static int toplevel_defun(parser *self) {
 
 decl_done:
 
+    // optional arrow: if it is present, we need to add an annotation to the defun name's symbol
+    if (0 == a_try(self, a_arrow)) {
+
+        if (a_try(self, a_type_identifier)) return 1;
+        ast_node *ann = self->result;
+
+        // make tuple
+        ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
+        set_node_file(self, tup);
+
+        // make arrow
+        ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
+        set_node_file(self, arrow);
+
+        // attach to name
+        name->symbol.annotation = arrow;
+    }
+
     if (a_try(self, a_open_curly)) return 1;
 
     ast_node_array exprs = {.alloc = self->ast_arena};

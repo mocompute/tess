@@ -45,7 +45,7 @@ free(self: TPtr) -> Void
 
 // -- Implementation --
 
-empty(a: Type) {
+empty(a: Type) -> T(a) {
   T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 
