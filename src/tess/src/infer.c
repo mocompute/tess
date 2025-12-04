@@ -1903,10 +1903,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
         }
 
         tl_monotype *mono = tl_polytype_instantiate(self->arena, arg->type, self->subs);
-
-        // FIXME: needed?
         tl_monotype_substitute(self->arena, mono, self->subs, null);
-
         array_push(arr, mono);
     }
 

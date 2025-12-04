@@ -823,10 +823,7 @@ static int a_nil(parser *self) {
 }
 
 static int a_null(parser *self) {
-
-    // FIXME: clarify difference between null and nil
     if (0 == the_symbol(self, "null")) return result_ast(self, ast_nil);
-
     self->error.tag = tl_err_expected_nil;
     return 1;
 }
@@ -846,7 +843,6 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
 static int a_type_identifier(parser *self);
 
 static int a_type_arrow(parser *self) {
-    // TODO: duplicated with toplevel_forward
     ast_node_array params = {.alloc = self->ast_arena};
     if (a_try(self, a_open_round)) return 1;
     if (0 == a_try(self, a_close_round)) goto decl_done;
@@ -1802,6 +1798,8 @@ static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_no
 }
 
 static int toplevel_defun(parser *self) {
+    // TODO: a portion is duplicated with a_type_arrow, but this function needs access to the params that
+    // a_type_arrow embeds in an arrow.
     if (a_try(self, a_identifier)) return 1;
     ast_node      *name   = self->result;
     ast_node_array params = {.alloc = self->ast_arena};
@@ -1876,34 +1874,10 @@ static int toplevel_assign(parser *self) {
 
 static int toplevel_forward(parser *self) {
     if (a_try(self, a_identifier)) return 1;
-    ast_node      *name   = self->result;
-    ast_node_array params = {.alloc = self->ast_arena};
+    ast_node *name = self->result;
 
-    if (a_try(self, a_open_round)) return 1;
-    if (0 == a_try(self, a_close_round)) goto decl_done;
-    if (0 == a_try(self, a_param)) array_push(params, self->result);
-
-    while (1) {
-        if (0 == a_try(self, a_close_round)) goto decl_done;
-        if (a_try(self, a_comma)) return 2;
-        if (a_try(self, a_param)) return 2;
-        array_push(params, self->result);
-    }
-
-decl_done:
-
-    if (a_try(self, a_arrow)) return 1;
-
-    if (a_try(self, a_type_identifier)) return 1;
-    ast_node *ann = self->result;
-
-    // make tuple
-    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
-    set_node_file(self, tup);
-
-    // make arrow
-    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
-    set_node_file(self, arrow);
+    if (a_try(self, a_type_arrow)) return 1;
+    ast_node *arrow = self->result;
 
     // attach to name
     name->symbol.annotation = arrow;
