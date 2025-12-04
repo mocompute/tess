@@ -1748,30 +1748,6 @@ static int a_for_statement(parser *self) {
         while_body         = for_body;
     }
 
-    // if (is_pointer) {
-    //     ast_node *lhs      = variable;
-    //     ast_node *rhs      = call_iter_value; // iter_value(iter)
-    //     ast_node *for_body = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
-    //     while_body         = for_body;
-    // } else {
-    //     // For value iteration, we need two let-ins. Build them inside-out.
-
-    //     // First, we need a name for the hidden iterator value (the pointer) and the deref operator
-    //     (star) ast_node *ptr   = ast_node_create_sym_c(self->ast_arena, "gen_iter_ptr"); ast_node *deref
-    //     = ast_node_create_sym_c(self->ast_arena, "*");
-
-    //     // The inner let-in
-    //     ast_node *lhs   = variable;
-    //     ast_node *rhs   = ast_node_create_unary_op(self->ast_arena, deref, ptr);
-    //     ast_node *inner = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
-
-    //     // The outer let-in
-    //     lhs             = ptr;
-    //     rhs             = call_iter_value;
-    //     ast_node *outer = ast_node_create_let_in(self->ast_arena, lhs, rhs, inner);
-    //     while_body      = outer;
-    // }
-
     // Now we need to construct the while statement. It will be enclosed in a let-in which initializes the
     // iterator. And it will be followed by a funcall to free the iterator. So we will have: let iter = init
     // in body (while, free).
