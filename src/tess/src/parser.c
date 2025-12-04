@@ -1680,14 +1680,14 @@ static int a_for_statement(parser *self) {
         call_iter_update = ast_node_create_nfa(self->ast_arena, iter_update, iter_args);
     }
 
-    // Create the nfa for iter_free
-    ast_node *call_iter_free = null;
+    // Create the nfa for iter_deinit
+    ast_node *call_iter_deinit = null;
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_free      = ast_node_create_sym_c(self->ast_arena, "iter_free");
-        mangle_name_for_module(self, iter_free, module_name);
-        call_iter_free = ast_node_create_nfa(self->ast_arena, iter_free, iter_args);
+        ast_node *iter_deinit    = ast_node_create_sym_c(self->ast_arena, "iter_deinit");
+        mangle_name_for_module(self, iter_deinit, module_name);
+        call_iter_deinit = ast_node_create_nfa(self->ast_arena, iter_deinit, iter_args);
     }
 
     ast_node *while_body = null;
@@ -1725,9 +1725,9 @@ static int a_for_statement(parser *self) {
     ast_node      *update                = call_iter_update;
     ast_node      *while_statement = ast_node_create_while(self->ast_arena, condition, update, while_body);
 
-    // The body of the let-in: the while statement followed by the iter_free
+    // The body of the let-in: the while statement followed by the iter_deinit
     array_push(while_statement_exprs, while_statement);
-    array_push(while_statement_exprs, call_iter_free);
+    array_push(while_statement_exprs, call_iter_deinit);
     ast_node *while_statement_exprs_body = create_body(self, while_statement_exprs);
 
     ast_node *lhs                        = iterator;

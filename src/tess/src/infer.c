@@ -943,7 +943,8 @@ static int reject_type_literal(tl_infer *self, ast_node const *node) {
 
 static void maybe_handle_null(tl_infer *self, ast_node *node) {
     // Note: special case: if `null` appears and there is no node type yet, or if it's not a Ptr, assign a
-    // Ptr(tv)
+    // Ptr(tv). The reason we do this is to assist non-annotated nodes such as struct fields that are
+    // initialised to null. Without this handling, Foo(ptr = Null) would need to be Foo(ptr: Ptr(T) = null).
     if (ast_node_is_nil(node)) {
         if (!node->type || !tl_monotype_is_ptr(node->type->type)) {
             ast_node_type_set(
@@ -953,11 +954,6 @@ static void maybe_handle_null(tl_infer *self, ast_node *node) {
         }
     }
 }
-
-// static tl_monotype *unwrap_literal(tl_monotype *self) {
-//     if (self && tl_monotype_is_type_literal(self)) return tl_monotype_literal_target(self);
-//     return self;
-// }
 
 static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_position pos) {
 
