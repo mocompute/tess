@@ -600,15 +600,20 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
             // If the target is a symbol and not a utd in_progress, it must either be a nullary type or it
             // is sugar for a type variable, e.g a function in stdlib.tl which returns a `Ptr(T)`.
-            if (ast_node_is_symbol(target) && !str_hset_contains(ctx->in_progress, target_name_str)) {
-                tl_monotype *parsed = tl_type_registry_parse_type_(self, ctx, target);
-                if (!parsed) {
-                    (void)type_variable_sugar(self, ctx, target);
+            if (ast_node_is_symbol(target)) {
+                if (!str_hset_contains(ctx->in_progress, target_name_str)) {
+                    tl_monotype *parsed = tl_type_registry_parse_type_(self, ctx, target);
+                    if (!parsed) {
+                        (void)type_variable_sugar(self, ctx, target);
+                    }
+                } else {
+                    // If target name is an in_progress utd, we must defer the parse.
+                    result = defer_parse(self, ctx, target_name_str);
                 }
+            } else {
+                // Maybe defer non-symbol target
+                result = defer_parse(self, ctx, target_name_str);
             }
-
-            // If target name is an in_progress utd, we must defer the parse.
-            result = defer_parse(self, ctx, target_name_str);
 
             if (result) {
                 tl_polytype *unary = tl_type_registry_get_unary(self, name);
