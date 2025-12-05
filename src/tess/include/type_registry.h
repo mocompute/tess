@@ -61,6 +61,7 @@ tl_monotype *tl_type_registry_bool(tl_type_registry *);
 tl_monotype *tl_type_registry_string(tl_type_registry *);
 tl_monotype *tl_type_registry_char(tl_type_registry *);
 tl_monotype *tl_type_registry_ptr(tl_type_registry *, tl_monotype *);
+tl_monotype *tl_type_registry_ptr_any(tl_type_registry *);
 tl_monotype *tl_type_registry_ptr_or_null(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_type_literal(tl_type_registry *);
 tl_polytype *tl_type_registry_get(tl_type_registry *, str);

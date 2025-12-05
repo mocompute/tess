@@ -460,6 +460,11 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     return out;
 }
 
+tl_monotype *tl_type_registry_ptr_any(tl_type_registry *self) {
+    tl_monotype *any = tl_monotype_create_any(self->alloc);
+    return tl_type_registry_ptr(self, any);
+}
+
 // -- parse_type
 
 static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
@@ -1625,6 +1630,12 @@ int tl_monotype_is_ptr_to_char(tl_monotype *self) {
     if (!self || !tl_monotype_is_ptr(self)) return 0;
     tl_monotype *target = tl_monotype_ptr_target(self);
     return tl_monotype_is_inst_of(target, S("CChar"));
+}
+
+int tl_monotype_is_ptr_to_tv(tl_monotype *self) {
+    if (!self || !tl_monotype_is_ptr(self)) return 0;
+    tl_monotype *target = tl_monotype_ptr_target(self);
+    return tl_monotype_is_tv(target);
 }
 
 int tl_monotype_is_ptr(tl_monotype *self) {

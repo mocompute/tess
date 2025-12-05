@@ -165,6 +165,7 @@ tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
 int                    tl_monotype_is_string(tl_monotype *);
 int                    tl_monotype_is_ptr_to_char(tl_monotype *);
+int                    tl_monotype_is_ptr_to_tv(tl_monotype *);
 i32                    tl_monotype_integer(tl_monotype *);
 tl_type_variable       tl_monotype_tv(tl_monotype *);
 

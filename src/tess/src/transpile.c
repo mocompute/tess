@@ -858,13 +858,20 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     // specialised. As a c function, it may be a valid part of the program regardless. If the funcall node
     // has a concrete type, use it to determine the result type.
     str res = str_empty();
-    if (!type && tl_polytype_is_concrete(node->type)) {
+    if (!type && node->type && tl_polytype_is_concrete(node->type)) {
         type = node->type->type;
         if (!is_nil_result(type)) {
             res = next_res(self);
             generate_decl(self, res, type);
         }
-    } else if (type) {
+    } else if (!type && node->type && tl_monotype_is_ptr_to_tv(node->type->type)) {
+        // treat Ptr(tv) as Ptr(any), which is rendered as void*
+        type = tl_type_registry_ptr_any(self->registry);
+        res  = next_res(self);
+        generate_decl(self, res, type);
+    }
+
+    else if (type) {
         res = generate_funcall_result(self, type);
     }
 
