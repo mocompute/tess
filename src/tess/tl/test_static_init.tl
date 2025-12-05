@@ -1,6 +1,11 @@
+#module Foo
+
+global := 123
+
 #module main
-val := 0
+
+val := 456
 
 main() {
-  val
+  val - Foo.global - 333
 }
