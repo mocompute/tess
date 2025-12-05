@@ -853,9 +853,20 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 
     // declare variable to hold funcall result if it's not nil
     tl_monotype *type = env_lookup(self, ast_node_str(node->named_application.name));
-    str          res;
-    if (type) res = generate_funcall_result(self, type);
-    else res = str_empty();
+
+    // Note: special case: if env lookup returns null, it could be a generic function that has not been
+    // specialised. As a c function, it may be a valid part of the program regardless. If the funcall node
+    // has a concrete type, use it to determine the result type.
+    str res = str_empty();
+    if (!type && tl_polytype_is_concrete(node->type)) {
+        type = node->type->type;
+        if (!is_nil_result(type)) {
+            res = next_res(self);
+            generate_decl(self, res, type);
+        }
+    } else if (type) {
+        res = generate_funcall_result(self, type);
+    }
 
     // function call
     if (!str_is_empty(res)) generate_assign_lhs(self, res);

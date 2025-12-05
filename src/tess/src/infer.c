@@ -602,6 +602,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
+        // Note: let nodes are intentionally not processed with the callback.
+
     } break;
 
     case ast_let_in: {
@@ -1143,9 +1145,13 @@ static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node con
 }
 
 int        is_union_struct(tl_infer *self, str name);
+static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
+                          tl_monotype *callsite);
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
+
+    // infer_ctx *ctx = traverse_ctx->user;
 
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
@@ -1200,13 +1206,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_monotype *ty = tl_type_registry_bool(self->registry);
         ensure_tv(self, &node->type);
         if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
-
-    case ast_let: {
-        ast_node_sized params = ast_node_sized_from_ast_array(node);
-        forall(i, params) {
-            if (resolve_node(self, params.v[i], traverse_ctx, npos_formal_parameter)) return 1;
-        }
     } break;
 
     case ast_body: {
@@ -1767,6 +1766,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (constrain_pm(self, node->type, nil, node)) return 1;
     } break;
 
+    case ast_let: // intentionally not processed
     case ast_hash_command:
     case ast_arrow:
     case ast_ellipsis:
@@ -2835,6 +2835,7 @@ void remove_generic_toplevels(tl_infer *self) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
+        if (tl_monotype_is_arrow(type->type) && tl_monotype_arrow_is_concrete(type->type)) continue;
         if (!tl_polytype_is_concrete(type)) array_push(names, name);
     }
 

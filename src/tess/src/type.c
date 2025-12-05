@@ -1507,6 +1507,15 @@ int tl_monotype_is_concrete(tl_monotype *self) {
     return res;
 }
 
+int tl_monotype_arrow_is_concrete(tl_monotype *self) {
+    // If arrow type is concrete on its arguments, and only polymorphic on its return type, we can consider
+    // it concrete.
+    if (!tl_monotype_is_arrow(self)) return 0;
+    tl_monotype *params = self->list.xs.v[0];
+    if (!tl_monotype_is_tuple(params)) fatal("runtime error");
+    return tl_monotype_is_concrete(params);
+}
+
 int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
     if (ptr_hset_contains(*seen, self)) return 0;
