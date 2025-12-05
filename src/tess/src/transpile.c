@@ -441,7 +441,7 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
         return remove_c_prefix(self->transient, name);
     }
 
-    if (str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
+    if (ctx && str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
     {
         // generate reference through context
         return str_cat(self->transient, S("*tl_ctx->"), name);

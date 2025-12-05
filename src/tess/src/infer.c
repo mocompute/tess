@@ -391,13 +391,13 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
 
             // if it is a toplevel, recurse through it
             ast_node *next = toplevel_get(self, name);
-            if (next) {
-                ast_node_dfs(ctx, next, do_tree_shake);
-            }
+            if (next) ast_node_dfs(ctx, next, do_tree_shake);
             str_hset_insert(&ctx->recurs, name);
-
-            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
+        } else if (value) {
+            // recurse into let-in value
+            ast_node *next = value;
+            if (next) ast_node_dfs(ctx, next, do_tree_shake);
         }
 
         // the let-in name
@@ -2859,6 +2859,12 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
         if (ast_node_is_let_in(node)) {
             str name = ast_node_str(node->let_in.name);
             str_hset_insert(&used, name);
+
+            // recurse into toplevel let-in nodes
+            hashmap *recur = tree_shake(self, node);
+            map_merge(&used, recur);
+            map_destroy(&recur);
+
         } else if (ast_node_is_utd(node)) {
             str name = ast_node_str(node->user_type_def.name);
             str_hset_insert(&used, name);
