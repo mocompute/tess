@@ -10,7 +10,7 @@ main() {
 
   ui8 : CUInt8 := sz
   error = error + if 1 == sizeof(ui8) {0} else {1}
-  error = error + if 255 == ui8 {0} else {1}
+  error = error + if 0377 == ui8 {0} else {1}      // 0 prefix: octal, like C
 
   i8 : CInt8 := sz
   error = error + if 1 == sizeof(i8) {0} else {1}
@@ -18,7 +18,7 @@ main() {
 
   ui16 : CUInt16 := sz
   error = error + if 2 == sizeof(ui16) {0} else {1}
-  error = error + if 65535 == ui16 {0} else {1}
+  error = error + if 0xffff == ui16 {0} else {1}  // 0x prefix: hex, like C
 
   i16 : CInt16 := sz
   error = error + if 2 == sizeof(i16) {0} else {1}

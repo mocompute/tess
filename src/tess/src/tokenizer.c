@@ -498,14 +498,20 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            // TODO: expand number formats, e.g. 1e-6 etc
-
             char const c = next_char(self);
 
             if (c >= '0' && c <= '9') continue;
+
+            // allow hexadecimal
+            if (c >= 'a' && c <= 'z') continue;
+            if (c >= 'A' && c <= 'Z') continue;
+
             switch (c) {
             case '.':
-            case '_': continue;
+            case '_':
+            case 'x':           // allow 0x and 0X prefix, recognized by C stdlib
+            case 'X':
+                continue;
 
             default:
                 // all other characters break a number

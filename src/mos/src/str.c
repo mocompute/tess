@@ -426,7 +426,7 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     errno               = 0;
 
     char         *p_end = 0;
-    long long int i     = strtoll(buf, &p_end, 10);
+    long long int i     = strtoll(buf, &p_end, 0);
     if (p_end == end && !errno) {
         *out_i64 = i;
         return 1;
@@ -435,7 +435,7 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
 
         errno                = 0;
         p_end                = 0;
-        unsigned long long u = strtoull(buf, &p_end, 10);
+        unsigned long long u = strtoull(buf, &p_end, 0);
         if (p_end == end && !errno) {
             *out_u64 = u;
             return 2;
