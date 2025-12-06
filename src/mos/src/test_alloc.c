@@ -15,17 +15,17 @@ static int test_align_next_power_of_two(void) {
     return error;
 }
 
-static int test_align_to_word_size(void) {
-    int    error = 0;
+static int test_align_to_pointer_size(void) {
+    int    error   = 0;
 
-    size_t word  = sizeof(void *);
+    size_t pointer = sizeof(void *);
 
-    error += 0 == alloc_align_to_word_size(0) ? 0 : 1;
-    error += word == alloc_align_to_word_size(1) ? 0 : 1;
-    error += word == alloc_align_to_word_size(word) ? 0 : 1;
-    error += 2 * word == alloc_align_to_word_size(word + 1) ? 0 : 1;
-    error += 2 * word == alloc_align_to_word_size(word * 2) ? 0 : 1;
-    error += 3 * word == alloc_align_to_word_size(word * 2 + 1) ? 0 : 1;
+    error += 0 == alloc_align_to_pointer_size(0) ? 0 : 1;
+    error += pointer == alloc_align_to_pointer_size(1) ? 0 : 1;
+    error += pointer == alloc_align_to_pointer_size(pointer) ? 0 : 1;
+    error += 2 * pointer == alloc_align_to_pointer_size(pointer + 1) ? 0 : 1;
+    error += 2 * pointer == alloc_align_to_pointer_size(pointer * 2) ? 0 : 1;
+    error += 3 * pointer == alloc_align_to_pointer_size(pointer * 2 + 1) ? 0 : 1;
 
     return error;
 }
@@ -124,7 +124,7 @@ int main(void) {
     int this_error = 0;
 
     T(test_align_next_power_of_two);
-    T(test_align_to_word_size);
+    T(test_align_to_pointer_size);
     T(test_align);
     T(test_arena_realloc);
     T(test_arena_realloc_non_contiguous);

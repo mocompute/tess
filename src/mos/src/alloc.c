@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdalign.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdnoreturn.h>
@@ -181,7 +182,7 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     arena_header *last          = null;
     size_t        last_capacity = 0;
 
-    sz                          = alloc_align_to_word_size(sz);
+    sz                          = alloc_align_to_pointer_size(sz);
 
     if (0 == sz) return null;
 
@@ -217,7 +218,7 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
 
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
-    sz                   = alloc_align_to_word_size(sz);
+    sz                   = alloc_align_to_pointer_size(sz);
     arena_header *bucket = find_bucket((arena_allocator *)a, p);
     if (null == bucket) {
         assert(0);
@@ -261,7 +262,7 @@ static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *f
     (void)file;
     (void)line;
 
-    sz        = alloc_align_to_word_size(sz);
+    sz        = alloc_align_to_pointer_size(sz);
     void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
     if (out) memset(out, 0xCD, num * sz);
     return out;
@@ -644,7 +645,11 @@ size_t alloc_align(size_t n, size_t align) {
     return (n + mask) & ~mask;
 }
 
-size_t alloc_align_to_word_size(size_t n) {
+size_t alloc_align_to_max(size_t n) {
+    return alloc_align(n, sizeof(max_align_t));
+}
+
+size_t alloc_align_to_pointer_size(size_t n) {
     return alloc_align(n, sizeof(void *));
 }
 

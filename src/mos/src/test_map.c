@@ -32,11 +32,11 @@ static int test_align(void) {
 
     assert(8 == sizeof(void *));
 
-    error += 8 == alloc_align_to_word_size(2) ? 0 : 1;
-    error += 8 == alloc_align_to_word_size(4) ? 0 : 1;
-    error += 8 == alloc_align_to_word_size(6) ? 0 : 1;
-    error += 8 == alloc_align_to_word_size(8) ? 0 : 1;
-    error += 16 == alloc_align_to_word_size(9) ? 0 : 1;
+    error += 8 == alloc_align_to_pointer_size(2) ? 0 : 1;
+    error += 8 == alloc_align_to_pointer_size(4) ? 0 : 1;
+    error += 8 == alloc_align_to_pointer_size(6) ? 0 : 1;
+    error += 8 == alloc_align_to_pointer_size(8) ? 0 : 1;
+    error += 16 == alloc_align_to_pointer_size(9) ? 0 : 1;
     return error;
 }
 

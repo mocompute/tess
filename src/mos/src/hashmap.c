@@ -66,7 +66,7 @@ static inline void set_tombstone(u8 *status) {
 }
 
 static inline size_t hashmap_entry_size(hashmap const *map) {
-    size_t aligned_value_size = alloc_align_to_word_size(map->value_size);
+    size_t aligned_value_size = alloc_align_to_pointer_size(map->value_size);
     return aligned_value_size + sizeof(hashmap_entry);
 }
 
@@ -241,7 +241,7 @@ hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
 hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     if (n_buckets < 8) n_buckets = 8;
 
-    size_t aligned_value_size = alloc_align_to_word_size(value_size);
+    size_t aligned_value_size = alloc_align_to_pointer_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
 
     size_t   bucket_size = (sizeof(hashmap_entry) + aligned_value_size);
