@@ -520,7 +520,8 @@ static void generate_toplevel_values(transpile *self) {
     cat_nl(self);
 
     // tl_init function
-    cat(self, S("static void tl_init(void) {\n"));
+    if (self->opts.is_library) cat(self, S("void tl_init(void) {\n"));
+    else cat(self, S("static void tl_init(void) {\n"));
 
     forall(i, self->toplevels_sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);

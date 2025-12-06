@@ -52,6 +52,8 @@ noreturn void usage(int status, char const *argv0) {
     puts("Commands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o required)\n");
+    printf("    lib                    compile and create shared library (-o required)\n");
+    printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage\n");
     printf("    -I <path>              add <path> to import search path. Multiple ok.\n");
@@ -320,6 +322,19 @@ static str_sized files_in_order(state *self, c_string_csized files) {
 
 //
 
+static void output_program(state *self) {
+    if (self->out_path) {
+        FILE *f = fopen(self->out_path, "wb");
+        if (!f) fatal("could not open output file: '%s'", self->out_path);
+
+        fprintf(f, "%.*s", str_ilen(self->program), str_buf(&self->program));
+
+        fclose(f);
+    } else {
+        printf("%.*s", str_ilen(self->program), str_buf(&self->program));
+    }
+}
+
 static void get_c_compiler(state *self) {
     char const *CC = getenv("CC");
     if (CC) self->cc = str_init(self->arena, CC);
@@ -405,28 +420,20 @@ int compile(state *self) {
 
     str program = str_build_finish(&program_build);
 
-    if (self->is_executable) {
+    if (self->is_executable || self->is_library) {
         // Save program and return to caller
         self->program = program;
         goto done;
     } else {
         // output C source code
-        if (self->out_path) {
-            FILE *f = fopen(self->out_path, "wb");
-            if (!f) fatal("could not open output file: '%s'", self->out_path);
-
-            fprintf(f, "%.*s", str_ilen(program), str_buf(&program));
-
-            fclose(f);
-        } else {
-            printf("%.*s", str_ilen(program), str_buf(&program));
-        }
+        self->program = program;
+        output_program(self);
     }
 
     str_deinit(default_allocator(), &program);
 
 done:
-    // is_executable: Caller will take over program
+    // is_executable || is_library: Caller will take over program
 cleanup_tp:
     transpile_destroy(default_allocator(), &transpile);
 
@@ -522,6 +529,90 @@ int compile_c(state *self) {
     return child_res;
 }
 
+int compile_c_obj(state *self) {
+    if (str_is_empty(self->program)) return 1;
+
+    int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
+    if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
+        perror("pipe failed");
+        return 1;
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork failed");
+        return 1;
+    }
+
+    int child_res = 0;
+
+    if (pid == 0) {
+        // child process
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+        dup2(stdin_pipe[0], STDIN_FILENO);
+        dup2(stdout_pipe[1], STDOUT_FILENO);
+        dup2(stderr_pipe[1], STDERR_FILENO);
+        close(stdin_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+
+        char const *cc = str_cstr(&self->cc);
+
+        // cflags
+        c_string_array argv = {.alloc = self->arena};
+        array_reserve(argv, self->cflags.size + 8);
+        array_push(argv, cc);
+
+        array_push_val(argv, "-o");
+        array_push(argv, self->out_path);
+
+        if (self->optimize) {
+            array_push_val(argv, "-O2");
+        }
+
+        forall(i, self->cflags) {
+            char const *cstr = str_cstr(&self->cflags.v[i]);
+            array_push(argv, cstr);
+        }
+
+        array_push_val(argv, "-std=c11");
+        array_push_val(argv, "-Wno-format-security");
+        array_push_val(argv, "-fPIC");
+        array_push_val(argv, "-shared");
+        array_push_val(argv, "-x");
+        array_push_val(argv, "c");
+        array_push_val(argv, "-");
+
+        array_push_val(argv, null);
+
+        child_res = execvp(cc, argv.v);
+        perror("exec failed");
+
+    } else {
+        // parent process
+        close(stdin_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+
+        write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
+        close(stdin_pipe[1]);
+
+        // free self->program
+        str_deinit(default_allocator(), &self->program);
+
+        // read stderr
+        char  buf[1024];
+        FILE *stderr_file = fdopen(stderr_pipe[0], "r");
+        while (fgets(buf, sizeof(buf), stderr_file)) fprintf(stderr, "%s", buf);
+        fclose(stderr_file);
+
+        wait(null);
+    }
+    return child_res;
+}
+
 int main(int argc, char *argv[]) {
 
     int             result = 0;
@@ -574,13 +665,26 @@ int main(int argc, char *argv[]) {
         result             = compile(&self);
         if (result) goto done;
         result = compile_c(&self);
+    }
 
+    else if (0 == strcmp("lib-emit-c", self.words.v[0])) {
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+        self.is_library = 1;
+        result          = compile(&self);
+        output_program(&self);
     }
 
     else if (0 == strcmp("lib", self.words.v[0])) {
         clock_gettime(CLOCK_MONOTONIC, &start_time);
+        if (!self.out_path) {
+            fprintf(stderr, "error: -o option is missing\n");
+            exit(1);
+        }
         self.is_library = 1;
         result          = compile(&self);
+        if (result) goto done;
+        result = compile_c_obj(&self);
     }
 
 done:
