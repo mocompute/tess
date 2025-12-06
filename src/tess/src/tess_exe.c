@@ -48,7 +48,7 @@ typedef struct {
 noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
 
-    printf("Usage: %s [-hv] [c | repl] [-o outpath] [path1 path2 ... pathn] \n", progname);
+    printf("Usage: %s [-hv] <command> [-o outpath] [path1 path2 ... pathn] \n", progname);
     puts("Commands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o required)\n");
