@@ -1927,6 +1927,7 @@ static int should_generate(str name, tl_polytype *type) {
     if (0 == str_cmp_nc(name, "c_", 2)) return 0;
 
     if (tl_polytype_is_scheme(type)) return 0;
+    if (!tl_monotype_is_concrete_no_weak(type->type)) return 0;
     if (!tl_monotype_is_arrow(type->type)) return 0; // not an arrow
     if (is_intrinsic(name)) return 0;
     return 1;
