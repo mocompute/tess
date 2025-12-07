@@ -117,6 +117,7 @@ function(tesslang_create_build_fail_test NAME)
 endfunction()
 
 tesslang_create_test(address_of)
+tesslang_create_test(alloc_align)
 tesslang_create_test(anon_lambda)
 tesslang_create_test(apply_generic)
 tesslang_create_test(apply_generic_through_pointer)
