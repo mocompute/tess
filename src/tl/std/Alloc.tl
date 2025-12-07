@@ -1,6 +1,7 @@
 #module Alloc
 #include <assert.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 // -- Synopsis --
 
@@ -18,7 +19,7 @@ Context : {
   managed:   Ptr(Allocator),
 }
 
-
+context : Context
 
 align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
@@ -37,4 +38,24 @@ align(n: CSize, align: CSize) {
 
 align_max(n: CSize) {
   align(n, _tl_sizeof_(c_max_align_t)) // must use intrinsic due to C typedef
+}
+
+_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
+_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
+_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
+_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
+
+_transient := Allocator(
+  malloc  = _malloc,
+  calloc  = _calloc,
+  realloc = _realloc,
+  free    = _free
+)
+
+module_init() {
+  context = Context(
+    transient = _transient.&,
+    periodic  = _transient.&,
+    managed   = _transient.&
+  )
 }

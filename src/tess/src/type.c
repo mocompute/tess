@@ -268,11 +268,6 @@ static void make_carray(tl_type_registry *self) {
 
 // --
 
-typedef struct {
-    u64 name_hash;
-    u64 args_hash;
-} registry_key;
-
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     if (str_eq(name, S("Union"))) fatal("runtime error");
     if (str_eq(name, S("Ptr"))) fatal("runtime error");
@@ -369,19 +364,21 @@ int tl_monotype_is_unary(tl_monotype *mono) {
     return 1;
 }
 
-tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
-                                         tl_monotype_sized args) {
+tl_type_registry_specialize_ctx tl_type_registry_specialize_begin(tl_type_registry *self, str name,
+                                                                  str               special_name,
+                                                                  tl_monotype_sized args) {
 
     // Don't specialize nullary type constructors: they should always exist with their canonical generic
     // name, because they're not generic.
-    if (!args.size) return null;
+    if (!args.size) return (tl_type_registry_specialize_ctx){.specialized = null};
 
     tl_monotype *type = null;
     registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
-    if ((type = map_get_ptr(self->specialized, &key, sizeof key))) return type;
+    if ((type = map_get_ptr(self->specialized, &key, sizeof key)))
+        return (tl_type_registry_specialize_ctx){.specialized = type, .is_existing = 1};
 
     tl_polytype *poly = tl_type_registry_get(self, name);
-    if (!poly) return null;
+    if (!poly) return (tl_type_registry_specialize_ctx){.specialized = null};
 
     assert(tl_monotype_is_inst(poly->type));
     tl_type_constructor_def *def = poly->type->cons_inst->def;
@@ -392,14 +389,29 @@ tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str s
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
 
-    if (!str_is_empty(special_name)) {
+    return (tl_type_registry_specialize_ctx){
+      .specialized = type, .name = name, .special_name = special_name, .key = key};
+}
+
+tl_monotype *tl_type_registry_specialize_commit(tl_type_registry               *self,
+                                                tl_type_registry_specialize_ctx ctx) {
+
+    if (!str_is_empty(ctx.special_name)) {
         // Important: don't cache in specialised table if there is no special_name
-        map_set_ptr(&self->specialized, &key, sizeof key, type);
-        tl_type_constructor_def_create_ext(self, special_name, name, (tl_type_variable_sized){0},
-                                           type->cons_inst->def->field_names, type->cons_inst->args);
+        map_set_ptr(&self->specialized, &ctx.key, sizeof ctx.key, ctx.specialized);
+        tl_type_constructor_def_create_ext(self, ctx.special_name, ctx.name, (tl_type_variable_sized){0},
+                                           ctx.specialized->cons_inst->def->field_names,
+                                           ctx.specialized->cons_inst->args);
     }
 
-    return type;
+    return ctx.specialized;
+}
+
+tl_monotype *tl_type_registry_specialize(tl_type_registry *self, str name, str special_name,
+                                         tl_monotype_sized args) {
+
+    tl_type_registry_specialize_ctx ctx = tl_type_registry_specialize_begin(self, name, special_name, args);
+    return tl_type_registry_specialize_commit(self, ctx);
 }
 
 tl_polytype *tl_type_registry_get(tl_type_registry *self, str name) {
@@ -1248,7 +1260,10 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
         } else {
             *inst = args;
         }
-        fresh->cons_inst->special_name = str_copy(alloc, special_name);
+        if (!str_is_empty(special_name)) {
+            ;
+            fresh->cons_inst->special_name = str_copy(alloc, special_name);
+        }
     }
 
     return fresh;

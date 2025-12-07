@@ -1825,12 +1825,14 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         }
     }
 
-    str          out_str   = str_empty();
-    str          name_inst = next_instantiation(self, name); // may be cancelled later
-    tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
-    if (!inst) goto cancel;
+    str                             out_str   = str_empty();
+    str                             name_inst = next_instantiation(self, name); // may be cancelled later
+    tl_type_registry_specialize_ctx inst_ctx =
+      tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
+    if (!inst_ctx.specialized) goto cancel;
 
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    name_and_type key      = {.name_hash = str_hash64(name),
+                              .type_hash = tl_monotype_hash64(inst_ctx.specialized)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
         if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
@@ -1845,7 +1847,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     utd = ast_node_clone(self->arena, utd);
     ast_node_name_replace(utd->user_type_def.name, name_inst);
-    utd->type = tl_polytype_absorb_mono(self->arena, inst);
+    utd->type = tl_polytype_absorb_mono(self->arena, inst_ctx.specialized);
     toplevel_add(self, name_inst, utd);
     tl_type_env_insert(self->env, name_inst, utd->type);
     array_push(self->synthesized_nodes, utd);
@@ -1858,6 +1860,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     array_free(recur_refs);
 
+    tl_type_registry_specialize_commit(self->registry, inst_ctx);
     return name_inst;
 
 cancel:
@@ -2947,10 +2950,11 @@ tl_monotype        *tl_infer_update_specialized_type_(tl_infer *self, tl_monotyp
 static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, hashmap **seen,
                                            hashmap **in_progress) {
 
-    tl_monotype *out = null;
-
     assert(tl_monotype_is_inst(mono));
     if (!tl_monotype_is_concrete(mono)) return null;
+
+    tl_monotype *out = map_get_ptr(*seen, &mono, sizeof(tl_monotype *));
+    if (out) return out;
 
     int tries = 10;
     while (tries--) {
@@ -2961,17 +2965,27 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, ha
 
             if (tl_monotype_is_inst(arg)) {
                 if (arg->cons_inst->args.size) {
-                    str generic_name = arg->cons_inst->def->generic_name;
-                    assert(!str_is_empty(generic_name));
 
-                    if (str_hset_contains(*in_progress, generic_name)) continue;
+                    tl_monotype *replace = map_get_ptr(*seen, &arg, sizeof(tl_monotype *));
+                    if (replace) {
+                        mono->cons_inst->args.v[i] = replace;
+                    } else {
+                        str generic_name = arg->cons_inst->def->generic_name;
+                        assert(!str_is_empty(generic_name));
 
-                    str_hset_insert(in_progress, generic_name);
-                    tl_monotype *replace = get_or_specialize_inst(self, arg, seen, in_progress);
-                    str_hset_remove(*in_progress, generic_name);
+                        if (str_hset_contains(*in_progress, generic_name)) continue;
 
-                    if (replace) mono->cons_inst->args.v[i] = replace;
-                    else did_fail = 1;
+                        str_hset_insert(in_progress, generic_name);
+                        tl_monotype *replace = get_or_specialize_inst(self, arg, seen, in_progress);
+                        str_hset_remove(*in_progress, generic_name);
+
+                        if (replace) {
+                            mono->cons_inst->args.v[i] = replace;
+                            map_set_ptr(seen, &arg, sizeof(tl_monotype *), replace);
+                        } else {
+                            did_fail = 1;
+                        }
+                    }
                 }
             } else {
                 tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
@@ -2993,7 +3007,7 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, ha
         if (!did_fail) break;
     }
 
-    if (tries == -1) fatal("loop exhausted");
+    if (tries == -1) fatal("get_or_specialize_inst: loop exhausted");
     return out;
 }
 
@@ -3001,6 +3015,9 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
                                                hashmap **in_progress) {
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
+
+    tl_monotype *result = map_get_ptr(*seen, &mono, sizeof(tl_monotype *));
+    if (result) return result;
 
     switch (mono->tag) {
     case tl_integer:
@@ -3013,14 +3030,17 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_literal:     {
         tl_monotype *target  = tl_monotype_literal_target(mono);
         tl_monotype *replace = tl_infer_update_specialized_type_(self, target, seen, in_progress);
-        if (replace) return tl_monotype_create_literal(self->arena, replace);
+        if (replace) {
+            result = tl_monotype_create_literal(self->arena, replace);
+        }
     } break;
 
     case tl_cons_inst:
         // already specialized?
         if (!str_is_empty(mono->cons_inst->special_name)) return null;
         tl_monotype *replace = get_or_specialize_inst(self, mono, seen, in_progress);
-        return replace;
+        result               = replace;
+        break;
 
     case tl_arrow:
     case tl_tuple: {
@@ -3033,11 +3053,13 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
                 did_replace        = 1;
             }
         }
-        if (did_replace) return mono;
+        if (did_replace) result = mono;
 
     } break;
     }
-    return null;
+
+    map_set_ptr(seen, &mono, sizeof(tl_monotype *), result);
+    return result;
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
