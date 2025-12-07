@@ -2941,7 +2941,8 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
     return mono;
 }
 
-tl_monotype        *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono);
+tl_monotype        *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
+                                                      hashmap **in_progress);
 
 static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, hashmap **seen,
                                            hashmap **in_progress) {
@@ -2972,7 +2973,7 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, ha
                     else did_fail = 1;
                 }
             } else {
-                tl_monotype *replace = tl_infer_update_specialized_type(self, arg);
+                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
                 if (replace) mono->cons_inst->args.v[i] = replace;
                 // ok if it returns null
             }

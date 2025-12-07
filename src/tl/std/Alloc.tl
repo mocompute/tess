@@ -2,6 +2,26 @@
 #include <assert.h>
 #include <stddef.h>
 
+// -- Synopsis --
+
+Allocator : {
+  malloc : (a: Ptr(Allocator), sz: CSize) -> Ptr(any)
+}
+
+// Context : {
+
+// }
+
+
+align     (n: CSize, alignment: CSize) -> CSize
+align_max (n: CSize)                   -> CSize
+
+
+
+// -- Implementation --
+
+
+
 align(n: CSize, align: CSize) {
   c_assert(align)
   mask := align - 1

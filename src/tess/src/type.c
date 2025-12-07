@@ -1820,41 +1820,50 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
         u64                      def_hash = tl_type_constructor_def_hash64(def);
         hash                              = hash64_combine(hash, &def_hash, sizeof def_hash);
 
-        // Recursive types: mark this in-progress
-        map_set(in_progress, &def_hash, sizeof def_hash, &def_hash);
+        // Check if self is an ancestor in progress
+        u64 *ancestor = null;
+        ancestor      = map_get(*in_progress, &def_hash, sizeof def_hash);
+        if (ancestor) {
+            // back-reference: use the def hash as a stable hash
+            hash = hash64_combine(hash, ancestor, sizeof *ancestor);
+        } else {
 
-        tl_monotype_sized args = self->cons_inst->args;
-        forall(i, args) {
-            tl_monotype *arg = args.v[i];
+            // Recursive types: mark this in-progress
+            map_set(in_progress, &def_hash, sizeof def_hash, &def_hash);
 
-            // Look through unary (e.g. Ptr) specializations to the target. If the target is the same
-            // generic type constructor as ourselves, we simply tag it as "Self" and go no further.
-            if (tl_monotype_is_unary(arg)) {
-                tl_monotype *target = tl_monotype_unary_target(arg);
+            tl_monotype_sized args = self->cons_inst->args;
+            forall(i, args) {
+                tl_monotype *arg = args.v[i];
 
-                // Check if target is an ancestor in progress
-                u64 *ancestor = null;
-                if (tl_monotype_is_inst(target)) {
-                    u64 ancestor_hash = tl_type_constructor_def_hash64(target->cons_inst->def);
-                    ancestor          = map_get(*in_progress, &ancestor_hash, sizeof ancestor_hash);
-                }
-                if (ancestor) {
-                    // back-reference: use the def hash as a stable hash
-                    hash = hash64_combine(hash, ancestor, sizeof *ancestor);
+                // Look through unary (e.g. Ptr) specializations to the target. If the target is the same
+                // generic type constructor as ourselves, we simply tag it as "Self" and go no further.
+                if (tl_monotype_is_unary(arg)) {
+                    tl_monotype *target = tl_monotype_unary_target(arg);
+
+                    // Check if target is an ancestor in progress
+                    u64 *ancestor = null;
+                    if (tl_monotype_is_inst(target)) {
+                        u64 ancestor_hash = tl_type_constructor_def_hash64(target->cons_inst->def);
+                        ancestor          = map_get(*in_progress, &ancestor_hash, sizeof ancestor_hash);
+                    }
+                    if (ancestor) {
+                        // back-reference: use the def hash as a stable hash
+                        hash = hash64_combine(hash, ancestor, sizeof *ancestor);
+                    } else {
+                        hash  = str_hash64_combine(hash, S("Unary"));
+                        u64 h = tl_monotype_hash64_(target, seen, in_progress);
+                        hash  = hash64_combine(hash, &h, sizeof h);
+                    }
+
                 } else {
-                    hash  = str_hash64_combine(hash, S("Unary"));
-                    u64 h = tl_monotype_hash64_(target, seen, in_progress);
+                    u64 h = tl_monotype_hash64_(arg, seen, in_progress);
                     hash  = hash64_combine(hash, &h, sizeof h);
                 }
-
-            } else {
-                u64 h = tl_monotype_hash64_(arg, seen, in_progress);
-                hash  = hash64_combine(hash, &h, sizeof h);
             }
-        }
 
-        // Remove from in-progress
-        map_erase(*in_progress, &def_hash, sizeof def_hash);
+            // Remove from in-progress
+            map_erase(*in_progress, &def_hash, sizeof def_hash);
+        }
 
         // important: do not include special_name as part of hash, because specialize_user_type uses
         // unspecialised name + hash to de-duplicate
