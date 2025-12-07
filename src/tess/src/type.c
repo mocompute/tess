@@ -1790,6 +1790,7 @@ void tl_monotype_absorb_fvs(tl_monotype *self, str_sized fvs) {
 }
 
 u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
+    assert(!str_is_empty(self->generic_name));
     u64 hash = str_hash64(self->generic_name);
     return hash;
 }

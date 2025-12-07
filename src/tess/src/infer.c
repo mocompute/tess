@@ -2962,6 +2962,7 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, ha
             if (tl_monotype_is_inst(arg)) {
                 if (arg->cons_inst->args.size) {
                     str generic_name = arg->cons_inst->def->generic_name;
+                    assert(!str_is_empty(generic_name));
 
                     if (str_hset_contains(*in_progress, generic_name)) continue;
 

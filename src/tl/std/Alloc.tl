@@ -5,12 +5,19 @@
 // -- Synopsis --
 
 Allocator : {
-  malloc : (a: Ptr(Allocator), sz: CSize) -> Ptr(any)
+  malloc:  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any),
+  calloc:  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any),
+  realloc: (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any),
+  free:    (a: Ptr(Allocator), p: Ptr(any))            -> Void,
 }
 
-// Context : {
 
-// }
+Context : {
+  transient: Ptr(Allocator),
+  periodic:  Ptr(Allocator),
+  managed:   Ptr(Allocator),
+}
+
 
 
 align     (n: CSize, alignment: CSize) -> CSize

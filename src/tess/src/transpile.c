@@ -123,6 +123,7 @@ static str   arrow_rhs_to_c(transpile *, tl_polytype *);
 static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 static str   type_literal_name(tl_monotype *type);
+static void  update_type(transpile *, tl_monotype **);
 
 //
 
@@ -873,6 +874,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     }
 
     else if (type) {
+        update_type(self, &type);
         res = generate_funcall_result(self, type);
     }
 
