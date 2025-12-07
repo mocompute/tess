@@ -3024,11 +3024,6 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_tuple: {
         int did_replace = 0;
         forall(i, mono->list.xs) {
-            tl_monotype *arg_ty = mono->list.xs.v[i];
-
-            if (mono == arg_ty) continue;
-            if (tl_monotype_is_ptr(arg_ty) && mono == tl_monotype_ptr_target(arg_ty)) continue;
-
             tl_monotype *replace =
               tl_infer_update_specialized_type_(self, mono->list.xs.v[i], seen, in_progress);
             if (replace) {
