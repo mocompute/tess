@@ -2931,20 +2931,10 @@ static int check_main_function(tl_infer *self, ast_node *main) {
 }
 
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
-    // dbg(self, "get_or_specialize_type: %s", str_cstr(&type_name));
-    // if (str_eq(type_name, S("Ptr"))) {
-    //     dbg(self, "Array_T: get_or_specialize_type with args: ");
-    //     forall(i, args) {
-    //         str tmp = tl_monotype_to_string(self->transient, args.v[i]);
-    //         dbg(self, "Array_T: %s", str_cstr(&tmp));
-    //         str_deinit(self->transient, &tmp);
-    //     }
-    //     dbg(self, "Array_T: end");
-    // }
 
     tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
     if (!mono) {
-        // not found, specialize it if all args are concrete
+        // not found, specialize it if all args are concrete, which includes placeholders
         tl_polytype *specialized = null;
         if (!tl_monotype_sized_is_concrete(args)) return null;
         specialize_type_constructor(self, type_name, args, &specialized);
@@ -2973,6 +2963,7 @@ static tl_monotype *defer_specialize(tl_infer *self, update_specialized_ctx *ctx
             placeholder = tl_monotype_create_placeholder(self->arena);
             str_map_set_ptr(&ctx->deferred, name, placeholder);
         }
+        dbg(self, "defer_specialize: returning placeholder for %s", str_cstr(&name));
         return placeholder;
     }
     return null;
@@ -3016,6 +3007,14 @@ static void resolve_placeholders(tl_infer *self, update_specialized_ctx *ctx, tl
                 // mutate placeholder to resolve type
                 *placeholder = *replace;
                 str_map_erase(ctx->deferred, keys.v[i]);
+
+                // FIXME: need to fix self->instances hash, because the inst was hashed with placeholder
+                // type.
+                name_and_type inst_key = {.name_hash = str_hash64(keys.v[i]),
+                                          .type_hash = tl_monotype_hash64(replace)};
+                dbg(self, "resolve_placeholders: adding instance for %s: %s", str_cstr(&keys.v[i]),
+                    str_cstr(&replace->cons_inst->special_name));
+                map_set(&self->instances, &inst_key, sizeof inst_key, &replace->cons_inst->special_name);
             }
         }
 
@@ -3045,7 +3044,7 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
             tl_monotype *target = arg->cons_inst->args.v[0];
 
             if (tl_monotype_is_placeholder(target)) {
-                hset_insert(&ctx->waiting, &arg, sizeof(tl_monotype *));
+                hset_insert(&ctx->waiting, &target, sizeof(tl_monotype *));
                 continue;
             }
 
@@ -3073,7 +3072,7 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
                     str_map_set_ptr(&ctx->by_name, arg_name, inst);
                     resolve_placeholders(self, ctx, result);
                 } else {
-                    hset_insert(&ctx->waiting, &inst, sizeof(tl_monotype *));
+                    hset_insert(&ctx->waiting, &target, sizeof(tl_monotype *));
                 }
             }
         } else {
@@ -3088,14 +3087,10 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
         }
     }
 
-    if (tl_monotype_has_placeholder_deep(mono)) {
-        hset_insert(&ctx->waiting, &mono, sizeof(tl_monotype *));
-    } else {
-        str               type_name = mono->cons_inst->def->generic_name;
-        tl_monotype_sized type_args = mono->cons_inst->args;
-        tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
-        if (replace) out = replace;
-    }
+    str               type_name = mono->cons_inst->def->generic_name;
+    tl_monotype_sized type_args = mono->cons_inst->args;
+    tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
+    if (replace) out = replace;
 
     if (out) {
         map_set_ptr(&ctx->seen, &mono, sizeof(tl_monotype *), out);
@@ -3167,12 +3162,18 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     };
     tl_monotype *out = tl_infer_update_specialized_type_(self, mono, &ctx);
 
+    resolve_placeholders(self, &ctx, out);
+
     // resolve any remaining placeholders
     str_array keys = str_map_keys(self->transient, ctx.deferred);
     forall(i, keys) {
         tl_monotype *placeholder = str_map_get_ptr(ctx.deferred, keys.v[i]);
         tl_monotype *specialized = str_map_get_ptr(ctx.by_name, keys.v[i]);
-        assert(specialized && "unresolved placeholder");
+        if (!specialized) {
+            dbg(self, "unresolved placeholder: %s", str_cstr(&keys.v[i]));
+            fatal("unresolved placeholder");
+        }
+
         *placeholder = *specialized;
     }
 
