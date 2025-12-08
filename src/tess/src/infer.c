@@ -2944,79 +2944,109 @@ static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_mon
     return mono;
 }
 
-tl_monotype        *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                                      hashmap **in_progress);
+typedef struct {
+    hashmap *seen;
+    hashmap *in_progress;
+    hashmap *deferred;
+} update_specialized_ctx;
 
-static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                           hashmap **in_progress) {
+tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, update_specialized_ctx *);
+
+static tl_monotype *defer_specialize(tl_infer *self, update_specialized_ctx *ctx, str name) {
+    if (str_hset_contains(ctx->in_progress, name) || str_map_contains(ctx->deferred, name)) {
+        // must defer: create a placeholder
+        tl_monotype *placeholder = str_map_get_ptr(ctx->deferred, name);
+        if (!placeholder) {
+            placeholder = tl_monotype_create_placeholder(self->arena);
+            str_map_set_ptr(&ctx->deferred, name, placeholder);
+        }
+        return placeholder;
+    }
+    return null;
+}
+
+static void resolve_placeholders(tl_infer *self, update_specialized_ctx *ctx, tl_monotype *replace) {
+    if (replace && tl_monotype_is_inst(replace)) {
+        str_array keys = str_map_keys(self->transient, ctx->deferred);
+        forall(i, keys) {
+            tl_monotype *placeholder = str_map_get_ptr(ctx->deferred, keys.v[i]);
+            if (str_eq(replace->cons_inst->def->generic_name, keys.v[i])) {
+                // mutate placeholder to resolve type
+                *placeholder = *replace;
+                str_map_erase(ctx->deferred, keys.v[i]);
+            }
+        }
+    }
+}
+
+static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, update_specialized_ctx *ctx) {
+
+    // Returns null if there is no need to replace the type
 
     assert(tl_monotype_is_inst(mono));
     if (!tl_monotype_is_concrete(mono)) return null;
 
-    tl_monotype *out = map_get_ptr(*seen, &mono, sizeof(tl_monotype *));
+    tl_monotype *out = map_get_ptr(ctx->seen, &mono, sizeof(tl_monotype *));
     if (out) return out;
 
-    int tries = 10;
-    while (tries--) {
-        int did_fail = 0;
+    // Recursive types: check for indirection through unary type (Ptr etc) and defer it
 
-        forall(i, mono->cons_inst->args) {
-            tl_monotype *arg = mono->cons_inst->args.v[i];
+    forall(i, mono->cons_inst->args) {
+        tl_monotype *arg = mono->cons_inst->args.v[i];
+        if (!tl_monotype_is_inst(arg)) continue;
+        str arg_name = arg->cons_inst->def->generic_name;
 
-            if (tl_monotype_is_inst(arg)) {
-                if (arg->cons_inst->args.size) {
+        if (tl_type_registry_is_unary_type(self->registry, arg_name)) {
 
-                    tl_monotype *replace = map_get_ptr(*seen, &arg, sizeof(tl_monotype *));
-                    if (replace) {
-                        mono->cons_inst->args.v[i] = replace;
-                    } else {
-                        str generic_name = arg->cons_inst->def->generic_name;
-                        assert(!str_is_empty(generic_name));
+            tl_monotype *target = arg->cons_inst->args.v[0];
+            if (tl_monotype_is_placeholder(target)) continue;
 
-                        if (str_hset_contains(*in_progress, generic_name)) continue;
+            str target_name = target->cons_inst->def->generic_name;
+            assert(!str_is_empty(target_name));
 
-                        str_hset_insert(in_progress, generic_name);
-                        tl_monotype *replace = get_or_specialize_inst(self, arg, seen, in_progress);
-                        str_hset_remove(*in_progress, generic_name);
+            tl_monotype *result = defer_specialize(self, ctx, target_name);
 
-                        if (replace) {
-                            mono->cons_inst->args.v[i] = replace;
-                            map_set_ptr(seen, &arg, sizeof(tl_monotype *), replace);
-                        } else {
-                            did_fail = 1;
-                        }
-                    }
-                }
-            } else {
-                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
-                if (replace) mono->cons_inst->args.v[i] = replace;
-                // ok if it returns null
+            if (!result && !str_hset_contains(ctx->in_progress, target_name)) {
+                str_hset_insert(&ctx->in_progress, target_name);
+                result = get_or_specialize_inst(self, target, ctx);
+                str_hset_remove(ctx->in_progress, target_name);
             }
+
+            if (result) {
+                tl_polytype *unary = tl_type_registry_get_unary(self->registry, arg_name);
+                assert(tl_monotype_is_inst(unary->type));
+                tl_monotype_sized args = {.v = alloc_malloc(self->arena, sizeof(tl_monotype *)), .size = 1};
+                args.v[0]              = result;
+                tl_monotype *inst      = tl_polytype_instantiate_with(self->arena, unary, args, self->subs);
+                map_set_ptr(&ctx->seen, &arg, sizeof(tl_monotype *), inst);
+
+                mono->cons_inst->args.v[i] = inst;
+                resolve_placeholders(self, ctx, result);
+            }
+        } else {
+            tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, ctx);
+            if (replace) mono->cons_inst->args.v[i] = replace;
+            // ok if it returns null
         }
-
-        if (did_fail) continue;
-
-        if (mono->cons_inst->args.size) {
-            str               type_name = mono->cons_inst->def->generic_name;
-            tl_monotype_sized type_args = mono->cons_inst->args;
-            tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
-            if (replace) out = replace;
-            else did_fail = 1;
-        }
-
-        if (!did_fail) break;
     }
 
-    if (tries == -1) fatal("get_or_specialize_inst: loop exhausted");
+    if (!tl_monotype_has_placeholder_deep(mono)) {
+        str               type_name = mono->cons_inst->def->generic_name;
+        tl_monotype_sized type_args = mono->cons_inst->args;
+        tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
+        if (replace) out = replace;
+    }
+
+    if (out) map_set_ptr(&ctx->seen, &mono, sizeof(tl_monotype *), out);
     return out;
 }
 
-tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                               hashmap **in_progress) {
+tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono,
+                                               update_specialized_ctx *ctx) {
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
-    tl_monotype *result = map_get_ptr(*seen, &mono, sizeof(tl_monotype *));
+    tl_monotype *result = map_get_ptr(ctx->seen, &mono, sizeof(tl_monotype *));
     if (result) return result;
 
     switch (mono->tag) {
@@ -3029,7 +3059,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
     case tl_literal:     {
         tl_monotype *target  = tl_monotype_literal_target(mono);
-        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, seen, in_progress);
+        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, ctx);
         if (replace) {
             result = tl_monotype_create_literal(self->arena, replace);
         }
@@ -3038,16 +3068,15 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_cons_inst:
         // already specialized?
         if (!str_is_empty(mono->cons_inst->special_name)) return null;
-        tl_monotype *replace = get_or_specialize_inst(self, mono, seen, in_progress);
-        result               = replace;
+        tl_monotype *replace = get_or_specialize_inst(self, mono, ctx);
+        if (replace) result = replace;
         break;
 
     case tl_arrow:
     case tl_tuple: {
         int did_replace = 0;
         forall(i, mono->list.xs) {
-            tl_monotype *replace =
-              tl_infer_update_specialized_type_(self, mono->list.xs.v[i], seen, in_progress);
+            tl_monotype *replace = tl_infer_update_specialized_type_(self, mono->list.xs.v[i], ctx);
             if (replace) {
                 mono->list.xs.v[i] = replace;
                 did_replace        = 1;
@@ -3058,14 +3087,17 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     } break;
     }
 
-    map_set_ptr(seen, &mono, sizeof(tl_monotype *), result);
+    if (result) map_set_ptr(&ctx->seen, &mono, sizeof(tl_monotype *), result);
     return result;
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
-    hashmap     *seen        = map_new(self->transient, tl_monotype *, tl_monotype *, 8);
-    hashmap     *in_progress = hset_create(self->transient, 8);
-    tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &seen, &in_progress);
+    update_specialized_ctx ctx = {
+      .seen        = map_new(self->transient, tl_monotype *, tl_monotype *, 8),
+      .in_progress = hset_create(self->transient, 8),
+      .deferred    = map_new(self->transient, str, tl_monotype *, 8),
+    };
+    tl_monotype *out = tl_infer_update_specialized_type_(self, mono, &ctx);
     return out;
 }
 

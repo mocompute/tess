@@ -30,8 +30,6 @@ static void                      make_carray(tl_type_registry *);
 static void                      mark_integer_type(tl_type_registry *, str);
 static void                      mark_float_type(tl_type_registry *, str);
 
-static tl_monotype              *tl_monotype_create_placeholder(allocator *alloc);
-
 // -- type constructor --
 
 static _Thread_local allocator *transient_allocator; // initialized by tl_type_registry_create
@@ -516,7 +514,7 @@ static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_t
     if (str_hset_contains(ctx->in_progress, name) || str_map_contains(ctx->deferred_parse, name) ||
         (!str_map_get_ptr(ctx->type_arguments, name) && !tl_type_registry_get(self, name))) {
 
-        // target cannot be parsed yet: create a placeholder type for it: Ptr(any)
+        // target cannot be parsed yet: create a placeholder type for it
 
         // fprintf(stderr, "parse_type: defer %s\n", str_cstr(&name));
 
@@ -1211,11 +1209,6 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
         replace_tv_mono(fresh, subs, q_to_t, &seen);
     }
 
-#ifndef NDEBUG
-    // assert the argument for a unary type maintains its pointer identity
-    if (1 == fresh->cons_inst->args.size) assert(args.v[0] == fresh->cons_inst->args.v[0]);
-#endif
-
     return fresh;
 }
 
@@ -1341,7 +1334,7 @@ tl_monotype *tl_monotype_create_any(allocator *alloc) {
     return self;
 }
 
-static tl_monotype *tl_monotype_create_placeholder(allocator *alloc) {
+tl_monotype *tl_monotype_create_placeholder(allocator *alloc) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_placeholder};
     return self;
@@ -1490,18 +1483,18 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
 
     switch (self->tag) {
 
-    case tl_placeholder:
     case tl_var:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis: return 0;
 
     case tl_integer:
     case tl_any:
         //
         return 1;
 
+    case tl_placeholder:
     case tl_weak:
-        // consider weak type variables as concrete, which is *usually* what type inference client wants.
-        // There are _no_weak variants, otherwise.
+        // consider weak and placeholder type variables as concrete, which is *usually* what type inference
+        // client wants. There are _no_weak variants, otherwise.
         return 1;
 
     case tl_cons_inst:
@@ -1536,7 +1529,7 @@ int tl_monotype_arrow_is_concrete(tl_monotype *self) {
     return tl_monotype_is_concrete(params);
 }
 
-int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
+static int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
     if (ptr_hset_contains(*seen, self)) return 0;
     ptr_hset_insert(seen, self);
@@ -1571,6 +1564,47 @@ int tl_monotype_is_weak_deep(tl_monotype *self) {
     hashmap *seen = hset_create(transient_allocator, 32);
     int      res  = tl_monotype_is_weak_(self, &seen);
     return res;
+}
+
+static int tl_monotype_has_placeholder_(tl_monotype *self, hashmap **seen) {
+    if (!self) return 0;
+    if (ptr_hset_contains(*seen, self)) return 0;
+    ptr_hset_insert(seen, self);
+
+    switch (self->tag) {
+    case tl_integer:
+    case tl_weak:
+    case tl_any:
+    case tl_var:
+    case tl_ellipsis:    return 0;
+
+    case tl_placeholder: return 1;
+
+    case tl_cons_inst:
+        forall(i, self->cons_inst->args) if (tl_monotype_has_placeholder_(self->cons_inst->args.v[i],
+                                                                          seen)) return 1;
+        return 0;
+    case tl_arrow:
+    case tl_tuple: {
+        forall(i, self->list.xs) if (tl_monotype_has_placeholder_(self->list.xs.v[i], seen)) return 1;
+        return 0;
+    }
+
+    case tl_literal:
+        //
+        return tl_monotype_has_placeholder_(self->literal, seen);
+    }
+    fatal("unreachable");
+}
+
+int tl_monotype_has_placeholder_deep(tl_monotype *self) {
+    hashmap *seen = hset_create(transient_allocator, 32);
+    int      res  = tl_monotype_has_placeholder_(self, &seen);
+    return res;
+}
+
+int tl_monotype_is_placeholder(tl_monotype *self) {
+    return self && tl_placeholder == self->tag;
 }
 
 int tl_monotype_sized_is_concrete(tl_monotype_sized arr) {

@@ -106,6 +106,7 @@ void tl_type_env_log(tl_type_env *);
 // -- monotype --
 
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_placeholder(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
@@ -141,6 +142,8 @@ int                    tl_monotype_is_concrete(tl_monotype *);
 int                    tl_monotype_arrow_is_concrete(tl_monotype *);
 int                    tl_monotype_is_weak(tl_monotype *);
 int                    tl_monotype_is_weak_deep(tl_monotype *);
+int                    tl_monotype_is_placeholder(tl_monotype *);
+int                    tl_monotype_has_placeholder_deep(tl_monotype *);
 int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
 int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // constructed non-arrow type
 int                    tl_monotype_is_concrete_no_weak(tl_monotype *);
