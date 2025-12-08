@@ -2977,7 +2977,7 @@ static int resolve_waiting(tl_infer *self, update_specialized_ctx *ctx) {
         tl_monotype *mono = *(tl_monotype **)iter.key_ptr;
 
         if (!tl_monotype_is_inst(mono)) continue;
-        if (tl_monotype_has_placeholder_deep(mono)) continue;
+        // if (tl_monotype_has_placeholder_deep(mono)) continue;
 
         str               type_name = mono->cons_inst->def->generic_name;
         tl_monotype_sized type_args = mono->cons_inst->args;
@@ -3007,14 +3007,16 @@ static void resolve_placeholders(tl_infer *self, update_specialized_ctx *ctx, tl
                 // mutate placeholder to resolve type
                 *placeholder = *replace;
                 str_map_erase(ctx->deferred, keys.v[i]);
+                dbg(self, "resolve_placeholders: %s resolved to %s", str_cstr(&keys.v[i]),
+                    str_cstr(&replace->cons_inst->special_name));
 
                 // FIXME: need to fix self->instances hash, because the inst was hashed with placeholder
                 // type.
-                name_and_type inst_key = {.name_hash = str_hash64(keys.v[i]),
-                                          .type_hash = tl_monotype_hash64(replace)};
-                dbg(self, "resolve_placeholders: adding instance for %s: %s", str_cstr(&keys.v[i]),
-                    str_cstr(&replace->cons_inst->special_name));
-                map_set(&self->instances, &inst_key, sizeof inst_key, &replace->cons_inst->special_name);
+                // name_and_type inst_key = {.name_hash = str_hash64(keys.v[i]),
+                //                           .type_hash = tl_monotype_hash64(replace)};
+                // dbg(self, "resolve_placeholders: adding instance for %s: %s", str_cstr(&keys.v[i]),
+                //     str_cstr(&replace->cons_inst->special_name));
+                // map_set(&self->instances, &inst_key, sizeof inst_key, &replace->cons_inst->special_name);
             }
         }
 
