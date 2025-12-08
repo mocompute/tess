@@ -2960,7 +2960,7 @@ static tl_monotype *defer_specialize(tl_infer *self, update_specialized_ctx *ctx
         // must defer: create a placeholder
         tl_monotype *placeholder = str_map_get_ptr(ctx->deferred, name);
         if (!placeholder) {
-            placeholder = tl_monotype_create_placeholder(self->arena);
+            placeholder = tl_monotype_create_placeholder(self->arena, name);
             str_map_set_ptr(&ctx->deferred, name, placeholder);
         }
         dbg(self, "defer_specialize: returning placeholder for %s", str_cstr(&name));

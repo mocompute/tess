@@ -520,7 +520,7 @@ static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_t
 
         tl_monotype *placeholder = str_map_get_ptr(ctx->deferred_parse, name);
         if (!placeholder) {
-            placeholder = tl_monotype_create_placeholder(self->alloc);
+            placeholder = tl_monotype_create_placeholder(self->alloc, name);
             str_map_set_ptr(&ctx->deferred_parse, name, placeholder);
         }
 
@@ -1334,9 +1334,9 @@ tl_monotype *tl_monotype_create_any(allocator *alloc) {
     return self;
 }
 
-tl_monotype *tl_monotype_create_placeholder(allocator *alloc) {
+tl_monotype *tl_monotype_create_placeholder(allocator *alloc, str name) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_placeholder};
+    *self             = (tl_monotype){.tag = tl_placeholder, .placeholder = name};
     return self;
 }
 
@@ -1857,7 +1857,8 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
     u64 hash = hash64(&self->tag, sizeof self->tag);
 
     switch (self->tag) {
-    case tl_placeholder:
+    case tl_placeholder: hash = str_hash64_combine(hash, self->placeholder); break;
+
     case tl_any:
     case tl_ellipsis:    break;
     case tl_var:
