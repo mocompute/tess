@@ -2367,10 +2367,13 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
         rename_variables(self, node->assignment.value, lex, level + 1);
         break;
 
-    case ast_binary_op:
+    case ast_binary_op: {
         rename_variables(self, node->binary_op.left, lex, level + 1);
-        rename_variables(self, node->binary_op.right, lex, level + 1);
-        break;
+
+        // Note: If op is a struct access operator (. or ->) do not rename the right hand side.
+        char const *op = str_cstr(&node->binary_op.op->symbol.name);
+        if (!is_struct_access_operator(op)) rename_variables(self, node->binary_op.right, lex, level + 1);
+    } break;
 
     case ast_unary_op: rename_variables(self, node->unary_op.operand, lex, level + 1); break;
 
