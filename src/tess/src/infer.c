@@ -1831,10 +1831,6 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     tl_type_registry_specialize_ctx inst_ctx =
       tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
 
-    // Note: this commit looks like it's in the wrong place, but it's needed, presently. See FIXME comment
-    // in the if(existing) branch.
-    tl_type_registry_specialize_commit(self->registry, inst_ctx);
-
     if (!inst_ctx.specialized) goto cancel;
 
     name_and_type key      = {.name_hash = str_hash64(name),
@@ -1844,14 +1840,6 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
         if (out_type) *out_type = poly;
         out_str = *existing;
-
-        // FIXME: Important: updating type registry's specialized cache to register the correct
-        // instantiation against the key hash. This is a bit whacked because the code in
-        // tl_infer_update_specialized_type will exhaust its loop unless type_registry_specialize is
-        // committed, even though it is being canceled here.
-        if (!tl_polytype_is_scheme(poly) && tl_monotype_is_inst_specialized(poly->type))
-
-            map_set_ptr(&self->registry->specialized, &inst_ctx.key, sizeof inst_ctx.key, poly->type);
 
         goto cancel;
     }
@@ -1876,8 +1864,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     array_free(recur_refs);
 
-    // Note: see comment above.
-    // tl_type_registry_specialize_commit(self->registry, inst_ctx);
+    tl_type_registry_specialize_commit(self->registry, inst_ctx);
     return name_inst;
 
 cancel:
