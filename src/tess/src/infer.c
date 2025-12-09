@@ -1818,10 +1818,9 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             }
 
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
-            if (poly && !tl_polytype_is_scheme(poly)) {
+            if (poly) {
                 // Note: it's a runtime error if poly is not concrete
-                // FIXME: should we fatal if type is not concrete?
-                args.v[i] = poly->type;
+                args.v[i] = tl_polytype_concrete(poly);
             }
         }
     }
