@@ -2971,7 +2971,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         int did_replace  = !tl_monotype_is_inst_specialized(mono);
         str generic_name = mono->cons_inst->def->generic_name;
 
-        // check args
+        // check args recursively
         str_hset_insert(in_progress, generic_name);
         forall(i, mono->cons_inst->args) {
             tl_monotype *arg = mono->cons_inst->args.v[i];
@@ -2992,7 +2992,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
                                           &replace);
 
-        if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("oops");
+        if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("unreachable");
 
         if (replace && did_replace) {
             return replace->type;
@@ -3016,6 +3016,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
     } break;
     }
+
     return null;
 }
 
@@ -3031,7 +3032,9 @@ static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
     // Don't try to specialize type schemes
     if (tl_polytype_is_scheme(*poly)) return;
 
-    int tries = 10;
+    // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
+    // need to replace the type being tested.
+    int tries = 5;
     while (tries--) {
         int          did_replace = 1;
         tl_monotype *replace     = tl_infer_update_specialized_type(self, (*poly)->type);
@@ -3229,10 +3232,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     apply_subs_to_ast(self);
     arena_reset(self->transient);
 
-    // update type specialisations: replace generic constructors with specialised constructors.
-    update_specialized_types(self);
-    arena_reset(self->transient);
-
     // ensure main function has the correct type
     if (main) {
         if (check_main_function(self, main)) return 1;
@@ -3251,6 +3250,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         if (check_missing_free_variables(self)) return 1;
         if (self->errors.size) return 1;
     }
+
+    // update type specialisations: replace generic constructors with specialised constructors.
+    update_specialized_types(self);
+    arena_reset(self->transient);
 
     if (1) {
         dbg(self, "-- final subs");
