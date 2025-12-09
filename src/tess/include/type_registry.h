@@ -29,6 +29,19 @@ typedef struct {
     ast_node const *annotation_target;
 } tl_type_registry_parse_type_ctx;
 
+typedef struct {
+    u64 name_hash;
+    u64 args_hash;
+} registry_key;
+
+typedef struct {
+    tl_monotype *specialized;
+    str          name;
+    str          special_name;
+    registry_key key;
+    int          is_existing;
+} tl_type_registry_specialize_ctx;
+
 nodiscard tl_type_registry *tl_type_registry_create(allocator *, allocator *, tl_type_subs *) mallocfun;
 tl_polytype *tl_type_constructor_def_create(tl_type_registry *, str name, tl_type_variable_sized tvs,
                                             str_sized fields, tl_monotype_sized) mallocfun;
@@ -36,6 +49,9 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *, tl_monotype_sized);
 tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *, tl_monotype *, i32);
+tl_type_registry_specialize_ctx tl_type_registry_specialize_begin(tl_type_registry *, str, str,
+                                                                  tl_monotype_sized);
+tl_monotype *tl_type_registry_specialize_commit(tl_type_registry *, tl_type_registry_specialize_ctx);
 tl_monotype *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str, tl_monotype_sized);
 void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);

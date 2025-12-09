@@ -1825,16 +1825,33 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         }
     }
 
-    str          out_str   = str_empty();
-    str          name_inst = next_instantiation(self, name); // may be cancelled later
-    tl_monotype *inst      = tl_type_registry_specialize(self->registry, name, name_inst, args);
-    if (!inst) goto cancel;
+    str                             out_str   = str_empty();
+    str                             name_inst = next_instantiation(self, name); // may be cancelled later
+    tl_type_registry_specialize_ctx inst_ctx =
+      tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
 
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(inst)};
+    // Note: this commit looks like it's in the wrong place, but it's needed, presently. See FIXME comment
+    // in the if(existing) branch.
+    tl_type_registry_specialize_commit(self->registry, inst_ctx);
+
+    if (!inst_ctx.specialized) goto cancel;
+
+    name_and_type key      = {.name_hash = str_hash64(name),
+                              .type_hash = tl_monotype_hash64(inst_ctx.specialized)};
     str          *existing = map_get(self->instances, &key, sizeof key);
     if (existing) {
-        if (out_type) *out_type = tl_type_env_lookup(self->env, *existing);
+        tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
+        if (out_type) *out_type = poly;
         out_str = *existing;
+
+        // FIXME: Important: updating type registry's specialized cache to register the correct
+        // instantiation against the key hash. This is a bit whacked because the code in
+        // tl_infer_update_specialized_type will exhaust its loop unless type_registry_specialize is
+        // committed, even though it is being canceled here.
+        if (!tl_polytype_is_scheme(poly) && tl_monotype_is_inst(poly->type) &&
+            !str_is_empty(poly->type->cons_inst->special_name))
+            map_set_ptr(&self->registry->specialized, &inst_ctx.key, sizeof inst_ctx.key, poly->type);
+
         goto cancel;
     }
 
@@ -1845,7 +1862,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     utd = ast_node_clone(self->arena, utd);
     ast_node_name_replace(utd->user_type_def.name, name_inst);
-    utd->type = tl_polytype_absorb_mono(self->arena, inst);
+    utd->type = tl_polytype_absorb_mono(self->arena, inst_ctx.specialized);
     toplevel_add(self, name_inst, utd);
     tl_type_env_insert(self->env, name_inst, utd->type);
     array_push(self->synthesized_nodes, utd);
@@ -1858,6 +1875,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     array_free(recur_refs);
 
+    // Note: see comment above.
+    // tl_type_registry_specialize_commit(self->registry, inst_ctx);
     return name_inst;
 
 cancel:
