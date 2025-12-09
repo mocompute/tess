@@ -3021,29 +3021,65 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
-    hashmap     *in_progress = hset_create(self->transient, 8);
-    tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
-    return out;
+    switch (mono->tag) {
+    case tl_any:
+    case tl_ellipsis:
+    case tl_integer:
+    case tl_var:
+    case tl_weak:
+    case tl_placeholder: return null;
+
+    case tl_cons_inst:
+    case tl_arrow:
+    case tl_tuple:
+    case tl_literal:     {
+        hashmap     *in_progress = hset_create(self->transient, 8);
+        tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
+        return out;
+    }
+    }
 }
 
-static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
+typedef struct {
+    hashmap *in_progress;
+} update_types_ctx;
+
+static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_polytype **poly) {
     if (!poly || !*poly) return; // not all ast nodes will have types
 
     // Don't try to specialize type schemes
     if (tl_polytype_is_scheme(*poly)) return;
 
-    // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
-    // need to replace the type being tested.
-    int tries = 5;
-    while (tries--) {
-        int          did_replace = 1;
-        tl_monotype *replace     = tl_infer_update_specialized_type(self, (*poly)->type);
-        if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
-        else did_replace = 0;
+    switch ((*poly)->type->tag) {
+    case tl_any:
+    case tl_ellipsis:
+    case tl_integer:
+    case tl_var:
+    case tl_weak:
+    case tl_placeholder: return;
 
-        if (!did_replace) break;
+    case tl_cons_inst:
+    case tl_arrow:
+    case tl_tuple:
+    case tl_literal:     {
+        // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
+        // need to replace the type being tested.
+        int tries = 10;
+        while (tries--) {
+            int did_replace = 1;
+
+            hset_reset(ctx->in_progress);
+            tl_monotype *replace =
+              tl_infer_update_specialized_type_(self, (*poly)->type, &ctx->in_progress);
+
+            if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
+            else did_replace = 0;
+
+            if (!did_replace) break;
+        }
+        if (-1 == tries) fatal("loop exhausted");
     }
-    if (-1 == tries) fatal("loop exhausted");
+    }
 }
 
 static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
@@ -3065,9 +3101,9 @@ static void update_types_arrow(tl_infer *self, ast_node *node) {
     }
 }
 
-static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
-    (void)ctx;
-    update_types_one_type(self, &node->type);
+static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    update_types_ctx *ctx = traverse_ctx->user;
+    update_types_one_type(self, ctx, &node->type);
     update_types_arrow(self, node);
 
     // propagate the types back up the ast, especially for type constructors
@@ -3115,13 +3151,16 @@ static int update_types_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 }
 
 static void update_specialized_types(tl_infer *self) {
+    update_types_ctx ctx  = {.in_progress = hset_create(self->transient, 8)};
+
     hashmap_iterator iter = {0};
     while (map_iter(self->env->map, &iter)) {
         tl_polytype **poly = iter.data;
-        update_types_one_type(self, poly);
+        update_types_one_type(self, &ctx, poly);
     }
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    traverse->user         = &ctx;
     iter                   = (hashmap_iterator){0};
     ast_node *node;
     while ((node = toplevel_iter(self, &iter))) {
