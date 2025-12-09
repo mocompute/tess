@@ -2947,8 +2947,8 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     return error;
 }
 
-tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                               hashmap **in_progress) {
+tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **in_progress) {
+
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
     // that makes me a little bit sad. But it makes sizeof(TypeConstructor) work.
 
@@ -2962,7 +2962,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
     case tl_literal:     {
         tl_monotype *target  = tl_monotype_literal_target(mono);
-        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, seen, in_progress);
+        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, in_progress);
         if (replace) return tl_monotype_create_literal(self->arena, replace);
     } break;
 
@@ -2978,7 +2978,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
             if (!tl_monotype_is_inst(arg) ||
                 !str_hset_contains(*in_progress, arg->cons_inst->def->generic_name)) {
 
-                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
+                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, in_progress);
 
                 if (replace) {
                     mono->cons_inst->args.v[i] = replace;
@@ -2994,8 +2994,6 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
         if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("oops");
 
-        if (replace) map_set_ptr(seen, &mono, sizeof(tl_monotype *), replace);
-
         if (replace && did_replace) {
             return replace->type;
         } else {
@@ -3008,8 +3006,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_tuple: {
         int did_replace = 0;
         forall(i, mono->list.xs) {
-            tl_monotype *replace =
-              tl_infer_update_specialized_type_(self, mono->list.xs.v[i], seen, in_progress);
+            tl_monotype *replace = tl_infer_update_specialized_type_(self, mono->list.xs.v[i], in_progress);
             if (replace) {
                 mono->list.xs.v[i] = replace;
                 did_replace        = 1;
@@ -3023,9 +3020,8 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 }
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
-    hashmap     *seen        = map_new(self->transient, tl_monotype *, tl_monotype *, 8);
     hashmap     *in_progress = hset_create(self->transient, 8);
-    tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &seen, &in_progress);
+    tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
     return out;
 }
 
