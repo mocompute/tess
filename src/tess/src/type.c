@@ -1618,6 +1618,11 @@ int tl_monotype_is_list(tl_monotype *self) {
 int tl_monotype_is_inst(tl_monotype *self) {
     return self && tl_cons_inst == self->tag;
 }
+
+int tl_monotype_is_inst_specialized(tl_monotype *self) {
+    return tl_monotype_is_inst(self) && !str_is_empty(self->cons_inst->special_name);
+}
+
 int tl_monotype_is_enum(tl_monotype *self) {
     // Enum type: has field names but has no instance args
     return tl_monotype_is_inst(self) && self->cons_inst->def->field_names.size &&

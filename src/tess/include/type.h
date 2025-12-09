@@ -136,6 +136,7 @@ int                    tl_monotype_is_integer(tl_monotype *);
 int                    tl_monotype_is_void(tl_monotype *);
 int                    tl_monotype_is_list(tl_monotype *);
 int                    tl_monotype_is_inst(tl_monotype *);
+int                    tl_monotype_is_inst_specialized(tl_monotype *);
 int                    tl_monotype_is_inst_of(tl_monotype *, str);
 int                    tl_monotype_is_enum(tl_monotype *);
 int                    tl_monotype_is_tuple(tl_monotype *);

@@ -1798,7 +1798,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     // specialize args first
     forall(i, args) {
-        if (tl_monotype_is_inst(args.v[i]) && str_is_empty(args.v[i]->cons_inst->special_name)) {
+        if (tl_monotype_is_inst(args.v[i]) && !tl_monotype_is_inst_specialized(args.v[i])) {
             tl_polytype *poly         = null;
             str          generic_name = args.v[i]->cons_inst->def->generic_name;
 
@@ -1849,8 +1849,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         // instantiation against the key hash. This is a bit whacked because the code in
         // tl_infer_update_specialized_type will exhaust its loop unless type_registry_specialize is
         // committed, even though it is being canceled here.
-        if (!tl_polytype_is_scheme(poly) && tl_monotype_is_inst(poly->type) &&
-            !str_is_empty(poly->type->cons_inst->special_name))
+        if (!tl_polytype_is_scheme(poly) && tl_monotype_is_inst_specialized(poly->type))
+
             map_set_ptr(&self->registry->specialized, &inst_ctx.key, sizeof inst_ctx.key, poly->type);
 
         goto cancel;
@@ -2968,7 +2968,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
     case tl_cons_inst: {
 
-        int did_replace  = str_is_empty(mono->cons_inst->special_name);
+        int did_replace  = !tl_monotype_is_inst_specialized(mono);
         str generic_name = mono->cons_inst->def->generic_name;
 
         // check args
@@ -2992,7 +2992,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
                                           &replace);
 
-        if (replace && str_is_empty(replace->type->cons_inst->special_name)) fatal("oops");
+        if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("oops");
 
         if (replace) map_set_ptr(seen, &mono, sizeof(tl_monotype *), replace);
 
