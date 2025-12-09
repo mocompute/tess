@@ -515,6 +515,7 @@ static void generate_toplevel_values(transpile *self) {
         tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
+        cat(self, S("_Thread_local "));
         generate_decl(self, name, type->type);
     }
 
