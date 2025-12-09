@@ -491,7 +491,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (1) {
+    if (0) {
         log_constraint_mono(self, left, right, node);
     }
 
@@ -1819,7 +1819,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
             if (poly) {
-                // if (!tl_polytype_is_concrete(poly)) return str_empty();
+                // Note: it's a runtime error if poly is not concrete
                 args.v[i] = tl_polytype_concrete(poly);
             }
         }
