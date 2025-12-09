@@ -10,7 +10,7 @@ MOS_SRC_DIR	= src/mos
 MOS_INC_DIR	= $(MOS_SRC_DIR)/include
 TESS_SRC_DIR	= src/tess
 TESS_INC_DIR	= $(TESS_SRC_DIR)/include
-BUILD_DIR	= build
+BUILD_DIR	= build-release
 
 # Installation directories
 PREFIX ?= /usr/local
