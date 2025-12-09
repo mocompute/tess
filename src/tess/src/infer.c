@@ -2933,6 +2933,8 @@ static int check_main_function(tl_infer *self, ast_node *main) {
 static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
 
     tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
+    return mono;
+    // FIXME
     if (!mono) {
         // not found, specialize it if all args are concrete, which includes placeholders
         tl_polytype *specialized = null;
@@ -3034,6 +3036,21 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
     tl_monotype *out = map_get_ptr(ctx->seen, &mono, sizeof(tl_monotype *));
     if (out) return out;
 
+    if (!str_is_empty(mono->cons_inst->special_name)) return null;
+    if (!tl_monotype_has_placeholder_deep(mono)) {
+        str           name     = mono->cons_inst->def->generic_name;
+        name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(mono)};
+        str          *existing = map_get(self->instances, &key, sizeof key);
+        if (existing) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
+
+            map_set_ptr(&ctx->seen, &mono, sizeof(tl_monotype *), poly->type);
+            str_map_set_ptr(&ctx->by_name, name, poly->type);
+            resolve_placeholders(self, ctx, poly->type);
+            return poly->type;
+        }
+    }
+
     // Recursive types: check for indirection through unary type (Ptr etc) and defer it
 
     forall(i, mono->cons_inst->args) {
@@ -3043,6 +3060,8 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
 
         if (tl_type_registry_is_unary_type(self->registry, arg_name)) {
 
+            // if (!str_is_empty(arg->cons_inst->special_name)) continue;
+
             tl_monotype *target = arg->cons_inst->args.v[0];
 
             if (tl_monotype_is_placeholder(target)) {
@@ -3050,10 +3069,34 @@ static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, up
                 continue;
             }
 
+            if (!tl_monotype_is_inst(target)) continue;
+            if (!str_is_empty(target->cons_inst->special_name)) continue;
+
             str target_name = target->cons_inst->def->generic_name;
             assert(!str_is_empty(target_name));
 
-            tl_monotype *result = defer_specialize(self, ctx, target_name);
+            tl_monotype *result = null;
+
+            if (!tl_monotype_has_placeholder_deep(target)) {
+                str           name     = target->cons_inst->def->generic_name;
+                name_and_type key      = {.name_hash = str_hash64(name),
+                                          .type_hash = tl_monotype_hash64(target)};
+                str          *existing = map_get(self->instances, &key, sizeof key);
+                if (existing) {
+                    tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
+
+                    if (!tl_polytype_is_scheme(poly) && !tl_monotype_has_placeholder_deep(poly->type)) {
+                        dbg(self, "found %s", str_cstr(existing));
+
+                        map_set_ptr(&ctx->seen, &target, sizeof(tl_monotype *), poly->type);
+                        str_map_set_ptr(&ctx->by_name, name, poly->type);
+                        resolve_placeholders(self, ctx, poly->type);
+                        result = poly->type;
+                    }
+                }
+            } else {
+                result = defer_specialize(self, ctx, target_name);
+            }
 
             if (!result && !str_hset_contains(ctx->in_progress, target_name)) {
                 str_hset_insert(&ctx->in_progress, target_name);
@@ -3128,12 +3171,37 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         }
     } break;
 
-    case tl_cons_inst:
+    case tl_cons_inst: {
         // already specialized?
         if (!str_is_empty(mono->cons_inst->special_name)) return null;
-        tl_monotype *replace = get_or_specialize_inst(self, mono, ctx);
+
+        tl_monotype  *replace  = null;
+
+        str           name     = mono->cons_inst->def->generic_name;
+        name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(mono)};
+        str          *existing = map_get(self->instances, &key, sizeof key);
+
+        if (str_eq(name, S("Point"))) {
+            ;
+        }
+
+        if (existing) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
+
+            if (!tl_polytype_is_scheme(poly)) {
+                map_set_ptr(&ctx->seen, &mono, sizeof(tl_monotype *), poly->type);
+                str_map_set_ptr(&ctx->by_name, name, poly->type);
+                replace = poly->type;
+            } else {
+                fatal("got scheme");
+            }
+        }
+
+        (void)get_or_specialize_inst;
+        // tl_monotype *replace = get_or_specialize_inst(self, mono, ctx);
         if (replace) result = replace;
-        break;
+
+    } break;
 
     case tl_arrow:
     case tl_tuple: {
@@ -3193,6 +3261,9 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 
 static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
     if (!poly || !*poly) return; // not all ast nodes will have types
+
+    // FIXME: skipping generic types
+    if (!tl_polytype_is_scheme(*poly)) return;
 
     tl_monotype *replace = tl_infer_update_specialized_type(self, (*poly)->type);
     if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
