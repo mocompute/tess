@@ -44,6 +44,7 @@ typedef struct tl_monotype {
         } list;
 
         i32 integer;
+        str placeholder;
     };
     enum {
         tl_any,
@@ -106,6 +107,7 @@ void tl_type_env_log(tl_type_env *);
 // -- monotype --
 
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_placeholder(allocator *, str) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
