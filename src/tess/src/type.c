@@ -2575,16 +2575,8 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 
         tl_monotype *resolved = subs->data.v[root].type;
         if (resolved) {
-            // Note: due to transitive and cycle issues, we need to shake/repeat a few times. Rather than
-            // formally prove we have exhausted all cycles, we just pick a number that seems to work in
-            // practice.
-            //
-            // FIXME: we have no regression test indicating a failure when tries == 1.
-            int tries = 1;
-            while (tries-- && !tl_monotype_is_concrete_no_weak(resolved)) {
-                // tl_monotype *copy = tl_monotype_clone(alloc, resolved);
+            if (!tl_monotype_is_concrete_no_weak(resolved)) {
                 tl_monotype_substitute_(alloc, resolved, subs, exclude, seen);
-                // resolved = copy;
             }
 
             *self = *resolved;
