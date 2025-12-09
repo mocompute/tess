@@ -1818,9 +1818,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             }
 
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
-            if (poly) {
+            if (poly && !tl_polytype_is_scheme(poly)) {
                 // Note: it's a runtime error if poly is not concrete
-                args.v[i] = tl_polytype_concrete(poly);
+                // FIXME: should we fatal if type is not concrete?
+                args.v[i] = poly->type;
             }
         }
     }
@@ -2946,76 +2947,6 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     return error;
 }
 
-static tl_monotype *get_or_specialize_type(tl_infer *self, str type_name, tl_monotype_sized args) {
-    tl_monotype *mono = tl_type_registry_get_cached_specialization(self->registry, type_name, args);
-    if (!mono) {
-        // not found, specialize it if all args are concrete
-        tl_polytype *specialized = null;
-        if (!tl_monotype_sized_is_concrete(args)) return null;
-        specialize_type_constructor(self, type_name, args, &specialized);
-        if (!specialized) return null;
-        mono = specialized->type;
-    }
-
-    return mono;
-}
-
-tl_monotype        *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                                      hashmap **in_progress);
-
-static tl_monotype *get_or_specialize_inst(tl_infer *self, tl_monotype *mono, hashmap **seen,
-                                           hashmap **in_progress) {
-
-    tl_monotype *out = null;
-
-    assert(tl_monotype_is_inst(mono));
-    if (!tl_monotype_is_concrete(mono)) return null;
-
-    int tries = 10;
-    while (tries--) {
-        int did_fail = 0;
-
-        forall(i, mono->cons_inst->args) {
-            tl_monotype *arg = mono->cons_inst->args.v[i];
-
-            if (tl_monotype_is_inst(arg)) {
-                if (arg->cons_inst->args.size) {
-                    str generic_name = arg->cons_inst->def->generic_name;
-                    assert(!str_is_empty(generic_name));
-
-                    if (str_hset_contains(*in_progress, generic_name)) continue;
-
-                    str_hset_insert(in_progress, generic_name);
-                    tl_monotype *replace = get_or_specialize_inst(self, arg, seen, in_progress);
-                    str_hset_remove(*in_progress, generic_name);
-
-                    if (replace) mono->cons_inst->args.v[i] = replace;
-                    else did_fail = 1;
-                }
-            } else {
-                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
-                if (replace) mono->cons_inst->args.v[i] = replace;
-                // ok if it returns null
-            }
-        }
-
-        if (did_fail) continue;
-
-        if (mono->cons_inst->args.size) {
-            str               type_name = mono->cons_inst->def->generic_name;
-            tl_monotype_sized type_args = mono->cons_inst->args;
-            tl_monotype      *replace   = get_or_specialize_type(self, type_name, type_args);
-            if (replace) out = replace;
-            else did_fail = 1;
-        }
-
-        if (!did_fail) break;
-    }
-
-    if (tries == -1) fatal("loop exhausted");
-    return out;
-}
-
 tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **seen,
                                                hashmap **in_progress) {
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
@@ -3035,11 +2966,43 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         if (replace) return tl_monotype_create_literal(self->arena, replace);
     } break;
 
-    case tl_cons_inst:
-        // already specialized?
-        if (!str_is_empty(mono->cons_inst->special_name)) return null;
-        tl_monotype *replace = get_or_specialize_inst(self, mono, seen, in_progress);
-        return replace;
+    case tl_cons_inst: {
+
+        int did_replace  = str_is_empty(mono->cons_inst->special_name);
+        str generic_name = mono->cons_inst->def->generic_name;
+
+        // check args
+        str_hset_insert(in_progress, generic_name);
+        forall(i, mono->cons_inst->args) {
+            tl_monotype *arg = mono->cons_inst->args.v[i];
+            if (!tl_monotype_is_inst(arg) ||
+                !str_hset_contains(*in_progress, arg->cons_inst->def->generic_name)) {
+
+                tl_monotype *replace = tl_infer_update_specialized_type_(self, arg, seen, in_progress);
+
+                if (replace) {
+                    mono->cons_inst->args.v[i] = replace;
+                    did_replace                = 1;
+                }
+            }
+        }
+        str_hset_remove(*in_progress, generic_name);
+
+        tl_polytype *replace = null;
+        (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
+                                          &replace);
+
+        if (replace && str_is_empty(replace->type->cons_inst->special_name)) fatal("oops");
+
+        if (replace) map_set_ptr(seen, &mono, sizeof(tl_monotype *), replace);
+
+        if (replace && did_replace) {
+            return replace->type;
+        } else {
+            return null;
+        }
+
+    } break;
 
     case tl_arrow:
     case tl_tuple: {
@@ -3069,8 +3032,19 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 static void update_types_one_type(tl_infer *self, tl_polytype **poly) {
     if (!poly || !*poly) return; // not all ast nodes will have types
 
-    tl_monotype *replace = tl_infer_update_specialized_type(self, (*poly)->type);
-    if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
+    // Don't try to specialize type schemes
+    if (tl_polytype_is_scheme(*poly)) return;
+
+    int tries = 10;
+    while (tries--) {
+        int          did_replace = 1;
+        tl_monotype *replace     = tl_infer_update_specialized_type(self, (*poly)->type);
+        if (replace) *poly = tl_polytype_absorb_mono(self->arena, replace);
+        else did_replace = 0;
+
+        if (!did_replace) break;
+    }
+    if (-1 == tries) fatal("loop exhausted");
 }
 
 static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
