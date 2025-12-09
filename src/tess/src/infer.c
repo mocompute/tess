@@ -2514,10 +2514,17 @@ static str next_variable_name(tl_infer *self) {
 }
 
 static str next_instantiation(tl_infer *self, str name) {
-    char buf[128];
-    // FIXME check for buffer overflow
-    snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
-    return str_init(self->arena, buf);
+    if (str_len(name) < 128 - 24) {
+        char buf[128];
+        snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
+        return str_init(self->arena, buf);
+    } else {
+        char *buf = alloc_malloc(self->transient, str_len(name) + 24);
+        snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
+        str out = str_init(self->arena, buf);
+        alloc_free(self->transient, buf);
+        return out;
+    }
 }
 
 static void cancel_last_instantiation(tl_infer *self) {
