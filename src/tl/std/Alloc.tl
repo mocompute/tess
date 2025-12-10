@@ -12,13 +12,11 @@ Allocator : {
   free:    (a: Ptr(Allocator), p: Ptr(any))            -> Void,
 }
 
-
 Context : {
   transient: Ptr(Allocator),
   periodic:  Ptr(Allocator),
   managed:   Ptr(Allocator),
 }
-
 
 
 align     (n: CSize, alignment: CSize) -> CSize
@@ -52,10 +50,7 @@ align_max(n: CSize) {
   align(n, _tl_sizeof_(c_max_align_t)) // must use intrinsic due to C typedef
 }
 
-
-
-
-
+// -- wrappers around stdlib allocator --
 
 _malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
 _calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
@@ -91,18 +86,25 @@ context := Context(
 )
 
 
-// module_init() {
-//   context = Context(
-//     transient = _transient.&,
-//     periodic  = _transient.&,
-//     managed   = _transient.&
-//   )
-// }
-
-
 // -- transient --
+
+// FIXME: these all use stdlib allocator for now, until we have a bump allocator
 
 transient         (sz)      { context.transient->malloc(context.transient, sz)      }
 clear_transient   (num, sz) { context.transient->calloc(context.transient, num, sz) }
 realloc_transient (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
 free_transient    (p)       { context.transient->free(context.transient, p)         }
+
+// -- periodic --
+
+periodic          (sz)      { context.periodic->malloc(context.periodic, sz)        }
+clear_periodic    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
+realloc_periodic  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
+free_periodic     (p)       { context.periodic->free(context.periodic, p)           }
+
+// -- managed --
+
+managed           (sz)      { context.managed->malloc(context.managed, sz)          }
+clear_managed     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
+realloc_managed   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
+free_managed      (p)       { context.managed->free(context.managed, p)             }
