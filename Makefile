@@ -97,4 +97,223 @@ install: $(TESS_EXE)
 	@mkdir -p $(INSTALL_LIB)/std
 	cd src/tl/std && find . -name '*.tl' -exec install -D -m 644 {} $(CURDIR)/$(INSTALL_LIB)/{} \;
 
-.PHONY: all clean install
+
+# C-level mos tests
+MOS_TESTS = alloc array map sexp str types util
+
+MOS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
+
+# Pattern rule: compile mos C test to executable
+$(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+
+# Build all mos tests
+build-mos-tests: $(MOS_TEST_EXES)
+
+# Run mos tests
+test-mos: build-mos-tests
+	@failed=0; \
+	for test in $(MOS_TEST_EXES); do \
+		name=$$(basename $$test); \
+		if $$test; then \
+			echo "PASS: $$name"; \
+		else \
+			echo "FAIL: $$name"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	if [ $$failed -gt 0 ]; then \
+		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		exit 1; \
+	fi; \
+	echo "\033[1;32m✅ All mos tests passed\033[0m"
+
+
+
+# C-level tess tests
+TESS_TESTS = tess type_v2
+
+TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
+
+# Pattern rule: compile C test to executable
+$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+
+# Build all C tests
+build-tess-tests: $(TESS_TEST_EXES)
+
+# Run C tests
+test-tess: build-tess-tests
+	@failed=0; \
+	for test in $(TESS_TEST_EXES); do \
+		name=$$(basename $$test); \
+		if $$test; then \
+			echo "PASS: $$name"; \
+		else \
+			echo "FAIL: $$name"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	if [ $$failed -gt 0 ]; then \
+		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		exit 1; \
+	fi; \
+	echo "\033[1;32m✅ All C tests passed\033[0m"
+
+
+
+
+# Test directories
+TL_TEST_DIR = $(TESS_SRC_DIR)/tl
+TL_STD_DIR = src/tl/std
+TL_BUILD_DIR = $(BUILD_DIR)/tl
+
+# List of tesslang tests (without test_ prefix and .tl suffix)
+TL_TESTS = \
+	address_of \
+	alloc_align \
+	alloc_allocators \
+	anon_lambda \
+	apply_generic \
+	apply_generic_through_pointer \
+	apply_lambda \
+	arithmetic_unary_op \
+	array_index_binary_op \
+	atexit \
+	_Exit \
+	binop \
+	c_div \
+	c_symbol_annotation \
+	c_struct \
+	c_timespec \
+	case_basic_else \
+	case_float \
+	case_pred_ident \
+	case_pred_lambda \
+	cast_string_to_ptr \
+	cast_string_to_ptr_and_index \
+	char_literal \
+	closure_polymorphism \
+	defun_inline_type \
+	dynamic_array \
+	enum_no_module \
+	enum_module \
+	embed_c \
+	if_basic \
+	if_expression \
+	factorial \
+	for_statement_basic \
+	for_statement_module \
+	forward_decl_not_needed \
+	function_pointer_argument \
+	function_pointer_value \
+	function_pointer_in_struct \
+	function_pointer_in_struct_direct \
+	function_pointer_in_struct_direct_2 \
+	generic_lambda \
+	global_variables \
+	lambda_basic \
+	lambda_apply \
+	lambda_immediate \
+	lambda_immediate_type_argument \
+	let_in_basic \
+	malloc_free \
+	malloc_free_is_null \
+	malloc_struct_basic \
+	mapper_basic \
+	mapper_lambda \
+	module_basic \
+	mutual_recursion \
+	mutual_recursion_module \
+	mutual_recursion_module_apply \
+	mutual_recursion_both_referenced \
+	nested_struct_access \
+	nested_lambda_context \
+	number_separators \
+	printf \
+	pointer_array \
+	pointer_cast \
+	pointer_deref \
+	pointer_deref_double \
+	reassign_into_stack_lambda \
+	reassign_result \
+	recursive_type \
+	recursive_type_basic \
+	recursive_type_cycle_3 \
+	recursive_type_generic \
+	recursive_type_mutual \
+	relational_basic \
+	return_statement \
+	scope_shadow \
+	sizeof \
+	sizeof_type_literal \
+	static_init \
+	static_init_struct \
+	static_init_struct_fun_ptr \
+	strcmp \
+	struct_concrete \
+	struct_empty \
+	struct_generic \
+	type_literal_generic \
+	type_arguments_annotations \
+	type_argument_field_annotation \
+	types_float \
+	types_integer \
+	types_integer_cast \
+	union_basic \
+	union_module_intermediate \
+	union_module_second_variant \
+	while_statement \
+	while_update_statement
+
+# Expected build failures
+TL_FAIL_TESTS = \
+	unknown_free_variable
+
+# Generate executable paths
+TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
+
+# Pattern rule: compile .tl to executable
+$(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
+	@mkdir -p $(dir $@)
+	./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $<
+
+
+# ./$(TESS_EXE) exe -I $(TL_TEST_DIR) -I $(TL_STD_DIR) -o $@ $<
+
+# Build all test executables
+build-tl-tests: $(TL_TEST_EXES)
+
+# Run all tests
+test-tl: build-tl-tests
+	@failed=0; \
+	for test in $(TL_TEST_EXES); do \
+		name=$$(basename $$test); \
+		if $$test; then \
+			echo "PASS: $$name"; \
+		else \
+			echo "FAIL: $$name"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	for name in $(TL_FAIL_TESTS); do \
+		if ./$(TESS_EXE) exe -I $(TL_TEST_DIR) -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+			echo "FAIL: $$name (expected build failure)"; \
+			failed=$$((failed + 1)); \
+		else \
+			echo "PASS: $$name (build failed as expected)"; \
+		fi; \
+	done; \
+	if [ $$failed -gt 0 ]; then \
+		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		exit 1; \
+	fi; \
+	echo "\033[1;32m✅ All TL tests passed\033[0m"
+
+
+# Run all tests (C and .tl)
+test: test-mos test-tess test-tl
+
+.PHONY: all clean install test build-mos-tests test-mos build-tess-tests test-tess build-tl-tests test-tl
