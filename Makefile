@@ -2,10 +2,6 @@
 # Tess Language - Makefile
 # ==============================================================================
 
-# ==============================================================================
-# Tess Language - Makefile
-# ==============================================================================
-
 # ------------------------------------------------------------------------------
 # Build Configuration
 # ------------------------------------------------------------------------------
@@ -66,15 +62,15 @@ TL_BUILD_DIR = $(BUILD_DIR)/tl
 # mos Library
 # ------------------------------------------------------------------------------
 
-MOS_SOURCES = \
-	$(MOS_SRC_DIR)/src/alloc.c \
-	$(MOS_SRC_DIR)/src/array.c \
-	$(MOS_SRC_DIR)/src/dbg.c \
-	$(MOS_SRC_DIR)/src/hash.c \
-	$(MOS_SRC_DIR)/src/file.c \
-	$(MOS_SRC_DIR)/src/hashmap.c \
-	$(MOS_SRC_DIR)/src/sexp.c \
-	$(MOS_SRC_DIR)/src/sexp_parser.c \
+MOS_SOURCES =					\
+	$(MOS_SRC_DIR)/src/alloc.c		\
+	$(MOS_SRC_DIR)/src/array.c		\
+	$(MOS_SRC_DIR)/src/dbg.c		\
+	$(MOS_SRC_DIR)/src/hash.c		\
+	$(MOS_SRC_DIR)/src/file.c		\
+	$(MOS_SRC_DIR)/src/hashmap.c		\
+	$(MOS_SRC_DIR)/src/sexp.c		\
+	$(MOS_SRC_DIR)/src/sexp_parser.c	\
 	$(MOS_SRC_DIR)/src/str.c
 
 MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
@@ -88,14 +84,14 @@ $(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
 # tess Library
 # ------------------------------------------------------------------------------
 
-TESS_SOURCES = \
-	$(TESS_SRC_DIR)/src/ast.c \
-	$(TESS_SRC_DIR)/src/error.c \
-	$(TESS_SRC_DIR)/src/parser.c \
-	$(TESS_SRC_DIR)/src/tess.c \
-	$(TESS_SRC_DIR)/src/token.c \
+TESS_SOURCES =				\
+	$(TESS_SRC_DIR)/src/ast.c	\
+	$(TESS_SRC_DIR)/src/error.c	\
+	$(TESS_SRC_DIR)/src/parser.c	\
+	$(TESS_SRC_DIR)/src/tess.c	\
+	$(TESS_SRC_DIR)/src/token.c	\
 	$(TESS_SRC_DIR)/src/tokenizer.c \
-	$(TESS_SRC_DIR)/src/infer.c \
+	$(TESS_SRC_DIR)/src/infer.c	\
 	$(TESS_SRC_DIR)/src/transpile.c \
 	$(TESS_SRC_DIR)/src/type.c
 
@@ -261,104 +257,104 @@ test-tess: build-tess-tests
 # Tesslang (.tl) Tests
 # ------------------------------------------------------------------------------
 
-TL_TESTS = \
-	address_of \
-	alloc_align \
-	alloc_allocators \
-	anon_lambda \
-	apply_generic \
-	apply_generic_through_pointer \
-	apply_lambda \
-	arithmetic_unary_op \
-	array_index_binary_op \
-	atexit \
-	_Exit \
-	binop \
-	c_div \
-	c_symbol_annotation \
-	c_struct \
-	c_timespec \
-	case_basic_else \
-	case_float \
-	case_pred_ident \
-	case_pred_lambda \
-	cast_string_to_ptr \
-	cast_string_to_ptr_and_index \
-	char_literal \
-	closure_polymorphism \
-	defun_inline_type \
-	dynamic_array \
-	enum_no_module \
-	enum_module \
-	embed_c \
-	if_basic \
-	if_expression \
-	factorial \
-	for_statement_basic \
-	for_statement_module \
-	forward_decl_not_needed \
-	function_pointer_argument \
-	function_pointer_value \
-	function_pointer_in_struct \
-	function_pointer_in_struct_direct \
-	function_pointer_in_struct_direct_2 \
-	generic_lambda \
-	global_variables \
-	lambda_basic \
-	lambda_apply \
-	lambda_immediate \
-	lambda_immediate_type_argument \
-	let_in_basic \
-	malloc_free \
-	malloc_free_is_null \
-	malloc_struct_basic \
-	mapper_basic \
-	mapper_lambda \
-	module_basic \
-	mutual_recursion \
-	mutual_recursion_module \
-	mutual_recursion_module_apply \
-	mutual_recursion_both_referenced \
-	nested_struct_access \
-	nested_lambda_context \
-	number_separators \
-	printf \
-	pointer_array \
-	pointer_cast \
-	pointer_deref \
-	pointer_deref_double \
-	reassign_into_stack_lambda \
-	reassign_result \
-	recursive_type \
-	recursive_type_basic \
-	recursive_type_cycle_3 \
-	recursive_type_generic \
-	recursive_type_mutual \
-	relational_basic \
-	return_statement \
-	scope_shadow \
-	sizeof \
-	sizeof_type_literal \
-	static_init \
-	static_init_struct \
-	static_init_struct_fun_ptr \
-	strcmp \
-	struct_concrete \
-	struct_empty \
-	struct_generic \
-	type_literal_generic \
-	type_arguments_annotations \
-	type_argument_field_annotation \
-	types_float \
-	types_integer \
-	types_integer_cast \
-	union_basic \
-	union_module_intermediate \
-	union_module_second_variant \
-	while_statement \
+TL_TESTS =					\
+	address_of				\
+	alloc_align				\
+	alloc_allocators			\
+	anon_lambda				\
+	apply_generic				\
+	apply_generic_through_pointer		\
+	apply_lambda				\
+	arithmetic_unary_op			\
+	array_index_binary_op			\
+	atexit					\
+	_Exit					\
+	binop					\
+	c_div					\
+	c_symbol_annotation			\
+	c_struct				\
+	c_timespec				\
+	case_basic_else				\
+	case_float				\
+	case_pred_ident				\
+	case_pred_lambda			\
+	cast_string_to_ptr			\
+	cast_string_to_ptr_and_index		\
+	char_literal				\
+	closure_polymorphism			\
+	defun_inline_type			\
+	dynamic_array				\
+	enum_no_module				\
+	enum_module				\
+	embed_c					\
+	if_basic				\
+	if_expression				\
+	factorial				\
+	for_statement_basic			\
+	for_statement_module			\
+	forward_decl_not_needed			\
+	function_pointer_argument		\
+	function_pointer_value			\
+	function_pointer_in_struct		\
+	function_pointer_in_struct_direct	\
+	function_pointer_in_struct_direct_2	\
+	generic_lambda				\
+	global_variables			\
+	lambda_basic				\
+	lambda_apply				\
+	lambda_immediate			\
+	lambda_immediate_type_argument		\
+	let_in_basic				\
+	malloc_free				\
+	malloc_free_is_null			\
+	malloc_struct_basic			\
+	mapper_basic				\
+	mapper_lambda				\
+	module_basic				\
+	mutual_recursion			\
+	mutual_recursion_module			\
+	mutual_recursion_module_apply		\
+	mutual_recursion_both_referenced	\
+	nested_struct_access			\
+	nested_lambda_context			\
+	number_separators			\
+	printf					\
+	pointer_array				\
+	pointer_cast				\
+	pointer_deref				\
+	pointer_deref_double			\
+	reassign_into_stack_lambda		\
+	reassign_result				\
+	recursive_type				\
+	recursive_type_basic			\
+	recursive_type_cycle_3			\
+	recursive_type_generic			\
+	recursive_type_mutual			\
+	relational_basic			\
+	return_statement			\
+	scope_shadow				\
+	sizeof					\
+	sizeof_type_literal			\
+	static_init				\
+	static_init_struct			\
+	static_init_struct_fun_ptr		\
+	strcmp					\
+	struct_concrete				\
+	struct_empty				\
+	struct_generic				\
+	type_literal_generic			\
+	type_arguments_annotations		\
+	type_argument_field_annotation		\
+	types_float				\
+	types_integer				\
+	types_integer_cast			\
+	union_basic				\
+	union_module_intermediate		\
+	union_module_second_variant		\
+	while_statement				\
 	while_update_statement
 
-TL_FAIL_TESTS = \
+TL_FAIL_TESTS =					\
 	unknown_free_variable
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
@@ -382,7 +378,7 @@ test-tl: build-tl-tests
 		fi; \
 	done; \
 	for name in $(TL_FAIL_TESTS); do \
-		if ./$(TESS_EXE) exe -I $(TL_TEST_DIR) -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			echo "FAIL: $$name (expected build failure)"; \
 			failed=$$((failed + 1)); \
 		else \
