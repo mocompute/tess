@@ -2,18 +2,46 @@
 # Tess Language - Makefile
 # ==============================================================================
 
+# ==============================================================================
+# Tess Language - Makefile
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Build Configuration
+# ------------------------------------------------------------------------------
+
+CONFIG ?= release
+
+ifeq ($(CONFIG),release)
+  CFLAGS_CONFIG = -O2 -DNDEBUG
+  LDFLAGS_CONFIG =
+  BUILD_DIR = build-release
+else ifeq ($(CONFIG),debug)
+  CFLAGS_CONFIG = -O0 -g -DDEBUG
+  LDFLAGS_CONFIG =
+  BUILD_DIR = build-debug
+else ifeq ($(CONFIG),asan)
+  CFLAGS_CONFIG = -O0 -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer
+  LDFLAGS_CONFIG = -fsanitize=address,undefined
+  BUILD_DIR = build-asan
+else
+  $(error Unknown CONFIG: $(CONFIG). Valid options: release, debug, asan)
+endif
+
 # ------------------------------------------------------------------------------
 # Compiler and Flags
 # ------------------------------------------------------------------------------
 
 CC     ?= cc
-CFLAGS ?= -O2 -DNDEBUG
+CFLAGS ?= $(CFLAGS_CONFIG)
 CFLAGS += -std=gnu11 -fPIE
 CFLAGS += -Werror -Wall -Wextra -Wswitch-enum -Wunused -Winline -Wimplicit-fallthrough
 CFLAGS += -Wno-gnu-alignof-expression
 
 CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
 LDFLAGS ?=
+LDFLAGS += $(LDFLAGS_CONFIG)
+
 
 # ------------------------------------------------------------------------------
 # Directories
@@ -23,7 +51,6 @@ MOS_SRC_DIR  = src/mos
 MOS_INC_DIR  = $(MOS_SRC_DIR)/include
 TESS_SRC_DIR = src/tess
 TESS_INC_DIR = $(TESS_SRC_DIR)/include
-BUILD_DIR    = build-release
 
 # Installation
 PREFIX      ?= /usr/local
@@ -160,6 +187,9 @@ install: $(TESS_EXE)
 
 clean:
 	rm -rf $(BUILD_DIR) $(TESS_EXE)
+
+cleanall:
+	rm -rf build-release build-debug build-asan $(TESS_EXE)
 
 # ==============================================================================
 # Tests
@@ -390,7 +420,7 @@ test:
 # Phony Targets
 # ------------------------------------------------------------------------------
 
-.PHONY: all clean install test
+.PHONY: all clean cleanall install test
 .PHONY: build-mos-tests test-mos
 .PHONY: build-tess-tests test-tess
 .PHONY: build-tl-tests test-tl
