@@ -1359,6 +1359,12 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             // Note: special case: mangle Module.foo and Module.bar() to simple expressions
             if (maybe_mangle_binop(self, op, &left, right)) continue;
 
+            // Note: special case: unmangle right hand side symbol following struct access operator
+            char const *op_c = str_cstr(&op->symbol.name);
+            if (is_struct_access_operator(op_c)) {
+                unmangle_name(self, right);
+            }
+
             // Note: special case: [ as binary operator, need to close it with ] token
             if (0 == str_cmp_c(op->symbol.name, "["))
                 if (a_try(self, a_close_square)) return null;

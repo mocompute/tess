@@ -1406,12 +1406,17 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
     // Note: special case: the address-of operator is special because its operand must not be evaluated
     // in the usual way.
     if (str_eq(op, S("&"))) {
-        str res          = next_res(self);
+        str res  = next_res(self);
 
-        int save         = ctx->want_lvalue;
-        ctx->want_lvalue = 1;
-        str operand      = generate_expr(self, null, node->unary_op.operand, ctx);
-        ctx->want_lvalue = save;
+        int save = 0;
+        if (ctx) {
+            save             = ctx->want_lvalue;
+            ctx->want_lvalue = 1;
+        }
+        str operand = generate_expr(self, null, node->unary_op.operand, ctx);
+        if (ctx) {
+            ctx->want_lvalue = save;
+        }
 
         generate_decl(self, res, type);
         generate_assign_lhs(self, res);
@@ -1423,7 +1428,7 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 
     str operand = generate_expr(self, null, node->unary_op.operand, ctx);
 
-    if (!ctx->want_lvalue) {
+    if (!ctx || !ctx->want_lvalue) {
         str res = next_res(self);
         if (!is_nil_result(type)) {
             generate_decl(self, res, type);

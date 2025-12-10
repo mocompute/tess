@@ -17,7 +17,7 @@
 #include <stdio.h>
 
 #define DEBUG_RESOLVE 0
-#define DEBUG_RENAME  0
+#define DEBUG_RENAME  1
 
 typedef struct {
     enum tl_error_tag tag;
@@ -83,6 +83,11 @@ typedef struct {
 } traverse_ctx;
 
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);
+
+typedef struct {
+    hashmap *lex;
+    int      is_field;
+} rename_variables_ctx;
 
 static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
 
@@ -541,7 +546,7 @@ static void ensure_tv(tl_infer *self, tl_polytype **type) {
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static void         rename_variables(tl_infer *, ast_node *, hashmap **, int);
+static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static str          specialize_fun(tl_infer *, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
@@ -560,8 +565,8 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
     name->symbol.annotation      = null;
 
     // rename variables: also erases type information
-    hashmap *rename_lex = map_new(self->transient, str, str, 16);
-    rename_variables(self, clone, &rename_lex, 0);
+    rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+    rename_variables(self, clone, &ctx, 0);
 
     return clone;
 }
@@ -2188,7 +2193,7 @@ static str next_variable_name(tl_infer *);
 // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
 // preserving lexical scope. This simplifies later passes by removing name collision concerns.
 
-static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
+static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
     // For toplevel definitions, rename them and keep them in lexical scope.
     if (!ast_node_is_let_in(node)) return;
 
@@ -2204,10 +2209,10 @@ static void rename_let_in(tl_infer *self, ast_node *node, hashmap **lex) {
         str_buf(&node->let_in.name->symbol.name));
 #endif
 
-    str_map_set(lex, name, &newvar);
+    str_map_set(&ctx->lex, name, &newvar);
 }
 
-static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int level) {
+static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
     // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
     // that must remain in lexical scope throughout the program.
 
@@ -2219,15 +2224,15 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
     switch (node->tag) {
 
     case ast_if_then_else:
-        rename_variables(self, node->if_then_else.condition, lex, level + 1);
-        rename_variables(self, node->if_then_else.yes, lex, level + 1);
-        rename_variables(self, node->if_then_else.no, lex, level + 1);
+        rename_variables(self, node->if_then_else.condition, ctx, level + 1);
+        rename_variables(self, node->if_then_else.yes, ctx, level + 1);
+        rename_variables(self, node->if_then_else.no, ctx, level + 1);
         break;
 
     case ast_let_in: {
 
         // recurse on value prior to adding name to lexical scope
-        rename_variables(self, node->let_in.value, lex, level + 1);
+        rename_variables(self, node->let_in.value, ctx, level + 1);
 
         hashmap *save = null;
         str      name = node->let_in.name->symbol.name;
@@ -2237,30 +2242,37 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             str newvar = next_variable_name(self);
 
             // establish lexical scope of the let-in binding and recurse
-            save = map_copy(*lex);
-            str_map_set(lex, name, &newvar);
+            save = map_copy(ctx->lex);
+            str_map_set(&ctx->lex, name, &newvar);
 
-            rename_variables(self, node->let_in.name, lex, level + 1);
+            rename_variables(self, node->let_in.name, ctx, level + 1);
         }
 
-        rename_variables(self, node->let_in.body, lex, level + 1);
+        rename_variables(self, node->let_in.body, ctx, level + 1);
 
         // restore prior scope
         if (save) {
-            map_destroy(lex);
-            *lex = save;
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
         }
     } break;
 
     case ast_symbol: {
+
+        // Do not rename symbols found immediately after a struct access
+        if (ctx->is_field) {
+            ctx->is_field = 0;
+            break;
+        }
+
         str *found;
-        if ((found = str_map_get(*lex, node->symbol.name))) {
+        if ((found = str_map_get(ctx->lex, node->symbol.name))) {
             ast_node_name_replace(node, *found);
 #if DEBUG_RENAME
             dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
                 str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
 #endif
-        } else if (node->symbol.is_mangled && (found = str_map_get(*lex, node->symbol.original))) {
+        } else if (node->symbol.is_mangled && (found = str_map_get(ctx->lex, node->symbol.original))) {
             // name was mangled because it conflicts with a toplevel name. But lexical rename is meant to
             // take precedence over mangling to match toplevel names.
             ast_node_name_replace(node, *found);
@@ -2278,12 +2290,12 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
 
         // traverse into annotation too, to support type arguments.
         // Note: keep in sync with ast_let_in arm.
-        rename_variables(self, node->symbol.annotation, lex, level + 1);
+        rename_variables(self, node->symbol.annotation, ctx, level + 1);
     } break;
 
     case ast_lambda_function: {
         // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(*lex);
+        hashmap           *save = map_copy(ctx->lex);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
@@ -2292,19 +2304,23 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             str name   = param->symbol.name;
             str newvar = next_variable_name(self);
             ast_node_name_replace(param, newvar);
-            str_map_set(lex, name, &newvar);
-            rename_variables(self, param, lex, level + 1);
+            str_map_set(&ctx->lex, name, &newvar);
+            rename_variables(self, param, ctx, level + 1);
         }
 
-        rename_variables(self, node->lambda_function.body, lex, level + 1);
+        rename_variables(self, node->lambda_function.body, ctx, level + 1);
 
-        map_destroy(lex);
-        *lex = save;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
     } break;
 
     case ast_let: {
         // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(*lex);
+        hashmap *save = map_copy(ctx->lex);
+
+        if (str_eq(node->let.name->symbol.name, S("Alloc_transient"))) {
+            ;
+        }
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
@@ -2313,93 +2329,96 @@ static void rename_variables(tl_infer *self, ast_node *node, hashmap **lex, int 
             str name   = param->symbol.name;
             str newvar = next_variable_name(self);
             ast_node_name_replace(param, newvar);
-            str_map_set(lex, name, &newvar);
-            rename_variables(self, param, lex, level + 1);
+            str_map_set(&ctx->lex, name, &newvar);
+            rename_variables(self, param, ctx, level + 1);
         }
 
-        rename_variables(self, node->let.body, lex, level + 1);
+        rename_variables(self, node->let.body, ctx, level + 1);
 
         // For the name, just erase its type
         ast_node_type_set(node->let.name, null);
 
-        map_destroy(lex);
-        *lex = save;
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
 
     } break;
 
     case ast_lambda_function_application: {
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex, level + 1);
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, ctx, level + 1);
 
         // establishes scope for lambda body
-        rename_variables(self, node->lambda_application.lambda, lex, level + 1);
+        rename_variables(self, node->lambda_application.lambda, ctx, level + 1);
+
     } break;
 
     case ast_named_function_application: {
-        rename_variables(self, node->named_application.name, lex, level + 1);
+        rename_variables(self, node->named_application.name, ctx, level + 1);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, lex, level + 1);
+
+        while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, ctx, level + 1);
 
     } break;
 
     case ast_tuple: {
         ast_node_sized arr = ast_node_sized_from_ast_array(node);
-        forall(i, arr) rename_variables(self, arr.v[i], lex, level + 1);
+        forall(i, arr) rename_variables(self, arr.v[i], ctx, level + 1);
     } break;
 
     case ast_assignment:
         // Note: no longer rename lhs of assignment, because it is used for named arguments of type
         // constructors. However, the type must be erased, because cloning generic functions relies on
         // rename_variables to erase types.
-        if (!node->assignment.is_field_name) rename_variables(self, node->assignment.name, lex, level + 1);
+        if (!node->assignment.is_field_name) rename_variables(self, node->assignment.name, ctx, level + 1);
         else {
             // Note: however, field names may now be annotated, so the annotations have to be processed.
             // This handles type variables in the field assignment annotation.
             if (ast_node_is_symbol(node->assignment.name))
-                rename_variables(self, node->assignment.name->symbol.annotation, lex, level + 1);
+                rename_variables(self, node->assignment.name->symbol.annotation, ctx, level + 1);
 
             ast_node_type_set(node->assignment.name, null);
         }
 
-        rename_variables(self, node->assignment.value, lex, level + 1);
+        rename_variables(self, node->assignment.value, ctx, level + 1);
         break;
 
     case ast_binary_op: {
-        rename_variables(self, node->binary_op.left, lex, level + 1);
+        rename_variables(self, node->binary_op.left, ctx, level + 1);
 
-        // Note: If op is a struct access operator (. or ->) do not rename the right hand side.
+        // Note: If op is a struct access operator (. or ->), signal it
         char const *op = str_cstr(&node->binary_op.op->symbol.name);
-        if (!is_struct_access_operator(op)) rename_variables(self, node->binary_op.right, lex, level + 1);
+        if (is_struct_access_operator(op)) ctx->is_field = 1;
+        rename_variables(self, node->binary_op.right, ctx, level + 1);
     } break;
 
-    case ast_unary_op: rename_variables(self, node->unary_op.operand, lex, level + 1); break;
+    case ast_unary_op: rename_variables(self, node->unary_op.operand, ctx, level + 1); break;
 
-    case ast_return:   rename_variables(self, node->return_.value, lex, level + 1); break;
+    case ast_return:   rename_variables(self, node->return_.value, ctx, level + 1); break;
 
     case ast_while:
-        rename_variables(self, node->while_.condition, lex, level + 1);
-        rename_variables(self, node->while_.update, lex, level + 1);
-        rename_variables(self, node->while_.body, lex, level + 1);
+        rename_variables(self, node->while_.condition, ctx, level + 1);
+        rename_variables(self, node->while_.update, ctx, level + 1);
+        rename_variables(self, node->while_.body, ctx, level + 1);
         break;
 
     case ast_body:
         //
         forall(i, node->body.expressions) {
-            rename_variables(self, node->body.expressions.v[i], lex, level + 1);
+            rename_variables(self, node->body.expressions.v[i], ctx, level + 1);
         }
         break;
 
     case ast_case:
-        rename_variables(self, node->case_.expression, lex, level + 1);
-        rename_variables(self, node->case_.binary_predicate, lex, level + 1);
+        rename_variables(self, node->case_.expression, ctx, level + 1);
+        rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
         forall(i, node->case_.conditions) {
-            rename_variables(self, node->case_.conditions.v[i], lex, level + 1);
+            rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
         }
         forall(i, node->case_.arms) {
-            rename_variables(self, node->case_.arms.v[i], lex, level + 1);
+            rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
         }
         break;
 
@@ -3174,12 +3193,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names
     // while preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
-        hashmap *lex = map_new(self->transient, str, str, 16);
+        rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
         // rename toplevel let-in symbols and keep them in global lexical scope
-        forall(i, nodes) rename_let_in(self, nodes.v[i], &lex);
+        forall(i, nodes) rename_let_in(self, nodes.v[i], &ctx);
 
         // rename the rest
-        forall(i, nodes) rename_variables(self, nodes.v[i], &lex, 0);
+        ctx = (rename_variables_ctx){.lex = ctx.lex};
+        forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
         arena_reset(self->transient);
     }
 
