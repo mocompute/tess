@@ -12,9 +12,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEFAULT_LOAD_FACTOR 0.70
+#define DEFAULT_LOAD_FACTOR 0.85
+#define WARN_DISTANCE       20
 #define DEFAULT_N_BUCKETS   64
-#define MAX_PROBE_LEN       (1 << 6) - 1
+#define MAX_PROBE_LEN       ((1 << 6) - 1)
 
 static_assert(16 == sizeof(hashmap_entry), "");
 
@@ -136,7 +137,7 @@ static int set_one(hashmap *map, hashmap_entry const *header, byte const *elemen
             dbg("map.c set_one: overflow\n");
             return 1; // overflow
         }
-        if (probe_distance > 16 && !warning_printed) {
+        if (probe_distance > WARN_DISTANCE && !warning_printed) {
             dbg("warning: high probe distance for key: %p, load factor: %f\n",
                 ((hashmap_entry *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
@@ -192,7 +193,7 @@ static int grow_buckets(hashmap **map) {
     // the new map. Then release the old map's buffers, and overwrite
     // its struct with the new map.
 
-    u64 new_buckets = (u64)((*map)->n_cells * 1.618);
+    u64 new_buckets = (u64)((*map)->n_cells * 2);
 
     if (new_buckets > UINT32_MAX) {
         dbg("map grow_buckets: too many buckets\n");
@@ -541,7 +542,7 @@ size_t hset_size(hashmap const *self) {
 }
 
 hashmap *hset_of_str(allocator *alloc, str_sized in) {
-    hashmap *out = hset_create(alloc, (u32)(in.size * DEFAULT_LOAD_FACTOR));
+    hashmap *out = hset_create(alloc, (u32)(in.size / DEFAULT_LOAD_FACTOR));
     forall(i, in) {
         span s = str_span(&in.v[i]);
         hset_insert(&out, s.buf, s.len);
