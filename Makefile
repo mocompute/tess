@@ -1,71 +1,89 @@
+# ==============================================================================
+# Tess Language - Makefile
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Compiler and Flags
+# ------------------------------------------------------------------------------
+
 CC     ?= cc
 CFLAGS ?= -O2 -DNDEBUG
 CFLAGS += -std=gnu11 -fPIE
 CFLAGS += -Werror -Wall -Wextra -Wswitch-enum -Wunused -Winline -Wimplicit-fallthrough
 CFLAGS += -Wno-gnu-alignof-expression
 
-
-# Directories
-MOS_SRC_DIR	= src/mos
-MOS_INC_DIR	= $(MOS_SRC_DIR)/include
-TESS_SRC_DIR	= src/tess
-TESS_INC_DIR	= $(TESS_SRC_DIR)/include
-BUILD_DIR	= build-release
-
-# Installation directories
-PREFIX ?= /usr/local
-INSTALL_BIN = $(DESTDIR)$(PREFIX)/bin
-INSTALL_LIB = $(DESTDIR)$(PREFIX)/lib/tess
-
-# Include paths
-CPPFLAGS        = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
-
-# Linker flags
+CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
 LDFLAGS ?=
 
-# mos library sources
-MOS_SOURCES =					\
-	$(MOS_SRC_DIR)/src/alloc.c		\
-	$(MOS_SRC_DIR)/src/array.c		\
-	$(MOS_SRC_DIR)/src/dbg.c		\
-	$(MOS_SRC_DIR)/src/hash.c		\
-	$(MOS_SRC_DIR)/src/file.c		\
-	$(MOS_SRC_DIR)/src/hashmap.c		\
-	$(MOS_SRC_DIR)/src/sexp.c		\
-	$(MOS_SRC_DIR)/src/sexp_parser.c	\
+# ------------------------------------------------------------------------------
+# Directories
+# ------------------------------------------------------------------------------
+
+MOS_SRC_DIR  = src/mos
+MOS_INC_DIR  = $(MOS_SRC_DIR)/include
+TESS_SRC_DIR = src/tess
+TESS_INC_DIR = $(TESS_SRC_DIR)/include
+BUILD_DIR    = build-release
+
+# Installation
+PREFIX      ?= /usr/local
+INSTALL_BIN  = $(DESTDIR)$(PREFIX)/bin
+INSTALL_LIB  = $(DESTDIR)$(PREFIX)/lib/tess
+
+# Test directories
+TL_TEST_DIR  = $(TESS_SRC_DIR)/tl
+TL_STD_DIR   = src/tl/std
+TL_BUILD_DIR = $(BUILD_DIR)/tl
+
+# ------------------------------------------------------------------------------
+# mos Library
+# ------------------------------------------------------------------------------
+
+MOS_SOURCES = \
+	$(MOS_SRC_DIR)/src/alloc.c \
+	$(MOS_SRC_DIR)/src/array.c \
+	$(MOS_SRC_DIR)/src/dbg.c \
+	$(MOS_SRC_DIR)/src/hash.c \
+	$(MOS_SRC_DIR)/src/file.c \
+	$(MOS_SRC_DIR)/src/hashmap.c \
+	$(MOS_SRC_DIR)/src/sexp.c \
+	$(MOS_SRC_DIR)/src/sexp_parser.c \
 	$(MOS_SRC_DIR)/src/str.c
 
 MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
 
-# tess library sources (excluding tess_embed.c for now)
-TESS_SOURCES =				\
-	$(TESS_SRC_DIR)/src/ast.c	\
-	$(TESS_SRC_DIR)/src/error.c	\
-	$(TESS_SRC_DIR)/src/parser.c	\
-	$(TESS_SRC_DIR)/src/tess.c	\
-	$(TESS_SRC_DIR)/src/token.c	\
+$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
+# tess Library
+# ------------------------------------------------------------------------------
+
+TESS_SOURCES = \
+	$(TESS_SRC_DIR)/src/ast.c \
+	$(TESS_SRC_DIR)/src/error.c \
+	$(TESS_SRC_DIR)/src/parser.c \
+	$(TESS_SRC_DIR)/src/tess.c \
+	$(TESS_SRC_DIR)/src/token.c \
 	$(TESS_SRC_DIR)/src/tokenizer.c \
-	$(TESS_SRC_DIR)/src/infer.c	\
+	$(TESS_SRC_DIR)/src/infer.c \
 	$(TESS_SRC_DIR)/src/transpile.c \
 	$(TESS_SRC_DIR)/src/type.c
 
 TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
 
-# Embedded file handling
-EMBED_TOOL = $(BUILD_DIR)/mos_embed
+$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
+# Embed Tool and Generated Sources
+# ------------------------------------------------------------------------------
+
+EMBED_TOOL     = $(BUILD_DIR)/mos_embed
 TESS_EMBED_SRC = $(BUILD_DIR)/tess_embed.c
 TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
-
-# tess executable
-TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
-TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
-TESS_EXE = tess
-
-# Default target
-all: $(TESS_EXE)
-
-$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
@@ -73,45 +91,64 @@ $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
 $(TESS_EMBED_SRC): $(EMBED_TOOL) $(TESS_SRC_DIR)/embed/std.c
 	$(EMBED_TOOL) $(TESS_SRC_DIR)/embed $(TESS_EMBED_SRC)
 
-$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
-
-$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
-
 $(TESS_EMBED_OBJ): $(TESS_EMBED_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
+# tess Executable
+# ------------------------------------------------------------------------------
+
+TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
+TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
+TESS_EXE     = tess
+
+$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 $(TESS_EXE_OBJ): $(TESS_EXE_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-clean:
-	rm -rf $(BUILD_DIR) $(TESS_EXE)
+# ------------------------------------------------------------------------------
+# Default Target
+# ------------------------------------------------------------------------------
+
+all: $(TESS_EXE)
+
+# ------------------------------------------------------------------------------
+# Installation
+# ------------------------------------------------------------------------------
 
 install: $(TESS_EXE)
 	install -D -m 755 $(TESS_EXE) $(INSTALL_BIN)/$(TESS_EXE)
 	@mkdir -p $(INSTALL_LIB)/std
 	cd src/tl/std && find . -name '*.tl' -exec install -D -m 644 {} $(CURDIR)/$(INSTALL_LIB)/{} \;
 
+# ------------------------------------------------------------------------------
+# Clean
+# ------------------------------------------------------------------------------
 
-# C-level mos tests
-MOS_TESTS = alloc array map sexp str types util
+clean:
+	rm -rf $(BUILD_DIR) $(TESS_EXE)
 
+# ==============================================================================
+# Tests
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# mos Library Tests
+# ------------------------------------------------------------------------------
+
+MOS_TESTS     = alloc array map sexp str types util
 MOS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
 
-# Pattern rule: compile mos C test to executable
 $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
-# Build all mos tests
 build-mos-tests: $(MOS_TEST_EXES)
 
-# Run mos tests
 test-mos: build-mos-tests
 	@failed=0; \
 	for test in $(MOS_TEST_EXES); do \
@@ -129,22 +166,19 @@ test-mos: build-mos-tests
 	fi; \
 	echo "\033[1;32m✅ All mos tests passed\033[0m"
 
+# ------------------------------------------------------------------------------
+# tess Compiler Tests
+# ------------------------------------------------------------------------------
 
-
-# C-level tess tests
-TESS_TESTS = tess type_v2
-
+TESS_TESTS     = tess type_v2
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
-# Pattern rule: compile C test to executable
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
-# Build all C tests
 build-tess-tests: $(TESS_TEST_EXES)
 
-# Run C tests
 test-tess: build-tess-tests
 	@failed=0; \
 	for test in $(TESS_TEST_EXES); do \
@@ -160,17 +194,12 @@ test-tess: build-tess-tests
 		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
 		exit 1; \
 	fi; \
-	echo "\033[1;32m✅ All C tests passed\033[0m"
+	echo "\033[1;32m✅ All tess tests passed\033[0m"
 
+# ------------------------------------------------------------------------------
+# Tesslang (.tl) Tests
+# ------------------------------------------------------------------------------
 
-
-
-# Test directories
-TL_TEST_DIR = $(TESS_SRC_DIR)/tl
-TL_STD_DIR = src/tl/std
-TL_BUILD_DIR = $(BUILD_DIR)/tl
-
-# List of tesslang tests (without test_ prefix and .tl suffix)
 TL_TESTS = \
 	address_of \
 	alloc_align \
@@ -268,25 +297,17 @@ TL_TESTS = \
 	while_statement \
 	while_update_statement
 
-# Expected build failures
 TL_FAIL_TESTS = \
 	unknown_free_variable
 
-# Generate executable paths
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
-# Pattern rule: compile .tl to executable
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $<
 
-
-# ./$(TESS_EXE) exe -I $(TL_TEST_DIR) -I $(TL_STD_DIR) -o $@ $<
-
-# Build all test executables
 build-tl-tests: $(TL_TEST_EXES)
 
-# Run all tests
 test-tl: build-tl-tests
 	@failed=0; \
 	for test in $(TL_TEST_EXES); do \
@@ -310,10 +331,34 @@ test-tl: build-tl-tests
 		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
 		exit 1; \
 	fi; \
-	echo "\033[1;32m✅ All TL tests passed\033[0m"
+	echo "\033[1;32m✅ All tl tests passed\033[0m"
 
+# ------------------------------------------------------------------------------
+# Combined Test Target
+# ------------------------------------------------------------------------------
 
-# Run all tests (C and .tl)
-test: test-mos test-tess test-tl
+test:
+	@mos_ok=0; tess_ok=0; tl_ok=0; \
+	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
+	$(MAKE) --no-print-directory test-tess && tess_ok=1; \
+	$(MAKE) --no-print-directory test-tl && tl_ok=1; \
+	echo ""; \
+	echo "=============================================================================="; \
+	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
+		echo "\033[1;32m✅ All test suites passed\033[0m"; \
+	else \
+		[ $$mos_ok -eq 0 ]  && echo "\033[1;31m❌ mos tests failed\033[0m"; \
+		[ $$tess_ok -eq 0 ] && echo "\033[1;31m❌ tess tests failed\033[0m"; \
+		[ $$tl_ok -eq 0 ]   && echo "\033[1;31m❌ tl tests failed\033[0m"; \
+		echo ""; \
+		exit 1; \
+	fi
 
-.PHONY: all clean install test build-mos-tests test-mos build-tess-tests test-tess build-tl-tests test-tl
+# ------------------------------------------------------------------------------
+# Phony Targets
+# ------------------------------------------------------------------------------
+
+.PHONY: all clean install test
+.PHONY: build-mos-tests test-mos
+.PHONY: build-tess-tests test-tess
+.PHONY: build-tl-tests test-tl
