@@ -1,38 +1,55 @@
 #module main
 #import <stdlib.tl>
 
-T(a) : {
-  v:            Ptr(a),
+
+// A generic type definition
+Arr(T) : {
+  v:            Ptr(T),
   size:         Int,
   capacity:     Int,
 }
 
-map(f: (a) -> b, arr: T(a)) -> T(b)
+// Annotation not required, but can be good for documentation: f is a function pointer (noted by the
+// presence of the arrow `->` operator), which takes an arbitrary type `T` and returns an arbitrary type `U`
+// (which may or may not differ from `T`).
+// map(f: (T) -> U, arr: Arr(T)) -> Arr(U)
 
-map(f: (a) -> b, arr: T(a)) {
-  out_p : Ptr(b) := c_malloc(sizeof(b) * arr.size)
-  out := T(v = out_p, size = arr.size, capacity = arr.size)
+map(f, arr) {
+  // out_p must be annotated as a `Ptr(U)`, allowing `U` to be inferred as a type argument.
+  out_p : Ptr(U) := c_malloc(sizeof(U) * arr.size)
 
+  // Construct an Arr object on the stack
+  out := Arr(v = out_p, size = arr.size, capacity = arr.size)
+
+  // Iteration is with `while`, with an optional `, expr` update expression (note the comma) which activates
+  // at the end of the loop. `continue` is supported with the same semantics as C. Collections can also
+  // provide custom iteration functions which can be access with a `for` statement.
   i := 0
-  while i < arr.size {
-    mapped := f(arr.v[i])
-    out.v[i] = mapped
-    i = i + 1
+  while i < arr.size, i = i + 1 {
+    out.v[i] = f(arr.v[i])
   }
+
+  // the value of the final expression is the return value. In this case, the struct will be copied to the
+  // caller's stack frame (potentially optimized).
   out
 }
 
 main() {
 
-  vals := T(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+  // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
+  // them uninitialised, shown here for the purpose of an example.
+  vals := Arr(v = c_malloc(sizeof(Int) * 4), size = void, capacity = 4)
+  vals.size = 4
 
+  // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
+  // a field or indexed location as below).
   vals.v[0] = 0
   vals.v[1] = 1
   vals.v[2] = 2
   vals.v[3] = 3
-  vals.size = 4
 
-  res := map((x) { x + 1 }, vals)
+  // A lambda function is parsed as `(...) { ... }`, that is, a set of parameters and a body.
+  res := map( (x) { x + 1 }, vals )
 
   // verify that map does not mutate its argument
   sum := 0
