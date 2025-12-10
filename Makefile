@@ -54,7 +54,8 @@ MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
 
 $(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(MSG_CC) $<
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
 # tess Library
@@ -75,7 +76,8 @@ TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURC
 
 $(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(MSG_CC) $<
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
 # Embed Tool and Generated Sources
@@ -86,14 +88,17 @@ TESS_EMBED_SRC = $(BUILD_DIR)/tess_embed.c
 TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
 
 $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 $(TESS_EMBED_SRC): $(EMBED_TOOL) $(TESS_SRC_DIR)/embed/std.c
-	$(EMBED_TOOL) $(TESS_SRC_DIR)/embed $(TESS_EMBED_SRC)
+	$(MSG_GEN) $<
+	$(Q)$(EMBED_TOOL) $(TESS_SRC_DIR)/embed $(TESS_EMBED_SRC) $(STDERR)
 
 $(TESS_EMBED_OBJ): $(TESS_EMBED_SRC)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(MSG_CC) $<
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
 # tess Executable
@@ -104,11 +109,35 @@ TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
 TESS_EXE     = tess
 
 $(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 $(TESS_EXE_OBJ): $(TESS_EXE_SRC)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(MSG_CC) $<
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
+# Output Control
+# ------------------------------------------------------------------------------
+
+V ?= 0
+ifeq ($(V),0)
+  Q = @
+  STDERR    = >/dev/null 2>&1
+  MSG_CC    = @printf "  \033[1;34m[CC]\033[0m     %s\n"
+  MSG_LD    = @printf "  \033[1;32m[LD]\033[0m     %s\n"
+  MSG_GEN   = @printf "  \033[1;33m[GEN]\033[0m    %s\n"
+  MSG_TEST  = @printf "  \033[1;35m[TEST]\033[0m   %s\n"
+else
+  Q =
+  STDERR    =
+  MSG_CC    = @printf "  [CC]     %s\n"
+  MSG_LD    = @printf "  [LD]     %s\n"
+  MSG_GEN   = @printf "  [GEN]    %s\n"
+  MSG_TEST  = @printf "  [TEST]   %s\n"
+endif
+
 
 # ------------------------------------------------------------------------------
 # Default Target
@@ -145,7 +174,8 @@ MOS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
 
 $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 build-mos-tests: $(MOS_TEST_EXES)
 
@@ -153,7 +183,7 @@ test-mos: build-mos-tests
 	@failed=0; \
 	for test in $(MOS_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test; then \
+		if $$test $(STDERR); then \
 			echo "PASS: $$name"; \
 		else \
 			echo "FAIL: $$name"; \
@@ -175,7 +205,8 @@ TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 build-tess-tests: $(TESS_TEST_EXES)
 
@@ -183,7 +214,7 @@ test-tess: build-tess-tests
 	@failed=0; \
 	for test in $(TESS_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test; then \
+		if $$test $(STDERR); then \
 			echo "PASS: $$name"; \
 		else \
 			echo "FAIL: $$name"; \
@@ -304,7 +335,8 @@ TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
-	./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $<
+	$(MSG_GEN) $@
+	$(Q)./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $<
 
 build-tl-tests: $(TL_TEST_EXES)
 
@@ -312,7 +344,7 @@ test-tl: build-tl-tests
 	@failed=0; \
 	for test in $(TL_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test; then \
+		if $$test $(STDERR); then \
 			echo "PASS: $$name"; \
 		else \
 			echo "FAIL: $$name"; \
