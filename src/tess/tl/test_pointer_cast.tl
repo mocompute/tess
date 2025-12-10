@@ -18,4 +18,6 @@ main() {
   // double dereference
   val := pp.*.*
   val - data
+
+  // FIXME: this test does not test pointer cast because it needs endian detection first
 }

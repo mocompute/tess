@@ -1028,7 +1028,24 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             } else if (tl_monotype_is_concrete(type)) {
                 if (should_assign_result(ctx, type)) {
                     generate_decl(self, name, type);
-                    if (!ast_node_is_nil_or_void(node->let_in.value)) generate_assign(self, name, value);
+
+                    // Note: special case: if we are assigning to a pointer type, cast the rhs to that type.
+                    // This allows C pointer casts without a warning.
+                    if (!ast_node_is_nil_or_void(node->let_in.value)) {
+                        if (tl_monotype_is_ptr(type)) {
+                            cat(self, name);
+                            cat_assign(self);
+
+                            cat_open_round(self);
+                            cat(self, type_to_c_mono(self, type));
+                            cat_close_round(self);
+
+                            cat(self, value);
+                            cat_semicolonln(self);
+                        } else {
+                            generate_assign(self, name, value);
+                        }
+                    }
                 }
             } else {
                 // Note: do not emit values that are not concrete. These can come out of type inference if
