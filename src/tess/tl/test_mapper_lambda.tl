@@ -39,33 +39,34 @@ main() {
   // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
   // them uninitialised, shown here for the purpose of an example.
   vals := Arr(v = c_malloc(sizeof(Int) * 4), size = void, capacity = 4)
-  vals.size = 4
 
   // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
-  // a field or indexed location as below).
+  // a field or indexed location).
+  vals.size = 4
   vals.v[0] = 0
   vals.v[1] = 1
   vals.v[2] = 2
   vals.v[3] = 3
 
-  // A lambda function is parsed as `(...) { ... }`, that is, a set of parameters and a body.
+  // A lambda function is parsed as `(...) { ... }`, that is, a set of 0 or more parameters and a body.
   res := map( (x) { x + 1 }, vals )
 
-  // verify that map does not mutate its argument
-  sum := 0
-  i := 0
+  // Verify that map does not mutate its argument. Note that statements need not be separated by a newline,
+  // any whitespace will do, or optional commas may be used.
+  sum := 0, i := 0
   while i < vals.size, i = i + 1 {
     sum = sum + vals.v[i]
   }
   c_assert(sum == 6)
 
   // verify that map returns an array with mapped values
-  sum := 0
-  i := 0
+  sum := 0, i := 0
   while i < vals.size, i = i + 1 {
     sum = sum + res.v[i]
   }
   c_assert(sum == 10)
 
   sum - 10
+
+  // The two c_malloc'd buffers are leaked here.
 }
