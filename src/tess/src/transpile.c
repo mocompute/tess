@@ -445,7 +445,7 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     if (ctx && str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
     {
         // generate reference through context
-        return str_cat(self->transient, S("*tl_ctx->"), name);
+        return str_cat_4(self->transient, S("("), S("*tl_ctx->"), name, S(")"));
     } else {
         if (useful_name(original_name, name)) {
             // TODO: put this behind an option
