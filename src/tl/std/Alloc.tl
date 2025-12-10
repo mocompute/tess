@@ -14,7 +14,7 @@ Allocator : {
 
 
 Context : {
-  trans: Ptr(Allocator),
+  transient: Ptr(Allocator),
   periodic:  Ptr(Allocator),
   managed:   Ptr(Allocator),
 }
@@ -85,7 +85,7 @@ _managed := Allocator(
 )
 
 context := Context(
-  trans = _transient.&,
+  transient = _transient.&,
   periodic  = _periodic.&,
   managed   = _managed.&
 )
@@ -102,8 +102,7 @@ context := Context(
 
 // -- transient --
 
-transient(sz: CSize) { context.trans->malloc(sz) }
-
-// clear_transient   (num: CSize,  sz: CSize) -> Ptr(any)
-// realloc_transient (p: Ptr(any), sz: CSize) -> Ptr(any)
-// free_transient    (p: Ptr(any))            -> Void
+transient         (sz)      { context.transient->malloc(context.transient, sz)      }
+clear_transient   (num, sz) { context.transient->calloc(context.transient, num, sz) }
+realloc_transient (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
+free_transient    (p)       { context.transient->free(context.transient, p)         }
