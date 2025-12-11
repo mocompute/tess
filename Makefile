@@ -59,6 +59,28 @@ TL_STD_DIR   = src/tl/std
 TL_BUILD_DIR = $(BUILD_DIR)/tl
 
 # ------------------------------------------------------------------------------
+# Output Control
+# ------------------------------------------------------------------------------
+
+V ?= 0
+ifeq ($(V),0)
+  Q = @
+  STDERR    = >/dev/null 2>&1
+else
+  Q =
+  STDERR    =
+endif
+
+MSG_CC    = @printf "  \033[1;34m[CC]\033[0m     %s\n"
+MSG_LD    = @printf "  \033[1;32m[LD]\033[0m     %s\n"
+MSG_GEN   = @printf "  \033[1;33m[GEN]\033[0m    %s\n"
+MSG_TEST  = printf  "  \033[1;35m[TEST]\033[0m   %s\n"
+MSG_FAIL  = printf  "  \033[1;31m[FAIL]\033[0m   %s\n"
+MSG_PASS  = printf  "  \033[1;32m[PASS]   %s\033[0m\n"
+MSG_FAIL2 = printf  "  \033[1;31m[FAIL]   %s (expected build failure)\033[0m\n"
+
+
+# ------------------------------------------------------------------------------
 # mos Library
 # ------------------------------------------------------------------------------
 
@@ -140,27 +162,6 @@ $(TESS_EXE_OBJ): $(TESS_EXE_SRC)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-# ------------------------------------------------------------------------------
-# Output Control
-# ------------------------------------------------------------------------------
-
-V ?= 0
-ifeq ($(V),0)
-  Q = @
-  STDERR    = >/dev/null 2>&1
-  MSG_CC    = @printf "  \033[1;34m[CC]\033[0m     %s\n"
-  MSG_LD    = @printf "  \033[1;32m[LD]\033[0m     %s\n"
-  MSG_GEN   = @printf "  \033[1;33m[GEN]\033[0m    %s\n"
-  MSG_TEST  = @printf "  \033[1;35m[TEST]\033[0m   %s\n"
-else
-  Q =
-  STDERR    =
-  MSG_CC    = @printf "  [CC]     %s\n"
-  MSG_LD    = @printf "  [LD]     %s\n"
-  MSG_GEN   = @printf "  [GEN]    %s\n"
-  MSG_TEST  = @printf "  [TEST]   %s\n"
-endif
-
 
 # ------------------------------------------------------------------------------
 # Default Target
@@ -209,18 +210,19 @@ test-mos: build-mos-tests
 	@failed=0; \
 	for test in $(MOS_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test $(STDERR); then \
-			printf "PASS: $$name\n"; \
-		else \
-			printf "FAIL: $$name\n"; \
+		$(MSG_TEST) $$name; \
+		if ! $$test $(STDERR); then \
+			printf "  \033[1;31m[FAIL] $$name\033[0m\n"; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
+		printf "  \033[1;31m[FAIL] $$failed mos test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	printf "\033[1;32m✅ All mos tests passed\033[0m\n"
+	printf "\n" ; \
+	$(MSG_PASS) "All mos tests passed"; \
+	printf "\n"
 
 # ------------------------------------------------------------------------------
 # tess Compiler Tests
@@ -240,18 +242,19 @@ test-tess: build-tess-tests
 	@failed=0; \
 	for test in $(TESS_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test $(STDERR); then \
-			printf "PASS: $$name\n"; \
-		else \
-			printf "FAIL: $$name\n"; \
+		$(MSG_TEST) $$name; \
+		if ! $$test $(STDERR); then \
+			$(MSG_FAIL) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
+		printf "  \033[1;31m[FAIL] $$failed tess test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	printf "\033[1;32m✅ All tess tests passed\033[0m\n"
+	printf "\n" ; \
+	$(MSG_PASS) "All tess tests passed"; \
+	printf "\n"
 
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
@@ -362,7 +365,9 @@ TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
-	$(Q)./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $<
+	@if ! ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $< ; then \
+		$(MSG_FAIL) $@; \
+	fi
 
 build-tl-tests: $(TL_TEST_EXES)
 
@@ -370,26 +375,27 @@ test-tl: build-tl-tests
 	@failed=0; \
 	for test in $(TL_TEST_EXES); do \
 		name=$$(basename $$test); \
-		if $$test $(STDERR); then \
-			printf "PASS: $$name\n"; \
-		else \
-			printf "FAIL: $$name\n"; \
+		$(MSG_TEST) $$name; \
+		if ! $$test $(STDERR); then \
+			$(MSG_FAIL) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	for name in $(TL_FAIL_TESTS); do \
+		$(MSG_TEST) $$name; \
 		if ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
-			printf "FAIL: $$name (expected build failure)\n"; \
+			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
-		else \
-			printf "PASS: $$name (build failed as expected)\n"; \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
+		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	printf "\033[1;32m✅ All tl tests passed\033[0m\n"
+	printf "\n"; \
+	$(MSG_PASS) "All TL tests passed"; \
+	printf "\n"
+
 
 # ------------------------------------------------------------------------------
 # Combined Test Target
@@ -403,18 +409,16 @@ test:
 	printf "\n"; \
 	printf "==============================================================================\n"; \
 	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
-		printf "\033[1;32m✅ All test suites passed\033[0m\n"; \
+		printf "\n"; \
+		$(MSG_PASS) "All test suites passed"; \
 	else \
-		[ $$mos_ok -eq 0 ]  && printf "\033[1;31m❌ mos tests failed\033[0m\n"; \
-		[ $$tess_ok -eq 0 ] && printf "\033[1;31m❌ tess tests failed\033[0m\n"; \
-		[ $$tl_ok -eq 0 ]   && printf "\033[1;31m❌ tl tests failed\033[0m\n"; \
+		[ $$mos_ok -eq 0 ]  && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
+		[ $$tess_ok -eq 0 ] && printf "  \033[1;31m[FAIL] tess tests failed\033[0m\n"; \
+		[ $$tl_ok -eq 0 ]   && printf "  \033[1;31m[FAIL] TL tests failed\033[0m\n"; \
 		printf "\n"; \
 		exit 1; \
 	fi
 
-# ------------------------------------------------------------------------------
-# Phony Targets
-# ------------------------------------------------------------------------------
 
 .PHONY: all clean cleanall install test
 .PHONY: build-mos-tests test-mos
