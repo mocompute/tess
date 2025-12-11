@@ -129,10 +129,21 @@ free_managed      (p)       { context.managed->free(context.managed, p)         
 
 // -- BumpAllocator --
 
+_bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any)
+_bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any)
+_bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
+_bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
+
+
 bump_create(alloc: Ptr(Allocator), size: CSize) {
   out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
-  arena->parent = alloc
+  out->parent = alloc
   size := next_power_of_two(size)
+  size = if size == 0 { 16 } else { size }
+  out->allocator.malloc  = _bump_malloc
+  out->allocator.calloc  = _bump_calloc
+  out->allocator.realloc = _bump_realloc
+  out->allocator.free    = _bump_free
   out->allocator.&
 }
 

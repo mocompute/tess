@@ -2665,6 +2665,8 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     // even local let-in-lambda functions are also in the environment, but their names will never clash
     // with function names.
     if (is_arrow || traverse_ctx_is_param(traverse_ctx, node->symbol.name)) {
+        // FIXME: arrow type may exist because of a forward declaration, but function definition may be
+        // missing. Need to report an error.
         ;
     } else {
         // a free variable
