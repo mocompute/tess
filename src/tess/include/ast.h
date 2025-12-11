@@ -204,6 +204,7 @@ nodiscard ast_node *ast_node_create_u64(allocator *, u64) mallocfun;
 nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
 nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_reassignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized, ast_node_sized,
                                          ast_node *) mallocfun;

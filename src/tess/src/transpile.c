@@ -1639,6 +1639,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_binary_op:    return generate_binary_op(self, type, node, ctx);
     case ast_unary_op:     return generate_unary_op(self, type, node, ctx);
 
+    case ast_reassignment:
     case ast_assignment:   return generate_reassignment(self, type, node, ctx);
 
     case ast_arrow:

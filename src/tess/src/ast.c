@@ -118,6 +118,13 @@ ast_node *ast_node_create_assignment(allocator *alloc, ast_node *name, ast_node 
     self->assignment.is_field_name = 0;
     return self;
 }
+ast_node *ast_node_create_reassignment(allocator *alloc, ast_node *name, ast_node *value) {
+    ast_node *self                 = ast_node_create(alloc, ast_reassignment);
+    self->assignment.name          = name;
+    self->assignment.value         = value;
+    self->assignment.is_field_name = 0;
+    return self;
+}
 ast_node *ast_node_create_return(allocator *alloc, ast_node *value, int is_break) {
     ast_node *self                   = ast_node_create(alloc, ast_return);
     self->return_.value              = value;
@@ -236,7 +243,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->right = ast_node_clone(alloc, vorig->right);
     } break;
 
-    case ast_assignment: {
+    case ast_reassignment:
+    case ast_assignment:   {
         struct ast_assignment *vclone = ast_node_assignment(clone),
                               *vorig  = ast_node_assignment((ast_node *)orig);
         vclone->name                  = ast_node_clone(alloc, vorig->name);
@@ -496,6 +504,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         break;
 
     case ast_assignment:
+    case ast_reassignment:
         fun(ctx, node->assignment.name);
         fun(ctx, node->assignment.value);
         break;
@@ -623,6 +632,7 @@ void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
         break;
 
     case ast_assignment:
+    case ast_reassignment:
         node->assignment.name  = fun(ctx, node->assignment.name);
         node->assignment.value = fun(ctx, node->assignment.value);
         break;
@@ -855,29 +865,12 @@ void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
 char const *ast_tag_to_string(ast_tag tag) {
 
     static char const *const strings1[] = {
-      "ast_nil",
-      "ast_hash_command",
-      "ast_arrow",
-      "ast_assignment",
-      "ast_binary_op",
-      "ast_body",
-      "ast_bool",
-      "ast_case",
-      "ast_char",
-      "ast_continue",
-      "ast_ellipsis",
-      "ast_eof",
-      "ast_f64",
-      "ast_i64",
-      "ast_if_then_else",
-      "ast_let_in",
-      "ast_return",
-      "ast_string",
-      "ast_symbol",
-      "ast_type_alias",
-      "ast_u64",
-      "ast_unary_op",
-      "ast_user_type_definition",
+      "ast_nil",          "ast_hash_command", "ast_arrow",        "ast_assignment",
+      "ast_binary_op",    "ast_body",         "ast_bool",         "ast_case",
+      "ast_char",         "ast_continue",     "ast_ellipsis",     "ast_eof",
+      "ast_f64",          "ast_i64",          "ast_if_then_else", "ast_let_in",
+      "ast_reassignment", "ast_return",       "ast_string",       "ast_symbol",
+      "ast_type_alias",   "ast_u64",          "ast_unary_op",     "ast_user_type_definition",
       "ast_while",
     };
 
@@ -1121,6 +1114,10 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" = "),
                          v2_ast_node_to_string(alloc, node->assignment.value));
 
+    case ast_reassignment:
+        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" re= "),
+                         v2_ast_node_to_string(alloc, node->assignment.value));
+
     case ast_eof:
     case ast_tuple: {
         str_build b = str_build_init(alloc, 64);
@@ -1162,7 +1159,7 @@ struct ast_arrow *ast_node_arrow(ast_node *node) {
 }
 
 struct ast_assignment *ast_node_assignment(ast_node *node) {
-    assert(node->tag == ast_assignment);
+    assert(node->tag == ast_assignment || node->tag == ast_reassignment);
     return &node->assignment;
 }
 
@@ -1260,6 +1257,7 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_assignment:
+    case ast_reassignment:
         //
         combine_node(self->assignment.name);
         combine_node(self->assignment.value);
@@ -1444,7 +1442,7 @@ int ast_node_is_lambda_application(ast_node const *self) {
     return ast_lambda_function_application == self->tag;
 }
 int ast_node_is_assignment(ast_node const *self) {
-    return ast_assignment == self->tag;
+    return ast_assignment == self->tag || ast_reassignment == self->tag;
 }
 int ast_node_is_binary_op(ast_node const *self) {
     return ast_binary_op == self->tag;

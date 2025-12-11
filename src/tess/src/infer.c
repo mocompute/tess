@@ -787,6 +787,19 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_reassignment:
+        ctx->node_pos      = npos_assign_lhs;
+        ctx->is_field_name = 0;
+        if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
+
+        ctx->node_pos      = npos_assign_rhs;
+        ctx->is_field_name = 0;
+        if (traverse_ast(self, ctx, node->assignment.value, cb)) return 1;
+
+        ctx->node_pos = npos_operand;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
     case ast_return:
         //
         ctx->node_pos = npos_operand;
@@ -1750,6 +1763,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_assignment:
+    case ast_reassignment:
         if (resolve_node(self, node->assignment.name, traverse_ctx, npos_assign_lhs)) return 1;
         if (resolve_node(self, node->assignment.value, traverse_ctx, npos_assign_rhs)) return 1;
 
@@ -2368,6 +2382,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         forall(i, arr) rename_variables(self, arr.v[i], ctx, level + 1);
     } break;
 
+    case ast_reassignment:
     case ast_assignment:
         // Note: no longer rename lhs of assignment, because it is used for named arguments of type
         // constructors. However, the type must be erased, because cloning generic functions relies on
@@ -2627,6 +2642,8 @@ typedef struct {
 } collect_free_variables_ctx;
 
 static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    if (ast_node_is_binary_op(node)) node = node->binary_op.left;
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
     str name = ast_node_str(node);
@@ -3124,9 +3141,10 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
-    case ast_assignment: ast_node_type_set(node, node->assignment.value->type); break;
+    case ast_reassignment:
+    case ast_assignment:   ast_node_type_set(node, node->assignment.value->type); break;
 
-    case ast_body:       {
+    case ast_body:         {
         u32 n = node->body.expressions.size;
         if (n) ast_node_type_set(node, node->body.expressions.v[n - 1]->type);
     } break;

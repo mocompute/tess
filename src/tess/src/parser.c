@@ -1475,7 +1475,7 @@ static int a_reassignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    ast_node *a = ast_node_create_assignment(self->ast_arena, lval, val);
+    ast_node *a = ast_node_create_reassignment(self->ast_arena, lval, val);
     return result_ast_node(self, a);
 }
 
