@@ -18,6 +18,23 @@ Context : {
   managed:   Ptr(Allocator),
 }
 
+_BumpHeader : {
+  next:     Ptr(_BumpHeader),
+  capacity: CSize,
+  size:     CSize,
+}
+
+_BumpBlock : {
+  size:     CSize,
+}
+
+BumpAllocator : {
+  allocator: Allocator,
+  parent:    Ptr(Allocator),
+  head:      Ptr(_BumpHeader),
+}
+
+//
 
 align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
@@ -108,3 +125,32 @@ managed           (sz)      { context.managed->malloc(context.managed, sz)      
 clear_managed     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
 realloc_managed   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
 free_managed      (p)       { context.managed->free(context.managed, p)             }
+
+
+// -- BumpAllocator --
+
+bump_create(alloc: Ptr(Allocator), size: CSize) {
+  out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
+  arena->parent = alloc
+  size := next_power_of_two(size)
+  out->allocator.&
+}
+
+// Returns: input if already a power of two, or else the next higher
+// power of two.
+next_power_of_two(n: CSize) {
+
+    if n > (c_SIZE_MAX / 2) + 1 {return 0} // overflow
+
+    if (n == 0) {return 1}
+
+    // set all bits to the right of the highest set bit by masking.
+    n = n - 1
+    n = n | (n >> 1)
+    n = n | (n >> 2)
+    n = n | (n >> 4)
+    n = n | (n >> 8)
+    n = n | (n >> 16)
+    n = n | (n >> 32)
+    n + 1
+}

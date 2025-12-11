@@ -573,7 +573,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     switch (self->token.tag) {
     case tok_symbol:
         if (is_arithmetic_operator(self->token.s) || is_logical_operator(self->token.s) ||
-            is_relational_operator(self->token.s)) {
+            is_relational_operator(self->token.s) || is_bitwise_operator(self->token.s)) {
             op = self->token.s;
         } else return 1;
         break;
@@ -588,9 +588,9 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_open_square:  op = "["; break;
     case tok_plus:         op = "+"; break;
     case tok_minus:        op = "-"; break;
+    case tok_bar:          op = "|"; break;
 
     case tok_bang:
-    case tok_bar:
     case tok_comma:
     case tok_c_block:
     case tok_colon:
