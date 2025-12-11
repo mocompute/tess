@@ -74,7 +74,7 @@ endif
 MSG_CC    = @printf "  \033[1;34m[CC]\033[0m     %s\n"
 MSG_LD    = @printf "  \033[1;32m[LD]\033[0m     %s\n"
 MSG_GEN   = @printf "  \033[1;33m[GEN]\033[0m    %s\n"
-MSG_TEST  = printf  "  \033[1;35m[TEST]\033[0m   %s\n"
+MSG_TEST  = printf  "  \033[1;34m[TEST]\033[0m   %s\n"
 MSG_FAIL  = printf  "  \033[1;31m[FAIL]\033[0m   %s\n"
 MSG_PASS  = printf  "  \033[1;32m[PASS]   %s\033[0m\n"
 MSG_FAIL2 = printf  "  \033[1;31m[FAIL]   %s (expected build failure)\033[0m\n"
