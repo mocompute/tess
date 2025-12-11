@@ -493,6 +493,13 @@ static int a_comma(parser *p) {
     return 1;
 }
 
+static int a_dot(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_dot == p->token.tag) return result_ast_str(p, ast_symbol, ".");
+    p->error.tag = tl_err_expected_dot;
+    return 1;
+}
+
 static int a_ellipsis(parser *p) {
     if (next_token(p)) return 1;
     if (tok_ellipsis == p->token.tag) return result_ast_str(p, ast_symbol, "...");
@@ -890,10 +897,8 @@ static int a_type_identifier(parser *self) {
         // Look for module-qualified identifier
         ast_node *ident = self->result;
 
-        if (0 == a_try_int(self, a_binary_operator, INT_MIN)) {
+        if (0 == a_try(self, a_dot)) {
             ast_node *op = self->result;
-
-            if (str_cmp_c(op->symbol.name, ".")) return 1;
 
             // FIXME: recurses, but ellipsis should not be accepted
             if (a_try(self, a_type_identifier)) return 1;
