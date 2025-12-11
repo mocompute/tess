@@ -210,17 +210,17 @@ test-mos: build-mos-tests
 	for test in $(MOS_TEST_EXES); do \
 		name=$$(basename $$test); \
 		if $$test $(STDERR); then \
-			echo "PASS: $$name"; \
+			printf "PASS: $$name\n"; \
 		else \
-			echo "FAIL: $$name"; \
+			printf "FAIL: $$name\n"; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	echo "\033[1;32m✅ All mos tests passed\033[0m"
+	printf "\033[1;32m✅ All mos tests passed\033[0m\n"
 
 # ------------------------------------------------------------------------------
 # tess Compiler Tests
@@ -241,17 +241,17 @@ test-tess: build-tess-tests
 	for test in $(TESS_TEST_EXES); do \
 		name=$$(basename $$test); \
 		if $$test $(STDERR); then \
-			echo "PASS: $$name"; \
+			printf "PASS: $$name\n"; \
 		else \
-			echo "FAIL: $$name"; \
+			printf "FAIL: $$name\n"; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	echo "\033[1;32m✅ All tess tests passed\033[0m"
+	printf "\033[1;32m✅ All tess tests passed\033[0m\n"
 
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
@@ -371,25 +371,25 @@ test-tl: build-tl-tests
 	for test in $(TL_TEST_EXES); do \
 		name=$$(basename $$test); \
 		if $$test $(STDERR); then \
-			echo "PASS: $$name"; \
+			printf "PASS: $$name\n"; \
 		else \
-			echo "FAIL: $$name"; \
+			printf "FAIL: $$name\n"; \
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
 	for name in $(TL_FAIL_TESTS); do \
 		if ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
-			echo "FAIL: $$name (expected build failure)"; \
+			printf "FAIL: $$name (expected build failure)\n"; \
 			failed=$$((failed + 1)); \
 		else \
-			echo "PASS: $$name (build failed as expected)"; \
+			printf "PASS: $$name (build failed as expected)\n"; \
 		fi; \
 	done; \
 	if [ $$failed -gt 0 ]; then \
-		echo "\033[1;31m❌ $$failed test(s) failed\033[0m"; \
+		printf "\033[1;31m❌ $$failed test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
-	echo "\033[1;32m✅ All tl tests passed\033[0m"
+	printf "\033[1;32m✅ All tl tests passed\033[0m\n"
 
 # ------------------------------------------------------------------------------
 # Combined Test Target
@@ -400,15 +400,15 @@ test:
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
 	$(MAKE) --no-print-directory test-tess && tess_ok=1; \
 	$(MAKE) --no-print-directory test-tl && tl_ok=1; \
-	echo ""; \
-	echo "=============================================================================="; \
+	printf "\n"; \
+	printf "==============================================================================\n"; \
 	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
-		echo "\033[1;32m✅ All test suites passed\033[0m"; \
+		printf "\033[1;32m✅ All test suites passed\033[0m\n"; \
 	else \
-		[ $$mos_ok -eq 0 ]  && echo "\033[1;31m❌ mos tests failed\033[0m"; \
-		[ $$tess_ok -eq 0 ] && echo "\033[1;31m❌ tess tests failed\033[0m"; \
-		[ $$tl_ok -eq 0 ]   && echo "\033[1;31m❌ tl tests failed\033[0m"; \
-		echo ""; \
+		[ $$mos_ok -eq 0 ]  && printf "\033[1;31m❌ mos tests failed\033[0m\n"; \
+		[ $$tess_ok -eq 0 ] && printf "\033[1;31m❌ tess tests failed\033[0m\n"; \
+		[ $$tl_ok -eq 0 ]   && printf "\033[1;31m❌ tl tests failed\033[0m\n"; \
+		printf "\n"; \
 		exit 1; \
 	fi
 
