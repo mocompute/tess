@@ -48,6 +48,7 @@ typedef struct ast_node {
         struct ast_assignment {
             struct ast_node *name;
             struct ast_node *value;
+            struct ast_node *op; // defined only for ast_reassignment_op
             int              is_field_name;
         } assignment;
 
@@ -205,6 +206,8 @@ nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
 nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_reassignment_op(allocator *, ast_node *, ast_node *,
+                                                    ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized, ast_node_sized,
                                          ast_node *) mallocfun;

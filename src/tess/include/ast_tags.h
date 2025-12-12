@@ -32,6 +32,7 @@ typedef enum ast_tag : u16 {
     ast_if_then_else,
     ast_let_in,
     ast_reassignment,
+    ast_reassignment_op,
     ast_return,
     ast_string,
     ast_symbol,
@@ -46,6 +47,8 @@ typedef enum ast_tag : u16 {
     ast_let,
     ast_named_function_application,
     ast_tuple,
+
+    // NOTE: update ast_tag_to_string
 
 } ast_tag;
 

@@ -794,6 +794,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         break;
 
     case ast_reassignment:
+    case ast_reassignment_op:
+        // don't traverse op, it's just an operator
         ctx->node_pos      = npos_assign_lhs;
         ctx->is_field_name = 0;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
@@ -1780,6 +1782,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_assignment:
     case ast_reassignment:
+    case ast_reassignment_op:
         if (resolve_node(self, node->assignment.name, traverse_ctx, npos_assign_lhs)) return 1;
         if (resolve_node(self, node->assignment.value, traverse_ctx, npos_assign_rhs)) return 1;
 
@@ -2399,6 +2402,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     } break;
 
     case ast_reassignment:
+    case ast_reassignment_op:
     case ast_assignment:
         // Note: no longer rename lhs of assignment, because it is used for named arguments of type
         // constructors. However, the type must be erased, because cloning generic functions relies on
@@ -3160,9 +3164,10 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
     case ast_reassignment:
-    case ast_assignment:   ast_node_type_set(node, node->assignment.value->type); break;
+    case ast_reassignment_op:
+    case ast_assignment:      ast_node_type_set(node, node->assignment.value->type); break;
 
-    case ast_body:         {
+    case ast_body:            {
         u32 n = node->body.expressions.size;
         if (n) ast_node_type_set(node, node->body.expressions.v[n - 1]->type);
     } break;

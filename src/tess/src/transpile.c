@@ -636,6 +636,14 @@ static void generate_assign(transpile *self, str lhs, str rhs) {
     cat_semicolonln(self);
 }
 
+static void generate_assign_op(transpile *self, str lhs, str rhs, str op) {
+    cat(self, lhs);
+    if (!str_is_empty(op)) cat(self, op);
+    else cat_assign(self);
+    cat(self, rhs);
+    cat_semicolonln(self);
+}
+
 static void generate_assign_field(transpile *self, str lhs, str field, str rhs) {
     cat(self, lhs);
     cat_dot(self);
@@ -1472,9 +1480,13 @@ static str generate_reassignment(transpile *self, tl_monotype *type, ast_node co
     str lhs          = generate_expr(self, null, node->assignment.name, ctx);
     ctx->want_lvalue = save;
 
-    if (!is_nil_result(type)) generate_assign(self, lhs, value);
+    str op           = node->assignment.op ? ast_node_str(node->assignment.op) : str_empty();
+    if (!is_nil_result(type)) generate_assign_op(self, lhs, value, op);
 
-    return value;
+    // Note: if this is an assignment by operation (+=, -=, etc), the value of the expression is the result.
+    // Otherwise, the value of the expression is the right hand side.
+    if (node->assignment.op) return lhs;
+    else return value;
 }
 
 static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
@@ -1622,25 +1634,26 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return generate_expr_symbol(self, type, name, ast_node_name_original(node), ctx);
     }
 
-    case ast_if_then_else: return generate_if_then_else(self, node, ctx);
+    case ast_if_then_else:    return generate_if_then_else(self, node, ctx);
 
-    case ast_return:       return generate_return(self, type, node, ctx);
-    case ast_while:        return generate_while(self, type, node, ctx);
-    case ast_continue:     return generate_continue(self, type, node, ctx);
+    case ast_return:          return generate_return(self, type, node, ctx);
+    case ast_while:           return generate_while(self, type, node, ctx);
+    case ast_continue:        return generate_continue(self, type, node, ctx);
 
-    case ast_nil:          return S("NULL");
-    case ast_void:         return str_empty();
+    case ast_nil:             return S("NULL");
+    case ast_void:            return str_empty();
 
-    case ast_tuple:        return generate_tuple(self, type, node, ctx);
+    case ast_tuple:           return generate_tuple(self, type, node, ctx);
 
-    case ast_body:         return generate_body(self, type, node, ctx);
-    case ast_case:         return generate_case(self, type, node, ctx);
+    case ast_body:            return generate_body(self, type, node, ctx);
+    case ast_case:            return generate_case(self, type, node, ctx);
 
-    case ast_binary_op:    return generate_binary_op(self, type, node, ctx);
-    case ast_unary_op:     return generate_unary_op(self, type, node, ctx);
+    case ast_binary_op:       return generate_binary_op(self, type, node, ctx);
+    case ast_unary_op:        return generate_unary_op(self, type, node, ctx);
 
     case ast_reassignment:
-    case ast_assignment:   return generate_reassignment(self, type, node, ctx);
+    case ast_reassignment_op:
+    case ast_assignment:      return generate_reassignment(self, type, node, ctx);
 
     case ast_arrow:
     case ast_ellipsis:

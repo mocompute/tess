@@ -270,6 +270,7 @@ TL_TESTS =					\
 	apply_lambda				\
 	arithmetic_unary_op			\
 	array_index_binary_op			\
+	assignment_by_op			\
 	atexit					\
 	_Exit					\
 	binop					\

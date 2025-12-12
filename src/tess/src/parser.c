@@ -309,6 +309,16 @@ int is_arithmetic_operator(char const *s) {
     return 0;
 }
 
+int is_assignment_by_operator(char const *s) {
+    static char const *strings[] = {
+      "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "^=", "|=", null,
+    };
+    char const **it = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+    return 0;
+}
+
 int is_relational_operator(char const *s) {
     static char const *strings[] = {
       "<", "<=", "==", "!=", ">=", ">", null,
@@ -571,6 +581,57 @@ static int a_close_square(parser *p) {
     if (tok_close_square == p->token.tag) return result_ast_str(p, ast_symbol, "]");
     p->error.tag = tl_err_expected_close_square;
     return 1;
+}
+
+static int a_assignment_by_operator(parser *self, int min_prec) {
+    if (next_token(self)) return 1;
+
+    char const *op = null;
+    switch (self->token.tag) {
+    case tok_symbol:
+        if (is_assignment_by_operator(self->token.s)) {
+            op = self->token.s;
+        } else return 1;
+        break;
+
+    case tok_bang_equal:
+    case tok_star:
+    case tok_dot:
+    case tok_equal_equal:
+    case tok_logical_and:
+    case tok_arrow:
+    case tok_ampersand:
+    case tok_open_square:
+    case tok_plus:
+    case tok_minus:
+    case tok_bar:
+    case tok_bang:
+    case tok_comma:
+    case tok_c_block:
+    case tok_colon:
+    case tok_colon_equal:
+    case tok_semicolon:
+    case tok_ellipsis:
+    case tok_open_round:
+    case tok_close_round:
+    case tok_open_curly:
+    case tok_close_curly:
+    case tok_close_square:
+    case tok_equal_sign:
+    case tok_invalid:
+    case tok_number:
+    case tok_string:
+    case tok_char:
+    case tok_comment:
+    case tok_hash_command: return 1;
+    }
+
+    if (!op) return 1;
+
+    int prec = operator_precedence(op, 0);
+    if (prec < min_prec) return 1;
+
+    return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
 }
 
 static int a_binary_operator(parser *self, int min_prec) {
@@ -1095,6 +1156,20 @@ static int operator_precedence(char const *op, int is_prefix) {
         int         p;
     };
     static struct item const infix[] = {
+      {"=", 5},
+      {"+=", 5},
+      {"-=", 5},
+      {"*=", 5},
+      {"/=", 5},
+      {"%=", 5},
+
+      // FIXME: these aren't supported by the tokenizer yet
+      {"<<=", 5},
+      {">>=", 5},
+      {"&=", 5},
+      {"^=", 5},
+      {"|=", 5},
+
       {"||", 10},
       {"&&", 20},
       {"|", 30},
@@ -1470,13 +1545,23 @@ static int a_reassignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
-    if (a_try(self, a_equal_sign)) return 1;
+    // TODO: merge these two similar cases
+    if (0 == a_try(self, a_equal_sign)) {
+        ast_node *val = parse_expression(self, INT_MIN);
+        if (!val) return 1;
 
-    ast_node *val = parse_expression(self, INT_MIN);
-    if (!val) return 1;
+        ast_node *a = ast_node_create_reassignment(self->ast_arena, lval, val);
+        return result_ast_node(self, a);
+    } else if (0 == a_try_int(self, a_assignment_by_operator, INT_MIN)) {
+        ast_node *op  = self->result;
 
-    ast_node *a = ast_node_create_reassignment(self->ast_arena, lval, val);
-    return result_ast_node(self, a);
+        ast_node *val = parse_expression(self, INT_MIN);
+        if (!val) return 1;
+
+        ast_node *a = ast_node_create_reassignment_op(self->ast_arena, lval, val, op);
+        return result_ast_node(self, a);
+    }
+    return 1;
 }
 
 static int a_field_assignment(parser *self) {

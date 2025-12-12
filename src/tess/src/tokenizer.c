@@ -157,13 +157,15 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         in_bang,
         in_minus,
+        in_plus,
+        in_star,
+        in_forward_slash,
+        in_percent,
         in_equal,
         in_colon,
         in_dot,
         in_dot_2,
         in_ampersand,
-
-        forward_slash,
 
         start_number,
         start_number_sign,
@@ -222,21 +224,19 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             char const c = next_char(self);
 
             switch (c) {
-            case '=': state = in_equal; break;
-            case '&': state = in_ampersand; break;
-            case '-': state = in_minus; break;
-
-            case '+':
-                replace_token(self->strings, &res, tok_plus);
-                state = stop;
-                continue;
+            case '=':  state = in_equal; break;
+            case '&':  state = in_ampersand; break;
+            case '-':  state = in_minus; break;
+            case '+':  state = in_plus; break;
+            case '*':  state = in_star; break;
+            case '/':  state = in_forward_slash; break;
+            case '%':  state = in_percent; break;
 
             case '"':  state = start_string; continue;
             case '\'': state = start_char; continue;
 
             case '\n': continue;
 
-            case '/':  state = forward_slash; continue;
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
             case '!':  state = in_bang; continue;
@@ -259,11 +259,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case ',':
                 replace_token(self->strings, &res, tok_comma);
-                state = stop;
-                break;
-
-            case '*':
-                replace_token(self->strings, &res, tok_star);
                 state = stop;
                 break;
 
@@ -412,9 +407,73 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 replace_token(self->strings, &res, tok_arrow);
                 state = stop;
                 break;
+            case '=':
+                replace_token_s(self->strings, &res, tok_symbol, "-=");
+                state = stop;
+                break;
             default:
                 reverse_pos(self);
                 replace_token(self->strings, &res, tok_minus);
+                state = stop;
+                break;
+            }
+        } break;
+
+        case in_plus: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_plus);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '=':
+                replace_token_s(self->strings, &res, tok_symbol, "+=");
+                state = stop;
+                break;
+            default:
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_plus);
+                state = stop;
+                break;
+            }
+        } break;
+
+        case in_star: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_star);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '=':
+                replace_token_s(self->strings, &res, tok_symbol, "*=");
+                state = stop;
+                break;
+            default:
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_star);
+                state = stop;
+                break;
+            }
+        } break;
+
+        case in_percent: {
+            if (self->pos == end) {
+                replace_token_s(self->strings, &res, tok_symbol, "%");
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '=':
+                replace_token_s(self->strings, &res, tok_symbol, "%=");
+                state = stop;
+                break;
+            default:
+                reverse_pos(self);
+                replace_token_s(self->strings, &res, tok_symbol, "%");
                 state = stop;
                 break;
             }
@@ -463,7 +522,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         } break;
 
-        case forward_slash: {
+        case in_forward_slash: {
             if (self->pos == end) {
                 replace_token_s(self->strings, &res, tok_symbol, "/");
                 state = stop;
@@ -472,10 +531,14 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             char const c = next_char(self);
             switch (c) {
             case '/': state = start_comment; continue;
+            case '=':
+                replace_token_s(self->strings, &res, tok_symbol, "/=");
+                state = stop;
+                break;
             default:
                 reverse_pos(self);
-                reverse_pos(self); // minus 2
-                state = start_symbol;
+                replace_token_s(self->strings, &res, tok_symbol, "/");
+                state = stop;
                 break;
             }
 
@@ -509,9 +572,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '.':
             case '_':
-            case 'x':           // allow 0x and 0X prefix, recognized by C stdlib
-            case 'X':
-                continue;
+            case 'x': // allow 0x and 0X prefix, recognized by C stdlib
+            case 'X': continue;
 
             default:
                 // all other characters break a number
