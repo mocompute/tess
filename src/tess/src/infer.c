@@ -54,6 +54,8 @@ struct tl_infer {
 
     int verbose;
     int indent_level;
+
+    int is_constrain_ignore_error; // non-zero if no error should be reported during unification
 };
 
 typedef struct {
@@ -109,29 +111,30 @@ static void      log_subs(tl_infer *);
 //
 
 tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new (alloc, tl_infer);
+    tl_infer *self                  = new (alloc, tl_infer);
 
-    self->opts               = *opts;
+    self->opts                      = *opts;
 
-    self->transient          = arena_create(alloc, 4096);
-    self->arena              = arena_create(alloc, 16 * 1024);
-    self->env                = tl_type_env_create(self->arena);
-    self->subs               = tl_type_subs_create(self->arena);
-    self->registry           = tl_type_registry_create(self->arena, self->transient, self->subs);
+    self->transient                 = arena_create(alloc, 4096);
+    self->arena                     = arena_create(alloc, 16 * 1024);
+    self->env                       = tl_type_env_create(self->arena);
+    self->subs                      = tl_type_subs_create(self->arena);
+    self->registry                  = tl_type_registry_create(self->arena, self->transient, self->subs);
 
-    self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
+    self->synthesized_nodes         = (ast_node_array){.alloc = self->arena};
 
-    self->toplevels          = null;
-    self->instances          = map_new(self->arena, name_and_type, str, 512);
-    self->instance_names     = hset_create(self->arena, 512);
-    self->hash_includes      = (str_array){.alloc = self->arena};
-    self->errors             = (tl_infer_error_array){.alloc = self->arena};
+    self->toplevels                 = null;
+    self->instances                 = map_new(self->arena, name_and_type, str, 512);
+    self->instance_names            = hset_create(self->arena, 512);
+    self->hash_includes             = (str_array){.alloc = self->arena};
+    self->errors                    = (tl_infer_error_array){.alloc = self->arena};
 
-    self->next_var_name      = 0;
-    self->next_instantiation = 0;
+    self->next_var_name             = 0;
+    self->next_instantiation        = 0;
 
-    self->verbose            = 0;
-    self->indent_level       = 0;
+    self->verbose                   = 0;
+    self->indent_level              = 0;
+    self->is_constrain_ignore_error = 0;
 
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
 
@@ -489,8 +492,10 @@ typedef struct {
 
 static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     type_error_cb_ctx *ctx = ctx_;
-    log_type_error_mm(ctx->self, left, right, ctx->node);
-    type_error(ctx->self, ctx->node);
+    if (!ctx->self->is_constrain_ignore_error) {
+        log_type_error_mm(ctx->self, left, right, ctx->node);
+        type_error(ctx->self, ctx->node);
+    }
 }
 
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
@@ -509,6 +514,7 @@ static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *rig
     // Note: special case: rather than teach the type system about this conversion, we turn a blind
     // eye to String : Ptr(CChar) things. Sadly this requires doing a substitution first.
     // TODO: why isn't this just in constrain()?
+
     tl_polytype_substitute(self->arena, left, self->subs);
     tl_polytype_substitute(self->arena, right, self->subs);
     if ((tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
@@ -1543,19 +1549,29 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             // casting: if name has an annotation, make it supreme: it overrides the value's type but must
             // still unify
-            tl_polytype *name_type  = node->let_in.name->type;
-            tl_polytype *value_type = node->let_in.value->type;
+            tl_polytype *name_type            = node->let_in.name->type;
+            tl_polytype *name_annotation_type = node->let_in.name->symbol.annotation_type;
+            tl_polytype *value_type           = node->let_in.value->type;
 
-            // Note: name_type and node->let_in.name->type have possibly diverged, so we should constrain
-            // both.
+            // Note: special case: if name is annotated and it has a Ptr (pointer) type, treat this let-in
+            // as as pointer cast, and turn a blind eye to any type mismatch. Since the unification
+            // machinery is directly connected to tl_infer's error system, we have to set a state flag to
+            // tell it to ignore errors reported during unification. We can't skip unification entirely,
+            // because we need type variables to be resolved.
+            {
+                int is_cast = 0;
+                if (name_annotation_type && tl_monotype_is_ptr(name_annotation_type->type)) is_cast = 1;
 
-            if (!escape_constraint(self, name_type, value_type) &&
-                constrain(self, name_type, value_type, node))
-                return 1;
+                if (is_cast) self->is_constrain_ignore_error = 1;
+                if (!escape_constraint(self, name_type, value_type) &&
+                    constrain(self, name_type, value_type, node) && !is_cast)
+                    return 1;
 
-            if (!escape_constraint(self, node->let_in.name->type, value_type) &&
-                constrain(self, node->let_in.name->type, value_type, node))
-                return 1;
+                if (!escape_constraint(self, node->let_in.name->type, value_type) &&
+                    constrain(self, node->let_in.name->type, value_type, node) && !is_cast)
+                    return 1;
+                self->is_constrain_ignore_error = 0;
+            }
 
             env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node);
 
