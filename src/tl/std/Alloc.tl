@@ -147,6 +147,12 @@ bump_create(alloc: Ptr(Allocator), size: CSize) {
   out->allocator.&
 }
 
+// bump_destroy(alloc: Ptr(Allocator)) {
+//   bump : Ptr(BumpAllocator) := alloc
+//   bump->parent->free(bump)
+//   void
+// }
+
 // Returns: input if already a power of two, or else the next higher
 // power of two.
 next_power_of_two(n: CSize) {
