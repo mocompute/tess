@@ -1,6 +1,8 @@
 #module Alloc
 #import <stdlib.tl>
 
+#import <Unsafe.tl>
+
 // -- Synopsis --
 
 Allocator : {
@@ -134,6 +136,13 @@ _bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any)
 _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
 
+// FIXME: implement these
+_bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
+_bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
+_bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
+_bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
+
+
 bump_create(alloc: Ptr(Allocator), size: CSize) {
   out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
   out->parent = alloc
@@ -153,30 +162,32 @@ bump_destroy(alloc: Ptr(Allocator)) {
 }
 
 _bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
-  p: Ptr(Byte) := bucket                     // cast
-  p += bucket->size                          // advance to free section
+  p: Ptr(Byte) := bucket                      // cast
+  p += bucket->size                           // advance to free section
 
-  block: Ptr(_BumpBlock) := p                // cast to block header and set size
+  block: Ptr(_BumpBlock) := p                 // cast to block header and set size
   block->size = sz
 
-  bucket->size += sz + sizeof(_BumpBlock)    // advance bucket size past header and requested size
-  c_assert(bucket->size <= bucket->capacity) // this function assumes capacity
+  bucket->size += sz + sizeof(_BumpBlock)     // advance bucket size past header and requested size
+  c_assert(bucket->size <= bucket->capacity)  // this function assumes capacity
 
-  res: Ptr(Byte) := block                    // cast
-  res += sizeof(_BumpBlock)                  // advance pointer past header and return it
-  res
+  res: Ptr(Byte) := block                     // cast
+  Unsafe.pointer_add(res, sizeof(_BumpBlock)) // advance pointer past header and return it
 }
 
 _block_size(p: Ptr(any)) -> Ptr(CSize) {
-  block: Ptr(_BumpBlock) := p - sizeof(CSize)
+  block: Ptr(_BumpBlock) := Unsafe.pointer_subtract(p, sizeof(CSize))
   block->size.&
 }
 
 _is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
   if p < bucket { return 0 }
-  sz := _block_size(p).*
-  // FIXME: incomplete
-  -1
+  block: Ptr(_BumpBlock) := Unsafe.pointer_subtract(p, sizeof(CSize))
+  sz := block->size
+  p_end := Unsafe.pointer_add(p, sz)
+  block_end := Unsafe.pointer_add(block, block->size)
+
+  block_end == p_end
 }
 
 

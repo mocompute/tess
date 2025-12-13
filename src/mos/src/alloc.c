@@ -133,6 +133,7 @@ static size_t *block_size(byte const *p) {
 static int is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
     if (((byte *)p) < ((byte *)bucket)) return 0;
+    // Is the pointer plus its allocated size pointing exactly to the end of the bucket?
     return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size - sizeof(arena_header);
 }
 
