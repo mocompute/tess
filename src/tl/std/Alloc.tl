@@ -16,12 +16,14 @@ Context : {
   managed:   Ptr(Allocator),
 }
 
+// Bump allocator bucket header. A bucket is a header followed by zero or more _BumpBlocks.
 _BumpHeader : {
   next:     Ptr(_BumpHeader),
   capacity: CSize,
   size:     CSize,
 }
 
+// Bump allocator block allocated by a client. Client data follows the size field.
 _BumpBlock : {
   size:     CSize,
 }
@@ -132,7 +134,6 @@ _bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any)
 _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
 
-
 bump_create(alloc: Ptr(Allocator), size: CSize) {
   out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
   out->parent = alloc
@@ -145,11 +146,39 @@ bump_create(alloc: Ptr(Allocator), size: CSize) {
   out->allocator.&
 }
 
-// bump_destroy(alloc: Ptr(Allocator)) {
-//   bump : Ptr(BumpAllocator) := alloc
-//   bump->parent->free(bump)
-//   void
-// }
+bump_destroy(alloc: Ptr(Allocator)) {
+  bump : Ptr(BumpAllocator) := alloc
+  bump->parent->free(bump)
+  void
+}
+
+_bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
+  p: Ptr(Byte) := bucket                     // cast
+  p += bucket->size                          // advance to free section
+
+  block: Ptr(_BumpBlock) := p                // cast to block header and set size
+  block->size = sz
+
+  bucket->size += sz + sizeof(_BumpBlock)    // advance bucket size past header and requested size
+  c_assert(bucket->size <= bucket->capacity) // this function assumes capacity
+
+  res: Ptr(Byte) := block                    // cast
+  res += sizeof(_BumpBlock)                  // advance pointer past header and return it
+  res
+}
+
+_block_size(p: Ptr(any)) -> Ptr(CSize) {
+  block: Ptr(_BumpBlock) := p - sizeof(CSize)
+  block->size.&
+}
+
+_is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
+  if p < bucket { return 0 }
+  sz := _block_size(p).*
+  // FIXME: incomplete
+  -1
+}
+
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
