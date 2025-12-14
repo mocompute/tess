@@ -73,12 +73,13 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
 }
 
 ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds, ast_node_sized arms,
-                               ast_node *bin_pred) {
+                               ast_node *bin_pred, int is_union) {
     ast_node *self               = ast_node_create(alloc, ast_case);
     self->case_.expression       = expr;
     self->case_.conditions       = conds;
     self->case_.arms             = arms;
     self->case_.binary_predicate = bin_pred; // may be null
+    self->case_.is_union         = is_union;
     return self;
 }
 
@@ -415,6 +416,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         forall(i, clone->case_.arms) {
             clone->case_.arms.v[i] = ast_node_clone(alloc, orig->case_.arms.v[i]);
         }
+        clone->case_.is_union = orig->case_.is_union;
     } break;
 
     case ast_unary_op: {

@@ -12,6 +12,7 @@
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
+#include "types.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -128,6 +129,9 @@ static void          mangle_name_for_module(parser *, ast_node *, str);
 static void          mangle_name(parser *, ast_node *);
 static void          unmangle_name(parser *, ast_node *);
 static str           next_var_name(parser *);
+
+static str           tagged_union_tag_name(parser *, ast_node *);
+static str           tagged_union_union_name(parser *, ast_node *);
 
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
@@ -1321,6 +1325,25 @@ static ast_node *parse_case_expr(parser *self) {
         if (!ast_node_is_symbol(bin_pred) && !ast_node_is_lambda_function(bin_pred)) return null;
     }
 
+    // look for optional union type for destructure expression. Exclusive with predicate, however.
+    ast_node *union_type   = null;
+    str       union_module = str_empty();
+    if (!bin_pred) {
+        if (0 == a_try(self, a_type_annotation)) {
+            union_type = self->result;
+            // Must be a symbol: other type annotations e.g. arrows and nfas are not permitted.
+            if (!ast_node_is_symbol(union_type)) goto begin_body;
+            union_module   = union_type->symbol.module;
+
+            str tag_name   = tagged_union_tag_name(self, union_type);
+            str union_name = tagged_union_union_name(self, union_type);
+            // FIXME: not yet implemented
+            (void)tag_name;
+            (void)union_name;
+        }
+    }
+
+begin_body:
     if (a_try(self, a_open_curly)) return null;
 
     ast_node_array conditions = {.alloc = self->ast_arena};
@@ -1339,7 +1362,20 @@ static ast_node *parse_case_expr(parser *self) {
         }
         if (0 == a_try(self, a_close_curly)) break;
 
-        ast_node *cond = parse_expression(self, INT_MIN);
+        ast_node *cond = null;
+        if (union_type) {
+            // a union case expression: condition must be an annotated symbol: a symbol to be bound, and the
+            // desired variant type to be matched.
+            if (a_try(self, a_param)) return null;
+            cond = self->result;
+
+            // mangle symbol for the union's module
+            mangle_name_for_module(self, cond, union_module);
+        } else {
+            // standard case expression
+            cond = parse_expression(self, INT_MIN);
+        }
+
         if (!cond) return null;
         ast_node *body = parse_body(self);
         if (!body) return null;
@@ -1357,7 +1393,7 @@ static ast_node *parse_case_expr(parser *self) {
     }
 
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), bin_pred);
+                                          (ast_node_sized)array_sized(arms), bin_pred, !!union_type);
     set_node_file(self, node);
     return node;
 }
@@ -1499,9 +1535,35 @@ static void unmangle_name(parser *self, ast_node *name) {
     str_deinit(self->ast_arena, &name->symbol.module);
 }
 
+static str unmangled_name(ast_node *name) {
+    if (!ast_node_is_symbol(name)) return str_empty();
+    if (!name->symbol.is_mangled) return name->symbol.name;
+    return name->symbol.original;
+}
+
+static str mangle_str_for_module(parser *self, str name, str module) {
+    return str_cat_3(self->ast_arena, module, S("_"), name);
+}
+
+static str tagged_union_tag_name(parser *self, ast_node *tu_name) {
+    str unmangled = unmangled_name(tu_name);
+    if (str_is_empty(unmangled)) return unmangled;
+
+    str tag_name = str_cat_3(self->ast_arena, S("_"), unmangled, S("Tag_"));
+    return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
+}
+
+static str tagged_union_union_name(parser *self, ast_node *tu_name) {
+    str unmangled = unmangled_name(tu_name);
+    if (str_is_empty(unmangled)) return unmangled;
+
+    str tag_name = str_cat_3(self->ast_arena, S("_"), unmangled, S("Union_"));
+    return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
+}
+
 static void mangle_name_for_module(parser *self, ast_node *name, str module) {
     if (ast_node_is_symbol(name) && !str_is_empty(module)) {
-        ast_node_name_replace(name, str_cat_3(self->ast_arena, module, S("_"), name->symbol.name));
+        ast_node_name_replace(name, mangle_str_for_module(self, name->symbol.name, module));
         name->symbol.is_mangled = 1;
         name->symbol.module     = str_copy(self->ast_arena, module);
         if (0) {
@@ -1512,6 +1574,7 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
 }
 
 static void mangle_name(parser *self, ast_node *name) {
+    // Note: module `main` set current_module to empty, so names are not mangled at all.
     if (str_is_empty(self->current_module)) return;
     if (ast_node_is_nfa(name)) return mangle_name(self, name->named_application.name);
     if (!ast_node_is_symbol(name)) return;
