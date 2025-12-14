@@ -361,6 +361,7 @@ TL_TESTS =					\
 	type_alias_module_simple_direct		\
 	type_assertion				\
 	type_assertion_field			\
+	tagged_union				\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\

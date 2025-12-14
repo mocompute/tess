@@ -18,5 +18,6 @@ Shape        : { tag: _ShapeTag_, u: _ShapeUnion_ }
 #module main
 
 main() {
+  // FIXME: implement tagged union and test it
   0
 }
