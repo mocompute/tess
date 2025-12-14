@@ -19,6 +19,7 @@ typedef struct ast_node {
         struct ast_symbol {
             str              name;
             str              original;
+            str              module; // by parser when mangling name for module
             struct ast_node *annotation;
             tl_polytype     *annotation_type;
             int              is_mangled; // by parser for module namespacing

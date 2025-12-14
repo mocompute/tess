@@ -205,6 +205,7 @@ ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
     self->symbol.is_mangled      = 0;
+    self->symbol.module          = str_empty();
     return self;
 }
 
@@ -215,6 +216,7 @@ ast_node *ast_node_create_sym(allocator *alloc, str str) {
     self->symbol.annotation      = null;
     self->symbol.annotation_type = null;
     self->symbol.is_mangled      = 0;
+    self->symbol.module          = str_empty();
     return self;
 }
 
@@ -281,6 +283,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         vclone->name            = str_copy(alloc, vorig->name);
         vclone->original        = str_copy(alloc, vorig->original);
+        vclone->module          = str_copy(alloc, vorig->module);
         vclone->annotation      = ast_node_clone(alloc, vorig->annotation);
         vclone->annotation_type = null;
         if (vorig->annotation_type) {
