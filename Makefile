@@ -192,6 +192,27 @@ cleanall:
 # Tests
 # ==============================================================================
 
+# $(1): test suite name (for display)
+# $(2): list of test executables
+define run_test_suite
+	@failed=0; \
+	for test in $(2); do \
+		name=$$(basename $$test); \
+		$(MSG_TEST) $$name; \
+		if ! $$test $(STDERR); then \
+			printf "  \033[1;31m[FAIL] $$name\033[0m\n"; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	if [ $$failed -gt 0 ]; then \
+		printf "  \033[1;31m[FAIL] $$failed $(1) test(s) failed\033[0m\n"; \
+		exit 1; \
+	fi; \
+	printf "\n" ; \
+	$(MSG_PASS) "All $(1) tests passed"; \
+	printf "\n"
+endef
+
 # ------------------------------------------------------------------------------
 # mos Library Tests
 # ------------------------------------------------------------------------------
@@ -207,22 +228,7 @@ $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
 build-mos-tests: $(MOS_TEST_EXES)
 
 test-mos: build-mos-tests
-	@failed=0; \
-	for test in $(MOS_TEST_EXES); do \
-		name=$$(basename $$test); \
-		$(MSG_TEST) $$name; \
-		if ! $$test $(STDERR); then \
-			printf "  \033[1;31m[FAIL] $$name\033[0m\n"; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	if [ $$failed -gt 0 ]; then \
-		printf "  \033[1;31m[FAIL] $$failed mos test(s) failed\033[0m\n"; \
-		exit 1; \
-	fi; \
-	printf "\n" ; \
-	$(MSG_PASS) "All mos tests passed"; \
-	printf "\n"
+	$(call run_test_suite,mos,$(MOS_TEST_EXES))
 
 # ------------------------------------------------------------------------------
 # tess Compiler Tests
@@ -239,22 +245,7 @@ $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_O
 build-tess-tests: $(TESS_TEST_EXES)
 
 test-tess: build-tess-tests
-	@failed=0; \
-	for test in $(TESS_TEST_EXES); do \
-		name=$$(basename $$test); \
-		$(MSG_TEST) $$name; \
-		if ! $$test $(STDERR); then \
-			$(MSG_FAIL) $$name; \
-			failed=$$((failed + 1)); \
-		fi; \
-	done; \
-	if [ $$failed -gt 0 ]; then \
-		printf "  \033[1;31m[FAIL] $$failed tess test(s) failed\033[0m\n"; \
-		exit 1; \
-	fi; \
-	printf "\n" ; \
-	$(MSG_PASS) "All tess tests passed"; \
-	printf "\n"
+	$(call run_test_suite,tess,$(TESS_TEST_EXES))
 
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
