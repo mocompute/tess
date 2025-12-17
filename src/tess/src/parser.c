@@ -1328,15 +1328,20 @@ static ast_node *parse_case_expr(parser *self) {
     // look for optional union type for destructure expression. Exclusive with predicate, however.
     ast_node *union_type   = null;
     str       union_module = str_empty();
+    str       tag_name     = str_empty();
+    str       union_name   = str_empty();
     if (!bin_pred) {
         if (0 == a_try(self, a_type_annotation)) {
+            // case s: Foo.Shape { c: Circle { ... } ... }
+            // `Foo.Shape` will be mangled to symbol Foo_Shape by a_type_annotation
+
             union_type = self->result;
             // Must be a symbol: other type annotations e.g. arrows and nfas are not permitted.
             if (!ast_node_is_symbol(union_type)) goto begin_body;
-            union_module   = union_type->symbol.module;
+            union_module = union_type->symbol.module;
 
-            str tag_name   = tagged_union_tag_name(self, union_type);
-            str union_name = tagged_union_union_name(self, union_type);
+            tag_name     = tagged_union_tag_name(self, union_type);
+            union_name   = tagged_union_union_name(self, union_type);
             // FIXME: not yet implemented
             (void)tag_name;
             (void)union_name;
@@ -1365,12 +1370,17 @@ begin_body:
         ast_node *cond = null;
         if (union_type) {
             // a union case expression: condition must be an annotated symbol: a symbol to be bound, and the
-            // desired variant type to be matched.
+            // desired variant type to be matched. The variant type must be mangled to the union_module.
+            // E.g. `c: Circle` is the symbol `c` with the annotation `Circle`, which must be mangled to
+            // `Foo.Circle`.
             if (a_try(self, a_param)) return null;
             cond = self->result;
+            if (!ast_node_is_symbol(cond) || !cond->symbol.annotation ||
+                !ast_node_is_symbol(cond->symbol.annotation))
+                return null;
 
             // mangle symbol for the union's module
-            mangle_name_for_module(self, cond, union_module);
+            mangle_name_for_module(self, cond->symbol.annotation, union_module);
         } else {
             // standard case expression
             cond = parse_expression(self, INT_MIN);
@@ -2346,6 +2356,16 @@ static int toplevel_union(parser *self) {
     mangle_name(self, type_ident);
     return result_ast_node(self, r);
 }
+
+// static int toplevel_tagged_union(parser *self) {
+//     if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
+//     ast_node *type_ident = self->result;
+
+//     if (a_try(self, a_equal_sign)) return 1;
+//     if (a_try(self, a_vertical_bar)) return 1;
+
+//     // FIXME: incomplete
+// }
 
 static int toplevel(parser *self) {
 
