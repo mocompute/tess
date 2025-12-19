@@ -2038,25 +2038,32 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
     return 0;
 }
 
-static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
-    // Here we handle let fptr = id in ... function pointers. When this is called after the function being
+static int specialize_operand(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
+    // Here we handle function pointers in operand positions. When this is called after the function being
     // pointed to has been specialised, the arrow types will be concrete. We use those types to look up
     // (using specialize_fun) the specialised version and replace the symbol name with the specialised name.
     // This ensures the transpiler refers to an existant concrete function rather than the generic template.
 
-    assert(ast_node_is_let_in(node));
-    tl_polytype *name_type  = node->let_in.name->type;
-    tl_polytype *value_type = node->let_in.value->type;
+    tl_polytype *value_type = node->type;
 
-    if (!name_type || !value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
-    if (!tl_polytype_is_concrete(name_type) || !tl_polytype_is_concrete(value_type)) return 0;
-    if (!ast_node_is_symbol(node->let_in.value)) return 0;
+    if (!value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
+    if (!tl_polytype_is_concrete(value_type)) return 0;
+    if (!ast_node_is_symbol(node)) return 0;
 
-    str value_name = ast_node_str(node->let_in.value);
+    str value_name = ast_node_str(node);
     str inst_name  = specialize_arrow(self, ctx, traverse_ctx, value_name, value_type->type);
     if (str_is_empty(inst_name)) return 0;
-    ast_node_name_replace(node->let_in.value, inst_name);
+    ast_node_name_replace(node, inst_name);
     return 0;
+}
+
+static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
+    // Here we handle let fptr = id in ... function pointers.
+    assert(ast_node_is_let_in(node));
+    tl_polytype *name_type = node->let_in.name->type;
+
+    if (!name_type || !tl_polytype_is_concrete(name_type)) return 0;
+    return specialize_operand(self, ctx, traverse_ctx, node->let_in.value);
 }
 
 static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
