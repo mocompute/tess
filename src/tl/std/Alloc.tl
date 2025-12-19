@@ -157,7 +157,7 @@ bump_create(alloc: Ptr(Allocator), size: CSize) {
 
 bump_destroy(alloc: Ptr(Allocator)) {
   bump : Ptr(BumpAllocator) := alloc
-  bump->parent->free(bump)
+  bump->parent->free(alloc, bump)
   void
 }
 

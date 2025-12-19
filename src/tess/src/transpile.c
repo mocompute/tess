@@ -1972,7 +1972,8 @@ static int should_generate(str name, tl_polytype *type) {
     if (is_c_symbol(name)) return 0;
 
     if (tl_polytype_is_scheme(type)) return 0;
-    if (!tl_monotype_is_concrete_no_weak(type->type)) return 0;
+    // Note: allow weak, because we currently use tl_weak for the ast_void type (FIXME)
+    if (!tl_monotype_is_concrete(type->type)) return 0;
     if (!tl_monotype_is_arrow(type->type)) return 0; // not an arrow
     if (is_intrinsic(name)) return 0;
     return 1;
@@ -2090,6 +2091,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else if (tl_monotype_is_any(mono)) {
         return S("/*any*/void");
+    } else if (tl_monotype_is_weak(mono)) {
+        // FIXME: we are using ast_void -> tl_weak, but we should have a proper tl_void variant to represent
+        // the unit type, the type of no value.
+        return S("/*weak*/void");
     }
 
     else {
