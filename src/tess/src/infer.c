@@ -2066,6 +2066,12 @@ static int specialize_let_in(tl_infer *self, infer_ctx *ctx, traverse_ctx *trave
     return specialize_operand(self, ctx, traverse_ctx, node->let_in.value);
 }
 
+static int specialize_reassignment(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                   ast_node *node) {
+    assert(ast_node_is_assignment(node));
+    return specialize_operand(self, ctx, traverse_ctx, node->assignment.value);
+}
+
 static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
     str       arg_name = ast_node_str(arg);
     ast_node *top      = toplevel_get(self, arg_name);
@@ -2106,8 +2112,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
     // check for nullary type constructors
     if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
-    // check for let_in nodes
+    // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
+    if (ast_node_is_assignment(node)) return specialize_reassignment(self, ctx, traverse_ctx, node);
 
     int is_anon = ast_node_is_lambda_application(node);
 
