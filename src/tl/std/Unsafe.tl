@@ -1,7 +1,7 @@
 #module Unsafe
 
 #ifc
-void*     tl_unsafe_pointer_add        (void *ptr, ptrdfiff_t n) { return ((char*)ptr) + n; }
+void*     tl_unsafe_pointer_add        (void *ptr, ptrdiff_t n)  { return ((char*)ptr) + n; }
 ptrdiff_t tl_unsafe_pointer_difference (void *lhs, void *rhs)    { return ((char*)lhs) - ((char*)rhs); }
 #endc
 
