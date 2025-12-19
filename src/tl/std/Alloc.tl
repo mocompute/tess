@@ -190,6 +190,11 @@ _is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
   block_end == p_end
 }
 
+_maybe_free_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
+  if _is_last_block(bucket, p) { bucket->size -= _block_size(p).* + sizeof(_BumpBlock) }
+  void
+}
+
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
