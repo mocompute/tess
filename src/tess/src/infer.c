@@ -410,7 +410,7 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             str_hset_insert(&ctx->recurs, name);
             str_hset_insert(&ctx->names, name);
         } else if (value) {
-            // recurse into let-in value
+            // recurse into value
             ast_node *next = value;
             if (next) ast_node_dfs(ctx, next, do_tree_shake);
         }
@@ -421,8 +421,26 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
         }
+    } else if (ast_node_is_reassignment(node)) {
+        // Note: duplicate logic for let_in nodes (TODO)
+        ast_node *value = node->assignment.value;
+        if (ast_node_is_symbol(value)) {
+            str name = ast_node_str(value); // caution: the value name, not the let's name
 
-    } else if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
+            // if it is a toplevel, recurse through it
+            ast_node *next = toplevel_get(self, name);
+            if (next) ast_node_dfs(ctx, next, do_tree_shake);
+            str_hset_insert(&ctx->recurs, name);
+            str_hset_insert(&ctx->names, name);
+        } else if (value) {
+            // recurse into value
+            ast_node *next = value;
+            if (next) ast_node_dfs(ctx, next, do_tree_shake);
+        }
+
+    }
+
+    else if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
@@ -2172,6 +2190,9 @@ static int specialize_operand(tl_infer *self, infer_ctx *ctx, traverse_ctx *trav
     // This ensures the transpiler refers to an existant concrete function rather than the generic template.
 
     tl_polytype *value_type = node->type;
+
+    // Note: important: need to substitute to ensure type is concrete if possible
+    tl_polytype_substitute(self->arena, value_type, self->subs);
 
     if (!value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
     if (!tl_polytype_is_concrete(value_type)) return 0;

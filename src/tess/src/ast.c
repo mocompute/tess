@@ -1470,7 +1470,12 @@ int ast_node_is_lambda_application(ast_node const *self) {
     return ast_lambda_function_application == self->tag;
 }
 int ast_node_is_assignment(ast_node const *self) {
+    // Usually this is what we want, since ast_assignment nodes share the same structure.
     return ast_assignment == self->tag || ast_reassignment == self->tag || ast_reassignment_op == self->tag;
+}
+int ast_node_is_reassignment(ast_node const *self) {
+    // Sometimes we need to explicitly filter on reassignment nodes semantically.
+    return ast_reassignment == self->tag;
 }
 int ast_node_is_binary_op(ast_node const *self) {
     return ast_binary_op == self->tag;
