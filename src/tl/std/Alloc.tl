@@ -137,7 +137,6 @@ _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
 
 // FIXME: implement these
-_bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
 _bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
 _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
@@ -194,6 +193,67 @@ _maybe_free_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
   if _is_last_block(bucket, p) { bucket->size -= _block_size(p).* + sizeof(_BumpBlock) }
   void
 }
+
+_bucket_has_capacity(bucket: Ptr(_BumpHeader), size: CSize) {
+  bucket->capacity - bucket->size >= sizeof(_BumpBlock) + size
+}
+
+_find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
+  bucket := arena->head
+  c_assert(bucket)
+  while bucket != null {
+    if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof(_BumpHeader))) == 1 &&
+       Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size))        == -1
+      { return bucket }
+    bucket = bucket->next
+  }
+
+  null
+}
+
+_BumpHeader_create(alloc, capacity) {
+  c_assert(capacity > sizeof(_BumpHeader))
+  out           := alloc->malloc(alloc, capacity)
+  out->next     = null
+  out->capacity = capacity
+  out->size     = sizeof(_BumpHeader)
+  out
+}
+
+_bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
+  arena : Ptr(BumpAllocator) := a
+
+  bucket := arena->head
+  last : Ptr(_BumpHeader) := null
+  last_capacity := 0
+
+  sz = align_max(sz)
+  if 0 == sz { return null }
+
+  c_assert(bucket)
+  while bucket != null {
+    if _bucket_has_capacity(bucket, sz) {
+      return _bump_alloc_assume_capacity(bucket, sz)
+    }
+
+    last_capacity = bucket->capacity
+    last          = bucket
+    bucket        = bucket->next
+  }
+
+  // otherwise, need to allocate a new bucket
+  needed := sz + sizeof(_BumpHeader)
+  new_capacity := last_capacity * 2
+  if new_capacity < needed { new_capacity = next_power_of_two(needed) }
+  if new_capacity == 0 { return null } // overflow
+
+  last->next = _BumpHeader_create(arena->parent, new_capacity)
+  if last->next == null { return null }
+  bucket = last->next
+  _bump_alloc_assume_capacity(bucket, sz)
+}
+
+
 
 
 // Returns: input if already a power of two, or else the next higher
