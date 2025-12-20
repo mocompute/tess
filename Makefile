@@ -317,6 +317,7 @@ TL_TESTS =					\
 	pointer_array				\
 	pointer_cast				\
 	pointer_cast_struct			\
+	pointer_compare_null			\
 	pointer_deref				\
 	pointer_deref_double			\
 	reassign_into_stack_lambda		\
