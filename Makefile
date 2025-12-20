@@ -328,6 +328,7 @@ TL_TESTS =					\
 	recursive_type_generic			\
 	recursive_type_mutual			\
 	relational_basic			\
+	return_null				\
 	return_statement			\
 	scope_shadow				\
 	sizeof					\
