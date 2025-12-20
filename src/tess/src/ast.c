@@ -1202,7 +1202,8 @@ struct ast_arrow *ast_node_arrow(ast_node *node) {
 }
 
 struct ast_assignment *ast_node_assignment(ast_node *node) {
-    assert(node->tag == ast_assignment || node->tag == ast_reassignment);
+    assert(node->tag == ast_assignment || node->tag == ast_reassignment ||
+           node->tag == ast_reassignment_op);
     return &node->assignment;
 }
 
