@@ -200,7 +200,7 @@ _bucket_has_capacity(bucket: Ptr(_BumpHeader), size: CSize) {
 
 _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
   bucket := arena->head
-  c_assert(bucket)
+  c_assert(bucket != null)
   while bucket != null {
     if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof(_BumpHeader))) == 1 &&
        Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size))        == -1
@@ -230,7 +230,7 @@ _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
   sz = align_max(sz)
   if 0 == sz { return null }
 
-  c_assert(bucket)
+  c_assert(bucket != null)
   while bucket != null {
     if _bucket_has_capacity(bucket, sz) {
       return _bump_alloc_assume_capacity(bucket, sz)
