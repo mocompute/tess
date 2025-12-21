@@ -36,6 +36,7 @@ typedef struct {
 
     int             no_line_directive;
     int             verbose;
+    int             verbose_ast;
     int             verbose_parse;
     int             report_time; // --time option
     int             help;
@@ -62,6 +63,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --time                 report elapsed time of compilation process\n");
+    printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
     exit(status);
 }
@@ -78,6 +80,7 @@ void state_init(state *self) {
     self->include_paths     = (str_array){.alloc = self->arena};
     self->program           = str_empty();
     self->verbose           = 0;
+    self->verbose_ast       = 0;
     self->verbose_parse     = 0;
     self->report_time       = 0;
     self->no_line_directive = 0;
@@ -106,7 +109,8 @@ void state_gather_single_options(state *self, char *str) {
 }
 
 void state_gather_long_option(state *self, char *str) {
-    if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
+    if (0 == strcmp("--verbose-ast", str)) self->verbose_ast = 1;
+    else if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--", str)) /* ignore */
@@ -404,6 +408,7 @@ int compile(state *self) {
 
     tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
+    tl_infer_set_verbose_ast(infer, self->verbose_ast);
     if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes), &infer_result)) {
         tl_infer_report_errors(infer);
         error++;

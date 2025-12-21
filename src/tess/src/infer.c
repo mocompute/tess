@@ -53,6 +53,7 @@ struct tl_infer {
     u32 next_instantiation;
 
     int verbose;
+    int verbose_ast;
     int indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
@@ -134,6 +135,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->next_instantiation        = 0;
 
     self->verbose                   = 0;
+    self->verbose_ast               = 0;
     self->indent_level              = 0;
     self->is_constrain_ignore_error = 0;
 
@@ -157,6 +159,10 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 void tl_infer_set_verbose(tl_infer *self, int verbose) {
     self->verbose      = verbose;
     self->env->verbose = verbose;
+}
+
+void tl_infer_set_verbose_ast(tl_infer *self, int verbose) {
+    self->verbose_ast = verbose;
 }
 
 tl_type_registry *tl_infer_get_registry(tl_infer *self) {
@@ -3466,7 +3472,9 @@ static void log_toplevels(tl_infer const *self) {
     str_array sorted = str_map_sorted_keys(self->transient, self->toplevels);
     forall(i, sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, sorted.v[i]);
-        str       str  = v2_ast_node_to_string(self->transient, node);
+        str       str;
+        if (self->verbose_ast) str = v2_ast_node_to_string(self->transient, node);
+        else str = ast_node_to_short_string(self->transient, node);
         log_str(self, str);
         str_deinit(self->transient, &str);
     }

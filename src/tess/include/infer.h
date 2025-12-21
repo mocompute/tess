@@ -27,6 +27,7 @@ typedef struct {
 nodiscard tl_infer *tl_infer_create(allocator *, tl_infer_opts const *) mallocfun;
 void                tl_infer_destroy(allocator *, tl_infer **);
 void                tl_infer_set_verbose(tl_infer *, int);
+void                tl_infer_set_verbose_ast(tl_infer *, int);
 tl_type_registry   *tl_infer_get_registry(tl_infer *);
 
 int                 tl_infer_run(tl_infer *, ast_node_sized, tl_infer_result *);

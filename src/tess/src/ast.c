@@ -1179,6 +1179,117 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     fatal("unreachable");
 }
 
+str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
+
+    if (!node) return str_init(alloc, "[null]");
+
+    switch (node->tag) {
+    case ast_binary_op:
+    case ast_body:
+    case ast_case:
+    case ast_hash_command:
+    case ast_f64:
+    case ast_i64:
+    case ast_u64:
+    case ast_string:
+    case ast_char:
+    case ast_bool:
+    case ast_nil:
+    case ast_void:
+    case ast_continue:
+    case ast_return:
+    case ast_while:
+    case ast_ellipsis:
+    case ast_if_then_else:
+    case ast_unary_op:
+    case ast_assignment:
+    case ast_reassignment:
+    case ast_reassignment_op:
+    case ast_eof:
+    case ast_tuple:
+    case ast_lambda_function_application: return str_init_static(ast_tag_to_string(node->tag));
+
+    case ast_symbol:                      return v2_ast_node_to_string(alloc, node);
+
+    case ast_let:                         {
+        str out               = str_copy(alloc, S("let "));
+        out                   = str_cat(alloc, out, ast_node_to_short_string(alloc, node->let.name));
+
+        ast_node_sized params = ast_node_sized_from_ast_array((ast_node *)node);
+        forall(i, params) {
+            if (ast_nil == params.v[i]->tag) {
+                out = str_cat(alloc, out, S(" ()"));
+                break;
+            } else {
+                out = str_cat_3(alloc, out, S(" "), params.v[i]->symbol.name);
+            }
+        }
+
+        if (node->type) out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type));
+        return out;
+    }
+
+    case ast_let_in: {
+        str out = str_copy(alloc, S("let "));
+        out     = str_cat(alloc, out, ast_node_to_short_string(alloc, node->let_in.name));
+        out     = str_cat(alloc, out, S(" = "));
+        out     = str_cat(alloc, out, ast_node_to_short_string(alloc, node->let_in.value));
+        out     = str_cat(alloc, out, S(" in "));
+        if (node->let_in.body) out = str_cat(alloc, out, S("..."));
+        return out;
+    }
+
+    case ast_named_function_application: {
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(apply "));
+        str_build_cat(&b, node->named_application.name->symbol.name);
+        for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
+            str_build_cat(&b, S(" "));
+            str_build_cat(&b, ast_node_to_short_string(alloc, node->named_application.arguments[i]));
+        }
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
+    }
+
+    case ast_arrow: {
+        str out = str_cat_3(alloc, ast_node_to_short_string(alloc, node->arrow.left), S(" -> "),
+                            ast_node_to_short_string(alloc, node->arrow.right));
+        return out;
+    }
+
+    case ast_lambda_function: {
+        str out = str_copy(alloc, S("fun"));
+
+        // here we want to include the nil value
+        for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
+            out = str_cat_3(alloc, out, S(" "),
+                            ast_node_to_short_string(alloc, node->lambda_function.parameters[i]));
+        }
+        out = str_cat(alloc, out, S(" -> ..."));
+        return out;
+    }
+
+    case ast_type_alias: {
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(alias "));
+        str_build_cat(&b, ast_node_to_short_string(alloc, node->type_alias.name));
+        str_build_cat(&b, S(" "));
+        str_build_cat(&b, ast_node_to_short_string(alloc, node->type_alias.target));
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
+    }
+
+    case ast_user_type_definition: {
+        str out = str_copy(alloc, S("[user_type_definition: "));
+        str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
+        str_dcat(alloc, &out, S("]"));
+        return out;
+    }
+    }
+
+    fatal("unreachable");
+}
+
 str_sized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
 
     str_sized strings = {.v    = alloc_calloc(alloc, nodes.end - nodes.begin, sizeof strings.v[0]),
