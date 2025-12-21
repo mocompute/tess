@@ -79,7 +79,8 @@ typedef struct {
     hashmap      *lexical_names;  // exists only during traverse_ast: hset str
     hashmap      *type_arguments; // map str -> tl_monotype*: arguments which are type literals
     void         *user;
-    node_position node_pos; // set by traverse_ast based on parent node
+    tl_monotype  *result_type; // result type of current function being traversed
+    node_position node_pos;    // set by traverse_ast based on parent node
     int           is_field_name;
     int           is_annotation;
 } traverse_ctx;
@@ -601,8 +602,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_let: {
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
+        ctx->result_type = null; // only set during specialisation
 
-        ctx->node_pos = npos_toplevel;
+        ctx->node_pos    = npos_toplevel;
         // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
         // specializing generic functions. The name's node->type should not in any case be relied upon: the
         // canonical arrow type of a function name is in the environment, not the ast.
@@ -1308,6 +1310,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (resolve_node(self, node->return_.value, traverse_ctx, npos_operand)) return 1;
         ensure_tv(self, &node->type);
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
+
+        // also constrain against result type of the outer function
+        if (traverse_ctx->result_type)
+            if (constrain_pm(self, node->return_.value->type, traverse_ctx->result_type, node)) return 1;
     } break;
 
     case ast_binary_op: {
@@ -1990,10 +1996,16 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
                             tl_monotype *arrow);
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
 
-static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special) {
+static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special,
+                           tl_monotype *callsite) {
     // Do this after creating a specialised function
     ast_node *infer_target = get_infer_target(special);
     if (infer_target) {
+        // set result type into traverse_ctx
+        if (callsite) {
+            tl_monotype *result_type  = tl_monotype_arrow_result(callsite);
+            traverse_ctx->result_type = result_type;
+        }
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg(self, "note: post_specialize failed infer");
             return 1;
@@ -2031,7 +2043,7 @@ static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse
         str inst_name = specialize_fun(self, top, callsite);
         str_map_set(&ctx->specials, arg_name, &inst_name);
         ast_node *special = toplevel_get(self, inst_name);
-        if (post_specialize(self, traverse_ctx, special)) return 1;
+        if (post_specialize(self, traverse_ctx, special, callsite)) return 1;
 
         ast_node_name_replace(arg, inst_name);
     }
@@ -2182,7 +2194,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
         concretize_params(self, node, callsite->type);
-        if (post_specialize(self, traverse_ctx, node->lambda_application.lambda)) {
+        if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }
         if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) {
@@ -2228,7 +2240,7 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
         inst_name = specialize_fun(self, top, arrow);
         str_map_set(&ctx->specials, name, &inst_name);
         ast_node *special = toplevel_get(self, inst_name);
-        if (post_specialize(self, traverse_ctx, special)) return str_empty();
+        if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
         return inst_name;
     }
 }
