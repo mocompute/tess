@@ -1827,6 +1827,32 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
+static name_and_type make_instance_key(str name, tl_monotype *arrow) {
+    return (name_and_type){.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
+}
+
+static str *instance_lookup(tl_infer *self, name_and_type *key) {
+    return map_get(self->instances, key, sizeof *key);
+}
+
+static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow) {
+    if (!tl_monotype_is_concrete(arrow)) return null;
+
+    // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
+    // because types are frequently cloned.
+    name_and_type key = make_instance_key(generic_name, arrow);
+    return instance_lookup(self, &key);
+}
+
+static int instance_name_exists(tl_infer *self, str instance_name) {
+    return str_hset_contains(self->instance_names, instance_name);
+}
+
+static void instance_add(tl_infer *self, name_and_type *key, str instance_name) {
+    map_set(&self->instances, key, sizeof *key, &instance_name);
+    str_hset_insert(&self->instance_names, instance_name);
+}
+
 static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_sized args,
                                         tl_polytype **out_type, hashmap **seen) {
     if (out_type) *out_type = null;
@@ -1882,9 +1908,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     if (!inst_ctx.specialized) goto cancel;
 
-    name_and_type key      = {.name_hash = str_hash64(name),
-                              .type_hash = tl_monotype_hash64(inst_ctx.specialized)};
-    str          *existing = map_get(self->instances, &key, sizeof key);
+    name_and_type key      = make_instance_key(name, inst_ctx.specialized);
+    str          *existing = instance_lookup(self, &key);
     if (existing) {
         tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
         if (out_type) *out_type = poly;
@@ -1896,7 +1921,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     ast_node *utd = toplevel_get(self, name);
     if (!utd) goto cancel;
 
-    map_set(&self->instances, &key, sizeof key, &name_inst);
+    instance_add(self, &key, name_inst);
 
     utd = ast_node_clone(self->arena, utd);
     ast_node_name_replace(utd->user_type_def.name, name_inst);
@@ -1997,7 +2022,6 @@ static ast_node *get_infer_target(ast_node *node) {
     return null;
 }
 
-static str lookup_arrow(tl_infer *self, str name, tl_monotype *arrow);
 static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
                             tl_monotype *arrow);
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
@@ -2211,18 +2235,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     return 0;
 }
 
-static str lookup_arrow(tl_infer *self, str name, tl_monotype *arrow) {
-    str inst_name = str_empty();
-    if (!tl_monotype_is_concrete(arrow)) return inst_name;
-
-    // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
-    // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
-    str          *existing = map_get(self->instances, &key, sizeof key);
-    if (existing) return *existing;
-    return str_empty();
-}
-
 static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
                             tl_monotype *arrow) {
     // TODO: cleanup combine with specialize_one
@@ -2231,11 +2243,11 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
     if (!tl_monotype_is_concrete(arrow)) return inst_name;
     else {
         // does a specialized toplevel with this name and concrete type already exist?
-        if (str_hset_contains(self->instance_names, name)) return name;
+        if (instance_name_exists(self, name)) return name;
     }
 
-    inst_name = lookup_arrow(self, name, arrow);
-    if (!str_is_empty(inst_name)) return inst_name;
+    str *found = instance_lookup_arrow(self, name, arrow);
+    if (found) return *found;
 
     ast_node *top = toplevel_get(self, name);
     str      *existing;
@@ -2549,14 +2561,13 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key      = {.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(callsite)};
-    str          *existing = map_get(self->instances, &key, sizeof key);
+    name_and_type key      = make_instance_key(name, callsite);
+    str          *existing = instance_lookup(self, &key);
     if (existing) return *existing;
 
     // instantiate unique name
     str name_inst = next_instantiation(self, name);
-    map_set(&self->instances, &key, sizeof key, &name_inst);
-    str_hset_insert(&self->instance_names, name_inst);
+    instance_add(self, &key, name_inst);
 
     // clone function source ast and rename variables, which also erases type information
     ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
@@ -3173,11 +3184,10 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
     if (ast_node_is_symbol(ident)) {
         tl_monotype *type = ident->type->type;
         if (!tl_monotype_is_arrow(type)) return;
-        str name      = ast_node_str(ident);
-        str inst_name = lookup_arrow(self, name, type);
-        if (!str_is_empty(inst_name)) {
-            ast_node_name_replace(ident, inst_name);
-        }
+        str  name      = ast_node_str(ident);
+
+        str *inst_name = instance_lookup_arrow(self, name, type);
+        if (inst_name) ast_node_name_replace(ident, *inst_name);
     }
 }
 
