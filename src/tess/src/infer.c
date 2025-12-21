@@ -472,13 +472,10 @@ static int traverse_ctx_is_param(traverse_ctx *self, str name) {
 }
 
 typedef struct {
-    hashmap *specials; // str => str
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
     infer_ctx *out = new (alloc, infer_ctx);
-    out->specials  = map_new(alloc, str, str, 16);
-
     return out;
 }
 
@@ -1179,8 +1176,6 @@ static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node con
 }
 
 int        is_union_struct(tl_infer *self, str name);
-static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
-                          tl_monotype *callsite);
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
@@ -1827,8 +1822,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
-static name_and_type make_instance_key(str name, tl_monotype *arrow) {
-    return (name_and_type){.name_hash = str_hash64(name), .type_hash = tl_monotype_hash64(arrow)};
+static name_and_type make_instance_key(str generic_name, tl_monotype *arrow) {
+    return (name_and_type){.name_hash = str_hash64(generic_name), .type_hash = tl_monotype_hash64(arrow)};
 }
 
 static str *instance_lookup(tl_infer *self, name_and_type *key) {
@@ -1845,6 +1840,7 @@ static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype 
 }
 
 static int instance_name_exists(tl_infer *self, str instance_name) {
+    // NB: here, the set is keyed by _instance_ name, not generic name.
     return str_hset_contains(self->instance_names, instance_name);
 }
 
@@ -2048,35 +2044,36 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     return 0;
 }
 
-static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *arg,
-                          tl_monotype *callsite) {
+static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                          ast_node *fun_name_node, tl_monotype *callsite) {
+    (void)ctx;
+
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
     str      *existing;
-    str       arg_name = ast_node_str(arg);
-    ast_node *top      = toplevel_get(self, arg_name);
+    str       fun_name = ast_node_str(fun_name_node);
+    ast_node *top      = toplevel_get(self, fun_name);
     // Note: using the arrow type's name helps cases where a function pointer has been assigned to a
     // variable.
 
-    if ((existing = str_map_get(ctx->specials, arg_name))) {
+    if ((existing = instance_lookup_arrow(self, fun_name, callsite))) {
         str inst_name = *existing;
-        ast_node_name_replace(arg, inst_name);
+        ast_node_name_replace(fun_name_node, inst_name);
         dbg(self, "specialize_one 1: patched in name %s", str_cstr(&inst_name));
         return 0;
-    } else {
-
-        // Important: resolve type variables before attempting to specialize.
-        // FIXME: disable this even though it was marked "important" because no regression test failure
-        // occurs.
-        // tl_monotype_substitute(self->arena, callsite, self->subs, null);
-
-        str inst_name = specialize_fun(self, top, callsite);
-        str_map_set(&ctx->specials, arg_name, &inst_name);
-        ast_node *special = toplevel_get(self, inst_name);
-        if (post_specialize(self, traverse_ctx, special, callsite)) return 1;
-
-        ast_node_name_replace(arg, inst_name);
     }
+
+    // Important: resolve type variables before attempting to specialize.
+    // FIXME: disable this even though it was marked "important" because no regression test failure
+    // occurs.
+    // tl_monotype_substitute(self->arena, callsite, self->subs, null);
+
+    str       inst_name = specialize_fun(self, top, callsite);
+    ast_node *special   = toplevel_get(self, inst_name);
+    if (post_specialize(self, traverse_ctx, special, callsite)) return 1;
+
+    ast_node_name_replace(fun_name_node, inst_name);
+
     return 0;
 }
 
@@ -2212,10 +2209,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             return 1;
         }
 
-        // remove name from specials after recursing through arguments, so it doesn't shadow subsequent uses
-        // of the same name, eg: let id x = x in let x1 = id 0 in let x2 = id "hello" in x1
-        str_map_erase(ctx->specials, name);
-
         dbg(self, "specialize_applications_cb done: nfa '%s'",
             str_cstr(&node->named_application.name->symbol.name));
 
@@ -2238,6 +2231,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
                             tl_monotype *arrow) {
     // TODO: cleanup combine with specialize_one
+    (void)ctx;
 
     str inst_name = str_empty();
     if (!tl_monotype_is_concrete(arrow)) return inst_name;
@@ -2251,16 +2245,13 @@ static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traver
 
     ast_node *top = toplevel_get(self, name);
     str      *existing;
-    if ((existing = str_map_get(ctx->specials, name))) {
-        // exists in recursive context
-        return *existing;
-    } else {
-        inst_name = specialize_fun(self, top, arrow);
-        str_map_set(&ctx->specials, name, &inst_name);
-        ast_node *special = toplevel_get(self, inst_name);
-        if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
-        return inst_name;
-    }
+
+    if ((existing = instance_lookup_arrow(self, name, arrow))) return *existing;
+
+    inst_name         = specialize_fun(self, top, arrow);
+    ast_node *special = toplevel_get(self, inst_name);
+    if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
+    return inst_name;
 }
 
 // --
