@@ -16,8 +16,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define DEBUG_RESOLVE 0
-#define DEBUG_RENAME  1
+#define DEBUG_RESOLVE   0
+#define DEBUG_RENAME    0
+#define DEBUG_CONSTRAIN 0
 
 typedef struct {
     enum tl_error_tag tag;
@@ -527,7 +528,7 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (0) {
+    if (DEBUG_CONSTRAIN) {
         log_constraint_mono(self, left, right, node);
     }
 
