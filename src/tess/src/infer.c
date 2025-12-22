@@ -3163,6 +3163,9 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     update_types_one_type(self, ctx, &node->type);
     update_types_arrow(self, node);
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch-enum"
+
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
     case ast_reassignment:
@@ -3178,34 +3181,11 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         if (node->let_in.body) ast_node_type_set(node, node->let_in.body->type);
         break;
 
-    case ast_case:
-    case ast_nil:
-    case ast_void:
-    case ast_arrow:
-    case ast_binary_op:
-    case ast_bool:
-    case ast_continue:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_f64:
-    case ast_i64:
-    case ast_if_then_else:
-    case ast_let:
-    case ast_return:
-    case ast_string:
-    case ast_char:
-    case ast_symbol:
-    case ast_u64:
-    case ast_user_type_definition:
-    case ast_while:
-    case ast_lambda_function:
-    case ast_lambda_function_application:
-    case ast_named_function_application:
-    case ast_tuple:
-    case ast_unary_op:
-    case ast_hash_command:
-    case ast_type_alias:                  break;
+    default: break;
     }
+
+#pragma clang diagnostic pop
+
     return 0;
 }
 
