@@ -1196,9 +1196,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_void: {
-        ensure_tv(self, &node->type);
-        tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-        if (constrain_pm(self, node->type, weak, node)) return 1;
+        // handled by maybe_handle_null()
     } break;
 
     case ast_string: {

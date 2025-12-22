@@ -1715,6 +1715,10 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         fatal("got a type variable");
     }
 
+    else if (tl_monotype_is_weak(type)) {
+        fatal("got a weak variable");
+    }
+
     else {
         fatal("unexpected type");
     }
