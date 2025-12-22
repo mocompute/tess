@@ -3223,6 +3223,9 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                 fprintf(stderr, "error: symbol '%s' not found\n", str_cstr(&node->symbol.name));
                 type_error(self, node);
             }
+        } else if (ast_node_is_nil(node) || ast_node_is_void(node)) {
+            // ignore these because transpiler knows how to handle them
+            ;
         }
 
         else
