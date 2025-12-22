@@ -2018,8 +2018,6 @@ static ast_node *get_infer_target(ast_node *node) {
     return null;
 }
 
-static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
-                            tl_monotype *arrow);
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
 
 static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special,
@@ -2044,36 +2042,33 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     return 0;
 }
 
+static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
+                            tl_monotype *arrow) {
+    (void)ctx;
+
+    if (instance_name_exists(self, name)) return name;
+
+    str *found = instance_lookup_arrow(self, name, arrow);
+    if (found) return *found;
+
+    str *existing;
+    if ((existing = instance_lookup_arrow(self, name, arrow))) return *existing;
+
+    ast_node *top       = toplevel_get(self, name);
+    str       inst_name = specialize_fun(self, top, arrow);
+    ast_node *special   = toplevel_get(self, inst_name);
+    if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
+    return inst_name;
+}
+
 static int specialize_one(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
                           ast_node *fun_name_node, tl_monotype *callsite) {
     (void)ctx;
-
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
-    str      *existing;
-    str       fun_name = ast_node_str(fun_name_node);
-    ast_node *top      = toplevel_get(self, fun_name);
-    // Note: using the arrow type's name helps cases where a function pointer has been assigned to a
-    // variable.
-
-    if ((existing = instance_lookup_arrow(self, fun_name, callsite))) {
-        str inst_name = *existing;
-        ast_node_name_replace(fun_name_node, inst_name);
-        dbg(self, "specialize_one 1: patched in name %s", str_cstr(&inst_name));
-        return 0;
-    }
-
-    // Important: resolve type variables before attempting to specialize.
-    // FIXME: disable this even though it was marked "important" because no regression test failure
-    // occurs.
-    // tl_monotype_substitute(self->arena, callsite, self->subs, null);
-
-    str       inst_name = specialize_fun(self, top, callsite);
-    ast_node *special   = toplevel_get(self, inst_name);
-    if (post_specialize(self, traverse_ctx, special, callsite)) return 1;
-
-    ast_node_name_replace(fun_name_node, inst_name);
-
+    str instance_name = specialize_arrow(self, ctx, traverse_ctx, ast_node_str(fun_name_node), callsite);
+    if (str_is_empty(instance_name)) return 1;
+    ast_node_name_replace(fun_name_node, instance_name);
     return 0;
 }
 
@@ -2226,32 +2221,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     }
 
     return 0;
-}
-
-static str specialize_arrow(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, str name,
-                            tl_monotype *arrow) {
-    // TODO: cleanup combine with specialize_one
-    (void)ctx;
-
-    str inst_name = str_empty();
-    if (!tl_monotype_is_concrete(arrow)) return inst_name;
-    else {
-        // does a specialized toplevel with this name and concrete type already exist?
-        if (instance_name_exists(self, name)) return name;
-    }
-
-    str *found = instance_lookup_arrow(self, name, arrow);
-    if (found) return *found;
-
-    ast_node *top = toplevel_get(self, name);
-    str      *existing;
-
-    if ((existing = instance_lookup_arrow(self, name, arrow))) return *existing;
-
-    inst_name         = specialize_fun(self, top, arrow);
-    ast_node *special = toplevel_get(self, inst_name);
-    if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
-    return inst_name;
 }
 
 // --
