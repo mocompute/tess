@@ -1,7 +1,5 @@
 #module Alloc
-#include <assert.h>
-#include <stddef.h>
-#include <stdlib.h>
+#import <stdlib.tl>
 
 // -- Synopsis --
 
@@ -58,7 +56,7 @@ free_managed      (p: Ptr(any))            -> Void
 
 
 align(n: CSize, align: CSize) {
-  c_assert(align)
+  c_assert(align != 0)
   mask := align - 1
   (n + mask) & ~mask
 }
