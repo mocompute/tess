@@ -3208,6 +3208,41 @@ static void update_specialized_types(tl_infer *self) {
     arena_reset(self->transient);
 }
 
+static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    if (traverse_ctx->is_field_name) return 0;
+
+    if (node->type && tl_monotype_is_tv(node->type->type)) {
+        fprintf(stderr, "error: tag = %s\n", ast_tag_to_string(node->tag));
+
+        if (ast_node_is_symbol(node)) {
+            tl_polytype *found;
+            if ((found = tl_type_env_lookup(self->env, ast_node_str(node)))) {
+                node->type = found;
+            } else {
+                fprintf(stderr, "error: symbol '%s' not found\n", str_cstr(&node->symbol.name));
+                type_error(self, node);
+            }
+        }
+
+        else
+            type_error(self, node);
+    }
+    return 0;
+}
+
+static void check_unresolved_types(tl_infer *self) {
+    // checks if any nodes in ast are still type variables
+    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
+    hashmap_iterator iter     = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue;
+        traverse_ast(self, traverse, node, check_unresolved_cb);
+    }
+    arena_reset(self->transient);
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
@@ -3330,6 +3365,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // update type specialisations: replace generic constructors with specialised constructors.
     update_specialized_types(self);
+    arena_reset(self->transient);
+
+    check_unresolved_types(self);
     arena_reset(self->transient);
 
     if (1) {
