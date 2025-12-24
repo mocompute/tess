@@ -438,7 +438,7 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     }
 
     // c_ prefixed symbols are always emitted literally
-    if (0 == str_cmp_nc(name, "c_", 2)) {
+    if (is_c_symbol(name)) {
         return remove_c_prefix(self->transient, name);
     }
 
@@ -1061,7 +1061,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 // can't correctly emit them because the type information is incomplete. However, there are
                 // exceptions: return value type information is not always available for c_ functions, so we
                 // emit all non-arrow values and c_* arrow values.
-                if (0 == str_cmp_nc(value, "c_", 2) || !tl_monotype_is_arrow(type)) {
+                if (is_c_symbol(value) || !tl_monotype_is_arrow(type)) {
 
                     generate_decl(self, name, type);
                     if (!ast_node_is_nil_or_void(node->let_in.value)) generate_assign(self, name, value);
@@ -1797,7 +1797,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self         = new (alloc, transpile);
+    transpile *self         = new(alloc, transpile);
 
     self->opts              = *opts;
 
@@ -1965,7 +1965,7 @@ static int should_generate(str name, tl_polytype *type) {
     if (str_eq(name, S("main"))) return 1;
 
     // never generate c_ prefixed functions
-    if (0 == str_cmp_nc(name, "c_", 2)) return 0;
+    if (is_c_symbol(name)) return 0;
 
     if (tl_polytype_is_scheme(type)) return 0;
     if (!tl_monotype_is_concrete_no_weak(type->type)) return 0;
