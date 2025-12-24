@@ -113,7 +113,7 @@ static void      log_subs(tl_infer *);
 //
 
 tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self                  = new (alloc, tl_infer);
+    tl_infer *self                  = new(alloc, tl_infer);
 
     self->opts                      = *opts;
 
@@ -456,7 +456,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new (transient, traverse_ctx);
+    traverse_ctx *out   = new(transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
@@ -475,7 +475,7 @@ typedef struct {
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new (alloc, infer_ctx);
+    infer_ctx *out = new(alloc, infer_ctx);
     return out;
 }
 
@@ -3216,16 +3216,25 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         fprintf(stderr, "error: tag = %s\n", ast_tag_to_string(node->tag));
 
         if (ast_node_is_symbol(node)) {
+            str name = ast_node_str(node);
+            if (is_c_symbol(name)) return 0;
+
             tl_polytype *found;
-            if ((found = tl_type_env_lookup(self->env, ast_node_str(node)))) {
+            if ((found = tl_type_env_lookup(self->env, name))) {
                 node->type = found;
             } else {
-                fprintf(stderr, "error: symbol '%s' not found\n", str_cstr(&node->symbol.name));
+                fprintf(stderr, "error: symbol '%s' not found\n", str_cstr(&name));
                 type_error(self, node);
             }
         } else if (ast_node_is_nil(node) || ast_node_is_void(node)) {
             // ignore these because transpiler knows how to handle them
             ;
+        }
+
+        else if (ast_node_is_nfa(node)) {
+            str name = ast_node_str(node->named_application.name);
+            if (is_c_symbol(name)) return 0;
+            type_error(self, node);
         }
 
         else
