@@ -479,6 +479,7 @@ static traverse_ctx *traverse_ctx_create(allocator *transient) {
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
+    out->result_type    = null;
     out->node_pos       = npos_operand;
     out->is_field_name  = 0;
     out->is_annotation  = 0;
@@ -628,7 +629,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_let: {
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
-        ctx->result_type = null; // only set during specialisation
 
         ctx->node_pos    = npos_toplevel;
         // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
