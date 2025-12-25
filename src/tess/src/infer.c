@@ -1536,9 +1536,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // define a generic lambda
             if (add_generic(self, node)) return 1;
 
-            // add let-in node to toplevels (because we need the name and the body)
-            toplevel_add(self, name, node);
-
             // Do not infer the node value - add_generic takes care of that.
             // Instead, trigger runtime problems if the name's type is referenced using the expression type
             // (rather than the type_env type).
@@ -1546,6 +1543,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             if (node->let_in.body)
                 if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+
+            // add let-in node to toplevels (because we need the name and the body)
+            {
+                ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
+                let_in_lambda->let_in.body = null;
+                toplevel_add(self, name, let_in_lambda);
+            }
 
         } else {
 
