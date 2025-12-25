@@ -2827,6 +2827,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
         assert(node->let_in.value->type);
         tl_type_env_insert(self->env, name, node->let_in.value->type);
+        ast_node_type_set(node->let_in.name, node->let_in.value->type);
         return 0;
 
     } else {
