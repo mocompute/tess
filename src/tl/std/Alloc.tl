@@ -213,11 +213,11 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
 
 _BumpHeader_create(alloc, capacity) {
   c_assert(capacity > sizeof(_BumpHeader))
-  out           := alloc->malloc(alloc, capacity)
+  out           := alloc->malloc(alloc, capacity) // FIXME: report an error because this is untyped
   out->next     = null
   out->capacity = capacity
   out->size     = sizeof(_BumpHeader)
-  out
+  out // FIXME: not enough info to infer type, so it should error
 }
 
 _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
