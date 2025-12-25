@@ -3213,37 +3213,15 @@ static void update_specialized_types(tl_infer *self) {
 }
 
 static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-
     if (traverse_ctx->is_field_name) return 0;
 
-    if (node->type && tl_monotype_is_tv(node->type->type)) {
-        fprintf(stderr, "error: tag = %s\n", ast_tag_to_string(node->tag));
-
-        if (ast_node_is_symbol(node)) {
-            str name = ast_node_str(node);
-            if (is_c_symbol(name)) return 0;
-
-            tl_polytype *found;
-            if ((found = tl_type_env_lookup(self->env, name))) {
-                node->type = found;
-            } else {
-                fprintf(stderr, "error: symbol '%s' not found\n", str_cstr(&name));
-                type_error(self, node);
-            }
-        } else if (ast_node_is_nil(node) || ast_node_is_void(node)) {
-            // ignore these because transpiler knows how to handle them
-            ;
-        }
-
-        else if (ast_node_is_nfa(node)) {
-            str name = ast_node_str(node->named_application.name);
-            if (is_c_symbol(name)) return 0;
+    if (ast_node_is_let_in(node)) {
+        if (!tl_polytype_is_concrete(node->let_in.name->type)) {
+            type_error(self, node->let_in.name);
             type_error(self, node);
         }
-
-        else
-            type_error(self, node);
     }
+
     return 0;
 }
 
