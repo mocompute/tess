@@ -113,7 +113,7 @@ static void      log_subs(tl_infer *);
 //
 
 tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self                  = new (alloc, tl_infer);
+    tl_infer *self                  = new(alloc, tl_infer);
 
     self->opts                      = *opts;
 
@@ -456,7 +456,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new (transient, traverse_ctx);
+    traverse_ctx *out   = new(transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
@@ -475,7 +475,7 @@ typedef struct {
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new (alloc, infer_ctx);
+    infer_ctx *out = new(alloc, infer_ctx);
     return out;
 }
 
@@ -1536,9 +1536,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // define a generic lambda
             if (add_generic(self, node)) return 1;
 
-            // add let-in node to toplevels (because we need the name and the body)
-            toplevel_add(self, name, node);
-
             // Do not infer the node value - add_generic takes care of that.
             // Instead, trigger runtime problems if the name's type is referenced using the expression type
             // (rather than the type_env type).
@@ -1546,6 +1543,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
             if (node->let_in.body)
                 if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+
+            // add let-in node to toplevels (because we need the name and the body)
+            {
+                ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
+                let_in_lambda->let_in.body = null;
+                toplevel_add(self, name, let_in_lambda);
+            }
 
         } else {
 
@@ -2823,6 +2827,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
         assert(node->let_in.value->type);
         tl_type_env_insert(self->env, name, node->let_in.value->type);
+        ast_node_type_set(node->let_in.name, node->let_in.value->type);
         return 0;
 
     } else {
@@ -3208,6 +3213,31 @@ static void update_specialized_types(tl_infer *self) {
     arena_reset(self->transient);
 }
 
+static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    if (traverse_ctx->is_field_name) return 0;
+
+    if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
+        if (!tl_polytype_is_concrete(node->let_in.name->type)) {
+            type_error(self, node->let_in.name);
+            type_error(self, node);
+        }
+    }
+
+    return 0;
+}
+
+static void check_unresolved_types(tl_infer *self) {
+    // checks if any nodes in ast are still type variables
+    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
+    hashmap_iterator iter     = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue;
+        traverse_ast(self, traverse, node, check_unresolved_cb);
+    }
+    arena_reset(self->transient);
+}
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
@@ -3330,6 +3360,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // update type specialisations: replace generic constructors with specialised constructors.
     update_specialized_types(self);
+    arena_reset(self->transient);
+
+    check_unresolved_types(self);
     arena_reset(self->transient);
 
     if (1) {
