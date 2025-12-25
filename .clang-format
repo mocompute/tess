@@ -1,11 +1,9 @@
 ---
 BasedOnStyle: LLVM
----
-Language: C
-LineEnding: LF
 IndentWidth: 4
-ColumnLimit: 108
 ContinuationIndentWidth: 2
+LineEnding: LF
+ColumnLimit: 108
 UseTab: Never
 
 BreakBeforeBraces: Custom
