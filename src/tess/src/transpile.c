@@ -2091,6 +2091,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     else {
         // FIXME: it seems this should always be an error, no? TODO: better error reporting.
         // do not fatal here: instead return a valid type, but caller will probably not use it.
+        str tmp = tl_monotype_to_string(self->transient, mono);
+        if (self->verbose) fprintf(stderr, "can't render a type variable: %s\n", str_cstr(&tmp));
         fatal("can't render a type variable");
         return S("/*untyped*/void*");
     }
