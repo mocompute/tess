@@ -2091,10 +2091,19 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else if (tl_monotype_is_any(mono)) {
         return S("/*any*/void");
+    } else if (tl_monotype_is_tv(mono)) {
+        return S("/*tv*/void");
     } else if (tl_monotype_is_weak(mono)) {
         // FIXME: we are using ast_void -> tl_weak, but we should have a proper tl_void variant to represent
         // the unit type, the type of no value.
         return S("/*weak*/void");
+    } else if (tl_monotype_is_ptr(mono)) {
+        // TODO: repeats case from above
+        tl_monotype *arg   = tl_monotype_ptr_target(mono);
+        tl_polytype  wrap  = tl_polytype_wrap(arg);
+        str          typec = type_to_c(self, &wrap);
+        // if (str_eq(typec, S("void*"))) fatal("oops");
+        return str_cat(self->transient, typec, S("*"));
     }
 
     else {
