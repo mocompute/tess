@@ -396,6 +396,8 @@ test-tl: build-tl-tests
 # Combined Test Target
 # ------------------------------------------------------------------------------
 
+build-tests: build-mos-tests build-tess-tests build-tl-tests
+
 test:
 	@mos_ok=0; tess_ok=0; tl_ok=0; \
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
@@ -415,7 +417,6 @@ test:
 	fi
 
 
-.PHONY: all clean cleanall install test
-.PHONY: build-mos-tests test-mos
-.PHONY: build-tess-tests test-tess
-.PHONY: build-tl-tests test-tl
+.PHONY: clean cleanall install test
+.PHONY: test-mos test-tess test-tl
+.DEFAULT_GOAL := all
