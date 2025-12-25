@@ -3215,7 +3215,7 @@ static void update_specialized_types(tl_infer *self) {
 static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (traverse_ctx->is_field_name) return 0;
 
-    if (ast_node_is_let_in(node)) {
+    if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
         if (!tl_polytype_is_concrete(node->let_in.name->type)) {
             type_error(self, node->let_in.name);
             type_error(self, node);
