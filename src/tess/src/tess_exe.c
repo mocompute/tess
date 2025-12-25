@@ -415,12 +415,15 @@ int compile(state *self) {
         goto cleanup_ti;
     }
 
-    transpile_opts transpile_opts = {.infer_result      = infer_result,
-                                     .is_library        = self->is_library,
-                                     .no_line_directive = self->no_line_directive};
-    transpile     *transpile      = transpile_create(default_allocator(), &transpile_opts);
+    transpile_opts transpile_opts = {
+      .infer_result      = infer_result,
+      .is_library        = self->is_library,
+      .no_line_directive = self->no_line_directive,
+      .verbose           = self->verbose,
+    };
+    transpile *transpile = transpile_create(default_allocator(), &transpile_opts);
 
-    str_build      program_build;
+    str_build  program_build;
     if (transpile_compile(transpile, &program_build)) goto cleanup_tp;
 
     str program = str_build_finish(&program_build);
