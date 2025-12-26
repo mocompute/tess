@@ -1365,6 +1365,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             // handle -> vs . access
             if (0 == strcmp("->", op)) {
 
+                // FIXME: it should be an error if inference completes and struct access has never checked
+                // field names being valid. Possibly do this check in a later phase rather than here.
+
                 // if type is not a constructor instance, all we can assert is that the left side must be a
                 // pointer
                 if (tl_monotype_is_inst(left->type->type)) {
