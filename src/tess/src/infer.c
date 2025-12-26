@@ -2253,6 +2253,12 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     infer_ctx *ctx = traverse_ctx->user;
+    if (ast_node_is_nfa(node)) {
+        str name = ast_node_str(node->named_application.name);
+
+        dbg(self, "specialize_applications_cb: enter '%s'",
+            str_cstr(&name));
+    }
 
     // Important: resolve the node, so that traverse_ctx is properly updated, including type arguments. For
     // example, node could be a symbol which is a formal argument that carries an annotation referring to a
@@ -2280,7 +2286,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         str name = ast_node_str(node->named_application.name);
 
         dbg(self, "specialize_applications_cb: nfa '%s'",
-            str_cstr(&node->named_application.name->symbol.name));
+            str_cstr(&name));
 
         // do not process a second time
         if (ast_node_is_specialized(node)) return 0;
@@ -2289,7 +2295,12 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (is_intrinsic(name)) return 0;
 
         // may be too early, e.g. for pointers
-        if (!toplevel_get(self, name)) return 0; // to early
+        if (!toplevel_get(self, name)) {
+            dbg(self, "specialize_applications_cb: skipping '%s'",
+                str_cstr(&name));
+
+            return 0; // to early
+        }
 
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) return 0; // mutual recursion or variable holding function pointer
