@@ -56,6 +56,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
+    case tok_double_colon:
     case tok_semicolon:
     case tok_ampersand:
     case tok_logical_and:
@@ -104,6 +105,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_dot:
     case tok_colon:
     case tok_colon_equal:
+    case tok_double_colon:
     case tok_semicolon:
     case tok_ampersand:
     case tok_logical_and:

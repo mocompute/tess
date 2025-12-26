@@ -610,6 +610,7 @@ static int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
+    case tok_double_colon:
     case tok_semicolon:
     case tok_ellipsis:
     case tok_open_round:
@@ -663,6 +664,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
+    case tok_double_colon:
     case tok_semicolon:
     case tok_ellipsis:
     case tok_open_round:
@@ -711,6 +713,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
+    case tok_double_colon:
     case tok_semicolon:
     case tok_logical_and:
     case tok_arrow:
@@ -869,6 +872,15 @@ static int a_colon_equal(parser *p) {
     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
     p->error.tag = tl_err_expected_colon_equal;
+    return 1;
+}
+
+static int a_double_colon(parser *p) {
+    if (next_token(p)) return 1;
+
+    if (tok_double_colon == p->token.tag) return result_ast_str(p, ast_symbol, "::");
+
+    p->error.tag = tl_err_expected_double_colon;
     return 1;
 }
 
@@ -1863,6 +1875,20 @@ static int a_for_statement(parser *self) {
     return result_ast_node(self, let_iter_init);
 }
 
+static int a_type_assertion(parser *self) {
+
+    ast_node *lval = parse_lvalue(self);
+    if (!lval) return 1;
+
+    if (a_try(self, a_double_colon)) return 1;
+
+    if (a_try(self, a_type_identifier)) return 1;
+    ast_node *ann = self->result;
+
+    ast_node *a   = ast_node_create_type_assertion(self->ast_arena, lval, ann);
+    return result_ast_node(self, a);
+}
+
 static int a_statement(parser *self) {
     if (0 == a_try(self, a_assignment)) return 0;
     if (0 == a_try(self, a_reassignment)) return 0;
@@ -1871,6 +1897,7 @@ static int a_statement(parser *self) {
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
+    if (0 == a_try(self, a_type_assertion)) return 0;
 
     return 1;
 }

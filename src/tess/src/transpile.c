@@ -1667,6 +1667,10 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
 
     case ast_hash_command:
     case ast_type_alias:   fatal("logic error");
+
+    case ast_type_assertion:
+        // ignored
+        return str_empty();
     }
     fatal("unreachable");
 }

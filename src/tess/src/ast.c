@@ -175,10 +175,18 @@ ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
     self->tuple.elements   = xs.v;
     return self;
 }
+
 ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node *target) {
     ast_node *self          = ast_node_create(alloc, ast_type_alias);
     self->type_alias.name   = name;
     self->type_alias.target = target;
+    return self;
+}
+
+ast_node *ast_node_create_type_assertion(allocator *alloc, ast_node *name, ast_node *annotation) {
+    ast_node *self                  = ast_node_create(alloc, ast_type_assertion);
+    self->type_assertion.name       = name;
+    self->type_assertion.annotation = annotation;
     return self;
 }
 
@@ -332,6 +340,11 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_type_alias: {
         clone->type_alias.name   = ast_node_clone(alloc, orig->type_alias.name);
         clone->type_alias.target = ast_node_clone(alloc, orig->type_alias.target);
+    } break;
+
+    case ast_type_assertion: {
+        clone->type_assertion.name       = ast_node_clone(alloc, orig->type_assertion.name);
+        clone->type_assertion.annotation = ast_node_clone(alloc, orig->type_assertion.annotation);
     } break;
 
     case ast_return:
@@ -587,6 +600,12 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->type_alias.target);
         break;
 
+    case ast_type_assertion:
+        //
+        fun(ctx, node->type_assertion.name);
+        fun(ctx, node->type_assertion.annotation);
+        break;
+
     case ast_body:
         //
         forall(i, node->body.expressions) fun(ctx, node->body.expressions.v[i]);
@@ -597,138 +616,6 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         if (node->case_.binary_predicate) fun(ctx, node->case_.binary_predicate);
         forall(i, node->case_.conditions) fun(ctx, node->case_.conditions.v[i]);
         forall(i, node->case_.arms) fun(ctx, node->case_.arms.v[i]);
-        break;
-
-    case ast_binary_op:
-        fun(ctx, node->binary_op.op);
-        fun(ctx, node->binary_op.left);
-        fun(ctx, node->binary_op.right);
-        break;
-
-    case ast_unary_op:
-        fun(ctx, node->unary_op.op);
-        fun(ctx, node->unary_op.operand);
-        break;
-    }
-}
-
-void ast_node_map_node(void *ctx, ast_node_map_node_fun fun, ast_node *node) {
-    if (!node) return;
-
-    // process node types that have a common ast_array
-    if (TL_AST_HAS_ARRAY(node->tag)) {
-        struct ast_array *v = ast_node_arr(node);
-        for (u32 i = 0; i < v->n; ++i) {
-            v->nodes[i] = fun(ctx, v->nodes[i]);
-        }
-    }
-
-    // process node types that have additional or no-array links
-    switch (node->tag) {
-    case ast_continue:
-    case ast_ellipsis:
-    case ast_eof:
-    case ast_nil:
-    case ast_void:
-    case ast_bool:
-    case ast_symbol:
-    case ast_hash_command:
-    case ast_i64:
-    case ast_u64:
-    case ast_f64:
-    case ast_string:
-    case ast_char:
-    case ast_tuple:
-        //
-        return;
-
-    case ast_arrow:
-        node->arrow.left  = fun(ctx, node->arrow.left);
-        node->arrow.right = fun(ctx, node->arrow.right);
-        break;
-
-    case ast_assignment:
-    case ast_reassignment:
-    case ast_reassignment_op:
-        node->assignment.name  = fun(ctx, node->assignment.name);
-        node->assignment.value = fun(ctx, node->assignment.value);
-        node->assignment.op    = fun(ctx, node->assignment.op);
-        break;
-
-    case ast_let_in:
-        node->let_in.name  = fun(ctx, node->let_in.name);
-        node->let_in.value = fun(ctx, node->let_in.value);
-        node->let_in.body  = fun(ctx, node->let_in.body);
-        break;
-
-    case ast_let:
-        //
-        node->let.name = fun(ctx, node->let.name);
-        node->let.body = fun(ctx, node->let.body);
-        break;
-
-    case ast_if_then_else:
-        node->if_then_else.condition = fun(ctx, node->if_then_else.condition);
-        node->if_then_else.yes       = fun(ctx, node->if_then_else.yes);
-        node->if_then_else.no        = fun(ctx, node->if_then_else.no);
-        break;
-
-    case ast_lambda_function:
-        //
-        node->lambda_function.body = fun(ctx, node->lambda_function.body);
-        break;
-
-    case ast_lambda_function_application:
-        //
-        node->lambda_application.lambda = fun(ctx, node->lambda_application.lambda);
-        break;
-
-    case ast_named_function_application:
-        //
-        node->named_application.name = fun(ctx, node->named_application.name);
-        break;
-
-    case ast_return:
-        //
-        node->return_.value = fun(ctx, node->return_.value);
-        break;
-
-    case ast_while:
-        node->while_.condition = fun(ctx, node->while_.condition);
-        node->while_.update    = fun(ctx, node->while_.update);
-        node->while_.body      = fun(ctx, node->while_.body);
-        break;
-
-    case ast_user_type_definition: {
-        struct ast_user_type_def *v = ast_node_utd(node);
-
-        node->user_type_def.name    = fun(ctx, node->user_type_def.name);
-
-        for (u32 i = 0; i < v->n_fields; ++i) {
-            v->field_annotations[i] = fun(ctx, v->field_annotations[i]);
-            v->field_names[i]       = fun(ctx, v->field_names[i]);
-        }
-
-    } break;
-
-    case ast_type_alias:
-        //
-        node->type_alias.target = fun(ctx, node->type_alias.target);
-        break;
-
-    case ast_body:
-        //
-        forall(i, node->body.expressions) {
-            node->body.expressions.v[i] = fun(ctx, node->body.expressions.v[i]);
-        }
-        break;
-
-    case ast_case:
-        node->case_.expression       = fun(ctx, node->case_.expression);
-        node->case_.binary_predicate = fun(ctx, node->case_.binary_predicate);
-        forall(i, node->case_.conditions) node->case_.conditions.v[i] =
-          fun(ctx, node->case_.conditions.v[i]);
-        forall(i, node->case_.arms) node->case_.arms.v[i] = fun(ctx, node->case_.arms.v[i]);
         break;
 
     case ast_binary_op:
@@ -804,23 +691,6 @@ static void dfs_one(void *ctx_, ast_node *node) {
     ctx->fun(ctx->caller_ctx, node);
 }
 
-static ast_node *dfs_map_one(void *ctx_, ast_node *node) {
-    struct dfs_map_ctx *ctx = ctx_;
-
-    if (!node) return node;
-
-    // exclude user type defs from dfs
-    if (ast_user_type_definition == node->tag) return node;
-
-    if (ctx->visited) {
-        if (hset_contains(ctx->visited, &node, sizeof(ast_node *))) return node;
-        hset_insert(&ctx->visited, &node, sizeof(ast_node *));
-    }
-
-    ast_node_map_node(ctx, dfs_map_one, node);
-    return ctx->fun(ctx->caller_ctx, node);
-}
-
 void ast_node_dfs(void *caller_ctx, ast_node *node, ast_op_fun fun) {
 
     // Note: const dfs also uses this function.
@@ -848,26 +718,6 @@ void ast_node_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *n
     fun(caller_ctx, node);
 
     hset_destroy(&ctx.visited);
-}
-
-ast_node *ast_node_map_dfs_safe_for_recur(allocator *alloc, void *caller_ctx, ast_node *node,
-                                          ast_op_map_fun fun) {
-
-    // Note: const dfs also uses this function.
-
-    if (!node) return node;
-
-    struct dfs_map_ctx ctx = {
-      .caller_ctx = caller_ctx,
-      .fun        = fun,
-      .visited    = hset_create(alloc, 128),
-    };
-
-    ast_node_map_node(&ctx, dfs_map_one, node);
-    ast_node *out = fun(caller_ctx, node);
-
-    hset_destroy(&ctx.visited);
-    return out;
 }
 
 void ast_node_cdfs(void *ctx, ast_node const *start, ast_op_cfun fun) {
@@ -906,6 +756,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_string",
       "ast_symbol",
       "ast_type_alias",
+      "ast_type_assertion",
       "ast_u64",
       "ast_unary_op",
       "ast_user_type_definition",
@@ -1120,6 +971,16 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     }
 
+    case ast_type_assertion: {
+        str_build b = str_build_init(alloc, 64);
+        str_build_cat(&b, S("(assertion "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_assertion.name));
+        str_build_cat(&b, S(" :: "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_assertion.annotation));
+        str_build_cat(&b, S(")"));
+        return str_build_finish(&b);
+    }
+
     case ast_user_type_definition: {
         str out = str_copy(alloc, S("[user_type_definition: "));
         str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
@@ -1209,6 +1070,7 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_tuple:
     case ast_lambda_function_application: return str_init_static(ast_tag_to_string(node->tag));
 
+    case ast_type_assertion:
     case ast_symbol:                      return v2_ast_node_to_string(alloc, node);
 
     case ast_let:                         {
@@ -1466,6 +1328,12 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->type_alias.target);
         break;
 
+    case ast_type_assertion:
+        //
+        combine_node(self->type_assertion.name);
+        combine_node(self->type_assertion.annotation);
+        break;
+
     case ast_user_type_definition:
         //
         combine_node(self->user_type_def.name);
@@ -1571,6 +1439,9 @@ int ast_node_is_tuple(ast_node const *self) {
 }
 int ast_node_is_type_alias(ast_node const *self) {
     return ast_type_alias == self->tag;
+}
+int ast_node_is_type_assertion(ast_node const *self) {
+    return ast_type_assertion == self->tag;
 }
 int ast_node_is_let(ast_node const *self) {
     return ast_let == self->tag;

@@ -61,6 +61,7 @@
     X(tl_err_expected_ellipsis, "expected_ellipsis")                                                       \
     X(tl_err_expected_colon, "expected_colon")                                                             \
     X(tl_err_expected_colon_equal, "expected_colon_equal")                                                 \
+    X(tl_err_expected_double_colon, "expected_double_colon")                                               \
     X(tl_err_expected_end_of_block, "expected_end_of_block")                                               \
     X(tl_err_expected_end_of_expression, "expected_end_of_expression")                                     \
     X(tl_err_expected_open_round, "expected_open_round")                                                   \
@@ -82,6 +83,7 @@
     X(tl_err_expected_pointer, "expected_pointer")                                                         \
     X(tl_err_expected_integer, "expected_integer")                                                         \
     X(tl_err_expected_type_constructor, "expected_type_constructor")                                       \
+    X(tl_err_unresolved_type, "unresolved_type")                                                           \
     X(tl_err_arity, "wrong_number_of_arguments")                                                           \
     X(tl_err_unknown_hash_command, "unknown_hash_command")                                                 \
     X(tl_err_unknown_type, "unknown_type")                                                                 \

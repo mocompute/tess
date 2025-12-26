@@ -350,6 +350,10 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 replace_token(self->strings, &res, tok_colon_equal);
                 state = stop;
                 break;
+            case ':':
+                replace_token(self->strings, &res, tok_double_colon);
+                state = stop;
+                break;
             default:
                 reverse_pos(self);
                 replace_token(self->strings, &res, tok_colon);

@@ -158,6 +158,11 @@ typedef struct ast_node {
             struct ast_node *name;   // symbol or nfa
             struct ast_node *target; // symbol or nfa
         } type_alias;
+
+        struct ast_type_assertion {
+            struct ast_node *name;       // lvalue
+            struct ast_node *annotation; // type annotation
+        } type_assertion;
     };
 
     char const       *file;
@@ -226,6 +231,7 @@ nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized)
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_type_assertion(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
@@ -244,7 +250,6 @@ typedef void (*ast_node_each_node_fun)(void *ctx, ast_node *);
 typedef ast_node *(*ast_node_map_node_fun)(void *ctx, ast_node *);
 
 void ast_node_each_node(void *, ast_node_each_node_fun, ast_node *);
-void ast_node_map_node(void *, ast_node_map_node_fun, ast_node *);
 
 // -- arguments
 
@@ -271,7 +276,6 @@ str_sized      ast_nodes_get_names(allocator *, ast_node_slice);
 void           ast_node_dfs(void *, ast_node *, ast_op_fun);
 void           ast_node_cdfs(void *, ast_node const *, ast_op_cfun);
 void           ast_node_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_fun);
-ast_node      *ast_node_map_dfs_safe_for_recur(allocator *, void *, ast_node *, ast_op_map_fun);
 
 ast_node     **ast_node_assignment_names(allocator *, ast_node const *);
 
@@ -296,6 +300,7 @@ int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
+int            ast_node_is_type_assertion(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
 int            ast_node_is_unary_op(ast_node const *);

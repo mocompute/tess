@@ -340,6 +340,8 @@ TL_TESTS =					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
+	type_assertion				\
+	type_assertion_field			\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\

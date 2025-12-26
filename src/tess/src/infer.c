@@ -483,6 +483,10 @@ static int type_error(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
     return 1;
 }
+static int unresolved_type_error(tl_infer *self, ast_node const *node) {
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_unresolved_type, .node = node}));
+    return 1;
+}
 
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
@@ -852,6 +856,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_symbol:
     case ast_u64:
     case ast_type_alias:
+    case ast_type_assertion:
     case ast_user_type_definition:
 
         // operate on the leaf node
@@ -1188,6 +1193,32 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 #endif
 
     switch (node->tag) {
+    case ast_type_assertion: {
+        tl_type_registry_parse_type_ctx parse_ctx;
+        tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
+
+        tl_monotype *type =
+          tl_type_registry_parse_type_with_ctx(self->registry, node->type_assertion.annotation, &parse_ctx);
+
+        if (resolve_node(self, node->type_assertion.name, traverse_ctx, npos_operand)) {
+            dbg(self, "assert resolve node failed");
+            return 1;
+        }
+        tl_polytype *name_type = node->type_assertion.name->type;
+        if (!tl_polytype_is_concrete(name_type)) {
+            tl_polytype_substitute(self->arena, name_type, self->subs);
+            if (!tl_polytype_is_concrete(name_type)) {
+                return unresolved_type_error(self, node->type_assertion.name);
+            }
+        }
+        if (constrain_pm(self, node->type_assertion.name->type, type, node)) {
+            dbg(self, "assert constrain failed");
+            return 1;
+        }
+        ast_node_type_set(node, tl_polytype_nil(self->arena, self->registry));
+
+    } break;
+
     case ast_nil: {
         ensure_tv(self, &node->type);
         tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
@@ -2464,6 +2495,11 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         forall(i, node->case_.arms) {
             rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
         }
+        break;
+
+    case ast_type_assertion:
+        //
+        rename_variables(self, node->type_assertion.name, ctx, level + 1);
         break;
 
     case ast_hash_command:
