@@ -39,7 +39,7 @@ void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size
         return;
     }
 
-    long const size = ftell(f);
+    long size = ftell(f);
     if (size < 0) {
         perror("failed to read file position");
         fclose(f);
@@ -53,7 +53,10 @@ void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size
     }
 
     char *buf = alloc_malloc(alloc, (size_t)size);
-    if (!buf) goto cleanup;
+    if (!buf) {
+        size = 0;
+        goto cleanup;
+    }
 
     size_t const n = fread(buf, 1, (size_t)size, f);
     if (n != (size_t)size || n > UINT32_MAX) {
@@ -70,8 +73,10 @@ cleanup:
 }
 
 char const *file_basename(char const *input) {
-    char const *p = strrchr(input, '/');
-    return p + 1;
+    char const *p1 = strrchr(input, '/');
+    char const *p2 = strrchr(input, '\\');
+    char const *p  = (p1 > p2) ? p1 : p2;
+    return p ? p + 1 : input;
 }
 
 char *file_current_working_directory(span buf) {
@@ -79,7 +84,8 @@ char *file_current_working_directory(span buf) {
 #ifndef MOS_WINDOWS
     out = getcwd(buf.buf, buf.len);
 #else
-    out = _getcwd(buf.buf, buf.len);
+    if (buf.len > INT_MAX) fatal("overflow");
+    out = _getcwd(buf.buf, (int)buf.len);
 #endif
     return out;
 }
