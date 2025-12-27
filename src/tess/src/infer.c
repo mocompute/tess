@@ -979,6 +979,126 @@ static int reject_type_literal(tl_infer *self, ast_node const *node) {
     return 0;
 }
 
+static int check_is_pointer(tl_infer *self, tl_polytype *type) {
+    if (tl_monotype_is_inst(type->type)) {
+        if (!tl_monotype_is_ptr(type->type)) {
+            array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void ensure_symbol_type_from_env(tl_infer *self, ast_node *node) {
+    if (!ast_node_is_symbol(node)) return;
+
+    tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(node));
+
+    // Note: do not override node->type if it is already concrete. There is some confusion with the handling
+    // of type literals that makes the constrain fail unless it is guarded behind this if condition.
+    if (!node->type || !tl_polytype_is_concrete(node->type)) constrain_or_set(self, node, poly);
+}
+
+static int infer_struct_access(tl_infer *self, ast_node *node) {
+    if (!ast_node_is_binary_op_struct_access(node)) fatal("logic error");
+    ensure_tv(self, &node->type);
+    ensure_tv(self, &node->binary_op.left->type);
+    ensure_tv(self, &node->binary_op.right->type);
+    ast_node    *left = node->binary_op.left, *right = node->binary_op.right;
+    char const  *op          = str_cstr(&node->binary_op.op->symbol.name);
+
+    tl_monotype *struct_type = null;
+
+    tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+    tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+
+    // handle -> vs . access
+    if (0 == strcmp("->", op)) {
+
+        // FIXME: it should be an error if inference completes and struct access has never checked
+        // field names being valid. Possibly do this check in a later phase rather than here.
+
+        // if type is not a constructor instance, all we can assert is that the left side must be a
+        // pointer
+        if (check_is_pointer(self, left->type)) return 1;
+        ensure_symbol_type_from_env(self, left);
+
+        if (tl_monotype_is_ptr(left->type->type)) {
+            struct_type = tl_monotype_ptr_target(left->type->type);
+        } else {
+            tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+            tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
+            if (constrain_pm(self, left->type, ptr, node)) return 1;
+            struct_type = weak;
+        }
+
+    } else {
+        ensure_symbol_type_from_env(self, left);
+        struct_type = (tl_monotype *)left->type->type;
+    }
+
+    // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
+    tl_monotype_substitute(self->arena, struct_type, self->subs, null);
+    if (tl_monotype_is_inst(struct_type)) {
+        // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
+        // fun_ptr is a function pointer.
+        ast_node *nfa = null;
+        if (ast_node_is_nfa(right)) {
+            nfa   = right;
+            right = right->named_application.name;
+        }
+        ensure_tv(self, &right->type);
+        if (ast_node_is_symbol(right)) {
+            str                       field_name = right->symbol.name;
+            tl_type_constructor_inst *inst       = struct_type->cons_inst;
+            i32 found = tl_monotype_type_constructor_field_index(struct_type, field_name);
+
+            dbg(self, "searched struct '%s' field name %s", str_cstr(&inst->def->name),
+                str_cstr(&field_name));
+
+            if (found != -1) {
+                if (!inst->args.size) {
+                    // empty struct
+                    if (constrain_pm(self, right->type, struct_type, node)) return 1;
+                    if (constrain_pm(self, node->type, struct_type, node)) return 1;
+                    if (constrain(self, node->type, right->type, node)) return 1;
+                    goto end_struct_access_op;
+                }
+
+                if ((u32)found >= inst->args.size) fatal("out of range");
+                tl_monotype *field_type = inst->args.v[found];
+                if (nfa) {
+                    tl_monotype *result_type = tl_monotype_arrow_result(field_type);
+                    // right = nfa's name
+                    if (constrain_pm(self, right->type, field_type, node)) return 1;
+                    if (constrain_pm(self, nfa->type, result_type, node)) return 1;
+                    if (constrain_pm(self, node->type, result_type, node)) return 1;
+                } else {
+                    if (constrain_pm(self, right->type, field_type, node)) return 1;
+                    if (constrain_pm(self, node->type, field_type, node)) return 1;
+                    if (constrain(self, node->type, right->type, node)) return 1;
+                }
+            } else {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
+                return 1;
+            }
+
+        } else {
+            // not a symbol
+            fatal("unreachable");
+        }
+    } else {
+        // struct type is not a type constructor
+        dbg(self, "warning: infer struct access without a struct type");
+    }
+
+end_struct_access_op:
+    // always substitute operands immediately
+    tl_polytype_substitute(self->arena, node->binary_op.left->type, self->subs);
+    tl_polytype_substitute(self->arena, node->binary_op.right->type, self->subs);
+    return 0;
+}
+
 static void maybe_handle_null(tl_infer *self, ast_node *node) {
     // Note: special case: if `null` appears and there is no node type yet, or if it's not a Ptr, assign a
     // Ptr(tv). The reason we do this is to assist non-annotated nodes such as struct fields that are
@@ -1089,6 +1209,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 update_env(self, ctx, node);
             }
         }
+
+        else if (ast_node_is_binary_op_struct_access(node)) {
+            return infer_struct_access(self, node);
+        }
+
         maybe_handle_null(self, node);
         break;
 
@@ -1115,6 +1240,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
             }
         }
+
+        else if (ast_node_is_binary_op_struct_access(node)) {
+            return infer_struct_access(self, node);
+        }
+
         break;
 
     case npos_field_name:
@@ -1129,6 +1259,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_operand: {
         // Accept type literal in operand position
         if (!ctx) fatal("logic error");
+
+        if (ast_node_is_binary_op_struct_access(node)) {
+            return infer_struct_access(self, node);
+        }
 
         tl_type_registry_parse_type_ctx parse_ctx;
         tl_monotype *parsed = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
@@ -1180,6 +1314,34 @@ static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node con
     return !!mono;
 }
 
+static int check_type_assertion(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+
+    tl_type_registry_parse_type_ctx parse_ctx;
+    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
+
+    tl_monotype *type =
+      tl_type_registry_parse_type_with_ctx(self->registry, node->type_assertion.annotation, &parse_ctx);
+
+    if (resolve_node(self, node->type_assertion.name, traverse_ctx, npos_operand)) {
+        dbg(self, "assert resolve node failed");
+        return 1;
+    }
+    tl_polytype *name_type = node->type_assertion.name->type;
+    if (!tl_polytype_is_concrete(name_type)) {
+        tl_polytype_substitute(self->arena, name_type, self->subs);
+        if (!tl_polytype_is_concrete(name_type)) {
+            log_subs(self);
+            return unresolved_type_error(self, node->type_assertion.name);
+        }
+    }
+    if (constrain_pm(self, node->type_assertion.name->type, type, node)) {
+        dbg(self, "assert constrain failed");
+        return 1;
+    }
+    ast_node_type_set(node, tl_polytype_nil(self->arena, self->registry));
+    return 0;
+}
+
 int        is_union_struct(tl_infer *self, str name);
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
@@ -1193,31 +1355,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 #endif
 
     switch (node->tag) {
-    case ast_type_assertion: {
-        tl_type_registry_parse_type_ctx parse_ctx;
-        tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
 
-        tl_monotype *type =
-          tl_type_registry_parse_type_with_ctx(self->registry, node->type_assertion.annotation, &parse_ctx);
-
-        if (resolve_node(self, node->type_assertion.name, traverse_ctx, npos_operand)) {
-            dbg(self, "assert resolve node failed");
-            return 1;
-        }
-        tl_polytype *name_type = node->type_assertion.name->type;
-        if (!tl_polytype_is_concrete(name_type)) {
-            tl_polytype_substitute(self->arena, name_type, self->subs);
-            if (!tl_polytype_is_concrete(name_type)) {
-                return unresolved_type_error(self, node->type_assertion.name);
-            }
-        }
-        if (constrain_pm(self, node->type_assertion.name->type, type, node)) {
-            dbg(self, "assert constrain failed");
-            return 1;
-        }
+    case ast_type_assertion:
+        //
         ast_node_type_set(node, tl_polytype_nil(self->arena, self->registry));
-
-    } break;
+        break;
 
     case ast_nil: {
         ensure_tv(self, &node->type);
@@ -1388,99 +1530,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
 
         else if (is_struct_access_operator(op)) {
-            tl_monotype *struct_type = null;
+            if (infer_struct_access(self, node)) return 1;
+        }
 
-            tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-            tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
-
-            // handle -> vs . access
-            if (0 == strcmp("->", op)) {
-
-                // FIXME: it should be an error if inference completes and struct access has never checked
-                // field names being valid. Possibly do this check in a later phase rather than here.
-
-                // if type is not a constructor instance, all we can assert is that the left side must be a
-                // pointer
-                if (tl_monotype_is_inst(left->type->type)) {
-
-                    if (!tl_monotype_has_ptr(left->type->type)) {
-                        array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
-                        return 1;
-                    }
-                    struct_type = tl_monotype_ptr_target(left->type->type);
-                } else {
-                    tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-                    tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-                    if (constrain_pm(self, left->type, ptr, node)) return 1;
-                    struct_type = weak;
-                }
-
-            } else {
-                struct_type = (tl_monotype *)left->type->type;
-            }
-
-            // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
-            tl_monotype_substitute(self->arena, struct_type, self->subs, null);
-            if (tl_monotype_is_inst(struct_type)) {
-                // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
-                // fun_ptr is a function pointer.
-                ast_node *nfa = null;
-                if (ast_node_is_nfa(right)) {
-                    nfa   = right;
-                    right = right->named_application.name;
-                }
-                ensure_tv(self, &right->type);
-                if (ast_node_is_symbol(right)) {
-                    str                       field_name = right->symbol.name;
-                    tl_type_constructor_inst *inst       = struct_type->cons_inst;
-                    i32 found = tl_monotype_type_constructor_field_index(struct_type, field_name);
-
-                    dbg(self, "searched struct '%s' field name %s", str_cstr(&inst->def->name),
-                        str_cstr(&field_name));
-
-                    if (found != -1) {
-                        if (!inst->args.size) {
-                            // empty struct
-                            if (constrain_pm(self, right->type, struct_type, node)) return 1;
-                            if (constrain_pm(self, node->type, struct_type, node)) return 1;
-                            if (constrain(self, node->type, right->type, node)) return 1;
-                            goto end_struct_access_op;
-                        }
-
-                        if ((u32)found >= inst->args.size) fatal("out of range");
-                        tl_monotype *field_type = inst->args.v[found];
-                        if (nfa) {
-                            tl_monotype *result_type = tl_monotype_arrow_result(field_type);
-                            // right = nfa's name
-                            if (constrain_pm(self, right->type, field_type, node)) return 1;
-                            if (constrain_pm(self, nfa->type, result_type, node)) return 1;
-                            if (constrain_pm(self, node->type, result_type, node)) return 1;
-                        } else {
-                            if (constrain_pm(self, right->type, field_type, node)) return 1;
-                            if (constrain_pm(self, node->type, field_type, node)) return 1;
-                            if (constrain(self, node->type, right->type, node)) return 1;
-                        }
-                    } else {
-                        array_push(self->errors,
-                                   ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
-                        return 1;
-                    }
-
-                } else {
-                    // not a symbol
-                    fatal("unreachable");
-                }
-            } else {
-                // struct type is not a type constructor
-                dbg(self, "warning: infer struct access without a struct type");
-            }
-
-        end_struct_access_op:
-            // always substitute operands immediately
-            tl_polytype_substitute(self->arena, node->binary_op.left->type, self->subs);
-            tl_polytype_substitute(self->arena, node->binary_op.right->type, self->subs);
-
-        } else fatal("unknown operator type");
+        else
+            fatal("unknown operator type");
 
     } break;
 
@@ -1852,7 +1906,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_arrow:
     case ast_ellipsis:
     case ast_eof:
-    case ast_type_alias:   break;
+    case ast_type_alias:
+        //
+        break;
     }
 
     return 0;
@@ -2032,7 +2088,8 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     ast_node_set_is_specialized(node);
     if (special_type) {
         // fprintf(stderr, "specialize_user_type: replacing node type.\n");
-        ast_node_type_set(node, special_type); // Note: this helps the transpiler
+
+        constrain_or_set(self, node, special_type); // Note: this helps the transpiler
     }
 
     return 0;
@@ -2185,6 +2242,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
     if (ast_node_is_assignment(node)) return specialize_reassignment(self, ctx, traverse_ctx, node);
+
+    // check for type assertion
+    if (ast_node_is_type_assertion(node)) return check_type_assertion(self, traverse_ctx, node);
 
     int is_anon = ast_node_is_lambda_application(node);
 

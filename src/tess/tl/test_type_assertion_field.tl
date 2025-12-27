@@ -7,8 +7,8 @@ Foo : {
 
 t() {
   foo := Foo(i = 1, f = 2.5)
-  foo.i :: Float
-  foo.f :: Int
+  foo.i :: Int
+  foo.f :: Float
 }
 
 main() {
