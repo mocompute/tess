@@ -8,6 +8,7 @@
 #include "file.h"
 #include "hashmap.h"
 #include "infer.h"
+#include "platform.h"
 #include "str.h"
 #include "token.h"
 #include "tokenizer.h"
@@ -131,7 +132,12 @@ static str           next_var_name(parser *);
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
 static int           too_many_arguments(parser *);
+
+#ifndef MOS_WINDOWS
 static void dbg(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+static void dbg(struct parser *, char const *restrict fmt, ...)
+#endif
 
 // -- allocation and deallocation --
 

@@ -2,6 +2,7 @@
 #define MOS_ALLOC_H
 
 #include "nodiscard.h"
+#include "platform.h"
 
 #include <stdlib.h>
 #include <stdnoreturn.h>
@@ -9,8 +10,12 @@
 
 // -- fatal --
 
+#ifndef MOS_WINDOWS
 noreturn void fatal_i(char const *file, int line, char const *restrict, ...)
   __attribute__((format(printf, 3, 4)));
+#else
+noreturn void fatal_i(char const *file, int line, char const *restrict, ...);
+#endif
 
 #define fatal(...) fatal_i(__FILE__, __LINE__, __VA_ARGS__)
 

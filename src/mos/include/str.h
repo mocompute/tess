@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "platform.h"
 #include "types.h"
 
 #define MOS_STR_MAX_SMALL (sizeof(size_t) + sizeof(char *) - 2)
@@ -59,7 +60,11 @@ str  str_copy(allocator *, str);
 str  str_copy_span(allocator *, span);
 void str_deinit(allocator *, str *);
 
+#ifndef MOS_WINDOWS
 str  str_fmt(allocator *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+str  str_fmt(allocator *, char const *restrict fmt, ...);
+#endif
 
 // -- operations --
 
