@@ -45,7 +45,7 @@ function(mos_create_exe NAME)
   set(TEST_NAME test-${NAME})
   add_executable(${TEST_NAME} "src/test_${NAME}.c")
   target_link_libraries(${TEST_NAME} PRIVATE mos)
-  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC} -Wunused)
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
   target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
 endfunction()
 

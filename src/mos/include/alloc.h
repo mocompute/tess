@@ -23,10 +23,10 @@ typedef struct allocator allocator;
 
 // -- default allocator --
 
-allocator *default_allocator();
+allocator *default_allocator(void);
 
 // -- leak detection --
-nodiscard allocator *leak_detector_create() mallocfun;
+nodiscard allocator *leak_detector_create(void) mallocfun;
 void                 leak_detector_destroy(allocator **);
 void                 leak_detector_report(allocator *);
 

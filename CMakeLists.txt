@@ -49,20 +49,27 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 else()
 
   # https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html
-  set(MOS_C_DIAGNOSTIC
-    # note: no -Wpedantic, due to use of computed goto
-    -Werror
-    -Wall -Wextra
-    -Winline
-    -Wswitch-enum
-    -Wimplicit-fallthrough
-    -Wunused
+  if(MSVC)
+    set(MOS_C_DIAGNOSTIC
+      # /WX /Wall
+      /Wall
+    )
+  else()
+    set(MOS_C_DIAGNOSTIC
+      # note: no -Wpedantic, due to use of computed goto
+      -Werror
+      -Wall -Wextra
+      -Winline
+      -Wswitch-enum
+      -Wimplicit-fallthrough
+      -Wunused
 
-    # allow GNU alignof extension
-    -Wno-gnu-alignof-expression
+      # allow GNU alignof extension
+      -Wno-gnu-alignof-expression
 
-    # -Wno-unused-function
-  )
+      # -Wno-unused-function
+    )
+  endif()
 
 endif()
 

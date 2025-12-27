@@ -1,7 +1,7 @@
 #ifndef MOS_PLATFORM_H
 #define MOS_PLATFORM_H
 
-#ifdef __WIN32__
+#ifdef _WIN32
 #define MOS_WINDOWS
 #endif
 

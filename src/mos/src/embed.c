@@ -1,9 +1,12 @@
 #include <ctype.h>
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#ifndef MOS_WINDOWS
+#include <dirent.h>
+#endif
 
 static void make_c_identifier(char *dest, char const *src, size_t len) {
     size_t j = 0;
