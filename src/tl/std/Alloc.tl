@@ -1,5 +1,6 @@
 #module Alloc
 #import <stdlib.tl>
+#import <stdint.tl>
 
 #import <Unsafe.tl>
 
@@ -157,7 +158,6 @@ bump_create(alloc: Ptr(Allocator), size: CSize) {
 bump_destroy(alloc: Ptr(Allocator)) {
   bump : Ptr(BumpAllocator) := alloc
   bump->parent->free(alloc, bump)
-  void
 }
 
 _bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
@@ -213,10 +213,10 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
 
 _BumpHeader_create(alloc, capacity) {
   c_assert(capacity > sizeof(_BumpHeader))
-  out           := alloc->malloc(alloc, capacity)
-  out->next     = null
-  out->capacity = capacity
-  out->size     = sizeof(_BumpHeader)
+  out: Ptr(_BumpHeader) := alloc->malloc(alloc, capacity)
+  out->next             = null
+  out->capacity         = capacity
+  out->size             = sizeof(_BumpHeader)
   out
 }
 

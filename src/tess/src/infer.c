@@ -1388,7 +1388,12 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     } break;
 
     case ast_void: {
-        // handled by maybe_handle_null()
+        if (traverse_ctx->node_pos == npos_operand) {
+            tl_monotype *nil = tl_type_registry_nil(self->registry);
+            ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, nil));
+            // if (constrain_pm(self, node->type, nil, node)) return 1;
+        }
+        // else handled by maybe_handle_null()
     } break;
 
     case ast_string: {
