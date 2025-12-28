@@ -1975,8 +1975,8 @@ static int should_generate(transpile *self, str name, tl_polytype *type) {
         if (self->verbose) cat_commentln(self, str_cat(self->transient, S("scheme: "), name));
         return 0;
     }
-    // Note: allow weak, because we currently use tl_weak for the ast_void type (FIXME)
-    if (!tl_monotype_is_concrete(type->type)) {
+
+    if (!tl_monotype_is_concrete_no_weak(type->type)) {
         if (self->verbose) cat_commentln(self, str_cat(self->transient, S("!concrete: "), name));
         return 0;
     }
@@ -2101,10 +2101,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         return S("/*any*/void");
     } else if (tl_monotype_is_tv(mono)) {
         return S("/*tv*/void");
-    } else if (tl_monotype_is_weak(mono)) {
-        // FIXME: we are using ast_void -> tl_weak, but we should have a proper tl_void variant to represent
-        // the unit type, the type of no value.
-        return S("/*weak*/void");
     } else if (tl_monotype_is_ptr(mono)) {
         // TODO: repeats case from above
         tl_monotype *arg   = tl_monotype_ptr_target(mono);
