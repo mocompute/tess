@@ -42,7 +42,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     self->input     = input;
     self->pos       = 0;
     self->file      = str_init(self->parent, file); // parent's lifetime
-    self->line      = 1;
+    self->line      = 0;
     self->col       = 0;
 
     self->buf       = (char_array){.alloc = alloc};
