@@ -3353,6 +3353,8 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
             type_error(self, node->let_in.name);
             type_error(self, node);
         }
+    } else if (ast_node_is_reassignment(node) && !tl_polytype_is_concrete(node->type)) {
+        unresolved_type_error(self, node);
     }
 
     return 0;
