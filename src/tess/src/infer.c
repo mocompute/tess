@@ -630,7 +630,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
 
-        ctx->node_pos    = npos_toplevel;
+        ctx->node_pos = npos_toplevel;
         // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
         // specializing generic functions. The name's node->type should not in any case be relied upon: the
         // canonical arrow type of a function name is in the environment, not the ast.
@@ -2261,8 +2261,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (ast_node_is_nfa(node)) {
         str name = ast_node_str(node->named_application.name);
 
-        dbg(self, "specialize_applications_cb: enter '%s'",
-            str_cstr(&name));
+        dbg(self, "specialize_applications_cb: enter '%s'", str_cstr(&name));
     }
 
     // Important: resolve the node, so that traverse_ctx is properly updated, including type arguments. For
@@ -2290,8 +2289,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
 
-        dbg(self, "specialize_applications_cb: nfa '%s'",
-            str_cstr(&name));
+        dbg(self, "specialize_applications_cb: nfa '%s'", str_cstr(&name));
 
         // do not process a second time
         if (ast_node_is_specialized(node)) return 0;
@@ -2301,8 +2299,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
         // may be too early, e.g. for pointers
         if (!toplevel_get(self, name)) {
-            dbg(self, "specialize_applications_cb: skipping '%s'",
-                str_cstr(&name));
+            dbg(self, "specialize_applications_cb: skipping '%s'", str_cstr(&name));
 
             return 0; // to early
         }
