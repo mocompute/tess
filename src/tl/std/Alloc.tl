@@ -143,11 +143,13 @@ _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_reallo
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
 
-bump_create(alloc: Ptr(Allocator), size: CSize) {
+bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
   out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
   out->parent = alloc
   size := next_power_of_two(size)
   size = if size == 0 { 16 } else { size }
+
+  out->head              = _BumpHeader_create(alloc, sz) // FIXME: sz is a free variable and should error
   out->allocator.malloc  = _bump_malloc
   out->allocator.calloc  = _bump_calloc
   out->allocator.realloc = _bump_realloc
