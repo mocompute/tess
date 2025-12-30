@@ -2356,7 +2356,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 
 // --
 
-static str next_variable_name(tl_infer *);
+static str next_variable_name(tl_infer *, str);
 
 // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
 // preserving lexical scope. This simplifies later passes by removing name collision concerns.
@@ -2368,7 +2368,7 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str name = node->let_in.name->symbol.name;
     if (is_c_symbol(name)) return;
 
-    str newvar = next_variable_name(self);
+    str newvar = next_variable_name(self, name);
     ast_node_name_replace(node->let_in.name, newvar);
 
 #if DEBUG_RENAME
@@ -2407,7 +2407,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         if (is_c_symbol(name)) break;
         if (level) {
             // do not rename toplevel symbols again (see rename_let_in)
-            str newvar = next_variable_name(self);
+            str newvar = next_variable_name(self, name);
 
             // establish lexical scope of the let-in binding and recurse
             save = map_copy(ctx->lex);
@@ -2470,7 +2470,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name   = param->symbol.name;
-            str newvar = next_variable_name(self);
+            str newvar = next_variable_name(self, name);
             ast_node_name_replace(param, newvar);
             str_map_set(&ctx->lex, name, &newvar);
             rename_variables(self, param, ctx, level + 1);
@@ -2484,18 +2484,14 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
 
     case ast_let: {
         // establish lexical scope for formal parameters and recurse
-        hashmap *save = map_copy(ctx->lex);
-
-        if (str_eq(node->let.name->symbol.name, S("Alloc_transient"))) {
-            ;
-        }
+        hashmap           *save = map_copy(ctx->lex);
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *param;
         while ((param = ast_arguments_next(&iter))) {
             assert(ast_node_is_symbol(param));
             str name   = param->symbol.name;
-            str newvar = next_variable_name(self);
+            str newvar = next_variable_name(self, name);
             ast_node_name_replace(param, newvar);
             str_map_set(&ctx->lex, name, &newvar);
             rename_variables(self, param, ctx, level + 1);
@@ -2703,9 +2699,11 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
     return name_inst;
 }
 
-static str next_variable_name(tl_infer *self) {
+static str next_variable_name(tl_infer *self, str name) {
     char buf[64];
-    snprintf(buf, sizeof buf, "tl_v%u", self->next_var_name++);
+    if (0 == str_cmp_nc(name, "tl_", 3))
+        snprintf(buf, sizeof buf, "%s_v%u", str_cstr(&name), self->next_var_name++);
+    else snprintf(buf, sizeof buf, "tl_%s_v%u", str_cstr(&name), self->next_var_name++);
     return str_init(self->arena, buf);
 }
 
