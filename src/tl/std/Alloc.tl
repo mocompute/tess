@@ -149,7 +149,7 @@ bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
   size := next_power_of_two(size)
   size = if size == 0 { 16 } else { size }
 
-  out->head              = _BumpHeader_create(alloc, sz) // FIXME: sz is a free variable and should error
+  out->head              = _BumpHeader_create(alloc, size)
   out->allocator.malloc  = _bump_malloc
   out->allocator.calloc  = _bump_calloc
   out->allocator.realloc = _bump_realloc
