@@ -10,8 +10,8 @@ c_tl_unsafe_pointer_add        (ptr: Ptr(any), n: CPtrDiff)   -> Ptr(any)
 c_tl_unsafe_pointer_difference (lhs: Ptr(any), rhs: Ptr(any)) -> CPtrDiff
 c_tl_unsafe_pointer_compare    (lhs: Ptr(any), rhs: Ptr(any)) -> CInt
 
-pointer_add      (ptr: Ptr(any), n: CPtrdiff) -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, n)  }
-pointer_subtract (ptr: Ptr(any), n: CPtrdiff) -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, -n) }
+pointer_add      (ptr: Ptr(any), n: CPtrDiff) -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, n)  }
+pointer_subtract (ptr: Ptr(any), n: CPtrDiff) -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, -n) }
 pointer_compare  (lhs: Ptr(any), rhs: Ptr(any)) -> CInt   { c_tl_unsafe_pointer_compare(lhs, rhs) }
 
 pointer_difference(lhs: Ptr(any), rhs: Ptr(any)) -> CPtrDiff {
