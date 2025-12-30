@@ -265,7 +265,7 @@ static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *f
 
     sz        = alloc_align_to_pointer_size(sz);
     void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
-    if (out) memset(out, 0xCD, num * sz);
+    if (out) memset(out, 0xCD, num * sz); // TODO: uses 0xCD for debugging, not 0x00
     return out;
 }
 

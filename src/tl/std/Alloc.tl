@@ -1,6 +1,7 @@
 #module Alloc
 #import <stdlib.tl>
 #import <stdint.tl>
+#import <string.tl>
 
 #import <Unsafe.tl>
 
@@ -137,12 +138,6 @@ _bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any)
 _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
 
-// FIXME: implement these
-_bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
-_bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
-_bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
-
-
 bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
   out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
   out->parent = alloc
@@ -255,7 +250,70 @@ _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
   _bump_alloc_assume_capacity(bucket, sz)
 }
 
+_bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
+  if p == null { return _bump_malloc(a, sz) }
 
+  sz = align_max(sz)
+  arena: Ptr(BumpAllocator) := a
+  bucket := _find_bucket(arena, p)
+  if bucket == null {
+    c_assert(0)
+    return null
+  }
+
+  cur_size_p := _block_size(p)
+  cur_size   := cur_size_p.*
+  if sz == cur_size { return p }
+
+  if _is_last_block(bucket, p) {
+    // shrink block in place
+    if sz < cur_size {
+      cur_size_p.* = sz
+      bucket->size -= cur_size - sz
+      return p
+    }
+
+    // grow block if there is room in its bucket
+    if _bucket_has_capacity(bucket, sz - cur_size) {
+      cur_size_p.* = sz
+      bucket->size += sz - cur_size
+      return p
+    }
+  }
+
+  if sz < cur_size { return p } // cannot shrink non-last block
+
+  // allocate new block, copy data, release old block if possible
+  new_block := _bump_malloc(a, sz)
+  c_assert(sz >= cur_size)
+  c_memcpy(new_block, p, cur_size)
+  _maybe_free_block(bucket, p)
+  new_block
+}
+
+_bump_calloc(a: Ptr(Allocator), num: CSize, sz: CSize) -> Ptr(any) {
+  sz = align_max(sz)
+  out := _bump_malloc(a, num * sz)
+  if out != null { c_memset(out, 0xCD, num * sz) }  // TODO: uses 0xCD for debugging, not 0x00
+  out
+}
+
+_bump_free(a: Ptr(Allocator), p: Ptr(any)) -> Void {
+  if p == null { return void }
+
+  arena: Ptr(BumpAllocator) := a
+  bucket := _find_bucket(arena, p)
+  if bucket == null {
+    c_assert(0) // attempt to free unknown pointer
+    return void
+  }
+
+  if _is_last_block(bucket, p) {
+    bucket->size -= _block_size(p).* + sizeof(_BumpBlock)
+  }
+
+  void
+}
 
 
 // Returns: input if already a power of two, or else the next higher
