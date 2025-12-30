@@ -505,6 +505,8 @@ int compile_c(state *self) {
 
         array_push_val(argv, "-std=c11");
         array_push_val(argv, "-Wno-format-security");
+        array_push_val(argv, "-Wno-unused-value");
+        array_push_val(argv, "-Wno-compare-distinct-pointer-types");
         array_push_val(argv, "-x");
         array_push_val(argv, "c");
         array_push_val(argv, "-");
