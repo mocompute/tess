@@ -382,10 +382,10 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
                 ast_node *next = toplevel_get(self, arg->symbol.name);
                 if (next) {
                     ast_node_dfs(ctx, next, do_tree_shake);
-                }
 
-                // and save the name
-                str_hset_insert(&ctx->names, arg->symbol.name);
+                    // and save the name
+                    str_hset_insert(&ctx->names, arg->symbol.name);
+                }
             }
         }
 
