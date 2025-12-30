@@ -15,6 +15,7 @@ test_bump_realloc() {
   p2 := bump->realloc(bump, p1, 128)
   if p1 != p2 { error += 1 }
   Alloc.bump_destroy(bump)
+
   error
 }
 

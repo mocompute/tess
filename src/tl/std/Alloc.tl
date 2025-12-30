@@ -178,12 +178,11 @@ _block_size(p: Ptr(any)) -> Ptr(CSize) {
 
 _is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
   if p < bucket { return 0 }
-  block: Ptr(_BumpBlock) := Unsafe.pointer_subtract(p, sizeof(CSize))
-  sz := block->size
-  p_end := Unsafe.pointer_add(p, sz)
-  block_end := Unsafe.pointer_add(block, block->size)
+  sz         := _block_size(p).*
+  p_end      := Unsafe.pointer_add(p, sz)
+  bucket_end := Unsafe.pointer_add(bucket, bucket->size)
 
-  block_end == p_end
+  p_end == bucket_end
 }
 
 _maybe_free_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
