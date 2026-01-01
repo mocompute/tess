@@ -19,6 +19,14 @@ test_bump_realloc() {
   error
 }
 
+test_transient_realloc() {
+  error := 0
+  p1 := Alloc.transient(64)
+  p2 := Alloc.realloc_transient(p1, 128)
+  if p1 != p2 { error += 1 }
+  error
+}
+
 test_bump_realloc_non_contiguous() {
   error := 0
 
@@ -75,6 +83,8 @@ main() {
   error += test_bump_realloc_non_contiguous()
   error += test_bump_free_reuse()
   error += test_align_next_power_of_two()
+
+  error += test_transient_realloc()
 
   error
 

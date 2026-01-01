@@ -80,10 +80,10 @@ _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)    
 
 // FIXME: use arenas
 _transient := Allocator(
-  malloc  = _malloc,
-  calloc  = _calloc,
-  realloc = _realloc,
-  free    = _free
+  malloc  = _bump_malloc,
+  calloc  = _bump_calloc,
+  realloc = _bump_realloc,
+  free    = _bump_free
 )
 
 _periodic := Allocator(
