@@ -78,21 +78,6 @@ _calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num,
 _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
-// FIXME: use arenas
-_transient := Allocator(
-  malloc  = _bump_malloc,
-  calloc  = _bump_calloc,
-  realloc = _bump_realloc,
-  free    = _bump_free
-)
-
-_periodic := Allocator(
-  malloc  = _malloc,
-  calloc  = _calloc,
-  realloc = _realloc,
-  free    = _free
-)
-
 _managed := Allocator(
   malloc  = _malloc,
   calloc  = _calloc,
@@ -100,9 +85,12 @@ _managed := Allocator(
   free    = _free
 )
 
+_periodic  := bump_create(_managed.&, 1024) // TODO: better initialisation
+_transient := bump_create(_managed.&, 1024) // TODO: better initialisation
+
 context := Context(
-  transient = _transient.&,
-  periodic  = _periodic.&,
+  transient = _transient,
+  periodic  = _periodic,
   managed   = _managed.&
 )
 
