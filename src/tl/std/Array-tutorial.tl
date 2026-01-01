@@ -219,9 +219,11 @@ Iter(a) : {
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
 // implements the `for` statement. See the bottom of this file for another iterator module, IndexedArray.
+// See also parser.c `a_for_statement` for documentation of how a for loop desugars into calls to these
+// functions.
 iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_ptr     (iter: Ptr(Iter(a))) -> Ptr(a)
-iter_value   (iter: Ptr(Iter(a))) -> a
+iter_ptr     (iter: Ptr(Iter(a))) -> Ptr(a) // when loop variable is `it.&`
+iter_value   (iter: Ptr(Iter(a))) -> a      // when loop variable is `it`
 iter_cond    (iter: Ptr(Iter(a))) -> Bool
 iter_update  (iter: Ptr(Iter(a))) -> Void
 iter_deinit  (iter: Ptr(Iter(a))) -> Void
