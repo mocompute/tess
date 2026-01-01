@@ -3,7 +3,7 @@
 
 main() {
   s1 := "hello"
-  case s1, (s1, s2) { 0 == c_strcmp(s1, s2) } {
+  case s1, (a, b) { 0 == c_strcmp(a, b) } {
     "world"    { 1 }
     "there"    { 1 }
     "hello"    { 0 }
