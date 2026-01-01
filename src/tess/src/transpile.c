@@ -136,6 +136,9 @@ static void generate_prototypes(transpile *self, int decl_static) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("missing type");
 
+        // skip let nodes that are not specialized
+        if (ast_node_is_let(node) && !ast_node_is_specialized(node)) continue;
+
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(self, name, type)) continue;
 
@@ -552,6 +555,9 @@ static void generate_toplevels(transpile *self) {
         str          name = toplevel_name(node);
         tl_polytype *poly = tl_type_env_lookup(self->env, name);
         if (!poly) fatal("missing type");
+
+        // skip let nodes that are not specialized
+        if (ast_node_is_let(node) && !ast_node_is_specialized(node)) continue;
 
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(self, name, poly)) continue;

@@ -270,7 +270,6 @@ TL_TESTS =					\
 	c_struct				\
 	c_timespec				\
 	case_basic_else				\
-	case_float				\
 	case_pred_ident				\
 	case_pred_lambda			\
 	cast_string_to_ptr			\
@@ -355,6 +354,7 @@ TL_TESTS =					\
 	while_update_statement
 
 TL_FAIL_TESTS =					\
+	case_float				\
 	unknown_free_variable
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))

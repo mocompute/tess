@@ -587,6 +587,7 @@ static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_n
 static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *,
                                            int is_params);
 static tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);
+static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *lhs, ast_node *rhs);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
 //
@@ -770,6 +771,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             ctx->node_pos = npos_operand;
             if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
         }
+        if (cb(self, ctx, node)) return 1;
     } break;
 
     case ast_binary_op:
@@ -1144,6 +1146,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     // Note: ctx may be null if this processing is initiated from load_toplevel()
 
+    if (!node) return 0;
+
     switch (pos) {
     case npos_toplevel:
     case npos_formal_parameter:
@@ -1448,14 +1452,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         ensure_tv(self, &node->type);
         tl_monotype *nil       = tl_type_registry_nil(self->registry);
-        tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         tl_monotype *any_type  = tl_monotype_create_any(self->arena);
         tl_polytype *expr_type = node->case_.expression->type;
 
         if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
 
-        // expression and all conditions must be same type so they can be compared for equality
+        // expression and all conditions must be same type so they can be compared for equality.
+
         forall(i, node->case_.conditions) {
+            // check if last condition is ast_nil, indicating an `else` case
+            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+
             if (resolve_node(self, node->case_.conditions.v[i], traverse_ctx, npos_operand)) return 1;
             ensure_tv(self, &node->case_.conditions.v[i]->type);
             if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
@@ -1491,12 +1498,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
         // predicate, if it exists, must be type (x, y) -> Bool
         if (node->case_.binary_predicate && node->case_.conditions.size) {
-            ast_node_array args = {.alloc = self->arena};
-            array_push(args, node->case_.expression);
-            array_push(args, node->case_.conditions.v[0]);
-            tl_polytype *bool_poly = tl_polytype_absorb_mono(self->arena, bool_type);
-            tl_polytype *pred_arrow =
-              make_arrow_result_type(self, traverse_ctx, (ast_node_sized)array_sized(args), bool_poly, 0);
+            tl_polytype *pred_arrow = make_binary_predicate_arrow(
+              self, traverse_ctx, node->case_.expression, node->case_.conditions.v[0]);
             if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
         }
 
@@ -2226,6 +2229,25 @@ static int specialize_reassignment(tl_infer *self, infer_ctx *ctx, traverse_ctx 
     return specialize_operand(self, ctx, traverse_ctx, node->assignment.value);
 }
 
+static int specialize_case(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node) {
+    assert(ast_node_is_case(node));
+    if (!node->case_.binary_predicate) return 0;
+
+    ast_node *predicate = node->case_.binary_predicate;
+    if (!ast_node_is_symbol(predicate)) return 0; // FIXME: what about lambdas?
+    if (!node->case_.conditions.size) return 0;
+
+    tl_polytype *pred_arrow =
+      make_binary_predicate_arrow(self, traverse_ctx, node->case_.expression, node->case_.conditions.v[0]);
+
+    str predicate_name = ast_node_str(predicate);
+    str inst_name      = specialize_arrow(self, ctx, traverse_ctx, predicate_name, pred_arrow->type);
+    if (str_is_empty(inst_name)) return 0;
+    ast_node_name_replace(predicate, inst_name);
+
+    return 0;
+}
+
 static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
     str       arg_name = ast_node_str(arg);
     ast_node *top      = toplevel_get(self, arg_name);
@@ -2240,13 +2262,16 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     // toplevel functions. When found, that function is specialized according to the callsite's expected
     // type.
 
-    ast_arguments_iter iter = ast_node_arguments_iter(node);
-    ast_node          *arg;
+    ast_arguments_iter iter     = ast_node_arguments_iter(node);
     tl_monotype_sized  app_args = tl_monotype_arrow_args(arrow)->list.xs;
-    u32                i        = 0;
+    ast_node          *arg;
+    u32                i = 0;
     while ((arg = ast_arguments_next(&iter))) {
-        if (!ast_node_is_symbol(arg)) goto next;
 
+        if (ast_node_is_assignment(arg))
+            if (specialize_reassignment(self, ctx, traverse_ctx, arg)) return 1;
+
+        if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (specialize_one(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
 
@@ -2267,13 +2292,16 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     // Important: resolve the node, so that traverse_ctx is properly updated, including type arguments. For
     // example, node could be a symbol which is a formal argument that carries an annotation referring to a
     // type variable.
-    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
+    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) {
+        return 1;
+    }
 
     // check for nullary type constructors
     if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
     // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, ctx, traverse_ctx, node);
     if (ast_node_is_assignment(node)) return specialize_reassignment(self, ctx, traverse_ctx, node);
+    if (ast_node_is_case(node)) return specialize_case(self, ctx, traverse_ctx, node);
 
     // check for type assertion
     if (ast_node_is_type_assertion(node)) return check_type_assertion(self, traverse_ctx, node);
@@ -2301,7 +2329,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (!toplevel_get(self, name)) {
             dbg(self, "specialize_applications_cb: skipping '%s'", str_cstr(&name));
 
-            return 0; // to early
+            return 0; // too early
         }
 
         tl_polytype *type = tl_type_env_lookup(self->env, name);
@@ -2316,7 +2344,9 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         // Important: use _with variant to copy free variables info to the arrow, which is added to the
         // environment further down.
         callsite = make_arrow_with(self, traverse_ctx, node, type);
-        if (!callsite) return 1;
+        if (!callsite) {
+            return 1;
+        }
 
         if (self->verbose) {
             str app_str = tl_polytype_to_string(self->transient, callsite);
@@ -2681,6 +2711,7 @@ static str specialize_fun(tl_infer *self, ast_node *node, tl_monotype *callsite)
 
     if (ast_node_is_let(generic_node)) {
         ast_node_name_replace(generic_node->let.name, name_inst);
+        ast_node_set_is_specialized(generic_node);
     } else if (ast_node_is_let_in_lambda(generic_node)) {
         ast_node_name_replace(generic_node->let_in.name, name_inst);
     } else if (ast_node_is_symbol(generic_node)) {
@@ -2792,6 +2823,21 @@ static tl_polytype *make_arrow_with(tl_infer *self, traverse_ctx *ctx, ast_node 
         (out->type)->list.fvs = type->type->list.fvs;
     }
     return out;
+}
+
+static tl_polytype *make_binary_predicate_arrow(tl_infer *self, traverse_ctx *ctx, ast_node *lhs,
+                                                ast_node *rhs) {
+
+    ast_node_array args = {.alloc = self->arena};
+    array_push(args, lhs);
+    array_push(args, rhs);
+    tl_monotype *bool_type = tl_type_registry_bool(self->registry);
+
+    tl_polytype *bool_poly = tl_polytype_absorb_mono(self->arena, bool_type);
+    tl_polytype *pred_arrow =
+      make_arrow_result_type(self, ctx, (ast_node_sized)array_sized(args), bool_poly, 0);
+
+    return pred_arrow;
 }
 
 typedef struct {
@@ -3113,6 +3159,9 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     assert(ast_node_is_let(main));
     tl_polytype *type = tl_type_env_lookup(self->env, S("main"));
     if (!type) fatal("main function with no type");
+
+    // set is_specialized
+    ast_node_set_is_specialized(main);
 
     tl_polytype *body_type = main->let.body->type;
     if (!body_type || tl_polytype_is_scheme(body_type)) {
@@ -3466,6 +3515,16 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
             }
         }
     }
+
+    // specialize toplevel nodes e.g. global values that may refer to functions by name
+    forall(i, nodes) {
+        ast_node *node = nodes.v[i];
+
+        if (ast_node_is_let_in(node)) {
+            traverse_ast(self, traverse, node, specialize_applications_cb);
+        }
+    }
+
     arena_reset(self->transient);
 
     // apply subs to global environment

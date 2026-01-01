@@ -162,11 +162,12 @@ ast_node *ast_node_create_let_in(allocator *alloc, ast_node *name, ast_node *val
     return self;
 }
 ast_node *ast_node_create_let(allocator *alloc, ast_node *name, ast_node_sized args, ast_node *body) {
-    ast_node *self         = ast_node_create(alloc, ast_let);
-    self->let.name         = name;
-    self->let.n_parameters = args.size;
-    self->let.parameters   = args.v;
-    self->let.body         = body;
+    ast_node *self           = ast_node_create(alloc, ast_let);
+    self->let.name           = name;
+    self->let.n_parameters   = args.size;
+    self->let.parameters     = args.v;
+    self->let.body           = body;
+    self->let.is_specialized = 0;
     return self;
 }
 ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
@@ -1488,6 +1489,9 @@ int ast_node_is_binary_op_struct_access(ast_node const *self) {
 int ast_node_is_body(ast_node const *self) {
     return ast_body == self->tag;
 }
+int ast_node_is_case(ast_node const *self) {
+    return ast_case == self->tag;
+}
 int ast_node_is_hash_command(ast_node const *self) {
     return ast_hash_command == self->tag;
 }
@@ -1501,14 +1505,16 @@ int ast_node_is_std_application(ast_node const *self) {
 }
 
 int ast_node_is_specialized(ast_node const *self) {
-    if (ast_node_is_nfa(self) && self->named_application.is_specialized) return 1;
-    if (ast_node_is_lambda_application(self) && self->lambda_application.is_specialized) return 1;
+    if (ast_node_is_nfa(self)) return self->named_application.is_specialized;
+    if (ast_node_is_lambda_application(self)) return self->lambda_application.is_specialized;
+    if (ast_node_is_let(self)) return self->let.is_specialized;
     return 0;
 }
 
 void ast_node_set_is_specialized(ast_node *self) {
     if (ast_node_is_nfa(self)) self->named_application.is_specialized = 1;
     else if (ast_node_is_lambda_application(self)) self->lambda_application.is_specialized = 1;
+    else if (ast_node_is_let(self)) self->let.is_specialized = 1;
     else fatal("logic error");
 }
 

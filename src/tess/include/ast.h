@@ -69,6 +69,7 @@ typedef struct ast_node {
             u8                n_parameters;
             struct ast_node  *name;
             struct ast_node  *body;
+            int               is_specialized;
         } let;
 
         struct ast_lambda_application {
@@ -287,6 +288,7 @@ int            ast_node_is_reassignment(ast_node const *);
 int            ast_node_is_binary_op(ast_node const *);
 int            ast_node_is_binary_op_struct_access(ast_node const *);
 int            ast_node_is_body(ast_node const *);
+int            ast_node_is_case(ast_node const *);
 int            ast_node_is_hash_command(ast_node const *);
 int            ast_node_is_ifc_block(ast_node const *);
 int            ast_node_is_lambda_function(ast_node const *);
