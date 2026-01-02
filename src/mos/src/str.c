@@ -289,6 +289,17 @@ int str_cmp_nc(str lhs, char const *rhs, size_t max) {
     return memcmp(left.buf, rhs, max);
 }
 
+int str_ends_with(str data, str suffix) {
+    size_t data_len   = str_len(data);
+    size_t suffix_len = str_len(suffix);
+    if (data_len < suffix_len) return 0;
+
+    char const *data_buf   = str_buf(&data);
+    char const *suffix_buf = str_buf(&suffix);
+    size_t      index      = data_len - suffix_len;
+    return 0 == memcmp(data_buf + index, suffix_buf, suffix_len);
+}
+
 int str_eq(str lhs, str rhs) {
     return 0 == str_cmp(lhs, rhs);
 }

@@ -93,6 +93,19 @@ static int test_build(void) {
     return error;
 }
 
+static int test_ends_with(void) {
+    int error = 0;
+
+    str data  = S("abcdef");
+    error += 1 == str_ends_with(data, S("def")) ? 0 : 1;
+    error += 1 == str_ends_with(data, S("abcdef")) ? 0 : 1;
+
+    error += 0 == str_ends_with(data, S("x")) ? 0 : 1;
+    error += 0 == str_ends_with(data, S("abcdefg")) ? 0 : 1;
+
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -114,6 +127,7 @@ int main(void) {
     T(test_cat);
     T(test_dcat);
     T(test_build);
+    T(test_ends_with);
 
     return error;
 }

@@ -61,9 +61,9 @@ str  str_copy_span(allocator *, span);
 void str_deinit(allocator *, str *);
 
 #ifndef MOS_WINDOWS
-str  str_fmt(allocator *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+str str_fmt(allocator *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 #else
-str  str_fmt(allocator *, char const *restrict fmt, ...);
+str str_fmt(allocator *, char const *restrict fmt, ...);
 #endif
 
 // -- operations --
@@ -88,6 +88,7 @@ int         str_cmp(str, str);
 int         str_cmp_v(void const *, void const *);
 int         str_cmp_c(str, char const *);
 int         str_cmp_nc(str, char const *, size_t);
+int         str_ends_with(str, str);
 int         str_eq(str, str);
 u32         str_hash32(str);
 u64         str_hash64(str);
