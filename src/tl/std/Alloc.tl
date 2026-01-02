@@ -7,6 +7,9 @@
 
 // -- Synopsis --
 
+initialTransientSize: CSize := 0
+initialPeriodicSize : CSize := 0
+
 Allocator : {
   malloc:  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any),
   calloc:  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any),
@@ -78,26 +81,12 @@ _calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num,
 _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
-_managed := Allocator(
-  malloc  = _malloc,
-  calloc  = _calloc,
-  realloc = _realloc,
-  free    = _free
-)
 
-_periodic  := bump_create(_managed.&, 1024) // TODO: better initialisation
-_transient := bump_create(_managed.&, 1024) // TODO: better initialisation
+// -- context --
 
-context := Context(
-  transient = _transient,
-  periodic  = _periodic,
-  managed   = _managed.&
-)
 
 
 // -- transient --
-
-// FIXME: these all use stdlib allocator for now, until we have a bump allocator
 
 transient         (sz)      { context.transient->malloc(context.transient, sz)      }
 clear_transient   (num, sz) { context.transient->calloc(context.transient, num, sz) }
@@ -118,10 +107,6 @@ clear_managed     (num, sz) { context.managed->calloc(context.managed, num, sz) 
 realloc_managed   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
 free_managed      (p)       { context.managed->free(context.managed, p)             }
 
-
-__init() {
-  // static initialisation
-}
 
 // -- BumpAllocator --
 
@@ -324,4 +309,43 @@ next_power_of_two(n: CSize) {
     n = n | (n >> 16)
     n = n | (n >> 32)
     n + 1
+}
+
+
+// -- initialisation --
+
+#ifc
+#ifndef TL_ALLOC_TRANSIENT_SIZE
+#define TL_ALLOC_TRANSIENT_SIZE 4096
+#endif
+
+#ifndef TL_ALLOC_PERIODIC_SIZE
+#define TL_ALLOC_PERIODIC_SIZE 4096
+#endif
+#endc
+
+c_TL_ALLOC_TRANSIENT_SIZE : CSize
+c_TL_ALLOC_PERIODIC_SIZE  : CSize
+
+_managed := Allocator(
+  malloc  = _malloc,
+  calloc  = _calloc,
+  realloc = _realloc,
+  free    = _free
+)
+
+
+context := Context(
+  transient = void,
+  periodic  = void,
+  managed   = _managed.&
+)
+
+
+__init() {
+  initialTransientSize = c_TL_ALLOC_TRANSIENT_SIZE
+  initialPeriodicSize  = c_TL_ALLOC_PERIODIC_SIZE
+
+  context.transient = bump_create(context.managed, initialTransientSize)
+  context.periodic  = bump_create(context.managed, initialPeriodicSize)
 }

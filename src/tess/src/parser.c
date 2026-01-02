@@ -1992,7 +1992,7 @@ decl_done:
 
 static int toplevel_assign(parser *self) {
     // cannot use parse_lvalue here
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_param)) return 1;
     ast_node *name = self->result;
 
     if (a_try(self, a_colon_equal)) return 1;

@@ -1693,6 +1693,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                     constrain(self, name_type, value_type, node) && !is_cast)
                     return 1;
 
+                // FIXME: why is this second clause here? Seems to be duplicate of previous
                 if (!escape_constraint(self, node->let_in.name->type, value_type) &&
                     constrain(self, node->let_in.name->type, value_type, node) && !is_cast)
                     return 1;
@@ -3132,6 +3133,11 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
         // Note: special case: preserve module init functions.
         else if (ast_node_is_let(node) && is_module_init(ast_node_str(node->let.name))) {
             str_hset_insert(&used, node->let.name->symbol.name);
+
+            // recurse into toplevel module init functions
+            hashmap *recur = tree_shake(self, node);
+            map_merge(&used, recur);
+            map_destroy(&recur);
         }
     }
 
