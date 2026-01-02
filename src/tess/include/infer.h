@@ -41,5 +41,6 @@ tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mo
 int                 is_c_symbol(str);
 int                 is_c_struct_symbol(str);
 int                 is_intrinsic(str);
+int                 is_module_init(str);
 
 #endif

@@ -3130,7 +3130,7 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
         }
 
         // Note: special case: preserve module init functions.
-        else if (ast_node_is_let(node) && str_ends_with(ast_node_str(node->let.name), S("__init"))) {
+        else if (ast_node_is_let(node) && is_module_init(ast_node_str(node->let.name))) {
             str_hset_insert(&used, node->let.name->symbol.name);
         }
     }
@@ -3539,7 +3539,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
             ast_node *node = nodes.v[i];
             if (ast_node_is_let(node)) {
                 str name = ast_node_str(node->let.name);
-                if (str_ends_with(name, S("__init"))) {
+                if (is_module_init(name)) {
                     // These two things must be done in order for the transpiler to emit the function: It
                     // must be specialized and it must not have a generic type.
                     ast_node_set_is_specialized(node);
@@ -3713,6 +3713,10 @@ int is_c_symbol(str name) {
 
 int is_c_struct_symbol(str name) {
     return (0 == str_cmp_nc(name, "c_struct_", 9));
+}
+
+int is_module_init(str name) {
+    return str_ends_with(name, S("___init"));
 }
 
 //
