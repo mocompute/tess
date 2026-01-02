@@ -530,6 +530,19 @@ static void generate_toplevel_values(transpile *self) {
 
     forall(i, self->toplevels_sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+
+        // call Module._init functions
+        if (ast_node_is_let(node)) {
+            str name = ast_node_str(node->let.name);
+            if (str_ends_with(name, S("__init"))) {
+                cat(self, mangle_fun(self, name));
+                cat_open_round(self);
+                cat_close_round(self);
+                cat_semicolonln(self);
+                continue;
+            }
+        }
+
         if (ast_node_is_let_in_lambda(node)) continue; // handled elsewhere
         if (!ast_node_is_let_in(node)) continue;
         str name = ast_node_str(node->let_in.name);

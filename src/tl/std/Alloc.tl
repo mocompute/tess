@@ -119,6 +119,10 @@ realloc_managed   (p, sz)   { context.managed->realloc(context.managed, p, sz)  
 free_managed      (p)       { context.managed->free(context.managed, p)             }
 
 
+_init() {
+  // static initialisation
+}
+
 // -- BumpAllocator --
 
 _bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any)

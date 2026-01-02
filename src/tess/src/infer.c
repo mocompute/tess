@@ -3128,6 +3128,11 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
             str name = ast_node_str(node->user_type_def.name);
             str_hset_insert(&used, name);
         }
+
+        // Note: special case: preserve module init functions.
+        else if (ast_node_is_let(node) && str_ends_with(ast_node_str(node->let.name), S("__init"))) {
+            str_hset_insert(&used, node->let.name->symbol.name);
+        }
     }
 
     iter = (hashmap_iterator){0};
@@ -3522,6 +3527,27 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
         if (ast_node_is_let_in(node)) {
             traverse_ast(self, traverse, node, specialize_applications_cb);
+        }
+    }
+
+    // specialize module init functions
+    {
+        // () -> Void
+        tl_polytype *callsite = make_arrow_result_type(self, traverse, (ast_node_sized){0},
+                                                       tl_polytype_nil(self->arena, self->registry), 0);
+        forall(i, nodes) {
+            ast_node *node = nodes.v[i];
+            if (ast_node_is_let(node)) {
+                str name = ast_node_str(node->let.name);
+                if (str_ends_with(name, S("__init"))) {
+                    // These two things must be done in order for the transpiler to emit the function: It
+                    // must be specialized and it must not have a generic type.
+                    ast_node_set_is_specialized(node);
+                    tl_type_env_insert(self->env, name, callsite);
+                    // recurse through init body as if we had specialized it
+                    post_specialize(self, traverse, node, callsite->type);
+                }
+            }
         }
     }
 
