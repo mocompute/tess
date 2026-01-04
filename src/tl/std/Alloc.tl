@@ -46,17 +46,17 @@ BumpAllocator : {
 align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
 
-transient         (sz: CSize)              -> Ptr(any)
+transient_alloc   (sz: CSize)              -> Ptr(any)
 transient_clear   (num: CSize,  sz: CSize) -> Ptr(any)
 transient_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
 transient_free    (p: Ptr(any))            -> Void
 
-periodic          (sz: CSize)              -> Ptr(any)
+periodic_alloc    (sz: CSize)              -> Ptr(any)
 periodic_clear    (num: CSize,  sz: CSize) -> Ptr(any)
 periodic_realloc  (p: Ptr(any), sz: CSize) -> Ptr(any)
 periodic_free     (p: Ptr(any))            -> Void
 
-managed           (sz: CSize)              -> Ptr(any)
+managed_alloc     (sz: CSize)              -> Ptr(any)
 managed_clear     (num: CSize,  sz: CSize) -> Ptr(any)
 managed_realloc   (p: Ptr(any), sz: CSize) -> Ptr(any)
 managed_free      (p: Ptr(any))            -> Void
@@ -82,26 +82,6 @@ _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, 
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
 
-// -- transient --
-
-transient         (sz)      { context.transient->malloc(context.transient, sz)      }
-transient_clear   (num, sz) { context.transient->calloc(context.transient, num, sz) }
-transient_realloc (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
-transient_free    (p)       { context.transient->free(context.transient, p)         }
-
-// -- periodic --
-
-periodic          (sz)      { context.periodic->malloc(context.periodic, sz)        }
-periodic_clear    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
-periodic_realloc  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
-periodic_free     (p)       { context.periodic->free(context.periodic, p)           }
-
-// -- managed --
-
-managed           (sz)      { context.managed->malloc(context.managed, sz)          }
-managed_clear     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
-managed_realloc   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
-managed_free      (p)       { context.managed->free(context.managed, p)             }
 
 
 // -- BumpAllocator --
@@ -307,6 +287,29 @@ next_power_of_two(n: CSize) {
     n + 1
 }
 
+// -- helpers --
+
+
+// -- transient --
+
+transient_alloc   (sz)      { context.transient->malloc(context.transient, sz)      }
+transient_clear   (num, sz) { context.transient->calloc(context.transient, num, sz) }
+transient_realloc (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
+transient_free    (p)       { context.transient->free(context.transient, p)         }
+
+// -- periodic --
+
+periodic_alloc    (sz)      { context.periodic->malloc(context.periodic, sz)        }
+periodic_clear    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
+periodic_realloc  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
+periodic_free     (p)       { context.periodic->free(context.periodic, p)           }
+
+// -- managed --
+
+managed_alloc     (sz)      { context.managed->malloc(context.managed, sz)          }
+managed_clear     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
+managed_realloc   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
+managed_free      (p)       { context.managed->free(context.managed, p)             }
 
 // -- initialisation --
 
