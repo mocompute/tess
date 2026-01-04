@@ -1691,11 +1691,6 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (!escape_constraint(self, name_type, value_type) &&
                     constrain(self, name_type, value_type, node) && !is_cast)
                     return 1;
-
-                // FIXME: why is this second clause here? Seems to be duplicate of previous
-                if (!escape_constraint(self, node->let_in.name->type, value_type) &&
-                    constrain(self, node->let_in.name->type, value_type, node) && !is_cast)
-                    return 1;
                 self->is_constrain_ignore_error = 0;
             }
 
