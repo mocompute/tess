@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define TOKENIZER_LINE_START 1
+
 struct tokenizer {
     allocator  *parent;
     allocator  *strings;
@@ -42,7 +44,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     self->input     = input;
     self->pos       = 0;
     self->file      = str_init(self->parent, file); // parent's lifetime
-    self->line      = 0;
+    self->line      = TOKENIZER_LINE_START;
     self->col       = 0;
 
     self->buf       = (char_array){.alloc = alloc};
@@ -925,5 +927,5 @@ void tokenizer_put_back(tokenizer *self, token const *toks, size_t n_toks) {
 
 void tokenizer_set_file(tokenizer *self, str file) {
     self->file = str_copy(self->parent, file);
-    self->line = 0;
+    self->line = TOKENIZER_LINE_START;
 }
