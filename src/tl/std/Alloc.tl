@@ -47,19 +47,19 @@ align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
 
 transient         (sz: CSize)              -> Ptr(any)
-clear_transient   (num: CSize,  sz: CSize) -> Ptr(any)
-realloc_transient (p: Ptr(any), sz: CSize) -> Ptr(any)
-free_transient    (p: Ptr(any))            -> Void
+transient_clear   (num: CSize,  sz: CSize) -> Ptr(any)
+transient_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
+transient_free    (p: Ptr(any))            -> Void
 
 periodic          (sz: CSize)              -> Ptr(any)
-clear_periodic    (num: CSize,  sz: CSize) -> Ptr(any)
-realloc_periodic  (p: Ptr(any), sz: CSize) -> Ptr(any)
-free_periodic     (p: Ptr(any))            -> Void
+periodic_clear    (num: CSize,  sz: CSize) -> Ptr(any)
+periodic_realloc  (p: Ptr(any), sz: CSize) -> Ptr(any)
+periodic_free     (p: Ptr(any))            -> Void
 
 managed           (sz: CSize)              -> Ptr(any)
-clear_managed     (num: CSize,  sz: CSize) -> Ptr(any)
-realloc_managed   (p: Ptr(any), sz: CSize) -> Ptr(any)
-free_managed      (p: Ptr(any))            -> Void
+managed_clear     (num: CSize,  sz: CSize) -> Ptr(any)
+managed_realloc   (p: Ptr(any), sz: CSize) -> Ptr(any)
+managed_free      (p: Ptr(any))            -> Void
 
 // -- Implementation --
 
@@ -82,30 +82,26 @@ _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, 
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
 
-// -- context --
-
-
-
 // -- transient --
 
 transient         (sz)      { context.transient->malloc(context.transient, sz)      }
-clear_transient   (num, sz) { context.transient->calloc(context.transient, num, sz) }
-realloc_transient (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
-free_transient    (p)       { context.transient->free(context.transient, p)         }
+transient_clear   (num, sz) { context.transient->calloc(context.transient, num, sz) }
+transient_realloc (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
+transient_free    (p)       { context.transient->free(context.transient, p)         }
 
 // -- periodic --
 
 periodic          (sz)      { context.periodic->malloc(context.periodic, sz)        }
-clear_periodic    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
-realloc_periodic  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
-free_periodic     (p)       { context.periodic->free(context.periodic, p)           }
+periodic_clear    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
+periodic_realloc  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
+periodic_free     (p)       { context.periodic->free(context.periodic, p)           }
 
 // -- managed --
 
 managed           (sz)      { context.managed->malloc(context.managed, sz)          }
-clear_managed     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
-realloc_managed   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
-free_managed      (p)       { context.managed->free(context.managed, p)             }
+managed_clear     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
+managed_realloc   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
+managed_free      (p)       { context.managed->free(context.managed, p)             }
 
 
 // -- BumpAllocator --

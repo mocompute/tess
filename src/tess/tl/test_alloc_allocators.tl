@@ -22,7 +22,7 @@ test_bump_realloc() {
 test_transient_realloc() {
   error := 0
   p1 := Alloc.transient(64)
-  p2 := Alloc.realloc_transient(p1, 128)
+  p2 := Alloc.transient_realloc(p1, 128)
   if p1 != p2 { error += 1 }
   error
 }
