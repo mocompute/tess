@@ -2836,14 +2836,10 @@ typedef struct {
     str_array fvs;
 } collect_free_variables_ctx;
 
-static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-
-    if (ast_node_is_binary_op(node)) node = node->binary_op.left;
+static int can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_node const *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
     str name = ast_node_str(node);
-
-    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
 
     // don't collect symbols which are nullary type literals
     if (tl_type_registry_is_nullary_type(self->registry, name)) return 0;
@@ -2851,22 +2847,32 @@ static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx,
     // don't collect symbols that start with c_
     if (0 == str_cmp_nc(name, "c_", 2)) return 0;
 
+    return 1;
+}
+
+static int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    if (ast_node_is_binary_op(node)) node = node->binary_op.left;
+    if (!can_be_free_variable(self, traverse_ctx, node)) return 0;
+
+    str name = ast_node_str(node);
+    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
+
     collect_free_variables_ctx *ctx      = traverse_ctx->user;
 
-    tl_polytype                *type     = tl_type_env_lookup(self->env, node->symbol.name);
+    tl_polytype                *type     = tl_type_env_lookup(self->env, name);
     int                         is_arrow = type && tl_monotype_is_arrow(type->type);
 
     // Note: arrow types in the environment are global functions and are not free variables. Note that
     // even local let-in-lambda functions are also in the environment, but their names will never clash
     // with function names.
-    if (is_arrow || traverse_ctx_is_param(traverse_ctx, node->symbol.name)) {
+    if (is_arrow || traverse_ctx_is_param(traverse_ctx, name)) {
         // FIXME: arrow type may exist because of a forward declaration, but function definition may be
         // missing. Need to report an error.
         ;
     } else {
         // a free variable
-        dbg(self, "collect_free_variables_cb: add '%s'", str_cstr(&node->symbol.name));
-        str_array_set_insert(&ctx->fvs, node->symbol.name);
+        dbg(self, "collect_free_variables_cb: add '%s'", str_cstr(&name));
+        str_array_set_insert(&ctx->fvs, name);
     }
 
     // if symbol has a type which carries fvs, we also collect those.
