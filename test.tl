@@ -1,12 +1,19 @@
+#import <Alloc.tl>
+
 #module Foo
 
-f() { 42 }
+Span(T) : { v: Ptr(T), sz: CSize }
+
+#module Bar
+
+Chars = Foo.Span(CChar)
 
 #module main
 
-// Error: attempt to monkey-patch by matching mangled name will cause compile error
-Foo_f() { 43 }
-
 main() {
-  res := Foo.f() - 43
+
+  data : Ptr(CChar) := Alloc.transient_alloc(128 * sizeof(CSignedChar))
+  cs := Bar.Chars(v = data, sz = 128)
+
+  0
 }
