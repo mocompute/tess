@@ -275,7 +275,7 @@ TL_TESTS =					\
 	cast_string_to_ptr			\
 	cast_string_to_ptr_and_index		\
 	char_literal				\
-	closure_polymorphism			\
+	closure_fun_ptr				\
 	defun_inline_type			\
 	dynamic_array				\
 	enum_no_module				\

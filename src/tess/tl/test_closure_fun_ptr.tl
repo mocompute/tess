@@ -1,5 +1,5 @@
 #module main
-f(g) { if (g()) { true } else { false } }
+f(g) { if g() { true } else { false } }
 
 main() {
   x1 := true
@@ -9,5 +9,5 @@ main() {
   ff1 := f(f1)
   ff2 := f(f2)
   res := ff1 && !ff2
-  if (res == true) { 0 } else { 1 }
+  if res == true { 0 } else { 1 }
 }
