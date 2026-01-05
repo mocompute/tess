@@ -446,3 +446,43 @@ vs.
 
 array_new(T : Type, count : Int) -> Ptr(T)
 array_new(Point(Int), 16)
+
+
+
+//
+// another exploration
+//
+
+// sugar for Ptr(foo) ?
+
+transient_alloc   (sz: CSize)              -> *.any
+transient_clear   (num: CSize,  sz: CSize) -> *.any
+transient_realloc (p: *.any, sz: CSize)    -> *.any
+transient_free    (p: *.any)               -> Void
+
+// Other examples, prefix "pointer to `type`"
+*.Map(String, Int)
+
+transient_alloc   (sz)      { context.transient->malloc(context.transient, sz)      }
+transient_clear   (num, sz) { context.transient->calloc(context.transient, num, sz) }
+transient_realloc (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
+transient_free    (p)       { context.transient->free(context.transient, p)         }
+
+// What about sugar for calling a function like a method?
+
+context.transient->malloc(., sz)
+
+context.transient |> context.transient->malloc(sz)
+
+// because it's a field which contains a function pointer, it's a pain
+context.transient.(context.transient->malloc)(sz)
+
+foo.bar() === bar(foo)
+// but currently, we read that as foo's field bar is a fun ptr, which we call with zero args
+
+// typical usage:
+foo.x     // is a field
+foo.bar() // is a method bar(this=foo.&)
+
+
+// could we have special sugar for that?
