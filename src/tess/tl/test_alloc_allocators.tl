@@ -1,6 +1,17 @@
 #module main
 #import <Alloc.tl>
 
+test_transient_realloc() {
+  error := 0
+  p1 := Alloc.transient_alloc(64)
+  p2 := Alloc.transient_realloc(p1, 128)
+  if p1 != p2 { error += 1 }
+  error
+}
+
+// the following tests directly access low-level Alloc functions. Prefer to use the provided helper
+// functions like Alloc.transient_alloc, etc.
+
 test_bump_create_destroy() {
   bump := Alloc.bump_create(Alloc.context.managed, 1024)
   Alloc.bump_destroy(bump)
@@ -19,13 +30,6 @@ test_bump_realloc() {
   error
 }
 
-test_transient_realloc() {
-  error := 0
-  p1 := Alloc.transient_alloc(64)
-  p2 := Alloc.transient_realloc(p1, 128)
-  if p1 != p2 { error += 1 }
-  error
-}
 
 test_bump_realloc_non_contiguous() {
   error := 0
