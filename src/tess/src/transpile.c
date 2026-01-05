@@ -1970,7 +1970,7 @@ static void cat_commentln(transpile *self, str s) {
 static str mangle_fun(transpile *self, str s) {
     // If name is already mangled, it could be a variable name. Don't mangle it further.
     if (0 == str_cmp_nc(s, "tl_", 3)) return s;
-    if (0 == str_cmp_nc(s, "std_", 4)) return s;
+    if (0 == str_cmp_nc(s, "std_", 4)) return s; // FIXME: do we still use std_ ?
 
     // don't mangle names which don't refer to actual functions. This helps avoid mangling struct field
     // names that have an arrow type.
