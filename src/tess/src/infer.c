@@ -3284,6 +3284,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
         return out;
     }
     }
+    return null;
 }
 
 typedef struct {
@@ -3351,8 +3352,8 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     update_types_one_type(self, ctx, &node->type);
     update_types_arrow(self, node);
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch-enum"
 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
@@ -3372,7 +3373,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     default: break;
     }
 
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 
     return 0;
 }

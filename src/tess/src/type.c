@@ -2218,6 +2218,7 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
     case tl_arrow:
     case tl_tuple:       return 1;
     }
+    return 1;
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,

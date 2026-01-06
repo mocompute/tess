@@ -1911,7 +1911,8 @@ static int a_statement(parser *self) {
 static int a_body_element(parser *self) {
     // Note: statement before expression, because assignment and ident are ambiguous. Commas can be ignored,
     // so they can be used between body elements for readability.
-    (void)a_try(self, a_comma);
+    int ignore = a_try(self, a_comma);
+    (void)ignore;               // for GCC
     if (0 == a_try(self, a_statement) || 0 == a_try(self, a_expression)) return 0;
     else return 1;
 }
