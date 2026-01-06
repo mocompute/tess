@@ -2731,8 +2731,9 @@ static str next_instantiation(tl_infer *self, str name) {
         snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
         return str_init(self->arena, buf);
     } else {
-        char *buf = alloc_malloc(self->transient, str_len(name) + 24);
-        snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
+        size_t len = str_len(name) + 24;
+        char *buf = alloc_malloc(self->transient, len);
+        snprintf(buf, len, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
         str out = str_init(self->arena, buf);
         alloc_free(self->transient, buf);
         return out;
