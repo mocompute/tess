@@ -123,8 +123,15 @@ CPMAddPackage("https://www.zlib.net/zlib-1.3.1.tar.gz")
 # -- system specific -----------------------------------------------
 # -- Keep this AFTER including external packages --
 
+# detect NIXOS, for clang include path workaround on unix
+if (DEFINED ENV{NIX_PROFILES} OR DEFINED ENV{NIX_PATH} OR DEFINED ENV{IN_NIX_SHELL})
+  set(IS_NIX TRUE)
+else()
+  set(IS_NIX FALSE)
+endif()
+
 if(UNIX)
-  if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+  if (IS_NIX AND CMAKE_C_COMPILER_ID STREQUAL "Clang")
     # Teach clang about where to find its include files. This is
     # required to make eglot work under NixOS, and to make
     # SCAN_FOR_MODULES work.
@@ -143,6 +150,7 @@ if(UNIX)
     # tell clang not to use any other search directories for include files
     list(PREPEND MOS_SYSTEM_INCLUDE
       -nostdinc
+      -Wno-unused-command-line-argument # clang-19
     )
     message(STATUS "MOS_SYSTEM_INCLUDE = ${MOS_SYSTEM_INCLUDE}")
   else()
