@@ -522,7 +522,8 @@ int compile_c(state *self) {
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
+        int ignore = write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
+        (void)ignore;
         close(stdin_pipe[1]);
 
         // free self->program
@@ -606,7 +607,9 @@ int compile_c_obj(state *self) {
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
+
+        int ignore = write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
+        (void)ignore;
         close(stdin_pipe[1]);
 
         // free self->program

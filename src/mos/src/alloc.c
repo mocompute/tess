@@ -560,9 +560,10 @@ static void *leak_detector_realloc(allocator *alloc, void *p, size_t sz, char co
     struct leak_allocation leak_record = {
       .realloc_ptr = p, .size = sz, .file = file, .line = line, .status = leak_action_realloc};
 
-    void *ptr                = realloc(p, sz);
-    leak_record.ptr          = ptr;
-    self->data[self->size++] = leak_record;
+    self->data[self->size]     = leak_record;
+    void *ptr                  = realloc(p, sz);
+    self->data[self->size].ptr = ptr;
+    self->size++;
     return ptr;
 }
 
