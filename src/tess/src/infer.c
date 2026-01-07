@@ -779,21 +779,24 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->binary_op.left, cb)) return 1;
 
         // when traversing to the right of . and ->, we could encounter field names that should not be
-        // considered free variables, so signal that in the traverse_ctx
+        // considered free variables, so signal that in the traverse_ctx. Note that other binary ops like
+        // arithmetic should not trigger the field_name case.
         {
-            int is_symbol = ast_node_is_symbol(node->binary_op.right);
-            int save      = 0;
-            if (is_symbol) {
+            char const *op               = str_cstr(&node->binary_op.op->symbol.name);
+            int         is_symbol        = ast_node_is_symbol(node->binary_op.right);
+            int         is_struct_access = is_struct_access_operator(op);
+            int         is_field_name    = is_symbol && is_struct_access;
+            int         save             = 0;
+            if (is_field_name) {
                 save               = ctx->is_field_name;
                 ctx->is_field_name = 1;
             }
 
-            char const *op = str_cstr(&node->binary_op.op->symbol.name);
             if (is_struct_access_operator(op)) ctx->node_pos = npos_field_name;
             else ctx->node_pos = npos_operand;
 
             if (traverse_ast(self, ctx, node->binary_op.right, cb)) return 1;
-            if (is_symbol) ctx->is_field_name = save;
+            if (is_field_name) ctx->is_field_name = save;
         }
 
         ctx->node_pos = npos_operand;
@@ -2732,7 +2735,7 @@ static str next_instantiation(tl_infer *self, str name) {
         return str_init(self->arena, buf);
     } else {
         size_t len = str_len(name) + 24;
-        char *buf = alloc_malloc(self->transient, len);
+        char  *buf = alloc_malloc(self->transient, len);
         snprintf(buf, len, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
         str out = str_init(self->arena, buf);
         alloc_free(self->transient, buf);
