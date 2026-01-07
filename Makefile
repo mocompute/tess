@@ -13,11 +13,11 @@ ifeq ($(CONFIG),release)
   LDFLAGS_CONFIG =
   BUILD_DIR = build-release
 else ifeq ($(CONFIG),debug)
-  CFLAGS_CONFIG = -O0 -g -DDEBUG
+  CFLAGS_CONFIG = -O -g -DDEBUG
   LDFLAGS_CONFIG =
   BUILD_DIR = build-debug
 else ifeq ($(CONFIG),asan)
-  CFLAGS_CONFIG = -O0 -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer
+  CFLAGS_CONFIG = -O -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer
   LDFLAGS_CONFIG = -fsanitize=address,undefined
   BUILD_DIR = build-asan
 else
@@ -28,11 +28,17 @@ endif
 # Compiler and Flags
 # ------------------------------------------------------------------------------
 
+V = 1
 CC     ?= cc
 CFLAGS ?= $(CFLAGS_CONFIG)
 CFLAGS += -std=gnu11 -fPIE
 CFLAGS += -Werror -Wall -Wextra -Wswitch-enum -Wunused -Winline -Wimplicit-fallthrough
-CFLAGS += -Wno-gnu-alignof-expression
+
+# Test if the compiler supports a given flag (substitute -no- flags)
+check_flag = $(shell $(CC) -Werror $(patsubst -Wno-%,-W%,$(1)) -x c -c /dev/null -o /dev/null 2>/dev/null && echo $(1))
+
+CLANG_FLAGS := -Wno-gnu-alignof-expression
+CFLAGS += $(foreach flag,$(CLANG_FLAGS),$(call check_flag,$(flag)))
 
 CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
 LDFLAGS ?=
