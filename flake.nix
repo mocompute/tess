@@ -1,32 +1,85 @@
 {
-  description = "Environment for Tess language development";
+  description = "The Tess Language compiler";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { self, nixpkgs, ... }:
     let
-      overlays = [];
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
 
       forAllSystems = function:
-        nixpkgs.lib.genAttrs [
-          "x86_64-linux"
-          "aarch64-linux"
-          "aarch64-darwin"
-        ] (system: function (
-          import nixpkgs {
-            inherit system;
-            inherit overlays;
-          }));
+        nixpkgs.lib.genAttrs supportedSystems (system: function {
+          inherit system;
+          pkgs = import nixpkgs { inherit system; };
+        });
+
+      mkPackage = { pkgs, config ? "release" }:
+        pkgs.stdenv.mkDerivation {
+          pname = "tess";
+          version = "0.1.0";
+
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ gnumake ];
+
+          # Used by tess Makefile
+          CONFIG = config;
+
+          # not autotools
+          dontConfigure = true;
+
+          buildPhase = ''
+            runHook preBuild
+            make -j all
+            runHook postBuild
+          '';
+
+          checkPhase = ''
+            runHook preCheck
+            make -j test
+            runHook postCheck
+          '';
+
+          doCheck = true;
+
+          installPhase = ''
+            runHook preInstall
+            make install DESTDIR=$out PREFIX=
+            runHook postInstall
+          '';
+
+          meta = with pkgs.lib; {
+            description = "The Tess Language compiler";
+            platforms = platforms.all;
+            # TODO other meta fields
+            # license = licenses.mit
+          };
+        };
     in
       {
-        devShells = forAllSystems (pkgs:
+        packages = forAllSystems({ pkgs, system }: {
+          default = mkPackage { inherit pkgs; config = "release"; };
+          release = mkPackage { inherit pkgs; config = "release"; };
+          debug   = mkPackage { inherit pkgs; config = "debug"; };
+          asan    = mkPackage { inherit pkgs; config = "asan"; };
+        });
+
+        overlays.default = final: prev: { tess = mkPackage { pkgs = final; }; };
+
+        devShells = forAllSystems ({ pkgs, system }:
           let
             isDarwin = pkgs.stdenv.isDarwin;
           in
             {
               default = pkgs.mkShellNoCC {
+                inputsFrom = [ self.packages.${system}.default ];
+
                 # Seems necessary on my MacBook to make lldb work.
                 shellHook = ''
                   ${if isDarwin then ''
@@ -35,7 +88,7 @@
                     else ""}
                   '';
 
-                buildInputs = with pkgs; [
+                packages = with pkgs; [
                   bashInteractive
                   cmake
                   tree
