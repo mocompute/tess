@@ -9,6 +9,31 @@ test_transient_realloc() {
   error
 }
 
+test_transient_free_alloc() {
+  error := 0
+  p1 := Alloc.transient_alloc(64)
+  Alloc.transient_free(p1)
+  p2 := Alloc.transient_alloc(128)
+  if p1 != p2 { error += 1 }
+
+  p3 := Alloc.transient_alloc(64)
+  if p2 == p3 { error += 1 }
+  error
+}
+
+test_transient_free_alloc_2() {
+  error := 0
+  p1 := Alloc.transient_alloc(64)
+  p2 := Alloc.transient_alloc(128)
+  if p2 <= p1 { error += 1 }
+
+  Alloc.transient_free(p1)
+
+  p3 := Alloc.transient_alloc(64)
+  if p3 <= p2 { error += 1 }
+  error
+}
+
 // the following tests directly access low-level Alloc functions. Prefer to use the provided helper
 // functions like Alloc.transient_alloc, etc.
 
@@ -89,6 +114,8 @@ main() {
   error += test_align_next_power_of_two()
 
   error += test_transient_realloc()
+  error += test_transient_free_alloc()
+  error += test_transient_free_alloc_2()
 
   error
 
