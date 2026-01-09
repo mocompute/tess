@@ -28,7 +28,6 @@ endif
 # Compiler and Flags
 # ------------------------------------------------------------------------------
 
-V = 1
 CC     ?= cc
 CFLAGS ?= $(CFLAGS_CONFIG)
 CFLAGS += -std=gnu11 -fPIE
