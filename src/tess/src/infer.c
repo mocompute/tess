@@ -2043,6 +2043,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     tl_type_env_insert(self->env, name_inst, utd->type);
     array_push(self->synthesized_nodes, utd);
 
+    assert(tl_monotype_is_inst_specialized(utd->type->type));
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
 
     // fixup recur refs
@@ -2114,7 +2115,10 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     if (special_type) {
         // fprintf(stderr, "specialize_user_type: replacing node type.\n");
 
-        constrain_or_set(self, node, special_type); // Note: this helps the transpiler
+        assert(tl_monotype_is_inst_specialized(special_type->type));
+
+        // Note: For type constructors being specialized, we must always override the node type.
+        ast_node_type_set(node, special_type);
     }
 
     return 0;
@@ -3371,6 +3375,12 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
     case ast_let_in:
         if (node->let_in.body) ast_node_type_set(node, node->let_in.body->type);
+
+        // Note: ensure name's type in the environment matches a specialized type constructor on the rhs
+        if (tl_monotype_is_inst_specialized(node->let_in.value->type->type)) {
+            ast_node_type_set(node->let_in.name, node->let_in.value->type);
+            tl_type_env_insert(self->env, ast_node_str(node->let_in.name), node->let_in.value->type);
+        }
         break;
 
     default: break;

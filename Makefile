@@ -331,6 +331,7 @@ TL_TESTS =					\
 	recursive_type_cycle_3			\
 	recursive_type_generic			\
 	recursive_type_mutual			\
+	regress_type_cons			\
 	relational_basic			\
 	return_null				\
 	return_statement			\
