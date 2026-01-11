@@ -6,10 +6,13 @@ Span(T) : { v: Ptr(T), sz: CSize }
 
 #module main
 
+Chars = Span(CUnsignedChar)
+
+
 main() {
 
-  data : Ptr(CChar) := Alloc.transient_alloc(128 * sizeof(CSignedChar))
-  cs := Foo.Span(v = data, sz = 128)
+  data : Ptr(CUnsignedChar) := Alloc.transient_alloc(128 * sizeof(CUnsignedChar))
+  cs := Chars(v = data, sz = 128)
 
   0
 }

@@ -2105,6 +2105,7 @@ static int toplevel_hash(parser *self) {
 
 static int toplevel_type_alias(parser *self) {
     ast_node *name = null;
+    // FIXME: this accepts funcalls as alias names, but we may not want to support that.
     if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) name = self->result;
     else return 1;
     if (a_try(self, a_equal_sign)) return 1;
