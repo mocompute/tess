@@ -2111,7 +2111,7 @@ static int toplevel_type_alias(parser *self) {
     if (a_try(self, a_equal_sign)) return 1;
 
     ast_node *target = null;
-    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) target = self->result;
+    if (0 == a_try(self, a_type_identifier)) target = self->result;
     else return 1;
 
     add_module_symbol(self, name);

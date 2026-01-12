@@ -345,6 +345,11 @@ TL_TESTS =					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
+	type_alias_local			\
+	type_alias_module_chained		\
+	type_alias_module_enum			\
+	type_alias_module_multi_arg		\
+	type_alias_module_simple		\
 	type_assertion				\
 	type_assertion_field			\
 	type_literal_generic			\
