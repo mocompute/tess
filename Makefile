@@ -346,7 +346,9 @@ TL_TESTS =					\
 	struct_empty				\
 	struct_generic				\
 	type_alias_local			\
+	type_alias_local_direct			\
 	type_alias_module_chained		\
+	type_alias_module_chained_direct	\
 	type_alias_module_enum			\
 	type_alias_module_multi_arg		\
 	type_alias_module_simple		\
@@ -367,6 +369,9 @@ TL_TESTS =					\
 TL_FAIL_TESTS =					\
 	case_float				\
 	fail_monkey_patch			\
+	type_alias_module_enum_direct		\
+	type_alias_module_multi_arg_direct	\
+	type_alias_module_simple_direct		\
 	unknown_free_variable
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
