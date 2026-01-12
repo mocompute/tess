@@ -1692,6 +1692,17 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
                 if (name_annotation_type && tl_monotype_is_ptr(name_annotation_type->type)) is_cast = 1;
 
                 if (is_cast) self->is_constrain_ignore_error = 1;
+                if (name_annotation_type) {
+                    // use annotation type as a cast, even if it is not a Ptr type.
+                    name_type = name_annotation_type;
+
+                    str name  = ast_node_str(node->let_in.name);
+                    str tmp   = tl_polytype_to_string(self->transient, name_annotation_type);
+
+                    dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name),
+                        str_cstr(&tmp));
+                }
+
                 if (!escape_constraint(self, name_type, value_type) &&
                     constrain(self, name_type, value_type, node) && !is_cast)
                     return 1;
@@ -2389,7 +2400,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             // extract the constructor name and replace the node's name with it
             if (tl_monotype_is_inst(type->type)) {
                 str constructor_name = type->type->cons_inst->def->generic_name;
-                dbg(self, "type alias '%s' resolves to constructor '%s'", str_cstr(&name), str_cstr(&constructor_name));
+                dbg(self, "type alias '%s' resolves to constructor '%s'", str_cstr(&name),
+                    str_cstr(&constructor_name));
                 ast_node_name_replace(node->named_application.name, constructor_name);
                 // look up the constructor's type for proper handling below
                 type = tl_type_registry_get(self->registry, constructor_name);
