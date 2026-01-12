@@ -2372,14 +2372,30 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (is_intrinsic(name)) return 0;
 
         // may be too early, e.g. for pointers
-        if (!toplevel_get(self, name)) {
+        // but type aliases and type constructors are always available
+        if (!toplevel_get(self, name) && !tl_type_registry_exists(self->registry, name)) {
             dbg(self, "specialize_applications_cb: skipping '%s'", str_cstr(&name));
 
             return 0; // too early
         }
 
         tl_polytype *type = tl_type_env_lookup(self->env, name);
-        if (!type) return 0; // mutual recursion or variable holding function pointer
+        if (!type) {
+            // check if it's a type alias or type constructor in the registry
+            type = tl_type_registry_get(self->registry, name);
+            if (!type) return 0; // mutual recursion or variable holding function pointer
+
+            // if it's a type alias pointing to an instantiation (like Foo_Span(Ptr(CChar), CSize)),
+            // extract the constructor name and replace the node's name with it
+            if (tl_monotype_is_inst(type->type)) {
+                str constructor_name = type->type->cons_inst->def->generic_name;
+                dbg(self, "type alias '%s' resolves to constructor '%s'", str_cstr(&name), str_cstr(&constructor_name));
+                ast_node_name_replace(node->named_application.name, constructor_name);
+                // look up the constructor's type for proper handling below
+                type = tl_type_registry_get(self->registry, constructor_name);
+                if (!type) return 0;
+            }
+        }
 
         // divert if this is a type constructor
         if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
