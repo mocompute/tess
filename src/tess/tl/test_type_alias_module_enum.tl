@@ -1,5 +1,3 @@
-#import "builtin.tl"
-
 #module Foo
 Status : {Ok, Error, Pending}
 

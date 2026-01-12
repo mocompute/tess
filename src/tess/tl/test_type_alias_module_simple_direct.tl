@@ -1,5 +1,3 @@
-#import "builtin.tl"
-
 #module Foo
 Span(T) : { v: Ptr(T), sz: CSize }
 

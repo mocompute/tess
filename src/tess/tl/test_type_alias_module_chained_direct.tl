@@ -1,5 +1,3 @@
-#import "builtin.tl"
-
 #module A
 Base : {x: Int}
 

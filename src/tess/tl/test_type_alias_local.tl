@@ -1,5 +1,3 @@
-#import "builtin.tl"
-
 #module Foo
 Point : {x: Int, y: Int}
 Pt = Point

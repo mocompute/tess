@@ -1,5 +1,3 @@
-#import "builtin.tl"
-
 #module Collections
 Map(K, V) : { keys: Ptr(K), values: Ptr(V), size: Int }
 
