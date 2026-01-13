@@ -1067,6 +1067,12 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
     tl_monotype_substitute(self->arena, struct_type, self->subs, null);
+
+    if (tl_monotype_is_type_literal(struct_type)) {
+        // enum access is through a type literal
+        struct_type = struct_type->literal;
+    }
+
     if (tl_monotype_is_inst(struct_type)) {
         // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
         // fun_ptr is a function pointer.
@@ -1115,7 +1121,9 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
             // not a symbol
             fatal("unreachable");
         }
-    } else {
+    }
+
+    else {
         // struct type is not a type constructor
         dbg(self, "warning: infer struct access without a struct type");
     }

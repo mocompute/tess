@@ -1349,10 +1349,19 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     // operator.
     if (ast_node_is_symbol(node->binary_op.left) && ast_node_is_symbol(node->binary_op.right) &&
         is_dot_operator(str_cstr(&op))) {
-        tl_monotype *left_type = env_lookup(self, ast_node_str(node->binary_op.left));
+        str          name      = ast_node_str(node->binary_op.left);
+        tl_monotype *left_type = env_lookup(self, name);
+        if (!left_type) {
+            // Handle type alias of an enum
+            tl_polytype *registry_type = tl_type_registry_get(self->registry, name);
+            if (registry_type && tl_monotype_is_enum(registry_type->type)) {
+                name      = registry_type->type->cons_inst->def->generic_name;
+                left_type = registry_type->type;
+            }
+        }
+
         if (left_type && tl_monotype_is_enum(left_type)) {
-            str mangled = str_cat_3(self->transient, ast_node_str(node->binary_op.left), S("_"),
-                                    ast_node_str(node->binary_op.right));
+            str mangled = str_cat_3(self->transient, name, S("_"), ast_node_str(node->binary_op.right));
             return mangled;
         }
     }
