@@ -2124,6 +2124,13 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
         arr_sized = existing->type->cons_inst->args;
 
+        // If name is a type alias pointing to a concrete type, we want the transpiler to ignore the alias
+        // name, and act as if the alias' target was referenced directly. This ensures the same type is used
+        // in the generated C code, allowing variables to be assignable.
+        if (tl_type_registry_is_type_alias(self->registry, name)) {
+            name = existing->type->cons_inst->def->generic_name;
+        }
+
     } else {
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);

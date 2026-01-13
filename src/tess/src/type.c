@@ -332,6 +332,10 @@ void tl_type_registry_type_alias_insert(tl_type_registry *self, str name, tl_pol
     str_map_set_ptr(&self->type_aliases, name, type);
 }
 
+int tl_type_registry_is_type_alias(tl_type_registry *self, str name) {
+    return str_map_contains(self->type_aliases, name);
+}
+
 int tl_type_registry_is_nullary_type(tl_type_registry *self, str name) {
     tl_polytype *poly = tl_type_registry_get(self, name);
     return tl_polytype_is_nullary(poly);
@@ -2041,7 +2045,7 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
 // -- substitutions --
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
-    tl_type_subs *self = new (alloc, tl_type_subs);
+    tl_type_subs *self = new(alloc, tl_type_subs);
     *self              = (tl_type_subs){
                    .data = (tl_type_uf_node_array){.alloc = alloc},
     };

@@ -55,6 +55,7 @@ tl_monotype *tl_type_registry_specialize_commit(tl_type_registry *, tl_type_regi
 tl_monotype *tl_type_registry_specialize(tl_type_registry *, str, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *, str, tl_monotype_sized);
 void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_polytype *);
+int          tl_type_registry_is_type_alias(tl_type_registry *, str);
 
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *, ast_node const *);
 tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *, ast_node const *,
