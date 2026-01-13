@@ -1289,7 +1289,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (reject_type_literal(self, node)) return 1;
         // Note: do not add symbol node to env from this position: field names. Rather,
         // ensure any existing non-type-variable type is replaced by a new type variable.
-        if (node->type) {
+        if (node->type && !tl_monotype_is_tv(node->type->type)) {
             ast_node_type_set(node, tl_polytype_create_fresh_tv(self->arena, self->subs));
         }
         break;
