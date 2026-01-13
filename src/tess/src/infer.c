@@ -232,6 +232,8 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     }
 }
 
+static void specialize_type_alias(tl_infer *, ast_node *);
+
 static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
     // Types of toplevel nodes (see parser.c/toplevel())
     //
@@ -274,6 +276,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
         else if (ast_node_is_type_alias(node)) {
             // FIXME: assmues alias name is a symbol. Parser may produce an nfa.
+            assert(ast_node_is_symbol(node->type_alias.name));
             str          name = toplevel_name(node);
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->type_alias.target);
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);
@@ -282,6 +285,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                 dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
             tl_type_registry_type_alias_insert(self->registry, name, poly);
+            specialize_type_alias(self, node);
         }
 
         else if (ast_node_is_let(node)) {
@@ -2032,6 +2036,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
       tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
 
     if (!inst_ctx.specialized) goto cancel;
+    if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
     name_and_type key      = make_instance_key(name, inst_ctx.specialized);
     str          *existing = instance_lookup(self, &key);
@@ -2043,7 +2048,9 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         goto cancel;
     }
 
-    ast_node *utd = toplevel_get(self, name);
+    // Look up generic type using the generic_name field, not the name parameter, because the latter may be
+    // a type alias.
+    ast_node *utd = toplevel_get(self, inst_ctx.specialized->cons_inst->def->generic_name);
     if (!utd) goto cancel;
 
     instance_add(self, &key, name_inst);
@@ -2095,30 +2102,50 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
     // Check if type being constructed is a C union. If so, do not specialize. We don't support polymorphic
     // unions.
     str name = node->named_application.name->symbol.name;
+
     if (is_union_struct(self, name)) return 0;
 
-    tl_monotype_array  arr  = {.alloc = self->transient};
-    ast_arguments_iter iter = ast_node_arguments_iter(node);
-    ast_node          *arg;
-    while ((arg = ast_arguments_next(&iter))) {
+    tl_monotype_array arr       = {.alloc = self->transient};
+    tl_monotype_sized arr_sized = {0};
 
-        tl_monotype *type_id = null;
-        if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
-            // a literal type
-            array_push_val(arr, tl_monotype_create_literal(self->arena, type_id));
-            continue;
+    // Check if type being constructed is concrete. If so, we want to take its arguments' concrete types
+    // rather than instantiate into new type variables.
+    tl_polytype *existing = tl_type_registry_get(self->registry, name);
+    if (existing && tl_polytype_is_concrete(existing)) {
+        assert(tl_monotype_is_inst(existing->type));
+
+        arr_sized = existing->type->cons_inst->args;
+
+    } else {
+
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+
+            tl_monotype *type_id = null;
+            if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
+                // a literal type
+                array_push_val(arr, tl_monotype_create_literal(self->arena, type_id));
+                continue;
+            }
+
+            tl_monotype *mono = null;
+            if (!tl_polytype_is_concrete(arg->type)) {
+                mono = tl_polytype_instantiate(self->arena, arg->type, self->subs);
+                tl_monotype_substitute(self->arena, mono, self->subs, null);
+            } else {
+                mono = arg->type->type;
+            }
+
+            array_push(arr, mono);
         }
 
-        tl_monotype *mono = tl_polytype_instantiate(self->arena, arg->type, self->subs);
-        tl_monotype_substitute(self->arena, mono, self->subs, null);
-        array_push(arr, mono);
+        assert(arr.size == node->named_application.n_arguments);
+        arr_sized = (tl_monotype_sized)array_sized(arr);
     }
 
-    assert(arr.size == node->named_application.n_arguments);
-
-    tl_monotype_sized arr_sized    = array_sized(arr);
-    tl_polytype      *special_type = null;
-    str               name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
+    tl_polytype *special_type = null;
+    str          name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
     if (str_is_empty(name_inst)) return 0;
 
     // update callsite
@@ -2305,6 +2332,28 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     return 0;
 }
 
+static void specialize_type_alias(tl_infer *self, ast_node *node) {
+    // if target of type alias is a generic instantiation, ensure it it is properly specialized.
+    // load_toplevel will have generalized the target type and inserted it into the alias registry.
+    // we will need to specialize it and replace it.
+    assert(ast_node_is_type_alias(node));
+
+    ast_node    *target = node->type_alias.target;
+    tl_monotype *parsed = tl_type_registry_parse_type(self->registry, target);
+    if (tl_monotype_is_inst(parsed) && tl_monotype_is_concrete(parsed)) {
+        str name = toplevel_name(node);
+        str tmp  = tl_monotype_to_string(self->transient, parsed);
+        dbg(self, "specialize_type_alias: %s = %s", str_cstr(&name), str_cstr(&tmp));
+        tl_type_registry_type_alias_insert(self->registry, name,
+                                           tl_polytype_absorb_mono(self->arena, parsed));
+        assert(tl_polytype_is_concrete(tl_type_registry_get(self->registry, name)));
+    } else if (tl_monotype_is_inst(parsed)) {
+        str name = toplevel_name(node);
+        str tmp  = tl_monotype_to_string(self->transient, parsed);
+        dbg(self, "specialize_type_alias: not concrete: %s = %s", str_cstr(&name), str_cstr(&tmp));
+    }
+}
+
 static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
     str       arg_name = ast_node_str(arg);
     ast_node *top      = toplevel_get(self, arg_name);
@@ -2395,18 +2444,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             // check if it's a type alias or type constructor in the registry
             type = tl_type_registry_get(self->registry, name);
             if (!type) return 0; // mutual recursion or variable holding function pointer
-
-            // if it's a type alias pointing to an instantiation (like Foo_Span(Ptr(CChar), CSize)),
-            // extract the constructor name and replace the node's name with it
-            if (tl_monotype_is_inst(type->type)) {
-                str constructor_name = type->type->cons_inst->def->generic_name;
-                dbg(self, "type alias '%s' resolves to constructor '%s'", str_cstr(&name),
-                    str_cstr(&constructor_name));
-                ast_node_name_replace(node->named_application.name, constructor_name);
-                // look up the constructor's type for proper handling below
-                type = tl_type_registry_get(self->registry, constructor_name);
-                if (!type) return 0;
-            }
         }
 
         // divert if this is a type constructor
