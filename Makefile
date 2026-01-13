@@ -13,7 +13,7 @@ ifeq ($(CONFIG),release)
   LDFLAGS_CONFIG =
   BUILD_DIR = build-release
 else ifeq ($(CONFIG),debug)
-  CFLAGS_CONFIG = -O -g -DDEBUG
+  CFLAGS_CONFIG = -g -DDEBUG
   LDFLAGS_CONFIG =
   BUILD_DIR = build-debug
 else ifeq ($(CONFIG),asan)
