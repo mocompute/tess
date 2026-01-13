@@ -353,6 +353,7 @@ TL_TESTS =					\
 	type_alias_module_enum_direct		\
 	type_alias_module_multi_arg		\
 	type_alias_module_multi_arg_direct	\
+	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
 	type_alias_module_simple_direct		\
 	type_assertion				\
