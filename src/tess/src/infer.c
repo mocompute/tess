@@ -49,7 +49,6 @@ struct tl_infer {
     // Context for single-pass parsing of user type definitions
     tl_type_registry_parse_type_ctx type_parse_ctx;
 
-    //
     u32 next_var_name;
     u32 next_instantiation;
 
@@ -96,7 +95,9 @@ typedef struct {
 
 static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
 
-//
+// ============================================================================
+// Public API
+// ============================================================================
 
 static void      apply_subs_to_ast(tl_infer *);
 static str       next_instantiation(tl_infer *, str);
@@ -110,8 +111,6 @@ static void      dbg(tl_infer const *self, char const *restrict fmt, ...);
 static void      log_toplevels(tl_infer const *);
 static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
-
-//
 
 tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     tl_infer *self                  = new(alloc, tl_infer);
@@ -1793,6 +1792,10 @@ static int check_type_assertion(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
 int        is_union_struct(tl_infer *self, str name);
 
+// ============================================================================
+// Type Constraint Generation
+// ============================================================================
+
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
 
@@ -2409,6 +2412,10 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
     return 0;
 }
 
+// ============================================================================
+// Generic Function Specialization
+// ============================================================================
+
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     infer_ctx *ctx = traverse_ctx->user;
     if (ast_node_is_nfa(node)) {
@@ -2561,6 +2568,10 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node,
 
     return save;
 }
+
+// ============================================================================
+// Variable Renaming (Alpha Conversion)
+// ============================================================================
 
 static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
     // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
@@ -3517,6 +3528,7 @@ static void check_unresolved_types(tl_infer *self) {
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
+    // Phase 1: Alpha-conversion - ensure unique variable names
     // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names
     // while preserving lexical scope. This simplifies later passes by removing name collision concerns.
     {
@@ -3530,6 +3542,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         arena_reset(self->transient);
     }
 
+    // Phase 2: Load top-level definitions
     // Load all top level forms.
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
@@ -3539,6 +3552,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     dbg(self, "-- toplevels");
     log_toplevels(self);
 
+    // Phase 3: Generic function type inference
     // now go through the toplevel let nodes and create generic functions: don't call add_generic from
     // inside the iteration because infer will add lambda functions to the toplevel.
     forall(i, nodes) {
@@ -3550,6 +3564,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     if (self->errors.size) return 1;
 
+    // Phase 4: Check free variables
     // check if free variables are present
     if (check_missing_free_variables(self)) return 1;
     if (self->errors.size) return 1;
@@ -3581,6 +3596,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         main = *found_main;
     }
 
+    // Phase 5: Generic function specialization
     // Final phase: communiate type information top-down by following applications. This contrasts with
     // the bottom-up inference we just completed. At this point the program is well-typed and we are
     // setting up for the transpiler.
@@ -3655,6 +3671,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     remove_generic_toplevels(self);
     arena_reset(self->transient);
 
+    // Phase 6: Tree shaking
     // tree shake
     if (main) {
         tree_shake_toplevels(self, main);
@@ -3665,6 +3682,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         if (self->errors.size) return 1;
     }
 
+    // Phase 7: Type specialization updates
     // update type specialisations: replace generic constructors with specialised constructors.
     update_specialized_types(self);
     arena_reset(self->transient);
