@@ -1399,7 +1399,13 @@ static ast_node *parse_base_expression(parser *self) {
     if (0 == a_try(self, a_nil)) return self->result; // parse () before (...)
 
     if (0 == a_try(self, a_open_round)) {
-        ast_node *expr = parse_expression(self, INT_MIN);
+
+        ast_node *expr = null;
+
+        // check for let-in expression before recursing
+        if (0 == a_try(self, a_assignment)) expr = self->result;
+
+        if (!expr) expr = parse_expression(self, INT_MIN);
         if (a_try(self, a_close_round)) return null;
         return expr;
     }
