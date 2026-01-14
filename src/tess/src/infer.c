@@ -1746,7 +1746,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         str          original = ast_node_name_original(node->named_application.name);
         tl_polytype *type     = tl_type_env_lookup(self->env, name);
         if (!type) {
-            break; // mututal recursion, undeclared std_* functions, etc
+            // Note: type alias names are not in the environment. (TODO: clean this up)
+            type = tl_type_registry_get(self->registry, name);
+            if (!type) break; // mututal recursion, undeclared std_* functions, etc
         }
 
         // Is it a type literal: node was parsed in operand context by resolve_node

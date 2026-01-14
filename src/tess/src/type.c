@@ -2209,6 +2209,24 @@ int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right
     // unifying its targets. It will also unify with type variables. It will not unify with any other type.
     // In particular, note that it does NOT unify with any or ellipsis.
 
+    if (tl_monotype_is_tv(left->literal)) {
+        switch (right->tag) {
+        case tl_literal:
+        case tl_var:
+        case tl_weak:
+            // handled below. E.g. (literal t0) :: (literal t1)
+            break;
+
+        case tl_integer:
+        case tl_placeholder:
+        case tl_any:
+        case tl_ellipsis:
+        case tl_cons_inst:
+        case tl_arrow:
+        case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, left->literal->var, right, cb, user, seen);
+        }
+    }
+
     switch (right->tag) {
     case tl_literal:     return tl_type_subs_unify_mono(subs, left->literal, right->literal, cb, user, seen);
 
