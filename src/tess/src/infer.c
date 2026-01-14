@@ -276,7 +276,12 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
         else if (ast_node_is_type_alias(node)) {
             // FIXME: assmues alias name is a symbol. Parser may produce an nfa.
-            assert(ast_node_is_symbol(node->type_alias.name));
+            if (!ast_node_is_symbol(node->type_alias.name)) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_expected_type_alias_symbol, .node = node}));
+                continue;
+            }
+
             str          name = toplevel_name(node);
             tl_monotype *mono = tl_type_registry_parse_type(self->registry, node->type_alias.target);
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);

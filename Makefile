@@ -374,6 +374,7 @@ TL_TESTS =					\
 TL_FAIL_TESTS =					\
 	case_float				\
 	fail_monkey_patch			\
+	type_alias_partial_specialization	\
 	unknown_free_variable
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))

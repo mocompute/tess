@@ -233,4 +233,5 @@ tesslang_create_test(while_update_statement)
 # Expected failures
 tesslang_create_build_fail_test(case_float)
 tesslang_create_build_fail_test(fail_monkey_patch)
+tesslang_create_build_fail_test(type_alias_partial_specialization)
 tesslang_create_build_fail_test(unknown_free_variable)

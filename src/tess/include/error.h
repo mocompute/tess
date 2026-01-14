@@ -83,6 +83,7 @@
     X(tl_err_expected_pointer, "expected_pointer")                                                         \
     X(tl_err_expected_integer, "expected_integer")                                                         \
     X(tl_err_expected_type_constructor, "expected_type_constructor")                                       \
+    X(tl_err_expected_type_alias_symbol, "expected_type_alias_symbol")                                     \
     X(tl_err_unresolved_type, "unresolved_type")                                                           \
     X(tl_err_arity, "wrong_number_of_arguments")                                                           \
     X(tl_err_unknown_hash_command, "unknown_hash_command")                                                 \
