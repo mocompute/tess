@@ -181,7 +181,7 @@ all: $(TESS_EXE)
 install: $(TESS_EXE)
 	install -D -m 755 $(TESS_EXE) $(INSTALL_BIN)/$(TESS_EXE)
 	@mkdir -p $(INSTALL_LIB)/std
-	cd src/tl/std && find . -name '*.tl' -exec install -D -m 644 {} $(CURDIR)/$(INSTALL_LIB)/{} \;
+	cd src/tl/std && find . -name '*.tl' -exec install -D -m 644 {} $(INSTALL_LIB)/std/{} \;
 
 # ------------------------------------------------------------------------------
 # Clean
