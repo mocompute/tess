@@ -1,17 +1,26 @@
 #module main
 #import <stdlib.tl>
+#import <Unsafe.tl>
 
-T(a) : {
+Arr(a) : {
   v:            Ptr(a),
   size:         Int,
   capacity:     Int,
 }
 
-map(f: (a) -> b, arr: T(a)) -> T(b)
+// This annotation is not required, but it is helpful for documentation: it reads: "`map` is a function of two arguments.
+// The first argument `f` is a generic unary function that maps a value of one type (`a`) to a value of another type (`b`).
+// The second argument `arr` is an `Arr` struct with elements of type `a`, passed by value.
+// The function returns an `Arr` struct with elements of type `b`.
+map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
 
-map(f: (a) -> b, arr: T(a)) {
+// Argument type annotations are not required.
+map(f, arr) {
+
+  // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
+  // Because `malloc` returns `void*`, the `: Ptr(b)` type annotation is required.
   out_p : Ptr(b) := c_malloc(sizeof(b) * arr.size)
-  out := T(v = out_p, size = arr.size, capacity = arr.size)
+  out := Arr(v = out_p, size = arr.size, capacity = arr.size)
 
   i := 0
   while i < arr.size {
@@ -22,11 +31,14 @@ map(f: (a) -> b, arr: T(a)) {
   out
 }
 
-add1(x) { x + 1 }
+add1(x)  { x + 1 }
+add1f(x) { x + 1.0 }
 
 main() {
 
-  vals := T(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+  error := 0
+
+  vals := Arr(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
 
   vals.v[0] = 0
   vals.v[1] = 1
@@ -43,6 +55,7 @@ main() {
     sum = sum + vals.v[i]
   }
   c_assert(sum == 6)
+  error += sum - 6
 
   // verify that map returns an array with mapped values
   sum := 0
@@ -51,6 +64,21 @@ main() {
     sum = sum + res.v[i]
   }
   c_assert(sum == 10)
+  error += sum - 10
 
-  sum - 10
+  floats := Arr(v = c_malloc(sizeof(Float) * 4), size = 0, capacity = 4)
+  floats.v[0] = 0.0
+  floats.v[1] = 1.0
+  floats.v[2] = 2.0
+  floats.v[3] = 3.0
+  floats.size = 4
+
+  floats_res := map(add1f, floats)
+  sum := 0.0
+  i := 0
+  while i < floats.size, i = i + 1 {
+    sum = sum + floats_res.v[i]
+  }
+
+  error += Unsafe.float_to_int(sum - 10.0)
 }
