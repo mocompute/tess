@@ -523,6 +523,10 @@ static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_no
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
+static int is_string_ptr_conversion(tl_infer *, tl_polytype *, tl_polytype *);
+static int is_carray_constructor(ast_node *);
+static int is_std_function(ast_node *);
+
 typedef struct {
     tl_infer       *self;
     ast_node const *node;
@@ -549,18 +553,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 }
 
 static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right) {
-    // Note: special case: rather than teach the type system about this conversion, we turn a blind
-    // eye to String : Ptr(CChar) things. Sadly this requires doing a substitution first.
-    // TODO: why isn't this just in constrain()?
-
-    tl_polytype_substitute(self->arena, left, self->subs);
-    tl_polytype_substitute(self->arena, right, self->subs);
-    if ((tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
-        (tl_monotype_is_ptr_to_char(right->type) && tl_monotype_is_string(left->type))) {
-        return 1;
-    }
-
-    return 0;
+    return is_string_ptr_conversion(self, left, right);
 }
 
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
@@ -621,6 +614,29 @@ static int          is_union_struct(tl_infer *, str);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
 static void         toplevel_add(tl_infer *, str, ast_node *);
+
+// ============================================================================
+// Special Case Handlers
+// ============================================================================
+
+static int is_string_ptr_conversion(tl_infer *self, tl_polytype *left, tl_polytype *right) {
+    tl_polytype_substitute(self->arena, left, self->subs);
+    tl_polytype_substitute(self->arena, right, self->subs);
+    return (tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
+           (tl_monotype_is_ptr_to_char(right->type) && tl_monotype_is_string(left->type));
+}
+
+static int is_carray_constructor(ast_node *node) {
+    return ast_node_is_nfa(node) && str_eq(ast_node_str(node->named_application.name), S("CArray"));
+}
+
+static int is_std_function(ast_node *node) {
+    return ast_node_is_std_application(node);
+}
+
+// ============================================================================
+// Type Inference Helpers
+// ============================================================================
 
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
@@ -811,9 +827,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
     if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
-    // Note: special case CArray
-    if (ast_node_is_nfa(node->let_in.value) &&
-        str_eq(ast_node_str(node->let_in.value->named_application.name), S("CArray"))) {
+    if (is_carray_constructor(node->let_in.value)) {
         ast_node *nfa = node->let_in.value;
         if (2 != nfa->named_application.n_arguments) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = nfa}));
@@ -857,7 +871,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         }
 
     } else {
-        if (ast_node_is_std_application(node->let_in.value)) {
+        if (is_std_function(node->let_in.value)) {
             node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
         }
 
