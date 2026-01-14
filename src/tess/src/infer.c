@@ -686,6 +686,85 @@ static int infer_continue(tl_infer *self, ast_node *node) {
     return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node);
 }
 
+static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->return_.value, ctx, npos_operand)) return 1;
+    ensure_tv(self, &node->type);
+    if (constrain(self, node->type, node->return_.value->type, node)) return 1;
+
+    if (ctx->result_type)
+        if (constrain_pm(self, node->return_.value->type, ctx->result_type, node)) return 1;
+
+    return 0;
+}
+
+static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_monotype *inst =
+      tl_polytype_instantiate(self->arena, node->lambda_application.lambda->type, self->subs);
+    ast_node_type_set(node->lambda_application.lambda, tl_polytype_absorb_mono(self->arena, inst));
+
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    tl_polytype       *app  = make_arrow(self, ctx, iter.nodes, node, 0);
+    if (!app) return 1;
+
+    if (self->verbose) {
+        str inst_str = tl_monotype_to_string(self->transient, inst);
+        str app_str  = tl_polytype_to_string(self->transient, app);
+        dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
+            str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+    }
+
+    tl_polytype wrap = tl_polytype_wrap(inst);
+    if (constrain(self, &wrap, app, node)) return 1;
+
+    if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node))
+        return 1;
+
+    return 0;
+}
+
+static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    ensure_tv(self, &node->type);
+
+    tl_polytype *arrow =
+      make_arrow(self, ctx, ast_node_sized_from_ast_array(node), node->lambda_function.body, 1);
+    if (!arrow) return 1;
+    tl_polytype_generalize(arrow, self->env, self->subs);
+    if (constrain(self, node->type, arrow, node)) return 1;
+
+    return 0;
+}
+
+static int infer_if_then_else(tl_infer *self, ast_node *node) {
+    tl_monotype *bool_type = tl_type_registry_bool(self->registry);
+    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node)) return 1;
+
+    ensure_tv(self, &node->type);
+    if (node->if_then_else.no) {
+        if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node)) return 1;
+        if (constrain(self, node->type, node->if_then_else.yes->type, node)) return 1;
+    } else {
+        tl_monotype *nil      = tl_type_registry_nil(self->registry);
+        tl_monotype *any_type = tl_monotype_create_any(self->arena);
+        if (constrain_pm(self, node->type, nil, node)) return 1;
+
+        if (constrain_pm(self, node->if_then_else.yes->type, any_type, node)) return 1;
+    }
+
+    return 0;
+}
+
+static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
+    if (resolve_node(self, node->assignment.value, ctx, npos_assign_rhs)) return 1;
+
+    ensure_tv(self, &node->type);
+
+    if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
+    if (constrain(self, node->type, node->assignment.name->type, node)) return 1;
+
+    return 0;
+}
+
 static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ast_node   *left = node->binary_op.left, *right = node->binary_op.right;
     char const *op = str_cstr(&node->binary_op.op->symbol.name);
@@ -1826,19 +1905,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64: // FIXME unsigned
         return infer_literal_type(self, node, tl_type_registry_int);
-    case ast_bool:   return infer_literal_type(self, node, tl_type_registry_bool);
-    case ast_body:   return infer_body(self, node);
-    case ast_case:   return infer_case(self, traverse_ctx, node);
-
-    case ast_return: {
-        if (resolve_node(self, node->return_.value, traverse_ctx, npos_operand)) return 1;
-        ensure_tv(self, &node->type);
-        if (constrain(self, node->type, node->return_.value->type, node)) return 1;
-
-        // also constrain against result type of the outer function
-        if (traverse_ctx->result_type)
-            if (constrain_pm(self, node->return_.value->type, traverse_ctx->result_type, node)) return 1;
-    } break;
+    case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
+    case ast_body:      return infer_body(self, node);
+    case ast_case:      return infer_case(self, traverse_ctx, node);
+    case ast_return:    return infer_return(self, traverse_ctx, node);
 
     case ast_binary_op: return infer_binary_op(self, traverse_ctx, node);
     case ast_unary_op:  return infer_unary_op(self, traverse_ctx, node);
@@ -1851,100 +1921,32 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         assert(node->type);
         break;
 
-    case ast_named_function_application:  return infer_named_function_application(self, traverse_ctx, node);
-
-    case ast_lambda_function_application: {
-
-        // Instantiate and save type since it will never be generic.
-        tl_monotype *inst =
-          tl_polytype_instantiate(self->arena, node->lambda_application.lambda->type, self->subs);
-        ast_node_type_set(node->lambda_application.lambda, tl_polytype_absorb_mono(self->arena, inst));
-
-        // constrain arrow types
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        tl_polytype       *app  = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
-        if (!app) return 1;
-
-        if (self->verbose) {
-            str inst_str = tl_monotype_to_string(self->transient, inst);
-            str app_str  = tl_polytype_to_string(self->transient, app);
-            dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
-                str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
-        }
-
-        tl_polytype wrap = tl_polytype_wrap(inst);
-        if (constrain(self, &wrap, app, node)) return 1;
-
-        // constain node type to the lambda body type
-        if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node))
-            return 1;
-
-    } break;
-
-    case ast_lambda_function: {
-        ensure_tv(self, &node->type);
-
-        tl_polytype *arrow = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node),
-                                        node->lambda_function.body, 1);
-        if (!arrow) return 1;
-        tl_polytype_generalize(arrow, self->env, self->subs);
-        if (constrain(self, node->type, arrow, node)) return 1;
-
-    } break;
-
-    case ast_if_then_else: {
-
-        tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-        if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node)) return 1;
-
-        // a nil type in else arm indicates the arm should not be generated, so don't type check it. If
-        // there is no else arm, then the if statement as a whole has an Void type. Otherwise, the if
-        // statement takes the type of its arms.
-        ensure_tv(self, &node->type);
-        if (node->if_then_else.no) {
-            if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node)) return 1;
-            if (constrain(self, node->type, node->if_then_else.yes->type, node)) return 1;
-        } else {
-            tl_monotype *nil      = tl_type_registry_nil(self->registry);
-            tl_monotype *any_type = tl_monotype_create_any(self->arena);
-            if (constrain_pm(self, node->type, nil, node)) return 1;
-
-            // with a single arm, its type can be any.
-            if (constrain_pm(self, node->if_then_else.yes->type, any_type, node)) return 1;
-        }
-    } break;
+    case ast_named_function_application: return infer_named_function_application(self, traverse_ctx, node);
+    case ast_lambda_function_application:
+        return infer_lambda_function_application(self, traverse_ctx, node);
+    case ast_lambda_function:      return infer_lambda_function(self, traverse_ctx, node);
+    case ast_if_then_else:         return infer_if_then_else(self, node);
 
     case ast_tuple:                return infer_tuple(self, node);
 
-    case ast_user_type_definition: {
-    } break;
+    case ast_user_type_definition: break;
 
     case ast_assignment:
     case ast_reassignment:
-    case ast_reassignment_op:
-        if (resolve_node(self, node->assignment.name, traverse_ctx, npos_assign_lhs)) return 1;
-        if (resolve_node(self, node->assignment.value, traverse_ctx, npos_assign_rhs)) return 1;
-
-        ensure_tv(self, &node->type);
-
-        if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
-        if (constrain(self, node->type, node->assignment.name->type, node)) return 1;
-        break;
+    case ast_reassignment_op:      return infer_assignment(self, traverse_ctx, node);
 
     case ast_continue:
         // use 'any' for continue so it can unify with any other conditional arm
         return infer_continue(self, node);
 
-    case ast_while: return infer_while(self, node);
+    case ast_while:        return infer_while(self, node);
 
-    case ast_let: // intentionally not processed
+    case ast_let:          // intentionally not processed
     case ast_hash_command:
     case ast_arrow:
     case ast_ellipsis:
     case ast_eof:
-    case ast_type_alias:
-        //
-        break;
+    case ast_type_alias:   break;
     }
 
     return 0;
