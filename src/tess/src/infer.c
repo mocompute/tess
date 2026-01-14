@@ -614,7 +614,13 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
     };
 }
 
-static int infer_struct_access(tl_infer *, ast_node *);
+static int          infer_struct_access(tl_infer *, ast_node *);
+static int          add_generic(tl_infer *, ast_node *);
+static int          is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
+static int          is_union_struct(tl_infer *, str);
+static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
+static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
+static void         toplevel_add(tl_infer *, str, ast_node *);
 
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
@@ -742,6 +748,240 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (constrain(self, node->type, operand->type, node)) return 1;
     } else {
         fatal("unknown unary operator");
+    }
+
+    return 0;
+}
+
+static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->case_.expression, ctx, npos_operand)) return 1;
+    if (resolve_node(self, node->case_.binary_predicate, ctx, npos_operand)) return 1;
+
+    ensure_tv(self, &node->type);
+    tl_monotype *nil       = tl_type_registry_nil(self->registry);
+    tl_monotype *any_type  = tl_monotype_create_any(self->arena);
+    tl_polytype *expr_type = node->case_.expression->type;
+
+    if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+    forall(i, node->case_.conditions) {
+        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+
+        if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;
+        ensure_tv(self, &node->case_.conditions.v[i]->type);
+        if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+    }
+
+    switch (node->case_.arms.size) {
+    case 0:
+        if (constrain_pm(self, node->type, nil, node)) return 1;
+        break;
+    case 1:
+        if (constrain_pm(self, node->type, nil, node)) return 1;
+        if (resolve_node(self, node->case_.arms.v[0], ctx, npos_operand)) return 1;
+        if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node)) return 1;
+        break;
+
+    default: {
+        if (resolve_node(self, node->case_.arms.v[0], ctx, npos_operand)) return 1;
+        tl_polytype *arm_type = node->case_.arms.v[0]->type;
+        if (constrain(self, node->type, arm_type, node->case_.arms.v[0])) return 1;
+
+        forall(i, node->case_.arms) {
+            if (resolve_node(self, node->case_.arms.v[i], ctx, npos_operand)) return 1;
+            ensure_tv(self, &node->case_.arms.v[i]->type);
+            if (constrain(self, node->case_.arms.v[i]->type, arm_type, node)) return 1;
+        }
+    } break;
+    }
+
+    if (node->case_.binary_predicate && node->case_.conditions.size) {
+        tl_polytype *pred_arrow =
+          make_binary_predicate_arrow(self, ctx, node->case_.expression, node->case_.conditions.v[0]);
+        if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
+    }
+
+    return 0;
+}
+
+static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->let_in.name, ctx, npos_let_in_lhs)) return 1;
+    if (resolve_node(self, node->let_in.value, ctx, npos_let_in_rhs)) return 1;
+
+    ensure_tv(self, &node->type);
+    if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
+
+    // Note: special case CArray
+    if (ast_node_is_nfa(node->let_in.value) &&
+        str_eq(ast_node_str(node->let_in.value->named_application.name), S("CArray"))) {
+        ast_node *nfa = node->let_in.value;
+        if (2 != nfa->named_application.n_arguments) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = nfa}));
+            return 1;
+        }
+        ast_node **args = nfa->named_application.arguments;
+        if (ast_i64 != args[1]->tag) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_integer, .node = args[1]}));
+            return 1;
+        }
+
+        tl_monotype *parsed_type = tl_type_registry_parse_type(self->registry, args[0]);
+        if (!parsed_type) {
+            expected_type(self, args[0]);
+            return 1;
+        }
+
+        tl_monotype *inst =
+          tl_type_registry_instantiate_carray(self->registry, parsed_type, (i32)args[1]->i64.val);
+        if (constrain_pm(self, node->let_in.value->type, inst, node)) return 1;
+
+        tl_monotype *ptr = tl_type_registry_ptr(self->registry, parsed_type);
+        if (constrain_pm(self, node->let_in.name->type, ptr, node->let_in.name)) return 1;
+        return 0;
+    }
+
+    else if (ast_node_is_lambda_function(node->let_in.value)) {
+        str name = node->let_in.name->symbol.name;
+
+        if (add_generic(self, node)) return 1;
+
+        node->let_in.name->type = null;
+
+        if (node->let_in.body)
+            if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+
+        {
+            ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
+            let_in_lambda->let_in.body = null;
+            toplevel_add(self, name, let_in_lambda);
+        }
+
+    } else {
+        if (ast_node_is_std_application(node->let_in.value)) {
+            node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
+        }
+
+        tl_polytype *name_type            = node->let_in.name->type;
+        tl_polytype *name_annotation_type = node->let_in.name->symbol.annotation_type;
+        tl_polytype *value_type           = node->let_in.value->type;
+
+        {
+            int is_cast = 0;
+            if (name_annotation_type && tl_monotype_is_ptr(name_annotation_type->type)) is_cast = 1;
+
+            if (is_cast) self->is_constrain_ignore_error = 1;
+            if (name_annotation_type) {
+                name_type = name_annotation_type;
+
+                str name = ast_node_str(node->let_in.name);
+                str tmp  = tl_polytype_to_string(self->transient, name_annotation_type);
+
+                dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
+            }
+
+            if (!escape_constraint(self, name_type, value_type) && constrain(self, name_type, value_type, node) &&
+                !is_cast)
+                return 1;
+            self->is_constrain_ignore_error = 0;
+        }
+
+        env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node);
+
+        if (node->let_in.body)
+            if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+    }
+    return 0;
+}
+
+static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node, ctx, ctx->node_pos)) return 1;
+
+    str          name     = ast_node_str(node->named_application.name);
+    str          original = ast_node_name_original(node->named_application.name);
+    tl_polytype *type     = tl_type_env_lookup(self->env, name);
+    if (!type) {
+        type = tl_type_registry_get(self->registry, name);
+        if (!type) return 0;
+    }
+
+    if (is_type_literal(self, ctx, node)) return 0;
+
+    if (tl_polytype_is_type_constructor(type)) {
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
+        }
+
+        tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
+        if (!inst) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+            return 1;
+        }
+
+        {
+            str          inst_str = tl_monotype_to_string(self->transient, inst);
+            tl_polytype *app      = make_arrow(self, ctx, iter.nodes, null, 0);
+            if (!app) return 1;
+
+            if (self->verbose) {
+                str app_str = tl_polytype_to_string(self->transient, app);
+                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
+                    str_cstr(&app_str));
+            }
+        }
+
+        if (!is_union_struct(self, name)) {
+            iter = ast_node_arguments_iter(node);
+            if (iter.nodes.size != inst->cons_inst->args.size) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+                return 1;
+            }
+        }
+
+        u32 i = 0;
+        iter  = ast_node_arguments_iter(node);
+        while ((arg = ast_arguments_next(&iter))) {
+            if (i >= inst->cons_inst->args.size) fatal("runtime error");
+
+            if (ast_node_is_assignment(arg)) {
+                i32 found =
+                  tl_monotype_type_constructor_field_index(inst, ast_node_name_original(arg->assignment.name));
+
+                if (-1 == found) {
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                    return 1;
+                }
+                assert(found < (i32)inst->cons_inst->args.size);
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+            } else {
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+            }
+            ++i;
+        }
+
+        if (constrain_pm(self, node->type, inst, node)) return 1;
+
+    } else {
+        if (tl_polytype_is_concrete(type)) {
+            if (!str_is_empty(original)) {
+                tl_polytype *found = tl_type_env_lookup(self->env, original);
+                if (found) type = found;
+            }
+        }
+
+        ast_arguments_iter iter     = ast_node_arguments_iter(node);
+        tl_monotype       *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
+        str                inst_str = tl_monotype_to_string(self->transient, inst);
+        tl_polytype       *app      = make_arrow(self, ctx, iter.nodes, node, 0);
+        if (!app) return 1;
+        if (self->verbose) {
+            str app_str = tl_polytype_to_string(self->transient, app);
+            dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
+                str_cstr(&app_str));
+        }
+        tl_polytype wrap = tl_polytype_wrap(inst);
+        if (constrain(self, &wrap, app, node)) return 1;
     }
 
     return 0;
@@ -1585,64 +1825,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_body:
         return infer_body(self, node);
 
-    case ast_case: {
-        if (resolve_node(self, node->case_.expression, traverse_ctx, npos_operand)) return 1;
-        if (resolve_node(self, node->case_.binary_predicate, traverse_ctx, npos_operand)) return 1;
-
-        ensure_tv(self, &node->type);
-        tl_monotype *nil       = tl_type_registry_nil(self->registry);
-        tl_monotype *any_type  = tl_monotype_create_any(self->arena);
-        tl_polytype *expr_type = node->case_.expression->type;
-
-        if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
-
-        // expression and all conditions must be same type so they can be compared for equality.
-
-        forall(i, node->case_.conditions) {
-            // check if last condition is ast_nil, indicating an `else` case
-            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
-
-            if (resolve_node(self, node->case_.conditions.v[i], traverse_ctx, npos_operand)) return 1;
-            ensure_tv(self, &node->case_.conditions.v[i]->type);
-            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
-        }
-
-        // arms must all be the same.
-        // node type is either nil if this has a single arm, or the type of its arms if it has multiple.
-        // If it has a single arm, it's a statement. If it has multiple arms, it's an expression.
-        switch (node->case_.arms.size) {
-        case 0:
-            if (constrain_pm(self, node->type, nil, node)) return 1;
-            break;
-        case 1:
-            if (constrain_pm(self, node->type, nil, node)) return 1;
-
-            // with a single arm, this is equivalent to a single-arm if statement, so its type can be any.
-            if (resolve_node(self, node->case_.arms.v[0], traverse_ctx, npos_operand)) return 1;
-            if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node)) return 1;
-            break;
-
-        default: {
-            if (resolve_node(self, node->case_.arms.v[0], traverse_ctx, npos_operand)) return 1;
-            tl_polytype *arm_type = node->case_.arms.v[0]->type;
-            if (constrain(self, node->type, arm_type, node->case_.arms.v[0])) return 1;
-
-            forall(i, node->case_.arms) {
-                if (resolve_node(self, node->case_.arms.v[i], traverse_ctx, npos_operand)) return 1;
-                ensure_tv(self, &node->case_.arms.v[i]->type);
-                if (constrain(self, node->case_.arms.v[i]->type, arm_type, node)) return 1;
-            }
-        } break;
-        }
-
-        // predicate, if it exists, must be type (x, y) -> Bool
-        if (node->case_.binary_predicate && node->case_.conditions.size) {
-            tl_polytype *pred_arrow = make_binary_predicate_arrow(
-              self, traverse_ctx, node->case_.expression, node->case_.conditions.v[0]);
-            if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
-        }
-
-    } break;
+    case ast_case:
+        return infer_case(self, traverse_ctx, node);
 
     case ast_return: {
         if (resolve_node(self, node->return_.value, traverse_ctx, npos_operand)) return 1;
@@ -1660,112 +1844,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_unary_op:
         return infer_unary_op(self, traverse_ctx, node);
 
-    case ast_let_in: {
-        if (resolve_node(self, node->let_in.name, traverse_ctx, npos_let_in_lhs)) return 1;
-        if (resolve_node(self, node->let_in.value, traverse_ctx, npos_let_in_rhs)) return 1;
-
-        ensure_tv(self, &node->type);
-        if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
-
-        // Note: special case CArray
-        if (ast_node_is_nfa(node->let_in.value) &&
-            str_eq(ast_node_str(node->let_in.value->named_application.name), S("CArray"))) {
-            ast_node *nfa = node->let_in.value;
-            if (2 != nfa->named_application.n_arguments) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = nfa}));
-                return 1;
-            }
-            ast_node **args = nfa->named_application.arguments;
-            if (ast_i64 != args[1]->tag) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_expected_integer, .node = args[1]}));
-                return 1;
-            }
-
-            tl_monotype *parsed_type = tl_type_registry_parse_type(self->registry, args[0]);
-            if (!parsed_type) {
-                expected_type(self, args[0]);
-                return 1;
-            }
-
-            tl_monotype *inst =
-              tl_type_registry_instantiate_carray(self->registry, parsed_type, (i32)args[1]->i64.val);
-            if (constrain_pm(self, node->let_in.value->type, inst, node)) return 1;
-
-            // node name is a Ptr(type)
-            tl_monotype *ptr = tl_type_registry_ptr(self->registry, parsed_type);
-            if (constrain_pm(self, node->let_in.name->type, ptr, node->let_in.name)) return 1;
-            break;
-        }
-
-        else if (ast_node_is_lambda_function(node->let_in.value)) {
-
-            str name = node->let_in.name->symbol.name;
-
-            // define a generic lambda
-            if (add_generic(self, node)) return 1;
-
-            // Do not infer the node value - add_generic takes care of that.
-            // Instead, trigger runtime problems if the name's type is referenced using the expression type
-            // (rather than the type_env type).
-            node->let_in.name->type = null;
-
-            if (node->let_in.body)
-                if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
-
-            // add let-in node to toplevels (because we need the name and the body)
-            {
-                ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
-                let_in_lambda->let_in.body = null;
-                toplevel_add(self, name, let_in_lambda);
-            }
-
-        } else {
-
-            if (ast_node_is_std_application(node->let_in.value)) {
-                // Note: special case std_ functions and give them all a Void return type
-                node->let_in.value->type = tl_polytype_nil(self->arena, self->registry);
-            }
-
-            // casting: if name has an annotation, make it supreme: it overrides the value's type but must
-            // still unify
-            tl_polytype *name_type            = node->let_in.name->type;
-            tl_polytype *name_annotation_type = node->let_in.name->symbol.annotation_type;
-            tl_polytype *value_type           = node->let_in.value->type;
-
-            // Note: special case: if name is annotated and it has a Ptr (pointer) type, treat this let-in
-            // as as pointer cast, and turn a blind eye to any type mismatch. Since the unification
-            // machinery is directly connected to tl_infer's error system, we have to set a state flag to
-            // tell it to ignore errors reported during unification. We can't skip unification entirely,
-            // because we need type variables to be resolved.
-            {
-                int is_cast = 0;
-                if (name_annotation_type && tl_monotype_is_ptr(name_annotation_type->type)) is_cast = 1;
-
-                if (is_cast) self->is_constrain_ignore_error = 1;
-                if (name_annotation_type) {
-                    // use annotation type as a cast, even if it is not a Ptr type.
-                    name_type = name_annotation_type;
-
-                    str name  = ast_node_str(node->let_in.name);
-                    str tmp   = tl_polytype_to_string(self->transient, name_annotation_type);
-
-                    dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name),
-                        str_cstr(&tmp));
-                }
-
-                if (!escape_constraint(self, name_type, value_type) &&
-                    constrain(self, name_type, value_type, node) && !is_cast)
-                    return 1;
-                self->is_constrain_ignore_error = 0;
-            }
-
-            env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node);
-
-            if (node->let_in.body)
-                if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
-        }
-    } break;
+    case ast_let_in:
+        return infer_let_in(self, traverse_ctx, node);
 
     case ast_symbol:
         // When resolving a symbol, we need to know what context it's in. This is specified by its parent
@@ -1774,113 +1854,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         assert(node->type);
         break;
 
-    case ast_named_function_application: {
-
-        // Note: do not attempt to resolve name, due to polymorphism
-
-        // traverse_ast is depth-first: arguments are traversed before the nfa node itself.
-        if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
-
-        str          name     = ast_node_str(node->named_application.name);
-        str          original = ast_node_name_original(node->named_application.name);
-        tl_polytype *type     = tl_type_env_lookup(self->env, name);
-        if (!type) {
-            // Note: type alias names are not in the environment. (TODO: clean this up)
-            type = tl_type_registry_get(self->registry, name);
-            if (!type) break; // mututal recursion, undeclared std_* functions, etc
-        }
-
-        // Is it a type literal: node was parsed in operand context by resolve_node
-        if (is_type_literal(self, traverse_ctx, node)) break;
-
-        if (tl_polytype_is_type_constructor(type)) {
-            // a type constructor
-
-            ast_arguments_iter iter = ast_node_arguments_iter(node);
-            ast_node          *arg;
-            while ((arg = ast_arguments_next(&iter))) {
-                if (resolve_node(self, arg, traverse_ctx, npos_function_argument)) return 1;
-            }
-
-            tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
-            if (!inst) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
-                return 1;
-            }
-
-            {
-                str          inst_str = tl_monotype_to_string(self->transient, inst);
-                tl_polytype *app      = make_arrow(self, traverse_ctx, iter.nodes, null, 0);
-                if (!app) return 1;
-
-                if (self->verbose) {
-                    str app_str = tl_polytype_to_string(self->transient, app);
-                    dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
-                        str_cstr(&inst_str), str_cstr(&app_str));
-                }
-            }
-
-            if (!is_union_struct(self, name)) {
-                iter = ast_node_arguments_iter(node);
-                if (iter.nodes.size != inst->cons_inst->args.size) {
-                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
-                    return 1;
-                }
-            }
-
-            u32 i = 0;
-            iter  = ast_node_arguments_iter(node);
-            while ((arg = ast_arguments_next(&iter))) {
-                if (i >= inst->cons_inst->args.size) fatal("runtime error");
-
-                if (ast_node_is_assignment(arg)) {
-                    // check if name exists in type def
-                    i32 found = tl_monotype_type_constructor_field_index(
-                      inst, ast_node_name_original(arg->assignment.name));
-
-                    if (-1 == found) {
-                        array_push(self->errors,
-                                   ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
-                        return 1;
-                    }
-                    assert(found < (i32)inst->cons_inst->args.size);
-                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
-                } else {
-                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[i], node)) return 1;
-                }
-                ++i;
-            }
-
-            if (constrain_pm(self, node->type, inst, node)) return 1;
-
-        } else {
-            // a function type
-
-            // if the type is not generic, try to recover the generic one
-            if (tl_polytype_is_concrete(type)) {
-                if (!str_is_empty(original)) {
-                    tl_polytype *found = tl_type_env_lookup(self->env, original);
-                    if (found) type = found;
-                }
-            }
-
-            // instantiate generic function type being applied
-            ast_arguments_iter iter     = ast_node_arguments_iter(node);
-            tl_monotype       *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
-            str                inst_str = tl_monotype_to_string(self->transient, inst);
-            tl_polytype       *app      = make_arrow(self, traverse_ctx, iter.nodes, node, 0);
-            if (!app) return 1;
-            if (self->verbose) {
-                str app_str = tl_polytype_to_string(self->transient, app);
-                dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
-                    str_cstr(&app_str));
-            }
-            // and constrain it with the callsite types (arguments -> result)
-            tl_polytype wrap = tl_polytype_wrap(inst);
-            if (constrain(self, &wrap, app, node)) return 1;
-        }
-
-    } break;
+    case ast_named_function_application:
+        return infer_named_function_application(self, traverse_ctx, node);
 
     case ast_lambda_function_application: {
 
