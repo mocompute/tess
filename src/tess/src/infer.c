@@ -49,12 +49,12 @@ struct tl_infer {
     // Context for single-pass parsing of user type definitions
     tl_type_registry_parse_type_ctx type_parse_ctx;
 
-    u32 next_var_name;
-    u32 next_instantiation;
+    u32                             next_var_name;
+    u32                             next_instantiation;
 
-    int verbose;
-    int verbose_ast;
-    int indent_level;
+    int                             verbose;
+    int                             verbose_ast;
+    int                             indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
 };
@@ -112,31 +112,31 @@ static void      log_toplevels(tl_infer const *);
 static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
-tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self                  = new(alloc, tl_infer);
+tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
+    tl_infer *self           = new(alloc, tl_infer);
 
-    self->opts                      = *opts;
+    self->opts               = *opts;
 
-    self->transient                 = arena_create(alloc, 4096);
-    self->arena                     = arena_create(alloc, 16 * 1024);
-    self->env                       = tl_type_env_create(self->arena);
-    self->subs                      = tl_type_subs_create(self->arena);
-    self->registry                  = tl_type_registry_create(self->arena, self->transient, self->subs);
+    self->transient          = arena_create(alloc, 4096);
+    self->arena              = arena_create(alloc, 16 * 1024);
+    self->env                = tl_type_env_create(self->arena);
+    self->subs               = tl_type_subs_create(self->arena);
+    self->registry           = tl_type_registry_create(self->arena, self->transient, self->subs);
 
-    self->synthesized_nodes         = (ast_node_array){.alloc = self->arena};
+    self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
 
-    self->toplevels                 = null;
-    self->instances                 = map_new(self->arena, name_and_type, str, 512);
-    self->instance_names            = hset_create(self->arena, 512);
-    self->hash_includes             = (str_array){.alloc = self->arena};
-    self->errors                    = (tl_infer_error_array){.alloc = self->arena};
+    self->toplevels          = null;
+    self->instances          = map_new(self->arena, name_and_type, str, 512);
+    self->instance_names     = hset_create(self->arena, 512);
+    self->hash_includes      = (str_array){.alloc = self->arena};
+    self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
-    self->next_var_name             = 0;
-    self->next_instantiation        = 0;
+    self->next_var_name      = 0;
+    self->next_instantiation = 0;
 
-    self->verbose                   = 0;
-    self->verbose_ast               = 0;
-    self->indent_level              = 0;
+    self->verbose            = 0;
+    self->verbose_ast        = 0;
+    self->indent_level       = 0;
     self->is_constrain_ignore_error = 0;
 
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
@@ -522,9 +522,9 @@ static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_no
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
-static int is_string_ptr_conversion(tl_infer *, tl_polytype *, tl_polytype *);
-static int is_carray_constructor(ast_node *);
-static int is_std_function(ast_node *);
+static int  is_string_ptr_conversion(tl_infer *, tl_polytype *, tl_polytype *);
+static int  is_carray_constructor(ast_node *);
+static int  is_std_function(ast_node *);
 
 typedef struct {
     tl_infer       *self;
@@ -583,7 +583,7 @@ static void ensure_tv(tl_infer *self, tl_polytype **type) {
 }
 
 static int infer_literal_type(tl_infer *self, ast_node *node,
-                               tl_monotype *(*get_type)(tl_type_registry *)) {
+                              tl_monotype *(*get_type)(tl_type_registry *)) {
     tl_monotype *ty = get_type(self->registry);
     ensure_tv(self, &node->type);
     return constrain_pm(self, node->type, ty, node);
@@ -595,15 +595,12 @@ typedef struct {
 } annotation_parse_result;
 
 static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
-                                                      ast_node *annotation_node) {
+                                                     ast_node *annotation_node) {
     tl_type_registry_parse_type_ctx parse_ctx;
-    tl_monotype *parsed = tl_type_registry_parse_type_out_ctx(
-        self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+    tl_monotype                    *parsed = tl_type_registry_parse_type_out_ctx(
+      self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
 
-    return (annotation_parse_result){
-        .parsed = parsed,
-        .type_arguments = parse_ctx.type_arguments
-    };
+    return (annotation_parse_result){.parsed = parsed, .type_arguments = parse_ctx.type_arguments};
 }
 
 static int          infer_struct_access(tl_infer *, ast_node *);
@@ -886,14 +883,14 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             if (name_annotation_type) {
                 name_type = name_annotation_type;
 
-                str name = ast_node_str(node->let_in.name);
-                str tmp  = tl_polytype_to_string(self->transient, name_annotation_type);
+                str name  = ast_node_str(node->let_in.name);
+                str tmp   = tl_polytype_to_string(self->transient, name_annotation_type);
 
                 dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
             }
 
-            if (!escape_constraint(self, name_type, value_type) && constrain(self, name_type, value_type, node) &&
-                !is_cast)
+            if (!escape_constraint(self, name_type, value_type) &&
+                constrain(self, name_type, value_type, node) && !is_cast)
                 return 1;
             self->is_constrain_ignore_error = 0;
         }
@@ -939,8 +936,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
 
             if (self->verbose) {
                 str app_str = tl_polytype_to_string(self->transient, app);
-                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
-                    str_cstr(&app_str));
+                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                    str_cstr(&inst_str), str_cstr(&app_str));
             }
         }
 
@@ -958,11 +955,12 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             if (i >= inst->cons_inst->args.size) fatal("runtime error");
 
             if (ast_node_is_assignment(arg)) {
-                i32 found =
-                  tl_monotype_type_constructor_field_index(inst, ast_node_name_original(arg->assignment.name));
+                i32 found = tl_monotype_type_constructor_field_index(
+                  inst, ast_node_name_original(arg->assignment.name));
 
                 if (-1 == found) {
-                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
                     return 1;
                 }
                 assert(found < (i32)inst->cons_inst->args.size);
@@ -1648,7 +1646,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (result.parsed) {
                 tl_monotype *mono = result.parsed;
 
-                mono = tl_monotype_create_literal(self->arena, mono);
+                mono              = tl_monotype_create_literal(self->arena, mono);
 #if DEBUG_RESOLVE
                 str node_str = v2_ast_node_to_string(self->transient, node);
                 str mono_str = tl_monotype_to_string(self->transient, mono);
@@ -1687,7 +1685,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             map_merge(&ctx->type_arguments, result.type_arguments);
 
             if (result.parsed) {
-                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, result.parsed))) return 1;
+                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, result.parsed)))
+                    return 1;
             }
         }
 
@@ -1790,7 +1789,7 @@ static int check_type_assertion(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     return 0;
 }
 
-int        is_union_struct(tl_infer *self, str name);
+int is_union_struct(tl_infer *self, str name);
 
 // ============================================================================
 // Type Constraint Generation
@@ -1821,29 +1820,15 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_string:
-        return infer_literal_type(self, node, tl_type_registry_string);
-
-    case ast_char:
-        return infer_literal_type(self, node, tl_type_registry_char);
-
-    case ast_f64:
-        return infer_literal_type(self, node, tl_type_registry_float);
-
-    case ast_i64:
-        return infer_literal_type(self, node, tl_type_registry_int);
-
+    case ast_string: return infer_literal_type(self, node, tl_type_registry_string);
+    case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
+    case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64: // FIXME unsigned
         return infer_literal_type(self, node, tl_type_registry_int);
-
-    case ast_bool:
-        return infer_literal_type(self, node, tl_type_registry_bool);
-
-    case ast_body:
-        return infer_body(self, node);
-
-    case ast_case:
-        return infer_case(self, traverse_ctx, node);
+    case ast_bool:   return infer_literal_type(self, node, tl_type_registry_bool);
+    case ast_body:   return infer_body(self, node);
+    case ast_case:   return infer_case(self, traverse_ctx, node);
 
     case ast_return: {
         if (resolve_node(self, node->return_.value, traverse_ctx, npos_operand)) return 1;
@@ -1855,14 +1840,9 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain_pm(self, node->return_.value->type, traverse_ctx->result_type, node)) return 1;
     } break;
 
-    case ast_binary_op:
-        return infer_binary_op(self, traverse_ctx, node);
-
-    case ast_unary_op:
-        return infer_unary_op(self, traverse_ctx, node);
-
-    case ast_let_in:
-        return infer_let_in(self, traverse_ctx, node);
+    case ast_binary_op: return infer_binary_op(self, traverse_ctx, node);
+    case ast_unary_op:  return infer_unary_op(self, traverse_ctx, node);
+    case ast_let_in:    return infer_let_in(self, traverse_ctx, node);
 
     case ast_symbol:
         // When resolving a symbol, we need to know what context it's in. This is specified by its parent
@@ -1871,8 +1851,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         assert(node->type);
         break;
 
-    case ast_named_function_application:
-        return infer_named_function_application(self, traverse_ctx, node);
+    case ast_named_function_application:  return infer_named_function_application(self, traverse_ctx, node);
 
     case ast_lambda_function_application: {
 
@@ -1935,8 +1914,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
     } break;
 
-    case ast_tuple:
-        return infer_tuple(self, node);
+    case ast_tuple:                return infer_tuple(self, node);
 
     case ast_user_type_definition: {
     } break;
@@ -1957,8 +1935,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // use 'any' for continue so it can unify with any other conditional arm
         return infer_continue(self, node);
 
-    case ast_while:
-        return infer_while(self, node);
+    case ast_while: return infer_while(self, node);
 
     case ast_let: // intentionally not processed
     case ast_hash_command:
@@ -2551,9 +2528,9 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str_map_set(&ctx->lex, name, &newvar);
 }
 
-static hashmap *rename_function_params(tl_infer *self, ast_node *node,
-                                        rename_variables_ctx *ctx, int level) {
-    hashmap *save = map_copy(ctx->lex);
+static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
+                                       int level) {
+    hashmap           *save = map_copy(ctx->lex);
 
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *param;
