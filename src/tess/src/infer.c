@@ -590,6 +590,13 @@ static void ensure_tv(tl_infer *self, tl_polytype **type) {
     *type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
+static int infer_literal_type(tl_infer *self, ast_node *node,
+                               tl_monotype *(*get_type)(tl_type_registry *)) {
+    tl_monotype *ty = get_type(self->registry);
+    ensure_tv(self, &node->type);
+    return constrain_pm(self, node->type, ty, node);
+}
+
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
@@ -1420,41 +1427,23 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
     } break;
 
-    case ast_string: {
-        tl_monotype *ty = tl_type_registry_string(self->registry);
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_string:
+        return infer_literal_type(self, node, tl_type_registry_string);
 
-    case ast_char: {
-        tl_monotype *ty = tl_type_registry_char(self->registry);
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_char:
+        return infer_literal_type(self, node, tl_type_registry_char);
 
-    case ast_f64: {
-        tl_monotype *ty = tl_type_registry_float(self->registry);
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_f64:
+        return infer_literal_type(self, node, tl_type_registry_float);
 
-    case ast_i64: {
-        tl_monotype *ty = tl_type_registry_int(self->registry);
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_i64:
+        return infer_literal_type(self, node, tl_type_registry_int);
 
-    case ast_u64: {
-        tl_monotype *ty = tl_type_registry_int(self->registry); // FIXME unsigned
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_u64: // FIXME unsigned
+        return infer_literal_type(self, node, tl_type_registry_int);
 
-    case ast_bool: {
-        tl_monotype *ty = tl_type_registry_bool(self->registry);
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, ty, node)) return 1;
-    } break;
+    case ast_bool:
+        return infer_literal_type(self, node, tl_type_registry_bool);
 
     case ast_body: {
         ensure_tv(self, &node->type);
