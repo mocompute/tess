@@ -597,6 +597,23 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
     return constrain_pm(self, node->type, ty, node);
 }
 
+typedef struct {
+    tl_monotype *parsed;
+    hashmap     *type_arguments;
+} annotation_parse_result;
+
+static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
+                                                      ast_node *annotation_node) {
+    tl_type_registry_parse_type_ctx parse_ctx;
+    tl_monotype *parsed = tl_type_registry_parse_type_out_ctx(
+        self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+
+    return (annotation_parse_result){
+        .parsed = parsed,
+        .type_arguments = parse_ctx.type_arguments
+    };
+}
+
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
@@ -1188,19 +1205,17 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 // knows how to managed its type arguments. Then we merge the parse context's type arguments
                 // into our own.
 
-                tl_type_registry_parse_type_ctx parse_ctx;
-                tl_monotype                    *mono = tl_type_registry_parse_type_out_ctx(
-                  self->registry, node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
-                if (!mono) {
+                annotation_parse_result result = parse_type_annotation(self, ctx, node);
+                if (!result.parsed) {
                     expected_type(self, node);
                     return 1;
                 }
                 if (ctx) {
-                    map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+                    map_merge(&ctx->type_arguments, result.type_arguments);
 
                     // Also add type arguments to lexical names. Especially for free variables process.
 
-                    str_array arr = str_map_keys(self->transient, parse_ctx.type_arguments);
+                    str_array arr = str_map_keys(self->transient, result.type_arguments);
                     forall(i, arr) {
 #if DEBUG_RESOLVE
                         dbg(self, "resolve_node: adding type argument to lexicals: '%s'",
@@ -1210,11 +1225,13 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                     }
                 }
 
+                tl_monotype *mono = result.parsed;
+
                 (void)name;
                 // If annotation is a type argument, grab its wrapped type from the type arguments map. We
                 // need it to be wrapped in a literal.
                 tl_monotype *found;
-                if ((found = str_map_get_ptr(parse_ctx.type_arguments, name))) mono = found;
+                if ((found = str_map_get_ptr(result.type_arguments, name))) mono = found;
 
                 node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
                 assert(node->symbol.annotation_type);
@@ -1239,12 +1256,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
 
             // A type literal in argument position must be wrapped in literal
-            tl_type_registry_parse_type_ctx parse_ctx;
-            tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
-                                                                    ctx->type_arguments, &parse_ctx);
-            map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+            annotation_parse_result result = parse_type_annotation(self, ctx, node);
+            map_merge(&ctx->type_arguments, result.type_arguments);
 
-            if (mono) {
+            if (result.parsed) {
+                tl_monotype *mono = result.parsed;
 
                 mono = tl_monotype_create_literal(self->arena, mono);
 #if DEBUG_RESOLVE
@@ -1281,13 +1297,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node) && node->symbol.annotation) {
             if (!ctx) fatal("logic error");
 
-            tl_type_registry_parse_type_ctx parse_ctx;
-            tl_monotype                    *parsed = tl_type_registry_parse_type_out_ctx(
-              self->registry, node->symbol.annotation, self->transient, ctx->type_arguments, &parse_ctx);
-            map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+            annotation_parse_result result = parse_type_annotation(self, ctx, node->symbol.annotation);
+            map_merge(&ctx->type_arguments, result.type_arguments);
 
-            if (parsed) {
-                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
+            if (result.parsed) {
+                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, result.parsed))) return 1;
             }
         }
 
@@ -1314,13 +1328,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             return infer_struct_access(self, node);
         }
 
-        tl_type_registry_parse_type_ctx parse_ctx;
-        tl_monotype *parsed = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
-                                                                  ctx->type_arguments, &parse_ctx);
-        map_merge(&ctx->type_arguments, parse_ctx.type_arguments);
+        annotation_parse_result result = parse_type_annotation(self, ctx, node);
+        map_merge(&ctx->type_arguments, result.type_arguments);
 
-        if (parsed) {
-            parsed = tl_monotype_create_literal(self->arena, parsed);
+        if (result.parsed) {
+            tl_monotype *parsed = tl_monotype_create_literal(self->arena, result.parsed);
             if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
         } else {
             maybe_handle_null(self, node);
