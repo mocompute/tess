@@ -614,6 +614,58 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
     };
 }
 
+static int infer_nil(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+    return constrain_pm(self, node->type, weak, node);
+}
+
+static int infer_void(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (ctx->node_pos == npos_operand) {
+        tl_monotype *nil = tl_type_registry_nil(self->registry);
+        ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, nil));
+    }
+    return 0;
+}
+
+static int infer_body(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    if (node->body.expressions.size) {
+        u32       sz   = node->body.expressions.size;
+        ast_node *last = node->body.expressions.v[sz - 1];
+        ensure_tv(self, &last->type);
+        return constrain(self, node->type, last->type, node);
+    }
+    return 0;
+}
+
+static int infer_tuple(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    ast_node_sized arr = ast_node_sized_from_ast_array(node);
+    assert(arr.size > 0);
+
+    tl_monotype_array tup_types = {.alloc = self->arena};
+    array_reserve(tup_types, arr.size);
+    forall(i, arr) {
+        if (tl_polytype_is_scheme(arr.v[i]->type)) fatal("generic type");
+        array_push(tup_types, arr.v[i]->type->type);
+    }
+
+    tl_monotype *tuple = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types));
+    return constrain(self, node->type, tl_polytype_absorb_mono(self->arena, tuple), node);
+}
+
+static int infer_while(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    tl_monotype *nil = tl_type_registry_nil(self->registry);
+    return constrain_pm(self, node->type, nil, node);
+}
+
+static int infer_continue(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node);
+}
+
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
@@ -1423,21 +1475,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         ast_node_type_set(node, tl_polytype_nil(self->arena, self->registry));
         break;
 
-    case ast_nil: {
-        ensure_tv(self, &node->type);
-        tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+    case ast_nil:
         // tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-        if (constrain_pm(self, node->type, weak, node)) return 1;
-    } break;
+        return infer_nil(self, node);
 
-    case ast_void: {
-        if (traverse_ctx->node_pos == npos_operand) {
-            tl_monotype *nil = tl_type_registry_nil(self->registry);
-            ast_node_type_set(node, tl_polytype_absorb_mono(self->arena, nil));
-            // if (constrain_pm(self, node->type, nil, node)) return 1;
-        }
+    case ast_void:
         // else handled by maybe_handle_null()
-    } break;
+        return infer_void(self, traverse_ctx, node);
 
     case ast_string:
         return infer_literal_type(self, node, tl_type_registry_string);
@@ -1457,15 +1501,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_bool:
         return infer_literal_type(self, node, tl_type_registry_bool);
 
-    case ast_body: {
-        ensure_tv(self, &node->type);
-        if (node->body.expressions.size) {
-            u32       sz   = node->body.expressions.size;
-            ast_node *last = node->body.expressions.v[sz - 1];
-            ensure_tv(self, &last->type);
-            if (constrain(self, node->type, last->type, node)) return 1;
-        }
-    } break;
+    case ast_body:
+        return infer_body(self, node);
 
     case ast_case: {
         if (resolve_node(self, node->case_.expression, traverse_ctx, npos_operand)) return 1;
@@ -1910,26 +1947,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         }
     } break;
 
-    case ast_tuple: {
-        ensure_tv(self, &node->type);
-        ast_node_sized arr = ast_node_sized_from_ast_array(node);
-        assert(arr.size > 0);
-
-        tl_monotype_array tup_types = {.alloc = self->arena};
-        array_reserve(tup_types, arr.size);
-        forall(i, arr) {
-            if (tl_polytype_is_scheme(arr.v[i]->type)) fatal("generic type");
-            array_push(tup_types, arr.v[i]->type->type);
-        }
-
-        if (constrain(self, node->type,
-                      tl_polytype_absorb_mono(
-                        self->arena,
-                        tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types))),
-                      node))
-            return 1;
-
-    } break;
+    case ast_tuple:
+        return infer_tuple(self, node);
 
     case ast_user_type_definition: {
     } break;
@@ -1948,15 +1967,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_continue:
         // use 'any' for continue so it can unify with any other conditional arm
-        ensure_tv(self, &node->type);
-        if (constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node)) return 1;
-        break;
+        return infer_continue(self, node);
 
-    case ast_while: {
-        ensure_tv(self, &node->type);
-        tl_monotype *nil = tl_type_registry_nil(self->registry);
-        if (constrain_pm(self, node->type, nil, node)) return 1;
-    } break;
+    case ast_while:
+        return infer_while(self, node);
 
     case ast_let: // intentionally not processed
     case ast_hash_command:
