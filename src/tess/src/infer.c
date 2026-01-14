@@ -2545,6 +2545,24 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str_map_set(&ctx->lex, name, &newvar);
 }
 
+static hashmap *rename_function_params(tl_infer *self, ast_node *node,
+                                        rename_variables_ctx *ctx, int level) {
+    hashmap *save = map_copy(ctx->lex);
+
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *param;
+    while ((param = ast_arguments_next(&iter))) {
+        assert(ast_node_is_symbol(param));
+        str name   = param->symbol.name;
+        str newvar = next_variable_name(self, name);
+        ast_node_name_replace(param, newvar);
+        str_map_set(&ctx->lex, name, &newvar);
+        rename_variables(self, param, ctx, level + 1);
+    }
+
+    return save;
+}
+
 static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
     // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
     // that must remain in lexical scope throughout the program.
@@ -2627,49 +2645,18 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     } break;
 
     case ast_lambda_function: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(ctx->lex);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str name   = param->symbol.name;
-            str newvar = next_variable_name(self, name);
-            ast_node_name_replace(param, newvar);
-            str_map_set(&ctx->lex, name, &newvar);
-            rename_variables(self, param, ctx, level + 1);
-        }
-
+        hashmap *save = rename_function_params(self, node, ctx, level);
         rename_variables(self, node->lambda_function.body, ctx, level + 1);
-
         map_destroy(&ctx->lex);
         ctx->lex = save;
     } break;
 
     case ast_let: {
-        // establish lexical scope for formal parameters and recurse
-        hashmap           *save = map_copy(ctx->lex);
-
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *param;
-        while ((param = ast_arguments_next(&iter))) {
-            assert(ast_node_is_symbol(param));
-            str name   = param->symbol.name;
-            str newvar = next_variable_name(self, name);
-            ast_node_name_replace(param, newvar);
-            str_map_set(&ctx->lex, name, &newvar);
-            rename_variables(self, param, ctx, level + 1);
-        }
-
+        hashmap *save = rename_function_params(self, node, ctx, level);
         rename_variables(self, node->let.body, ctx, level + 1);
-
-        // For the name, just erase its type
         ast_node_type_set(node->let.name, null);
-
         map_destroy(&ctx->lex);
         ctx->lex = save;
-
     } break;
 
     case ast_lambda_function_application: {
