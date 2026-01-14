@@ -614,6 +614,8 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
     };
 }
 
+static int infer_struct_access(tl_infer *, ast_node *);
+
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
@@ -664,6 +666,85 @@ static int infer_while(tl_infer *self, ast_node *node) {
 static int infer_continue(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node);
+}
+
+static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    ast_node   *left = node->binary_op.left, *right = node->binary_op.right;
+    char const *op = str_cstr(&node->binary_op.op->symbol.name);
+
+    if (resolve_node(self, left, ctx, npos_operand)) return 1;
+    if (resolve_node(self, right, ctx, is_struct_access_operator(op) ? npos_field_name : npos_operand))
+        return 1;
+
+    ensure_tv(self, &node->type);
+
+    if (is_arithmetic_operator(op)) {
+        if (constrain(self, node->type, left->type, node)) return 1;
+        if (constrain(self, left->type, right->type, node)) return 1;
+    } else if (is_bitwise_operator(op)) {
+        tl_monotype *int_type = tl_type_registry_int(self->registry);
+        if (constrain_pm(self, left->type, int_type, node)) return 1;
+        if (constrain_pm(self, right->type, int_type, node)) return 1;
+        if (constrain_pm(self, node->type, int_type, node)) return 1;
+    } else if (is_logical_operator(op) || is_relational_operator(op)) {
+        tl_monotype *bool_type = tl_type_registry_bool(self->registry);
+        if (constrain_pm(self, node->type, bool_type, node)) return 1;
+        if (constrain(self, left->type, right->type, node)) return 1;
+    } else if (is_index_operator(op)) {
+        tl_monotype *int_type = tl_type_registry_int(self->registry);
+        if (constrain_pm(self, right->type, int_type, node)) return 1;
+
+        tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+        tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+
+        if (tl_monotype_has_ptr(left->type->type)) {
+            tl_monotype *target = tl_monotype_ptr_target(left->type->type);
+            if (constrain_pm(self, node->type, target, node)) return 1;
+        }
+    } else if (is_struct_access_operator(op)) {
+        if (infer_struct_access(self, node)) return 1;
+    } else {
+        fatal("unknown operator type");
+    }
+
+    return 0;
+}
+
+static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->unary_op.operand, ctx, npos_operand)) return 1;
+    ast_node *operand = node->unary_op.operand;
+    ensure_tv(self, &node->type);
+
+    str op = ast_node_str(node->unary_op.op);
+    if (str_eq(op, S("*"))) {
+        tl_polytype_substitute(self->arena, operand->type, self->subs);
+        if (tl_monotype_has_ptr(operand->type->type)) {
+            assert(!tl_polytype_is_scheme(operand->type));
+            tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
+            if (constrain_pm(self, node->type, target, node)) return 1;
+        } else if (tl_polytype_is_concrete(operand->type)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
+            return 1;
+        }
+    } else if (str_eq(op, S("&"))) {
+        if (!tl_polytype_is_scheme(operand->type)) {
+            tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
+            if (constrain_pm(self, node->type, ptr, node)) return 1;
+        } else {
+            tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
+            tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
+            if (constrain_pm(self, node->type, ptr, node)) return 1;
+        }
+    } else if (str_eq(op, S("!"))) {
+        tl_monotype *bool_type = tl_type_registry_bool(self->registry);
+        if (constrain_pm(self, node->type, bool_type, node)) return 1;
+    } else if (str_eq(op, S("~")) || str_eq(op, S("-")) || str_eq(op, S("+"))) {
+        if (constrain(self, node->type, operand->type, node)) return 1;
+    } else {
+        fatal("unknown unary operator");
+    }
+
+    return 0;
 }
 
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
@@ -1573,96 +1654,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
             if (constrain_pm(self, node->return_.value->type, traverse_ctx->result_type, node)) return 1;
     } break;
 
-    case ast_binary_op: {
-        ast_node   *left = node->binary_op.left, *right = node->binary_op.right;
-        char const *op = str_cstr(&node->binary_op.op->symbol.name);
-        if (resolve_node(self, left, traverse_ctx, npos_operand)) return 1;
-        if (resolve_node(self, right, traverse_ctx,
-                         is_struct_access_operator(op) ? npos_field_name : npos_operand))
-            return 1;
+    case ast_binary_op:
+        return infer_binary_op(self, traverse_ctx, node);
 
-        ensure_tv(self, &node->type);
-
-        if (is_arithmetic_operator(op)) {
-            // operands and result must all be same type
-            if (constrain(self, node->type, left->type, node)) return 1;
-            if (constrain(self, left->type, right->type, node)) return 1;
-        } else if (is_bitwise_operator(op)) {
-            // operands and result must be integer
-            tl_monotype *int_type = tl_type_registry_int(self->registry);
-            if (constrain_pm(self, left->type, int_type, node)) return 1;
-            if (constrain_pm(self, right->type, int_type, node)) return 1;
-            if (constrain_pm(self, node->type, int_type, node)) return 1;
-        } else if (is_logical_operator(op) || is_relational_operator(op)) {
-            // operands must be same type, and result must be boolean
-            tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-            if (constrain_pm(self, node->type, bool_type, node)) return 1;
-            if (constrain(self, left->type, right->type, node)) return 1;
-        } else if (is_index_operator(op)) {
-            // index must be integral, and if accessing through a pointer, the result must be Ptr's type
-            // argument
-            tl_monotype *int_type = tl_type_registry_int(self->registry);
-            if (constrain_pm(self, right->type, int_type, node)) return 1;
-
-            tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-            tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
-
-            if (tl_monotype_has_ptr(left->type->type)) {
-                tl_monotype *target = tl_monotype_ptr_target(left->type->type);
-                if (constrain_pm(self, node->type, target, node)) return 1;
-            }
-
-        }
-
-        else if (is_struct_access_operator(op)) {
-            if (infer_struct_access(self, node)) return 1;
-        }
-
-        else
-            fatal("unknown operator type");
-
-    } break;
-
-    case ast_unary_op: {
-        if (resolve_node(self, node->unary_op.operand, traverse_ctx, npos_operand)) return 1;
-        ast_node *operand = node->unary_op.operand;
-        ensure_tv(self, &node->type);
-
-        str op = ast_node_str(node->unary_op.op);
-        if (str_eq(op, S("*"))) {
-            tl_polytype_substitute(self->arena, operand->type, self->subs);
-            if (tl_monotype_has_ptr(operand->type->type)) {
-                assert(!tl_polytype_is_scheme(operand->type));
-                tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
-                if (constrain_pm(self, node->type, target, node)) return 1;
-            } else if (tl_polytype_is_concrete(operand->type)) {
-                // pointer required
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
-                return 1;
-            }
-        } else if (str_eq(op, S("&"))) {
-            if (!tl_polytype_is_scheme(operand->type)) {
-                tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
-                if (constrain_pm(self, node->type, ptr, node)) return 1;
-            } else {
-                tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-                tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-                if (constrain_pm(self, node->type, ptr, node)) return 1;
-            }
-        } else if (str_eq(op, S("!"))) {
-            tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-            if (constrain_pm(self, node->type, bool_type, node)) return 1;
-        } else if (str_eq(op, S("~"))) {
-            if (constrain(self, node->type, operand->type, node)) return 1;
-        } else if (str_eq(op, S("-"))) {
-            if (constrain(self, node->type, operand->type, node)) return 1;
-        } else if (str_eq(op, S("+"))) {
-            if (constrain(self, node->type, operand->type, node)) return 1;
-        } else {
-            fatal("unknown unary operator");
-        }
-
-    } break;
+    case ast_unary_op:
+        return infer_unary_op(self, traverse_ctx, node);
 
     case ast_let_in: {
         if (resolve_node(self, node->let_in.name, traverse_ctx, npos_let_in_lhs)) return 1;
