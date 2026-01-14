@@ -2171,7 +2171,8 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         return unify_type_constructor_union(subs, left, right, cb, user, seen);
 
     switch (right->tag) {
-    case tl_integer:
+    case tl_integer:     return !tl_monotype_is_integer_convertible(left);
+
     case tl_placeholder:
     case tl_literal:     return 1;
 
