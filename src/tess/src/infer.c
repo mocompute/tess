@@ -3033,6 +3033,14 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
 static int add_generic(tl_infer *self, ast_node *node) {
     if (!node) return 0;
 
+    // Handle body nodes early - they contain multiple definitions (e.g., from tagged union desugaring)
+    if (ast_node_is_body(node)) {
+        forall(i, node->body.expressions) {
+            if (add_generic(self, node->body.expressions.v[i])) return 1;
+        }
+        return 0;
+    }
+
     ast_node    *infer_target = get_infer_target(node);
     ast_node    *name_node    = toplevel_name_node(node);
     tl_polytype *provisional  = name_node->symbol.annotation_type;

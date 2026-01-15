@@ -1840,7 +1840,20 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->arena             = arena_create(alloc, TRANSPILE_ARENA_SIZE);
     self->transient         = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
 
-    self->nodes             = opts->infer_result.nodes;
+    // Flatten body nodes to get all individual type definitions
+    // (body nodes come from tagged union desugaring which produces multiple UTDs)
+    ast_node_array flat_nodes = {.alloc = self->arena};
+    forall(i, opts->infer_result.nodes) {
+        ast_node *node = opts->infer_result.nodes.v[i];
+        if (ast_node_is_body(node)) {
+            forall(j, node->body.expressions) {
+                array_push(flat_nodes, node->body.expressions.v[j]);
+            }
+        } else {
+            array_push(flat_nodes, node);
+        }
+    }
+    self->nodes             = (ast_node_sized)array_sized(flat_nodes);
     self->infer             = opts->infer_result.infer;
     self->registry          = opts->infer_result.registry;
     self->env               = opts->infer_result.env;
