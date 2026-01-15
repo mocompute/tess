@@ -1993,7 +1993,7 @@ static int a_body_element(parser *self) {
     // Note: statement before expression, because assignment and ident are ambiguous. Commas can be ignored,
     // so they can be used between body elements for readability.
     int ignore = a_try(self, a_comma);
-    (void)ignore;               // for GCC
+    (void)ignore; // for GCC
     if (0 == a_try(self, a_statement) || 0 == a_try(self, a_expression)) return 0;
     else return 1;
 }
@@ -2360,17 +2360,18 @@ static int toplevel_union(parser *self) {
 // Helper to create a struct UTD node from variant data
 static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
                                    ast_node_array fields) {
-    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union = 0;
-    r->user_type_def.name     = name;
+    ast_node *r                       = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.is_union         = 0;
+    r->user_type_def.name             = name;
     r->user_type_def.n_type_arguments = n_type_args;
     r->user_type_def.type_arguments   = type_args;
     r->user_type_def.n_fields         = fields.size;
     r->user_type_def.field_types      = null;
 
     if (fields.size) {
-        r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-        r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+        r->user_type_def.field_names = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+        r->user_type_def.field_annotations =
+          alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
         forall(i, fields) {
             r->user_type_def.field_names[i]       = fields.v[i];
             r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
@@ -2405,14 +2406,14 @@ static ast_node *create_enum_utd(parser *self, ast_node *name, ast_node_array id
 // Helper to create a union UTD node
 static ast_node *create_union_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
                                   ast_node_array fields) {
-    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union = 1;
-    r->user_type_def.name     = name;
-    r->user_type_def.n_type_arguments = n_type_args;
-    r->user_type_def.type_arguments   = type_args;
-    r->user_type_def.n_fields         = fields.size;
-    r->user_type_def.field_types      = null;
-    r->user_type_def.field_names      = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
+    ast_node *r                        = ast_node_create(self->ast_arena, ast_user_type_definition);
+    r->user_type_def.is_union          = 1;
+    r->user_type_def.name              = name;
+    r->user_type_def.n_type_arguments  = n_type_args;
+    r->user_type_def.type_arguments    = type_args;
+    r->user_type_def.n_fields          = fields.size;
+    r->user_type_def.field_types       = null;
+    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
     r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
     forall(i, fields) {
         r->user_type_def.field_names[i]       = fields.v[i];
@@ -2424,20 +2425,20 @@ static ast_node *create_union_utd(parser *self, ast_node *name, u8 n_type_args, 
 
 // Helper to create a constructor function for a tagged union variant
 // E.g., Shape_Circle(radius: Float) -> Shape { ... }
-static ast_node *create_variant_constructor(parser *self,
-                                            str tu_name_str,           // e.g., "Shape"
-                                            str var_name_str,          // e.g., "Circle"
-                                            u8 n_type_args,            // number of type params
-                                            ast_node **type_args,      // type param nodes
-                                            ast_node_array var_fields, // variant fields
-                                            u8 var_n_type_args,        // type params used by this variant
-                                            ast_node **var_type_args)  // type params for variant struct
+static ast_node *create_variant_constructor(parser        *self,
+                                            str            tu_name_str,  // e.g., "Shape"
+                                            str            var_name_str, // e.g., "Circle"
+                                            u8             n_type_args,  // number of type params
+                                            ast_node     **type_args,    // type param nodes
+                                            ast_node_array var_fields,   // variant fields
+                                            u8         var_n_type_args,  // type params used by this variant
+                                            ast_node **var_type_args)    // type params for variant struct
 {
     allocator *arena = self->ast_arena;
 
     // 1. Create function name: Shape_Circle
-    str func_name_str = str_cat_3(arena, tu_name_str, S("_"), var_name_str);
-    ast_node *func_name = ast_node_create_sym(arena, func_name_str);
+    str       func_name_str = str_cat_3(arena, tu_name_str, S("_"), var_name_str);
+    ast_node *func_name     = ast_node_create_sym(arena, func_name_str);
 
     // 2. Clone variant fields as function parameters
     ast_node_array params = {.alloc = arena};
@@ -2456,10 +2457,8 @@ static ast_node *create_variant_constructor(parser *self,
     // For generic: Shape(T)
     ast_node *return_type = null;
     if (n_type_args) {
-        ast_node_sized args = {
-            .size = n_type_args,
-            .v = alloc_malloc(arena, n_type_args * sizeof(ast_node *))
-        };
+        ast_node_sized args = {.size = n_type_args,
+                               .v    = alloc_malloc(arena, n_type_args * sizeof(ast_node *))};
         for (u8 i = 0; i < n_type_args; i++) {
             args.v[i] = ast_node_clone(arena, type_args[i]);
         }
@@ -2482,10 +2481,10 @@ static ast_node *create_variant_constructor(parser *self,
     // Inner variant construction: Circle(radius = radius)
     ast_node_array inner_args = {.alloc = arena};
     forall(i, var_fields) {
-        ast_node *field = var_fields.v[i];
-        ast_node *arg_name = ast_node_create_sym(arena, field->symbol.name);
-        ast_node *arg_val = ast_node_create_sym(arena, field->symbol.name);
-        ast_node *arg_assign = ast_node_create_assignment(arena, arg_name, arg_val);
+        ast_node *field                      = var_fields.v[i];
+        ast_node *arg_name                   = ast_node_create_sym(arena, field->symbol.name);
+        ast_node *arg_val                    = ast_node_create_sym(arena, field->symbol.name);
+        ast_node *arg_assign                 = ast_node_create_assignment(arena, arg_name, arg_val);
         arg_assign->assignment.is_field_name = 1; // Mark as field name to prevent renaming
         set_node_file(self, arg_assign);
         array_push(inner_args, arg_assign);
@@ -2495,10 +2494,8 @@ static ast_node *create_variant_constructor(parser *self,
     ast_node *inner_call_name = null;
     if (var_n_type_args) {
         // Generic variant: Circle(T)
-        ast_node_sized args = {
-            .size = var_n_type_args,
-            .v = alloc_malloc(arena, var_n_type_args * sizeof(ast_node *))
-        };
+        ast_node_sized args = {.size = var_n_type_args,
+                               .v    = alloc_malloc(arena, var_n_type_args * sizeof(ast_node *))};
         for (u8 i = 0; i < var_n_type_args; i++) {
             args.v[i] = ast_node_clone(arena, var_type_args[i]);
         }
@@ -2509,13 +2506,14 @@ static ast_node *create_variant_constructor(parser *self,
         inner_call_name = ast_node_create_sym(arena, var_name_str);
         mangle_name(self, inner_call_name);
     }
-    ast_node *inner_call = ast_node_create_nfa(arena, inner_call_name, (ast_node_sized)array_sized(inner_args));
+    ast_node *inner_call =
+      ast_node_create_nfa(arena, inner_call_name, (ast_node_sized)array_sized(inner_args));
     set_node_file(self, inner_call);
 
     // Union construction: _ShapeUnion_(Circle = innerCall)
-    str union_name_str = str_cat_3(arena, S("_"), tu_name_str, S("Union_"));
-    ast_node *union_arg_name = ast_node_create_sym(arena, var_name_str);
-    ast_node *union_assign = ast_node_create_assignment(arena, union_arg_name, inner_call);
+    str       union_name_str               = str_cat_3(arena, S("_"), tu_name_str, S("Union_"));
+    ast_node *union_arg_name               = ast_node_create_sym(arena, var_name_str);
+    ast_node *union_assign                 = ast_node_create_assignment(arena, union_arg_name, inner_call);
     union_assign->assignment.is_field_name = 1;
     set_node_file(self, union_assign);
     ast_node_array union_args = {.alloc = arena};
@@ -2524,10 +2522,8 @@ static ast_node *create_variant_constructor(parser *self,
 
     ast_node *union_call_name = null;
     if (n_type_args) {
-        ast_node_sized args = {
-            .size = n_type_args,
-            .v = alloc_malloc(arena, n_type_args * sizeof(ast_node *))
-        };
+        ast_node_sized args = {.size = n_type_args,
+                               .v    = alloc_malloc(arena, n_type_args * sizeof(ast_node *))};
         for (u8 i = 0; i < n_type_args; i++) {
             args.v[i] = ast_node_clone(arena, type_args[i]);
         }
@@ -2538,26 +2534,27 @@ static ast_node *create_variant_constructor(parser *self,
         union_call_name = ast_node_create_sym(arena, union_name_str);
         mangle_name(self, union_call_name);
     }
-    ast_node *union_call = ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
+    ast_node *union_call =
+      ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
     set_node_file(self, union_call);
 
     // Tag access: _ShapeTag_.Circle
-    str tag_name_str = str_cat_3(arena, S("_"), tu_name_str, S("Tag_"));
-    ast_node *tag_type = ast_node_create_sym(arena, tag_name_str);
+    str       tag_name_str = str_cat_3(arena, S("_"), tu_name_str, S("Tag_"));
+    ast_node *tag_type     = ast_node_create_sym(arena, tag_name_str);
     mangle_name(self, tag_type);
-    ast_node *dot_op = ast_node_create_sym_c(arena, ".");
+    ast_node *dot_op      = ast_node_create_sym_c(arena, ".");
     ast_node *tag_variant = ast_node_create_sym(arena, var_name_str);
-    ast_node *tag_access = ast_node_create_binary_op(arena, dot_op, tag_type, tag_variant);
+    ast_node *tag_access  = ast_node_create_binary_op(arena, dot_op, tag_type, tag_variant);
     set_node_file(self, tag_access);
 
     // Wrapper construction: Shape(tag = tagAccess, u = unionCall)
-    ast_node *tag_arg_name = ast_node_create_sym_c(arena, "tag");
-    ast_node *tag_assign = ast_node_create_assignment(arena, tag_arg_name, tag_access);
+    ast_node *tag_arg_name               = ast_node_create_sym_c(arena, "tag");
+    ast_node *tag_assign                 = ast_node_create_assignment(arena, tag_arg_name, tag_access);
     tag_assign->assignment.is_field_name = 1;
     set_node_file(self, tag_assign);
 
-    ast_node *u_arg_name = ast_node_create_sym_c(arena, "u");
-    ast_node *u_assign = ast_node_create_assignment(arena, u_arg_name, union_call);
+    ast_node *u_arg_name               = ast_node_create_sym_c(arena, "u");
+    ast_node *u_assign                 = ast_node_create_assignment(arena, u_arg_name, union_call);
     u_assign->assignment.is_field_name = 1;
     set_node_file(self, u_assign);
 
@@ -2568,10 +2565,8 @@ static ast_node *create_variant_constructor(parser *self,
 
     ast_node *wrapper_call_name = null;
     if (n_type_args) {
-        ast_node_sized args = {
-            .size = n_type_args,
-            .v = alloc_malloc(arena, n_type_args * sizeof(ast_node *))
-        };
+        ast_node_sized args = {.size = n_type_args,
+                               .v    = alloc_malloc(arena, n_type_args * sizeof(ast_node *))};
         for (u8 i = 0; i < n_type_args; i++) {
             args.v[i] = ast_node_clone(arena, type_args[i]);
         }
@@ -2582,7 +2577,8 @@ static ast_node *create_variant_constructor(parser *self,
         wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, wrapper_call_name);
     }
-    ast_node *wrapper_call = ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized)array_sized(wrapper_args));
+    ast_node *wrapper_call =
+      ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized)array_sized(wrapper_args));
     set_node_file(self, wrapper_call);
 
     // Create body with just the wrapper call
@@ -2639,8 +2635,8 @@ static int toplevel_tagged_union(parser *self) {
     if (a_try(self, a_vertical_bar)) return 1;
 
     // Extract type name and type arguments
-    ast_node *tu_name      = null;
-    u8        n_type_args  = 0;
+    ast_node  *tu_name     = null;
+    u8         n_type_args = 0;
     ast_node **type_args   = null;
 
     if (ast_node_is_symbol(type_ident)) {
@@ -2705,10 +2701,10 @@ static int toplevel_tagged_union(parser *self) {
 
     // 1. Tag enum: _ShapeTag_ : { Circle, Square, Rectangle }
     {
-        str tag_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
-        ast_node *tag_name = ast_node_create_sym(self->ast_arena, tag_name_str);
+        str            tag_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
+        ast_node      *tag_name     = ast_node_create_sym(self->ast_arena, tag_name_str);
 
-        ast_node_array tag_idents = {.alloc = self->ast_arena};
+        ast_node_array tag_idents   = {.alloc = self->ast_arena};
         forall(i, variants) {
             ast_node *ident = ast_node_create_sym(self->ast_arena, variants.v[i].name->symbol.name);
             array_push(tag_idents, ident);
@@ -2723,13 +2719,13 @@ static int toplevel_tagged_union(parser *self) {
 
     // 2. Variant structs: Circle : { radius: Float }, Square : { ... }, etc.
     forall(i, variants) {
-        variant  *v         = &variants.v[i];
-        ast_node *var_name  = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
+        variant  *v        = &variants.v[i];
+        ast_node *var_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
 
         // For generics, we need to determine which type params are used by this variant
         // For now, include all type params if any fields exist
-        u8        var_n_type_args = 0;
-        ast_node **var_type_args  = null;
+        u8         var_n_type_args = 0;
+        ast_node **var_type_args   = null;
         if (n_type_args && v->fields.size) {
             var_n_type_args = n_type_args;
             var_type_args   = type_args;
@@ -2743,8 +2739,8 @@ static int toplevel_tagged_union(parser *self) {
 
     // 3. Union type: _ShapeUnion_ : { | Circle: Circle | Square: Square | ... }
     {
-        str union_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
-        ast_node *union_name = ast_node_create_sym(self->ast_arena, union_name_str);
+        str       union_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
+        ast_node *union_name     = ast_node_create_sym(self->ast_arena, union_name_str);
 
         // Build union fields: each field name is the variant name, annotation is the variant type
         ast_node_array union_fields = {.alloc = self->ast_arena};
@@ -2758,10 +2754,9 @@ static int toplevel_tagged_union(parser *self) {
             ast_node *field_ann = null;
             if (n_type_args && v->fields.size) {
                 // Generic variant: Circle(T)
-                ast_node_sized args = {
-                    .size = n_type_args,
-                    .v    = alloc_malloc(self->ast_arena, n_type_args * sizeof(ast_node *))
-                };
+                ast_node_sized args = {.size = n_type_args,
+                                       .v =
+                                         alloc_malloc(self->ast_arena, n_type_args * sizeof(ast_node *))};
                 forall(j, args) {
                     args.v[j] = ast_node_clone(self->ast_arena, type_args[j]);
                 }
@@ -2788,7 +2783,8 @@ static int toplevel_tagged_union(parser *self) {
             }
         }
 
-        ast_node *union_utd = create_union_utd(self, union_name, n_type_args, union_type_args, union_fields);
+        ast_node *union_utd =
+          create_union_utd(self, union_name, n_type_args, union_type_args, union_fields);
         add_module_symbol(self, union_name);
         mangle_name(self, union_name);
         array_push(result_nodes, union_utd);
@@ -2803,9 +2799,9 @@ static int toplevel_tagged_union(parser *self) {
 
         // Field: tag: _ShapeTag_
         {
-            ast_node *tag_field = ast_node_create_sym_c(self->ast_arena, "tag");
-            str tag_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
-            ast_node *tag_ann = ast_node_create_sym(self->ast_arena, tag_type_str);
+            ast_node *tag_field    = ast_node_create_sym_c(self->ast_arena, "tag");
+            str       tag_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
+            ast_node *tag_ann      = ast_node_create_sym(self->ast_arena, tag_type_str);
             mangle_name(self, tag_ann);
             tag_field->symbol.annotation = tag_ann;
             array_push(wrapper_fields, tag_field);
@@ -2813,15 +2809,14 @@ static int toplevel_tagged_union(parser *self) {
 
         // Field: u: _ShapeUnion_ (or _ShapeUnion_(T) for generics)
         {
-            ast_node *u_field = ast_node_create_sym_c(self->ast_arena, "u");
-            str union_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
+            ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, "u");
+            str       union_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
 
-            ast_node *u_ann = null;
+            ast_node *u_ann          = null;
             if (n_type_args) {
-                ast_node_sized args = {
-                    .size = n_type_args,
-                    .v    = alloc_malloc(self->ast_arena, n_type_args * sizeof(ast_node *))
-                };
+                ast_node_sized args = {.size = n_type_args,
+                                       .v =
+                                         alloc_malloc(self->ast_arena, n_type_args * sizeof(ast_node *))};
                 forall(j, args) {
                     args.v[j] = ast_node_clone(self->ast_arena, type_args[j]);
                 }
@@ -2847,7 +2842,8 @@ static int toplevel_tagged_union(parser *self) {
             }
         }
 
-        ast_node *wrapper_utd = create_struct_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields);
+        ast_node *wrapper_utd =
+          create_struct_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields);
         add_module_symbol(self, wrapper_name);
         mangle_name(self, wrapper_name);
         array_push(result_nodes, wrapper_utd);
@@ -2858,21 +2854,15 @@ static int toplevel_tagged_union(parser *self) {
         variant *v = &variants.v[i];
 
         // Determine type args for this variant (same as when creating variant struct)
-        u8        var_n_type_args = 0;
-        ast_node **var_type_args  = null;
+        u8         var_n_type_args = 0;
+        ast_node **var_type_args   = null;
         if (n_type_args && v->fields.size) {
             var_n_type_args = n_type_args;
             var_type_args   = type_args;
         }
 
-        ast_node *ctor = create_variant_constructor(self,
-            tu_name_str,
-            v->name->symbol.name,
-            n_type_args,
-            type_args,
-            v->fields,
-            var_n_type_args,
-            var_type_args);
+        ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
+                                                    type_args, v->fields, var_n_type_args, var_type_args);
         array_push(result_nodes, ctor);
     }
 

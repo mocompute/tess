@@ -1245,13 +1245,13 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
     (void)wrapper_name; // may be used for debug
 
     // Result variable for the entire case expression
-    str          res        = str_empty();
-    str          end_label  = str_empty();
+    str          res         = str_empty();
+    str          end_label   = str_empty();
     tl_monotype *result_type = null;
 
     if (node->case_.arms.size > 0) {
         ast_node const *first_arm = node->case_.arms.v[0];
-        result_type = first_arm->type->type;
+        result_type               = first_arm->type->type;
         if (!is_nil_result(result_type)) {
             res       = next_res(self);
             end_label = next_label(self);
@@ -1291,8 +1291,8 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         // Get the tag type from the wrapper's first field (tag)
         // The wrapper has fields in order: tag, u
-        tl_monotype *tag_type = null;
-        str_sized field_names = wrapper_type->cons_inst->def->field_names;
+        tl_monotype *tag_type    = null;
+        str_sized    field_names = wrapper_type->cons_inst->def->field_names;
         forall(f, field_names) {
             if (str_eq(field_names.v[f], S("tag"))) {
                 tag_type = wrapper_type->cons_inst->args.v[f];
@@ -1634,7 +1634,7 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 
 static str generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
-    str value        = generate_expr(self, type, node->assignment.value, ctx);
+    str value = generate_expr(self, type, node->assignment.value, ctx);
 
     // Field name assignments (e.g., in struct construction: Foo(bar = val)) should not emit
     // the assignment statement - they are just named arguments whose values get used.
@@ -1966,13 +1966,13 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self         = new(alloc, transpile);
+    transpile *self = new (alloc, transpile);
 
-    self->opts              = *opts;
+    self->opts      = *opts;
 
-    self->parent            = alloc;
-    self->arena             = arena_create(alloc, TRANSPILE_ARENA_SIZE);
-    self->transient         = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
+    self->parent    = alloc;
+    self->arena     = arena_create(alloc, TRANSPILE_ARENA_SIZE);
+    self->transient = arena_create(alloc, TRANSPILE_TRANSIENT_SIZE);
 
     // Flatten body nodes to get all individual type definitions
     // (body nodes come from tagged union desugaring which produces multiple UTDs)

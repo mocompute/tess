@@ -288,6 +288,33 @@ v := Value(the_int = 42)
 n := v.the_int
 ```
 
+## Tagged Unions
+
+```tl
+#module Foo
+Shape = | Circle    { radius: Float }
+        | Square    { length: Float }
+
+s := Foo.Shape_Circle(radius = 2.0)
+
+// The type annotation on `s` is required, as are the annotations on
+// each of the conditions.
+area := case s: Foo.Shape {
+  c:  Circle { c.radius * c.radius * 3.14159  }
+  sq: Square { sq.length * sq.length }
+}
+```
+
+Note that a tagged union is defined using the equal sign `=` rather
+than the typical colon `:` used to declare other forms of types.
+
+TODO: add reference form of case statement, similar syntaxt to `for` loop:
+
+case s.&: Foo.Shape {
+  c:  Circle { c->radius *= 2.0  }
+  sq: Square { sq->length * sq->length }
+}
+
 ## Pointers
 
 ### Address-of and Dereference

@@ -113,7 +113,7 @@ static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
 tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new(alloc, tl_infer);
+    tl_infer *self           = new (alloc, tl_infer);
 
     self->opts               = *opts;
 
@@ -484,7 +484,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new(transient, traverse_ctx);
+    traverse_ctx *out   = new (transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
@@ -504,7 +504,7 @@ typedef struct {
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new(alloc, infer_ctx);
+    infer_ctx *out = new (alloc, infer_ctx);
     return out;
 }
 
@@ -874,15 +874,11 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 return 1;
             }
 
-            // Set the binding's type (not as a literal - this is a value, not a type expression)
+            // Set the binding's type (not as a literal - this is a value, not a type expression).
+            // Note that we set both the condition node and the annotation_type.
             tl_polytype *variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
             ast_node_type_set(cond, variant_poly);
             cond->symbol.annotation_type = variant_poly;
-
-            // Add to lexical names so it's not treated as a free variable
-            if (ctx) {
-                str_hset_insert(&ctx->lexical_names, cond->symbol.name);
-            }
 
             // Add to type environment so it can be looked up in the arm body
             update_env(self, ctx, cond);

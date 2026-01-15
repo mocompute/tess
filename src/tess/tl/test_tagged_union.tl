@@ -8,13 +8,14 @@ Shape = | Circle    { radius: Float }
 
 main() {
   // Test constructor function
-  s := Foo.Shape_Circle(radius = 2.0)
+  s      := Foo.Shape_Circle(radius = 2.0)
+  square := Foo.Shape_Square(length = 1.5) // unused
 
   // Test case expression
-  result := case s: Foo.Shape {
-    c: Circle { c.radius }
-    sq: Square { sq.length }
+  area := case s: Foo.Shape {
+    c:  Circle { c.radius * c.radius * 3.14159 }
+    sq: Square { sq.length * sq.length }
   }
 
-  if result > 1.9 { 0 } else { 1 }
+  if area > 12.0 { 0 } else { 1 }
 }
