@@ -610,6 +610,7 @@ static int          is_union_struct(tl_infer *, str);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
 static void         toplevel_add(tl_infer *, str, ast_node *);
+static void         update_env(tl_infer *, traverse_ctx *, ast_node *);
 
 // ============================================================================
 // Special Case Handlers
@@ -855,12 +856,46 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
 
-    forall(i, node->case_.conditions) {
-        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+    if (node->case_.is_union) {
+        // Tagged union case expression: conditions are binding patterns like "c: Circle"
+        // The condition symbol (c) is bound to the variant type (Circle) for use in the arm
+        forall(i, node->case_.conditions) {
+            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
 
-        if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;
-        ensure_tv(self, &node->case_.conditions.v[i]->type);
-        if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+            ast_node *cond = node->case_.conditions.v[i];
+            if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
+                fatal("tagged union case condition must be 'binding: VariantType'");
+            }
+
+            // Parse the annotation to get the variant type
+            annotation_parse_result result = parse_type_annotation(self, ctx, cond->symbol.annotation);
+            if (!result.parsed) {
+                expected_type(self, cond->symbol.annotation);
+                return 1;
+            }
+
+            // Set the binding's type (not as a literal - this is a value, not a type expression)
+            tl_polytype *variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
+            ast_node_type_set(cond, variant_poly);
+            cond->symbol.annotation_type = variant_poly;
+
+            // Add to lexical names so it's not treated as a free variable
+            if (ctx) {
+                str_hset_insert(&ctx->lexical_names, cond->symbol.name);
+            }
+
+            // Add to type environment so it can be looked up in the arm body
+            update_env(self, ctx, cond);
+        }
+    } else {
+        // Standard case expression: conditions are expressions compared for equality
+        forall(i, node->case_.conditions) {
+            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+
+            if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;
+            ensure_tv(self, &node->case_.conditions.v[i]->type);
+            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+        }
     }
 
     switch (node->case_.arms.size) {
@@ -1259,13 +1294,46 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
 
-        forall(i, node->case_.conditions) {
-            ctx->node_pos = npos_operand;
-            if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
-        }
-        forall(i, node->case_.arms) {
-            ctx->node_pos = npos_operand;
-            if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+        if (node->case_.is_union) {
+            // For union cases, conditions are handled by infer_case() directly.
+            // We only need to add condition symbols to lexical scope before traversing arms.
+            forall(i, node->case_.conditions) {
+                hashmap  *save = map_copy(ctx->lexical_names);
+                ast_node *cond = node->case_.conditions.v[i];
+
+                // Skip nil condition (else arm)
+                if (ast_node_is_nil(cond)) {
+                    if (i < node->case_.arms.size) {
+                        ctx->node_pos = npos_operand;
+                        if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+                    }
+                    ctx->lexical_names = save;
+                    continue;
+                }
+
+                // Add condition symbol to lexical scope (don't traverse it - infer_case handles it)
+                if (ast_node_is_symbol(cond)) {
+                    str_hset_insert(&ctx->lexical_names, cond->symbol.name);
+                }
+
+                // Process only the corresponding arm (not the condition)
+                if (i < node->case_.arms.size) {
+                    ctx->node_pos = npos_operand;
+                    if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+                }
+
+                ctx->lexical_names = save;
+            }
+        } else {
+            // Original behavior for non-union cases
+            forall(i, node->case_.conditions) {
+                ctx->node_pos = npos_operand;
+                if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
+            }
+            forall(i, node->case_.arms) {
+                ctx->node_pos = npos_operand;
+                if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+            }
         }
         if (cb(self, ctx, node)) return 1;
     } break;
@@ -2914,6 +2982,9 @@ static int can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
     // don't collect symbols that start with c_
     if (0 == str_cmp_nc(name, "c_", 2)) return 0;
+
+    // don't collect symbols that are already in lexical scope (e.g., union case bindings)
+    if (str_hset_contains(traverse_ctx->lexical_names, name)) return 0;
 
     return 1;
 }

@@ -1226,10 +1226,140 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
     return out;
 }
 
+// Generate case expression for tagged union pattern matching
+// case s: Shape { c: Circle { ... } sq: Square { ... } }
+// Generates:
+//   if (s.tag == Foo__ShapeTag__Circle) { Foo_Circle c = s.u.Circle; ... }
+//   else if (s.tag == Foo__ShapeTag__Square) { ... }
+static str generate_tagged_union_case(transpile *self, ast_node const *node, eval_ctx *ctx) {
+    assert(node->case_.is_union);
+
+    // Generate the expression being matched
+    str expr_str = generate_expr(self, null, node->case_.expression, ctx);
+
+    // Get the wrapper type (Shape)
+    tl_monotype *wrapper_type = node->case_.expression->type->type;
+    if (!tl_monotype_is_inst(wrapper_type)) fatal("expected tagged union wrapper type");
+
+    str wrapper_name = wrapper_type->cons_inst->def->name;
+    (void)wrapper_name; // may be used for debug
+
+    // Result variable for the entire case expression
+    str          res        = str_empty();
+    str          end_label  = str_empty();
+    tl_monotype *result_type = null;
+
+    if (node->case_.arms.size > 0) {
+        ast_node const *first_arm = node->case_.arms.v[0];
+        result_type = first_arm->type->type;
+        if (!is_nil_result(result_type)) {
+            res       = next_res(self);
+            end_label = next_label(self);
+            generate_decl(self, res, result_type);
+        }
+    }
+
+    forall(i, node->case_.arms) {
+        if (ast_node_is_nil_or_void(node->case_.conditions.v[i])) {
+            // else arm
+            if (i + 1 != node->case_.arms.size) fatal("else must be last");
+            str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
+            if (!str_is_empty(res)) {
+                generate_assign(self, res, arm_body);
+            }
+            if (!str_is_empty(end_label)) {
+                cat(self, S("goto "));
+                cat(self, end_label);
+                cat_semicolonln(self);
+            }
+            break;
+        }
+
+        ast_node *cond = node->case_.conditions.v[i];
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
+            fatal("tagged union case condition must be 'binding: VariantType'");
+        }
+
+        // Get variant type from the condition's annotation
+        ast_node    *variant_type_node = cond->symbol.annotation;
+        tl_monotype *variant_type      = cond->symbol.annotation_type->type;
+
+        if (!tl_monotype_is_inst(variant_type)) fatal("expected variant type");
+
+        // Get the variant name (unmangled) from the annotation
+        str variant_name = ast_node_name_original(variant_type_node);
+
+        // Get the tag type from the wrapper's first field (tag)
+        // The wrapper has fields in order: tag, u
+        tl_monotype *tag_type = null;
+        str_sized field_names = wrapper_type->cons_inst->def->field_names;
+        forall(f, field_names) {
+            if (str_eq(field_names.v[f], S("tag"))) {
+                tag_type = wrapper_type->cons_inst->args.v[f];
+                break;
+            }
+        }
+        if (!tag_type) fatal("wrapper type missing 'tag' field");
+        str tag_enum_name = tag_type->cons_inst->def->name;
+
+        // Build tag value name: TagEnumName_VariantName
+        // e.g., Foo__ShapeTag_ + "_" + Circle -> Foo__ShapeTag__Circle
+        str tag_value_name = str_cat_3(self->transient, tag_enum_name, S("_"), variant_name);
+
+        // Generate: if (expr.tag == TagEnumValue) {
+        if (i == 0) {
+            cat(self, S("if ("));
+        } else {
+            cat(self, S("else if ("));
+        }
+        cat(self, expr_str);
+        cat(self, S(".tag == "));
+        cat(self, tag_value_name);
+        cat(self, S(") {\n"));
+
+        // Generate binding: VariantType binding = expr.u.VariantName;
+        str binding_name = ast_node_str(cond);
+        generate_decl(self, binding_name, variant_type);
+        cat(self, binding_name);
+        cat(self, S(" = "));
+        cat(self, expr_str);
+        cat(self, S(".u."));
+        cat(self, variant_name);
+        cat_semicolonln(self);
+
+        // Generate arm body
+        str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
+        if (!str_is_empty(res)) {
+            generate_assign(self, res, arm_body);
+        }
+        if (!str_is_empty(end_label)) {
+            cat(self, S("goto "));
+            cat(self, end_label);
+            cat_semicolonln(self);
+        }
+
+        cat_close_curlyln(self);
+    }
+
+    if (!str_is_empty(end_label)) {
+        cat_nl(self);
+        cat(self, end_label);
+        cat(self, S(":"));
+        cat_semicolonln(self);
+    }
+
+    return res;
+}
+
 static str generate_case(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     (void)type;
     assert(ast_case == node->tag);
     if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
+
+    // Handle tagged union case expressions
+    if (node->case_.is_union) {
+        return generate_tagged_union_case(self, node, ctx);
+    }
 
     ast_node    *bin_pred   = null;
     ast_node    *lfa_args[] = {null, null}; // ignored because we generate args manually
@@ -1505,6 +1635,10 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
 static str generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
     str value        = generate_expr(self, type, node->assignment.value, ctx);
+
+    // Field name assignments (e.g., in struct construction: Foo(bar = val)) should not emit
+    // the assignment statement - they are just named arguments whose values get used.
+    if (node->assignment.is_field_name) return value;
 
     int save         = ctx->want_lvalue;
     ctx->want_lvalue = 1;
