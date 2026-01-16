@@ -1262,7 +1262,10 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
     forall(i, node->case_.arms) {
         if (ast_node_is_nil_or_void(node->case_.conditions.v[i])) {
             // else arm
-            if (i + 1 != node->case_.arms.size) fatal("else must be last");
+            if (i + 1 != node->case_.arms.size) {
+                // TODO: make this an error
+                fatal("else must be last");
+            }
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
             if (!str_is_empty(res)) {
                 generate_assign(self, res, arm_body);
@@ -1966,7 +1969,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self = new (alloc, transpile);
+    transpile *self = new(alloc, transpile);
 
     self->opts      = *opts;
 

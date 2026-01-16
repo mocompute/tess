@@ -377,6 +377,8 @@ TL_TESTS =					\
 TL_FAIL_TESTS =					\
 	case_float				\
 	fail_monkey_patch			\
+	fail_tagged_union_missing_case		\
+	fail_tagged_union_unknown_variant	\
 	type_alias_partial_specialization	\
 	unknown_free_variable
 

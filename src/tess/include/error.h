@@ -100,7 +100,9 @@
     X(tl_err_field_not_found, "field_not_found")                                                           \
     X(tl_err_polymorphic_function_argument, "polymorphic_function_argument")                               \
     X(tl_err_unknown_symbol_in_main, "unknown symbol in main()")                                           \
-    X(tl_err_unexpected_type_literal, "unexpected_type_literal")
+    X(tl_err_unexpected_type_literal, "unexpected_type_literal")                                           \
+    X(tl_err_tagged_union_missing_case, "tagged_union_missing_case")                                       \
+    X(tl_err_tagged_union_unknown_variant, "tagged_union_unknown_variant")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

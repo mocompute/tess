@@ -113,7 +113,7 @@ static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
 tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new (alloc, tl_infer);
+    tl_infer *self           = new(alloc, tl_infer);
 
     self->opts               = *opts;
 
@@ -484,7 +484,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new (transient, traverse_ctx);
+    traverse_ctx *out   = new(transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
@@ -504,7 +504,7 @@ typedef struct {
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new (alloc, infer_ctx);
+    infer_ctx *out = new(alloc, infer_ctx);
     return out;
 }
 
@@ -859,8 +859,34 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->case_.is_union) {
         // Tagged union case expression: conditions are binding patterns like "c: Circle"
         // The condition symbol (c) is bound to the variant type (Circle) for use in the arm
+
+        // Get wrapper type and extract valid variants
+        tl_monotype *wrapper_type = expr_type->type;
+        tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+
+        if (!tl_monotype_is_inst(wrapper_type)) {
+            expected_type(self, node->case_.expression);
+            return 1;
+        }
+
+        // Find the 'u' (union) field in the wrapper type
+        i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+        if (u_index < 0) fatal("wrapper type missing 'u' field");
+
+        tl_monotype *union_type      = wrapper_type->cons_inst->args.v[u_index];
+        str_sized    valid_variants  = union_type->cons_inst->def->field_names;
+
+        // Track which variants are covered (for exhaustiveness checking)
+        int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
+        memset(variant_covered, 0, valid_variants.size * sizeof(int));
+        int  has_else_arm    = 0;
+
         forall(i, node->case_.conditions) {
-            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+            // Detect `else` condition on final arm
+            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) {
+                has_else_arm = 1;
+                break;
+            }
 
             ast_node *cond = node->case_.conditions.v[i];
             if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
@@ -874,6 +900,26 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 return 1;
             }
 
+            // Validate that the variant type is a valid variant of the wrapper type
+            // Use the original (unmangled) name from the annotation, as union field names are unmangled
+            str variant_name  = ast_node_name_original(cond->symbol.annotation);
+            int variant_found = -1;
+            forall(j, valid_variants) {
+                if (str_eq(valid_variants.v[j], variant_name)) {
+                    variant_found = (int)j;
+                    break;
+                }
+            }
+
+            if (variant_found < 0) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
+                return 1;
+            }
+
+            // Mark this variant as covered
+            variant_covered[variant_found] = 1;
+
             // Set the binding's type (not as a literal - this is a value, not a type expression).
             // Note that we set both the condition node and the annotation_type.
             tl_polytype *variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
@@ -883,9 +929,22 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // Add to type environment so it can be looked up in the arm body
             update_env(self, ctx, cond);
         }
+
+        // Exhaustiveness check: if no else arm, verify all variants are covered
+        if (!has_else_arm) {
+            forall(j, valid_variants) {
+                if (!variant_covered[j]) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_tagged_union_missing_case, .node = node}));
+                    return 1;
+                }
+            }
+        }
+
     } else {
         // Standard case expression: conditions are expressions compared for equality
         forall(i, node->case_.conditions) {
+            // Detect `else` condition on final arm
             if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
 
             if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;

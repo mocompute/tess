@@ -8,19 +8,35 @@ Shape = | Circle    { radius: Float }
 #module main
 
 main() {
-  // Test constructor function
-  s      := Foo.Shape_Circle(radius = 2.0)
-  square := Foo.Shape_Square(length = 1.5) // unused
-  none   := Foo.Shape_None                 // unused
-  none2  := Foo.Shape_None()               // also works
+  error := 0
 
-  // Test case expression. There is no exhaustiveness checking.
-  // FIXME: without an else case, area would be left undefined.
-  area := case s: Foo.Shape {
+  // Test constructor functions
+  circle := Foo.Shape_Circle(radius = 2.0)
+  square := Foo.Shape_Square(length = 1.5)
+  none   := Foo.Shape_None()
+
+  // Test 1: Exhaustive case expression (all variants covered, no else needed)
+  area1 := case circle: Foo.Shape {
     c:  Circle { c.radius * c.radius * 3.14159 }
     sq: Square { sq.length * sq.length }
-    else       { 0.0 }                     // optional else case
+    n:  None   { 0.0 }
   }
+  error += if area1 >= 12.0 {0} else {1}
 
-  if area > 12.0 { 0 } else { 1 }
+  // Test 2: Partial coverage with else clause (omits None variant)
+  area2 := case square: Foo.Shape {
+    c:  Circle { c.radius * c.radius * 3.14159 }
+    sq: Square { sq.length * sq.length }
+    else       { 0.0 }  // handles None and any other variant
+  }
+  error += if area2 >= 2.25 {0} else {1}
+
+  // Test 3: Else clause handles multiple omitted variants (only Circle)
+  area3 := case none: Foo.Shape {
+    c: Circle { c.radius * c.radius * 3.14159 }
+    else      { -1.0 }  // handles Square and None
+  }
+  error += if area3 == -1.0 {0} else {1}
+
+  error
 }
