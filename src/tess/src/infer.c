@@ -188,6 +188,16 @@ static void expected_type(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
 }
 
+static void expected_tagged_union(tl_infer *self, ast_node const *node) {
+    array_push(self->errors,
+               ((tl_infer_error){.tag = tl_err_tagged_union_expected_tagged_union, .node = node}));
+}
+
+static void tagged_union_case_syntax_error(tl_infer *self, ast_node const *node) {
+    array_push(self->errors,
+               ((tl_infer_error){.tag = tl_err_tagged_union_case_syntax_error, .node = node}));
+}
+
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
 
@@ -865,13 +875,17 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
 
         if (!tl_monotype_is_inst(wrapper_type)) {
-            expected_type(self, node->case_.expression);
+            expected_tagged_union(self, node->case_.expression);
             return 1;
         }
 
         // Find the 'u' (union) field in the wrapper type
         i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
-        if (u_index < 0) fatal("wrapper type missing 'u' field");
+        if (u_index < 0) {
+            // wrapper type missing 'u'
+            expected_tagged_union(self, node->case_.expression);
+            return 1;
+        }
 
         tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
         str_sized    valid_variants = union_type->cons_inst->def->field_names;
@@ -890,7 +904,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
             ast_node *cond = node->case_.conditions.v[i];
             if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
-                fatal("tagged union case condition must be 'binding: VariantType'");
+                // "tagged union case condition must be 'binding: VariantType'"
+                tagged_union_case_syntax_error(self, cond);
             }
 
             // Parse the annotation to get the variant type
