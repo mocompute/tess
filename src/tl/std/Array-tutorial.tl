@@ -57,9 +57,9 @@
 // Int is a builtin type, corresponding to C `long long`, which is guaranteed by the C standard to be a
 // signed integer at least 64 bits long.
 T(a) : {
-  v:        Ptr(a),
-  size:     Int,
-  capacity: Int,
+    v:        Ptr(a),
+    size:     Int,
+    capacity: Int,
 }
 
 
@@ -112,99 +112,99 @@ free(self: TPtr) -> Void
 // -- Implementation --
 
 empty(a: Type) {
-  // The syntax `T( ... )` below indicates a type constructor. Here, the type `T` is defined earlier in the
-  // file. A type constructor must include every field; it is not permitted to omit any field. The syntax
-  // `field = value` is used exclusively for type constructors. Although the syntax is similar to a function
-  // call with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
-  // distinguish function calls from type constructors, and is an opinionated language design choice to
-  // exclude parameter names from the formal API of TL libraries.
-  //
-  // The field `v` includes a type annotation, which is required here to ensure the compiler knows what
-  // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
-  // arguments provided to the generic `T` type constructor.
-  T ( v : Ptr(a) = null, capacity = 0, size = 0 )
+    // The syntax `T( ... )` below indicates a type constructor. Here, the type `T` is defined earlier in the
+    // file. A type constructor must include every field; it is not permitted to omit any field. The syntax
+    // `field = value` is used exclusively for type constructors. Although the syntax is similar to a function
+    // call with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
+    // distinguish function calls from type constructors, and is an opinionated language design choice to
+    // exclude parameter names from the formal API of TL libraries.
+    //
+    // The field `v` includes a type annotation, which is required here to ensure the compiler knows what
+    // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
+    // arguments provided to the generic `T` type constructor.
+    T ( v : Ptr(a) = null, capacity = 0, size = 0 )
 }
 
 init(val: a, count: Int) {
-  // Note that `a` in the annotation of the `val` parameter is a type argument. It can be supplied as an
-  // argument to `with_capacity`, which is expecting a type argument. Type arguments to a function expecting
-  // a type argument may be type literals, such as `Int`, or another type argument.
-  arr := with_capacity(a, count)
-  arr.size = count
-  for p.& in arr { p.* = val }
-  arr
+    // Note that `a` in the annotation of the `val` parameter is a type argument. It can be supplied as an
+    // argument to `with_capacity`, which is expecting a type argument. Type arguments to a function expecting
+    // a type argument may be type literals, such as `Int`, or another type argument.
+    arr := with_capacity(a, count)
+    arr.size = count
+    for p.& in arr { p.* = val }
+    arr
 }
 
 free(self) {
-  // `c_free` is transpiled to `free` and access the C stdlib.h `free` function. `->` is used in this
-  // context as the member access through pointer operator, identical to C.
-  c_free(self->v)
+    // `c_free` is transpiled to `free` and access the C stdlib.h `free` function. `->` is used in this
+    // context as the member access through pointer operator, identical to C.
+    c_free(self->v)
 
-  // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type, similar to C
-  // NULL or nullptr.
-  self->v = null
+    // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type, similar to C
+    // NULL or nullptr.
+    self->v = null
 
-  // All functions must return a value, and the value of the final expression in the body of the function is
-  // used as the return value. For functions which return no value, they must return the pseudo-value
-  // `void`. If this `void` expression was omitted, the return value of this function would be `null`, with
-  // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct, due to the previous
-  // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void` which appeared as
-  // the result in the forward declaration for `free` at the top of this file, this would generate a type
-  // error at compile time.
-  void
+    // All functions must return a value, and the value of the final expression in the body of the function is
+    // used as the return value. For functions which return no value, they must return the pseudo-value
+    // `void`. If this `void` expression was omitted, the return value of this function would be `null`, with
+    // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct, due to the previous
+    // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void` which appeared as
+    // the result in the forward declaration for `free` at the top of this file, this would generate a type
+    // error at compile time.
+    void
 }
 
 // The first formal parameter of this function is given the annotation `Type`. This is a special type which
 // indicates a literal type argument, such as `Int` or `Ptr(T)`.
 with_capacity(a: Type, count: Int) {
 
-  // The `:=` operator indicates a variable declaration. Variables must be declared at the point of their
-  // first use. Subsequently, a new value may be assigned to the variable using the `=` operator.
-  //
-  // This statement also introduces the use of a type variable (`a`) as a type argument to another function
-  // call.
-  width      := _type_width_aligned(a)
+    // The `:=` operator indicates a variable declaration. Variables must be declared at the point of their
+    // first use. Subsequently, a new value may be assigned to the variable using the `=` operator.
+    //
+    // This statement also introduces the use of a type variable (`a`) as a type argument to another function
+    // call.
+    width      := _type_width_aligned(a)
 
-  // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
-  // since `c_malloc` is declared as returning a generic type, the annotation effectively casts the return
-  // value to the expected type of the variable `p`. In this case, the annotation is NOT needed, because the
-  // type of `p` can be inferred by its point of use in the `v = p` assignment of the type constructor on
-  // the next line.
-  p : Ptr(a) := c_malloc(count * width)
-  T ( v = p, capacity = count, size = 0 )
+    // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
+    // since `c_malloc` is declared as returning a generic type, the annotation effectively casts the return
+    // value to the expected type of the variable `p`. In this case, the annotation is NOT needed, because the
+    // type of `p` can be inferred by its point of use in the `v = p` assignment of the type constructor on
+    // the next line.
+    p : Ptr(a) := c_malloc(count * width)
+    T ( v = p, capacity = count, size = 0 )
 }
 
 // The type annotations can be left off, and the previous declaration at the top of the file will be used.
 with_capacity_undefined(a, count) {
-  result := with_capacity(a, count)
-  result.size = count
-  result
+    result := with_capacity(a, count)
+    result.size = count
+    result
 }
 
 
 reserve(self: Ptr(T(a)), count: Int) {
-  // This is an if statement. Round braces are optional around the condition.
-  if self->capacity < count {
-    // The `: Ptr(a)` annotation is required here, so the compiler knows what concrete type to assign to `p`
-    p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+    // This is an if statement. Round braces are optional around the condition.
+    if self->capacity < count {
+        // The `: Ptr(a)` annotation is required here, so the compiler knows what concrete type to assign to `p`
+        p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
 
-    // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
-    if p == null { _tl_fatal_("oom") }
-    self->v = p
-  }
-  void
+        // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
+        if p == null { _tl_fatal_("oom") }
+        self->v = p
+    }
+    void
 }
 
 
 push(self, x) {
-  if _is_full(self) { _grow(self, self->capacity + 1) }
+    if _is_full(self) { _grow(self, self->capacity + 1) }
 
-  // Assigning to an array element through a pointer is identical to C.
-  self->v[self->size] = x
+    // Assigning to an array element through a pointer is identical to C.
+    self->v[self->size] = x
 
-  // It's a bit wordy compared to C, but there are no ++ operators or += operators.
-  self->size = self->size + 1
-  void
+    // It's a bit wordy compared to C, but there are no ++ operators or += operators.
+    self->size = self->size + 1
+    void
 }
 
 // -- Iterator interface --
@@ -212,9 +212,9 @@ push(self, x) {
 // The iterator struct. This is used to provide a public iterator interface over an Array using the `for`
 // statement.
 Iter(a) : {
-  v:        Ptr(a),
-  size:     Int,
-  index:    Int,
+    v:        Ptr(a),
+    size:     Int,
+    index:    Int,
 }
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
@@ -256,21 +256,21 @@ _type_width_aligned (a: Type)                   -> Int
 _is_full(self) { self->capacity == self->size }
 
 _grow(self, at_least) {
-  // This `if` statement demonstrates the use of the return statement. Not that unlike C, the return statement
-  // must always state an explicit value to return. `void` may be used to indicate a void return.
-  if self->capacity >= at_least { return void }
+    // This `if` statement demonstrates the use of the return statement. Not that unlike C, the return statement
+    // must always state an explicit value to return. `void` may be used to indicate a void return.
+    if self->capacity >= at_least { return void }
 
-  count := self->capacity
-  if count < 1 { count = 1 }
+    count := self->capacity
+    if count < 1 { count = 1 }
 
-  // This statement introduces a `while` statement. There is a variation that includes an 'update'
-  // expression, similar to that of a C `for` loop, but that is not shown here. `break` and `continue` are
-  // also supported.
-  while count < at_least { count = count * 2 }
+    // This statement introduces a `while` statement. There is a variation that includes an 'update'
+    // expression, similar to that of a C `for` loop, but that is not shown here. `break` and `continue` are
+    // also supported.
+    while count < at_least { count = count * 2 }
 
-  // Notice that there is no need here to add a `void` expression, since the call to `reserve()` itself
-  // returns `void`.
-  reserve(self, count)
+    // Notice that there is no need here to add a `void` expression, since the call to `reserve()` itself
+    // returns `void`.
+    reserve(self, count)
 }
 
 // `a` is annotated as a type argument, which are handled carefully to interface with C's sizeof and alignof
@@ -289,21 +289,21 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 // -- Indexed iterator interface --
 
 IterValuePtr(a) : {
-  ptr:   Ptr(a),
-  index: Int,
+    ptr:   Ptr(a),
+    index: Int,
 }
 
 IterValue(a) : {
-  value: a,
-  index: Int,
+    value: a,
+    index: Int,
 }
 
 Iter(a) : {
-  v:        Ptr(a),
-  size:     Int,
-  index:    Int,
-  iv:       IterValue(a),
-  ivp:      IterValuePtr(a),
+    v:        Ptr(a),
+    size:     Int,
+    index:    Int,
+    iv:       IterValue(a),
+    ivp:      IterValuePtr(a),
 }
 
 
