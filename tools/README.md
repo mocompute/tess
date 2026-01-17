@@ -13,7 +13,7 @@ A major mode for editing TL (Tess Language) files in Emacs.
   - Preprocessor directives (`#module`, `#import`, `#include`, `#ifc`, `#endc`)
 
 - **Intelligent Indentation**: Automatic indentation based on brace structure
-  - 2-space indentation by default (customizable)
+  - 4-space indentation by default (customizable)
   - Proper handling of nested blocks
   - Closing braces align with their opening context
   - `else` statements align with their matching `if`
@@ -119,20 +119,20 @@ TL Mode supports all TL language features:
 
 // Generic function with type inference
 map(arr: Array.T(a), f: (a -> b)) -> Array.T(b) {
-  result := Array.empty(b)
-  for x <- arr.& {
-    Array.push(result.&, f(x))
-  }
-  result
+    result := Array.empty(b)
+    for x <- arr.& {
+        Array.push(result.&, f(x))
+    }
+    result
 }
 
 // Function with explicit types
 factorial(n: Int) -> Int {
-  if n <= 1 {
-    1
-  } else {
-    n * factorial(n - 1)
-  }
+    if n <= 1 {
+        1
+    } else {
+        n * factorial(n - 1)
+    }
 }
 ```
 

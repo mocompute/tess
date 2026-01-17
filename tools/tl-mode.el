@@ -17,7 +17,7 @@
 ;;
 ;; Features:
 ;; - Syntax highlighting for keywords, types, operators, and literals
-;; - Intelligent indentation using SMIE (Simple Minded Indentation Engine)
+;; - Intelligent indentation using custom brace-based indentation
 ;; - Comment support (C++-style //)
 ;; - Automatic file association for .tl files
 ;; - Imenu support for navigation
@@ -41,8 +41,6 @@
 ;;   (setq tl-indent-offset 4)
 
 ;;; Code:
-
-(require 'smie)
 
 ;;; Customization
 
@@ -153,9 +151,8 @@
       ("\\<\\([A-Z][a-zA-Z0-9_]*\\)[ \t]*("
        (1 font-lock-type-face))
 
-      ;; Multi-character operators
-      ("\\(->\\|:=\\|::\\|\\.&\\|\\.\\*\\|==\\|!=\\|<=\\|>=\\|&&\\|||\\)"
-       (1 font-lock-builtin-face))
+      ;; Multi-character operators (use default punctuation face, no special highlighting)
+      ;; Operators like ->, :=, ::, .&, .*, ==, !=, <=, >=, &&, || are left unhighlighted
 
       ;; Numeric literals
       ;; Hexadecimal
@@ -168,8 +165,8 @@
       ;; Integer (including octal and with underscores)
       ("\\<[0-9][0-9_]*\\>" . font-lock-constant-face)
 
-      ;; Character literals
-      ("'\\(?:\\\\[nrt'\"\\\\]\\|[^']\\)'" . font-lock-string-face)
+      ;; Character literals (including \0 null, \n, \r, \t, \', \", \\)
+      ("'\\(?:\\\\[0nrt'\"\\\\]\\|[^']\\)'" . font-lock-string-face)
       ))
   "Font lock keywords for TL mode.")
 
@@ -189,6 +186,24 @@
     ;; If point was in the indentation, move to the start of content
     (when (> (- (point-max) pos) (point))
       (goto-char (- (point-max) pos)))))
+
+(defun tl-previous-code-line-info ()
+  "Get indentation info from the previous non-blank, non-comment line.
+Returns a cons cell (INDENT . ENDS-WITH-OPEN-BRACE)."
+  (save-excursion
+    (forward-line -1)
+    (while (and (not (bobp))
+                (looking-at "^[ \t]*\\(?:$\\|//\\|#\\)"))
+      (forward-line -1))
+    (let ((indent (current-indentation))
+          (opens-block nil))
+      ;; Check if line ends with opening brace (ignoring trailing comment)
+      (end-of-line)
+      (skip-chars-backward " \t")
+      (when (and (> (point) (line-beginning-position))
+                 (eq (char-before) ?\{))
+        (setq opens-block t))
+      (cons indent opens-block))))
 
 (defun tl-calculate-indentation ()
   "Calculate the indentation for the current line."
@@ -219,34 +234,14 @@
               (current-indentation))
           (error 0))))
 
-     ;; Default: check the previous non-empty line
+     ;; Default: base on previous line
      (t
-      (let ((cur-indent 0)
-            (base-indent 0))
-        (save-excursion
-          ;; Find previous non-empty, non-comment line
-          (forward-line -1)
-          (while (and (not (bobp))
-                      (or (looking-at "^[ \t]*$")
-                          (looking-at "^[ \t]*//")
-                          (looking-at "^[ \t]*#")))
-            (forward-line -1))
-
-          (setq base-indent (current-indentation))
-
-          ;; Look for opening brace on previous line
-          (end-of-line)
-          (when (re-search-backward "[{}]" (line-beginning-position) t)
-            (if (looking-at "{")
-                ;; Previous line opens a block: increase indent
-                (setq cur-indent (+ base-indent tl-indent-offset))
-              ;; Previous line closes a block: use base indent
-              (setq cur-indent base-indent)))
-
-          ;; If no brace found, continue at same level
-          (when (= cur-indent 0)
-            (setq cur-indent base-indent)))
-        cur-indent)))))
+      (let* ((info (tl-previous-code-line-info))
+             (prev-indent (car info))
+             (opens-block (cdr info)))
+        (if opens-block
+            (+ prev-indent tl-indent-offset)
+          prev-indent))))))
 
 (defun tl-indent-region (start end)
   "Indent region from START to END."
@@ -312,7 +307,7 @@ functions, lambdas, closures, and C interoperability.
 
   ;; Electric indentation
   (setq-local electric-indent-chars
-              (append '(?\n ?\} ?\;) electric-indent-chars))
+              (append '(?\n ?\{ ?\} ?\;) electric-indent-chars))
 
   ;; Beginning/end of defun
   (setq-local beginning-of-defun-function #'tl-beginning-of-defun)
@@ -330,7 +325,8 @@ With ARG, do it that many times."
 
 (defun tl-end-of-defun (&optional arg)
   "Move forward to the end of a function definition.
-With ARG, do it that many times."
+With ARG, do it that many times.
+Handles both regular functions and type constructors like `Point(a) : { ... }`."
   (interactive "p")
   (let ((arg (or arg 1)))
     (if (< arg 0)
@@ -338,8 +334,24 @@ With ARG, do it that many times."
       (dotimes (_ arg)
         (when (re-search-forward "^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*[ \t]*(" nil 'move)
           (forward-char -1)
-          (forward-sexp)
-          (forward-sexp))))))
+          (forward-sexp)  ; Skip parameter list
+          (skip-chars-forward " \t\n")
+          ;; Handle return type annotation (-> Type)
+          (when (looking-at "->")
+            (forward-char 2)
+            (skip-chars-forward " \t")
+            ;; Skip return type (may include parens for function types)
+            (if (looking-at "(")
+                (forward-sexp)
+              (skip-chars-forward "a-zA-Z0-9_.(")))
+          (skip-chars-forward " \t\n")
+          ;; Handle type constructor colon
+          (when (looking-at ":")
+            (forward-char 1))
+          (skip-chars-forward " \t\n")
+          ;; Now we should be at the opening brace
+          (when (looking-at "{")
+            (forward-sexp)))))))
 
 ;;; File Association
 

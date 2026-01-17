@@ -8,8 +8,9 @@
 (add-to-list 'load-path (file-name-directory load-file-name))
 (require 'tl-mode)
 
-(let ((test-file "test-syntax.tl")
-      (output-file "test-syntax-indented.tl"))
+(let* ((dir (file-name-directory load-file-name))
+       (test-file (expand-file-name "test-syntax.tl" dir))
+       (output-file (expand-file-name "test-syntax-indented.tl" dir)))
   (message "Testing indentation on %s..." test-file)
 
   (with-temp-buffer
