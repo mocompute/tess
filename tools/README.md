@@ -19,9 +19,8 @@ A major mode for editing TL (Tess Language) files in Emacs.
   - `else` statements align with their matching `if`
 
 - **Code Navigation**: Imenu support for quick navigation
-  - Jump to functions
-  - Jump to type definitions
-  - Jump to modules
+  - Displays a flat list of all functions, types, and modules
+  - Jump to any definition instantly
 
 - **Comment Support**: C++-style `//` comments
 
@@ -77,12 +76,12 @@ Standard Emacs editing commands work as expected:
 
 ### Imenu Navigation
 
-Press `M-x imenu` (or `C-c C-j` if bound) to see a list of:
-- Functions
-- Types
-- Modules
+Press `M-x imenu` (or `C-c C-j` if bound) to see a flat list of all definitions in the current file:
+- All functions
+- All type definitions
+- All module declarations
 
-Select an item to jump to its definition.
+All items appear in a single list in the order they appear in the file. Module names are prefixed with `#module`. Select any item to jump to its definition.
 
 ## Testing
 

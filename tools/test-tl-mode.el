@@ -58,7 +58,7 @@
 
 ;; Test 8: Test imenu
 (message "Test 8: Checking imenu support...")
-(if (boundp 'tl-imenu-generic-expression)
+(if (fboundp 'tl-imenu-create-index)
     (message "✓ Imenu support is defined")
   (error "✗ Imenu support is missing"))
 

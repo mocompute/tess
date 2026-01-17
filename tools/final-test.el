@@ -57,8 +57,8 @@
   (let ((imenu-auto-rescan t))
     (condition-case err
         (let ((index (imenu--make-index-alist)))
-          (if index
-              (message "  ✓ Imenu index created with %d top-level items" (length index))
+          (if (and index (> (length index) 0))
+              (message "  ✓ Imenu index created with %d items" (length index))
             (message "  ✗ Imenu index empty")))
       (error (message "  ✗ Imenu error: %s" err)))))
 

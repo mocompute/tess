@@ -259,11 +259,27 @@
 
 ;;; Imenu Support
 
-(defvar tl-imenu-generic-expression
-  '(("Functions" "^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)[ \t]*(" 1)
-    ("Types" "^[ \t]*\\([A-Z][a-zA-Z0-9_]*\\)[ \t]*(" 1)
-    ("Modules" "^[ \t]*#module[ \t]+\\([a-zA-Z_][a-zA-Z0-9_]*\\)" 1))
-  "Imenu generic expression for TL mode.")
+(defun tl-imenu-create-index ()
+  "Create a flat imenu index for TL mode.
+Returns a list of (name . position) pairs for all functions, types, and modules."
+  (let ((index '()))
+    (save-excursion
+      (goto-char (point-min))
+      ;; Find all modules
+      (while (re-search-forward "^[ \t]*#module[ \t]+\\([a-zA-Z_][a-zA-Z0-9_]*\\)" nil t)
+        (push (cons (concat "#module " (match-string-no-properties 1))
+                    (match-beginning 1))
+              index))
+
+      ;; Find all function definitions and type constructors
+      (goto-char (point-min))
+      (while (re-search-forward "^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)[ \t]*(" nil t)
+        (let ((name (match-string-no-properties 1)))
+          (push (cons name (match-beginning 1))
+                index))))
+
+    ;; Return in forward order (reverse because we pushed)
+    (nreverse index)))
 
 ;;; Mode Definition
 
@@ -292,7 +308,7 @@ functions, lambdas, closures, and C interoperability.
   (setq-local indent-region-function #'tl-indent-region)
 
   ;; Imenu
-  (setq-local imenu-generic-expression tl-imenu-generic-expression)
+  (setq-local imenu-create-index-function #'tl-imenu-create-index)
 
   ;; Electric indentation
   (setq-local electric-indent-chars
