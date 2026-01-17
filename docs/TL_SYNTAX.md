@@ -228,7 +228,7 @@ for x in collection {
 }
 
 for x.& in collection {
-  x.* = 0          // x is a reference; can mutate
+  x.* = 0          // x is a pointer; can mutate
 }
 ```
 
@@ -308,12 +308,18 @@ area := case s: Foo.Shape {
 Note that a tagged union is defined using the equal sign `=` rather
 than the typical colon `:` used to declare other forms of types.
 
-TODO: add reference form of case statement, similar syntaxt to `for` loop:
+### Mutable tagged union case
 
+```tl
 case s.&: Foo.Shape {
   c:  Circle { c->radius *= 2.0  }
   sq: Square { sq->length * sq->length }
 }
+```
+
+Use this syntax to access pointers to the each variant. Note the `.&`
+suffix on the case variable. This is the same syntax used to access
+mutable iterators with the `for` statement.
 
 ## Pointers
 
