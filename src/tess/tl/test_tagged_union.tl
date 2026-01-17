@@ -38,7 +38,7 @@ main() {
   }
   error += if area3 == -1.0 {0} else {1}
 
-  // Test 4: mutable case
+  // Test 4: mutable case: use `.&` suffix on case variable
   area4 := case square.&: Foo.Shape {
     sq: Square { sq->length = 3.0
                  sq->length * sq->length }
