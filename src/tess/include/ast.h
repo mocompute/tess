@@ -14,6 +14,9 @@ defarray(ast_node_array, struct ast_node *);
 defsized(ast_node_sized, struct ast_node *);
 defslice(ast_node_slice, struct ast_node *);
 
+#define AST_TAGGED_UNION_VALUE   1
+#define AST_TAGGED_UNION_MUTABLE 2
+
 typedef struct ast_node {
     union {
         struct ast_symbol {
@@ -103,7 +106,7 @@ typedef struct ast_node {
             ast_node_sized   conditions;       // must be same size
             ast_node_sized   arms;             // must be same size
             struct ast_node *binary_predicate; // may be null
-            int              is_union;         // by parser if case is a union destructure
+            int              is_union; // by parser if case is a union destructure (1: plain, 2: mutable)
         } case_;
 
         struct ast_if_then_else {

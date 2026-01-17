@@ -1233,6 +1233,7 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
 //   else if (s.tag == Foo__ShapeTag__Square) { ... }
 static str generate_tagged_union_case(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(node->case_.is_union);
+    int is_pointer = node->case_.is_union == AST_TAGGED_UNION_MUTABLE;
 
     // Generate the expression being matched
     str expr_str = generate_expr(self, null, node->case_.expression, ctx);
@@ -1325,6 +1326,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         generate_decl(self, binding_name, variant_type);
         cat(self, binding_name);
         cat(self, S(" = "));
+        if (is_pointer) cat(self, S("&"));
         cat(self, expr_str);
         cat(self, S(".u."));
         cat(self, variant_name);

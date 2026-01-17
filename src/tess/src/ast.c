@@ -74,6 +74,7 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
 
 ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds, ast_node_sized arms,
                                ast_node *bin_pred, int is_union) {
+    // Note: is_union may be 0, 1, or 2. See ast.h
     ast_node *self               = ast_node_create(alloc, ast_case);
     self->case_.expression       = expr;
     self->case_.conditions       = conds;

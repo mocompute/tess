@@ -873,13 +873,13 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
         if (u_index < 0) fatal("wrapper type missing 'u' field");
 
-        tl_monotype *union_type      = wrapper_type->cons_inst->args.v[u_index];
-        str_sized    valid_variants  = union_type->cons_inst->def->field_names;
+        tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
+        str_sized    valid_variants = union_type->cons_inst->def->field_names;
 
         // Track which variants are covered (for exhaustiveness checking)
         int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
         memset(variant_covered, 0, valid_variants.size * sizeof(int));
-        int  has_else_arm    = 0;
+        int has_else_arm = 0;
 
         forall(i, node->case_.conditions) {
             // Detect `else` condition on final arm
@@ -922,12 +922,17 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
             // Set the binding's type (not as a literal - this is a value, not a type expression).
             // Note that we set both the condition node and the annotation_type.
-            tl_polytype *variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
+            // If the case variable is mutable (var.&), we have a pointer type.
+            tl_polytype *variant_poly = null;
+            if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
+                variant_poly =
+                  tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, result.parsed));
+            } else {
+                variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
+            }
+
             ast_node_type_set(cond, variant_poly);
             cond->symbol.annotation_type = variant_poly;
-
-            // Add to type environment so it can be looked up in the arm body
-            update_env(self, ctx, cond);
         }
 
         // Exhaustiveness check: if no else arm, verify all variants are covered
@@ -1622,10 +1627,10 @@ static int reject_type_literal(tl_infer *self, ast_node const *node) {
     return 0;
 }
 
-static int check_is_pointer(tl_infer *self, tl_polytype *type) {
+static int check_is_pointer(tl_infer *self, tl_polytype *type, ast_node *node) {
     if (tl_monotype_is_inst(type->type)) {
         if (!tl_monotype_is_ptr(type->type)) {
-            array_push(self->errors, (tl_infer_error){.tag = tl_err_expected_pointer});
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
             return 1;
         }
     }
@@ -1663,7 +1668,7 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
 
         // if type is not a constructor instance, all we can assert is that the left side must be a
         // pointer
-        if (check_is_pointer(self, left->type)) return 1;
+        if (check_is_pointer(self, left->type, left)) return 1;
         ensure_symbol_type_from_env(self, left);
 
         if (tl_monotype_is_ptr(left->type->type)) {
@@ -2841,16 +2846,33 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         }
         break;
 
-    case ast_case:
+    case ast_case: {
+        int is_union = node->case_.is_union;
+
         rename_variables(self, node->case_.expression, ctx, level + 1);
         rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
+        if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
         forall(i, node->case_.conditions) {
+            hashmap *save = null;
+            if (is_union && ast_node_is_symbol(node->case_.conditions.v[i])) {
+                // node may be ast_nil for an else clause
+                str name   = ast_node_str(node->case_.conditions.v[i]);
+                str newvar = next_variable_name(self, name);
+
+                // establish lexical scope of the union case binding
+                save = map_copy(ctx->lex);
+                str_map_set(&ctx->lex, name, &newvar);
+            }
+
             rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
-        }
-        forall(i, node->case_.arms) {
             rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
+
+            if (save) {
+                map_destroy(&ctx->lex);
+                ctx->lex = save;
+            }
         }
-        break;
+    } break;
 
     case ast_type_assertion:
         //

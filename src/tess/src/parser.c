@@ -1317,6 +1317,16 @@ static ast_node *parse_case_expr(parser *self) {
     ast_node *expr = parse_expression(self, INT_MIN);
     if (!expr) return null;
 
+    int is_pointer = 0;
+    if (ast_node_is_unary_op(expr)) {
+        if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
+        else return null; // no other unary op is valid
+
+        // reset variable to the actual symbol
+        expr = expr->unary_op.operand;
+        if (!ast_node_is_symbol(expr)) return null;
+    }
+
     // look for optional predicate
     ast_node *bin_pred = null;
     if (0 == a_try(self, a_comma)) {
@@ -1402,8 +1412,12 @@ begin_body:
         array_push(arms, else_arm);
     }
 
+    int union_flag = 0;
+    if (is_pointer) union_flag = AST_TAGGED_UNION_MUTABLE;
+    else if (union_type) union_flag = AST_TAGGED_UNION_VALUE;
+
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), bin_pred, !!union_type);
+                                          (ast_node_sized)array_sized(arms), bin_pred, union_flag);
     set_node_file(self, node);
     return node;
 }

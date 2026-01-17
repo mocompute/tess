@@ -38,5 +38,13 @@ main() {
   }
   error += if area3 == -1.0 {0} else {1}
 
+  // Test 4: mutable case
+  area4 := case square.&: Foo.Shape {
+    sq: Square { sq->length = 3.0
+                 sq->length * sq->length }
+    else       { 0.0 }
+  }
+  error += if area4 >= 9.0 {0} else {1}
+
   error
 }
