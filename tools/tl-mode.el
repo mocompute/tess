@@ -205,6 +205,38 @@ Returns a cons cell (INDENT . ENDS-WITH-OPEN-BRACE)."
         (setq opens-block t))
       (cons indent opens-block))))
 
+(defun tl-tagged-union-continuation-indent ()
+  "Calculate indentation for a tagged union continuation line (starts with |).
+Aligns with the | on the first line of the tagged union definition."
+  (save-excursion
+    (forward-line -1)
+    ;; Skip blank lines and comments
+    (while (and (not (bobp))
+                (looking-at "^[ \t]*\\(?:$\\|//\\)"))
+      (forward-line -1))
+    ;; Look for | at any position on this line
+    (if (looking-at "^\\(.*?\\)|")
+        (length (match-string 1))
+      ;; Fallback: look for "= |" pattern (start of tagged union definition)
+      (if (re-search-backward "^[a-zA-Z_][a-zA-Z0-9_]*\\(?:(.*)\\)?[ \t]*=[ \t]*|" nil t)
+          (progn
+            (goto-char (match-end 0))
+            (backward-char 1)
+            (current-column))
+        0))))
+
+(defun tl-after-tagged-union-p ()
+  "Return t if the previous non-blank code was part of a tagged union.
+Used to detect when we should reset to column 0."
+  (save-excursion
+    (forward-line -1)
+    ;; Skip blank lines
+    (while (and (not (bobp))
+                (looking-at "^[ \t]*$"))
+      (forward-line -1))
+    ;; Check if previous non-blank line starts with |
+    (looking-at "^[ \t]*|")))
+
 (defun tl-calculate-indentation ()
   "Calculate the indentation for the current line."
   (save-excursion
@@ -233,6 +265,15 @@ Returns a cons cell (INDENT . ENDS-WITH-OPEN-BRACE)."
               (backward-sexp)
               (current-indentation))
           (error 0))))
+
+     ;; Tagged union continuation: line starts with |
+     ((looking-at "|")
+      (tl-tagged-union-continuation-indent))
+
+     ;; After tagged union: top-level definition resets to column 0
+     ((and (tl-after-tagged-union-p)
+           (looking-at "[a-zA-Z_]"))
+      0)
 
      ;; Default: base on previous line
      (t
