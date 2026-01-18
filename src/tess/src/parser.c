@@ -2371,6 +2371,72 @@ static int toplevel_union(parser *self) {
     return result_ast_node(self, r);
 }
 
+// Helper to check if an AST node references a type parameter name
+static int annotation_uses_type_param(ast_node *node, str param_name) {
+    if (!node) return 0;
+
+    if (ast_node_is_symbol(node)) {
+        if (str_eq(node->symbol.name, param_name)) return 1;
+        // Also check the annotation
+        return annotation_uses_type_param(node->symbol.annotation, param_name);
+    }
+
+    if (ast_node_is_nfa(node)) {
+        // Check the nfa arguments recursively
+        for (u32 i = 0; i < node->named_application.n_arguments; i++) {
+            if (annotation_uses_type_param(node->named_application.arguments[i], param_name)) return 1;
+        }
+    }
+
+    return 0;
+}
+
+// Helper to collect type params used by a variant's fields
+// Returns the number of used type params and fills used_type_args with the used params
+static u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
+                                   ast_node_array fields, ast_node ***out_used_type_args) {
+    if (!n_type_args || !fields.size) {
+        *out_used_type_args = null;
+        return 0;
+    }
+
+    // Track which type params are used
+    u8 *used = alloc_malloc(self->ast_arena, n_type_args * sizeof(u8));
+    for (u8 i = 0; i < n_type_args; i++) used[i] = 0;
+
+    // Check each field's annotation for type param references
+    forall(i, fields) {
+        ast_node *ann = fields.v[i]->symbol.annotation;
+        for (u8 j = 0; j < n_type_args; j++) {
+            if (!used[j] && annotation_uses_type_param(ann, type_args[j]->symbol.name)) {
+                used[j] = 1;
+            }
+        }
+    }
+
+    // Count and collect used type params
+    u8 count = 0;
+    for (u8 i = 0; i < n_type_args; i++) {
+        if (used[i]) count++;
+    }
+
+    if (count == 0) {
+        *out_used_type_args = null;
+        return 0;
+    }
+
+    ast_node **result = alloc_malloc(self->ast_arena, count * sizeof(ast_node *));
+    u8         idx    = 0;
+    for (u8 i = 0; i < n_type_args; i++) {
+        if (used[i]) {
+            result[idx++] = ast_node_clone(self->ast_arena, type_args[i]);
+        }
+    }
+
+    *out_used_type_args = result;
+    return count;
+}
+
 // Helper to create a struct UTD node from variant data
 static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
                                    ast_node_array fields) {
@@ -2703,14 +2769,10 @@ static int toplevel_tagged_union(parser *self) {
         variant  *v        = &variants.v[i];
         ast_node *var_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
 
-        // For generics, we need to determine which type params are used by this variant
-        // For now, include all type params if any fields exist
-        u8         var_n_type_args = 0;
+        // For generics, determine which type params are actually used by this variant's fields
         ast_node **var_type_args   = null;
-        if (n_type_args && v->fields.size) {
-            var_n_type_args = n_type_args;
-            var_type_args   = type_args;
-        }
+        u8         var_n_type_args = collect_used_type_params(self, n_type_args, type_args,
+                                                               v->fields, &var_type_args);
 
         ast_node *var_struct = create_struct_utd(self, var_name, var_n_type_args, var_type_args, v->fields);
         add_module_symbol(self, var_name);
@@ -2732,20 +2794,20 @@ static int toplevel_tagged_union(parser *self) {
             ast_node *field_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
 
             // Field annotation: the variant type (may be generic)
+            // Must use only the type params that the variant actually uses
+            ast_node **used_type_args   = null;
+            u8         n_used_type_args = collect_used_type_params(self, n_type_args, type_args,
+                                                                    v->fields, &used_type_args);
+
             ast_node *field_ann = null;
-            if (n_type_args && v->fields.size) {
-                // Generic variant: Circle(T)
-                ast_node_sized args = {.size = n_type_args,
-                                       .v =
-                                         alloc_malloc(self->ast_arena, n_type_args * sizeof(ast_node *))};
-                forall(j, args) {
-                    args.v[j] = ast_node_clone(self->ast_arena, type_args[j]);
-                }
+            if (n_used_type_args) {
+                // Generic variant with used type params
+                ast_node_sized args = {.size = n_used_type_args, .v = used_type_args};
                 ast_node *var_type_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
                 mangle_name(self, var_type_name);
                 field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args);
             } else {
-                // Non-generic variant
+                // Non-generic variant (no fields or no type params used)
                 field_ann = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
                 mangle_name(self, field_ann);
             }

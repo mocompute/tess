@@ -143,6 +143,7 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
   - `tl_*` prefix for Tess language types/functions
   - `mos_*` prefix for MOS library
   - Lowercase with underscores (snake_case)
+- **Booleans** - C code uses 1 and 0 instead of true and false
 
 ## Testing Infrastructure
 
