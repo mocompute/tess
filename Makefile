@@ -362,7 +362,6 @@ TL_TESTS =					\
 	type_assertion				\
 	type_assertion_field			\
 	tagged_union				\
-	tagged_union_option			\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\
@@ -380,6 +379,14 @@ TL_FAIL_TESTS =					\
 	fail_monkey_patch			\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
+	tagged_union_generic_basic		\
+	tagged_union_generic_case		\
+	tagged_union_generic_func		\
+	tagged_union_generic_multi		\
+	tagged_union_generic_nested		\
+	tagged_union_generic_param		\
+	tagged_union_generic_return		\
+	tagged_union_option			\
 	type_alias_partial_specialization	\
 	unknown_free_variable
 
