@@ -369,6 +369,7 @@ TL_TESTS =					\
 	tagged_union_generic_nested		\
 	tagged_union_generic_param		\
 	tagged_union_generic_return		\
+	tagged_union_mutable_case		\
 	tagged_union_option			\
 	type_literal_generic			\
 	type_arguments_annotations		\
