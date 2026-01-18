@@ -410,7 +410,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->case_.expression       = ast_node_clone(alloc, orig->case_.expression);
         clone->case_.binary_predicate = ast_node_clone(alloc, orig->case_.binary_predicate);
         clone->case_.conditions.v = alloc_malloc(alloc, orig->case_.conditions.size * sizeof(ast_node *));
-        clone->case_.arms.v       = alloc_malloc(alloc, orig->case_.arms.size * sizeof(ast_node *));
+        clone->case_.conditions.size = orig->case_.conditions.size;
+        clone->case_.arms.v          = alloc_malloc(alloc, orig->case_.arms.size * sizeof(ast_node *));
+        clone->case_.arms.size       = orig->case_.conditions.size;
         forall(i, clone->case_.conditions) {
             clone->case_.conditions.v[i] = ast_node_clone(alloc, orig->case_.conditions.v[i]);
         }
