@@ -12,7 +12,7 @@ main() {
             c->radius = 5
             void
         }
-        else { void }
+        else { } // sugar for { void }
     }
 
     // Verify the mutation worked

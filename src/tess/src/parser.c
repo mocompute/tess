@@ -1297,6 +1297,14 @@ static ast_node *parse_body(parser *self) {
     if (a_try(self, a_open_curly)) return null;
 
     ast_node_array exprs = {.alloc = self->ast_arena};
+
+    // Check for empty body `{ }` as sugar for `{ void }`
+    if (0 == a_try(self, a_close_curly)) {
+        (void)result_ast(self, ast_void);
+        array_push(exprs, self->result);
+        return create_body(self, exprs);
+    }
+
     while (1) {
         if (a_try(self, a_body_element)) return null;
         array_push(exprs, self->result);
