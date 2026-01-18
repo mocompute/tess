@@ -6,9 +6,9 @@ T(a) = | Some { v: a }
 main() {
     good := T_Some(v = 123)
 
-    bad := case good: T {
+    res := case good: T {
         s: Some { s.v }
         n: None { 0 }
     }
-    bad - 123
+    res - 123
 }
