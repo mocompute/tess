@@ -79,7 +79,7 @@ ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized 
     self->case_.expression       = expr;
     self->case_.conditions       = conds;
     self->case_.arms             = arms;
-    self->case_.binary_predicate = bin_pred;        // may be null
+    self->case_.binary_predicate = bin_pred;         // may be null
     self->case_.union_annotation = union_annotation; // type annotation for tagged union
     self->case_.is_union         = is_union;
     return self;
@@ -291,7 +291,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->annotation_type = null;
         if (vorig->annotation_type) {
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
-        }
+        } else vclone->annotation_type = null;
         vclone->is_mangled = vorig->is_mangled;
     } break;
 
@@ -421,7 +421,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         forall(i, clone->case_.arms) {
             clone->case_.arms.v[i] = ast_node_clone(alloc, orig->case_.arms.v[i]);
         }
-        clone->case_.is_union = orig->case_.is_union;
+        clone->case_.is_union         = orig->case_.is_union;
+        clone->case_.union_annotation = ast_node_clone(alloc, orig->case_.union_annotation);
     } break;
 
     case ast_unary_op: {
