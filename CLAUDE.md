@@ -41,6 +41,7 @@ To run a single TL language test:
 ### Using the Compiler
 ```bash
 ./tess c -I src/tl/std <file.tl>                    # Transpile to C (stdout)
+./tess c -v -I src/tl/std <file.tl>                 # Transpile to C, verbose (stdout)
 ./tess exe -I src/tl/std <file.tl> -o <output>      # Compile to executable
 ./tess lib -I src/tl/std <file.tl> -o <output.so>   # Compile to shared library
 ./tess c --no-line-directive -I src/tl/std <file>   # Transpile without #line directives
