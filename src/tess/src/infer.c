@@ -942,8 +942,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // Mark this variant as covered
             variant_covered[variant_found] = 1;
 
-            // Get the variant type from the union type (which already has concrete types after substitution)
-            // This handles both generic and non-generic variants correctly
+            // Get the variant type from the union type (which already has concrete types after
+            // substitution) This handles both generic and non-generic variants correctly
             tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
 
             // Set the binding's type (not as a literal - this is a value, not a type expression).
@@ -2250,7 +2250,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    str name = node->named_application.name->symbol.name;
+    str               name      = node->named_application.name->symbol.name;
 
     tl_monotype_array arr       = {.alloc = self->transient};
     tl_monotype_sized arr_sized = {0};
@@ -2510,9 +2510,9 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
             // If the variant type is a generic inst that needs specialization
             if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
-                str                 generic_name = inner_type->cons_inst->def->generic_name;
-                tl_monotype_sized   args         = inner_type->cons_inst->args;
-                tl_polytype        *special_type = null;
+                str               generic_name = inner_type->cons_inst->def->generic_name;
+                tl_monotype_sized args         = inner_type->cons_inst->args;
+                tl_polytype      *special_type = null;
 
                 str inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
                 if (!str_is_empty(inst_name) && special_type) {

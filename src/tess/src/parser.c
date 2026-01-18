@@ -1424,8 +1424,9 @@ begin_body:
     if (is_pointer) union_flag = AST_TAGGED_UNION_MUTABLE;
     else if (union_type) union_flag = AST_TAGGED_UNION_VALUE;
 
-    ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), bin_pred, union_type, union_flag);
+    ast_node *node =
+      ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
+                           (ast_node_sized)array_sized(arms), bin_pred, union_type, union_flag);
     set_node_file(self, node);
     return node;
 }
@@ -2515,12 +2516,12 @@ static ast_node *create_union_utd(parser *self, ast_node *name, u8 n_type_args, 
 // Helper to create a constructor function for a tagged union variant
 // E.g., Shape_Circle(radius: Float) -> Shape { ... }
 // Note: Type parameters are inferred during type checking, not passed explicitly.
-static ast_node *create_variant_constructor(parser        *self,
-                                            str            tu_name_str,  // e.g., "Shape"
-                                            str            var_name_str, // e.g., "Circle"
-                                            u8             n_type_args,  // number of type params (unused, for future)
-                                            ast_node     **type_args,    // type param nodes (unused, for future)
-                                            ast_node_array var_fields)   // variant fields
+static ast_node *create_variant_constructor(parser *self,
+                                            str     tu_name_str,  // e.g., "Shape"
+                                            str     var_name_str, // e.g., "Circle"
+                                            u8 n_type_args, // number of type params (unused, for future)
+                                            ast_node **type_args, // type param nodes (unused, for future)
+                                            ast_node_array var_fields) // variant fields
 {
     (void)n_type_args; // Type parameters are inferred, not passed explicitly
     (void)type_args;
@@ -2779,9 +2780,9 @@ static int toplevel_tagged_union(parser *self) {
         ast_node *var_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
 
         // For generics, determine which type params are actually used by this variant's fields
-        ast_node **var_type_args   = null;
-        u8         var_n_type_args = collect_used_type_params(self, n_type_args, type_args,
-                                                               v->fields, &var_type_args);
+        ast_node **var_type_args = null;
+        u8         var_n_type_args =
+          collect_used_type_params(self, n_type_args, type_args, v->fields, &var_type_args);
 
         ast_node *var_struct = create_struct_utd(self, var_name, var_n_type_args, var_type_args, v->fields);
         add_module_symbol(self, var_name);
@@ -2804,15 +2805,15 @@ static int toplevel_tagged_union(parser *self) {
 
             // Field annotation: the variant type (may be generic)
             // Must use only the type params that the variant actually uses
-            ast_node **used_type_args   = null;
-            u8         n_used_type_args = collect_used_type_params(self, n_type_args, type_args,
-                                                                    v->fields, &used_type_args);
+            ast_node **used_type_args = null;
+            u8         n_used_type_args =
+              collect_used_type_params(self, n_type_args, type_args, v->fields, &used_type_args);
 
             ast_node *field_ann = null;
             if (n_used_type_args) {
                 // Generic variant with used type params
-                ast_node_sized args = {.size = n_used_type_args, .v = used_type_args};
-                ast_node *var_type_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
+                ast_node_sized args          = {.size = n_used_type_args, .v = used_type_args};
+                ast_node      *var_type_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
                 mangle_name(self, var_type_name);
                 field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args);
             } else {
@@ -2903,7 +2904,7 @@ static int toplevel_tagged_union(parser *self) {
 
     // 5. Constructor functions for each variant
     forall(i, variants) {
-        variant *v = &variants.v[i];
+        variant  *v    = &variants.v[i];
 
         ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
                                                     type_args, v->fields);
