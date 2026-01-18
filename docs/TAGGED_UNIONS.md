@@ -180,38 +180,28 @@ static int annotation_uses_type_param(ast_node *node, str param_name)
 
 ## 4. Type System Representation
 
-**Location:** `src/tess/src/type.c`
+**Important Clarification:** Tagged unions have **no direct representation** in the type system. They are purely a syntactic feature that desugars into ordinary types:
+- The tag enum (`_ShapeTag_`) is a regular enum type
+- The variant structs (`Circle`, `Square`) are regular struct types
+- The internal union (`_ShapeUnion_`) is a C-style union type (declared with `is_union = 1`)
+- The wrapper struct (`Shape`) is a regular struct type
 
-### 4.1 Union Type Constructor
+After parsing, the type system sees only these desugared types - it has no concept of "tagged union" as a distinct type.
 
-The `Union` type is registered as a variable-arity type constructor (line 59-60):
-```c
-make_variable_arity_tc(self, S("Union"));
-```
+### 4.1 C-Style Unions vs. Tagged Unions
 
-This allows it to accept any number of variant type arguments.
+The type system has a concept of **C-style unions** (types with `is_union = 1` in the AST), which are used internally for the `_ShapeUnion_` component of tagged unions. These are untagged unions that map directly to C's `union` keyword.
 
-### 4.2 Union Instantiation
+This is **completely different** from the `Union` type constructor in `type.c`, which is a partially-implemented feature for representing union types like `Union(Ptr, Void)` in the type system. The `Union` type constructor is not used by tagged unions.
 
-`tl_type_registry_instantiate_union()` (lines 299-313):
-```c
-tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self,
-                                                tl_monotype_sized args) {
-    // args contains one monotype per variant
-    tl_polytype *poly = str_map_get_ptr(self->definitions, S("Union"));
-    type = tl_polytype_instantiate(self->alloc, poly, self->subs);
-    type->cons_inst->args = args;  // Set variant types
-    return type;
-}
-```
+### 4.2 Type Constructor Definition
 
-### 4.3 Type Constructor Definition
-
-When a user type definition is parsed, it creates a `tl_type_constructor_def` containing:
+When a user type definition is parsed (struct, enum, or C-style union), it creates a `tl_type_constructor_def` containing:
 - `name` - canonical type name
 - `generic_name` - unspecialized name (for aliases)
-- `field_names` - array of field/variant names
-- `is_variable_args` - 1 for variable-arity types like Union
+- `field_names` - array of field names
+
+For tagged unions, this happens separately for each desugared component (tag enum, variant structs, internal union, wrapper struct).
 
 ---
 
@@ -219,24 +209,26 @@ When a user type definition is parsed, it creates a `tl_type_constructor_def` co
 
 **Location:** `src/tess/src/infer.c`
 
-### 5.1 Union Detection
+### 5.1 C-Style Union Detection
 
-`is_union_struct()` (lines 2227-2231):
+`is_union_struct()` (lines 2227-2231) detects C-style unions (the internal `_ShapeUnion_` type), not tagged unions:
 ```c
 int is_union_struct(tl_infer *self, str name) {
     ast_node *utd = toplevel_get(self, name);
-    if (utd && ast_node_is_union_def(utd)) return 1;
+    if (utd && ast_node_is_union_def(utd)) return 1;  // checks is_union == 1
     return 0;
 }
 ```
 
-### 5.2 Generic Specialization for Unions
+This is used during specialization to handle the internal union type differently from regular structs.
 
-`specialize_user_type()` (lines 2233-2315) handles union specialization specially (lines 2259-2269):
+### 5.2 Generic Specialization for C-Style Unions
+
+`specialize_user_type()` (lines 2233-2315) handles C-style union specialization specially (lines 2259-2269):
 
 ```c
 } else if (is_union_struct(self, name)) {
-    // For unions, get args from the node's inferred type, not AST arguments.
+    // For C-style unions, get args from the node's inferred type, not AST arguments.
     // Union constructions pass only one variant value, but specialization
     // needs all variant types from the inferred type.
     if (node->type && tl_monotype_is_inst(node->type->type)) {
@@ -249,7 +241,7 @@ int is_union_struct(tl_infer *self, str name) {
 }
 ```
 
-**Key Insight:** When constructing a union (e.g., `_OptionUnion_(Some = value)`), the AST only contains one argument (the active variant), but the type system needs ALL variant types for specialization. The solution is to extract arguments from the node's inferred type instead of the AST.
+**Key Insight:** When constructing a C-style union (e.g., `_OptionUnion_(Some = value)`), the AST only contains one argument (the active variant's value), but the type system needs ALL variant types for specialization. The solution is to extract arguments from the node's inferred type instead of the AST.
 
 ### 5.3 The Arity Mismatch Problem (Historical Bug)
 
