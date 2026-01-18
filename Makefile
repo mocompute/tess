@@ -362,6 +362,7 @@ TL_TESTS =					\
 	type_assertion				\
 	type_assertion_field			\
 	tagged_union				\
+	tagged_union_option			\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\
