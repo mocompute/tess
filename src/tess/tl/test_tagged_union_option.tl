@@ -7,13 +7,18 @@ test1() {
     error := 0
 
     good := T_Some(v = 123)
-
     result := case good: T {
         x: Some { x.v }
         n: None { 456 }
     }
-
     error += if result - 123 == 0 {0} else {1}
+
+    good := T_Some(v = 0.5)
+    result := case good: T {
+        x: Some { x.v }
+        n: None { 45.6 }
+    }
+    error += if result - 0.5 == 0.0 {0} else {1}
 
     error
 }
