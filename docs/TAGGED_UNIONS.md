@@ -72,10 +72,15 @@ Using `.&` suffix creates mutable bindings (pointers to variants):
 
 ```tess
 case shape.&: Shape {
-    c: Circle { c->radius = 3.0 }  // c is Ptr(Circle)
-    _         { }
+    c: Circle {
+        c->radius = 5  // c is Ptr(Circle)
+        void
+    }
+    else { void }
 }
 ```
+
+Note: Empty arms must use `{ void }`, not `{ }`.
 
 ---
 
