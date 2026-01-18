@@ -908,14 +908,7 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 tagged_union_case_syntax_error(self, cond);
             }
 
-            // Parse the annotation to get the variant type
-            annotation_parse_result result = parse_type_annotation(self, ctx, cond->symbol.annotation);
-            if (!result.parsed) {
-                expected_type(self, cond->symbol.annotation);
-                return 1;
-            }
-
-            // Validate that the variant type is a valid variant of the wrapper type
+            // Find the variant by name in the union type
             // Use the original (unmangled) name from the annotation, as union field names are unmangled
             str variant_name  = ast_node_name_original(cond->symbol.annotation);
             int variant_found = -1;
@@ -935,15 +928,19 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // Mark this variant as covered
             variant_covered[variant_found] = 1;
 
+            // Get the variant type from the union type (which already has concrete types after substitution)
+            // This handles both generic and non-generic variants correctly
+            tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
+
             // Set the binding's type (not as a literal - this is a value, not a type expression).
             // Note that we set both the condition node and the annotation_type.
             // If the case variable is mutable (var.&), we have a pointer type.
             tl_polytype *variant_poly = null;
             if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
                 variant_poly =
-                  tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, result.parsed));
+                  tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
             } else {
-                variant_poly = tl_polytype_absorb_mono(self->arena, result.parsed);
+                variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
             }
 
             ast_node_type_set(cond, variant_poly);
@@ -2354,6 +2351,12 @@ static void specialized_add_to_env(tl_infer *self, str inst_name, tl_monotype *m
     tl_type_env_insert_mono(self->env, inst_name, mono);
 }
 
+static void do_apply_subs(void *ctx, ast_node *node);
+
+static void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
+    ast_node_dfs(self, node, do_apply_subs);
+}
+
 static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special,
                            tl_monotype *callsite) {
     // Do this after creating a specialised function
@@ -2368,6 +2371,8 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             dbg(self, "note: post_specialize failed infer");
             return 1;
         }
+        // Apply substitutions to AST before specialization, so types are concrete
+        apply_subs_to_ast_node(self, infer_target);
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
@@ -2462,6 +2467,55 @@ static int specialize_reassignment(tl_infer *self, traverse_ctx *traverse_ctx, a
 
 static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     assert(ast_node_is_case(node));
+
+    // Handle tagged union case: specialize variant types in conditions
+    if (node->case_.is_union) {
+        forall(i, node->case_.conditions) {
+            ast_node *cond = node->case_.conditions.v[i];
+
+            // Skip nil condition (else arm)
+            if (ast_node_is_nil(cond)) continue;
+
+            // Condition should be a symbol with annotation_type set by infer_case
+            if (!ast_node_is_symbol(cond) || !cond->symbol.annotation_type) continue;
+
+            tl_monotype *variant_type = cond->symbol.annotation_type->type;
+
+            // Handle pointer types (for mutable case bindings)
+            tl_monotype *inner_type = variant_type;
+            if (tl_monotype_is_ptr(variant_type)) {
+                inner_type = tl_monotype_ptr_target(variant_type);
+            }
+
+            // If the variant type is a generic inst that needs specialization
+            if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
+                str                 generic_name = inner_type->cons_inst->def->generic_name;
+                tl_monotype_sized   args         = inner_type->cons_inst->args;
+                tl_polytype        *special_type = null;
+
+                str inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
+                if (!str_is_empty(inst_name) && special_type) {
+                    // Update the annotation_type with the specialized type
+                    if (tl_monotype_is_ptr(variant_type)) {
+                        tl_monotype *new_ptr =
+                          tl_type_registry_ptr(self->registry, tl_polytype_concrete(special_type));
+                        cond->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, new_ptr);
+                    } else {
+                        cond->symbol.annotation_type = special_type;
+                    }
+                    ast_node_type_set(cond, cond->symbol.annotation_type);
+
+                    // Update the annotation node's name to the specialized name
+                    if (cond->symbol.annotation && ast_node_is_symbol(cond->symbol.annotation)) {
+                        ast_node_name_replace(cond->symbol.annotation, inst_name);
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    // Handle binary predicate case (non-union)
     if (!node->case_.binary_predicate) return 0;
 
     ast_node *predicate = node->case_.binary_predicate;
