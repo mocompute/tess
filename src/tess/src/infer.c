@@ -874,6 +874,20 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype *wrapper_type = expr_type->type;
         tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
 
+        // If expression type is not yet concrete, use the type annotation (e.g., T in "case x: T")
+        // This handles cross-module generic functions where the type is still a type variable
+        // during Phase 3 (inference) and won't be resolved until Phase 5 (specialization).
+        if (!tl_monotype_is_inst(wrapper_type) && node->case_.union_annotation) {
+            annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
+            if (result.parsed && tl_monotype_is_inst(result.parsed)) {
+                wrapper_type = result.parsed;
+                // Constrain expression type to match annotation
+                if (constrain_pm(self, expr_type, wrapper_type, node->case_.expression)) {
+                    return 1;
+                }
+            }
+        }
+
         if (!tl_monotype_is_inst(wrapper_type)) {
             expected_tagged_union(self, node->case_.expression);
             return 1;

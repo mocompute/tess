@@ -1417,7 +1417,7 @@ begin_body:
     else if (union_type) union_flag = AST_TAGGED_UNION_VALUE;
 
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), bin_pred, union_flag);
+                                          (ast_node_sized)array_sized(arms), bin_pred, union_type, union_flag);
     set_node_file(self, node);
     return node;
 }
@@ -1551,6 +1551,7 @@ static int a_expression(parser *self) {
 
 static void unmangle_name(parser *self, ast_node *name) {
     (void)self;
+    if (ast_node_is_nfa(name)) return unmangle_name(self, name->named_application.name);
     if (!ast_node_is_symbol(name)) return;
     if (!name->symbol.is_mangled) return;
     if (str_is_empty(name->symbol.original)) return;

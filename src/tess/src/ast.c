@@ -73,13 +73,14 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
 }
 
 ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds, ast_node_sized arms,
-                               ast_node *bin_pred, int is_union) {
+                               ast_node *bin_pred, ast_node *union_annotation, int is_union) {
     // Note: is_union may be 0, 1, or 2. See ast.h
     ast_node *self               = ast_node_create(alloc, ast_case);
     self->case_.expression       = expr;
     self->case_.conditions       = conds;
     self->case_.arms             = arms;
-    self->case_.binary_predicate = bin_pred; // may be null
+    self->case_.binary_predicate = bin_pred;        // may be null
+    self->case_.union_annotation = union_annotation; // type annotation for tagged union
     self->case_.is_union         = is_union;
     return self;
 }
@@ -409,6 +410,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_case: {
         clone->case_.expression       = ast_node_clone(alloc, orig->case_.expression);
         clone->case_.binary_predicate = ast_node_clone(alloc, orig->case_.binary_predicate);
+        clone->case_.union_annotation = ast_node_clone(alloc, orig->case_.union_annotation);
         clone->case_.conditions.v = alloc_malloc(alloc, orig->case_.conditions.size * sizeof(ast_node *));
         clone->case_.conditions.size = orig->case_.conditions.size;
         clone->case_.arms.v          = alloc_malloc(alloc, orig->case_.arms.size * sizeof(ast_node *));
@@ -623,6 +625,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_case:
         fun(ctx, node->case_.expression);
         if (node->case_.binary_predicate) fun(ctx, node->case_.binary_predicate);
+        if (node->case_.union_annotation) fun(ctx, node->case_.union_annotation);
         forall(i, node->case_.conditions) fun(ctx, node->case_.conditions.v[i]);
         forall(i, node->case_.arms) fun(ctx, node->case_.arms.v[i]);
         break;
@@ -1385,6 +1388,7 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_case:
         combine_node(self->case_.expression);
         combine_node(self->case_.binary_predicate);
+        combine_node(self->case_.union_annotation);
         forall(i, self->case_.conditions) combine_node(self->case_.conditions.v[i]);
         forall(i, self->case_.arms) combine_node(self->case_.arms.v[i]);
         break;
