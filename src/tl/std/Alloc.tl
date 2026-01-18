@@ -244,7 +244,7 @@ _bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
     c_memcpy(new_block, p, cur_size)
     _maybe_free_block(bucket, p)
     new_block
-  }
+}
 
 _bump_calloc(a: Ptr(Allocator), num: CSize, sz: CSize) -> Ptr(any) {
     sz = align_max(sz)

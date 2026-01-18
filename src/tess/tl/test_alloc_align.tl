@@ -16,4 +16,5 @@ main() {
   else {
     error = error + if Alloc.align_max(max_align+1) == 2 * max_align {0} else {1}
   }
+  error
 }

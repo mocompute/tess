@@ -652,6 +652,8 @@ static void generate_assign_lhs(transpile *self, str var) {
 }
 
 static void generate_assign(transpile *self, str lhs, str rhs) {
+    // Note: some callers do not check if the assignment is valid, so we do it here.
+    if (str_is_empty(rhs) || str_is_empty(lhs)) return;
     cat(self, lhs);
     cat_assign(self);
     cat(self, rhs);
@@ -1268,9 +1270,8 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
                 fatal("else must be last");
             }
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
-            if (!str_is_empty(res)) {
-                generate_assign(self, res, arm_body);
-            }
+            generate_assign(self, res, arm_body);
+
             if (!str_is_empty(end_label)) {
                 cat(self, S("goto "));
                 cat(self, end_label);
@@ -1334,9 +1335,8 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         // Generate arm body
         str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
-        if (!str_is_empty(res)) {
-            generate_assign(self, res, arm_body);
-        }
+        generate_assign(self, res, arm_body);
+
         if (!str_is_empty(end_label)) {
             cat(self, S("goto "));
             cat(self, end_label);
@@ -1637,7 +1637,7 @@ static str generate_unary_op(transpile *self, tl_monotype *type, ast_node const 
     }
 }
 
-static str generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+static str generate_assignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
 
     str value = generate_expr(self, type, node->assignment.value, ctx);
 
@@ -1657,6 +1657,23 @@ static str generate_reassignment(transpile *self, tl_monotype *type, ast_node co
     // Otherwise, the value of the expression is the right hand side.
     if (node->assignment.op) return lhs;
     else return value;
+}
+
+static void generate_reassignment(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+
+    str value = generate_expr(self, type, node->assignment.value, ctx);
+
+    // Field name assignments (e.g., in struct construction: Foo(bar = val)) should not emit
+    // the assignment statement - they are just named arguments whose values get used.
+    if (node->assignment.is_field_name) return;
+
+    int save         = ctx->want_lvalue;
+    ctx->want_lvalue = 1;
+    str lhs          = generate_expr(self, null, node->assignment.name, ctx);
+    ctx->want_lvalue = save;
+
+    str op           = node->assignment.op ? ast_node_str(node->assignment.op) : str_empty();
+    if (!is_nil_result(type)) generate_assign_op(self, lhs, value, op);
 }
 
 static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
@@ -1821,9 +1838,10 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_binary_op:       return generate_binary_op(self, type, node, ctx);
     case ast_unary_op:        return generate_unary_op(self, type, node, ctx);
 
+    case ast_assignment:      return generate_assignment(self, type, node, ctx);
+
     case ast_reassignment:
-    case ast_reassignment_op:
-    case ast_assignment:      return generate_reassignment(self, type, node, ctx);
+    case ast_reassignment_op: generate_reassignment(self, type, node, ctx); return str_empty();
 
     case ast_arrow:
     case ast_ellipsis:

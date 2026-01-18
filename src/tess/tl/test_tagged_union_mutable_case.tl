@@ -8,11 +8,8 @@ main() {
 
     // Mutable pattern matching - modify the radius
     case shape.&: Shape {
-        c: Circle {
-            c->radius = 5
-            void
-        }
-        else { } // sugar for { void }
+        c: Circle { c->radius = 5 }
+        else { }
     }
 
     // Verify the mutation worked

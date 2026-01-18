@@ -776,6 +776,22 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
+    if (resolve_node(self, node->assignment.value, ctx, npos_assign_rhs)) return 1;
+
+    ensure_tv(self, &node->type);
+
+    // reassignment nodes have void type
+    tl_monotype *nil = tl_type_registry_nil(self->registry);
+    if (constrain_pm(self, node->type, nil, node)) return 1;
+
+    // name and value are same type
+    if (constrain(self, node->assignment.name->type, node->assignment.value->type, node)) return 1;
+
+    return 0;
+}
+
 static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ast_node   *left = node->binary_op.left, *right = node->binary_op.right;
     char const *op = str_cstr(&node->binary_op.op->symbol.name);
@@ -2085,9 +2101,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     case ast_user_type_definition: break;
 
-    case ast_assignment:
+    case ast_assignment:           return infer_assignment(self, traverse_ctx, node);
+
     case ast_reassignment:
-    case ast_reassignment_op:      return infer_assignment(self, traverse_ctx, node);
+    case ast_reassignment_op:      return infer_reassignment(self, traverse_ctx, node);
 
     case ast_continue:
         // use 'any' for continue so it can unify with any other conditional arm
