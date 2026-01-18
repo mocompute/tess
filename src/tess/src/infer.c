@@ -2236,11 +2236,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    // Check if type being constructed is a C union. If so, do not specialize. We don't support polymorphic
-    // unions.
     str name = node->named_application.name->symbol.name;
-
-    if (is_union_struct(self, name)) return 0;
 
     tl_monotype_array arr       = {.alloc = self->transient};
     tl_monotype_sized arr_sized = {0};
@@ -2260,6 +2256,17 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
             name = existing->type->cons_inst->def->generic_name;
         }
 
+    } else if (is_union_struct(self, name)) {
+        // For unions, get args from the node's inferred type, not AST arguments.
+        // Union constructions pass only one variant value, but specialization
+        // needs all variant types from the inferred type.
+        if (node->type && tl_monotype_is_inst(node->type->type)) {
+            tl_monotype *mono = node->type->type;
+            tl_monotype_substitute(self->arena, mono, self->subs, null);
+            arr_sized = mono->cons_inst->args;
+        } else {
+            return 0; // Type not ready yet
+        }
     } else {
 
         ast_arguments_iter iter = ast_node_arguments_iter(node);
