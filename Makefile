@@ -139,6 +139,7 @@ TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
 
 # Version header generation
 VERSION_HEADER = $(BUILD_DIR)/version.h
+VERSION := $(shell cat VERSION)
 
 $(VERSION_HEADER):
 	@mkdir -p $(dir $@)
@@ -149,7 +150,7 @@ $(VERSION_HEADER):
 		echo "#ifndef TESS_VERSION_H" >> $@; \
 		echo "#define TESS_VERSION_H" >> $@; \
 		echo "" >> $@; \
-		echo "#define TESS_VERSION \"0.1.0-$$HASH\"" >> $@; \
+		echo "#define TESS_VERSION \"$(VERSION)-$$HASH\"" >> $@; \
 		echo "" >> $@; \
 		echo "#endif /* TESS_VERSION_H */" >> $@; \
 	)
