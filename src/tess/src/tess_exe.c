@@ -543,25 +543,19 @@ int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
 
     // Write program to temp file (required for MSVC, simpler for all compilers)
+    // Use process ID in the name to avoid race conditions when running parallel tests
     char temp_path[MAX_PATH];
     if (GetTempPathA(MAX_PATH, temp_path) == 0) {
         fprintf(stderr, "failed to get temp path\n");
         return 1;
     }
-    char temp_file[MAX_PATH];
-    if (GetTempFileNameA(temp_path, "tess", 0, temp_file) == 0) {
-        fprintf(stderr, "failed to create temp file\n");
-        return 1;
-    }
 
-    // Rename to .c extension for compiler recognition
+    // Generate unique temp file name using process ID to avoid collisions
+    DWORD pid = GetCurrentProcessId();
     char temp_c_file[MAX_PATH];
-    snprintf(temp_c_file, MAX_PATH, "%s.c", temp_file);
-    DeleteFileA(temp_file);  // Remove the temp file created by GetTempFileNameA
-
-    // MSVC creates .obj files; put them in temp dir too
     char temp_obj_file[MAX_PATH];
-    snprintf(temp_obj_file, MAX_PATH, "%s.obj", temp_file);
+    snprintf(temp_c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
+    snprintf(temp_obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
 
     FILE *f = fopen(temp_c_file, "wb");
     if (!f) {
@@ -585,9 +579,9 @@ int compile_c(state *self) {
             str_build_cat(&cmd, S(" "));
             str_build_cat(&cmd, self->cflags.v[i]);
         }
-        str_build_cat(&cmd, S(" /Fo:"));
+        str_build_cat(&cmd, S(" /Fo"));
         str_build_cat(&cmd, str_init_static(temp_obj_file));
-        str_build_cat(&cmd, S(" /Fe:"));
+        str_build_cat(&cmd, S(" /Fe"));
         str_build_cat(&cmd, str_init_static(self->out_path));
         str_build_cat(&cmd, S(" /TC "));
         str_build_cat(&cmd, str_init_static(temp_c_file));
@@ -784,25 +778,19 @@ int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
 
     // Write program to temp file
+    // Use process ID in the name to avoid race conditions when running parallel tests
     char temp_path[MAX_PATH];
     if (GetTempPathA(MAX_PATH, temp_path) == 0) {
         fprintf(stderr, "failed to get temp path\n");
         return 1;
     }
-    char temp_file[MAX_PATH];
-    if (GetTempFileNameA(temp_path, "tess", 0, temp_file) == 0) {
-        fprintf(stderr, "failed to create temp file\n");
-        return 1;
-    }
 
-    // Rename to .c extension
+    // Generate unique temp file name using process ID to avoid collisions
+    DWORD pid = GetCurrentProcessId();
     char temp_c_file[MAX_PATH];
-    snprintf(temp_c_file, MAX_PATH, "%s.c", temp_file);
-    DeleteFileA(temp_file);  // Remove the temp file created by GetTempFileNameA
-
-    // MSVC creates .obj files; put them in temp dir too
     char temp_obj_file[MAX_PATH];
-    snprintf(temp_obj_file, MAX_PATH, "%s.obj", temp_file);
+    snprintf(temp_c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
+    snprintf(temp_obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
 
     FILE *f = fopen(temp_c_file, "wb");
     if (!f) {
@@ -826,9 +814,9 @@ int compile_c_obj(state *self) {
             str_build_cat(&cmd, S(" "));
             str_build_cat(&cmd, self->cflags.v[i]);
         }
-        str_build_cat(&cmd, S(" /Fo:"));
+        str_build_cat(&cmd, S(" /Fo"));
         str_build_cat(&cmd, str_init_static(temp_obj_file));
-        str_build_cat(&cmd, S(" /Fe:"));
+        str_build_cat(&cmd, S(" /Fe"));
         str_build_cat(&cmd, str_init_static(self->out_path));
         str_build_cat(&cmd, S(" /TC "));
         str_build_cat(&cmd, str_init_static(temp_c_file));
