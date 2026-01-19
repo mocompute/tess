@@ -301,6 +301,7 @@ TL_TESTS =					\
 	function_pointer_in_struct_direct_2	\
 	generic_lambda				\
 	global_variables			\
+	hello					\
 	lambda_basic				\
 	lambda_apply				\
 	lambda_immediate			\
