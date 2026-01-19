@@ -289,6 +289,8 @@ TL_TESTS =					\
 	if_basic				\
 	if_expression				\
 	factorial				\
+	for_break				\
+	for_continue				\
 	for_statement_basic			\
 	for_statement_module			\
 	forward_decl_not_needed			\
@@ -380,6 +382,8 @@ TL_TESTS =					\
 	union_basic				\
 	union_module_intermediate		\
 	union_module_second_variant		\
+	while_break				\
+	while_continue				\
 	while_statement				\
 	while_update_statement
 

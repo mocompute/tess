@@ -700,7 +700,8 @@ static int infer_continue(tl_infer *self, ast_node *node) {
 static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->return_.value, ctx, npos_operand)) return 1;
     ensure_tv(self, &node->type);
-    if (constrain(self, node->type, node->return_.value->type, node)) return 1;
+    if (!node->return_.is_break_statement)
+        if (constrain(self, node->type, node->return_.value->type, node)) return 1;
 
     if (ctx->result_type)
         if (constrain_pm(self, node->return_.value->type, ctx->result_type, node)) return 1;

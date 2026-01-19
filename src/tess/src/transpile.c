@@ -1717,20 +1717,16 @@ static str generate_while(transpile *self, tl_monotype *type, ast_node const *no
     cat(self, S("break;\n"));
 
     str save_update_label = ctx->update_label;
-    if (node->while_.update) {
-        ctx->update_label = next_label(self);
-    }
+    ctx->update_label     = next_label(self);
 
     (void)generate_expr(self, null, node->while_.body, ctx);
 
-    if (node->while_.update) {
-        // include semicolon after label for c99 reasons: label followed by a declaration is a c23 thing
-        cat(self, ctx->update_label);
-        cat(self, S(":;\n"));
-        ctx->update_label = save_update_label;
+    // include semicolon after label for c99 reasons: label followed by a declaration is a c23 thing
+    cat(self, ctx->update_label);
+    cat(self, S(":;\n"));
+    ctx->update_label = save_update_label;
 
-        (void)generate_expr(self, null, node->while_.update, ctx);
-    }
+    if (node->while_.update) (void)generate_expr(self, null, node->while_.update, ctx);
 
     cat_close_curlyln(self);
 
