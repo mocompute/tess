@@ -7,6 +7,11 @@
 #include <assert.h>
 #include <stdalign.h>
 
+// MSVC doesn't support alignof with expressions, only type names.
+// This macro infers alignment from size. It caps at pointer alignment (8 on 64-bit)
+// rather than max_align_t to avoid over-alignment that changes array stride calculations.
+#define infer_align(size) ((size) >= 8 ? 8 : (size) >= 4 ? 4 : (size) >= 2 ? 2 : 1)
+
 #define defarray(NAME, T)                                                                                  \
     typedef struct {                                                                                       \
         T         *v;                                                                                      \
@@ -50,18 +55,20 @@ defslice(c_string_cslice, char const *);
 #define array_reserve(p, n)                                                                                \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_reserve_impl((array_t *)&(p), (p).v, (n), sizeof(p).v[0], alignof((p).v[0]));        \
+        (p).v = array_reserve_impl((array_t *)&(p), (p).v, (n), sizeof(p).v[0],                            \
+                                   infer_align(sizeof(p).v[0]));                                           \
     } while (0)
 
 #define array_push(p, x)                                                                                   \
     do {                                                                                                   \
         static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_push_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)));        \
+        (p).v = array_push_impl((array_t *)&(p), (p).v, sizeof(p).v[0],                                    \
+                                infer_align(sizeof(p).v[0]), (&(x)));                                      \
     } while (0)
 
 #define array_contains(p, x)                                                                               \
-    array_contains_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)))
+    array_contains_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (&(x)))
 
 #define array_free(p)                                                                                      \
     do {                                                                                                   \
@@ -74,7 +81,7 @@ defslice(c_string_cslice, char const *);
         static_assert(sizeof((s).v[0]) == sizeof((p).v[0]), "size mismatch");                              \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
         static_assert(sizeof(s) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),            \
+        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]),            \
                                      (void *)(s).v, (s).size);                                             \
     } while (0)
 
@@ -82,7 +89,7 @@ defslice(c_string_cslice, char const *);
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]),            \
+        (p).v = array_push_many_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]),            \
                                      (void *)(xs), (u32)(n));                                              \
     } while (0)
 
@@ -99,7 +106,7 @@ defslice(c_string_cslice, char const *);
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_move_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (void *)(xs),   \
+        (p).v = array_move_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (void *)(xs),   \
                                 (u32)(n));                                                                 \
     } while (0)
 
@@ -108,7 +115,7 @@ defslice(c_string_cslice, char const *);
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
         (p).v =                                                                                            \
-          array_insert_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]), (xs), (n));    \
+          array_insert_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], infer_align(sizeof(p).v[0]), (xs), (n));    \
     } while (0)
 
 #define array_insert_sorted(p, x, cmp)                                                                     \
@@ -116,29 +123,29 @@ defslice(c_string_cslice, char const *);
         static_assert(sizeof((x)[0]) == sizeof((p).v[0]), "size mismatch");                                \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
         (p).v =                                                                                            \
-          array_insert_sorted_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (x), (cmp)); \
+          array_insert_sorted_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (x), (cmp)); \
     } while (0)
 
 #define array_erase(p, i)                                                                                  \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        array_erase_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));                  \
+        array_erase_impl((array_t *)&(p), (p).v, (i), sizeof(p).v[0], infer_align(sizeof(p).v[0]));                  \
     } while (0)
 
 #define array_sized_erase(p, i)                                                                            \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_sized_t), "not an array_sized");                           \
-        array_sized_erase_impl((array_sized_t *)&(p), (p).v, (i), sizeof(p).v[0], alignof((p).v[0]));      \
+        array_sized_erase_impl((array_sized_t *)&(p), (p).v, (i), sizeof(p).v[0], infer_align(sizeof(p).v[0]));      \
     } while (0)
 
 #define array_shrink(p)                                                                                    \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]));              \
+        (p).v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]));              \
     } while (0)
 
 #define array_sized(p)                                                                                     \
-    {.size = (p).size, .v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]))}
+    {.size = (p).size, .v = array_shrink_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]))}
 
 #define slice_all(x)  {.v = (x).v, .end = (x).size}
 #define slice_size(x) ((x).end - (x).begin)
@@ -167,7 +174,7 @@ defslice(c_string_cslice, char const *);
     do {                                                                                                   \
         static_assert(sizeof((&x)[0]) == sizeof((p).v[0]), "size mismatch");                               \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_set_insert_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&x));    \
+        (p).v = array_set_insert_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (&x));    \
     } while (0)
 
 // each array is restrict - must not alias
@@ -178,7 +185,7 @@ defslice(c_string_cslice, char const *);
         static_assert(sizeof(rhs) >= sizeof(array_t), "not an array");                                     \
         (res).v =                                                                                          \
           array_set_difference_impl((array_t *)&(res), (res).v, (array_t *)&(lhs), (lhs).v,                \
-                                    (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0]));    \
+                                    (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], infer_align(sizeof(lhs).v[0]));    \
     } while (0)
 
 // each array is restrict - must not alias
@@ -188,7 +195,7 @@ defslice(c_string_cslice, char const *);
         static_assert(sizeof(lhs) >= sizeof(array_t), "not an array");                                     \
         static_assert(sizeof(rhs) >= sizeof(array_t), "not an array");                                     \
         (res).v = array_set_union_impl((array_t *)&(res), (res).v, (array_t *)&(lhs), (lhs).v,             \
-                                       (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], alignof((lhs).v[0])); \
+                                       (array_t *)&(rhs), (rhs).v, sizeof(lhs).v[0], infer_align(sizeof(lhs).v[0])); \
     } while (0)
 
 char_cslice char_cslice_from(char const *, u32);
