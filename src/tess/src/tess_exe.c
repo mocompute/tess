@@ -559,6 +559,10 @@ int compile_c(state *self) {
     snprintf(temp_c_file, MAX_PATH, "%s.c", temp_file);
     DeleteFileA(temp_file);  // Remove the temp file created by GetTempFileNameA
 
+    // MSVC creates .obj files; put them in temp dir too
+    char temp_obj_file[MAX_PATH];
+    snprintf(temp_obj_file, MAX_PATH, "%s.obj", temp_file);
+
     FILE *f = fopen(temp_c_file, "wb");
     if (!f) {
         fprintf(stderr, "failed to open temp file for writing\n");
@@ -581,6 +585,8 @@ int compile_c(state *self) {
             str_build_cat(&cmd, S(" "));
             str_build_cat(&cmd, self->cflags.v[i]);
         }
+        str_build_cat(&cmd, S(" /Fo:"));
+        str_build_cat(&cmd, str_init_static(temp_obj_file));
         str_build_cat(&cmd, S(" /Fe:"));
         str_build_cat(&cmd, str_init_static(self->out_path));
         str_build_cat(&cmd, S(" /TC "));
@@ -612,6 +618,7 @@ int compile_c(state *self) {
     if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
         DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
         return 1;
     }
     SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
@@ -648,6 +655,7 @@ int compile_c(state *self) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
         CloseHandle(stderr_read);
         DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
         return 1;
     }
 
@@ -669,8 +677,9 @@ int compile_c(state *self) {
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Clean up temp file
+    // Clean up temp files
     DeleteFileA(temp_c_file);
+    DeleteFileA(temp_obj_file);
 
     return (int)exit_code;
 }
@@ -789,7 +798,11 @@ int compile_c_obj(state *self) {
     // Rename to .c extension
     char temp_c_file[MAX_PATH];
     snprintf(temp_c_file, MAX_PATH, "%s.c", temp_file);
-    DeleteFileA(temp_file);
+    DeleteFileA(temp_file);  // Remove the temp file created by GetTempFileNameA
+
+    // MSVC creates .obj files; put them in temp dir too
+    char temp_obj_file[MAX_PATH];
+    snprintf(temp_obj_file, MAX_PATH, "%s.obj", temp_file);
 
     FILE *f = fopen(temp_c_file, "wb");
     if (!f) {
@@ -813,6 +826,8 @@ int compile_c_obj(state *self) {
             str_build_cat(&cmd, S(" "));
             str_build_cat(&cmd, self->cflags.v[i]);
         }
+        str_build_cat(&cmd, S(" /Fo:"));
+        str_build_cat(&cmd, str_init_static(temp_obj_file));
         str_build_cat(&cmd, S(" /Fe:"));
         str_build_cat(&cmd, str_init_static(self->out_path));
         str_build_cat(&cmd, S(" /TC "));
@@ -844,6 +859,7 @@ int compile_c_obj(state *self) {
     if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
         DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
         return 1;
     }
     SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
@@ -880,6 +896,7 @@ int compile_c_obj(state *self) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
         CloseHandle(stderr_read);
         DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
         return 1;
     }
 
@@ -901,8 +918,9 @@ int compile_c_obj(state *self) {
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Clean up temp file
+    // Clean up temp files
     DeleteFileA(temp_c_file);
+    DeleteFileA(temp_obj_file);
 
     return (int)exit_code;
 }
