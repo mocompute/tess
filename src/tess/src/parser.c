@@ -1061,7 +1061,10 @@ static int a_funcall(parser *self) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
         if (a_try(self, a_expression)) return 1;
-        { ast_node *_t = maybe_wrap_lambda_function_in_let_in(self, self->result); array_push(args, _t); }
+        {
+            ast_node *_t = maybe_wrap_lambda_function_in_let_in(self, self->result);
+            array_push(args, _t);
+        }
     }
 
 done:
@@ -1562,7 +1565,10 @@ static int a_expression(parser *self) {
 
 static void unmangle_name(parser *self, ast_node *name) {
     (void)self;
-    if (ast_node_is_nfa(name)) return unmangle_name(self, name->named_application.name);
+    if (ast_node_is_nfa(name)) {
+        unmangle_name(self, name->named_application.name);
+        return;
+    }
     if (!ast_node_is_symbol(name)) return;
     if (!name->symbol.is_mangled) return;
     if (str_is_empty(name->symbol.original)) return;
@@ -1612,7 +1618,10 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
 static void mangle_name(parser *self, ast_node *name) {
     // Note: module `main` set current_module to empty, so names are not mangled at all.
     if (str_is_empty(self->current_module)) return;
-    if (ast_node_is_nfa(name)) return mangle_name(self, name->named_application.name);
+    if (ast_node_is_nfa(name)) {
+        mangle_name(self, name->named_application.name);
+        return;
+    }
     if (!ast_node_is_symbol(name)) return;
     if (name->symbol.is_mangled) return;
     if (is_intrinsic(name->symbol.name)) return;
