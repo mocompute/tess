@@ -2,7 +2,9 @@
 #define MOS_PLATFORM_H
 
 #ifdef _WIN32
+#ifndef MOS_WINDOWS
 #define MOS_WINDOWS
+#endif
 #endif
 
 #ifdef __APPLE__
