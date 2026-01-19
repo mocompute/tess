@@ -5,18 +5,29 @@ message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 file(STRINGS ${PROJECT_SOURCE_DIR}/VERSION TESS_VERSION)
 set(VERSION_HEADER ${CMAKE_CURRENT_BINARY_DIR}/version.h)
 
-add_custom_target(version_header ALL
-  COMMAND sh -c "HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo unknown) && \
-    echo '/* Auto-generated version header */' > ${VERSION_HEADER} && \
-    echo '\\#ifndef TESS_VERSION_H' >> ${VERSION_HEADER} && \
-    echo '\\#define TESS_VERSION_H' >> ${VERSION_HEADER} && \
-    echo '' >> ${VERSION_HEADER} && \
-    echo '\\#define TESS_VERSION \"${TESS_VERSION}-'$$HASH'\"' >> ${VERSION_HEADER} && \
-    echo '' >> ${VERSION_HEADER} && \
-    echo '\\#endif /* TESS_VERSION_H */' >> ${VERSION_HEADER}"
+# Get git hash at configure time (will be "unknown" if not in a git repo)
+execute_process(
+  COMMAND git rev-parse --short=7 HEAD
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMMENT "Generating version header"
+  OUTPUT_VARIABLE GIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+  RESULT_VARIABLE GIT_RESULT
 )
+if(NOT GIT_RESULT EQUAL 0)
+  set(GIT_HASH "unknown")
+endif()
+
+# Generate version header at configure time
+file(WRITE ${VERSION_HEADER}
+"/* Auto-generated version header */
+#ifndef TESS_VERSION_H
+#define TESS_VERSION_H
+
+#define TESS_VERSION \"${TESS_VERSION}-${GIT_HASH}\"
+
+#endif /* TESS_VERSION_H */
+")
 
 # -- embed --
 
@@ -78,7 +89,6 @@ target_compile_options(tess_exe BEFORE PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC}
 target_include_directories(tess_exe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(tess_exe PUBLIC tess)
 target_link_options(tess_exe PRIVATE ${MOS_C_LINK_OPTIONS})
-add_dependencies(tess_exe version_header)
 
 # -- tests --
 
