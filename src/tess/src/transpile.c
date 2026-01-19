@@ -695,11 +695,11 @@ static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u3
 }
 
 static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
-    return generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
+    generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
 }
 
 static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_var, u32 n_args) {
-    return generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
+    generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
 }
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
@@ -1902,7 +1902,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     }
 
     else if (tl_monotype_is_type_literal(type)) {
-        return generate_decl(self, name, tl_monotype_literal_target(type));
+        generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
     else if (tl_monotype_is_tv(type)) {
