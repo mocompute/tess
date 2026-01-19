@@ -118,6 +118,79 @@ static int test_struct_layout(void) {
     return 0;
 }
 
+static int test_cmp(void) {
+    int error = 0;
+
+    // Two empty strings
+    error += 0 == str_cmp(S(""), S("")) ? 0 : 1;
+
+    // Two equal non-empty strings
+    error += 0 == str_cmp(S("hello"), S("hello")) ? 0 : 1;
+
+    // Strings where one is prefix of another
+    error += str_cmp(S("abc"), S("abcd")) < 0 ? 0 : 1;
+    error += str_cmp(S("abcd"), S("abc")) > 0 ? 0 : 1;
+
+    // Strings of equal length with different content
+    error += str_cmp(S("abc"), S("abd")) < 0 ? 0 : 1;
+    error += str_cmp(S("abd"), S("abc")) > 0 ? 0 : 1;
+
+    // Empty vs non-empty
+    error += str_cmp(S(""), S("a")) < 0 ? 0 : 1;
+    error += str_cmp(S("a"), S("")) > 0 ? 0 : 1;
+
+    return error;
+}
+
+static int test_cat_multi(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // str_cat_3: basic case
+    str r3 = str_cat_3(alloc, S("a"), S("b"), S("c"));
+    error += str_eq(r3, S("abc")) ? 0 : 1;
+    str_deinit(alloc, &r3);
+
+    // str_cat_3: with empty strings
+    r3 = str_cat_3(alloc, S(""), S("x"), S(""));
+    error += str_eq(r3, S("x")) ? 0 : 1;
+    str_deinit(alloc, &r3);
+
+    // str_cat_4: basic case
+    str r4 = str_cat_4(alloc, S("a"), S("b"), S("c"), S("d"));
+    error += str_eq(r4, S("abcd")) ? 0 : 1;
+    str_deinit(alloc, &r4);
+
+    // str_cat_5: basic case
+    str r5 = str_cat_5(alloc, S("1"), S("2"), S("3"), S("4"), S("5"));
+    error += str_eq(r5, S("12345")) ? 0 : 1;
+    str_deinit(alloc, &r5);
+
+    // str_cat_6: basic case
+    str r6 = str_cat_6(alloc, S("a"), S("b"), S("c"), S("d"), S("e"), S("f"));
+    error += str_eq(r6, S("abcdef")) ? 0 : 1;
+    str_deinit(alloc, &r6);
+
+    // str_cat_3: large strings (exceeds small string optimization)
+    str big1 = str_init(alloc, "hello_world_");
+    str big2 = str_init(alloc, "this_is_a_test_");
+    str big3 = str_init(alloc, "string_concatenation");
+    str rbig = str_cat_3(alloc, big1, big2, big3);
+    error += str_eq(rbig, S("hello_world_this_is_a_test_string_concatenation")) ? 0 : 1;
+    str_deinit(alloc, &big1);
+    str_deinit(alloc, &big2);
+    str_deinit(alloc, &big3);
+    str_deinit(alloc, &rbig);
+
+    // str_cat_4: all empty
+    r4 = str_cat_4(alloc, S(""), S(""), S(""), S(""));
+    error += str_eq(r4, S("")) ? 0 : 1;
+    str_deinit(alloc, &r4);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -141,6 +214,8 @@ int main(void) {
     T(test_build);
     T(test_ends_with);
     T(test_struct_layout);
+    T(test_cmp);
+    T(test_cat_multi);
 
     return error;
 }

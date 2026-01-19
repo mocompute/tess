@@ -97,6 +97,7 @@ u64         str_hash64_combine(u64, str);
 u64         str_hash64_combine_sized(u64, str_sized);
 
 span        str_span(str *);
+cspan       str_cspan(str const *);
 ispan       str_ispan(str *); // for use with C lib; exits program on int overflow
 
 span        str_slice_len(str *, size_t start, size_t len); // range checked

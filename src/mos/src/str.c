@@ -129,7 +129,7 @@ str str_fmt(allocator *alloc, char const *restrict fmt, ...) {
     // .len must not include terminating null character
     str out = {.big = {.len = len - 1, .buf = alloc_malloc(alloc, len + 1)}};
 
-    va_start(args2, fmt);
+    // args2 already has saved state from va_copy - use it directly
     vsnprintf(out.big.buf, len, fmt, args2);
     va_end(args2);
 
@@ -155,42 +155,93 @@ str str_cat_c(allocator *alloc, str left, char const *right) {
     return str_cat(alloc, left, str_init_static(right));
 }
 
-str str_cat_3(allocator *alloc, str left, str mid, str right) {
-    str out = str_empty();
-    str_dcat(alloc, &out, left);
-    str_dcat(alloc, &out, mid);
-    str_dcat(alloc, &out, right);
+str str_cat_3(allocator *alloc, str one, str two, str three) {
+    span   s1  = str_span(&one);
+    span   s2  = str_span(&two);
+    span   s3  = str_span(&three);
+    size_t len = s1.len + s2.len + s3.len;
+
+    str    out;
+    if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
+    span out_span = str_span(&out);
+
+    memcpy(out_span.buf, s1.buf, s1.len);
+    memcpy(out_span.buf + s1.len, s2.buf, s2.len);
+    memcpy(out_span.buf + s1.len + s2.len, s3.buf, s3.len);
     return out;
 }
 
 str str_cat_4(allocator *alloc, str one, str two, str three, str four) {
-    str out = str_empty();
-    str_dcat(alloc, &out, one);
-    str_dcat(alloc, &out, two);
-    str_dcat(alloc, &out, three);
-    str_dcat(alloc, &out, four);
+    span   s1  = str_span(&one);
+    span   s2  = str_span(&two);
+    span   s3  = str_span(&three);
+    span   s4  = str_span(&four);
+    size_t len = s1.len + s2.len + s3.len + s4.len;
+
+    str    out;
+    if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
+    span out_span = str_span(&out);
+
+    // clang-format off
+    size_t off = 0;
+    memcpy(out_span.buf + off, s1.buf, s1.len); off += s1.len;
+    memcpy(out_span.buf + off, s2.buf, s2.len); off += s2.len;
+    memcpy(out_span.buf + off, s3.buf, s3.len); off += s3.len;
+    memcpy(out_span.buf + off, s4.buf, s4.len);
     return out;
+    // clang-format on
 }
 
 str str_cat_5(allocator *alloc, str one, str two, str three, str four, str five) {
-    str out = str_empty();
-    str_dcat(alloc, &out, one);
-    str_dcat(alloc, &out, two);
-    str_dcat(alloc, &out, three);
-    str_dcat(alloc, &out, four);
-    str_dcat(alloc, &out, five);
+    span   s1  = str_span(&one);
+    span   s2  = str_span(&two);
+    span   s3  = str_span(&three);
+    span   s4  = str_span(&four);
+    span   s5  = str_span(&five);
+    size_t len = s1.len + s2.len + s3.len + s4.len + s5.len;
+
+    str    out;
+    if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
+    span out_span = str_span(&out);
+
+    // clang-format off
+    size_t off = 0;
+    memcpy(out_span.buf + off, s1.buf, s1.len); off += s1.len;
+    memcpy(out_span.buf + off, s2.buf, s2.len); off += s2.len;
+    memcpy(out_span.buf + off, s3.buf, s3.len); off += s3.len;
+    memcpy(out_span.buf + off, s4.buf, s4.len); off += s4.len;
+    memcpy(out_span.buf + off, s5.buf, s5.len);
     return out;
+    // clang-format on
 }
 
 str str_cat_6(allocator *alloc, str one, str two, str three, str four, str five, str six) {
-    str out = str_empty();
-    str_dcat(alloc, &out, one);
-    str_dcat(alloc, &out, two);
-    str_dcat(alloc, &out, three);
-    str_dcat(alloc, &out, four);
-    str_dcat(alloc, &out, five);
-    str_dcat(alloc, &out, six);
+    span   s1  = str_span(&one);
+    span   s2  = str_span(&two);
+    span   s3  = str_span(&three);
+    span   s4  = str_span(&four);
+    span   s5  = str_span(&five);
+    span   s6  = str_span(&six);
+    size_t len = s1.len + s2.len + s3.len + s4.len + s5.len + s6.len;
+
+    str    out;
+    if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
+    span out_span = str_span(&out);
+
+    // clang-format off
+    size_t off = 0;
+    memcpy(out_span.buf + off, s1.buf, s1.len); off += s1.len;
+    memcpy(out_span.buf + off, s2.buf, s2.len); off += s2.len;
+    memcpy(out_span.buf + off, s3.buf, s3.len); off += s3.len;
+    memcpy(out_span.buf + off, s4.buf, s4.len); off += s4.len;
+    memcpy(out_span.buf + off, s5.buf, s5.len); off += s5.len;
+    memcpy(out_span.buf + off, s6.buf, s6.len);
     return out;
+    // clang-format on
 }
 
 str str_cat_array(allocator *alloc, str_sized arr) {
@@ -258,16 +309,12 @@ int str_is_empty(str self) {
 
 int str_cmp(str lhs, str rhs) {
     span   left = str_span(&lhs), right = str_span(&rhs);
-
     size_t max_len = min(left.len, right.len);
     int    res     = 0;
-    if (max_len && (res = memcmp(&left.buf[0], &right.buf[0], max_len))) return res;
-
+    if (max_len && (res = memcmp(left.buf, right.buf, max_len))) return res;
     if (left.len < right.len) return -1;
     if (left.len > right.len) return 1;
-
-    if (!left.len) return 0;
-    return memcmp(&left.buf[0], &right.buf[0], left.len);
+    return 0;
 }
 
 int str_cmp_v(void const *lhs, void const *rhs) {
@@ -585,8 +632,10 @@ str str_build_str(allocator *alloc, str_build self) {
 
 str str_build_finish(str_build *p) {
     // grow buffer to make room for \0 for str_cstr
-    { char _t = '\0'; array_push(*p, _t); }
+    // clang-format off
+    {char _t = '\0'; array_push(*p, _t);}
     p->size--;
+    // clang-format on
 
     str out = str_init_move_n(&p->v, p->size);
     // move will leave p->v unchanged if it's copying into small
