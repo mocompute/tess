@@ -678,7 +678,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     goto top_success;
                 }
             }
-            array_push_val(args, mono);
+            // clang-format off
+            { tl_monotype *_t = mono; array_push(args, _t); }
+            // clang-format on
         }
 
         // Note: special case for parsing a Union(a, b, ...)
@@ -712,7 +714,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     goto top_success;
                 }
             }
-            array_push_val(args, mono);
+            // clang-format off
+            { tl_monotype *_t = mono; array_push(args, _t); }
+            // clang-format on
         }
         tl_monotype *left_mono =
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));

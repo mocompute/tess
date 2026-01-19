@@ -1052,14 +1052,16 @@ static int a_funcall(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_round)) goto done;
-    if (0 == a_try(self, a_expression))
-        array_push_val(args, maybe_wrap_lambda_function_in_let_in(self, self->result));
+    if (0 == a_try(self, a_expression)) {
+        ast_node *_t = maybe_wrap_lambda_function_in_let_in(self, self->result);
+        array_push(args, _t);
+    }
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
         if (a_try(self, a_expression)) return 1;
-        array_push_val(args, maybe_wrap_lambda_function_in_let_in(self, self->result));
+        { ast_node *_t = maybe_wrap_lambda_function_in_let_in(self, self->result); array_push(args, _t); }
     }
 
 done:

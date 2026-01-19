@@ -63,12 +63,6 @@ defslice(c_string_cslice, char const *);
 #define array_contains(p, x)                                                                               \
     array_contains_impl((array_t *)&(p), (p).v, sizeof(p).v[0], alignof((p).v[0]), (&(x)))
 
-#define array_push_val(p, x)                                                                               \
-    do {                                                                                                   \
-        const typeof((p).v[0]) tmp = (x);                                                                  \
-        array_push((p), tmp);                                                                              \
-    } while (0)
-
 #define array_free(p)                                                                                      \
     do {                                                                                                   \
         static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \

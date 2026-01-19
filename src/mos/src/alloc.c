@@ -12,8 +12,8 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
-// MSVC versions before VS2015 (1900) don't have max_align_t
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
+// MSVC may not define max_align_t in stddef.h
+#if defined(_MSC_VER)
 typedef double max_align_t;
 #endif
 
@@ -668,17 +668,17 @@ size_t alloc_align_to_pointer_size(size_t n) {
 }
 
 noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...) {
-    static const size_t buf_size = 256;
-    char                buf[buf_size];
-    va_list             args;
+#define BUF_SIZE 256
+    char    buf[BUF_SIZE];
+    va_list args;
 
     //
 
-    int len = snprintf(buf, buf_size, "%s:%i: fatal: ", file, line);
+    int len = snprintf(buf, BUF_SIZE, "%s:%i: fatal: ", file, line);
     if (len < 0) exit(1);
 
     va_start(args, fmt);
-    vsnprintf(buf + len, buf_size - (size_t)len, fmt, args);
+    vsnprintf(buf + len, BUF_SIZE - (size_t)len, fmt, args);
     va_end(args);
 
     fprintf(stderr, "%s\n", buf);

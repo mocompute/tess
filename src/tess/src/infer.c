@@ -2190,7 +2190,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             // Do not recurse: fixup after
             if (str_eq(name, generic_name)) {
-                array_push_val(recur_refs, &args.v[i]);
+                { tl_monotype **_t = &args.v[i]; array_push(recur_refs, _t); }
                 continue;
             }
 
@@ -2198,7 +2198,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             if (tl_monotype_is_ptr(args.v[i])) {
                 tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
                 if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
-                    array_push_val(recur_refs, &args.v[i]->cons_inst->args.v[0]);
+                    { tl_monotype **_t = &args.v[i]->cons_inst->args.v[0]; array_push(recur_refs, _t); }
                     continue;
                 }
             }
@@ -2320,7 +2320,7 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
             tl_monotype *type_id = null;
             if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
                 // a literal type
-                array_push_val(arr, tl_monotype_create_literal(self->arena, type_id));
+                { tl_monotype *_t = tl_monotype_create_literal(self->arena, type_id); array_push(arr, _t); }
                 continue;
             }
 

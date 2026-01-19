@@ -1390,8 +1390,10 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
 
         // allocate room for conditional arm arguments
         array_reserve(args_res, 2);
-        array_push_val(args_res, str_empty());
-        array_push_val(args_res, str_empty());
+        // clang-format off
+        { str _t = str_empty(); array_push(args_res, _t); }
+        { str _t = str_empty(); array_push(args_res, _t); }
+        // clang-format on
     }
 
     switch (node->case_.conditions.size) {

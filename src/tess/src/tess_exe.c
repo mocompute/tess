@@ -501,11 +501,14 @@ int compile_c(state *self) {
         array_reserve(argv, self->cflags.size + 8);
         array_push(argv, cc);
 
-        array_push_val(argv, "-o");
+        // clang-format off
+        {char const *_t = "-o"; array_push(argv, _t);}
         array_push(argv, self->out_path);
+        // clang-format on
 
         if (self->optimize) {
-            array_push_val(argv, "-O2");
+            char const *_t = "-O2";
+            array_push(argv, _t);
         }
 
         forall(i, self->cflags) {
@@ -513,15 +516,17 @@ int compile_c(state *self) {
             array_push(argv, cstr);
         }
 
-        array_push_val(argv, "-std=c11");
-        array_push_val(argv, "-Wno-format-security");
-        array_push_val(argv, "-Wno-unused-value");
-        array_push_val(argv, "-Wno-compare-distinct-pointer-types");
-        array_push_val(argv, "-x");
-        array_push_val(argv, "c");
-        array_push_val(argv, "-");
+        // clang-format off
+        { char const *_t = "-std=c11"; array_push(argv, _t); }
+        { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
+        { char const *_t = "-Wno-unused-value"; array_push(argv, _t); }
+        { char const *_t = "-Wno-compare-distinct-pointer-types"; array_push(argv, _t); }
+        { char const *_t = "-x"; array_push(argv, _t); }
+        { char const *_t = "c"; array_push(argv, _t); }
+        { char const *_t = "-"; array_push(argv, _t); }
 
-        array_push_val(argv, null);
+        { char const *_t = null; array_push(argv, _t); }
+        //clang-format on
 
         child_res = execvp(cc, argv.v);
         perror("exec failed");
@@ -586,11 +591,12 @@ int compile_c_obj(state *self) {
         array_reserve(argv, self->cflags.size + 8);
         array_push(argv, cc);
 
-        array_push_val(argv, "-o");
+        // clang-format off
+        { char const *_t = "-o"; array_push(argv, _t); }
         array_push(argv, self->out_path);
 
         if (self->optimize) {
-            array_push_val(argv, "-O2");
+            char const *_t = "-O2"; array_push(argv, _t);
         }
 
         forall(i, self->cflags) {
@@ -598,15 +604,16 @@ int compile_c_obj(state *self) {
             array_push(argv, cstr);
         }
 
-        array_push_val(argv, "-std=c11");
-        array_push_val(argv, "-Wno-format-security");
-        array_push_val(argv, "-fPIC");
-        array_push_val(argv, "-shared");
-        array_push_val(argv, "-x");
-        array_push_val(argv, "c");
-        array_push_val(argv, "-");
+        { char const *_t = "-std=c11"; array_push(argv, _t); }
+        { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
+        { char const *_t = "-fPIC"; array_push(argv, _t); }
+        { char const *_t = "-shared"; array_push(argv, _t); }
+        { char const *_t = "-x"; array_push(argv, _t); }
+        { char const *_t = "c"; array_push(argv, _t); }
+        { char const *_t = "-"; array_push(argv, _t); }
 
-        array_push_val(argv, null);
+        { char const *_t = null; array_push(argv, _t); }
+        // clang-format on
 
         child_res = execvp(cc, argv.v);
         perror("exec failed");
