@@ -539,70 +539,33 @@ static int is_msvc_compiler(state *self) {
     return (0 == strcmp(cc, "cl") || 0 == strcmp(cc, "cl.exe"));
 }
 
-int compile_c(state *self) {
-    if (str_is_empty(self->program)) return 1;
+// Temp file management for Windows builds
+typedef struct {
+    char c_file[MAX_PATH];
+    char obj_file[MAX_PATH];
+} win_temp_files;
 
-    // Write program to temp file (required for MSVC, simpler for all compilers)
-    // Use process ID in the name to avoid race conditions when running parallel tests
+static int win_temp_files_init(win_temp_files *tf) {
     char temp_path[MAX_PATH];
     if (GetTempPathA(MAX_PATH, temp_path) == 0) {
         fprintf(stderr, "failed to get temp path\n");
         return 1;
     }
-
-    // Generate unique temp file name using process ID to avoid collisions
     DWORD pid = GetCurrentProcessId();
-    char temp_c_file[MAX_PATH];
-    char temp_obj_file[MAX_PATH];
-    snprintf(temp_c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
-    snprintf(temp_obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
+    snprintf(tf->c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
+    snprintf(tf->obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
+    return 0;
+}
 
-    FILE *f = fopen(temp_c_file, "wb");
-    if (!f) {
-        fprintf(stderr, "failed to open temp file for writing\n");
-        return 1;
-    }
-    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
-    fclose(f);
+static void win_temp_files_cleanup(win_temp_files *tf) {
+    DeleteFileA(tf->c_file);
+    DeleteFileA(tf->obj_file);
+}
 
-    str_deinit(default_allocator(), &self->program);
-
-    // Build command line
-    str_build cmd = str_build_init(self->arena, 256);
-
-    if (is_msvc_compiler(self)) {
-        // MSVC command line
-        str_build_cat(&cmd, self->cc);
-        str_build_cat(&cmd, S(" /nologo"));
-        if (self->optimize) str_build_cat(&cmd, S(" /O2"));
-        forall(i, self->cflags) {
-            str_build_cat(&cmd, S(" "));
-            str_build_cat(&cmd, self->cflags.v[i]);
-        }
-        str_build_cat(&cmd, S(" /Fo"));
-        str_build_cat(&cmd, str_init_static(temp_obj_file));
-        str_build_cat(&cmd, S(" /Fe"));
-        str_build_cat(&cmd, str_init_static(self->out_path));
-        str_build_cat(&cmd, S(" /TC "));
-        str_build_cat(&cmd, str_init_static(temp_c_file));
-    } else {
-        // GCC/Clang command line
-        str_build_cat(&cmd, self->cc);
-        str_build_cat(&cmd, S(" -o "));
-        str_build_cat(&cmd, str_init_static(self->out_path));
-        if (self->optimize) str_build_cat(&cmd, S(" -O2"));
-        forall(i, self->cflags) {
-            str_build_cat(&cmd, S(" "));
-            str_build_cat(&cmd, self->cflags.v[i]);
-        }
-        str_build_cat(&cmd, S(" -std=c11 -Wno-format-security -Wno-unused-value "));
-        str_build_cat(&cmd, str_init_static(temp_c_file));
-    }
-
-    str cmdstr = str_build_finish(&cmd);
-    char const *cmdline = str_cstr(&cmdstr);
-
-    if (self->verbose) {
+// Run a compiler command, capturing stdout (discarded) and forwarding stderr
+// Returns the process exit code, or 1 on failure to launch
+static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) {
+    if (verbose) {
         fprintf(stderr, "Running: %s\n", cmdline);
     }
 
@@ -610,19 +573,17 @@ int compile_c(state *self) {
     HANDLE stdout_read, stdout_write;
     HANDLE stderr_read, stderr_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+
     if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
         return 1;
     }
     SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+
     if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
         CloseHandle(stdout_read);
         CloseHandle(stdout_write);
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
         return 1;
     }
     SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
@@ -637,20 +598,11 @@ int compile_c(state *self) {
     PROCESS_INFORMATION pi = {0};
 
     // Need mutable command line for CreateProcessA
-    char *cmdline_mut = alloc_malloc(self->arena, strlen(cmdline) + 1);
+    char *cmdline_mut = alloc_malloc(arena, strlen(cmdline) + 1);
     strcpy(cmdline_mut, cmdline);
 
     BOOL success = CreateProcessA(
-        NULL,           // lpApplicationName
-        cmdline_mut,    // lpCommandLine
-        NULL,           // lpProcessAttributes
-        NULL,           // lpThreadAttributes
-        TRUE,           // bInheritHandles
-        0,              // dwCreationFlags
-        NULL,           // lpEnvironment
-        NULL,           // lpCurrentDirectory
-        &si,            // lpStartupInfo
-        &pi             // lpProcessInformation
+        NULL, cmdline_mut, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
     );
 
     CloseHandle(stdout_write);
@@ -660,8 +612,6 @@ int compile_c(state *self) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
         CloseHandle(stdout_read);
         CloseHandle(stderr_read);
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
         return 1;
     }
 
@@ -678,20 +628,74 @@ int compile_c(state *self) {
     }
     CloseHandle(stderr_read);
 
-    // Wait for process
+    // Wait for process and get exit code
     WaitForSingleObject(pi.hProcess, INFINITE);
-
     DWORD exit_code = 0;
     GetExitCodeProcess(pi.hProcess, &exit_code);
-
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Clean up temp files
-    DeleteFileA(temp_c_file);
-    DeleteFileA(temp_obj_file);
-
     return (int)exit_code;
+}
+
+// Build compiler command line
+// msvc_extra: additional MSVC flags (e.g., " /LD" for DLL)
+// gcc_extra: additional GCC/Clang flags (e.g., " -shared" for shared lib)
+static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf,
+                               char const *msvc_extra, char const *gcc_extra) {
+    if (is_msvc_compiler(self)) {
+        str_build_cat(cmd, self->cc);
+        str_build_cat(cmd, S(" /nologo"));
+        if (msvc_extra) str_build_cat(cmd, str_init_static(msvc_extra));
+        if (self->optimize) str_build_cat(cmd, S(" /O2"));
+        forall(i, self->cflags) {
+            str_build_cat(cmd, S(" "));
+            str_build_cat(cmd, self->cflags.v[i]);
+        }
+        str_build_cat(cmd, S(" /Fo"));
+        str_build_cat(cmd, str_init_static(tf->obj_file));
+        str_build_cat(cmd, S(" /Fe"));
+        str_build_cat(cmd, str_init_static(self->out_path));
+        str_build_cat(cmd, S(" /TC "));
+        str_build_cat(cmd, str_init_static(tf->c_file));
+    } else {
+        str_build_cat(cmd, self->cc);
+        str_build_cat(cmd, S(" -o "));
+        str_build_cat(cmd, str_init_static(self->out_path));
+        if (self->optimize) str_build_cat(cmd, S(" -O2"));
+        forall(i, self->cflags) {
+            str_build_cat(cmd, S(" "));
+            str_build_cat(cmd, self->cflags.v[i]);
+        }
+        str_build_cat(cmd, S(" -std=c11 -Wno-format-security"));
+        if (gcc_extra) str_build_cat(cmd, str_init_static(gcc_extra));
+        str_build_cat(cmd, S(" "));
+        str_build_cat(cmd, str_init_static(tf->c_file));
+    }
+}
+
+int compile_c(state *self) {
+    if (str_is_empty(self->program)) return 1;
+
+    win_temp_files tf;
+    if (win_temp_files_init(&tf)) return 1;
+
+    FILE *f = fopen(tf.c_file, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open temp file for writing\n");
+        return 1;
+    }
+    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
+    fclose(f);
+    str_deinit(default_allocator(), &self->program);
+
+    str_build cmd = str_build_init(self->arena, 256);
+    win_build_cmdline(self, &cmd, &tf, NULL, " -Wno-unused-value");
+    str cmdstr = str_build_finish(&cmd);
+
+    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
+    win_temp_files_cleanup(&tf);
+    return result;
 }
 
 #else
@@ -793,156 +797,25 @@ int compile_c(state *self) {
 int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
 
-    // Write program to temp file
-    // Use process ID in the name to avoid race conditions when running parallel tests
-    char temp_path[MAX_PATH];
-    if (GetTempPathA(MAX_PATH, temp_path) == 0) {
-        fprintf(stderr, "failed to get temp path\n");
-        return 1;
-    }
+    win_temp_files tf;
+    if (win_temp_files_init(&tf)) return 1;
 
-    // Generate unique temp file name using process ID to avoid collisions
-    DWORD pid = GetCurrentProcessId();
-    char temp_c_file[MAX_PATH];
-    char temp_obj_file[MAX_PATH];
-    snprintf(temp_c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
-    snprintf(temp_obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
-
-    FILE *f = fopen(temp_c_file, "wb");
+    FILE *f = fopen(tf.c_file, "wb");
     if (!f) {
         fprintf(stderr, "failed to open temp file for writing\n");
         return 1;
     }
     fwrite(str_buf(&self->program), 1, str_len(self->program), f);
     fclose(f);
-
     str_deinit(default_allocator(), &self->program);
 
-    // Build command line
     str_build cmd = str_build_init(self->arena, 256);
-
-    if (is_msvc_compiler(self)) {
-        // MSVC command line for DLL
-        str_build_cat(&cmd, self->cc);
-        str_build_cat(&cmd, S(" /nologo /LD"));
-        if (self->optimize) str_build_cat(&cmd, S(" /O2"));
-        forall(i, self->cflags) {
-            str_build_cat(&cmd, S(" "));
-            str_build_cat(&cmd, self->cflags.v[i]);
-        }
-        str_build_cat(&cmd, S(" /Fo"));
-        str_build_cat(&cmd, str_init_static(temp_obj_file));
-        str_build_cat(&cmd, S(" /Fe"));
-        str_build_cat(&cmd, str_init_static(self->out_path));
-        str_build_cat(&cmd, S(" /TC "));
-        str_build_cat(&cmd, str_init_static(temp_c_file));
-    } else {
-        // GCC/Clang command line for shared library
-        str_build_cat(&cmd, self->cc);
-        str_build_cat(&cmd, S(" -o "));
-        str_build_cat(&cmd, str_init_static(self->out_path));
-        if (self->optimize) str_build_cat(&cmd, S(" -O2"));
-        forall(i, self->cflags) {
-            str_build_cat(&cmd, S(" "));
-            str_build_cat(&cmd, self->cflags.v[i]);
-        }
-        str_build_cat(&cmd, S(" -std=c11 -Wno-format-security -shared "));
-        str_build_cat(&cmd, str_init_static(temp_c_file));
-    }
-
+    win_build_cmdline(self, &cmd, &tf, " /LD", " -shared");
     str cmdstr = str_build_finish(&cmd);
-    char const *cmdline = str_cstr(&cmdstr);
 
-    if (self->verbose) {
-        fprintf(stderr, "Running: %s\n", cmdline);
-    }
-
-    // Create pipes for stdout and stderr
-    HANDLE stdout_read, stdout_write;
-    HANDLE stderr_read, stderr_write;
-    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
-        fprintf(stderr, "CreatePipe failed\n");
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
-        return 1;
-    }
-    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
-    if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
-        fprintf(stderr, "CreatePipe failed\n");
-        CloseHandle(stdout_read);
-        CloseHandle(stdout_write);
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
-        return 1;
-    }
-    SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
-
-    // Set up process startup info
-    STARTUPINFOA si = {sizeof(STARTUPINFOA)};
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = stdout_write;  // Capture stdout (MSVC prints filename here)
-    si.hStdError = stderr_write;
-
-    PROCESS_INFORMATION pi = {0};
-
-    // Need mutable command line for CreateProcessA
-    char *cmdline_mut = alloc_malloc(self->arena, strlen(cmdline) + 1);
-    strcpy(cmdline_mut, cmdline);
-
-    BOOL success = CreateProcessA(
-        NULL,
-        cmdline_mut,
-        NULL,
-        NULL,
-        TRUE,
-        0,
-        NULL,
-        NULL,
-        &si,
-        &pi
-    );
-
-    CloseHandle(stdout_write);
-    CloseHandle(stderr_write);
-
-    if (!success) {
-        fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
-        CloseHandle(stdout_read);
-        CloseHandle(stderr_read);
-        DeleteFileA(temp_c_file);
-        DeleteFileA(temp_obj_file);
-        return 1;
-    }
-
-    // Drain stdout (discard MSVC's filename echo) and read stderr
-    char buf[1024];
-    DWORD bytes_read;
-    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        // Discard stdout output
-    }
-    CloseHandle(stdout_read);
-    while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        buf[bytes_read] = '\0';
-        fprintf(stderr, "%s", buf);
-    }
-    CloseHandle(stderr_read);
-
-    // Wait for process
-    WaitForSingleObject(pi.hProcess, INFINITE);
-
-    DWORD exit_code = 0;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-
-    // Clean up temp files
-    DeleteFileA(temp_c_file);
-    DeleteFileA(temp_obj_file);
-
-    return (int)exit_code;
+    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
+    win_temp_files_cleanup(&tf);
+    return result;
 }
 
 #else
