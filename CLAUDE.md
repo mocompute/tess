@@ -56,6 +56,114 @@ make install PREFIX=/usr/local    # Install to /usr/local (default)
 make install PREFIX=$HOME/.local  # Install to local user directory
 ```
 
+## Building on Windows with CMake
+
+On Windows, use CMake instead of the Makefile. The CMake build system supports MSVC, MinGW, and Clang.
+
+### Prerequisites
+- CMake 3.15 or later
+- Visual Studio 2019 or later (for MSVC), or MinGW/Clang
+- Git (optional, for version info)
+
+### Initial Configuration
+```powershell
+# Configure with CMake (from repository root)
+cmake -B out/build -S .
+
+# Or specify a generator explicitly
+cmake -B out/build -S . -G "Visual Studio 17 2022"
+cmake -B out/build -S . -G "Ninja"
+cmake -B out/build -S . -G "MinGW Makefiles"
+```
+
+### Build Configurations
+```powershell
+# Release build (optimized)
+cmake -B out/build -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build --config Release
+
+# Debug build (with symbols)
+cmake -B out/build -S . -DCMAKE_BUILD_TYPE=Debug
+cmake --build out/build --config Debug
+
+# Build with specific number of parallel jobs
+cmake --build out/build --config Release -j 8
+```
+
+### Building the Compiler
+```powershell
+# Build all targets
+cmake --build out/build --config Release
+
+# Build specific target
+cmake --build out/build --config Release --target tess
+
+# Clean and rebuild
+cmake --build out/build --config Release --target clean
+cmake --build out/build --config Release
+```
+
+### Running Tests
+```powershell
+# Run all tests using CTest
+cd out/build
+ctest -C Release
+
+# Run tests in parallel
+ctest -C Release -j 8
+
+# Run tests with verbose output
+ctest -C Release --verbose
+
+# Run specific test suite
+ctest -C Release -R test-mos     # MOS library tests
+ctest -C Release -R test-tess    # Compiler unit tests
+ctest -C Release -R test-tl      # TL language integration tests
+
+# Run a specific test by name
+ctest -C Release -R test_array
+ctest -C Release -R test_tl_generic
+```
+
+### Single Test Execution
+To run a single TL language test on Windows:
+```powershell
+.\out\build\tess.exe exe -I src/tl/std src/tess/tl/test_<name>.tl -o test_output.exe
+.\test_output.exe
+```
+
+### Using the Compiler on Windows
+```powershell
+# Transpile to C (stdout)
+.\out\build\tess.exe c -I src/tl/std <file.tl>
+
+# Compile to executable
+.\out\build\tess.exe exe -I src/tl/std <file.tl> -o output.exe
+
+# Compile to shared library
+.\out\build\tess.exe lib -I src/tl/std <file.tl> -o output.dll
+
+# Verbose compilation
+.\out\build\tess.exe exe -v -I src/tl/std <file.tl> -o output.exe
+```
+
+### Windows-Specific Notes
+- The CMake build automatically detects available C compilers (MSVC, MinGW, Clang)
+- Visual Studio solution files are generated when using the VS generator
+- Build outputs go to `out/build/<config>/` by default
+- The compiler executable is named `tess.exe` on Windows
+- Shared libraries use `.dll` extension instead of `.so`
+- Some features like address sanitizer may have limited support depending on the compiler
+
+### Installation on Windows
+```powershell
+# Install to default location (requires admin privileges)
+cmake --install out/build --config Release
+
+# Install to custom location
+cmake --install out/build --config Release --prefix C:\path\to\install
+```
+
 ## Architecture Overview
 
 ### Compilation Pipeline
