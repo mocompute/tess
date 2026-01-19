@@ -606,11 +606,21 @@ int compile_c(state *self) {
         fprintf(stderr, "Running: %s\n", cmdline);
     }
 
-    // Create pipe for stderr
+    // Create pipes for stdout and stderr
+    HANDLE stdout_read, stdout_write;
     HANDLE stderr_read, stderr_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
+        fprintf(stderr, "CreatePipe failed\n");
+        DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
+        return 1;
+    }
+    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
     if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
+        CloseHandle(stdout_read);
+        CloseHandle(stdout_write);
         DeleteFileA(temp_c_file);
         DeleteFileA(temp_obj_file);
         return 1;
@@ -621,7 +631,7 @@ int compile_c(state *self) {
     STARTUPINFOA si = {sizeof(STARTUPINFOA)};
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    si.hStdOutput = stdout_write;  // Capture stdout (MSVC prints filename here)
     si.hStdError = stderr_write;
 
     PROCESS_INFORMATION pi = {0};
@@ -643,19 +653,25 @@ int compile_c(state *self) {
         &pi             // lpProcessInformation
     );
 
+    CloseHandle(stdout_write);
     CloseHandle(stderr_write);
 
     if (!success) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
+        CloseHandle(stdout_read);
         CloseHandle(stderr_read);
         DeleteFileA(temp_c_file);
         DeleteFileA(temp_obj_file);
         return 1;
     }
 
-    // Read stderr
+    // Drain stdout (discard MSVC's filename echo) and read stderr
     char buf[1024];
     DWORD bytes_read;
+    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
+        // Discard stdout output
+    }
+    CloseHandle(stdout_read);
     while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
         buf[bytes_read] = '\0';
         fprintf(stderr, "%s", buf);
@@ -841,11 +857,21 @@ int compile_c_obj(state *self) {
         fprintf(stderr, "Running: %s\n", cmdline);
     }
 
-    // Create pipe for stderr
+    // Create pipes for stdout and stderr
+    HANDLE stdout_read, stdout_write;
     HANDLE stderr_read, stderr_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
+        fprintf(stderr, "CreatePipe failed\n");
+        DeleteFileA(temp_c_file);
+        DeleteFileA(temp_obj_file);
+        return 1;
+    }
+    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
     if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
+        CloseHandle(stdout_read);
+        CloseHandle(stdout_write);
         DeleteFileA(temp_c_file);
         DeleteFileA(temp_obj_file);
         return 1;
@@ -856,7 +882,7 @@ int compile_c_obj(state *self) {
     STARTUPINFOA si = {sizeof(STARTUPINFOA)};
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    si.hStdOutput = stdout_write;  // Capture stdout (MSVC prints filename here)
     si.hStdError = stderr_write;
 
     PROCESS_INFORMATION pi = {0};
@@ -878,19 +904,25 @@ int compile_c_obj(state *self) {
         &pi
     );
 
+    CloseHandle(stdout_write);
     CloseHandle(stderr_write);
 
     if (!success) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
+        CloseHandle(stdout_read);
         CloseHandle(stderr_read);
         DeleteFileA(temp_c_file);
         DeleteFileA(temp_obj_file);
         return 1;
     }
 
-    // Read stderr
+    // Drain stdout (discard MSVC's filename echo) and read stderr
     char buf[1024];
     DWORD bytes_read;
+    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
+        // Discard stdout output
+    }
+    CloseHandle(stdout_read);
     while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
         buf[bytes_read] = '\0';
         fprintf(stderr, "%s", buf);
