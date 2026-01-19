@@ -30,21 +30,15 @@ typedef double max_align_t;
 
 typedef struct {
     size_t size;
-    alignas(void *) byte* data;
 } arena_block;
 
 typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
-#ifdef _MSC_VER
-    // MSVC doesn't allow arrays of structs containing flexible array members.
-    // Since data[] is always accessed via byte pointer arithmetic, use byte[] directly.
-    alignas(void *) byte* data;
-#else
-    alignas(void *) arena_block data[];
-#endif
 } arena_header;
+
+#define arena_header_data(h) ((arena_block *)(((char *)(h)) + sizeof(arena_header)))
 
 typedef struct arena_allocator {
     struct allocator allocator;
@@ -67,8 +61,7 @@ static void *default_calloc(allocator *a, size_t num, size_t sz, char const *fil
     (void)line;
     (void)a;
     void *ptr = malloc(num * sz); // TODO: overflow but really?
-    if (ptr)
-        memset(ptr, 0xCD, num * sz);
+    if (ptr) memset(ptr, 0xCD, num * sz);
     return ptr;
 }
 
@@ -133,7 +126,7 @@ static void *bump_alloc_assume_capacity(arena_header *bucket, size_t sz) {
     bucket->size += sz + sizeof(arena_block);
     assert(bucket->size <= bucket->capacity);
 
-    void *res = &out->data;
+    void *res = ((char *)out) + sizeof(*out);
     return res;
 }
 
@@ -146,7 +139,9 @@ static int is_last_block(arena_header const *bucket, void const *p) {
     size_t sz = *block_size(p);
     if (((byte *)p) < ((byte *)bucket)) return 0;
     // Is the pointer plus its allocated size pointing exactly to the end of the bucket?
-    return (size_t)(((byte *)p) - ((byte *)bucket->data)) + sz == bucket->size - sizeof(arena_header);
+
+    return (size_t)(((byte *)p) - ((byte *)arena_header_data(bucket)) + sz) ==
+           bucket->size - sizeof(arena_header);
 }
 
 static void maybe_free_block(arena_header *bucket, void const *ptr) {
