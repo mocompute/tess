@@ -511,6 +511,7 @@ static int traverse_ctx_is_param(traverse_ctx *self, str name) {
 }
 
 typedef struct {
+    char unused; // MSVC requires at least one struct member
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {

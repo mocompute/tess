@@ -140,7 +140,7 @@ static int           too_many_arguments(parser *);
 #ifndef MOS_WINDOWS
 static void dbg(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
 #else
-static void dbg(struct parser *, char const *restrict fmt, ...)
+static void dbg(struct parser *, char const *restrict fmt, ...);
 #endif
 
 // -- allocation and deallocation --
