@@ -279,6 +279,10 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
         catln(self, S(" {"));
 
         assert(def->field_names.size == poly->type->cons_inst->args.size);
+        if (def->field_names.size == 0) {
+            // MSVC requires at least one member in a struct
+            catln(self, S("char _empty;"));
+        }
         forall(i, def->field_names) {
             generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
         }
