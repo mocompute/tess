@@ -137,6 +137,25 @@ EMBED_TOOL     = $(BUILD_DIR)/mos_embed
 TESS_EMBED_SRC = $(BUILD_DIR)/tess_embed.c
 TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
 
+# Version header generation
+VERSION_HEADER = $(BUILD_DIR)/version.h
+
+$(VERSION_HEADER):
+	@mkdir -p $(dir $@)
+	$(MSG_GEN) $@
+	$(Q)( \
+		HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown"); \
+		echo "/* Auto-generated version header */" > $@; \
+		echo "#ifndef TESS_VERSION_H" >> $@; \
+		echo "#define TESS_VERSION_H" >> $@; \
+		echo "" >> $@; \
+		echo "#define TESS_VERSION \"0.1.0-$$HASH\"" >> $@; \
+		echo "" >> $@; \
+		echo "#endif /* TESS_VERSION_H */" >> $@; \
+	)
+
+.PHONY: $(VERSION_HEADER)
+
 $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
@@ -162,10 +181,10 @@ $(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-$(TESS_EXE_OBJ): $(TESS_EXE_SRC)
+$(TESS_EXE_OBJ): $(TESS_EXE_SRC) $(VERSION_HEADER)
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
-	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -I$(BUILD_DIR) -c -o $@ $<
 
 
 # ------------------------------------------------------------------------------

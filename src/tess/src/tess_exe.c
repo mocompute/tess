@@ -20,6 +20,8 @@
 // -- embed externs --
 extern char const *embed_std_tl;
 
+#include "version.h"
+
 typedef struct {
     allocator      *arena;
 
@@ -56,7 +58,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("\nOptions:\n");
-    printf("    -h                     print usage\n");
+    printf("    -h                     print usage and exit\n");
+    printf("    -V, --version          print version and exit\n");
     printf("    -I <path>              add <path> to import search path. Multiple ok.\n");
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
@@ -66,6 +69,11 @@ noreturn void usage(int status, char const *argv0) {
     printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
     exit(status);
+}
+
+noreturn void version() {
+    printf("%s\n", TESS_VERSION);
+    exit(0);
 }
 
 void state_init(state *self) {
@@ -102,6 +110,7 @@ void state_gather_single_options(state *self, char *str) {
         switch (str[i]) {
         case 'h': self->help = 1; break;
         case 'v': self->verbose = 1; break;
+        case 'V': version(); break;
         case 'O': self->optimize = 1; break;
         default:  usage(1, self->argv0); break;
         }
@@ -109,7 +118,8 @@ void state_gather_single_options(state *self, char *str) {
 }
 
 void state_gather_long_option(state *self, char *str) {
-    if (0 == strcmp("--verbose-ast", str)) self->verbose_ast = 1;
+    if (0 == strcmp("--version", str)) version();
+    else if (0 == strcmp("--verbose-ast", str)) self->verbose_ast = 1;
     else if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
@@ -606,7 +616,6 @@ int compile_c_obj(state *self) {
         close(stdin_pipe[0]);
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
-
 
         int ignore = write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
         (void)ignore;
