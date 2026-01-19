@@ -296,15 +296,68 @@ while i < 10, i = i + 1 {
 
 ### For-in Loop
 
+The `for` statement iterates over collections using a module-based iterator interface:
+
 ```tl
 for x in collection {
-  use(x)           // x is a copy
+  use(x)           // x is a copy of the current element
 }
 
 for x.& in collection {
-  x.* = 0          // x is a pointer; can mutate
+  x.* = 0          // x is a pointer; can mutate the element
 }
 ```
+
+#### Custom Iterator Modules
+
+By default, `for` uses the `Array` module's iterator. You can specify a different iterator module:
+
+```tl
+for x in Module collection { ... }
+for x.& in Module collection { ... }
+```
+
+For example, `IndexedArray` provides both the value and its index:
+
+```tl
+for it in IndexedArray xs {
+  c_printf("index=%d value=%d\n", it.index, it.value)
+}
+
+for it.& in IndexedArray xs {
+  it.ptr.* = it.index * 2    // Modify element using pointer
+}
+```
+
+#### Iterator Interface
+
+Iterator modules must implement these functions:
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `iter_init` | `(Ptr(T)) -> Iter` | Initialize iterator from collection pointer |
+| `iter_value` | `(Ptr(Iter)) -> TValue` | Get current element value |
+| `iter_ptr` | `(Ptr(Iter)) -> Ptr(TValue)` | Get pointer to current element |
+| `iter_cond` | `(Ptr(Iter)) -> Bool` | Check if iteration should continue |
+| `iter_update` | `(Ptr(Iter)) -> Void` | Advance to next element |
+| `iter_deinit` | `(Ptr(Iter)) -> Void` | Clean up iterator resources |
+
+The `Iter` type can contain arbitrary fields accessible in the loop body (like `index` in `IndexedArray`).
+
+#### Desugaring
+
+The statement `for x in Module xs { body }` desugars to:
+
+```tl
+iter := Module.iter_init(xs.&)
+while Module.iter_cond(iter.&), Module.iter_update(iter.&) {
+  x := Module.iter_value(iter.&)
+  body
+}
+Module.iter_deinit(iter.&)
+```
+
+With `.&`, `iter_ptr` is called instead of `iter_value`.
 
 ### Return Statement
 
