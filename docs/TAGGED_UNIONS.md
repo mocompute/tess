@@ -257,6 +257,70 @@ When the parser originally passed ALL parent type params to each variant, it cre
 
 **Solution:** `collect_used_type_params()` determines which type params each variant actually uses, ensuring arities match.
 
+### 5.4 Constructor Body Specialization Cascade
+
+When a tagged union constructor is specialized, the specialization must cascade through all nested type constructions in the function body. This is handled by `post_specialize()` in `infer.c`.
+
+**Example:** For `Option(a) = | Some { value: a } | None`, calling `Option_Some(value = 42)`:
+
+1. **Initial specialization:** `Option_Some` becomes `Option_Some_0(value: Int) -> Option_0(Int)`
+
+2. **Body analysis:** The constructor body contains nested calls:
+   ```tess
+   Option(
+       tag = _OptionTag_.Some,
+       u = _OptionUnion_(Some = Some(value = value))
+   )
+   ```
+
+3. **Cascading specialization:** `post_specialize()` traverses the body and specializes each nested call:
+   - `Some(value = value)` → `Some_0(value: Int)`
+   - `_OptionUnion_(Some = ...)` → `_OptionUnion__0(Some: Some_0)`
+   - `Option(tag = ..., u = ...)` → `Option_0(tag: _OptionTag_, u: _OptionUnion__0)`
+
+**Implementation in `post_specialize()`:**
+
+```c
+static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special,
+                           tl_monotype *callsite) {
+    ast_node *infer_target = get_infer_target(special);
+    if (infer_target) {
+        // 1. Re-run type inference on the specialized function body
+        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
+
+        // 2. Apply substitutions to make types concrete
+        apply_subs_to_ast_node(self, infer_target);
+
+        // 3. Recursively specialize any generic calls in the body
+        traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb);
+    }
+    return 0;
+}
+```
+
+The recursive call to `specialize_applications_cb` in step 3 is what triggers the cascade—each nested call is visited and specialized, which may trigger further `post_specialize()` calls for those functions.
+
+### 5.5 Internal Union (`_TUnion_`) Specialization
+
+The internal C-style union requires special handling during specialization, different from regular structs:
+
+**The Problem:** When constructing `_OptionUnion_(Some = value)`, the AST contains only one argument (the active variant), but the type needs information about ALL variants for proper specialization.
+
+**The Solution:** `specialize_user_type()` detects C-style unions via `is_union_struct()` and extracts arguments from the **inferred type** rather than the AST:
+
+```c
+if (is_union_struct(self, name)) {
+    // Get all variant types from the inferred type, not AST arguments
+    if (node->type && tl_monotype_is_inst(node->type->type)) {
+        tl_monotype *mono = node->type->type;
+        tl_monotype_substitute(self->arena, mono, self->subs, null);
+        arr_sized = mono->cons_inst->args;  // Contains ALL variant types
+    }
+}
+```
+
+This ensures that `_OptionUnion_(a)` is properly specialized to `_OptionUnion__0` with both `Some_0` and `None` variant types, even though only one variant was provided at the construction site.
+
 ---
 
 ## 6. Case Expression Type Checking

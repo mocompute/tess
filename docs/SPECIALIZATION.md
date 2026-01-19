@@ -8,8 +8,7 @@ This document provides a comprehensive analysis of the generic specialization fl
 2. [The Specialization Pipeline](#the-specialization-pipeline)
 3. [Function Specialization](#function-specialization)
 4. [Type Constructor Specialization](#type-constructor-specialization)
-5. [Tagged Union Desugaring](#tagged-union-desugaring)
-6. [Key Functions Reference](#key-functions-reference)
+5. [Key Functions Reference](#key-functions-reference)
 
 ---
 
@@ -213,78 +212,6 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     return name_inst;
 }
 ```
-
----
-
-## Tagged Union Desugaring
-
-Tagged unions in Tess are syntactic sugar that desugar into multiple lower-level types and functions during parsing.
-
-### Source Syntax
-
-```tess
-T(a) = | Some { v: a }
-       | None
-```
-
-### Desugared Output
-
-The parser (`parser.c`, `toplevel_tagged_union()`) transforms this into **5 components**:
-
-#### 1. Tag Enum: `_TTag_`
-```tess
-_TTag_ : { Some, None }
-```
-An enum with one variant per tagged union case.
-
-#### 2. Variant Structs: `Some(a)`, `None`
-```tess
-Some(a) : { v: a }
-None : {}
-```
-Each variant becomes its own struct (generic if it has type parameters).
-
-#### 3. Internal Union: `_TUnion_(a)`
-```tess
-_TUnion_(a) : { | Some: Some(a) | None: None }
-```
-A C union containing all variant types. **This is generic if the tagged union is generic.**
-
-#### 4. Wrapper Struct: `T(a)`
-```tess
-T(a) : {
-    tag: _TTag_
-    u: _TUnion_(a)
-}
-```
-The actual tagged union type, containing the discriminant and the union.
-
-#### 5. Constructor Functions: `T_Some`, `T_None`
-```tess
-T_Some(v: a) -> T(a) {
-    T(
-        tag = _TTag_.Some,
-        u = _TUnion_(Some = Some(v = v))
-    )
-}
-
-T_None() -> T(a) {
-    T(
-        tag = _TTag_.None,
-        u = _TUnion_(None = None())
-    )
-}
-```
-
-### Specialization of Constructor Bodies
-
-When `T_Some` is specialized with a concrete type (e.g., `T_Some(v = 123)` becomes `T_Some_0(v: Int)`), the nested calls must also be specialized:
-
-- `Some(v = v)` → `Some_0(v: Int)`
-- `_TUnion_(Some = ...)` → `_TUnion__0(Some: Some_0)`
-- `T(tag = ..., u = ...)` → `T_0(tag: _TTag_, u: _TUnion__0)`
-
-This is handled by `post_specialize()` which recursively traverses the specialized function body.
 
 ---
 
