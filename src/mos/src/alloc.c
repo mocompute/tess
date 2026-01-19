@@ -12,6 +12,11 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+// MSVC versions before VS2015 (1900) don't have max_align_t
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
+typedef double max_align_t;
+#endif
+
 // use LSAN's allocators if we can detect they are present
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
@@ -32,7 +37,13 @@ typedef struct arena_header {
     struct arena_header *next;
     size_t               capacity;
     size_t               size;
+#ifdef _MSC_VER
+    // MSVC doesn't allow arrays of structs containing flexible array members.
+    // Since data[] is always accessed via byte pointer arithmetic, use byte[] directly.
+    alignas(void *) byte data[];
+#else
     alignas(void *) arena_block data[];
+#endif
 } arena_header;
 
 typedef struct arena_allocator {
@@ -613,9 +624,10 @@ void alloc_invalidate_n(void *p, size_t len) {
 
 void alloc_assert_invalid_n(void *p, size_t len) {
 #ifndef NDEBUG
+    byte *bp = (byte *)p;
     while (len--) {
-        assert(*(byte *)p == 0xCD);
-        p++;
+        assert(*bp == 0xCD);
+        bp++;
     };
 #else
     (void)p;

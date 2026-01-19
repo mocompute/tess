@@ -4,7 +4,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifndef MOS_WINDOWS
+#ifdef MOS_WINDOWS
+#include <windows.h>
+#else
 #include <dirent.h>
 #endif
 
@@ -98,7 +100,57 @@ int process_file(FILE *out, char const *path, char const *filename) {
     return 0;
 }
 
-// Process directory
+#ifdef MOS_WINDOWS
+
+// Windows implementation using FindFirstFile/FindNextFile
+void process_directory(char const *progname, char const *dir_path, char const *output_file) {
+    char search_path[1024];
+    snprintf(search_path, sizeof(search_path), "%s\\*", dir_path);
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE           find_handle = FindFirstFileA(search_path, &find_data);
+
+    if (find_handle == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "%s: Error: Cannot open directory %s\n", progname, dir_path);
+        exit(1);
+    }
+
+    FILE *out = fopen(output_file, "w");
+    if (!out) {
+        fprintf(stderr, "%s: Error: Cannot create output file %s\n", progname, output_file);
+        FindClose(find_handle);
+        exit(1);
+    }
+
+    // Write header
+    fprintf(out, "// Generated from directory: %s\n\n", dir_path);
+
+    size_t file_count = 0;
+
+    do {
+        // Skip directories and hidden files
+        if (find_data.cFileName[0] == '.') continue;
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+        char filepath[1024];
+        snprintf(filepath, sizeof(filepath), "%s\\%s", dir_path, find_data.cFileName);
+
+        printf("%s: Processing: %s\n", progname, find_data.cFileName);
+
+        if (0 == process_file(out, filepath, find_data.cFileName)) {
+            file_count++;
+        }
+    } while (FindNextFileA(find_handle, &find_data));
+
+    fclose(out);
+    FindClose(find_handle);
+
+    printf("%s: Generated %s with %zu embedded files\n", progname, output_file, file_count);
+}
+
+#else
+
+// POSIX implementation using opendir/readdir
 void process_directory(char const *progname, char const *dir_path, char const *output_file) {
     DIR *dir = opendir(dir_path);
     if (!dir) {
@@ -143,6 +195,8 @@ void process_directory(char const *progname, char const *dir_path, char const *o
     printf("%s: Generated %s with %zu embedded files\n", progname, output_file, file_count);
 }
 
+#endif
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <directory> <output.c>\n", argv[0]);
@@ -151,6 +205,9 @@ int main(int argc, char *argv[]) {
     }
 
     char *progname = strrchr(argv[0], '/');
+#ifdef MOS_WINDOWS
+    if (!progname) progname = strrchr(argv[0], '\\');
+#endif
     if (progname) progname++;
     else progname = argv[0];
 

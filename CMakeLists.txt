@@ -164,6 +164,12 @@ if(UNIX)
   add_compile_options(${MOS_SYSTEM_INCLUDE})
 endif()
 
+# -- Windows-specific definitions --------------------------------
+
+if(WIN32)
+  add_compile_definitions(MOS_WINDOWS)
+endif()
+
 # -- modules -----------------------------------------------------
 
 add_subdirectory(src/mos)
