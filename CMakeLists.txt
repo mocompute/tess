@@ -31,20 +31,32 @@ enable_testing()
 message(STATUS "CMAKE_SYSTEM_PROCESSOR = ${CMAKE_SYSTEM_PROCESSOR}")
 
 set(MOS_C_LINK_OPTIONS)
-set(MOS_C_EXEC -fPIE)
-set(MOS_C_SHARED -fPIC -shared)
+
+if(MSVC)
+  set(MOS_C_EXEC)
+  set(MOS_C_SHARED)
+else()
+  set(MOS_C_EXEC -fPIE)
+  set(MOS_C_SHARED -fPIC -shared)
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
 
-  set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra
-    -Wswitch-enum
-    -Wunused
-    -Winline
-    -Wimplicit-fallthrough
+  if(MSVC)
+    set(MOS_C_DIAGNOSTIC
+      # /WX /Wall
+    )
+  else()
+    set(MOS_C_DIAGNOSTIC -Werror -Wall -Wextra
+      -Wswitch-enum
+      -Wunused
+      -Winline
+      -Wimplicit-fallthrough
 
-    # allow GNU alignof extension
-    -Wno-gnu-alignof-expression
-  )
+      # allow GNU alignof extension
+      -Wno-gnu-alignof-expression
+    )
+  endif()
 
 else()
 

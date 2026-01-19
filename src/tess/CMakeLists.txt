@@ -96,7 +96,7 @@ function(tess_create_test NAME)
   set(TEST_NAME test-${NAME})
   add_executable(${TEST_NAME} "src/test_${NAME}.c")
   target_link_libraries(${TEST_NAME} PRIVATE tess)
-  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC} -Wunused)
+  target_compile_options(${TEST_NAME} PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
   target_link_options(${TEST_NAME} PRIVATE ${MOS_C_LINK_OPTIONS})
   add_test(NAME ${TEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
 endfunction()
@@ -108,7 +108,7 @@ tess_create_test(type_v2)
 
 function(tesslang_create_test NAME)
   set(TEST_NAME test-tl-${NAME})
-  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
   add_custom_command(
     OUTPUT ${TEST_EXE}
     COMMAND
@@ -131,7 +131,7 @@ endfunction()
 
 function(tesslang_create_build_fail_test NAME)
   set(TEST_NAME test-tl-${NAME})
-  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
   add_test(NAME ${TEST_NAME}
     COMMAND
     $<TARGET_FILE:tess_exe>
