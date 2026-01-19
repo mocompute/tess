@@ -30,7 +30,7 @@ typedef double max_align_t;
 
 typedef struct {
     size_t size;
-    alignas(void *) byte data[];
+    alignas(void *) byte* data;
 } arena_block;
 
 typedef struct arena_header {
@@ -40,7 +40,7 @@ typedef struct arena_header {
 #ifdef _MSC_VER
     // MSVC doesn't allow arrays of structs containing flexible array members.
     // Since data[] is always accessed via byte pointer arithmetic, use byte[] directly.
-    alignas(void *) byte data[];
+    alignas(void *) byte* data;
 #else
     alignas(void *) arena_block data[];
 #endif
@@ -67,7 +67,8 @@ static void *default_calloc(allocator *a, size_t num, size_t sz, char const *fil
     (void)line;
     (void)a;
     void *ptr = malloc(num * sz); // TODO: overflow but really?
-    memset(ptr, 0xCD, num * sz);
+    if (ptr)
+        memset(ptr, 0xCD, num * sz);
     return ptr;
 }
 
@@ -82,10 +83,10 @@ static void default_free(allocator *a, void *p, char const *file, int line) {
     (void)file;
     (void)line;
     (void)a;
-    return free(p);
+    free(p);
 }
 
-allocator *default_allocator() {
+allocator *default_allocator(void) {
     static allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
     return &allocator;
 }

@@ -373,7 +373,7 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
     }
 }
 void map_set_ptr(hashmap **self, void const *key, u8 key_len, void const *data) {
-    return map_set(self, key, key_len, &data);
+    map_set(self, key, key_len, &data);
 }
 
 void map_set_v(hashmap **self, void const *key, u8 key_len, void const *data) {
@@ -395,7 +395,7 @@ void str_map_set(hashmap **self, str key, void const *data) {
 }
 
 void str_map_set_ptr(hashmap **self, str key, void const *data) {
-    return str_map_set(self, key, &data);
+    str_map_set(self, key, &data);
 }
 
 str_array str_map_keys(allocator *alloc, hashmap *self) {
@@ -452,7 +452,7 @@ void map_erase(hashmap *map, void const *key, u8 key_len) {
 void str_map_erase(hashmap *self, str key) {
     span s = str_span(&key);
     assert(s.len < UINT8_MAX);
-    return map_erase(self, s.buf, s.len);
+    map_erase(self, s.buf, s.len);
 }
 
 void map_reset(hashmap *map) {
@@ -491,11 +491,11 @@ void hset_insert(hashmap **self, void const *key, u8 len) {
 void str_hset_insert(hashmap **self, str key) {
     span s = str_span(&key);
     assert(s.len < UINT8_MAX);
-    return hset_insert(self, s.buf, s.len);
+    hset_insert(self, s.buf, s.len);
 }
 
 void ptr_hset_insert(hashmap **self, void const *key) {
-    return hset_insert(self, &key, sizeof(void *));
+    hset_insert(self, &key, sizeof(void *));
 }
 
 int hset_contains(hashmap const *self, void const *key, u8 len) {

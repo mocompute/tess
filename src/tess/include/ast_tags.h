@@ -12,7 +12,7 @@
 #define TL_AST_HAS_ARRAY(x)  BIT_TEST((x), TL_AST_BIT_ARRAY)
 #define TL_AST_CLEAR_BITS(x) FIELD_GET((x), 0, TL_AST_BIT_ARRAY - 1)
 
-typedef enum ast_tag : u16 {
+typedef enum ast_tag {
     ast_nil,
     ast_void,
     ast_hash_command,

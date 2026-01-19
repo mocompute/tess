@@ -52,7 +52,6 @@ else()
   if(MSVC)
     set(MOS_C_DIAGNOSTIC
       # /WX /Wall
-      /Wall
     )
   else()
     set(MOS_C_DIAGNOSTIC
