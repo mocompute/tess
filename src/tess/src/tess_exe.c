@@ -7,6 +7,8 @@
 #include "transpile.h"
 #include "types.h"
 
+#include "platform.h"
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,8 +16,65 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef MOS_WINDOWS
+#include <io.h>
+#include <fcntl.h>
+#include <process.h>
+#include <windows.h>
+#else
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
+
+// -- High-resolution timing --
+#ifdef MOS_WINDOWS
+typedef struct {
+    LARGE_INTEGER start;
+    LARGE_INTEGER end;
+    LARGE_INTEGER freq;
+} hires_timer;
+
+static void hires_timer_init(hires_timer *t) {
+    QueryPerformanceFrequency(&t->freq);
+    QueryPerformanceCounter(&t->start);
+    t->end = t->start;
+}
+
+static void hires_timer_start(hires_timer *t) {
+    QueryPerformanceCounter(&t->start);
+}
+
+static void hires_timer_stop(hires_timer *t) {
+    QueryPerformanceCounter(&t->end);
+}
+
+static double hires_timer_elapsed_sec(hires_timer *t) {
+    return (double)(t->end.QuadPart - t->start.QuadPart) / (double)t->freq.QuadPart;
+}
+#else
+typedef struct {
+    struct timespec start;
+    struct timespec end;
+} hires_timer;
+
+static void hires_timer_init(hires_timer *t) {
+    clock_gettime(CLOCK_MONOTONIC, &t->start);
+    t->end = t->start;
+}
+
+static void hires_timer_start(hires_timer *t) {
+    clock_gettime(CLOCK_MONOTONIC, &t->start);
+}
+
+static void hires_timer_stop(hires_timer *t) {
+    clock_gettime(CLOCK_MONOTONIC, &t->end);
+}
+
+static double hires_timer_elapsed_sec(hires_timer *t) {
+    return (double)(t->end.tv_sec - t->start.tv_sec) +
+           (double)(t->end.tv_nsec - t->start.tv_nsec) / 1e9;
+}
+#endif
 
 // -- embed externs --
 extern char const *embed_std_tl;
@@ -351,10 +410,18 @@ static void output_program(state *self) {
 
 static void get_c_compiler(state *self) {
     char const *CC = getenv("CC");
-    if (CC) self->cc = str_init(self->arena, CC);
+    if (CC) {
+        self->cc = str_init(self->arena, CC);
+    }
+#ifdef MOS_WINDOWS
+    else if (0 == system("where cl >nul 2>&1")) self->cc = str_init(self->arena, "cl");
+    else if (0 == system("where clang >nul 2>&1")) self->cc = str_init(self->arena, "clang");
+    else if (0 == system("where gcc >nul 2>&1")) self->cc = str_init(self->arena, "gcc");
+#else
     else if (0 == system("command -v cc &> /dev/null")) self->cc = str_init(self->arena, "cc");
     else if (0 == system("command -v gcc &> /dev/null")) self->cc = str_init(self->arena, "gcc");
     else if (0 == system("command -v clang &> /dev/null")) self->cc = str_init(self->arena, "clang");
+#endif
     else self->cc = str_empty();
 
     char const *CFLAGS = getenv("CFLAGS");
@@ -465,6 +532,174 @@ cleanup_parser:
     return error;
 }
 
+#ifdef MOS_WINDOWS
+
+static int is_msvc_compiler(state *self) {
+    char const *cc = str_cstr(&self->cc);
+    return (0 == strcmp(cc, "cl") || 0 == strcmp(cc, "cl.exe"));
+}
+
+// Temp file management for Windows builds
+typedef struct {
+    char c_file[MAX_PATH];
+    char obj_file[MAX_PATH];
+} win_temp_files;
+
+static int win_temp_files_init(win_temp_files *tf) {
+    char temp_path[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, temp_path) == 0) {
+        fprintf(stderr, "failed to get temp path\n");
+        return 1;
+    }
+    DWORD pid = GetCurrentProcessId();
+    snprintf(tf->c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
+    snprintf(tf->obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
+    return 0;
+}
+
+static void win_temp_files_cleanup(win_temp_files *tf) {
+    DeleteFileA(tf->c_file);
+    DeleteFileA(tf->obj_file);
+}
+
+// Run a compiler command, capturing stdout (discarded) and forwarding stderr
+// Returns the process exit code, or 1 on failure to launch
+static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) {
+    if (verbose) {
+        fprintf(stderr, "Running: %s\n", cmdline);
+    }
+
+    // Create pipes for stdout and stderr
+    HANDLE stdout_read, stdout_write;
+    HANDLE stderr_read, stderr_write;
+    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+
+    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
+        fprintf(stderr, "CreatePipe failed\n");
+        return 1;
+    }
+    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
+
+    if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
+        fprintf(stderr, "CreatePipe failed\n");
+        CloseHandle(stdout_read);
+        CloseHandle(stdout_write);
+        return 1;
+    }
+    SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+
+    // Set up process startup info
+    STARTUPINFOA si = {sizeof(STARTUPINFOA)};
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = stdout_write;  // Capture stdout (MSVC prints filename here)
+    si.hStdError = stderr_write;
+
+    PROCESS_INFORMATION pi = {0};
+
+    // Need mutable command line for CreateProcessA
+    char *cmdline_mut = alloc_malloc(arena, strlen(cmdline) + 1);
+    strcpy(cmdline_mut, cmdline);
+
+    BOOL success = CreateProcessA(
+        NULL, cmdline_mut, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
+    );
+
+    CloseHandle(stdout_write);
+    CloseHandle(stderr_write);
+
+    if (!success) {
+        fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
+        CloseHandle(stdout_read);
+        CloseHandle(stderr_read);
+        return 1;
+    }
+
+    // Drain stdout (discard MSVC's filename echo) and read stderr
+    char buf[1024];
+    DWORD bytes_read;
+    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
+        // Discard stdout output
+    }
+    CloseHandle(stdout_read);
+    while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
+        buf[bytes_read] = '\0';
+        fprintf(stderr, "%s", buf);
+    }
+    CloseHandle(stderr_read);
+
+    // Wait for process and get exit code
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exit_code = 0;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    return (int)exit_code;
+}
+
+// Build compiler command line
+// msvc_extra: additional MSVC flags (e.g., S(" /LD") for DLL)
+// gcc_extra: additional GCC/Clang flags (e.g., S(" -shared") for shared lib)
+static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf,
+                               str msvc_extra, str gcc_extra) {
+    if (is_msvc_compiler(self)) {
+        str_build_cat(cmd, self->cc);
+        str_build_cat(cmd, S(" /nologo"));
+        if (!str_is_empty(msvc_extra)) str_build_cat(cmd, msvc_extra);
+        if (self->optimize) str_build_cat(cmd, S(" /O2"));
+        forall(i, self->cflags) {
+            str_build_cat(cmd, S(" "));
+            str_build_cat(cmd, self->cflags.v[i]);
+        }
+        str_build_cat(cmd, S(" /Fo"));
+        str_build_cat(cmd, str_init_static(tf->obj_file));
+        str_build_cat(cmd, S(" /Fe"));
+        str_build_cat(cmd, str_init_static(self->out_path));
+        str_build_cat(cmd, S(" /TC "));
+        str_build_cat(cmd, str_init_static(tf->c_file));
+    } else {
+        str_build_cat(cmd, self->cc);
+        str_build_cat(cmd, S(" -o "));
+        str_build_cat(cmd, str_init_static(self->out_path));
+        if (self->optimize) str_build_cat(cmd, S(" -O2"));
+        forall(i, self->cflags) {
+            str_build_cat(cmd, S(" "));
+            str_build_cat(cmd, self->cflags.v[i]);
+        }
+        str_build_cat(cmd, S(" -std=c11 -Wno-format-security"));
+        if (!str_is_empty(gcc_extra)) str_build_cat(cmd, gcc_extra);
+        str_build_cat(cmd, S(" "));
+        str_build_cat(cmd, str_init_static(tf->c_file));
+    }
+}
+
+int compile_c(state *self) {
+    if (str_is_empty(self->program)) return 1;
+
+    win_temp_files tf;
+    if (win_temp_files_init(&tf)) return 1;
+
+    FILE *f = fopen(tf.c_file, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open temp file for writing\n");
+        return 1;
+    }
+    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
+    fclose(f);
+    str_deinit(default_allocator(), &self->program);
+
+    str_build cmd = str_build_init(self->arena, 256);
+    win_build_cmdline(self, &cmd, &tf, str_empty(), S(" -Wno-unused-value"));
+    str cmdstr = str_build_finish(&cmd);
+
+    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
+    win_temp_files_cleanup(&tf);
+    return result;
+}
+
+#else
+
 int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
 
@@ -555,6 +790,36 @@ int compile_c(state *self) {
     return child_res;
 }
 
+#endif
+
+#ifdef MOS_WINDOWS
+
+int compile_c_obj(state *self) {
+    if (str_is_empty(self->program)) return 1;
+
+    win_temp_files tf;
+    if (win_temp_files_init(&tf)) return 1;
+
+    FILE *f = fopen(tf.c_file, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open temp file for writing\n");
+        return 1;
+    }
+    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
+    fclose(f);
+    str_deinit(default_allocator(), &self->program);
+
+    str_build cmd = str_build_init(self->arena, 256);
+    win_build_cmdline(self, &cmd, &tf, S(" /LD"), S(" -shared"));
+    str cmdstr = str_build_finish(&cmd);
+
+    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
+    win_temp_files_cleanup(&tf);
+    return result;
+}
+
+#else
+
 int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
 
@@ -642,15 +907,16 @@ int compile_c_obj(state *self) {
     return child_res;
 }
 
+#endif
+
 int main(int argc, char *argv[]) {
 
-    int             result = 0;
-    char            buf[256];
-    span            buf_s = {.buf = buf, .len = sizeof buf};
+    int         result = 0;
+    char        buf[256];
+    span        buf_s = {.buf = buf, .len = sizeof buf};
 
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    hires_timer timer;
+    hires_timer_init(&timer);
 
     if (!file_current_working_directory(buf_s)) {
         fprintf(stderr, "failed to determine current working directory.\n");
@@ -680,12 +946,12 @@ int main(int argc, char *argv[]) {
     if (self.words.size == 0) usage(0, argv[0]);
 
     if (0 == strcmp("c", self.words.v[0])) {
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        hires_timer_start(&timer);
         result = compile(&self);
     }
 
     else if (0 == strcmp("exe", self.words.v[0])) {
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        hires_timer_start(&timer);
         if (!self.out_path) {
             fprintf(stderr, "error: -o option is missing\n");
             exit(1);
@@ -697,7 +963,7 @@ int main(int argc, char *argv[]) {
     }
 
     else if (0 == strcmp("lib-emit-c", self.words.v[0])) {
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        hires_timer_start(&timer);
 
         self.is_library = 1;
         result          = compile(&self);
@@ -705,7 +971,7 @@ int main(int argc, char *argv[]) {
     }
 
     else if (0 == strcmp("lib", self.words.v[0])) {
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
+        hires_timer_start(&timer);
         if (!self.out_path) {
             fprintf(stderr, "error: -o option is missing\n");
             exit(1);
@@ -717,12 +983,10 @@ int main(int argc, char *argv[]) {
     }
 
 done:
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    hires_timer_stop(&timer);
 
     if (self.report_time) {
-        double elapsed = (double)(end_time.tv_sec - start_time.tv_sec) +
-                         (double)(end_time.tv_nsec - start_time.tv_nsec) / 1e9;
-
+        double elapsed = hires_timer_elapsed_sec(&timer);
         double ms = elapsed * 1000;
         fprintf(stderr, "Elapsed time: %0.6fms\n", ms);
     }

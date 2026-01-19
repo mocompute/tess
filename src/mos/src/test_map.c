@@ -88,7 +88,12 @@ static int test_big_map(void) {
 
     int          error = 0;
 
+    #if MOS_WINDOWS
+    // MSVC gives us rand() in range [0, 32767]
+    size_t const N     = 10000;
+    #else
     size_t const N     = 100000;
+    #endif
 
     typedef struct pair_t {
         int left;
@@ -107,7 +112,13 @@ static int test_big_map(void) {
     for (size_t i = 0; i < N; ++i) {
         // find unique key
         int key = rand();
-        while (map_contains(map, &key, sizeof key)) key = rand();
+        int tries = 1000;
+        while (tries-- && map_contains(map, &key, sizeof key)) {
+            key = rand();
+            fprintf(stderr, "next key == %i\n", key);
+        }
+        if (-1 == tries)
+            fatal("loop exhausted");
 
         pair_t pair = {key, rand()};
         array_push(vec, pair);

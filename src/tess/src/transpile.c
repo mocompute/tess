@@ -279,6 +279,10 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
         catln(self, S(" {"));
 
         assert(def->field_names.size == poly->type->cons_inst->args.size);
+        if (def->field_names.size == 0) {
+            // MSVC requires at least one member in a struct
+            catln(self, S("char _empty;"));
+        }
         forall(i, def->field_names) {
             generate_decl(self, def->field_names.v[i], poly->type->cons_inst->args.v[i]);
         }
@@ -518,7 +522,7 @@ static void generate_toplevel_values(transpile *self) {
         tl_polytype *type = node->let_in.value->type;
         if (!tl_polytype_is_concrete(type)) continue;
 
-        cat(self, S("_Thread_local "));
+        cat(self, S("TL_THREAD_LOCAL "));
         generate_decl(self, name, type->type);
     }
 
@@ -691,11 +695,11 @@ static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u3
 }
 
 static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
-    return generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
+    generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
 }
 
 static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_var, u32 n_args) {
-    return generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
+    generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
 }
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
@@ -1898,7 +1902,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     }
 
     else if (tl_monotype_is_type_literal(type)) {
-        return generate_decl(self, name, tl_monotype_literal_target(type));
+        generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
     else if (tl_monotype_is_tv(type)) {

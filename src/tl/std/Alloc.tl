@@ -1,9 +1,17 @@
 #module Alloc
+#include <stddef.h>
 #import <stdlib.tl>
 #import <stdint.tl>
 #import <string.tl>
 
 #import <Unsafe.tl>
+
+#ifc
+// MSVC may not define max_align_t in stddef.h
+#if defined(_MSC_VER)
+typedef double max_align_t;
+#endif
+#endc
 
 // -- Synopsis --
 

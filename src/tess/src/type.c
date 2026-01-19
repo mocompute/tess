@@ -14,6 +14,13 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// Thread-local storage compatibility
+#ifdef _MSC_VER
+#define THREAD_LOCAL __declspec(thread)
+#else
+#define THREAD_LOCAL _Thread_local
+#endif
+
 #define DEBUG_ENV 1
 
 static void                      dbg(tl_type_env *, char const *restrict fmt, ...);
@@ -32,7 +39,7 @@ static void                      mark_float_type(tl_type_registry *, str);
 
 // -- type constructor --
 
-static _Thread_local allocator *transient_allocator; // initialized by tl_type_registry_create
+static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
 
 tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);

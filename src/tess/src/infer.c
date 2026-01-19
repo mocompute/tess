@@ -203,7 +203,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
     tl_type_registry_parse_type_ctx_reset(&self->type_parse_ctx);
     tl_monotype *mono = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->type_parse_ctx);
-    if (!mono) return expected_type(self, node);
+    if (!mono) { expected_type(self, node); return; }
 
     str name = node->user_type_def.name->symbol.name;
     tl_type_registry_insert_mono(self->registry, name, mono);
@@ -511,6 +511,7 @@ static int traverse_ctx_is_param(traverse_ctx *self, str name) {
 }
 
 typedef struct {
+    char unused; // MSVC requires at least one struct member
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
@@ -3694,8 +3695,10 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     update_types_one_type(self, ctx, &node->type);
     update_types_arrow(self, node);
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#endif
 
     // propagate the types back up the ast, especially for type constructors
     switch (node->tag) {
@@ -3721,8 +3724,9 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     default: break;
     }
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
-
+#endif
     return 0;
 }
 
@@ -4140,7 +4144,7 @@ static void log_type_error(tl_infer *self, tl_polytype *left, tl_polytype *right
 }
 static void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     tl_polytype l = tl_polytype_wrap((tl_monotype *)left), r = tl_polytype_wrap((tl_monotype *)right);
-    return log_type_error(self, &l, &r, node);
+    log_type_error(self, &l, &r, node);
 }
 
 static void log_subs(tl_infer *self) {

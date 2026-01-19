@@ -16,6 +16,16 @@
 #ifdef _MSC_VER
 // MSVC-compatible versions (no typeof or statement expressions)
 // Note: min/max evaluate arguments multiple times - use with care
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
+#ifdef swap
+#undef swap
+#endif
+
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 // swap uses memcpy to avoid needing typeof

@@ -18,9 +18,9 @@ typedef struct {
     union {
         span big;
         struct {
-            char         buf[MOS_STR_MAX_SMALL + 1]; // room for \0
-            unsigned int len : 4;
-            unsigned int tag : 4;
+            char          buf[MOS_STR_MAX_SMALL + 1]; // room for \0
+            unsigned char len : 4;
+            unsigned char tag : 4;
             // 1 if small, anything else if allocated (because it's the low bits of big.buf
         } small;
     };
