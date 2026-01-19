@@ -262,7 +262,7 @@ result := if a { 1 } else if b { 2 } else { 3 }
 
 ### Case/Match
 
-Pattern matching on values:
+Pattern matching on values using equality by default:
 
 ```tl
 case n {
@@ -272,14 +272,33 @@ case n {
 }
 ```
 
-With a custom predicate function:
+#### Custom Predicates
+
+By default, `case` uses `==` to compare the value against each pattern. You can provide a custom predicate function that takes two arguments (the value and the pattern) and returns a boolean.
+
+**Using a named function:**
 
 ```tl
-case value, (a, b) { predicate(a, b) } {
-  pattern1 { result1 }
-  pattern2 { result2 }
+streq(a, b) { 0 == c_strcmp(a, b) }
+
+result := case s, streq {
+  "hello" { 0 }
+  "world" { 1 }
+  else    { 2 }
 }
 ```
+
+**Using an inline lambda:**
+
+```tl
+result := case s, (a, b) { 0 == c_strcmp(a, b) } {
+  "hello" { 0 }
+  "world" { 1 }
+  else    { 2 }
+}
+```
+
+In both forms, the predicate is called as `predicate(value, pattern)` for each arm until a match is found.
 
 ### While Loop
 
