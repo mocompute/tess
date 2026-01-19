@@ -128,8 +128,8 @@ endif()
 
 # -- zlib --
 
-option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
-CPMAddPackage("https://www.zlib.net/zlib-1.3.1.tar.gz")
+# option(ZLIB_BUILD_EXAMPLES "Enable Zlib Examples" OFF)
+# CPMAddPackage("https://www.zlib.net/zlib-1.3.1.tar.gz")
 
 # -- system specific -----------------------------------------------
 # -- Keep this AFTER including external packages --
