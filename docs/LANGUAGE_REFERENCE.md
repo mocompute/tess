@@ -2,6 +2,29 @@
 
 TL is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner style), generic types and functions, lambdas, closures, and C interoperability.
 
+## Key Language Characteristics
+
+**Expression-based:** Nearly everything in TL is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported).
+
+**Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression:
+
+```tl
+greet(name) { c_printf("Hello, %s\n", name); void }
+```
+
+**Parentheses for grouping:** Use `( )` to group expressions and control evaluation order, or to introduce local bindings with let-in style:
+
+```tl
+result := (x := compute()
+           x * x + 1)
+```
+
+**Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
+
+**Distinct declaration vs assignment:** `:=` declares a new binding; `=` mutates an existing one. This enables predictable scoping and intentional shadowing.
+
+**Postfix pointer operators:** Address-of (`.&`) and dereference (`.*`) are postfix rather than prefix, enabling chained access like `ptr.*.field` or `obj.&`.
+
 ## Program Structure
 
 A TL program consists of one or more **modules**. Each module begins with a `#module` directive:
@@ -73,22 +96,72 @@ Pt = Point(Int)    // Creates a type alias
 
 ## Variables and Assignment
 
+TL distinguishes between **binding** (`:=`) and **mutation** (`=`):
+
+### Binding with `:=`
+
+The `:=` operator introduces a new name with ML-style let-in semantics. Each use of `:=` creates a fresh binding that shadows any previous use of the same name in an outer scope. The binding's scope extends to the end of the enclosing block, and the entire expression evaluates to the block's final value:
+
 ```tl
-x := 42              // Declaration with type inference (creates new binding)
-x : Int := 42        // Declaration with explicit type annotation
-x = 10               // Reassignment (mutates existing binding)
-x += 2               // Compound assignment (also -=, *=, /=)
+x := 42              // Introduce new binding 'x'
+x : Int := 42        // With explicit type annotation
+
+x := 1
+x := x + 1           // New binding shadows the previous one; x is now 2
+x := x * 2           // Another new binding; x is now 4
 ```
 
-The `:=` operator declares a new variable; `=` reassigns an existing one. This enables lexical scoping with shadowing:
+Since bindings are expressions, you can capture the result of a let-in block using parentheses:
+
+```tl
+result := (
+  a := 10
+  b := 20
+  a + b              // Block evaluates to 30
+)
+// result is 30; a and b are not visible here
+```
+
+This is equivalent to ML's `let a = 10 in let b = 20 in a + b`.
+
+Shadowing is lexically scoped—inner bindings don't affect outer ones:
 
 ```tl
 val := 1
 if true {
-  val := 2    // New binding, shadows outer val
+  val := 2           // New binding, shadows outer val within this block
+  // val is 2 here
 }
-// val is still 1 here
+// val is 1 here (outer binding unchanged)
 ```
+
+### Mutation with `=`
+
+The `=` operator mutates an existing binding in place. It requires that the name already exists:
+
+```tl
+x := 0               // Create binding
+x = 10               // Mutate existing binding (x is now 10)
+x += 2               // Compound assignment (also -=, *=, /=)
+```
+
+Mutation affects the binding in its original scope:
+
+```tl
+val := 1
+if true {
+  val = 2            // Mutates the outer binding
+}
+// val is 2 here (outer binding was modified)
+```
+
+### Why Two Operators?
+
+This distinction makes code intent explicit:
+- `:=` signals "I'm introducing a new name" (safe, no side effects on outer scope)
+- `=` signals "I'm changing an existing value" (intentional mutation)
+
+It also enables functional patterns where rebinding is preferred over mutation, while still allowing imperative style when needed.
 
 ## Functions
 
@@ -97,9 +170,10 @@ if true {
 ```tl
 add(a, b) { a + b }                    // Types inferred
 add(a: Int, b: Int) -> Int { a + b }   // Explicit type annotations
+log(msg) { c_printf("%s\n", msg); void }  // Use void for side-effect-only functions
 ```
 
-The last expression in the function body is the return value.
+The last expression in the function body is the return value. Use `void` as the final expression for functions that shouldn't return a meaningful value.
 
 ### Lambdas
 
