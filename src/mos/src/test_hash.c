@@ -51,7 +51,7 @@ void test_hash32(int n, int word_size) {
 
     OUT("%i strings of size %i, collisions = %u", n, word_size, collisions);
 
-    arena_destroy(default_allocator(), &alloc);
+    arena_destroy(&alloc);
 }
 
 int main(void) {

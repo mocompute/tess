@@ -242,7 +242,7 @@ endef
 # mos Library Tests
 # ------------------------------------------------------------------------------
 
-MOS_TESTS     = alloc array map sexp str types util
+MOS_TESTS     = alloc array hash map sexp str types util
 MOS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
 
 $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
