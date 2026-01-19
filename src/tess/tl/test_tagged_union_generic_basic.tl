@@ -1,6 +1,6 @@
 #module main
 
-T(a) = | Some { v: a }
+T(a) : | Some { v: a }
        | None
 
 main() {

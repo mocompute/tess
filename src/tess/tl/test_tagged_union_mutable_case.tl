@@ -1,6 +1,6 @@
 #module main
 
-Shape = | Circle { radius: Int }
+Shape : | Circle { radius: Int }
         | Square { length: Int }
 
 main() {

@@ -33,7 +33,7 @@ Tagged unions (also called discriminated unions or sum types) in Tess are algebr
 ### Basic Tagged Union
 
 ```tess
-Shape = | Circle    { radius: Float }
+Shape : | Circle    { radius: Float }
         | Square    { length: Float }
         | Rectangle { length: Float, height: Float }
 ```
@@ -41,10 +41,10 @@ Shape = | Circle    { radius: Float }
 ### Generic Tagged Union
 
 ```tess
-Option(a) = | Some { value: a }
+Option(a) : | Some { value: a }
             | None
 
-Either(a, b) = | Left  { v: a }
+Either(a, b) : | Left  { v: a }
                | Right { v: b }
 ```
 
@@ -92,7 +92,7 @@ A tagged union definition is desugared into **5 separate AST nodes**:
 
 ### 3.1 Desugaring Example
 
-For `Shape = | Circle { radius: Float } | Square { length: Float }`:
+For `Shape : | Circle { radius: Float } | Square { length: Float }`:
 
 ```
 1. _ShapeTag_   : { Circle, Square }              // Tag enum
@@ -261,7 +261,7 @@ When the parser originally passed ALL parent type params to each variant, it cre
 
 When a tagged union constructor is specialized, the specialization must cascade through all nested type constructions in the function body. This is handled by `post_specialize()` in `infer.c`.
 
-**Example:** For `Option(a) = | Some { value: a } | None`, calling `Option_Some(value = 42)`:
+**Example:** For `Option(a) : | Some { value: a } | None`, calling `Option_Some(value = 42)`:
 
 1. **Initial specialization:** `Option_Some` becomes `Option_Some_0(value: Int) -> Option_0(Int)`
 
@@ -390,7 +390,7 @@ if (!has_else_arm) {
 
 ### 7.1 Generated C Structure
 
-For `Shape = | Circle { radius: Float } | Square { length: Float }`:
+For `Shape : | Circle { radius: Float } | Square { length: Float }`:
 
 ```c
 typedef enum {
@@ -485,7 +485,7 @@ From `src/tess/include/error.h`:
 
 ### 9.1 Arity Mismatch in Generic Tagged Unions
 
-**Problem:** For `Either(a, b) = | Left { v: a } | Right { v: b }`:
+**Problem:** For `Either(a, b) : | Left { v: a } | Right { v: b }`:
 - Parser creates `Left(a, b)` but type system sees only 1 used param
 - Union references `Left(a, b)` expecting 2 params - mismatch
 

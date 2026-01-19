@@ -438,7 +438,7 @@ n := v.the_int
 
 ```tl
 #module Foo
-Shape = | Circle    { radius: Float }
+Shape : | Circle    { radius: Float }
         | Square    { length: Float }
 
 s := Foo.Shape_Circle(radius = 2.0)
@@ -450,9 +450,6 @@ area := case s: Foo.Shape {
   sq: Square { sq.length * sq.length }
 }
 ```
-
-Note that a tagged union is defined using the equal sign `=` rather
-than the typical colon `:` used to declare other forms of types.
 
 ### Mutable tagged union case
 

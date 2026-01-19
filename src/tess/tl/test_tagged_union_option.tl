@@ -1,6 +1,6 @@
 #module Option
 
-T(a) = | Some { v: a }
+T(a) : | Some { v: a }
        | None
 
 test1() {

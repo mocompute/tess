@@ -1,6 +1,6 @@
 #module main
 
-T(a) = | Some { v: a }
+T(a) : | Some { v: a }
        | None
 
 make_some(x: Int) -> T(Int) {

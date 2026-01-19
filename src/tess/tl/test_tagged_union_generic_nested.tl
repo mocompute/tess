@@ -1,6 +1,6 @@
 #module main
 
-Option(a) = | Some { v: a }
+Option(a) : | Some { v: a }
             | None
 
 main() {

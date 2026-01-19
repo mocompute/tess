@@ -2685,8 +2685,8 @@ static int toplevel_tagged_union(parser *self) {
     ast_node *type_ident = self->result;
     unmangle_name(self, type_ident);
 
-    // Parse '='
-    if (a_try(self, a_equal_sign)) return 1;
+    // Parse ':'
+    if (a_try(self, a_colon)) return 1;
 
     // Parse first '|'
     if (a_try(self, a_vertical_bar)) return 1;
@@ -2932,7 +2932,6 @@ static int toplevel(parser *self) {
         if (0 == a_try(self, toplevel_type_alias)) goto success;
 
         // Tagged union must come before enum/struct since both start with identifier
-        // but tagged union has '=' after name, while enum/struct have ':'
         if (0 == (res = a_try(self, toplevel_tagged_union))) goto success;
         else if (2 == res) goto error;
 

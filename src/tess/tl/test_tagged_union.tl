@@ -1,7 +1,7 @@
 #module Foo
 
 // Tagged union syntax
-Shape = | Circle    { radius: Float }
+Shape : | Circle    { radius: Float }
         | Square    { length: Float }
         | None
 
