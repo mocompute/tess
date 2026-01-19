@@ -200,10 +200,10 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->modules_seen);
-    arena_destroy(alloc, &(*self)->transient);
-    arena_destroy(alloc, &(*self)->ast_arena);
-    arena_destroy(alloc, &(*self)->tokens_arena);
-    arena_destroy(alloc, &(*self)->file_arena);
+    arena_destroy(&(*self)->transient);
+    arena_destroy(&(*self)->ast_arena);
+    arena_destroy(&(*self)->tokens_arena);
+    arena_destroy(&(*self)->file_arena);
     alloc_free(alloc, *self);
     *self = null;
 }

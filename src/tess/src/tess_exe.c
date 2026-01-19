@@ -17,8 +17,8 @@
 #include <time.h>
 
 #ifdef MOS_WINDOWS
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
 #include <process.h>
 #include <windows.h>
 #else
@@ -71,8 +71,7 @@ static void hires_timer_stop(hires_timer *t) {
 }
 
 static double hires_timer_elapsed_sec(hires_timer *t) {
-    return (double)(t->end.tv_sec - t->start.tv_sec) +
-           (double)(t->end.tv_nsec - t->start.tv_nsec) / 1e9;
+    return (double)(t->end.tv_sec - t->start.tv_sec) + (double)(t->end.tv_nsec - t->start.tv_nsec) / 1e9;
 }
 #endif
 
@@ -158,7 +157,7 @@ void state_init(state *self) {
 }
 
 void state_deinit(state *self) {
-    arena_destroy(default_allocator(), &self->arena);
+    arena_destroy(&self->arena);
 
     alloc_invalidate(self);
 }
@@ -414,11 +413,13 @@ static void get_c_compiler(state *self) {
         self->cc = str_init(self->arena, CC);
     }
 #ifdef MOS_WINDOWS
-    else if (0 == system("where cl >nul 2>&1")) self->cc = str_init(self->arena, "cl");
+    else if (0 == system("where cl >nul 2>&1"))
+        self->cc = str_init(self->arena, "cl");
     else if (0 == system("where clang >nul 2>&1")) self->cc = str_init(self->arena, "clang");
     else if (0 == system("where gcc >nul 2>&1")) self->cc = str_init(self->arena, "gcc");
 #else
-    else if (0 == system("command -v cc &> /dev/null")) self->cc = str_init(self->arena, "cc");
+    else if (0 == system("command -v cc &> /dev/null"))
+        self->cc = str_init(self->arena, "cc");
     else if (0 == system("command -v gcc &> /dev/null")) self->cc = str_init(self->arena, "gcc");
     else if (0 == system("command -v clang &> /dev/null")) self->cc = str_init(self->arena, "clang");
 #endif
@@ -528,7 +529,7 @@ cleanup_ti:
 cleanup_parser:
     parser_destroy(&parser);
     array_free(nodes);
-    arena_destroy(default_allocator(), &nodes_alloc);
+    arena_destroy(&nodes_alloc);
     return error;
 }
 
@@ -570,8 +571,8 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
     }
 
     // Create pipes for stdout and stderr
-    HANDLE stdout_read, stdout_write;
-    HANDLE stderr_read, stderr_write;
+    HANDLE              stdout_read, stdout_write;
+    HANDLE              stderr_read, stderr_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
     if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
@@ -589,11 +590,11 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
     SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
 
     // Set up process startup info
-    STARTUPINFOA si = {sizeof(STARTUPINFOA)};
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = stdout_write;  // Capture stdout (MSVC prints filename here)
-    si.hStdError = stderr_write;
+    STARTUPINFOA si        = {sizeof(STARTUPINFOA)};
+    si.dwFlags             = STARTF_USESTDHANDLES;
+    si.hStdInput           = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput          = stdout_write; // Capture stdout (MSVC prints filename here)
+    si.hStdError           = stderr_write;
 
     PROCESS_INFORMATION pi = {0};
 
@@ -601,9 +602,7 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
     char *cmdline_mut = alloc_malloc(arena, strlen(cmdline) + 1);
     strcpy(cmdline_mut, cmdline);
 
-    BOOL success = CreateProcessA(
-        NULL, cmdline_mut, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi
-    );
+    BOOL success = CreateProcessA(NULL, cmdline_mut, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
 
     CloseHandle(stdout_write);
     CloseHandle(stderr_write);
@@ -616,7 +615,7 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
     }
 
     // Drain stdout (discard MSVC's filename echo) and read stderr
-    char buf[1024];
+    char  buf[1024];
     DWORD bytes_read;
     while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
         // Discard stdout output
@@ -641,8 +640,8 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
 // Build compiler command line
 // msvc_extra: additional MSVC flags (e.g., S(" /LD") for DLL)
 // gcc_extra: additional GCC/Clang flags (e.g., S(" -shared") for shared lib)
-static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf,
-                               str msvc_extra, str gcc_extra) {
+static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf, str msvc_extra,
+                              str gcc_extra) {
     if (is_msvc_compiler(self)) {
         str_build_cat(cmd, self->cc);
         str_build_cat(cmd, S(" /nologo"));
@@ -987,7 +986,7 @@ done:
 
     if (self.report_time) {
         double elapsed = hires_timer_elapsed_sec(&timer);
-        double ms = elapsed * 1000;
+        double ms      = elapsed * 1000;
         fprintf(stderr, "Elapsed time: %0.6fms\n", ms);
     }
 

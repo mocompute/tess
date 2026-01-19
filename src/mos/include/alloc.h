@@ -10,6 +10,9 @@
 
 // -- fatal --
 
+// Important: Allocations via this alloc.h API never fail. If the underlying allocator fails, the program
+// exits with fatal().
+
 #ifndef MOS_WINDOWS
 noreturn void fatal_i(char const *file, int line, char const *restrict, ...)
   __attribute__((format(printf, 3, 4)));
@@ -33,11 +36,10 @@ void                 leak_detector_report(allocator *);
 // -- arena bump allocator --
 
 nodiscard allocator *arena_create(allocator *alloc, size_t) mallocfun;
-void                 arena_dealloc(allocator *parent, allocator **arena);
-void                 arena_destroy(allocator *, allocator **);
-void                 arena_init(allocator *, allocator *parent, size_t);
-void                 arena_reset(allocator *);
-void                 arena_deinit(allocator *);
+void                 arena_destroy(allocator **);
+
+// reset arena to empty but retain all capacity
+void arena_reset(allocator *);
 
 // -- allocator malloc and friends --
 //
@@ -67,7 +69,7 @@ size_t          alloc_align_to_pointer_size(size_t);
 size_t          alloc_align(size_t n, size_t align);
 
 #define alloc_assert_invalid(P) alloc_assert_invalid_n((P), sizeof *(P))
-#define alloc_zero(P)           memset((P), 0xCD, sizeof *(P));
+#define alloc_zero(P)           memset((P), 0, sizeof *(P));
 #define alloc_invalidate(P)     memset((P), 0xCD, sizeof *(P));
 #define alloc_copy(DST, SRC)    memcpy((DST), (SRC), sizeof *(DST));
 

@@ -28,6 +28,8 @@ typedef double max_align_t;
 #include <stdlib.h>
 #endif
 
+#define ALLOC_DEBUG_PATTERN 0xCD
+
 typedef struct {
     size_t size;
 } arena_block;
@@ -60,8 +62,7 @@ static void *default_calloc(allocator *a, size_t num, size_t sz, char const *fil
     (void)file;
     (void)line;
     (void)a;
-    void *ptr = malloc(num * sz); // TODO: overflow but really?
-    if (ptr) memset(ptr, 0xCD, num * sz);
+    void *ptr = calloc(num, sz); // calloc checks for overflow
     return ptr;
 }
 
@@ -153,6 +154,7 @@ static int bucket_has_capacity(arena_header const *bucket, size_t size) {
 }
 
 static arena_header *find_bucket(arena_allocator const *arena, void const *ptr) {
+    // find bucket where ptr is allocated
     arena_header *bucket = arena->head;
     assert(bucket);
     while (bucket) {
@@ -272,7 +274,7 @@ static void *arena_calloc(allocator *alloc, size_t num, size_t sz, char const *f
 
     sz        = alloc_align_to_pointer_size(sz);
     void *out = arena_malloc(alloc, num * sz, __FILE__, __LINE__);
-    if (out) memset(out, 0xCD, num * sz); // TODO: uses 0xCD for debugging, not 0x00
+    if (out) memset(out, 0, num * sz);
     return out;
 }
 
@@ -292,24 +294,7 @@ static void arena_free(allocator *a, void *p, char const *file, int line) {
     }
 }
 
-allocator *arena_create(allocator *alloc, size_t sz) {
-    allocator *out = alloc_malloc(alloc, sizeof(struct arena_allocator));
-    arena_init(out, alloc, sz);
-    return out;
-}
-
-void arena_dealloc(allocator *alloc, allocator **arena) {
-    alloc_assert_invalid(*arena);
-    alloc_free(alloc, *arena);
-    *arena = null;
-}
-
-void arena_destroy(allocator *alloc, allocator **arena) {
-    arena_deinit(*arena);
-    arena_dealloc(alloc, arena);
-}
-
-void arena_init(allocator *arena_, allocator *parent, size_t sz) {
+static void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
@@ -322,8 +307,14 @@ void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena->allocator.free    = &arena_free;
 }
 
-void arena_deinit(allocator *arena_) {
-    arena_allocator *arena = (arena_allocator *)arena_;
+allocator *arena_create(allocator *alloc, size_t sz) {
+    allocator *out = alloc_malloc(alloc, sizeof(struct arena_allocator));
+    arena_init(out, alloc, sz);
+    return out;
+}
+
+void arena_destroy(allocator **arena_) {
+    arena_allocator *arena = *((arena_allocator **)arena_);
 
     arena_header    *next  = arena->head;
 
@@ -333,7 +324,8 @@ void arena_deinit(allocator *arena_) {
         next = next_next;
     }
 
-    alloc_invalidate(arena);
+    alloc_free(arena->parent, *arena_);
+    *arena_ = null;
 }
 
 void arena_reset(allocator *arena_) {
@@ -383,7 +375,7 @@ static void *leak_detector_calloc(allocator *alloc, size_t num, size_t sz, char 
 static void *leak_detector_realloc(allocator *a, void *p, size_t sz, char const *file, int line);
 static void  leak_detector_free(allocator *alloc, void *p, char const *file, int line);
 
-allocator   *leak_detector_create() {
+allocator   *leak_detector_create(void) {
 
     leak_detector *self = malloc(sizeof *self);
     assert(self);
@@ -615,14 +607,14 @@ char *alloc_strndup(allocator *alloc, char const *src, size_t max) {
 
 void alloc_invalidate_n(void *p, size_t len) {
     if (!p) return;
-    memset(p, 0xCD, len);
+    memset(p, ALLOC_DEBUG_PATTERN, len);
 }
 
 void alloc_assert_invalid_n(void *p, size_t len) {
 #ifndef NDEBUG
     byte *bp = (byte *)p;
     while (len--) {
-        assert(*bp == 0xCD);
+        assert(*bp == ALLOC_DEBUG_PATTERN);
         bp++;
     };
 #else

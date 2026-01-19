@@ -56,7 +56,7 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
 }
 
 void tokenizer_destroy(tokenizer **self) {
-    arena_destroy((*self)->parent, &(*self)->strings);
+    arena_destroy(&(*self)->strings);
 
     array_free((*self)->backtrack);
     array_free((*self)->buf);

@@ -150,8 +150,8 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
     if ((*p)->instances) map_destroy(&(*p)->instances);
     if ((*p)->instance_names) hset_destroy(&(*p)->instance_names);
 
-    arena_destroy(alloc, &(*p)->transient);
-    arena_destroy(alloc, &(*p)->arena);
+    arena_destroy(&(*p)->transient);
+    arena_destroy(&(*p)->arena);
     alloc_free(alloc, *p);
     *p = null;
 }
@@ -203,7 +203,10 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
     tl_type_registry_parse_type_ctx_reset(&self->type_parse_ctx);
     tl_monotype *mono = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->type_parse_ctx);
-    if (!mono) { expected_type(self, node); return; }
+    if (!mono) {
+        expected_type(self, node);
+        return;
+    }
 
     str name = node->user_type_def.name->symbol.name;
     tl_type_registry_insert_mono(self->registry, name, mono);
@@ -2191,7 +2194,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             // Do not recurse: fixup after
             if (str_eq(name, generic_name)) {
-                { tl_monotype **_t = &args.v[i]; array_push(recur_refs, _t); }
+                {
+                    tl_monotype **_t = &args.v[i];
+                    array_push(recur_refs, _t);
+                }
                 continue;
             }
 
@@ -2199,7 +2205,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             if (tl_monotype_is_ptr(args.v[i])) {
                 tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
                 if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
-                    { tl_monotype **_t = &args.v[i]->cons_inst->args.v[0]; array_push(recur_refs, _t); }
+                    {
+                        tl_monotype **_t = &args.v[i]->cons_inst->args.v[0];
+                        array_push(recur_refs, _t);
+                    }
                     continue;
                 }
             }
@@ -2321,7 +2330,10 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
             tl_monotype *type_id = null;
             if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
                 // a literal type
-                { tl_monotype *_t = tl_monotype_create_literal(self->arena, type_id); array_push(arr, _t); }
+                {
+                    tl_monotype *_t = tl_monotype_create_literal(self->arena, type_id);
+                    array_push(arr, _t);
+                }
                 continue;
             }
 

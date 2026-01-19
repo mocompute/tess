@@ -54,7 +54,7 @@ static int test_arena_realloc(void) {
 
     error += p1 == p2 ? 0 : 1;
 
-    arena_destroy(default_allocator(), &arena);
+    arena_destroy(&arena);
 
     return error;
 }
@@ -71,7 +71,7 @@ static int test_arena_realloc_non_contiguous(void) {
     error += p1 != p2 ? 0 : 1;
     error += p1 != p3 ? 0 : 1;
 
-    arena_destroy(default_allocator(), &arena);
+    arena_destroy(&arena);
 
     return error;
 }
@@ -88,7 +88,7 @@ static int test_arena_free_reuse(void) {
 
     error += p1 == p2 ? 0 : 1;
 
-    arena_destroy(default_allocator(), &arena);
+    arena_destroy(&arena);
 
     return error;
 }
@@ -107,7 +107,7 @@ static int test_arena_free_reuse_non_contiguous(void) {
     error += p1 != p3 ? 0 : 1;
     error += p2 != p3 ? 0 : 1;
 
-    arena_destroy(default_allocator(), &arena);
+    arena_destroy(&arena);
 
     return error;
 }

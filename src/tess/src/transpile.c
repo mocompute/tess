@@ -2037,8 +2037,8 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
 void transpile_destroy(allocator *alloc, transpile **p) {
     if (!p || !*p) return;
 
-    arena_destroy(alloc, &(*p)->transient);
-    arena_destroy(alloc, &(*p)->arena);
+    arena_destroy(&(*p)->transient);
+    arena_destroy(&(*p)->arena);
     alloc_free(alloc, *p);
     *p = null;
 }
