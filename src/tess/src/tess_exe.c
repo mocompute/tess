@@ -639,14 +639,14 @@ static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) 
 }
 
 // Build compiler command line
-// msvc_extra: additional MSVC flags (e.g., " /LD" for DLL)
-// gcc_extra: additional GCC/Clang flags (e.g., " -shared" for shared lib)
+// msvc_extra: additional MSVC flags (e.g., S(" /LD") for DLL)
+// gcc_extra: additional GCC/Clang flags (e.g., S(" -shared") for shared lib)
 static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf,
-                               char const *msvc_extra, char const *gcc_extra) {
+                               str msvc_extra, str gcc_extra) {
     if (is_msvc_compiler(self)) {
         str_build_cat(cmd, self->cc);
         str_build_cat(cmd, S(" /nologo"));
-        if (msvc_extra) str_build_cat(cmd, str_init_static(msvc_extra));
+        if (!str_is_empty(msvc_extra)) str_build_cat(cmd, msvc_extra);
         if (self->optimize) str_build_cat(cmd, S(" /O2"));
         forall(i, self->cflags) {
             str_build_cat(cmd, S(" "));
@@ -668,7 +668,7 @@ static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf,
             str_build_cat(cmd, self->cflags.v[i]);
         }
         str_build_cat(cmd, S(" -std=c11 -Wno-format-security"));
-        if (gcc_extra) str_build_cat(cmd, str_init_static(gcc_extra));
+        if (!str_is_empty(gcc_extra)) str_build_cat(cmd, gcc_extra);
         str_build_cat(cmd, S(" "));
         str_build_cat(cmd, str_init_static(tf->c_file));
     }
@@ -690,7 +690,7 @@ int compile_c(state *self) {
     str_deinit(default_allocator(), &self->program);
 
     str_build cmd = str_build_init(self->arena, 256);
-    win_build_cmdline(self, &cmd, &tf, NULL, " -Wno-unused-value");
+    win_build_cmdline(self, &cmd, &tf, str_empty(), S(" -Wno-unused-value"));
     str cmdstr = str_build_finish(&cmd);
 
     int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
@@ -810,7 +810,7 @@ int compile_c_obj(state *self) {
     str_deinit(default_allocator(), &self->program);
 
     str_build cmd = str_build_init(self->arena, 256);
-    win_build_cmdline(self, &cmd, &tf, " /LD", " -shared");
+    win_build_cmdline(self, &cmd, &tf, S(" /LD"), S(" -shared"));
     str cmdstr = str_build_finish(&cmd);
 
     int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
