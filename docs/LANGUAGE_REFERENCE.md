@@ -552,6 +552,17 @@ n1 := Node(value = 1, next = null)
 n2 := Node(value = 2, next = n1.&)
 ```
 
+Mutually recursive types are also supported—types can reference each other:
+
+```tl
+Tree(a)   : { value: a, children: Ptr(Forest(a)) }
+Forest(a) : { trees: Array.T(Tree(a)) }
+
+t1 := Tree(value = 1, children = null)
+forest := Forest(trees = Array.with_capacity(Tree(Int), 16))
+t1.children = forest.&
+```
+
 ## Comments
 
 ```tl
