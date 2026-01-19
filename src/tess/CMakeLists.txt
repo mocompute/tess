@@ -129,6 +129,30 @@ function(tesslang_create_test NAME)
   set_tests_properties(${TEST_NAME} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
+function(tesslang_create_test_optimized NAME)
+  set(TEST_NAME test-tl-${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
+  add_custom_command(
+    OUTPUT ${TEST_EXE}
+    COMMAND
+    tess_exe
+    exe
+    -O
+    -I ${CMAKE_CURRENT_SOURCE_DIR}
+    -I ${PROJECT_SOURCE_DIR}/src/tl/std
+    -o ${TEST_EXE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    DEPENDS
+      $<TARGET_FILE:tess_exe>
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Compiling test_${NAME}.tl"
+  )
+  add_custom_target(${TEST_NAME} ALL DEPENDS ${TEST_EXE})
+  add_test(NAME ${TEST_NAME} COMMAND ${TEST_EXE})
+  set_tests_properties(${TEST_NAME} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+endfunction()
+
 function(tesslang_create_build_fail_test NAME)
   set(TEST_NAME test-tl-${NAME})
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
@@ -238,7 +262,7 @@ tesslang_create_test(strcmp)
 tesslang_create_test(struct_concrete)
 tesslang_create_test(struct_empty)
 tesslang_create_test(struct_generic)
-tesslang_create_test(tail_call)
+tesslang_create_test_optimized(tail_call)
 tesslang_create_test(type_assertion)
 tesslang_create_test(type_assertion_field)
 tesslang_create_test(tagged_union)
