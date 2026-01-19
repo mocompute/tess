@@ -106,6 +106,18 @@ static int test_ends_with(void) {
     return error;
 }
 
+static int test_struct_layout(void) {
+    // str is a union of 'big' (span) and 'small' (buffer + bitfields).
+    // MSVC adds padding before unsigned int bitfields for alignment,
+    // which would make sizeof(str) > sizeof(span), breaking the union.
+    // Using unsigned char bitfields avoids this padding.
+    if (sizeof(str) != sizeof(span)) {
+        fprintf(stderr, "sizeof(str)=%zu != sizeof(span)=%zu\n", sizeof(str), sizeof(span));
+        return 1;
+    }
+    return 0;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -128,6 +140,7 @@ int main(void) {
     T(test_dcat);
     T(test_build);
     T(test_ends_with);
+    T(test_struct_layout);
 
     return error;
 }
