@@ -1225,7 +1225,12 @@ static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *no
 
 //
 
-static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
+static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
+static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite);
+static void      toplevel_name_replace(ast_node *node, str name_replace);
+
+static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
+                                         str inst_name) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
@@ -1235,6 +1240,13 @@ static ast_node *clone_generic(tl_infer *self, ast_node const *node) {
     // rename variables: also erases type information
     rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
     rename_variables(self, clone, &ctx, 0);
+
+    // recalculate free variables, because symbol names have been renamed
+    tl_polytype wrap = tl_polytype_wrap(arrow);
+    add_free_variables_to_arrow(self, clone, &wrap);
+
+    concretize_params(self, clone, arrow);
+    toplevel_name_replace(clone, inst_name);
 
     return clone;
 }
@@ -2423,33 +2435,27 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
 static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow) {
 
-    // are we trying to specialize a name which has already been specialized?
+    // 1. Check if already specialized
     if (instance_name_exists(self, name)) return name;
 
-    // are we trying to specialize a name + arrow type we've already specialized?
+    // 2. Check cache for this name+type combination
     str *found = instance_lookup_arrow(self, name, arrow);
     if (found) return *found;
 
-    // instantiate unique name
+    // 3. Create unique instance name(e.g., "identity_0")
     name_and_type key       = make_instance_key(name, arrow);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
 
-    // clone function source ast and rename variables, which also erases type information
-    ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
+    // 4. Clone generic function's AST
+    ast_node *generic_node = clone_generic_for_arrow(self, toplevel_get(self, name), arrow, inst_name);
 
-    // recalculate free variables, because symbol names have been renamed
-    tl_polytype wrap = tl_polytype_wrap(arrow);
-    add_free_variables_to_arrow(self, generic_node, &wrap);
-
+    // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);
-    toplevel_name_replace(generic_node, inst_name);
-    concretize_params(self, generic_node, arrow);
-
-    // add to toplevel
-    dbg(self, "toplevel_add: %.*s", str_ilen(inst_name), str_buf(&inst_name));
     toplevel_add(self, inst_name, generic_node);
+    dbg(self, "toplevel_add: %s", str_cstr(&inst_name));
 
+    // 6. CRITICAL: Process the specialized function body
     ast_node *special = toplevel_get(self, inst_name);
     if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
     return inst_name;

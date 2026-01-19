@@ -39,13 +39,13 @@ Specialization is integrated into the type inference phase. The key entry point 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Type Inference Phase                                 │
+│                         Type Inference Phase                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  1. Parse AST                                                                │
-│  2. Rename variables (alpha-conversion for unique names)                     │
-│  3. Assign type variables to symbols                                         │
-│  4. Collect constraints                                                      │
-│  5. Satisfy constraints via unification                                      │
+│  1. Parse AST                                                               │
+│  2. Rename variables (alpha-conversion for unique names)                    │
+│  3. Assign type variables to symbols                                        │
+│  4. Collect constraints                                                     │
+│  5. Satisfy constraints via unification                                     │
 │  6. ══════════════════════════════════════════════════════════════════════  │
 │  │  SPECIALIZATION PASS                                                     │
 │  │  traverse_ast(... specialize_applications_cb ...)                        │
@@ -53,7 +53,7 @@ Specialization is integrated into the type inference phase. The key entry point 
 │  │    ├── For each type constructor: specialize_user_type()                 │
 │  │    └── Recursively specialize nested calls in specialized functions      │
 │  ════════════════════════════════════════════════════════════════════════   │
-│  7. Update types with specialization results                                 │
+│  7. Update types with specialization results                                │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -104,7 +104,7 @@ static str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name
     instance_add(self, &key, inst_name);
 
     // 4. Clone the generic function's AST
-    ast_node *generic_node = clone_generic(self, toplevel_get(self, name));
+    ast_node *generic_node = clone_generic_for_arrow(self, toplevel_get(self, name), arrow, inst_name);
 
     // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);
