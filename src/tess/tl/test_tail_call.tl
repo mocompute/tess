@@ -8,7 +8,7 @@ main() {
   f(100000)
 }
 
-// ./tess c -I src/tl/std src/tess/tl/test_tail_call.tl | cc -x c - -O -S -o - -masm=intel
+// ./tess c src/tess/tl/test_tail_call.tl | cc -x c - -O -S -o - -masm=intel
 //      .intel_syntax noprefix
 //      .file	"-"
 //      .text
@@ -49,7 +49,7 @@ main() {
 //      .addrsig
 
 
-// ./tess c -I src/tl/std src/tess/tl/test_tail_call.tl | cc -x c - -O2 -S -o - -masm=intel
+// ./tess c src/tess/tl/test_tail_call.tl | cc -x c - -O2 -S -o - -masm=intel
 //      .intel_syntax noprefix
 //      .file	"-"
 //      .text

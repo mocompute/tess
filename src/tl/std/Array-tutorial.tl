@@ -16,8 +16,7 @@
 #module Array
 
 // The `#import` directive includes the specified file and makes any modules and identifiers declared in the
-// file available in the current scope (still namespaced, as described above). The search paths are defined
-// using `-I` options on the compiler command line.
+// file available in the current scope (still namespaced, as described above).
 //
 // Any TL file may define one or more modules. While conventionally a single file defines a single module,
 // this is not required. However, multiple files may NOT be used to declare identifiers for the same module.

@@ -1,5 +1,5 @@
 // From root directory, build with:
-// ./tess exe -I src/tl/std -o example src/tl/examples/argc_argv.tl
+// ./tess exe -o example src/tl/examples/argc_argv.tl
 
 #module main
 #import <stdio.tl>

@@ -111,7 +111,7 @@ Set up compilation command for TL files:
   (add-hook 'tl-mode-hook
             (lambda ()
               (set (make-local-variable 'compile-command)
-                   (format "./tess exe -I src/tl/std %s -o /tmp/a.out"
+                   (format "./tess exe %s -o /tmp/a.out"
                           (buffer-file-name))))))
 ```
 

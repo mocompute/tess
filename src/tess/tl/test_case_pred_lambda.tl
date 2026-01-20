@@ -12,7 +12,7 @@ main() {
 
 
 
-// ./tess c -I src/tl/std src/tess/tl/test_case_pred_lambda.tl | cc -O -x c - -S -masm=intel -o -
+// ./tess c src/tess/tl/test_case_pred_lambda.tl | cc -O -x c - -S -masm=intel -o -
 //      .intel_syntax noprefix
 //      .file	"-"
 //      .text
