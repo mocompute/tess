@@ -25,10 +25,10 @@ make CONFIG=asan        # Address sanitizer build for memory debugging
 ### Running Tests
 ```bash
 make test               # Run all test suites
-make -j test            # Run tests in parallel
-make test-mos           # MOS library tests only
-make test-tess          # Compiler unit tests only
-make test-tl            # TL language integration tests only
+make -j test            # Run tests in parallel (preferred)
+make -j test-mos           # MOS library tests only
+make -j test-tess          # Compiler unit tests only
+make -j test-tl            # TL language integration tests only
 ```
 
 ### Single Test Execution
@@ -264,6 +264,15 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
   - Module system, mutual recursion
   - C interoperability
   - Expected failure tests (prefixed with `fail_`)
+
+### Testing Requirements
+
+When adding new functionality or fixing bugs, always ensure proper test coverage:
+- Add tests incrementally as part of implementation, not at the end
+- For multi-step implementation plans, add and verify tests at each step before proceeding
+- New MOS library functions should have corresponding unit tests in `src/mos/src/test_*.c`
+- New compiler features should have TL integration tests in `src/tess/tl/test_*.tl`
+- Run `make -j test` to verify all tests pass before committing
 
 ## Build System Notes
 
