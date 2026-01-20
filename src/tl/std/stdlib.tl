@@ -6,13 +6,13 @@
 c_assert       (condition: Bool)                               -> Void
 
 // stdlib.h
-c_atof         (nptr: String)                                  -> Float
-c_atoi         (nptr: String)                                  -> Int
-c_atol         (nptr: String)                                  -> Int
-c_atoll        (nptr: String)                                  -> Int
-c_strtod       (nptr: String, endptr: Ptr(String))             -> Float
-c_getenv       (name: String)                                  -> String
-c_system       (str: String)                                   -> Int
+c_atof         (nptr: Ptr(CChar))                                  -> Float
+c_atoi         (nptr: Ptr(CChar))                                  -> Int
+c_atol         (nptr: Ptr(CChar))                                  -> Int
+c_atoll        (nptr: Ptr(CChar))                                  -> Int
+c_strtod       (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)))             -> Float
+c_getenv       (name: Ptr(CChar))                                  -> Ptr(CChar)
+c_system       (str: Ptr(CChar))                                   -> Int
 c_rand         ()                                              -> CInt
 c_srand        (seed: CUnsignedInt)                            -> Void
 c_aligned_alloc(alignment: CSize, size: CSize)                 -> Ptr(T)
@@ -27,12 +27,12 @@ c_abs          (j: CInt)                                       -> CInt
 c_labs         (j: CLong)                                      -> CLong
 c_llabs        (j: CLongLong)                                  -> CLongLong
 
-c_strtof       (nptr: String, endptr: Ptr(String))             -> CFloat
-c_strtold      (nptr: String, endptr: Ptr(String))             -> CLongDouble
-c_strtol       (nptr: String, endptr: Ptr(String), base: CInt) -> CLong
-c_strtoll      (nptr: String, endptr: Ptr(String), base: CInt) -> CLongLong
-c_strtoul      (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLong
-c_strtoull     (nptr: String, endptr: Ptr(String), base: CInt) -> CUnsignedLongLong
+c_strtof       (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)))             -> CFloat
+c_strtold      (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)))             -> CLongDouble
+c_strtol       (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)), base: CInt) -> CLong
+c_strtoll      (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)), base: CInt) -> CLongLong
+c_strtoul      (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)), base: CInt) -> CUnsignedLong
+c_strtoull     (nptr: Ptr(CChar), endptr: Ptr(Ptr(CChar)), base: CInt) -> CUnsignedLongLong
 c_atexit       (f: () -> Void)                                 -> Void
 c__Exit        (status: CInt)                                  -> Void
 c_bsearch      (key: Ptr(Void),

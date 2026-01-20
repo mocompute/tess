@@ -39,7 +39,7 @@ Type annotations are needed when:
 1. **C function declarations** - The compiler cannot infer types across the FFI boundary:
    ```tl
    c_malloc(size: CSize) -> Ptr(any)
-   c_printf(fmt: String, ...) -> CInt
+   c_printf(fmt: Ptr(CChar), ...) -> CInt
    ```
 
 2. **Ambiguous pointer types** - When `c_malloc` or similar returns `Ptr(any)`:
@@ -126,7 +126,7 @@ id(x) { x }
 main() {
   a := id(42)       // Creates id_Int: (Int) -> Int
   b := id(3.14)     // Creates id_Float: (Float) -> Float
-  c := id("hello")  // Creates id_String: (String) -> String
+  c := id("hello")  // Creates id_String: (Ptr(CChar)) -> String
 }
 ```
 
@@ -185,8 +185,8 @@ Type annotations on functions are only required when there is no usage context t
 Type aliases create shorthand names for types:
 
 ```tl
-Pt = Point(Int)                              // Simple alias
-StringIntMap = Collections.Map(String, Int)  // Fully specialized alias
+Pt = Point(Int)                                  // Simple alias
+StringIntMap = Collections.Map(Ptr(CChar), Int)  // Fully specialized alias
 ```
 
 Aliases are expanded at compile time. `Pt` and `Point(Int)` are the same type.
@@ -197,7 +197,7 @@ TL does not support partially specialized type aliases:
 
 ```tl
 // NOT SUPPORTED:
-StringMap(V) = Map(String, V)   // Error: partial specialization
+StringMap(V) = Map(Ptr(CChar), V)   // Error: partial specialization
 ```
 
 Instead, use the full generic type or create a fully specialized alias.

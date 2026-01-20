@@ -36,7 +36,7 @@ Point(a) : {
 }
 
 // Test case expression
-classify(n: Int) -> String {
+classify(n: Int) -> Ptr(CChar) {
     case {
         n < 0 -> "negative"
         n == 0 -> "zero"

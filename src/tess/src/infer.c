@@ -536,7 +536,6 @@ static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_no
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
-static int  is_string_ptr_conversion(tl_infer *, tl_polytype *, tl_polytype *);
 static int  is_carray_constructor(ast_node *);
 static int  is_std_function(ast_node *);
 
@@ -563,10 +562,6 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
     hashmap *seen = hset_create(self->transient, 32);
     int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
     return res;
-}
-
-static int escape_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right) {
-    return is_string_ptr_conversion(self, left, right);
 }
 
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
@@ -629,13 +624,6 @@ static void         update_env(tl_infer *, traverse_ctx *, ast_node *);
 // ============================================================================
 // Special Case Handlers
 // ============================================================================
-
-static int is_string_ptr_conversion(tl_infer *self, tl_polytype *left, tl_polytype *right) {
-    tl_polytype_substitute(self->arena, left, self->subs);
-    tl_polytype_substitute(self->arena, right, self->subs);
-    return (tl_monotype_is_ptr_to_char(left->type) && tl_monotype_is_string(right->type)) ||
-           (tl_monotype_is_ptr_to_char(right->type) && tl_monotype_is_string(left->type));
-}
 
 static int is_carray_constructor(ast_node *node) {
     return ast_node_is_nfa(node) && str_eq(ast_node_str(node->named_application.name), S("CArray"));
@@ -1110,9 +1098,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
             }
 
-            if (!escape_constraint(self, name_type, value_type) &&
-                constrain(self, name_type, value_type, node) && !is_cast)
-                return 1;
+            if (constrain(self, name_type, value_type, node) && !is_cast) return 1;
             self->is_constrain_ignore_error = 0;
         }
 
@@ -2086,7 +2072,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_string: return infer_literal_type(self, node, tl_type_registry_string);
+    case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
     case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
     case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
     case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);

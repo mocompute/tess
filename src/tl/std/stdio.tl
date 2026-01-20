@@ -1,6 +1,6 @@
 #module stdio
 #include <stdio.h>
 
-_tl_fatal_      (s: String)   -> any
+_tl_fatal_      (s: Ptr(CChar))   -> any
 
-c_printf(fmt: String, args: ...) -> Void
+c_printf(fmt: Ptr(CChar), args: ...) -> Void

@@ -1,22 +1,9 @@
-#module Foo
-
-// tagged union sugar:
-
-Shape = | Circle    { radius: Float }
-        | Square    { length: Float }
-        | Rectangle { length: Float, height: Float }
-
-// desugars to:
-
-// _ShapeTag_   : { Circle, Square, Rectangle }
-// Circle       : { radius: Float }
-// Square       : { length: Float }
-// Rectangle    : { length: Float, height: Float }
-// _ShapeUnion_ : { | Circle: Circle | Square: Square | Rectangle: Rectangle }
-// Shape        : { tag: _ShapeTag_, u: _ShapeUnion_ }
-
 #module main
+#import <string.tl>
 
 main() {
-  0
+    buffer := CArray(CChar, 256)
+    ptr : Ptr(CChar) := buffer   // CArray decays to Ptr
+    c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
+    0
 }

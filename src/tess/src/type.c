@@ -58,7 +58,6 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     make_nullary_inst(self, S("Int"));
     make_nullary_inst(self, S("Bool"));
     make_nullary_inst(self, S("Float"));
-    make_nullary_inst(self, S("String"));
 
     // Ptr is unary type constructor
     make_unary_tc(self, S("Ptr"));
@@ -457,9 +456,6 @@ tl_monotype *tl_type_registry_float(tl_type_registry *self) {
 tl_monotype *tl_type_registry_bool(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Bool"));
 }
-tl_monotype *tl_type_registry_string(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("String"));
-}
 tl_monotype *tl_type_registry_char(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("CChar"));
 }
@@ -484,6 +480,10 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
 tl_monotype *tl_type_registry_ptr_any(tl_type_registry *self) {
     tl_monotype *any = tl_monotype_create_any(self->alloc);
     return tl_type_registry_ptr(self, any);
+}
+tl_monotype *tl_type_registry_ptr_char(tl_type_registry *self) {
+    tl_monotype *cchar = tl_type_registry_char(self);
+    return tl_type_registry_ptr(self, cchar);
 }
 
 // -- parse_type
@@ -559,7 +559,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = parse_type_specials(self, ctx, node);
         if (result) goto top_success;
 
-        // or is it a nullary literal: Int, Float, String, etc, including user type constructors
+        // or is it a nullary literal: Int, Float, etc, including user type constructors
         str          name = ast_node_str(node);
         tl_polytype *poly = tl_type_registry_get_nullary(self, name);
         if (poly) {
@@ -594,7 +594,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
     }
 
     else if (ast_node_is_nfa(node)) {
-        // a type constructor with args: Array(Float), Map(String, String), etc.
+        // a type constructor with args: Array(Float), Map(Int, Int), etc.
         // Note: `Ptr(T)` (if T is not a registered type name) is sugar for `Ptr(T: Type, T)`
 
         // Note: a nullary type should not be parsed as an nfa: Int() is not legal
@@ -1650,10 +1650,6 @@ int tl_monotype_is_tuple(tl_monotype *self) {
 
 int tl_monotype_is_tv(tl_monotype *self) {
     return self && tl_var == self->tag;
-}
-
-int tl_monotype_is_string(tl_monotype *self) {
-    return self && tl_monotype_is_inst_of(self, S("String"));
 }
 
 int tl_monotype_is_ptr_to_char(tl_monotype *self) {

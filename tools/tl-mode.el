@@ -109,7 +109,7 @@
          (builtins '("sizeof" "alignof"))
 
          ;; Types (comprehensive list)
-         (types '("Int" "Float" "Bool" "String" "Byte"
+         (types '("Int" "Float" "Bool" "Byte"
                   ;; C types
                   "CChar" "CShort" "CInt" "CLong" "CLongLong"
                   "CSize" "CPtrDiff"

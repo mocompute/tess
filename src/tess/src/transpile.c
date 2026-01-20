@@ -2255,9 +2255,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("double");
         } else if (str_eq(S("Bool"), cons_name)) {
             return S("/*bool*/int");
-        } else if (str_eq(S("String"), cons_name)) {
-            // return S("char const*");
-            return S("char *");
         } else if (str_eq(S("Void"), cons_name)) {
             return S("void");
         } else if (tl_monotype_is_ptr(mono)) {

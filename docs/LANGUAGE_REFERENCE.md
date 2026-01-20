@@ -75,7 +75,6 @@ Module initialization functions are called in dependency order before `main()` e
 - `Int` - 64-bit signed integer
 - `Float` - 64-bit floating point
 - `Bool` - Boolean (`true` or `false`)
-- `String` - String type
 - `Void` - No value
 - `Type` - Type literals (used with `sizeof`)
 
@@ -128,7 +127,7 @@ empty(a: Type) -> Array.T(a) {
 
 // Call with explicit type argument
 arr := empty(Int)           // Creates Array.T(Int)
-strs := empty(String)       // Creates Array.T(String)
+strs := empty(Float)        // Creates Array.T(Float)
 ```
 
 This pattern is commonly used in the standard library for functions that need to create values of a generic type.
@@ -307,7 +306,7 @@ result := sum_to(1000000, 0)       // Works without stack overflow
 0377                // Octal
 3.14                // Float
 1.5e-10             // Scientific notation
-"hello"             // String
+"hello"             // String (Ptr(CChar))
 'a'                 // Character
 '\n'                // Escape sequence
 true, false         // Boolean
@@ -629,18 +628,6 @@ ptr : Ptr(CChar) := buffer   // CArray decays to Ptr
 c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
 ```
 
-### String to Pointer Coercion
-
-`String` values implicitly convert to `Ptr(CChar)` for C interoperability:
-
-```tl
-msg := "hello"
-c_puts(msg)                  // String converts to Ptr(CChar)
-c_printf("%s\n", msg)        // Works seamlessly with C functions
-```
-
-This allows strings to be passed directly to C functions expecting `char*`.
-
 ## C Interoperability
 
 ### Embedding C Code
@@ -656,8 +643,8 @@ int add(int a, int b) { return a + b; }
 Functions with the `c_` prefix map directly to C functions:
 
 ```tl
-c_printf(fmt: String, ...) -> CInt     // Declares printf
-c_malloc(size: CSize) -> Ptr(any)      // Declares malloc
+c_printf(fmt: Ptr(CChar), ...) -> CInt     // Declares printf
+c_malloc(size: CSize) -> Ptr(any)          // Declares malloc
 ```
 
 To call a C function named `foo`, declare it as `c_foo` in TL.
