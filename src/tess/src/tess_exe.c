@@ -296,6 +296,22 @@ static void print_import_paths(state *self) {
     fprintf(stderr, "\n");
 }
 
+static void add_standard_include_paths(state *self, char const *cwd) {
+    char exe_buf[4096];
+    span exe_span = {.buf = exe_buf, .len = sizeof(exe_buf)};
+
+    // 1. Add <exe_dir>/../lib/tess/std (for installed tess)
+    if (file_exe_directory(exe_span)) {
+        str exe_dir = str_init(self->arena, exe_buf);
+        str installed_std = str_cat(self->arena, exe_dir, S("/../lib/tess/std"));
+        array_push(self->include_paths, installed_std);
+    }
+
+    // 2. Add <cwd>/src/tl/std (for development builds)
+    str cwd_std = str_cat(self->arena, str_init_static(cwd), S("/src/tl/std"));
+    array_push(self->include_paths, cwd_std);
+}
+
 static str find_import_file(state *self, str path) {
     // Note: path must be quoted, either with quotes or angle brackets
     if (!is_quoted(path) && !is_angle_quoted(path)) return str_empty();
@@ -929,6 +945,10 @@ int main(int argc, char *argv[]) {
     state self;
     state_init(&self);
     state_gather_options(&self, argc, argv);
+
+    if (!self.no_standard_includes) {
+        add_standard_include_paths(&self, buf);
+    }
 
     get_c_compiler(&self);
     if (str_is_empty(self.cc)) {

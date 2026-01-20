@@ -8,8 +8,13 @@
 
 #ifdef MOS_WINDOWS
 #include <direct.h>
+#include <windows.h>
 #else
 #include <unistd.h>
+#endif
+
+#ifdef MOS_APPLE
+#include <mach-o/dyld.h>
 #endif
 
 int file_exists(char const *filename) {
@@ -88,4 +93,26 @@ char *file_current_working_directory(span buf) {
     out = _getcwd(buf.buf, (int)buf.len);
 #endif
     return out;
+}
+
+char *file_exe_directory(span buf) {
+#ifdef MOS_WINDOWS
+    DWORD len = GetModuleFileNameA(NULL, buf.buf, (DWORD)buf.len);
+    if (len == 0 || len >= buf.len) return NULL;
+#elif defined(MOS_APPLE)
+    uint32_t size = (uint32_t)buf.len;
+    if (_NSGetExecutablePath(buf.buf, &size) != 0) return NULL;
+#else
+    ssize_t len = readlink("/proc/self/exe", buf.buf, buf.len - 1);
+    if (len == -1) return NULL;
+    buf.buf[len] = '\0';
+#endif
+    // Find last path separator and truncate to get directory
+    char *last_sep = strrchr(buf.buf, '/');
+#ifdef MOS_WINDOWS
+    char *last_sep_win = strrchr(buf.buf, '\\');
+    if (last_sep_win > last_sep) last_sep = last_sep_win;
+#endif
+    if (last_sep) *last_sep = '\0';
+    return buf.buf;
 }
