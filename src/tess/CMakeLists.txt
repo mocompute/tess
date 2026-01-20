@@ -114,6 +114,7 @@ function(tesslang_create_test NAME)
     COMMAND
     tess_exe
     exe
+    --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
     -I ${PROJECT_SOURCE_DIR}/src/tl/std
     -o ${TEST_EXE}
@@ -138,6 +139,7 @@ function(tesslang_create_test_optimized NAME)
     tess_exe
     exe
     -O
+    --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
     -I ${PROJECT_SOURCE_DIR}/src/tl/std
     -o ${TEST_EXE}
@@ -160,6 +162,7 @@ function(tesslang_create_build_fail_test NAME)
     COMMAND
     $<TARGET_FILE:tess_exe>
     exe
+    --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
     -I ${PROJECT_SOURCE_DIR}/src/tl/std
     -o ${TEST_EXE}

@@ -421,7 +421,7 @@ TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
-	@if ! ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o $@ $< ; then \
+	@if ! ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o $@ $< ; then \
 		$(MSG_FAIL) $@; \
 	fi
 
@@ -439,7 +439,7 @@ test-tl: build-tl-tests
 	done; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \

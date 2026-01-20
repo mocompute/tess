@@ -34,21 +34,22 @@ make -j test-tl            # TL language integration tests only
 ### Single Test Execution
 To run a single TL language test:
 ```bash
-./tess exe -I src/tl/std src/tess/tl/test_<name>.tl -o /tmp/test_output
+./tess exe src/tess/tl/test_<name>.tl -o /tmp/test_output
 /tmp/test_output        # Run the compiled test
 ```
 
 ### Using the Compiler
 ```bash
-./tess c -I src/tl/std <file.tl>                    # Transpile to C (stdout)
-./tess c -v -I src/tl/std <file.tl>                 # Transpile to C, verbose (stdout)
-./tess exe -I src/tl/std <file.tl> -o <output>      # Compile to executable
-./tess lib -I src/tl/std <file.tl> -o <output.so>   # Compile to shared library
-./tess c --no-line-directive -I src/tl/std <file>   # Transpile without #line directives
-./tess exe -v -I src/tl/std <file.tl> -o <output>   # Verbose compilation
+./tess c <file.tl>                    # Transpile to C (stdout)
+./tess c -v <file.tl>                 # Transpile to C, verbose (stdout)
+./tess exe <file.tl> -o <output>      # Compile to executable
+./tess lib <file.tl> -o <output.so>   # Compile to shared library
+./tess c --no-line-directive <file>   # Transpile without #line directives
+./tess exe -v <file.tl> -o <output>   # Verbose compilation
+./tess exe --no-standard-includes -I src/tl/std <file.tl> -o <output>  # Disable automatic std includes
 ```
 
-The `-I src/tl/std` flag is required to include the standard library (builtin.tl, Array.tl, etc).
+The standard library paths are included automatically. Use `--no-standard-includes` to disable this and manually specify include paths with `-I`.
 
 ### Installation
 ```bash
@@ -128,23 +129,23 @@ ctest -C Release -R test_tl_generic
 ### Single Test Execution
 To run a single TL language test on Windows:
 ```powershell
-.\out\build\tess.exe exe -I src/tl/std src/tess/tl/test_<name>.tl -o test_output.exe
+.\out\build\tess.exe exe src/tess/tl/test_<name>.tl -o test_output.exe
 .\test_output.exe
 ```
 
 ### Using the Compiler on Windows
 ```powershell
 # Transpile to C (stdout)
-.\out\build\tess.exe c -I src/tl/std <file.tl>
+.\out\build\tess.exe c <file.tl>
 
 # Compile to executable
-.\out\build\tess.exe exe -I src/tl/std <file.tl> -o output.exe
+.\out\build\tess.exe exe <file.tl> -o output.exe
 
 # Compile to shared library
-.\out\build\tess.exe lib -I src/tl/std <file.tl> -o output.dll
+.\out\build\tess.exe lib <file.tl> -o output.dll
 
 # Verbose compilation
-.\out\build\tess.exe exe -v -I src/tl/std <file.tl> -o output.exe
+.\out\build\tess.exe exe -v <file.tl> -o output.exe
 ```
 
 ### Windows-Specific Notes
@@ -223,7 +224,7 @@ The standard library C stubs (`src/tess/embed/std.c`) are embedded into the comp
 
 The compiler automatically resolves imports by:
 1. Parsing `#import` directives from source files
-2. Searching include paths (`-I` flags) for imported modules
+2. Searching standard library paths (automatic) and user include paths (`-I` flags) for imported modules
 3. Building dependency graph and ordering files
 4. Parsing all files in dependency order
 
