@@ -624,7 +624,7 @@ b : Ptr(Byte) := p    // Cast to different pointer type
 `CArray` types automatically decay to pointers when needed, similar to C:
 
 ```tl
-buffer : CArray(CChar, 256) := void
+buffer := CArray(CChar, 256)
 ptr : Ptr(CChar) := buffer   // CArray decays to Ptr
 c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
 ```
