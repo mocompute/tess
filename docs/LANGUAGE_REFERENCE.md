@@ -9,7 +9,7 @@ TL is a statically-typed, compiled programming language that transpiles to C. It
 **Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
 
 ```tl
-greet(name) { c_printf("Hello, %s\n", name); void }
+greet(name) { c_printf("Hello, %s\n", name)  void }
 ```
 
 If a function ends with an assignment statement (`=`), it already returns `Void` since assignments have no value:
@@ -27,9 +27,9 @@ result := (x := compute()
 
 **Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
 
-**Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
+**Minimal syntax:** TL favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines)—there are no semicolons. Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
 
-**Postfix pointer operators:** Address-of (`.&`) and dereference (`.*`) are postfix rather than prefix, enabling chained access like `ptr.*.field` or `obj.&`.
+**Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
 
 ## Program Structure
 
@@ -219,7 +219,7 @@ It also enables functional patterns where rebinding is preferred over mutation, 
 ```tl
 add(a, b) { a + b }                    // Types inferred
 add(a: Int, b: Int) -> Int { a + b }   // Explicit type annotations
-log(msg) { c_printf("%s\n", msg); void }  // void needed after expression
+log(msg) { c_printf("%s\n", msg)  void }  // void needed after expression
 update(v) { value = v }                // No void needed - assignment has no value
 ```
 
