@@ -4,12 +4,18 @@ TL is a statically-typed, compiled programming language that transpiles to C. It
 
 ## Key Language Characteristics
 
-**Expression-based:** Nearly everything in TL is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported).
+**Expression-based:** Nearly everything in TL is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
 
-**Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression:
+**Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
 
 ```tl
 greet(name) { c_printf("Hello, %s\n", name); void }
+```
+
+If a function ends with an assignment statement (`=`), it already returns `Void` since assignments have no value:
+
+```tl
+set_name(n) { name = n }   // No void needed - assignment has no value
 ```
 
 **Parentheses for grouping:** Use `( )` to group expressions and control evaluation order, or to introduce local bindings with let-in style:
@@ -21,7 +27,7 @@ result := (x := compute()
 
 **Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
 
-**Distinct declaration vs assignment:** `:=` declares a new binding; `=` mutates an existing one. This enables predictable scoping and intentional shadowing.
+**Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
 
 **Postfix pointer operators:** Address-of (`.&`) and dereference (`.*`) are postfix rather than prefix, enabling chained access like `ptr.*.field` or `obj.&`.
 
@@ -45,6 +51,22 @@ The entry point is the `main` function in the `main` module.
 ```
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
+
+### Module Initialization
+
+Modules can define a `__init()` function that runs automatically when the module is loaded:
+
+```tl
+#module Config
+
+default_value := 0
+
+__init() {
+  default_value = load_from_env()
+}
+```
+
+Module initialization functions are called in dependency order before `main()` executes.
 
 ## Types
 
@@ -93,6 +115,23 @@ Point(a) : { x: a, y: a }
 ```tl
 Pt = Point(Int)    // Creates a type alias
 ```
+
+### Type as a Value
+
+The `Type` type allows passing types as function arguments. This is used for generic function instantiation:
+
+```tl
+// Function that takes a type parameter as a value
+empty(a: Type) -> Array.T(a) {
+  Array.with_capacity(a, 16)
+}
+
+// Call with explicit type argument
+arr := empty(Int)           // Creates Array.T(Int)
+strs := empty(String)       // Creates Array.T(String)
+```
+
+This pattern is commonly used in the standard library for functions that need to create values of a generic type.
 
 ## Variables and Assignment
 
@@ -145,6 +184,16 @@ x = 10               // Mutate existing binding (x is now 10)
 x += 2               // Compound assignment (also -=, *=, /=)
 ```
 
+**Assignment is a statement, not an expression.** Unlike `:=` which produces a value, `=` has no value. This means functions that end with an assignment implicitly return `Void`:
+
+```tl
+set_value(v) {
+  global_val = v     // Assignment is last - function returns Void
+}
+```
+
+No explicit `void` is needed after an assignment statement.
+
 Mutation affects the binding in its original scope:
 
 ```tl
@@ -158,8 +207,8 @@ if true {
 ### Why Two Operators?
 
 This distinction makes code intent explicit:
-- `:=` signals "I'm introducing a new name" (safe, no side effects on outer scope)
-- `=` signals "I'm changing an existing value" (intentional mutation)
+- `:=` signals "I'm introducing a new name" (expression with a value)
+- `=` signals "I'm changing an existing value" (statement with no value)
 
 It also enables functional patterns where rebinding is preferred over mutation, while still allowing imperative style when needed.
 
@@ -170,10 +219,11 @@ It also enables functional patterns where rebinding is preferred over mutation, 
 ```tl
 add(a, b) { a + b }                    // Types inferred
 add(a: Int, b: Int) -> Int { a + b }   // Explicit type annotations
-log(msg) { c_printf("%s\n", msg); void }  // Use void for side-effect-only functions
+log(msg) { c_printf("%s\n", msg); void }  // void needed after expression
+update(v) { value = v }                // No void needed - assignment has no value
 ```
 
-The last expression in the function body is the return value. Use `void` as the final expression for functions that shouldn't return a meaningful value.
+The last expression in the function body is the return value. Use `void` as the final expression when the last statement is an expression (like a function call) but the function should return nothing. If the function ends with an assignment (`=`), no `void` is needed.
 
 ### Lambdas
 
@@ -191,6 +241,24 @@ f := () { val }    // Captures val
 f()                // Returns 10
 ```
 
+**Capture by reference:** Closures capture variables by reference, not by value. This means mutations after the lambda is created are visible inside the lambda:
+
+```tl
+x := 1
+f := () { x }
+x = 0              // Mutate x after creating lambda
+f()                // Returns 0, not 1
+```
+
+This also means lambdas can mutate captured variables:
+
+```tl
+counter := 0
+increment := () { counter = counter + 1 }
+increment()        // counter is now 1
+increment()        // counter is now 2
+```
+
 ### Function Pointers
 
 ```tl
@@ -203,6 +271,19 @@ apply(fp, 5)         // Pass as argument
 
 ```tl
 map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
+```
+
+### Tail Call Optimization
+
+TL defines tail call optimization (TCO) as part of the language semantics. The generated C code is structured to enable TCO, and the underlying C compilers implement the optimization on all supported platforms. Tail-recursive functions are compiled to loops, allowing deep recursion without stack overflow:
+
+```tl
+sum_to(n, acc) {
+  if n == 0 { acc }
+  else { sum_to(n - 1, acc + n) }  // Tail call - optimized to loop
+}
+
+result := sum_to(1000000, 0)       // Works without stack overflow
 ```
 
 ## Expressions
@@ -378,11 +459,33 @@ Module.iter_deinit(iter.&)
 
 With `.&`, `iter_ptr` is called instead of `iter_value`.
 
+### Break and Continue
+
+Use `break` to exit a loop early, and `continue` to skip to the next iteration:
+
+```tl
+while i < 10, i = i + 1 {
+  if i == 5 { break }       // Exit loop when i reaches 5
+  if i % 2 == 0 { continue } // Skip even numbers
+  c_printf("%d\n", i)
+}
+
+for x in collection {
+  if x < 0 { continue }     // Skip negative values
+  if x > 100 { break }      // Stop at first value over 100
+  process(x)
+}
+```
+
+Both `break` and `continue` work in `while` and `for` loops.
+
 ### Return Statement
 
 ```tl
 return value    // Early return from function
 ```
+
+Use `return` for early exit from a function. Since TL is expression-based, implicit returns (the last expression in a function body) are preferred for normal control flow.
 
 ## Structs
 
@@ -407,6 +510,23 @@ p := Point(x = 1, y = 2)               // Named arguments
 p.x                                    // Read field
 p.x = 10                               // Write field
 ```
+
+### Uninitialized Fields
+
+Use `void` to leave a field uninitialized during construction:
+
+```tl
+Buffer : { data: Ptr(Byte), size: Int, capacity: Int }
+
+buf := Buffer(
+  data = c_malloc(1024),
+  size = void,         // Left uninitialized
+  capacity = 1024
+)
+buf.size = 0           // Initialize later
+```
+
+This is useful when a field will be set immediately after construction or when working with low-level memory patterns.
 
 ## Enums
 
@@ -450,6 +570,10 @@ area := case s: Foo.Shape {
   sq: Square { sq.length * sq.length }
 }
 ```
+
+`case` expressions of this form for tagged unions must be exhaustive:
+there must be one arm per variant in the union, or else there must be
+an `else` arm.
 
 ### Mutable tagged union case
 
@@ -495,6 +619,28 @@ p : Ptr(Int) := c_malloc(sizeof(Int) * 10)
 b : Ptr(Byte) := p    // Cast to different pointer type
 ```
 
+### Array Decay
+
+`CArray` types automatically decay to pointers when needed, similar to C:
+
+```tl
+buffer : CArray(CChar, 256) := void
+ptr : Ptr(CChar) := buffer   // CArray decays to Ptr
+c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
+```
+
+### String to Pointer Coercion
+
+`String` values implicitly convert to `Ptr(CChar)` for C interoperability:
+
+```tl
+msg := "hello"
+c_puts(msg)                  // String converts to Ptr(CChar)
+c_printf("%s\n", msg)        // Works seamlessly with C functions
+```
+
+This allows strings to be passed directly to C functions expecting `char*`.
+
 ## C Interoperability
 
 ### Embedding C Code
@@ -524,6 +670,10 @@ c_INT_MAX : Int                        // C constant or variable
 
 ### Declaring C Struct Types
 
+The `c_struct_` prefix transpiles directly to a C `struct` and is used
+to annotate the types of the struct's fields. Interestingly, only the
+fields used by the TL program need to be annotated.
+
 ```tl
 c_struct_foo : { x: CInt, y: CInt }    // Annotate C struct layout
 ```
@@ -535,9 +685,27 @@ sizeof(T)           // Size of type or value in bytes
 alignof(T)          // Alignment of type or value
 ```
 
+### Compiler Intrinsics
+
+These low-level intrinsics are used internally by the standard library:
+
+```tl
+_tl_sizeof_(T)      // Type-parameterized sizeof (for generic code)
+_tl_alignof_(T)     // Type-parameterized alignof (for generic code)
+_tl_fatal_(msg)     // Terminate with error message
+```
+
+The `_tl_sizeof_` and `_tl_alignof_` intrinsics differ from `sizeof`/`alignof` in that they work with type variables in generic functions:
+
+```tl
+allocate(a: Type) -> Ptr(a) {
+  c_malloc(_tl_sizeof_(a))   // Works with generic type parameter
+}
+```
+
 ## Global Variables
 
-Variables declared at module scope are global:
+Variables declared at module scope are global variables:
 
 ```tl
 #module Foo
@@ -547,6 +715,8 @@ increment() {
   counter = counter + 1
 }
 ```
+
+All global variables are thread-local. There are no non-thread-local variables.
 
 ## Mutual Recursion
 
@@ -584,3 +754,19 @@ t1.children = forest.&
 ```tl
 // Single-line comment
 ```
+
+## Naming Conventions
+
+The standard library follows these conventions:
+
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `lowercase_snake` | Public functions | `with_capacity`, `iter_init` |
+| `_leading_underscore` | Private/internal functions | `_bump_malloc`, `_find_bucket` |
+| `c_name` | C function binding | `c_malloc`, `c_printf` |
+| `c_struct_name` | C struct type annotation | `c_struct_timespec` |
+| `PascalCase` | Types and modules | `Array`, `Alloc`, `Point` |
+| `__double_underscore` | Special functions | `__init` (module initialization) |
+| `_tl_name_` | Compiler intrinsics | `_tl_sizeof_`, `_tl_fatal_` |
+
+Single-letter names like `a`, `b`, `T` are conventionally used for type parameters in generic definitions.
