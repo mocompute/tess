@@ -50,7 +50,7 @@ make -j              # Build the compiler
 make -j test         # Run tests
 
 # build an executable
-./tess exe -I src/tl/std program.tl -o program
+./tess exe -o program
 ```
 
 ## Project Status
