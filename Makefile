@@ -422,6 +422,8 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	case_float				\
+	fail_lambda_implicit_return		\
+	fail_lambda_return			\
 	fail_monkey_patch			\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\

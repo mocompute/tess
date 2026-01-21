@@ -104,7 +104,8 @@
     X(tl_err_tagged_union_missing_case, "tagged_union_missing_case")                                       \
     X(tl_err_tagged_union_unknown_variant, "tagged_union_unknown_variant")                                 \
     X(tl_err_tagged_union_expected_tagged_union, "tagged_union_expected_tagged_union")                     \
-    X(tl_err_tagged_union_case_syntax_error, "tagged_union_case_syntax_error")
+    X(tl_err_tagged_union_case_syntax_error, "tagged_union_case_syntax_error")                             \
+    X(tl_err_cannot_return_lambda, "cannot_return_lambda")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

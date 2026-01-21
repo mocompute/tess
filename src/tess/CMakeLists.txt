@@ -318,6 +318,8 @@ tesslang_create_test(while_update_statement)
 
 # Expected failures
 tesslang_create_build_fail_test(case_float)
+tesslang_create_build_fail_test(fail_lambda_implicit_return)
+tesslang_create_build_fail_test(fail_lambda_return)
 tesslang_create_build_fail_test(fail_monkey_patch)
 tesslang_create_build_fail_test(fail_tagged_union_missing_case)
 tesslang_create_build_fail_test(fail_tagged_union_unknown_variant)

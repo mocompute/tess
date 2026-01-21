@@ -657,6 +657,12 @@ static int infer_body(tl_infer *self, ast_node *node) {
         u32       sz   = node->body.expressions.size;
         ast_node *last = node->body.expressions.v[sz - 1];
         ensure_tv(self, &last->type);
+
+        if (ast_node_is_lambda_function(last)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_cannot_return_lambda, .node = last}));
+            return 1;
+        }
+
         return constrain(self, node->type, last->type, node);
     }
     return 0;
@@ -691,6 +697,12 @@ static int infer_continue(tl_infer *self, ast_node *node) {
 
 static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->return_.value, ctx, npos_operand)) return 1;
+
+    if (node->return_.value && ast_node_is_lambda_function(node->return_.value)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_cannot_return_lambda, .node = node}));
+        return 1;
+    }
+
     ensure_tv(self, &node->type);
     if (!node->return_.is_break_statement)
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
