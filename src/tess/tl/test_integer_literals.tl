@@ -13,6 +13,20 @@ main() {
   error = error + if 0X10 == 16 {0} else {1}
   error = error + if 0XFF == 255 {0} else {1}
 
+  // Test binary with lowercase b
+  error = error + if 0b1010 == 10 {0} else {1}
+  error = error + if 0b11111111 == 255 {0} else {1}
+  error = error + if 0b0 == 0 {0} else {1}
+  error = error + if 0b1 == 1 {0} else {1}
+
+  // Test binary with uppercase B
+  error = error + if 0B1010 == 10 {0} else {1}
+  error = error + if 0B11111111 == 255 {0} else {1}
+
+  // Test binary with underscores
+  error = error + if 0b1111_0000 == 240 {0} else {1}
+  error = error + if 0b1010_1010 == 170 {0} else {1}
+
   // Test octal (leading zero)
   error = error + if 010 == 8 {0} else {1}
   error = error + if 0377 == 255 {0} else {1}
