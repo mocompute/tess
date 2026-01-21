@@ -325,6 +325,38 @@ res := (x := 42
         x - 10)     // x is scoped to the expression; res = 32
 ```
 
+### Block Expressions
+
+A block can be used as an expression by wrapping it in parentheses: `({ ... })`. The block's value is its final expression:
+
+```tl
+result := ({
+  setup()
+  compute()
+  cleanup()
+  42           // Block evaluates to 42
+})
+```
+
+This is useful when you need to execute multiple statements in an expression context, such as in the middle of a larger expression or as an argument to a function:
+
+```tl
+total := base_cost + ({
+  discount := calculate_discount()
+  apply_tax(price - discount)
+})
+```
+
+Block expressions combine naturally with let-in bindings:
+
+```tl
+value := ({
+  x := 10
+  y := 20
+  x * y        // Returns 200
+})
+```
+
 ### Type Assertions
 
 ```tl

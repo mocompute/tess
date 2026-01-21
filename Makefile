@@ -292,6 +292,7 @@ TL_TESTS =					\
 	_Exit					\
 	binop					\
 	bitwise_operators			\
+	block_expression			\
 	c_div					\
 	c_symbol_annotation			\
 	c_struct				\
