@@ -306,7 +306,7 @@ result := sum_to(1000000, 0)       // Works without stack overflow
 0377                // Octal
 3.14                // Float
 1.5e-10             // Scientific notation
-"hello"             // String (Ptr(CChar))
+"hello"             // String (CString)
 'a'                 // Character
 '\n'                // Escape sequence
 true, false         // Boolean
@@ -624,7 +624,7 @@ b : Ptr(Byte) := p    // Cast to different pointer type
 
 ```tl
 buffer := CArray(CChar, 256)
-ptr : Ptr(CChar) := buffer   // CArray decays to Ptr
+ptr : CString := buffer      // CArray decays to Ptr
 c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
 ```
 
@@ -643,8 +643,8 @@ int add(int a, int b) { return a + b; }
 Functions with the `c_` prefix map directly to C functions:
 
 ```tl
-c_printf(fmt: Ptr(CChar), ...) -> CInt     // Declares printf
-c_malloc(size: CSize) -> Ptr(any)          // Declares malloc
+c_printf(fmt: CString, ...) -> CInt     // Declares printf
+c_malloc(size: CSize) -> Ptr(any)       // Declares malloc
 ```
 
 To call a C function named `foo`, declare it as `c_foo` in TL.

@@ -36,7 +36,7 @@ Point(a) : {
 }
 
 // Test case expression
-classify(n: Int) -> Ptr(CChar) {
+classify(n: Int) -> CString {
     case {
         n < 0 -> "negative"
         n == 0 -> "zero"

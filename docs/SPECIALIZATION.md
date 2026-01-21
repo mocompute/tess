@@ -22,7 +22,7 @@ identity(x: a) -> a { x }
 
 main() {
     identity(42)      // Specializes to: identity_0(x: Int) -> Int
-    identity("hello") // Specializes to: identity_1(x: Ptr(CChar)) -> String
+    identity("hello") // Specializes to: identity_1(x: CString) -> String
 }
 ```
 

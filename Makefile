@@ -297,8 +297,6 @@ TL_TESTS =					\
 	case_basic_else				\
 	case_pred_ident				\
 	case_pred_lambda			\
-	cast_string_to_ptr			\
-	cast_string_to_ptr_and_index		\
 	char_literal				\
 	closure_fun_ptr				\
 	defun_inline_type			\

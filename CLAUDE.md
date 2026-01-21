@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner-style), generic types/functions, lambdas, closures, and C interoperability. The compiler generates C code which is then compiled to native executables or shared libraries.
 
+## Documentation
+
+The `docs/` directory contains detailed documentation about the compiler's design and implementation. **Always consult these files before reading source code** when learning about a feature or implementation detail:
+
+- `LANGUAGE_REFERENCE.md` - Language syntax and features
+- `TL_TYPE_SYSTEM.md` - Type system design and implementation
+- `SPECIALIZATION.md` - Generic function specialization
+- `TAGGED_UNIONS.md` - Tagged union implementation
+
 ## Build Commands
 
 ### Standard Build
@@ -286,31 +295,3 @@ The Makefile supports:
 - Colored output for build status
 
 CMake and Nix Flake support are also available for alternative build systems.
-
-## TODO
-
-### Refactor escape_constraint for Type Coercions
-
-**Status:** Planned, not started
-
-**Problem:** CArray decay to pointer doesn't work in function arguments. The `escape_constraint` mechanism handles `String ↔ Ptr(CChar)` but only in `infer_let_in()`, not function arguments.
-
-**Goal:** Make `escape_constraint` a general-purpose type coercion system supporting:
-1. `String ↔ Ptr(CChar)` - Bidirectional equivalence (existing)
-2. `CArray(T, N) → Ptr(T)` - One-way decay (new)
-
-**Full plan:** See `/home/mo/.claude/projects/-home-mo-dev-github-tess/6001902d-40a6-43a1-902d-58a755a41cb5.jsonl`
-
-**Files to modify:**
-- `src/tess/tl/test_carray_decay.tl` - CREATE new test file
-- `Makefile` - Add `carray_decay` to TL_TESTS
-- `src/tess/CMakeLists.txt` - Add `tesslang_create_test(carray_decay)`
-- `src/tess/include/type.h` - Declare new helper functions
-- `src/tess/src/type.c` - Implement `tl_monotype_is_carray()`, `tl_monotype_carray_element_type()`
-- `src/tess/src/infer.c` - Refactor escape_constraint, add function arg escape checking
-
-**Key code locations:**
-- `escape_constraint()` at infer.c:568-570
-- `is_string_ptr_conversion()` at infer.c:633-638
-- `infer_let_in()` at infer.c:1040-1125 (uses escape_constraint)
-- `infer_named_function_application()` at infer.c:1127-1220 (needs escape_constraint)

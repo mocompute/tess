@@ -2,7 +2,7 @@
 Map(K, V) : { keys: Ptr(K), values: Ptr(V), size: Int }
 
 #module App
-StringIntMap = Collections.Map(Ptr(CChar), Int)
+StringIntMap = Collections.Map(CString, Int)
 
 #module main
 main() {
