@@ -23,6 +23,7 @@
     X(tok_semicolon, "semicolon")                                                                          \
     X(tok_ampersand, "ampersand")                                                                          \
     X(tok_logical_and, "logical_and")                                                                      \
+    X(tok_logical_or, "logical_or")                                                                        \
     X(tok_star, "star")                                                                                    \
     X(tok_arrow, "arrow")                                                                                  \
     X(tok_plus, "plus")                                                                                    \

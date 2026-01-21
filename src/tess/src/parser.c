@@ -609,6 +609,7 @@ static int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_dot:
     case tok_equal_equal:
     case tok_logical_and:
+    case tok_logical_or:
     case tok_arrow:
     case tok_ampersand:
     case tok_open_square:
@@ -662,6 +663,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_dot:          op = "."; break;
     case tok_equal_equal:  op = "=="; break;
     case tok_logical_and:  op = "&&"; break;
+    case tok_logical_or:   op = "||"; break;
     case tok_arrow:        op = "->"; break;
     case tok_ampersand:    op = "&"; break;
     case tok_open_square:  op = "["; break;
@@ -726,6 +728,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_double_colon:
     case tok_semicolon:
     case tok_logical_and:
+    case tok_logical_or:
     case tok_arrow:
     case tok_ellipsis:
     case tok_open_round:

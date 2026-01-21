@@ -168,6 +168,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_dot,
         in_dot_2,
         in_ampersand,
+        in_vertical_bar,
 
         start_number,
         start_number_sign,
@@ -228,6 +229,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             switch (c) {
             case '=':  state = in_equal; break;
             case '&':  state = in_ampersand; break;
+            case '|':  state = in_vertical_bar; break;
             case '-':  state = in_minus; break;
             case '+':  state = in_plus; break;
             case '*':  state = in_star; break;
@@ -246,11 +248,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case '~':
                 replace_token_s(self->strings, &res, tok_symbol, "~");
-                state = stop;
-                break;
-
-            case '|':
-                replace_token(self->strings, &res, tok_bar);
                 state = stop;
                 break;
 
@@ -522,6 +519,27 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             } else {
                 reverse_pos(self);
                 replace_token(self->strings, &res, tok_ampersand);
+                state = stop;
+                goto finish;
+            }
+
+        } break;
+
+        case in_vertical_bar: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_bar);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            if ('|' == c) {
+                // ||
+                replace_token(self->strings, &res, tok_logical_or);
+                state = stop;
+                goto finish;
+            } else {
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_bar);
                 state = stop;
                 goto finish;
             }
