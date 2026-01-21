@@ -278,6 +278,7 @@ test-tess: build-tess-tests
 
 TL_TESTS =					\
 	address_of				\
+	alignof					\
 	alloc_align				\
 	alloc_allocators			\
 	anon_lambda				\
@@ -290,23 +291,30 @@ TL_TESTS =					\
 	atexit					\
 	_Exit					\
 	binop					\
+	bitwise_operators			\
 	c_div					\
 	c_symbol_annotation			\
 	c_struct				\
 	c_timespec				\
+	carray					\
 	case_basic_else				\
 	case_pred_ident				\
 	case_pred_lambda			\
 	char_literal				\
 	closure_fun_ptr				\
+	compound_assignment			\
 	defun_inline_type			\
 	dynamic_array				\
 	enum_no_module				\
 	enum_module				\
 	embed_c					\
+	escape_sequences			\
 	if_basic				\
 	if_expression				\
+	integer_literals			\
 	factorial				\
+	fatal_intrinsic				\
+	float_scientific			\
 	for_break				\
 	for_continue				\
 	for_statement_basic			\
@@ -332,6 +340,7 @@ TL_TESTS =					\
 	mapper_basic				\
 	mapper_lambda				\
 	module_basic				\
+	module_init				\
 	mutual_recursion			\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
@@ -367,6 +376,7 @@ TL_TESTS =					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
+	struct_construction			\
 	tail_call				\
 	type_alias_generic			\
 	type_alias_local			\
@@ -401,6 +411,7 @@ TL_TESTS =					\
 	union_basic				\
 	union_module_intermediate		\
 	union_module_second_variant		\
+	uninitialized_fields			\
 	while_break				\
 	while_continue				\
 	while_statement				\
