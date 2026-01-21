@@ -334,6 +334,7 @@ TL_TESTS =					\
 	lambda_immediate_type_argument		\
 	let_in_basic				\
 	let_in_expression			\
+	logical_or				\
 	malloc_free				\
 	malloc_free_is_null			\
 	malloc_struct_basic			\

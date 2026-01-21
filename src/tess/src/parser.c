@@ -1482,6 +1482,9 @@ static ast_node *parse_base_expression(parser *self) {
         // check for let-in expression before recursing
         if (0 == a_try(self, a_assignment)) expr = self->result;
 
+        // if not let-in expression, check for body ({ ... }) before recursing
+        if (!expr) expr = parse_body(self);
+
         if (!expr) expr = parse_expression(self, INT_MIN);
         if (a_try(self, a_close_round)) return null;
         return expr;
