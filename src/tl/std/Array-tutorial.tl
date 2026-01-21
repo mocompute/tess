@@ -142,15 +142,6 @@ free(self) {
     // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type, similar to C
     // NULL or nullptr.
     self->v = null
-
-    // All functions must return a value, and the value of the final expression in the body of the function is
-    // used as the return value. For functions which return no value, they must return the pseudo-value
-    // `void`. If this `void` expression was omitted, the return value of this function would be `null`, with
-    // the type `Ptr(a)`, inferred from the type of the `v` field of the `T(a)` struct, due to the previous
-    // assignment statement. Since the type `Ptr(a)` is not compatible with the type `Void` which appeared as
-    // the result in the forward declaration for `free` at the top of this file, this would generate a type
-    // error at compile time.
-    void
 }
 
 // The first formal parameter of this function is given the annotation `Type`. This is a special type which
@@ -191,7 +182,6 @@ reserve(self: Ptr(T(a)), count: Int) {
         if p == null { _tl_fatal_("oom") }
         self->v = p
     }
-    void
 }
 
 
@@ -203,7 +193,6 @@ push(self, x) {
 
     // It's a bit wordy compared to C, but there are no ++ operators or += operators.
     self->size = self->size + 1
-    void
 }
 
 // -- Iterator interface --
@@ -231,7 +220,7 @@ iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr(iter)    { iter->v[iter->index].&                           }
 iter_value(iter)  { iter->v[iter->index]                             }
 iter_cond(iter)   { iter->index < iter->size                         }
-iter_update(iter) { iter->index = iter->index + 1              void  }
+iter_update(iter) { iter->index = iter->index + 1                    }
 iter_deinit(iter) {                                                  }
 
 
@@ -321,5 +310,5 @@ iter_init(arr)    { Iter (v = arr->v, size = arr->size, index = 0,
 iter_ptr(iter)    { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp     }
 iter_value(iter)  { iter->iv.value = iter->v[iter->index]   iter->iv.index  = iter->index iter->iv      }
 iter_cond(iter)   { iter->index < iter->size                                                            }
-iter_update(iter) { iter->index = iter->index + 1                                                  void }
+iter_update(iter) { iter->index = iter->index + 1                                                       }
 iter_deinit(iter) {                                                                                     }

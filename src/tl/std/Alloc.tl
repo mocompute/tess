@@ -92,9 +92,6 @@ _calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num,
 _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
-
-
-
 // -- BumpAllocator --
 
 _bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any)
@@ -274,8 +271,6 @@ _bump_free(a: Ptr(Allocator), p: Ptr(any)) -> Void {
     if _is_last_block(bucket, p) {
         bucket->size -= _block_size(p).* + sizeof(_BumpBlock)
     }
-
-    void
 }
 
 

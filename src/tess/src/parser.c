@@ -1743,7 +1743,11 @@ static int a_return_statement(parser *self) {
     if (a_try_s(self, the_symbol, "return")) return 1;
 
     ast_node *value = parse_expression(self, INT_MIN);
-    if (!value) return 1;
+    if (!value) {
+        // allow `return` without an argument to mean `return void`
+        result_ast(self, ast_void);
+        value = self->result;
+    }
 
     ast_node *r = ast_node_create_return(self->ast_arena, value, 0);
     return result_ast_node(self, r);

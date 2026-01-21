@@ -59,7 +59,6 @@ init(val: a, count: Int) {
 free(self) {
     c_free(self->v)
     self->v = null
-    void
 }
 
 with_capacity(a: Type, count: Int) {
@@ -81,7 +80,6 @@ reserve(self: Ptr(T(a)), count: Int) {
         if p == null { _tl_fatal_("oom") }
         self->v = p
     }
-    void
 }
 
 
@@ -89,7 +87,6 @@ push(self, x) {
     if _is_full(self) { _grow(self, self->capacity + 1) }
     self->v[self->size] = x
     self->size = self->size + 1
-    void
 }
 
 // -- Iterator interface --
@@ -111,7 +108,7 @@ iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr(iter)    { iter->v[iter->index].&                           }
 iter_value(iter)  { iter->v[iter->index]                             }
 iter_cond(iter)   { iter->index < iter->size                         }
-iter_update(iter) { iter->index = iter->index + 1              void  }
+iter_update(iter) { iter->index = iter->index + 1                    }
 iter_deinit(iter) {                                                  }
 
 
@@ -128,7 +125,7 @@ _type_width_aligned (a: Type)                   -> Int
 _is_full(self) { self->capacity == self->size }
 
 _grow(self, at_least) {
-    if self->capacity >= at_least { return void }
+    if self->capacity >= at_least { return }
 
     count := self->capacity
     if count < 1 { count = 1 }
@@ -182,5 +179,5 @@ iter_init(arr)    { Iter (v     = arr->v,
 iter_ptr(iter)    { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp     }
 iter_value(iter)  { iter->iv.value = iter->v[iter->index]   iter->iv.index  = iter->index iter->iv      }
 iter_cond(iter)   { iter->index < iter->size                                                            }
-iter_update(iter) { iter->index = iter->index + 1                                                  void }
+iter_update(iter) { iter->index = iter->index + 1                                                       }
 iter_deinit(iter) {                                                                                     }
