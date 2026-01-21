@@ -37,7 +37,6 @@
 // argument, and returns a pointer to an arbitrary type `T`. See `Array.reserve()` for the syntax used to
 // cast the return value from `c_malloc` to its appropriate type.
 #import <stdlib.tl>
-#import <stdio.tl> // for fatal()
 
 // The Array struct. Conventionally, when a module primarily provides functions which operate on a single
 // struct, that struct is called `T`. This avoids redundant module-qualified struct names, like

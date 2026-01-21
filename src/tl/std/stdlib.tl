@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+_tl_fatal_      (s: CString)   -> any
+
 // assert.h
 c_assert       (condition: Bool)                               -> Void
 
