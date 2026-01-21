@@ -18,7 +18,7 @@ main() {
   error := 0
 
   // Check that TestInit.__init() has already run
-  error = error + if TestInit.get_value() == 42 {0} else {1}
+  error += if TestInit.get_value() == 42 {0} else {1}
 
   c_printf("module init test: %d errors\n", error)
   error

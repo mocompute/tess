@@ -19,7 +19,7 @@ main() {
     cleanup()
     42
   })
-  error = error + if result == 42 { 0 } else { 1 }
+  error += if result == 42 { 0 } else { 1 }
 
   // Test block expression in arithmetic context (from documentation)
   base_cost := 100
@@ -29,7 +29,7 @@ main() {
     apply_tax(price - discount)
   })
   // 100 + (50 - 5) = 145
-  error = error + if total == 145 { 0 } else { 1 }
+  error += if total == 145 { 0 } else { 1 }
 
   // Test block expression with let-in bindings (from documentation)
   value := ({
@@ -37,7 +37,7 @@ main() {
     y := 20
     x * y
   })
-  error = error + if value == 200 { 0 } else { 1 }
+  error += if value == 200 { 0 } else { 1 }
 
   // Test nested block expressions
   nested := ({
@@ -47,15 +47,15 @@ main() {
     })
     a + 3
   })
-  error = error + if nested == 13 { 0 } else { 1 }
+  error += if nested == 13 { 0 } else { 1 }
 
   // Test block expression as function argument
   sum := add(({ 1 + 2 }), ({ 3 + 4 }))
-  error = error + if sum == 10 { 0 } else { 1 }
+  error += if sum == 10 { 0 } else { 1 }
 
   // Test empty block (should return void, but we test with a value)
   empty_result := ({ 0 })
-  error = error + if empty_result == 0 { 0 } else { 1 }
+  error += if empty_result == 0 { 0 } else { 1 }
 
   // Test block with multiple statements
   multi := ({
@@ -64,7 +64,7 @@ main() {
     c := 3
     a + b + c
   })
-  error = error + if multi == 6 { 0 } else { 1 }
+  error += if multi == 6 { 0 } else { 1 }
 
   c_printf("block expression test: %d errors\n", error)
   error

@@ -21,8 +21,8 @@ main() {
   error := val - data
 
   // Note: assumes little-endian
-  error = error + if (0x08 == b[0]) {0} else {1}
-  error = error + if (0x07 == b[1]) {0} else {1}
-  error = error + if (0x06 == b[2]) {0} else {1}
+  error += if (0x08 == b[0]) {0} else {1}
+  error += if (0x07 == b[1]) {0} else {1}
+  error += if (0x06 == b[2]) {0} else {1}
   error
 }
