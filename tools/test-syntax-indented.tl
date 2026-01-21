@@ -78,6 +78,8 @@ c_function(p: Ptr(CInt), size: CSize) -> CDouble {
 test_literals() {
     // Numbers
     hex := 0xFF
+    binary := 0b1010
+    binary_upper := 0B1111_0000
     decimal := 123_456
     float := 3.14159
     scientific := 1.23e-10

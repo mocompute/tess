@@ -157,6 +157,8 @@
       ;; Numeric literals
       ;; Hexadecimal
       ("\\<0[xX][0-9a-fA-F_]+\\>" . font-lock-constant-face)
+      ;; Binary
+      ("\\<0[bB][01_]+\\>" . font-lock-constant-face)
       ;; Float with exponent
       ("\\<[0-9][0-9_]*\\.[0-9_]*\\(?:[eE][+-]?[0-9_]+\\)?\\>" . font-lock-constant-face)
       ("\\<[0-9][0-9_]*[eE][+-]?[0-9_]+\\>" . font-lock-constant-face)
