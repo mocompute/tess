@@ -4101,10 +4101,7 @@ ast_node *toplevel_name_node(ast_node *node) {
     else if (ast_node_is_utd(node)) return node->user_type_def.name;
     else if (ast_node_is_nfa(node)) return node->named_application.name;
     else if (ast_node_is_type_alias(node)) {
-        // FIXME: this returns nfa name if name is an nfa, but we may not want to support nfa aliases.
         if (ast_node_is_symbol(node->type_alias.name)) return node->type_alias.name;
-        else if (ast_node_is_nfa(node->type_alias.name))
-            return node->type_alias.name->named_application.name;
         else fatal("runtime error");
     } else fatal("logic error");
 }
