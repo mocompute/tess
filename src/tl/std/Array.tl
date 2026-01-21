@@ -79,6 +79,7 @@ reserve(self: Ptr(T(a)), count: Int) {
         p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
         if p == null { _tl_fatal_("oom") }
         self->v = p
+        self->capacity = count
     }
 }
 

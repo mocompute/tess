@@ -286,6 +286,7 @@ TL_TESTS =					\
 	apply_generic_through_pointer		\
 	apply_lambda				\
 	arithmetic_unary_op			\
+	array_comprehensive			\
 	array_index_binary_op			\
 	assignment_by_op			\
 	atexit					\
