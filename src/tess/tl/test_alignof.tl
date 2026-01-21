@@ -33,10 +33,6 @@ main() {
   error += if alignof(CInt32) >= 4 {0} else {1}
   error += if alignof(CInt64) >= 4 {0} else {1}  // 8 on most 64-bit platforms
 
-  // Test alignof on a value (should give the same as the type)
-  p := Point(x = 1, y = 2)
-  error += if alignof(p) == alignof(Point) {0} else {1}
-
   c_printf("alignof test: %d errors\n", error)
   error
 }

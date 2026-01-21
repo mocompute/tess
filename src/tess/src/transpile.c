@@ -2489,6 +2489,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 }
 
 static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
+    (void)ctx;
     (void)extra;
 
     assert(ast_node_is_nfa(node));
@@ -2517,12 +2518,8 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else {
-        // expression
-        int save         = ctx->want_lvalue;
-        ctx->want_lvalue = 1;
-        str expr         = generate_expr(self, null, arg, ctx);
-        ctx->want_lvalue = save;
-        return str_cat_3(self->transient, S("_Alignof("), expr, S(")"));
+        // expression - not support because MSVC makes us sad
+        fatal("alignof(expression) not supported");
     }
 }
 
