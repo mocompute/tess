@@ -478,13 +478,21 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0: error, 1: i64, 2: u64, 3: f64.
     // Unlike C functions, input string must not have garbage after valid number.
 
-    size_t      len     = strlen(buf);
-    char const *end     = &buf[len];
+    size_t      len = strlen(buf);
+    char const *end = &buf[len];
 
-    errno               = 0;
+    // Detect binary prefix (0b or 0B)
+    int         base        = 0;
+    char const *parse_start = buf;
+    if (len >= 2 && buf[0] == '0' && (buf[1] == 'b' || buf[1] == 'B')) {
+        base        = 2;
+        parse_start = buf + 2; // Skip "0b" prefix
+    }
+
+    errno = 0;
 
     char         *p_end = 0;
-    long long int i     = strtoll(buf, &p_end, 0);
+    long long int i     = strtoll(parse_start, &p_end, base);
     if (p_end == end && !errno) {
         *out_i64 = i;
         return 1;
@@ -493,13 +501,13 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
 
         errno                = 0;
         p_end                = 0;
-        unsigned long long u = strtoull(buf, &p_end, 0);
+        unsigned long long u = strtoull(parse_start, &p_end, base);
         if (p_end == end && !errno) {
             *out_u64 = u;
             return 2;
 
-        } else {
-
+        } else if (base == 0) {
+            // Only try float parsing for non-binary numbers
             errno    = 0;
             p_end    = 0;
             double d = strtod(buf, &p_end);

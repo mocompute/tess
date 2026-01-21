@@ -142,6 +142,34 @@ static int test_cmp(void) {
     return error;
 }
 
+static int test_parse_cnum_binary(void) {
+    int error = 0;
+    i64 i;
+    u64 u;
+    f64 f;
+
+    // Basic binary
+    error += str_parse_cnum("0b1010", &i, &u, &f) == 1 ? 0 : 1;
+    error += i == 10 ? 0 : 1;
+
+    error += str_parse_cnum("0B1111", &i, &u, &f) == 1 ? 0 : 1;
+    error += i == 15 ? 0 : 1;
+
+    // Larger binary
+    error += str_parse_cnum("0b11110000", &i, &u, &f) == 1 ? 0 : 1;
+    error += i == 240 ? 0 : 1;
+
+    // Binary zero
+    error += str_parse_cnum("0b0", &i, &u, &f) == 1 ? 0 : 1;
+    error += i == 0 ? 0 : 1;
+
+    // All ones byte
+    error += str_parse_cnum("0b11111111", &i, &u, &f) == 1 ? 0 : 1;
+    error += i == 255 ? 0 : 1;
+
+    return error;
+}
+
 static int test_cat_multi(void) {
     int        error = 0;
     allocator *alloc = leak_detector_create();
@@ -216,6 +244,7 @@ int main(void) {
     T(test_struct_layout);
     T(test_cmp);
     T(test_cat_multi);
+    T(test_parse_cnum_binary);
 
     return error;
 }

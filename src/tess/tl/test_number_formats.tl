@@ -35,6 +35,23 @@ main() {
   h2 := 0xE0
   error = error + if h2 == 224 {0} else {1}
 
+  // Test binary literals
+  b1 := 0b1010
+  error = error + if b1 == 10 {0} else {1}
+
+  b2 := 0B1111
+  error = error + if b2 == 15 {0} else {1}
+
+  b3 := 0b1111_0000
+  error = error + if b3 == 240 {0} else {1}
+
+  b4 := 0b0
+  error = error + if b4 == 0 {0} else {1}
+
+  // Binary with many digits
+  b5 := 0b11111111
+  error = error + if b5 == 255 {0} else {1}
+
   c_printf("number formats test: %d errors\n", error)
   error
 }

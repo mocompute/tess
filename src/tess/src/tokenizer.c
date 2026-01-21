@@ -151,6 +151,14 @@ static int is_hex_number(tokenizer *self, size_t start) {
     return (second == 'x' || second == 'X');
 }
 
+static int is_binary_number(tokenizer *self, size_t start) {
+    // Check if number starts with 0b or 0B
+    if (self->pos - start < 2) return 0;
+    if (self->input.v[start] != '0') return 0;
+    char second = self->input.v[start + 1];
+    return (second == 'b' || second == 'B');
+}
+
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
     out_err->tag = tl_err_ok;
@@ -596,7 +604,15 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             char const c = next_char(self);
 
-            if (c >= '0' && c <= '9') continue;
+            if (c >= '0' && c <= '9') {
+                // For binary numbers, only allow 0 and 1
+                if (is_binary_number(self, start_capture) && c > '1') {
+                    reverse_pos(self);
+                    state = stop_number;
+                    continue;
+                }
+                continue;
+            }
 
             // Check for exponent marker in non-hex context
             if ((c == 'e' || c == 'E') && !is_hex_number(self, start_capture)) {
@@ -604,15 +620,26 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 continue;
             }
 
-            // allow hexadecimal and binary
-            if (c >= 'a' && c <= 'z') continue;
-            if (c >= 'A' && c <= 'Z') continue;
+            // allow hexadecimal letters (not for binary)
+            if (!is_binary_number(self, start_capture)) {
+                if (c >= 'a' && c <= 'z') continue;
+                if (c >= 'A' && c <= 'Z') continue;
+            }
 
             switch (c) {
             case '.':
+                // No decimal point in binary numbers
+                if (is_binary_number(self, start_capture)) {
+                    reverse_pos(self);
+                    state = stop_number;
+                    continue;
+                }
+                continue;
             case '_':
-            case 'x': // allow 0x and 0X prefix, recognized by C stdlib
-            case 'X': continue;
+            case 'x': // allow 0x and 0X prefix
+            case 'X':
+            case 'b': // allow 0b and 0B prefix
+            case 'B': continue;
 
             default:
                 // all other characters break a number
