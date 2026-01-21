@@ -68,6 +68,8 @@ __init() {
 
 Module initialization functions are called in dependency order before `main()` executes.
 
+**Note:** `__init()` only works in named modules (those with a `#module` declaration other than `main`).
+
 ## Types
 
 ### Primitive Types
