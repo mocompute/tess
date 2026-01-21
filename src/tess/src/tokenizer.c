@@ -143,6 +143,14 @@ static char peek_char(tokenizer *self, u32 pos) {
     return self->input.v[pos];
 }
 
+static int is_hex_number(tokenizer *self, size_t start) {
+    // Check if number starts with 0x or 0X
+    if (self->pos - start < 2) return 0;
+    if (self->input.v[start] != '0') return 0;
+    char second = self->input.v[start + 1];
+    return (second == 'x' || second == 'X');
+}
+
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
     out_err->tag = tl_err_ok;
@@ -174,6 +182,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         start_number_sign,
         in_number,
         in_number_sign,
+        in_number_exponent,  // after seeing 'e' or 'E' in a number
         stop_number,
 
         start_string,
@@ -589,7 +598,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             if (c >= '0' && c <= '9') continue;
 
-            // allow hexadecimal
+            // Check for exponent marker in non-hex context
+            if ((c == 'e' || c == 'E') && !is_hex_number(self, start_capture)) {
+                state = in_number_exponent;
+                continue;
+            }
+
+            // allow hexadecimal and binary
             if (c >= 'a' && c <= 'z') continue;
             if (c >= 'A' && c <= 'Z') continue;
 
@@ -619,6 +634,31 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             case ')': state = stop_symbol; break;
             default:  state = in_number; break;
             }
+        } break;
+
+        case in_number_exponent: {
+            // After seeing 'e' or 'E', allow optional +/- followed by digits
+            if (self->pos == end) {
+                state = stop_number;
+                continue;
+            }
+
+            char const c = next_char(self);
+
+            // Allow a single + or - after exponent marker
+            if (c == '+' || c == '-') {
+                state = in_number;
+                continue;
+            }
+
+            if (c >= '0' && c <= '9') {
+                state = in_number;
+                continue;
+            }
+
+            // Anything else breaks the number
+            reverse_pos(self);
+            state = stop_number;
         } break;
 
         case stop_number: {

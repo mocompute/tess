@@ -349,6 +349,7 @@ TL_TESTS =					\
 	mutual_recursion_both_referenced	\
 	nested_struct_access			\
 	nested_lambda_context			\
+	number_formats				\
 	number_separators			\
 	printf					\
 	pointer_array				\
