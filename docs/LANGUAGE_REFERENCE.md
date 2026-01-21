@@ -260,6 +260,20 @@ increment()        // counter is now 1
 increment()        // counter is now 2
 ```
 
+**Lambdas cannot be returned from functions:** Because lambdas capture variables by reference, returning a lambda from a function would create dangling pointers to stack variables that no longer exist. The compiler prohibits this:
+
+```tl
+// ERROR: Cannot return lambda from function
+make_adder(n) { (x) { x + n } }
+```
+
+If you need to return a callable, use a named function instead:
+
+```tl
+add1(x) { x + 1 }
+get_adder() { add1 }     // OK: returns function pointer, not lambda
+```
+
 ### Function Pointers
 
 ```tl
