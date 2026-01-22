@@ -605,6 +605,10 @@ typedef struct {
 
 static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
                                                      ast_node *annotation_node) {
+
+    if (!ast_node_is_symbol(annotation_node) && !ast_node_is_nfa(annotation_node))
+        return (annotation_parse_result){0};
+
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_monotype                    *parsed = tl_type_registry_parse_type_out_ctx(
       self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
@@ -1905,7 +1909,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
             // A type literal in argument position must be wrapped in literal
             annotation_parse_result result = parse_type_annotation(self, ctx, node);
-            map_merge(&ctx->type_arguments, result.type_arguments);
+            if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
 
             if (result.parsed) {
                 tl_monotype *mono = result.parsed;
@@ -1946,7 +1950,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
 
             annotation_parse_result result = parse_type_annotation(self, ctx, node->symbol.annotation);
-            map_merge(&ctx->type_arguments, result.type_arguments);
+            if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
 
             if (result.parsed) {
                 if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, result.parsed)))
@@ -1978,7 +1982,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         }
 
         annotation_parse_result result = parse_type_annotation(self, ctx, node);
-        map_merge(&ctx->type_arguments, result.type_arguments);
+        if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
 
         if (result.parsed) {
             tl_monotype *parsed = tl_monotype_create_literal(self->arena, result.parsed);
