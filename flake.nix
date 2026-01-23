@@ -103,7 +103,7 @@
                 ]) ++ (pkgs.lib.optionals (!pkgs.stdenv.isDarwin) [
 
                   # gcc
-                  gcc15
+                  # gcc15
 
                   # some perf things
                   linuxKernel.packages.linux_6_6.perf
