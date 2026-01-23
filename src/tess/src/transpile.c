@@ -1482,6 +1482,50 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
     }
 }
 
+// Short-circuit evaluation for || and && operators.
+// For ||: if left is true, skip evaluating right and return 1.
+// For &&: if left is false, skip evaluating right and return 0.
+static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx,
+                                     int is_or) {
+    // 1. Evaluate left operand
+    str left = generate_expr(self, null, node->binary_op.left, ctx);
+
+    // 2. Declare result variable
+    str res = next_res(self);
+    generate_decl(self, res, type);
+
+    // 3. Generate if statement
+    cat(self, S("if ("));
+    if (is_or) {
+        // For ||: if left is true, short-circuit
+        cat(self, left);
+    } else {
+        // For &&: if left is false (i.e. !left is true), short-circuit
+        cat(self, S("!"));
+        cat(self, left);
+    }
+    cat(self, S(") {\n"));
+
+    // 4a. Short-circuit branch (left determined the result)
+    if (is_or) {
+        // For ||: if left is true, result is 1
+        generate_assign(self, res, S("1"));
+    } else {
+        // For &&: if left is false, result is 0
+        generate_assign(self, res, S("0"));
+    }
+
+    cat(self, S("} else {\n"));
+
+    // 4b. Non-short-circuit branch (evaluate right)
+    str right = generate_expr(self, null, node->binary_op.right, ctx);
+    generate_assign(self, res, right);
+
+    cat(self, S("}\n"));
+
+    return res;
+}
+
 static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
     str op = ast_node_str(node->binary_op.op);
@@ -1505,6 +1549,14 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             str mangled = str_cat_3(self->transient, name, S("_"), ast_node_str(node->binary_op.right));
             return mangled;
         }
+    }
+
+    // Short-circuit logical operators
+    if (0 == str_cmp_c(op, "||")) {
+        return generate_short_circuit_op(self, type, node, ctx, 1);
+    }
+    if (0 == str_cmp_c(op, "&&")) {
+        return generate_short_circuit_op(self, type, node, ctx, 0);
     }
 
     str left = generate_expr(self, null, node->binary_op.left, ctx); // types null

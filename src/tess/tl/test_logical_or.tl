@@ -15,8 +15,7 @@ main() {
   x := 0
   result := true || ({x = 1 true})
   // x should still be 0 if short-circuit worked
-  // Note: This test may not work if x = 1 is not an expression
-  // Let's test with a function call instead
+  error += if (0 == x) {0} else {1}
 
   // Test with variables
   a := true
