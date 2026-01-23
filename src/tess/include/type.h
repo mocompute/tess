@@ -118,7 +118,6 @@ nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) ma
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_tuple(allocator *, tl_monotype_sized);
-nodiscard tl_monotype *tl_monotype_create_arrow(allocator *, tl_monotype *, tl_monotype *);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
 nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_monotype_generalize(allocator *, tl_monotype *) mallocfun;

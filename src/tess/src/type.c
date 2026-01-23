@@ -737,7 +737,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 goto top_success;
             }
         }
-        tl_monotype *arrow = tl_monotype_create_arrow(self->alloc, left_mono, right_mono);
+        tl_monotype *arrow = tl_type_registry_create_arrow(self, left_mono, right_mono);
         result             = arrow;
     }
 
@@ -1406,19 +1406,21 @@ nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *self) {
     return tl_monotype_create_weak(self->data.alloc, tv);
 }
 
-tl_monotype *tl_monotype_create_arrow(allocator *alloc, tl_monotype *lhs, tl_monotype *rhs) {
-    tl_monotype      *left  = tl_monotype_clone(alloc, lhs);
-    tl_monotype      *right = tl_monotype_clone(alloc, rhs);
-    tl_monotype_array arr   = {.alloc = alloc};
+tl_monotype *tl_type_registry_create_arrow(tl_type_registry *self, tl_monotype *lhs, tl_monotype *rhs) {
+    tl_monotype      *left  = tl_monotype_clone(self->alloc, lhs);
+    tl_monotype      *right = tl_monotype_clone(self->alloc, rhs);
+    tl_monotype_array arr   = {.alloc = self->alloc};
     assert(left);
     if (right) {
         array_reserve(arr, 2);
         array_push(arr, left);
         array_push(arr, right);
     } else {
+        right = tl_type_registry_nil(self);
         array_push(arr, left);
+        array_push(arr, right);
     }
-    return tl_monotype_create_list(alloc, (tl_monotype_sized)array_sized(arr));
+    return tl_monotype_create_list(self->alloc, (tl_monotype_sized)array_sized(arr));
 }
 
 tl_monotype *tl_monotype_create_list(allocator *alloc, tl_monotype_sized xs) {

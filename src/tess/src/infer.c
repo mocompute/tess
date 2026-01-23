@@ -3096,7 +3096,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         // always use a tuple on the left side of arrow, even if zero elements
         tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
         tl_monotype *rhs   = result_type ? result_type->type : null;
-        tl_monotype *arrow = tl_monotype_create_arrow(self->arena, lhs, rhs);
+        tl_monotype *arrow = tl_type_registry_create_arrow(self->registry, lhs, rhs);
 
         {
             str str = tl_monotype_to_string(self->transient, arrow);
@@ -3130,7 +3130,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
             right = tl_type_registry_nil(self->registry);
         }
 
-        tl_monotype *out = tl_monotype_create_arrow(self->arena, left, right);
+        tl_monotype *out = tl_type_registry_create_arrow(self->registry, left, right);
 
         {
             str str = tl_monotype_to_string(self->transient, out);
