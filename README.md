@@ -36,6 +36,13 @@ A statically-typed programming language that transpiles to C11.
   vf := Vec2(1.0, 2.0)       // Vec2(Float)
   ```
 
+- **Function overloading** - Define multiple functions with the same name but different arities. The compiler resolves calls by argument count:
+  ```tl
+  add(x) { x }
+  add(x, y) { x + y }
+  add(x, y, z) { x + y + z }
+  ```
+
 - **Tagged unions** - Algebraic data types with exhaustive case matching:
   ```tl
   Shape : | Circle { radius: Float }

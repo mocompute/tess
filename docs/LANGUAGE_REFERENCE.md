@@ -276,16 +276,52 @@ get_adder() { add1 }     // OK: returns function pointer, not lambda
 
 ### Function Pointers
 
+To get a pointer to a function, use the function name followed by `/` and its arity (number of parameters):
+
 ```tl
 add1(x) { x + 1 }
-fp := add1           // Get function pointer
-apply(fp, 5)         // Pass as argument
+fp := add1/1         // Get pointer to add1 (arity 1)
+apply(f, x) { f(x) }
+apply(fp, 5)         // Pass function pointer as argument
+```
+
+Function pointers can be stored in structs:
+
+```tl
+f1() { 1 }
+Ctx(T) : { callback: T }
+ctx := Ctx(callback = f1/0)
+ctx.callback()       // Call through struct field
 ```
 
 ### Generic Function Signatures
 
 ```tl
 map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
+```
+
+### Function Overloading by Arity
+
+Functions with the same name can be defined with different numbers of parameters. The compiler resolves calls based on the number of arguments provided:
+
+```tl
+add(x) { x }
+add(x, y) { x + y }
+add(x, y, z) { x + y + z }
+
+main() {
+  a := add(1)        // Calls single-argument version
+  b := add(1, 2)     // Calls two-argument version
+  c := add(1, 2, 3)  // Calls three-argument version
+}
+```
+
+Each overload must have a distinct number of parameters. Overloads are resolved at compile time based on argument count.
+
+When taking a pointer to an overloaded function, the `/arity` syntax disambiguates which version:
+
+```tl
+fp := add/2          // Pointer to the two-argument version
 ```
 
 ### Tail Call Optimization
