@@ -2688,7 +2688,11 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
 
-        dbg(self, "specialize_applications_cb: nfa '%s'", str_cstr(&name));
+        if (self->verbose) {
+            str tmp = v2_ast_node_to_string(self->transient, node);
+            dbg(self, "specialize_applications_cb: nfa '%s'", str_cstr(&tmp));
+            str_deinit(self->transient, &tmp);
+        }
 
         // do not process a second time
         if (ast_node_is_specialized(node)) return 0;
