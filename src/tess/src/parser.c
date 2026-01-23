@@ -30,6 +30,7 @@ struct parser {
     allocator             *tokens_arena; // for tokens only
     allocator             *ast_arena;    // for ast nodes and related
     allocator             *transient;    // reset after each call to parser_next
+    allocator             *speculative;  // for speculative AST allocations in toplevel()
 
     parser_opts            opts;
 
@@ -157,6 +158,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
     self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
     self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->speculative             = arena_create(alloc, PARSER_ARENA_SIZE);
     self->tokenizer               = null;
     self->files                   = opts->files;
     self->files_index             = 0;
@@ -204,6 +206,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
+    arena_destroy(&(*self)->speculative);
     arena_destroy(&(*self)->ast_arena);
     arena_destroy(&(*self)->tokens_arena);
     arena_destroy(&(*self)->file_arena);
@@ -3103,6 +3106,10 @@ static int toplevel(parser *self) {
 
     self->error.tag = tl_err_ok;
 
+    // Switch to speculative arena for all allocations during pattern matching
+    allocator *permanent = self->ast_arena;
+    self->ast_arena = self->speculative;
+
     while (!is_eof(self)) {
 
         int res = 0;
@@ -3137,21 +3144,39 @@ static int toplevel(parser *self) {
         else if (2 == res) goto error;
 
         self->error.tag = tl_err_expected_toplevel;
+        // Fall through to cleanup_fail
+
+    cleanup_fail:
+        arena_reset(self->speculative);
+        self->ast_arena = permanent;
         return 1;
 
     error:
+        arena_reset(self->speculative);
+        self->ast_arena = permanent;
         return res;
 
     success:
         if (self->expect_module) {
             self->error.tag = tl_err_expected_module;
-            return 1;
+            goto cleanup_fail;
         }
 
     success_hash:
-        if (!self->skip_module) return 0;
+        if (!self->skip_module) {
+            // Clone successful result to permanent arena
+            self->result = ast_node_clone(permanent, self->result);
+            arena_reset(self->speculative);
+            self->ast_arena = permanent;
+            return 0;
+        }
+        // skip_module: continue loop, reset speculative arena for next iteration
+        arena_reset(self->speculative);
     }
 
+    // EOF reached
+    arena_reset(self->speculative);
+    self->ast_arena = permanent;
     return 1;
 }
 

@@ -395,8 +395,15 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             for (u32 i = 0; i < vclone->n_fields; ++i)
                 vclone->field_annotations[i] = ast_node_clone(alloc, vorig->field_annotations[i]);
 
-        vclone->type_arguments = null;
-        vclone->field_types    = null;
+        // Clone type_arguments (populated by parser for generic types)
+        if (vorig->type_arguments) {
+            vclone->type_arguments = alloc_malloc(alloc, vclone->n_type_arguments * sizeof(ast_node *));
+            for (u32 i = 0; i < vclone->n_type_arguments; ++i)
+                vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
+        } else vclone->type_arguments = null;
+
+        // field_types is computed by type inference, not parser
+        vclone->field_types = null;
 
     } break;
 
@@ -1185,7 +1192,7 @@ str_sized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
 //
 
 struct ast_symbol *ast_node_sym(ast_node *node) {
-    assert(node->tag == ast_symbol || node->tag == ast_string);
+    assert(node->tag == ast_symbol || node->tag == ast_string || node->tag == ast_char);
     return &node->symbol;
 }
 
