@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 main() {
   error := 0
@@ -57,6 +56,5 @@ main() {
   f /= 4.0
   error += if f == 2.5 {0} else {1}
 
-  c_printf("compound assignment test: %d errors\n", error)
   error
 }

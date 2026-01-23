@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 // Helper functions for documentation examples
 setup() { void }
@@ -66,6 +65,5 @@ main() {
   })
   error += if multi == 6 { 0 } else { 1 }
 
-  c_printf("block expression test: %d errors\n", error)
   error
 }

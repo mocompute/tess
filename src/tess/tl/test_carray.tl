@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 #import <string.tl>
 
 main() {
@@ -46,6 +45,5 @@ main() {
   float_arr[2] = 3.5
   error += if float_arr[1] == 2.5 {0} else {1}
 
-  c_printf("CArray test: %d errors\n", error)
   error
 }

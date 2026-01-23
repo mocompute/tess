@@ -4,7 +4,8 @@
 #module Array
 #import <Alloc.tl>
 #import <stdlib.tl>
-#import <stdio.tl> // for fatal()
+#import <stdio.tl>
+#import <fatal.tl>
 
 // The Array struct.
 T(a) : {

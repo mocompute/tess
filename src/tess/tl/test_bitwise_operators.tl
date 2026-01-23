@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 #import <stdint.tl>
 
 main() {
@@ -46,6 +45,5 @@ main() {
   error += if (a & b) == 0x02040608 {0} else {1}
   error += if (a | b) == 0x1F3F5F7F {0} else {1}
 
-  c_printf("bitwise operators test: %d errors\n", error)
   error
 }

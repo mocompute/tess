@@ -1,6 +1,5 @@
 #module main
-#import <stdio.tl>
-#import <stdlib.tl>
+#import <fatal.tl>
 
 // Test that _tl_fatal_ compiles and can be used in conditional code
 // Note: We don't actually call it since it terminates the program
@@ -19,6 +18,5 @@ main() {
   conditionally_fail(false)
 
   // If we reach here, the test passed (the function compiled correctly)
-  c_printf("fatal intrinsic test: %d errors\n", error)
   error
 }

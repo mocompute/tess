@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 // Simple struct with two fields
 Point : { x: Int, y: Int }
@@ -55,6 +54,5 @@ main() {
   p5 := Point(x = 300, y = 400)
   error += if p4.x + p5.x == 400 {0} else {1}
 
-  c_printf("struct construction test: %d errors\n", error)
   error
 }

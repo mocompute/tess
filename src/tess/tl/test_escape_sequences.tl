@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 #import <string.tl>
 
 main() {
@@ -59,6 +58,5 @@ main() {
   len2 := c_strlen(s2)
   error += if len2 == 5 {0} else {1}
 
-  c_printf("escape sequences test: %d errors\n", error)
   error
 }

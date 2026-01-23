@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 #import <stdint.tl>
 
 // Simple struct for testing
@@ -33,6 +32,5 @@ main() {
   error += if alignof(CInt32) >= 4 {0} else {1}
   error += if alignof(CInt64) >= 4 {0} else {1}  // 8 on most 64-bit platforms
 
-  c_printf("alignof test: %d errors\n", error)
   error
 }

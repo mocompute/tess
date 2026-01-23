@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 main() {
   error := 0
@@ -48,6 +47,5 @@ main() {
   error += if 0x100 == 256 {0} else {1}
   error += if 0400 == 256 {0} else {1}
 
-  c_printf("integer literals test: %d errors\n", error)
   error
 }

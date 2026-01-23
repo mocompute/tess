@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 main() {
   error := 0
@@ -52,6 +51,5 @@ main() {
   b5 := 0b11111111
   error += if b5 == 255 {0} else {1}
 
-  c_printf("number formats test: %d errors\n", error)
   error
 }

@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 #import <stdlib.tl>
 
 // Define a struct with multiple fields
@@ -39,6 +38,5 @@ main() {
   error += if p.z == 15 {0} else {1}
 
   c_free(buf.data)
-  c_printf("uninitialized fields test: %d errors\n", error)
   error
 }

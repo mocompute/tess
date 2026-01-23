@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 main() {
   error := 0
@@ -28,6 +27,5 @@ main() {
   f6 := 1.234e1
   error += if f6 == 12.34 {0} else {1}
 
-  c_printf("float scientific notation test: %d errors\n", error)
   error
 }

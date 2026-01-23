@@ -1,5 +1,4 @@
 #module main
-#import <stdio.tl>
 
 main() {
   error := 0
@@ -37,6 +36,5 @@ main() {
   error += if (false || false || true) {0} else {1}
   error += if (false || false || false) {1} else {0}
 
-  c_printf("logical OR test: %d errors\n", error)
   error
 }
