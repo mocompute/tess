@@ -88,6 +88,7 @@ typedef struct ast_node {
             u8                n_arguments;
             struct ast_node  *name;
             int               is_specialized;
+            int               is_type_constructor;
         } named_application;
 
         struct ast_tuple {
@@ -103,10 +104,10 @@ typedef struct ast_node {
 
         struct ast_case {
             struct ast_node *expression;
-            ast_node_sized   conditions;        // must be same size
-            ast_node_sized   arms;              // must be same size
-            struct ast_node *binary_predicate;  // may be null
-            struct ast_node *union_annotation;  // type annotation for tagged union (e.g., T in case x: T)
+            ast_node_sized   conditions;       // must be same size
+            ast_node_sized   arms;             // must be same size
+            struct ast_node *binary_predicate; // may be null
+            struct ast_node *union_annotation; // type annotation for tagged union (e.g., T in case x: T)
             int              is_union; // by parser if case is a union destructure (1: plain, 2: mutable)
         } case_;
 
@@ -235,6 +236,7 @@ nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, a
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;

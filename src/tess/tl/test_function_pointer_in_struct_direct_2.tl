@@ -12,7 +12,7 @@ Ctx(t1) : {
 }
 
 init() {
-  Ctx(malloc_fun = malloc)
+  Ctx(malloc_fun = malloc/1)
 }
 
 

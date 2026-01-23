@@ -288,6 +288,7 @@ TL_TESTS =					\
 	arithmetic_unary_op			\
 	array_comprehensive			\
 	array_index_binary_op			\
+	arity_overload				\
 	assignment_by_op			\
 	atexit					\
 	_Exit					\

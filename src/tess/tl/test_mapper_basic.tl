@@ -46,7 +46,7 @@ main() {
   vals.v[3] = 3
   vals.size = 4
 
-  res := map(add1, vals)
+  res := map(add1/1, vals)
 
   // verify that map does not mutate its argument
   sum := 0
@@ -73,7 +73,7 @@ main() {
   floats.v[3] = 3.0
   floats.size = 4
 
-  floats_res := map(add1f, floats)
+  floats_res := map(add1f/1, floats)
   sum := 0.0
   i := 0
   while i < floats.size, i = i + 1 {

@@ -10,6 +10,8 @@
 #include "str.h"
 #include "util.h"
 
+#include "parser.h" // for mangle_str_for_arity
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -155,10 +157,12 @@ static tl_polytype *tl_type_constructor_create(tl_type_registry *self, str name,
 }
 
 void tl_type_registry_insert(tl_type_registry *self, str name, tl_polytype *poly) {
+    // fprintf(stderr, "type registry insert: %s\n", str_cstr(&name));
     str_map_set_ptr(&self->definitions, name, poly);
 }
 
 void tl_type_registry_insert_mono(tl_type_registry *self, str name, tl_monotype *mono) {
+    // fprintf(stderr, "type registry insert: %s\n", str_cstr(&name));
     tl_polytype *poly = tl_monotype_generalize(self->alloc, mono);
     str_map_set_ptr(&self->definitions, name, poly);
 }
@@ -170,6 +174,7 @@ tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name
     tl_polytype *poly =
       tl_type_constructor_create_ext(self, name, generic_name, type_variables, field_names, field_types);
 
+    // fprintf(stderr, "type registry: insert %s\n", str_cstr(&name));
     tl_type_registry_insert(self, name, poly);
     return poly;
 }
@@ -190,6 +195,7 @@ static void make_unary_tc(tl_type_registry *self, str name) {
     tl_monotype      *tv_type = tl_monotype_create_tv(self->alloc, tv);
     tl_monotype_array mt_arr  = {.alloc = self->alloc};
     array_push(mt_arr, tv_type);
+
     tl_type_constructor_def_create(self, name, (tl_type_variable_sized)sized_all(unary), empty,
                                    (tl_monotype_sized)sized_all(mt_arr));
 }
@@ -284,23 +290,24 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     return type;
 }
 
-tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
-    // For use with Type literals only, e.g. instantiate a Point(a) as a Point(Int)
-    tl_monotype *type = null;
+// tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args)
+// {
+//     // For use with Type literals only, e.g. instantiate a Point(a) as a Point(Int)
+//     tl_monotype *type       = null;
 
-    tl_polytype *poly = tl_type_registry_get(self, name);
-    if (!poly) {
-        // unknown type, possibly due to recursive types: return a weak type variable rather than null
-        return tl_monotype_create_fresh_weak(self->subs);
-    }
+//     tl_polytype *poly       = tl_type_registry_get(self, name);
+//     if (!poly) {
+//         // unknown type, possibly due to recursive types: return a weak type variable rather than null
+//         return tl_monotype_create_fresh_weak(self->subs);
+//     }
 
-    u32 arity = poly->quantifiers.size;
-    if (args.size != arity) fatal("runtime error");
+//     u32 arity = poly->quantifiers.size;
+//     if (args.size != arity) fatal("runtime error");
 
-    type = tl_polytype_instantiate_with(self->alloc, poly, args, self->subs);
+//     type = tl_polytype_instantiate_with(self->alloc, poly, args, self->subs);
 
-    return type;
-}
+//     return type;
+// }
 
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
     str          name = S("Union");
@@ -516,6 +523,9 @@ static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry
     tl_monotype *result = null;
     result              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
     str ta              = ast_node_str(node);
+    if (0) {
+        fprintf(stderr, "type variable sugar: '%s'\n", str_cstr(&ta));
+    }
     str_map_set_ptr(&ctx->type_arguments, ta, result);
 
     return tl_monotype_literal_target(result);
@@ -559,7 +569,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = parse_type_specials(self, ctx, node);
         if (result) goto top_success;
 
-        // or is it a nullary literal: Int, Float, etc, including user type constructors
+        // or is it a nullary literal: Int, Float, etc
         str          name = ast_node_str(node);
         tl_polytype *poly = tl_type_registry_get_nullary(self, name);
         if (poly) {
@@ -774,6 +784,12 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // Note: enum types have no annotations
             if (annotations) {
                 tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, annotations[i]);
+                if (1) {
+                    if (!mono) {
+                        str tmp = v2_ast_node_to_string(self->transient, annotations[i]);
+                        fprintf(stderr, "failed to parse '%s'\n", str_cstr(&tmp));
+                    }
+                }
                 if (!mono) goto utd_error; // TODO: better error
 
                 array_push(field_types, mono);
@@ -858,6 +874,13 @@ tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *self, ast_no
     // Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
 
     tl_monotype *result = tl_type_registry_parse_type_(self, ctx, node);
+
+    if (1) {
+        if (!result) {
+            str tmp = v2_ast_node_to_string(self->transient, node);
+            fprintf(stderr, "failed to parse '%s'\n", str_cstr(&tmp));
+        }
+    }
 
     return result;
 }

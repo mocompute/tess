@@ -7,7 +7,7 @@ Ctx(t1) : {
 }
 
 init() {
-  Ctx ( p1 = f1, p2 = f2 )
+  Ctx ( p1 = f1/0, p2 = f2/0 )
 }
 
 main() {

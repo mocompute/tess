@@ -50,11 +50,17 @@ ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
     return self;
 }
 ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized args) {
-    ast_node *self                         = ast_node_create(alloc, ast_named_function_application);
-    self->named_application.name           = name;
-    self->named_application.n_arguments    = args.size;
-    self->named_application.arguments      = args.v;
-    self->named_application.is_specialized = 0;
+    ast_node *self                              = ast_node_create(alloc, ast_named_function_application);
+    self->named_application.name                = name;
+    self->named_application.n_arguments         = args.size;
+    self->named_application.arguments           = args.v;
+    self->named_application.is_specialized      = 0;
+    self->named_application.is_type_constructor = 0;
+    return self;
+}
+ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized args) {
+    ast_node *self                              = ast_node_create_nfa(alloc, name, args);
+    self->named_application.is_type_constructor = 1;
     return self;
 }
 ast_node *ast_node_create_lfa(allocator *alloc, ast_node *lambda, ast_node_sized args) {
@@ -342,6 +348,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
                                      *vorig  = ast_node_named((ast_node *)orig);
         vclone->name                         = ast_node_clone(alloc, vorig->name);
         vclone->is_specialized               = vorig->is_specialized;
+        vclone->is_type_constructor          = vorig->is_type_constructor;
     } break;
 
     case ast_type_alias: {

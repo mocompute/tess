@@ -174,7 +174,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         start_number_sign,
         in_number,
         in_number_sign,
-        in_number_exponent,  // after seeing 'e' or 'E' in a number
+        in_number_exponent, // after seeing 'e' or 'E' in a number
         stop_number,
 
         start_string,
@@ -205,13 +205,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         stop_hash_command,
 
         stop,
-    } state          = start;
+    } state = start;
 
     enum {
         num_decimal,
         num_hex,
         num_binary,
-    } number_format = num_decimal;
+    } number_format  = num_decimal;
 
     size_t const end = self->input.size;
 
@@ -760,7 +760,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             }
 
             char const c = next_char(self);
-            if ((c == '_') || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+            if ((c == '_') || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c == '/'))
                 break;
 
             // all other characters break an identifier

@@ -9,7 +9,7 @@ Ctx : {
   malloc_fun: (n: CSize) -> Ptr(any),
 }
 
-allocator := Ctx(malloc_fun = malloc)
+allocator := Ctx(malloc_fun = malloc/1)
 
 
 #module main

@@ -193,6 +193,10 @@ static void expected_tagged_union(tl_infer *self, ast_node const *node) {
                ((tl_infer_error){.tag = tl_err_tagged_union_expected_tagged_union, .node = node}));
 }
 
+static void wrong_number_of_arguments(tl_infer *self, ast_node const *node) {
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+}
+
 static void tagged_union_case_syntax_error(tl_infer *self, ast_node const *node) {
     array_push(self->errors,
                ((tl_infer_error){.tag = tl_err_tagged_union_case_syntax_error, .node = node}));
@@ -225,7 +229,7 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     str_sized words = node->hash_command.words;
 
     if (words.size < 2) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+        wrong_number_of_arguments(self, node);
         return 1;
     }
 
@@ -612,6 +616,11 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_monotype                    *parsed = tl_type_registry_parse_type_out_ctx(
       self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+
+    if (0) {
+        str tmp = v2_ast_node_to_string(self->transient, annotation_node);
+        dbg(self, "parse_type_annotation: '%s' -> %p", str_cstr(&tmp), parsed);
+    }
 
     return (annotation_parse_result){.parsed = parsed, .type_arguments = parse_ctx.type_arguments};
 }
@@ -1051,7 +1060,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (is_carray_constructor(node->let_in.value)) {
         ast_node *nfa = node->let_in.value;
         if (2 != nfa->named_application.n_arguments) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = nfa}));
+            wrong_number_of_arguments(self, nfa);
             return 1;
         }
         ast_node **args = nfa->named_application.arguments;
@@ -1148,7 +1157,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
 
         tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
         if (!inst) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+            wrong_number_of_arguments(self, node);
             return 1;
         }
 
@@ -1167,7 +1176,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
         if (!is_union_struct(self, name)) {
             iter = ast_node_arguments_iter(node);
             if (iter.nodes.size != inst->cons_inst->args.size) {
-                array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+                wrong_number_of_arguments(self, node);
                 return 1;
             }
         }
@@ -1586,6 +1595,11 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
     // return 1 if node is not a type identifier or other error occurs.
 
     if (ast_node_is_symbol(node)) return 1;
+
+    if (0) {
+        str tmp = v2_ast_node_to_string(self->transient, node);
+        dbg(self, "type_literal_specialize: '%s'", str_cstr(&tmp));
+    }
 
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
     if (parsed) {
@@ -4093,7 +4107,7 @@ int is_c_struct_symbol(str name) {
 }
 
 int is_module_init(str name) {
-    return str_ends_with(name, S("___init"));
+    return str_ends_with(name, S("___init__0"));
 }
 
 //

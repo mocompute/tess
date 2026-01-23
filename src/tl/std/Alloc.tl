@@ -106,10 +106,10 @@ bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
     size = if size == 0 { 16 } else { size }
 
     out->head              = _BumpHeader_create(alloc, size)
-    out->allocator.malloc  = _bump_malloc
-    out->allocator.calloc  = _bump_calloc
-    out->allocator.realloc = _bump_realloc
-    out->allocator.free    = _bump_free
+    out->allocator.malloc  = _bump_malloc/2
+    out->allocator.calloc  = _bump_calloc/3
+    out->allocator.realloc = _bump_realloc/3
+    out->allocator.free    = _bump_free/2
     out->allocator.&
 }
 
@@ -333,10 +333,10 @@ c_TL_ALLOC_TRANSIENT_SIZE : CSize
 c_TL_ALLOC_PERIODIC_SIZE  : CSize
 
 _managed := Allocator(
-    malloc  = _malloc,
-    calloc  = _calloc,
-    realloc = _realloc,
-    free    = _free
+    malloc  = _malloc/2,
+    calloc  = _calloc/3,
+    realloc = _realloc/3,
+    free    = _free/2
 )
 
 // Allocation Context. Public so that user code can (carefully) install its own allocators dynamically.

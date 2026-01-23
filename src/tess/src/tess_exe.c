@@ -302,7 +302,7 @@ static void add_standard_include_paths(state *self, char const *cwd) {
 
     // 1. Add <exe_dir>/../lib/tess/std (for installed tess)
     if (file_exe_directory(exe_span)) {
-        str exe_dir = str_init(self->arena, exe_buf);
+        str exe_dir       = str_init(self->arena, exe_buf);
         str installed_std = str_cat(self->arena, exe_dir, S("/../lib/tess/std"));
         array_push(self->include_paths, installed_std);
     }
@@ -474,6 +474,7 @@ int compile(state *self) {
 
     parser *parser = parser_create(default_allocator(), &parser_opts);
     if (!parser) fatal("could not create parser");
+    parser_set_verbose(parser, self->verbose_parse);
 
     allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
     ast_node_array nodes       = {.alloc = nodes_alloc};

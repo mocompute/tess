@@ -3,5 +3,5 @@ id(x) { x }
 apply(f, x) { f(x) }
 
 main() {
-  apply(id, 0)
+  apply(id/1, 0)
 }

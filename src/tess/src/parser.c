@@ -15,9 +15,11 @@
 #include "types.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define PARSER_ARENA_SIZE 1024
@@ -127,6 +129,7 @@ static int           the_symbol(parser *, char const *const);
 static int           string_to_number(parser *, char const *const);
 static void          mangle_name_for_module(parser *, ast_node *, str);
 static void          mangle_name(parser *, ast_node *);
+static void          mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition);
 static void          unmangle_name(parser *, ast_node *);
 static str           next_var_name(parser *);
 
@@ -222,6 +225,8 @@ void parser_set_module_symbols(parser *self, hashmap *mod_syms) {
 // -- module --
 
 static void add_module_symbol(parser *self, ast_node *name) {
+    // Keeps names before they are mangled with the module name prefix, but after they are mangled with
+    // arity.
     if (ast_node_is_symbol(name)) {
         // For safety, don't add symbols which have already been mangled.
         if (name->symbol.is_mangled) return;
@@ -286,6 +291,13 @@ static int result_ast_bool(parser *p, int val) {
 
 static int result_ast_str(parser *p, ast_tag tag, char const *s) {
     p->result      = ast_node_create_sym_c(p->ast_arena, s);
+    p->result->tag = tag;
+    set_result_file(p);
+    return 0;
+}
+
+static int result_ast_str_(parser *p, ast_tag tag, str s) {
+    p->result      = ast_node_create_sym(p->ast_arena, s);
     p->result->tag = tag;
     set_result_file(p);
     return 0;
@@ -755,6 +767,9 @@ static int a_unary_operator(parser *self, int min_prec) {
     return result_ast_node(self, ast_node_create_sym_c(self->ast_arena, op));
 }
 
+static int unmangle_arity(str name);
+static str unmangle_arity_qualified_name(allocator *alloc, str name);
+
 static int a_identifier(parser *p) {
     if (next_token(p)) return 1;
 
@@ -767,7 +782,7 @@ static int a_identifier(parser *p) {
         char const *pc = &p->token.s[1];
         while (*pc) {
             if ('_' == *pc || ('a' <= *pc && *pc <= 'z') || ('A' <= *pc && *pc <= 'Z') ||
-                ('0' <= *pc && *pc <= '9')) {
+                ('0' <= *pc && *pc <= '9') || '/' == *pc) {
                 pc++; // still good
             } else {
                 goto error;
@@ -777,7 +792,18 @@ static int a_identifier(parser *p) {
         // check for reserved words, which are not allowed as identifiers
         if (is_reserved(p->token.s)) goto error;
 
-        return result_ast_str(p, ast_symbol, p->token.s);
+        str name = str_init(p->ast_arena, p->token.s);
+
+        // check for arity-qualified name
+        int arity = unmangle_arity(name);
+        if (arity != -1) {
+            str base = unmangle_arity_qualified_name(p->ast_arena, name);
+            assert(!str_is_empty(base));
+            str mangled = mangle_str_for_arity(p->ast_arena, base, (u8)arity);
+            return result_ast_str_(p, ast_symbol, mangled);
+        }
+
+        return result_ast_str_(p, ast_symbol, name);
     }
 
 error:
@@ -1072,7 +1098,13 @@ static int a_funcall(parser *self) {
 
 done:
     array_shrink(args);
+
+    // IMPORTANT: arity-mangle FIRST, then module-mangle.
+    // symbol_is_module_function checks for the arity-mangled name (e.g., "foo__0") in
+    // current_module_symbols. If we module-mangle first, we'd be checking for the wrong name.
+    mangle_name_for_arity(self, name, args.size, 0); // 0 = function call, not definition
     mangle_name(self, name);
+
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
@@ -1097,7 +1129,7 @@ static int a_type_constructor(parser *self) {
 done:
     array_shrink(args);
     mangle_name(self, name);
-    ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
+    ast_node *node = ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
@@ -1161,8 +1193,9 @@ done:;
 }
 
 static int a_value(parser *self) {
-    if (0 == a_try(self, a_type_constructor)) return 0;
+    // Put funcall before type constructor, due to arity mangling
     if (0 == a_try(self, a_funcall)) return 0;
+    if (0 == a_try(self, a_type_constructor)) return 0;
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
@@ -1171,6 +1204,7 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;
     if (0 == a_try(self, a_identifier)) {
+        dbg(self, "a_value: '%s'", str_cstr(&self->result->symbol.name));
         mangle_name(self, self->result);
         return 0;
     }
@@ -1445,11 +1479,25 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
         str_hset_contains(self->modules_seen, (*inout)->symbol.name)) {
         ast_node *to_mangle = null;
+        u8        arity     = 0;
         if (ast_node_is_symbol(right)) to_mangle = right;
-        else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
+        else if (ast_node_is_nfa(right)) {
+            to_mangle = right->named_application.name;
+            arity     = right->named_application.n_arguments;
+        }
         if (to_mangle) {
             unmangle_name(self, to_mangle);
-            mangle_name_for_module(self, to_mangle, (*inout)->symbol.name);
+            // When mangling a cross-module function call like ModuleOne.f(-1, 1),
+            // we need to also mangle for arity. The arity mangling in a_funcall
+            // doesn't know about the target module, so we do it here.
+            str      target_module = (*inout)->symbol.name;
+            str      original_name = to_mangle->symbol.name;
+            str      mangled_name  = mangle_str_for_arity(self->ast_arena, original_name, arity);
+            hashmap *module_syms   = str_map_get_ptr(self->module_symbols, target_module);
+            if (module_syms && str_hset_contains(module_syms, mangled_name)) {
+                to_mangle->symbol.name = mangled_name;
+            }
+            mangle_name_for_module(self, to_mangle, target_module);
             *inout = right;
             return 1;
         }
@@ -1569,6 +1617,32 @@ static int a_expression(parser *self) {
     return result_ast_node(self, res);
 }
 
+static int unmangle_arity(str name) {
+    // Returns -1 if name is not mangled with the format `foo/X` where X is an integer in the range [0,
+    // 255]. Otherwise, returns X.
+    char const *s = str_cstr(&name);
+    char const *p = strrchr(s, '/');
+    if (!p || p == s) return -1;
+    if ((size_t)(p - s) + 1 >= str_len(name)) return -1;
+    p++;
+    // check for '0' directly because strtol returns 0 upon error
+    if (*p == '0') return 0;
+
+    long num = strtol(p, null, 10);
+    if (num > 255 || num < 1) return -1;
+    return (int)num;
+}
+
+static str unmangle_arity_qualified_name(allocator *alloc, str name) {
+    // Returns str_empty if name is not arity-qualified (e.g. `foo/X`). Otherwise returns the name portion
+    // as a newly allocated str.
+    char const *s = str_cstr(&name);
+    char const *p = strrchr(s, '/');
+    if (!p || p == s) return str_empty();
+    if ((size_t)(p - s) + 1 >= str_len(name)) return str_empty();
+    return str_init_n(alloc, s, p - s);
+}
+
 static void unmangle_name(parser *self, ast_node *name) {
     (void)self;
     if (ast_node_is_nfa(name)) {
@@ -1583,6 +1657,45 @@ static void unmangle_name(parser *self, ast_node *name) {
     str_deinit(self->ast_arena, &name->symbol.module);
 }
 
+// Check if a symbol is a known module-level function (not a type).
+// Returns true only for symbols that exist in module_symbols (with arity mangling) and are not types.
+// Used for arity mangling: only mangle calls to known module functions, not local variables.
+static int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
+    if (!ast_node_is_symbol(name)) return 0;
+
+    // Get the original (unmangled) name for type check
+    str original_name = name->symbol.original;
+    if (str_is_empty(original_name)) original_name = name->symbol.name;
+
+    // Types should not be mangled for arity
+    if (tl_type_registry_get(self->opts.registry, original_name)) return 0;
+
+    // Generate the arity-mangled name to search for
+    str mangled_name = mangle_str_for_arity(self->ast_arena, original_name, arity);
+
+    // Check builtin symbols first (e.g., sizeof, alignof)
+    if (str_hset_contains(self->builtin_module_symbols, mangled_name)) return 1;
+
+    // Get module name
+    str module_name = name->symbol.module;
+
+    // For symbols in the current module (empty module name), check current_module_symbols directly.
+    // This handles the case where we're parsing a call within the same module where the function is
+    // defined.
+    if (str_is_empty(module_name)) {
+        int found = str_hset_contains(self->current_module_symbols, mangled_name);
+        return found;
+    }
+
+    // For cross-module references, look up the module's symbol table
+    if (!str_map_contains(self->module_symbols, module_name)) return 0;
+    hashmap *module_syms = str_map_get_ptr(self->module_symbols, module_name);
+    if (!module_syms) return 0;
+
+    // Check if arity-mangled symbol exists in that module
+    return str_hset_contains(module_syms, mangled_name);
+}
+
 static str unmangled_name(ast_node *name) {
     if (!ast_node_is_symbol(name)) return str_empty();
     if (!name->symbol.is_mangled) return name->symbol.name;
@@ -1591,6 +1704,10 @@ static str unmangled_name(ast_node *name) {
 
 static str mangle_str_for_module(parser *self, str name, str module) {
     return str_cat_3(self->ast_arena, module, S("_"), name);
+}
+
+str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
+    return str_fmt(alloc, "%s__%i", str_cstr(&name), (int)arity);
 }
 
 static str tagged_union_tag_name(parser *self, ast_node *tu_name) {
@@ -1619,6 +1736,28 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
                     str_cstr(&name->symbol.name));
         }
     }
+}
+
+static void mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition) {
+    if (!ast_node_is_symbol(name)) return;
+    str name_str = name->symbol.name;
+    if (str_eq(name_str, S("main"))) return;
+    if (is_c_symbol(name_str)) return;
+
+    // For function calls (not definitions), only mangle if the symbol is a known module-level function.
+    // Do NOT mangle unknown symbols - they might be local variables (parameters, let bindings).
+    // This is the key fix: previously we mangled unknown symbols, which broke calls like f(x)
+    // where f is a parameter.
+    // For function definitions, always mangle - the definition establishes the mangled name.
+    if (!is_definition && !symbol_is_module_function(self, name, arity)) {
+        return;
+    }
+
+    ast_node_name_replace(name, mangle_str_for_arity(self->ast_arena, name_str, arity));
+    name_str = name->symbol.name;
+
+    // Don't set is_mangled: that flag is to indicate module mangling, not arity mangling.
+    dbg(self, "arity mangle '%s' to '%s'\n", str_cstr(&name->symbol.original), str_cstr(&name_str));
 }
 
 static void mangle_name(parser *self, ast_node *name) {
@@ -1921,7 +2060,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterable_address;
-        ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init");
+        ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init__1");
         mangle_name_for_module(self, iter_init, module_name);
         call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
     }
@@ -1931,7 +2070,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_value     = ast_node_create_sym_c(self->ast_arena, "iter_value");
+        ast_node *iter_value     = ast_node_create_sym_c(self->ast_arena, "iter_value__1");
         mangle_name_for_module(self, iter_value, module_name);
         call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, iter_args);
     }
@@ -1941,7 +2080,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_ptr       = ast_node_create_sym_c(self->ast_arena, "iter_ptr");
+        ast_node *iter_ptr       = ast_node_create_sym_c(self->ast_arena, "iter_ptr__1");
         mangle_name_for_module(self, iter_ptr, module_name);
         call_iter_ptr = ast_node_create_nfa(self->ast_arena, iter_ptr, iter_args);
     }
@@ -1951,7 +2090,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_cond      = ast_node_create_sym_c(self->ast_arena, "iter_cond");
+        ast_node *iter_cond      = ast_node_create_sym_c(self->ast_arena, "iter_cond__1");
         mangle_name_for_module(self, iter_cond, module_name);
         call_iter_cond = ast_node_create_nfa(self->ast_arena, iter_cond, iter_args);
     }
@@ -1961,7 +2100,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_update    = ast_node_create_sym_c(self->ast_arena, "iter_update");
+        ast_node *iter_update    = ast_node_create_sym_c(self->ast_arena, "iter_update__1");
         mangle_name_for_module(self, iter_update, module_name);
         call_iter_update = ast_node_create_nfa(self->ast_arena, iter_update, iter_args);
     }
@@ -1971,7 +2110,7 @@ static int a_for_statement(parser *self) {
     {
         ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
         iter_args.v[0]           = iterator_address;
-        ast_node *iter_deinit    = ast_node_create_sym_c(self->ast_arena, "iter_deinit");
+        ast_node *iter_deinit    = ast_node_create_sym_c(self->ast_arena, "iter_deinit__1");
         mangle_name_for_module(self, iter_deinit, module_name);
         call_iter_deinit = ast_node_create_nfa(self->ast_arena, iter_deinit, iter_args);
     }
@@ -2105,8 +2244,11 @@ decl_done:
 
     ast_node *body = create_body(self, exprs);
 
+    // arity-mangle the name before recording it in module symbols
+    mangle_name_for_arity(self, name, params.size, 1); // 1 = function definition
     add_module_symbol(self, name);
     mangle_name(self, name);
+
     ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params);
     let->let.name = name;
@@ -2140,6 +2282,10 @@ static int toplevel_forward(parser *self) {
     // attach to name
     name->symbol.annotation = arrow;
 
+    // Get arity from the arrow's parameter tuple
+    ast_node_sized params = ast_node_sized_from_ast_array_const(arrow->arrow.left);
+    mangle_name_for_arity(self, name, params.size, 1); // 1 = forward declaration (definition)
+
     add_module_symbol(self, name);
     mangle_name(self, name);
 
@@ -2155,6 +2301,12 @@ static int toplevel_symbol_annotation(parser *self) {
 
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
+
+    if (ast_node_is_arrow(ident->symbol.annotation)) {
+        ast_node      *arrow  = ident->symbol.annotation;
+        ast_node_sized params = ast_node_sized_from_ast_array_const(arrow->arrow.left);
+        mangle_name_for_arity(self, ident, params.size, 1); // 1 = symbol annotation (definition)
+    }
 
     add_module_symbol(self, ident);
     mangle_name(self, ident);
@@ -2177,7 +2329,9 @@ static void load_module_symbols(parser *self) {
     if (self->is_symbol_pass) return;
     str module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
     if (str_map_contains(self->module_symbols, module_name)) {
-        map_destroy(&self->current_module_symbols);
+        // Don't destroy current_module_symbols here - after the first load, it points to a hashmap
+        // in module_symbols, and destroying it would corrupt module_symbols entries.
+        // The memory is managed by module_symbols and will be freed when the parser is destroyed.
         self->current_module_symbols = str_map_get_ptr(self->module_symbols, module_name);
     }
 }
@@ -2215,7 +2369,12 @@ static int toplevel_hash(parser *self) {
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
                 else self->current_module = module;
 
-                hset_reset(self->current_module_symbols);
+                // Only reset during first pass. During second pass, current_module_symbols may point
+                // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
+                // corrupt module_symbols.
+                if (self->is_symbol_pass) {
+                    hset_reset(self->current_module_symbols);
+                }
 
                 // load module symbols, if any
                 load_module_symbols(self);
@@ -3067,7 +3226,10 @@ int parser_parse_all_symbols(parser *self) {
     int res              = 0;
     self->is_symbol_pass = 1;
     while (0 == (res = parser_next(self))) {
-        ;
+        ast_node *node;
+        parser_result(self, &node);
+        str str = v2_ast_node_to_string(self->transient, node);
+        dbg(self, "parse_all_symbols: parsed node %s", str_cstr(&str));
     }
 
     save_current_module_symbols(self);
@@ -3118,6 +3280,10 @@ void parser_report_errors(parser *self) {
     fprintf(stderr, "%s:%u:%u: syntax error: %s\n", self->error.file, self->error.line, self->error.col,
             tl_error_tag_to_string(self->error.tag));
 }
+void parser_set_verbose(parser *self, int val) {
+    self->verbose = val;
+}
+
 static int too_many_arguments(parser *self) {
     self->error.tag = tl_err_too_many_arguments;
     return 1;

@@ -45,6 +45,7 @@ int  parser_parse_all(parser *, ast_node_array *out);
 int  parser_parse_all_symbols(parser *);
 int  parser_parse_all_verbose(parser *, ast_node_array *out);
 void parser_report_errors(parser *);
+void parser_set_verbose(parser *, int);
 
 // -- utilities --
 
@@ -55,5 +56,7 @@ int is_index_operator(char const *);
 int is_struct_access_operator(char const *);
 int is_dot_operator(char const *);
 int is_bitwise_operator(char const *);
+
+str mangle_str_for_arity(allocator *, str, u8);
 
 #endif
