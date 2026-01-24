@@ -1,9 +1,11 @@
 #include "alloc.h"
 #include "alloc_internal.h"
 
+#include "platform.h"
 #include "types.h"
 
 #include <assert.h>
+#include <signal.h>
 #include <stdalign.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -693,6 +695,14 @@ noreturn void fatal_i(char const *file, int line, char const *restrict fmt, ...)
 
     fprintf(stderr, "%s\n", buf);
 
-    assert(0);
+#ifdef MOS_WINDOWS
+    if (IsDebuggerPresent()) {
+        __debugbreak();
+    }
+#elif defined(__has_builtin) && __has_builtin(__builtin_debugtrap)
+    __builtin_debugtrap();
+#elif defined(SIGTRAP)
+    raise(SIGTRAP);
+#endif
     exit(1);
 }
