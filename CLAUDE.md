@@ -56,6 +56,8 @@ To run a single TL language test:
 ./tess c --no-line-directive <file>   # Transpile without #line directives
 ./tess exe -v <file.tl> -o <output>   # Verbose compilation
 ./tess exe --no-standard-includes -I src/tl/std <file.tl> -o <output>  # Disable automatic std includes
+./tess c --stats <file.tl>            # Report per-phase memory and time statistics
+./tess c --time <file.tl>             # Report total elapsed time
 ```
 
 The standard library paths are included automatically. Use `--no-standard-includes` to disable this and manually specify include paths with `-I`.
