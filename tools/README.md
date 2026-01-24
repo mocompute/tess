@@ -1,10 +1,10 @@
 # TL Mode for Emacs
 
-A major mode for editing TL (Tess Language) files in Emacs.
+A major mode for editing Tess language (`.tl`) files in Emacs.
 
 ## Features
 
-- **Syntax Highlighting**: Full syntax highlighting for TL language constructs
+- **Syntax Highlighting**: Full syntax highlighting for Tess language constructs
   - Keywords (`if`, `else`, `case`, `while`, `for`, `return`, etc.)
   - Built-in functions (`sizeof`, `alignof`)
   - Types (primitives, C-compatible types, generic types)
@@ -101,7 +101,7 @@ emacs --batch -l test-indentation.el
 
 ## Language Support
 
-TL Mode supports all TL language features:
+TL Mode supports all Tess language features:
 
 - Type inference and generic types
 - Lambdas and closures
@@ -151,4 +151,4 @@ Contributions are welcome! Please test your changes with the included test suite
 ## See Also
 
 - [Tess Language Repository](https://github.com/tess-lang/tess)
-- [TL Syntax Documentation](../docs/TL_SYNTAX.md)
+- [Tess Language Reference](../docs/LANGUAGE_REFERENCE.md)

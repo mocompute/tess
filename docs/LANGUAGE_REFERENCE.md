@@ -1,10 +1,10 @@
-# TL Language Syntax Overview
+# Tess Language Reference
 
-TL is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner style), generic types and functions, lambdas, closures, and C interoperability.
+Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner style), generic types and functions, lambdas, closures, and C interoperability.
 
 ## Key Language Characteristics
 
-**Expression-based:** Nearly everything in TL is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
+**Expression-based:** Nearly everything in Tess is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
 
 **Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
 
@@ -27,13 +27,13 @@ result := (x := compute()
 
 **Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
 
-**Minimal syntax:** TL favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines)—there are no semicolons. Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
+**Minimal syntax:** Tess favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines)—there are no semicolons. Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
 
 **Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
 
 ## Program Structure
 
-A TL program consists of one or more **modules**. Each module begins with a `#module` directive:
+A Tess program consists of one or more **modules**. Each module begins with a `#module` directive:
 
 ```tl
 #module main
@@ -46,7 +46,7 @@ The entry point is the `main` function in the `main` module.
 
 ```tl
 #module ModuleName      // Declare a module
-#import <filename.tl>   // Import another TL file
+#import <filename.tl>   // Import another Tess file
 #include <header.h>     // Include a C header
 ```
 
@@ -136,7 +136,7 @@ This pattern is commonly used in the standard library for functions that need to
 
 ## Variables and Assignment
 
-TL distinguishes between **binding** (`:=`) and **mutation** (`=`):
+Tess distinguishes between **binding** (`:=`) and **mutation** (`=`):
 
 ### Binding with `:=`
 
@@ -326,7 +326,7 @@ fp := add/2          // Pointer to the two-argument version
 
 ### Tail Call Optimization
 
-TL defines tail call optimization (TCO) as part of the language semantics. The generated C code is structured to enable TCO, and the underlying C compilers implement the optimization on all supported platforms. Tail-recursive functions are compiled to loops, allowing deep recursion without stack overflow:
+Tess defines tail call optimization (TCO) as part of the language semantics. The generated C code is structured to enable TCO, and the underlying C compilers implement the optimization on all supported platforms. Tail-recursive functions are compiled to loops, allowing deep recursion without stack overflow:
 
 ```tl
 sum_to(n, acc) {
@@ -568,7 +568,7 @@ Both `break` and `continue` work in `while` and `for` loops.
 return value    // Early return from function
 ```
 
-Use `return` for early exit from a function. Since TL is expression-based, implicit returns (the last expression in a function body) are preferred for normal control flow.
+Use `return` for early exit from a function. Since Tess is expression-based, implicit returns (the last expression in a function body) are preferred for normal control flow.
 
 ## Structs
 
@@ -731,7 +731,7 @@ c_printf(fmt: CString, ...) -> CInt     // Declares printf
 c_malloc(size: CSize) -> Ptr(any)       // Declares malloc
 ```
 
-To call a C function named `foo`, declare it as `c_foo` in TL.
+To call a C function named `foo`, declare it as `c_foo` in Tess.
 
 ### Declaring C Symbols
 

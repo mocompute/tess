@@ -1,10 +1,10 @@
-# TL Type System
+# Tess Type System
 
-TL features a Hindley-Milner style type system with full type inference, parametric polymorphism (generics), and monomorphization. This document describes how the type system works.
+Tess features a Hindley-Milner style type system with full type inference, parametric polymorphism (generics), and monomorphization. This document describes how the type system works.
 
 ## Overview
 
-The TL type system provides:
+The Tess type system provides:
 
 - **Type Inference** - Types are inferred from usage; explicit annotations are rarely required
 - **Parametric Polymorphism** - Generic functions and types with type parameters
@@ -14,7 +14,7 @@ The TL type system provides:
 
 ## Type Inference
 
-TL uses constraint-based type inference. The compiler:
+Tess uses constraint-based type inference. The compiler:
 
 1. Assigns fresh type variables to all expressions
 2. Collects constraints from the program structure
@@ -116,7 +116,7 @@ b := array_new(Rect(Float), 16)
 
 ## Monomorphization (Specialization)
 
-TL compiles generic code by **monomorphization**: creating specialized versions for each concrete type used.
+Tess compiles generic code by **monomorphization**: creating specialized versions for each concrete type used.
 
 ### How It Works
 
@@ -193,7 +193,7 @@ Aliases are expanded at compile time. `Pt` and `Point(Int)` are the same type.
 
 ### Partial Specialization (Not Supported)
 
-TL does not support partially specialized type aliases:
+Tess does not support partially specialized type aliases:
 
 ```tl
 // NOT SUPPORTED:
@@ -407,7 +407,7 @@ Functions without a meaningful return value have type `(...) -> Void`.
 
 ## Summary
 
-The TL type system provides:
+The Tess type system provides:
 
 | Feature | Description |
 |---------|-------------|

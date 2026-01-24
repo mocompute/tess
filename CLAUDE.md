@@ -11,7 +11,7 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 The `docs/` directory contains detailed documentation about the compiler's design and implementation. **Always consult these files before reading source code** when learning about a feature or implementation detail:
 
 - `LANGUAGE_REFERENCE.md` - Language syntax and features
-- `TL_TYPE_SYSTEM.md` - Type system design and implementation
+- `TYPE_SYSTEM.md` - Type system design and implementation
 - `SPECIALIZATION.md` - Generic function specialization
 - `TAGGED_UNIONS.md` - Tagged union implementation
 
@@ -37,11 +37,11 @@ make test               # Run all test suites
 make -j test            # Run tests in parallel (preferred)
 make -j test-mos           # MOS library tests only
 make -j test-tess          # Compiler unit tests only
-make -j test-tl            # TL language integration tests only
+make -j test-tl            # Tess language integration tests only
 ```
 
 ### Single Test Execution
-To run a single TL language test:
+To run a single Tess language test:
 ```bash
 ./tess exe src/tess/tl/test_<name>.tl -o /tmp/test_output
 /tmp/test_output        # Run the compiled test
@@ -130,7 +130,7 @@ ctest -C Release --verbose
 # Run specific test suite
 ctest -C Release -R test-mos     # MOS library tests
 ctest -C Release -R test-tess    # Compiler unit tests
-ctest -C Release -R test-tl      # TL language integration tests
+ctest -C Release -R test-tl      # Tess language integration tests
 
 # Run a specific test by name
 ctest -C Release -R test_array
@@ -138,7 +138,7 @@ ctest -C Release -R test_tl_generic
 ```
 
 ### Single Test Execution
-To run a single TL language test on Windows:
+To run a single Tess language test on Windows:
 ```powershell
 .\out\build\tess.exe exe src/tess/tl/test_<name>.tl -o test_output.exe
 .\test_output.exe
@@ -269,7 +269,7 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
 
 - **MOS tests** (`src/mos/src/test_*.c`) - Unit tests for data structures
 - **Tess tests** (`src/tess/src/test_*.c`) - Compiler unit tests
-- **TL tests** (`src/tess/tl/test_*.tl`) - Integration tests covering:
+- **Tess tests** (`src/tess/tl/test_*.tl`) - Integration tests covering:
   - Type inference and generics
   - Lambdas, closures, pattern matching
   - Memory management, pointers
@@ -283,7 +283,7 @@ When adding new functionality or fixing bugs, always ensure proper test coverage
 - Add tests incrementally as part of implementation, not at the end
 - For multi-step implementation plans, add and verify tests at each step before proceeding
 - New MOS library functions should have corresponding unit tests in `src/mos/src/test_*.c`
-- New compiler features should have TL integration tests in `src/tess/tl/test_*.tl`
+- New compiler features should have Tess integration tests in `src/tess/tl/test_*.tl`
 - Run `make -j test` to verify all tests pass before committing
 
 ## Build System Notes
