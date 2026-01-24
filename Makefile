@@ -466,6 +466,9 @@ build-tl-tests: $(TL_TEST_EXES)
 
 test-tl: build-tl-tests
 	@failed=0; \
+	count_pass=0; \
+	count_fail=0; \
+	count_known=0; \
 	for test in $(TL_TEST_EXES); do \
 		name=$$(basename $$test); \
 		$(MSG_TEST) $$name; \
@@ -473,14 +476,18 @@ test-tl: build-tl-tests
 			$(MSG_FAIL) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
+		count_pass=$$((count_pass + 1)); \
 	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_pass passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
 		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
+		count_fail=$$((count_fail + 1)); \
 	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_fail expected failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
 		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
@@ -489,7 +496,11 @@ test-tl: build-tl-tests
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
 			known=$$((known + 1)); \
 		fi; \
+		count_known=$$((count_known + 1)); \
 	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_known known failure tests\n"; \
+	total=$$((count_pass + count_fail + count_known)); \
+	printf "  \033[1;36m[TOTAL]\033[0m $$total tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \
 		exit 1; \
