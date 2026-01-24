@@ -243,8 +243,10 @@ endef
 # mos Library Tests
 # ------------------------------------------------------------------------------
 
-MOS_TESTS     = alloc array file hash map sexp str types util
-MOS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
+MOS_TESTS      = alloc array file map sexp str types util
+MOS_BENCHMARKS = hash
+MOS_TEST_EXES      = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
+MOS_BENCHMARK_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_BENCHMARKS))
 
 $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
 	@mkdir -p $(dir $@)
@@ -252,6 +254,11 @@ $(BUILD_DIR)/test_mos_%: $(MOS_SRC_DIR)/src/test_%.c $(MOS_OBJECTS)
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 build-mos-tests: $(MOS_TEST_EXES)
+
+build-mos-benchmarks: $(MOS_BENCHMARK_EXES)
+
+bench-mos: build-mos-benchmarks
+	$(call run_test_suite,mos benchmarks,$(MOS_BENCHMARK_EXES))
 
 test-mos: build-mos-tests
 	$(call run_test_suite,mos,$(MOS_TEST_EXES))
@@ -498,4 +505,5 @@ test:
 
 .PHONY: clean cleanall install test
 .PHONY: test-mos test-tess test-tl
+.PHONY: build-mos-benchmarks bench-mos
 .DEFAULT_GOAL := all
