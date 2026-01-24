@@ -688,13 +688,15 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
     str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file));
     str fe = str_cat(self->arena, S("/Fe"), str_init_static(self->out_path));
 
-    array_push(argv, str_cstr(&fo));
-    array_push(argv, str_cstr(&fe));
+    // clang-format off
+    { char const *_t = str_cstr(&fo); array_push(argv, _t); }
+    { char const *_t = str_cstr(&fe); array_push(argv, _t); }
 
     { char const *_t = "/TC"; array_push(argv, _t); }
     array_push(argv, c_file);
 
     { char const *_t = null; array_push(argv, _t); }
+    // clang-format on
 
     return argv;
 }
