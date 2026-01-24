@@ -106,6 +106,21 @@ typedef struct {
 
     int             is_library;
     int             is_executable;
+
+    // Compilation statistics (populated when report_stats is set)
+    struct {
+        double parse_time_ms;
+        size_t parse_peak_mem;
+        size_t parse_final_mem;
+        double infer_time_ms;
+        size_t infer_peak_mem;
+        size_t infer_final_mem;
+        double transpile_time_ms;
+        size_t transpile_peak_mem;
+        size_t transpile_final_mem;
+        double cc_time_ms;
+        size_t cc_input_size;  // Size of C source passed to compiler
+    } stats;
 } state;
 
 noreturn void usage(int status, char const *argv0) {
@@ -463,12 +478,6 @@ static void get_c_compiler(state *self) {
 
 // -- stats formatting helpers --
 
-typedef struct {
-    double time_ms;
-    size_t peak_memory;
-    size_t final_memory;
-} phase_stats;
-
 static void format_memory(char *buf, size_t sz, size_t bytes) {
     if (bytes < 1024)
         snprintf(buf, sz, "%zu B", bytes);
@@ -485,11 +494,17 @@ static void print_stats_header(void) {
             "------------", "------------");
 }
 
-static void print_stats_row(char const *phase, phase_stats const *s) {
+static void print_stats_row(char const *phase, double time_ms, size_t peak_mem, size_t final_mem) {
     char peak_buf[32], final_buf[32];
-    format_memory(peak_buf, sizeof peak_buf, s->peak_memory);
-    format_memory(final_buf, sizeof final_buf, s->final_memory);
-    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, s->time_ms, peak_buf, final_buf);
+    format_memory(peak_buf, sizeof peak_buf, peak_mem);
+    format_memory(final_buf, sizeof final_buf, final_mem);
+    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, time_ms, peak_buf, final_buf);
+}
+
+static void print_stats_row_no_mem(char const *phase, double time_ms, size_t input_size) {
+    char size_buf[32];
+    format_memory(size_buf, sizeof size_buf, input_size);
+    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, time_ms, "-", size_buf);
 }
 
 static void print_stats_footer(double total_ms, size_t total_peak) {
@@ -507,9 +522,6 @@ int compile(state *self) {
     int             error       = 0;
 
     // Stats collection
-    phase_stats parse_stats  = {0};
-    phase_stats infer_stats  = {0};
-    phase_stats transpile_stats = {0};
     hires_timer phase_timer;
     hires_timer_init(&phase_timer);
 
@@ -561,11 +573,11 @@ int compile(state *self) {
 
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
-        parse_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        self->stats.parse_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats ast_stats, token_stats;
         parser_get_arena_stats(parser, &ast_stats, &token_stats);
-        parse_stats.peak_memory = ast_stats.peak_allocated + token_stats.peak_allocated;
-        parse_stats.final_memory = ast_stats.allocated + token_stats.allocated;
+        self->stats.parse_peak_mem = ast_stats.peak_allocated + token_stats.peak_allocated;
+        self->stats.parse_final_mem = ast_stats.allocated + token_stats.allocated;
     }
 
     // === TYPE INFERENCE PHASE ===
@@ -582,11 +594,11 @@ int compile(state *self) {
 
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
-        infer_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        self->stats.infer_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats infer_arena_stats;
         tl_infer_get_arena_stats(infer, &infer_arena_stats);
-        infer_stats.peak_memory = infer_arena_stats.peak_allocated;
-        infer_stats.final_memory = infer_arena_stats.allocated;
+        self->stats.infer_peak_mem = infer_arena_stats.peak_allocated;
+        self->stats.infer_final_mem = infer_arena_stats.allocated;
     }
 
     // === TRANSPILATION PHASE ===
@@ -605,11 +617,11 @@ int compile(state *self) {
 
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
-        transpile_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        self->stats.transpile_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats tp_arena_stats;
         transpile_get_arena_stats(transpile, &tp_arena_stats);
-        transpile_stats.peak_memory = tp_arena_stats.peak_allocated;
-        transpile_stats.final_memory = tp_arena_stats.allocated;
+        self->stats.transpile_peak_mem = tp_arena_stats.peak_allocated;
+        self->stats.transpile_final_mem = tp_arena_stats.allocated;
     }
 
     str program = str_build_finish(&program_build);
@@ -629,17 +641,6 @@ int compile(state *self) {
 done:
     // is_executable || is_library: Caller will take over program
 cleanup_tp:
-    // Print stats before cleanup (while we still have the data)
-    if (self->report_stats && !error) {
-        print_stats_header();
-        print_stats_row("Parsing", &parse_stats);
-        print_stats_row("Type Inference", &infer_stats);
-        print_stats_row("Transpilation", &transpile_stats);
-        double total_ms = parse_stats.time_ms + infer_stats.time_ms + transpile_stats.time_ms;
-        size_t total_peak = parse_stats.peak_memory + infer_stats.peak_memory + transpile_stats.peak_memory;
-        print_stats_footer(total_ms, total_peak);
-    }
-
     transpile_destroy(default_allocator(), &transpile);
 
 cleanup_ti:
@@ -795,6 +796,13 @@ static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf, s
 int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
 
+    hires_timer cc_timer;
+    hires_timer_init(&cc_timer);
+    hires_timer_start(&cc_timer);
+
+    // Record input size for stats
+    size_t input_size = str_len(self->program);
+
     win_temp_files tf;
     if (win_temp_files_init(&tf)) return 1;
 
@@ -813,6 +821,13 @@ int compile_c(state *self) {
 
     int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
     win_temp_files_cleanup(&tf);
+
+    hires_timer_stop(&cc_timer);
+    if (self->report_stats) {
+        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_input_size = input_size;
+    }
+
     return result;
 }
 
@@ -820,6 +835,13 @@ int compile_c(state *self) {
 
 int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
+
+    hires_timer cc_timer;
+    hires_timer_init(&cc_timer);
+    hires_timer_start(&cc_timer);
+
+    // Record input size for stats
+    size_t input_size = str_len(self->program);
 
     int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
     if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
@@ -905,6 +927,13 @@ int compile_c(state *self) {
 
         wait(null);
     }
+
+    hires_timer_stop(&cc_timer);
+    if (self->report_stats) {
+        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_input_size = input_size;
+    }
+
     return child_res;
 }
 
@@ -914,6 +943,13 @@ int compile_c(state *self) {
 
 int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
+
+    hires_timer cc_timer;
+    hires_timer_init(&cc_timer);
+    hires_timer_start(&cc_timer);
+
+    // Record input size for stats
+    size_t input_size = str_len(self->program);
 
     win_temp_files tf;
     if (win_temp_files_init(&tf)) return 1;
@@ -933,6 +969,13 @@ int compile_c_obj(state *self) {
 
     int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
     win_temp_files_cleanup(&tf);
+
+    hires_timer_stop(&cc_timer);
+    if (self->report_stats) {
+        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_input_size = input_size;
+    }
+
     return result;
 }
 
@@ -940,6 +983,13 @@ int compile_c_obj(state *self) {
 
 int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
+
+    hires_timer cc_timer;
+    hires_timer_init(&cc_timer);
+    hires_timer_start(&cc_timer);
+
+    // Record input size for stats
+    size_t input_size = str_len(self->program);
 
     int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
     if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
@@ -1022,6 +1072,13 @@ int compile_c_obj(state *self) {
 
         wait(null);
     }
+
+    hires_timer_stop(&cc_timer);
+    if (self->report_stats) {
+        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_input_size = input_size;
+    }
+
     return child_res;
 }
 
@@ -1107,6 +1164,30 @@ int main(int argc, char *argv[]) {
 
 done:
     hires_timer_stop(&timer);
+
+    if (self.report_stats && !result) {
+        print_stats_header();
+        print_stats_row("Parsing", self.stats.parse_time_ms,
+                        self.stats.parse_peak_mem, self.stats.parse_final_mem);
+        print_stats_row("Type Inference", self.stats.infer_time_ms,
+                        self.stats.infer_peak_mem, self.stats.infer_final_mem);
+        print_stats_row("Transpilation", self.stats.transpile_time_ms,
+                        self.stats.transpile_peak_mem, self.stats.transpile_final_mem);
+
+        double total_ms = self.stats.parse_time_ms + self.stats.infer_time_ms +
+                          self.stats.transpile_time_ms;
+        size_t total_peak = self.stats.parse_peak_mem + self.stats.infer_peak_mem +
+                            self.stats.transpile_peak_mem;
+
+        // C compilation phase (only for exe/lib commands)
+        if (self.is_executable || self.is_library) {
+            print_stats_row_no_mem("C Compilation", self.stats.cc_time_ms,
+                                   self.stats.cc_input_size);
+            total_ms += self.stats.cc_time_ms;
+        }
+
+        print_stats_footer(total_ms, total_peak);
+    }
 
     if (self.report_time) {
         double elapsed = hires_timer_elapsed_sec(&timer);
