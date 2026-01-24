@@ -169,6 +169,10 @@ tl_type_registry *tl_infer_get_registry(tl_infer *self) {
     return self->registry;
 }
 
+void tl_infer_get_arena_stats(tl_infer *self, arena_stats *out) {
+    arena_get_stats(self->arena, out);
+}
+
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node);
 
 static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *node) {

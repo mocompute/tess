@@ -43,4 +43,8 @@ int                 is_c_struct_symbol(str);
 int                 is_intrinsic(str);
 int                 is_module_init(str);
 
+// -- stats --
+
+void                tl_infer_get_arena_stats(tl_infer *, arena_stats *out);
+
 #endif

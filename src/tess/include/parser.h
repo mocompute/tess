@@ -59,4 +59,8 @@ int is_bitwise_operator(char const *);
 
 str mangle_str_for_arity(allocator *, str, u8);
 
+// -- stats --
+
+void parser_get_arena_stats(parser *, arena_stats *ast, arena_stats *tokens);
+
 #endif

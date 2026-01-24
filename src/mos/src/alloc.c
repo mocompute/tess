@@ -46,6 +46,7 @@ typedef struct arena_allocator {
     struct allocator allocator;
     allocator       *parent;
     arena_header    *head;
+    size_t           peak_allocated;
 } arena_allocator;
 
 static void *default_malloc(allocator *a, size_t sz, char const *, int) mallocfun;
@@ -297,6 +298,7 @@ static void arena_free(allocator *a, void *p, char const *file, int line) {
 static void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
+    arena->peak_allocated  = 0;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
     if (0 == sz) sz = 16; // overflow (TODO)
 
@@ -331,12 +333,32 @@ void arena_destroy(allocator **arena_) {
 void arena_reset(allocator *arena_) {
     // resets every block to size 0 (plus arena_header)
     arena_allocator *arena = (arena_allocator *)arena_;
-    arena_header    *next  = arena->head;
 
+    // Compute current total and update peak
+    size_t current = 0;
+    for (arena_header *h = arena->head; h; h = h->next)
+        current += h->size - sizeof(arena_header);
+    if (current > arena->peak_allocated)
+        arena->peak_allocated = current;
+
+    // Reset buckets
+    arena_header *next = arena->head;
     while (next) {
         next->size = sizeof(arena_header);
         next       = next->next;
     }
+}
+
+void arena_get_stats(allocator *arena_, arena_stats *out) {
+    arena_allocator *arena = (arena_allocator *)arena_;
+    out->allocated = out->capacity = out->bucket_count = 0;
+    for (arena_header *h = arena->head; h; h = h->next) {
+        out->allocated += h->size - sizeof(arena_header);
+        out->capacity += h->capacity - sizeof(arena_header);
+        out->bucket_count++;
+    }
+    out->peak_allocated = arena->peak_allocated > out->allocated
+                          ? arena->peak_allocated : out->allocated;
 }
 
 // -- leak detector allocator --

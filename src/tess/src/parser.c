@@ -225,6 +225,11 @@ void parser_set_module_symbols(parser *self, hashmap *mod_syms) {
     self->module_symbols = mod_syms;
 }
 
+void parser_get_arena_stats(parser *self, arena_stats *ast, arena_stats *tokens) {
+    arena_get_stats(self->ast_arena, ast);
+    arena_get_stats(self->tokens_arena, tokens);
+}
+
 // -- module --
 
 static void add_module_symbol(parser *self, ast_node *name) {

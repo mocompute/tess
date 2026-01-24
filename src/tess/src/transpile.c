@@ -2099,6 +2099,10 @@ void transpile_set_verbose(transpile *self, int val) {
     self->verbose = val;
 }
 
+void transpile_get_arena_stats(transpile *self, arena_stats *out) {
+    arena_get_stats(self->arena, out);
+}
+
 //
 
 static str next_res(transpile *self) {

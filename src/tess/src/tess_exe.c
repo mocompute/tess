@@ -99,7 +99,8 @@ typedef struct {
     int             verbose;
     int             verbose_ast;
     int             verbose_parse;
-    int             report_time; // --time option
+    int             report_time;  // --time option
+    int             report_stats; // --stats option
     int             help;
     int             optimize;
 
@@ -125,6 +126,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --no-standard-includes only directories specified with -I will be searched\n");
+    printf("    --stats                report memory and time statistics per phase\n");
     printf("    --time                 report elapsed time of compilation process\n");
     printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
@@ -151,6 +153,7 @@ void state_init(state *self) {
     self->verbose_ast          = 0;
     self->verbose_parse        = 0;
     self->report_time          = 0;
+    self->report_stats         = 0;
     self->no_line_directive    = 0;
     self->no_standard_includes = 0;
     self->help                 = 0;
@@ -185,6 +188,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
+    else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--", str)) /* ignore */
         ;
     else usage(1, self->argv0);
@@ -457,10 +461,57 @@ static void get_c_compiler(state *self) {
     }
 }
 
+// -- stats formatting helpers --
+
+typedef struct {
+    double time_ms;
+    size_t peak_memory;
+    size_t final_memory;
+} phase_stats;
+
+static void format_memory(char *buf, size_t sz, size_t bytes) {
+    if (bytes < 1024)
+        snprintf(buf, sz, "%zu B", bytes);
+    else if (bytes < 1024 * 1024)
+        snprintf(buf, sz, "%.1f KB", bytes / 1024.0);
+    else
+        snprintf(buf, sz, "%.2f MB", bytes / (1024.0 * 1024.0));
+}
+
+static void print_stats_header(void) {
+    fprintf(stderr, "\n=== Compilation Statistics ===\n\n");
+    fprintf(stderr, "%-20s %12s %12s %12s\n", "Phase", "Time (ms)", "Peak Mem", "Final Mem");
+    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------",
+            "------------", "------------");
+}
+
+static void print_stats_row(char const *phase, phase_stats const *s) {
+    char peak_buf[32], final_buf[32];
+    format_memory(peak_buf, sizeof peak_buf, s->peak_memory);
+    format_memory(final_buf, sizeof final_buf, s->final_memory);
+    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, s->time_ms, peak_buf, final_buf);
+}
+
+static void print_stats_footer(double total_ms, size_t total_peak) {
+    char peak_buf[32];
+    format_memory(peak_buf, sizeof peak_buf, total_peak);
+    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------",
+            "------------", "------------");
+    fprintf(stderr, "%-20s %12.3f %12s\n", "TOTAL", total_ms, peak_buf);
+    fprintf(stderr, "\n");
+}
+
 int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
     int             error       = 0;
+
+    // Stats collection
+    phase_stats parse_stats  = {0};
+    phase_stats infer_stats  = {0};
+    phase_stats transpile_stats = {0};
+    hires_timer phase_timer;
+    hires_timer_init(&phase_timer);
 
     c_string_csized paths       = {.v = &self->words.v[1], .size = self->words.size - 1};
 
@@ -471,6 +522,9 @@ int compile(state *self) {
           .registry = tl_infer_get_registry(infer),
           .files    = files_in_order(self, paths),
     };
+
+    // === PARSING PHASE ===
+    hires_timer_start(&phase_timer);
 
     parser *parser = parser_create(default_allocator(), &parser_opts);
     if (!parser) fatal("could not create parser");
@@ -505,6 +559,18 @@ int compile(state *self) {
         }
     }
 
+    hires_timer_stop(&phase_timer);
+    if (self->report_stats) {
+        parse_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        arena_stats ast_stats, token_stats;
+        parser_get_arena_stats(parser, &ast_stats, &token_stats);
+        parse_stats.peak_memory = ast_stats.peak_allocated + token_stats.peak_allocated;
+        parse_stats.final_memory = ast_stats.allocated + token_stats.allocated;
+    }
+
+    // === TYPE INFERENCE PHASE ===
+    hires_timer_start(&phase_timer);
+
     tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
     tl_infer_set_verbose_ast(infer, self->verbose_ast);
@@ -513,6 +579,18 @@ int compile(state *self) {
         error++;
         goto cleanup_ti;
     }
+
+    hires_timer_stop(&phase_timer);
+    if (self->report_stats) {
+        infer_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        arena_stats infer_arena_stats;
+        tl_infer_get_arena_stats(infer, &infer_arena_stats);
+        infer_stats.peak_memory = infer_arena_stats.peak_allocated;
+        infer_stats.final_memory = infer_arena_stats.allocated;
+    }
+
+    // === TRANSPILATION PHASE ===
+    hires_timer_start(&phase_timer);
 
     transpile_opts transpile_opts = {
       .infer_result      = infer_result,
@@ -524,6 +602,15 @@ int compile(state *self) {
 
     str_build  program_build;
     if (transpile_compile(transpile, &program_build)) goto cleanup_tp;
+
+    hires_timer_stop(&phase_timer);
+    if (self->report_stats) {
+        transpile_stats.time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
+        arena_stats tp_arena_stats;
+        transpile_get_arena_stats(transpile, &tp_arena_stats);
+        transpile_stats.peak_memory = tp_arena_stats.peak_allocated;
+        transpile_stats.final_memory = tp_arena_stats.allocated;
+    }
 
     str program = str_build_finish(&program_build);
 
@@ -542,6 +629,17 @@ int compile(state *self) {
 done:
     // is_executable || is_library: Caller will take over program
 cleanup_tp:
+    // Print stats before cleanup (while we still have the data)
+    if (self->report_stats && !error) {
+        print_stats_header();
+        print_stats_row("Parsing", &parse_stats);
+        print_stats_row("Type Inference", &infer_stats);
+        print_stats_row("Transpilation", &transpile_stats);
+        double total_ms = parse_stats.time_ms + infer_stats.time_ms + transpile_stats.time_ms;
+        size_t total_peak = parse_stats.peak_memory + infer_stats.peak_memory + transpile_stats.peak_memory;
+        print_stats_footer(total_ms, total_peak);
+    }
+
     transpile_destroy(default_allocator(), &transpile);
 
 cleanup_ti:

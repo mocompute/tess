@@ -41,6 +41,17 @@ void                 arena_destroy(allocator **);
 // reset arena to empty but retain all capacity
 void arena_reset(allocator *);
 
+// -- arena statistics --
+
+typedef struct {
+    size_t allocated;      // Current bytes in use
+    size_t capacity;       // Total capacity across all buckets
+    size_t peak_allocated; // High-water mark
+    size_t bucket_count;   // Number of buckets
+} arena_stats;
+
+void arena_get_stats(allocator *arena, arena_stats *out);
+
 // -- allocator malloc and friends --
 //
 // these allocations never fail: failures call fatal() and exit the program.
