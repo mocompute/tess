@@ -14,65 +14,13 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 #include <string.h>
-#include <time.h>
 
 #ifdef MOS_WINDOWS
 #include <fcntl.h>
 #include <io.h>
 #include <process.h>
-#include <windows.h>
 #else
 #include <sys/wait.h>
-#include <unistd.h>
-#endif
-
-// -- High-resolution timing --
-#ifdef MOS_WINDOWS
-typedef struct {
-    LARGE_INTEGER start;
-    LARGE_INTEGER end;
-    LARGE_INTEGER freq;
-} hires_timer;
-
-static void hires_timer_init(hires_timer *t) {
-    QueryPerformanceFrequency(&t->freq);
-    QueryPerformanceCounter(&t->start);
-    t->end = t->start;
-}
-
-static void hires_timer_start(hires_timer *t) {
-    QueryPerformanceCounter(&t->start);
-}
-
-static void hires_timer_stop(hires_timer *t) {
-    QueryPerformanceCounter(&t->end);
-}
-
-static double hires_timer_elapsed_sec(hires_timer *t) {
-    return (double)(t->end.QuadPart - t->start.QuadPart) / (double)t->freq.QuadPart;
-}
-#else
-typedef struct {
-    struct timespec start;
-    struct timespec end;
-} hires_timer;
-
-static void hires_timer_init(hires_timer *t) {
-    clock_gettime(CLOCK_MONOTONIC, &t->start);
-    t->end = t->start;
-}
-
-static void hires_timer_start(hires_timer *t) {
-    clock_gettime(CLOCK_MONOTONIC, &t->start);
-}
-
-static void hires_timer_stop(hires_timer *t) {
-    clock_gettime(CLOCK_MONOTONIC, &t->end);
-}
-
-static double hires_timer_elapsed_sec(hires_timer *t) {
-    return (double)(t->end.tv_sec - t->start.tv_sec) + (double)(t->end.tv_nsec - t->start.tv_nsec) / 1e9;
-}
 #endif
 
 // -- embed externs --

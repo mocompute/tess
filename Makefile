@@ -96,6 +96,7 @@ MOS_SOURCES =					\
 	$(MOS_SRC_DIR)/src/hash.c		\
 	$(MOS_SRC_DIR)/src/file.c		\
 	$(MOS_SRC_DIR)/src/hashmap.c		\
+	$(MOS_SRC_DIR)/src/platform.c		\
 	$(MOS_SRC_DIR)/src/sexp.c		\
 	$(MOS_SRC_DIR)/src/sexp_parser.c	\
 	$(MOS_SRC_DIR)/src/str.c

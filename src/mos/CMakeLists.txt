@@ -22,6 +22,7 @@ set(SOURCES
   src/hash.c
   src/file.c
   src/hashmap.c
+  src/platform.c
   src/sexp.c
   src/sexp_parser.c
   src/str.c
