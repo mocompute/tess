@@ -11,6 +11,7 @@ This directory contains technical documentation for the Tess programming languag
 | [SPECIALIZATION.md](SPECIALIZATION.md) | Deep dive into generic specialization (monomorphization) in the compiler |
 | [TAGGED_UNIONS.md](TAGGED_UNIONS.md) | Technical documentation on tagged union (sum type) implementation |
 | [NAME_MANGLING.md](NAME_MANGLING.md) | Name mangling system for arity overloading, modules, and specialization |
+| [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
 ## Suggested Reading Order
 
