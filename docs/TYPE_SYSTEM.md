@@ -239,6 +239,9 @@ Tuples group multiple types:
 (Int, Float, String)            // Triple
 ```
 
+Tuples are a feature of the type system, not the Tess language. They
+are used to represent function parameter lists in arrow types.
+
 ## Constraint Satisfaction
 
 The type checker generates and solves constraints:
