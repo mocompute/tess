@@ -583,8 +583,7 @@ Empty : { }                            // Empty struct
 ### Construction
 
 ```tl
-p := Point(1, 2)                       // Positional arguments
-p := Point(x = 1, y = 2)               // Named arguments
+p := Point(x = 1, y = 2)               // Named arguments required
 ```
 
 ### Field Access

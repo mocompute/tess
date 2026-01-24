@@ -9,8 +9,8 @@ make_points(count) { Array.with_capacity(Point(Int), count) }
 main() {
   points := make_points(8)
 
-  Array.push(points.&, Point(0, 1, null))
-  Array.push(points.&, Point(2, 3, points.v[0].&))
+  Array.push(points.&, Point(x = 0, y = 1, next = null))
+  Array.push(points.&, Point(x = 2, y = 3, next = points.v[0].&))
 
   res := points.v[0].x
   if (points.v[1].next->x != 0) { res = 1 }

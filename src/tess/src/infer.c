@@ -113,7 +113,7 @@ static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
 tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new(alloc, tl_infer);
+    tl_infer *self           = new (alloc, tl_infer);
 
     self->opts               = *opts;
 
@@ -505,7 +505,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new(transient, traverse_ctx);
+    traverse_ctx *out   = new (transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 32);
     out->type_arguments = map_create_ptr(transient, 16);
     out->user           = null;
@@ -526,7 +526,7 @@ typedef struct {
 } infer_ctx;
 
 static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new(alloc, infer_ctx);
+    infer_ctx *out = new (alloc, infer_ctx);
     return out;
 }
 
@@ -1153,6 +1153,9 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     if (is_type_literal(self, ctx, node)) return 0;
 
     if (tl_polytype_is_type_constructor(type)) {
+        // This nfa can be either a type literal, or a type value constructor. Value constructors are of the
+        // form `Foo(a=1, b=2)`. Type literals are of the form `Foo(Int)` for generics or plain `Foo` for
+        // concrete.
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) {
@@ -1191,6 +1194,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             if (i >= inst->cons_inst->args.size) fatal("runtime error");
 
             if (ast_node_is_assignment(arg)) {
+                // This is a type value constructor
                 i32 found = tl_monotype_type_constructor_field_index(
                   inst, ast_node_name_original(arg->assignment.name));
 
@@ -1202,7 +1206,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                 assert(found < (i32)inst->cons_inst->args.size);
                 if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
             } else {
-                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[i], node)) return 1;
+                // In this branch, node is a type literal.
             }
             ++i;
         }
@@ -1801,7 +1805,13 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
                 if ((u32)found >= inst->args.size) fatal("out of range");
                 tl_monotype *field_type = inst->args.v[found];
                 if (nfa) {
-                    tl_monotype *result_type = tl_monotype_arrow_result(field_type);
+                    tl_monotype *result_type;
+                    if (tl_monotype_is_arrow(field_type)) {
+                        result_type = tl_monotype_arrow_result(field_type);
+                    } else {
+                        // Field type is not yet an arrow (e.g., a type variable).
+                        result_type = tl_monotype_create_fresh_tv(self->subs);
+                    }
                     // right = nfa's name
                     if (constrain_pm(self, right->type, field_type, node)) return 1;
                     if (constrain_pm(self, nfa->type, result_type, node)) return 1;
@@ -2304,7 +2314,10 @@ int is_union_struct(tl_infer *self, str name) {
     return 0;
 }
 
-static int specialize_user_type(tl_infer *self, ast_node *node) {
+static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                      ast_node *node, tl_monotype_sized expected_types);
+
+static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     // divert if type constructor application is actually a type literal
     if (0 == type_literal_specialize(self, node)) return 0;
 
@@ -2342,7 +2355,6 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
             return 0; // Type not ready yet
         }
     } else {
-
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) {
@@ -2386,6 +2398,15 @@ static int specialize_user_type(tl_infer *self, ast_node *node) {
 
         // Note: For type constructors being specialized, we must always override the node type.
         ast_node_type_set(node, special_type);
+    }
+
+    // Specialize function pointer arguments in struct initialization.
+    // This must be done for both generic and non-generic type constructors,
+    // as function pointer arguments need to reference specialized function names.
+    if (node->named_application.n_arguments > 0) {
+        if (specialize_value_arguments(self, null, traverse_ctx, node, arr_sized)) {
+            return 1;
+        }
     }
 
     return 0;
@@ -2641,14 +2662,12 @@ static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
     return 1;
 }
 
-static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node,
-                                tl_monotype *arrow) {
-    // Visits arguments used in node (function call arguments, etc) to check for symbols which refer to
-    // toplevel functions. When found, that function is specialized according to the callsite's expected
-    // type.
+static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
+                                      ast_node *node, tl_monotype_sized expected_types) {
+    // Visits arguments to check for symbols referring to toplevel functions.
+    // When found, specializes the function according to the expected type.
 
-    ast_arguments_iter iter     = ast_node_arguments_iter(node);
-    tl_monotype_sized  app_args = tl_monotype_arrow_args(arrow)->list.xs;
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *arg;
     u32                i = 0;
     while ((arg = ast_arguments_next(&iter))) {
@@ -2658,12 +2677,23 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
 
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
-        if (specialize_arrow_with_name(self, ctx, traverse_ctx, arg, app_args.v[i])) return 1;
+        if (i >= expected_types.size) break;
+        if (specialize_arrow_with_name(self, ctx, traverse_ctx, arg, expected_types.v[i])) return 1;
 
     next:
         ++i;
     }
     return 0;
+}
+
+static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node,
+                                tl_monotype *arrow) {
+    // Visits arguments used in node (function call arguments, etc) to check for symbols which refer to
+    // toplevel functions. When found, that function is specialized according to the callsite's expected
+    // type.
+
+    tl_monotype_sized app_args = tl_monotype_arrow_args(arrow)->list.xs;
+    return specialize_value_arguments(self, ctx, traverse_ctx, node, app_args);
 }
 
 // ============================================================================
@@ -2686,7 +2716,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     }
 
     // check for nullary type constructors
-    if (ast_node_is_symbol(node)) return specialize_user_type(self, node);
+    if (ast_node_is_symbol(node)) return specialize_user_type(self, traverse_ctx, node);
     // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, traverse_ctx, node);
     if (ast_node_is_assignment(node)) return specialize_reassignment(self, traverse_ctx, node);
@@ -2734,7 +2764,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         }
 
         // divert if this is a type constructor
-        if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, node);
+        if (tl_polytype_is_type_constructor(type)) return specialize_user_type(self, traverse_ctx, node);
 
         // remember this callsite is specialized
         ast_node_set_is_specialized(node);
@@ -3751,9 +3781,17 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         if (node->let_in.body) ast_node_type_set(node, node->let_in.body->type);
 
         // Note: ensure name's type in the environment matches a specialized type constructor on the rhs
-        if (tl_monotype_is_inst_specialized(node->let_in.value->type->type)) {
-            ast_node_type_set(node->let_in.name, node->let_in.value->type);
-            tl_type_env_insert(self->env, ast_node_str(node->let_in.name), node->let_in.value->type);
+        {
+            tl_monotype *value_type = node->let_in.value->type->type;
+            // Also check for type literals whose target is a specialized instance
+            if (tl_monotype_is_type_literal(value_type)) {
+                value_type = tl_monotype_literal_target(value_type);
+            }
+            if (tl_monotype_is_inst_specialized(value_type)) {
+                tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, value_type);
+                ast_node_type_set(node->let_in.name, new_type);
+                tl_type_env_insert(self->env, ast_node_str(node->let_in.name), new_type);
+            }
         }
         break;
 

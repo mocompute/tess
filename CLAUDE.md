@@ -264,6 +264,7 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
   - `mos_*` prefix for MOS library
   - Lowercase with underscores (snake_case)
 - **Booleans** - C code uses 1 and 0 instead of true and false
+- **Tess language naming** - In the Tess language itself, types may start with lowercase letters and cannot be distinguished from function names or variables based solely on spelling/case. The compiler must use structural information (AST node types, type system data) rather than naming conventions to differentiate between types and values.
 
 ## Testing Infrastructure
 

@@ -705,6 +705,7 @@ static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_v
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
     // generate args to match arrow type or type constructor
     str_array args_res = {.alloc = self->transient};
+    if (!args.size) return args_res;
     array_reserve(args_res, args.size);
 
     tl_monotype_sized arr;
@@ -1485,8 +1486,8 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
 // Short-circuit evaluation for || and && operators.
 // For ||: if left is true, skip evaluating right and return 1.
 // For &&: if left is false, skip evaluating right and return 0.
-static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx,
-                                     int is_or) {
+static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_node const *node,
+                                     eval_ctx *ctx, int is_or) {
     // 1. Evaluate left operand
     str left = generate_expr(self, null, node->binary_op.left, ctx);
 
@@ -2043,7 +2044,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self = new(alloc, transpile);
+    transpile *self = new (alloc, transpile);
 
     self->opts      = *opts;
 

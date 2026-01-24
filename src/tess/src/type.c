@@ -2077,7 +2077,7 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
 // -- substitutions --
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
-    tl_type_subs *self = new(alloc, tl_type_subs);
+    tl_type_subs *self = new (alloc, tl_type_subs);
     *self              = (tl_type_subs){
                    .data = (tl_type_uf_node_array){.alloc = alloc},
     };
