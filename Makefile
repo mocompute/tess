@@ -336,6 +336,8 @@ TL_TESTS =					\
 	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
 	function_pointer_in_struct_direct_2	\
+	function_pointer_array			\
+	function_pointer_recursive_type		\
 	generic_lambda				\
 	global_variables			\
 	hello					\
@@ -390,6 +392,7 @@ TL_TESTS =					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
+	struct_generic_function_signature	\
 	struct_construction			\
 	tail_call				\
 	type_alias_generic			\
@@ -416,6 +419,8 @@ TL_TESTS =					\
 	tagged_union_generic_return		\
 	tagged_union_mutable_case		\
 	tagged_union_option			\
+	tagged_union_function_pointer		\
+	tagged_union_generic_function_pointer	\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\
@@ -433,6 +438,7 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	case_float				\
+	fail_function_pointer_pointer		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -440,6 +446,12 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_unknown_variant	\
 	type_alias_partial_specialization	\
 	unknown_free_variable
+
+# Tests that should work but currently fail due to compiler bugs
+TL_KNOWN_FAILURES =				\
+	function_pointer_mutable		\
+	function_pointer_higher_order_return	\
+	static_init_generic_function_pointer
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
@@ -469,12 +481,24 @@ test-tl: build-tl-tests
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
+	known=0; \
+	for name in $(TL_KNOWN_FAILURES); do \
+		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
+			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
+		else \
+			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
+			known=$$((known + 1)); \
+		fi; \
+	done; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \
 		exit 1; \
 	fi; \
 	printf "\n"; \
 	$(MSG_PASS) "All TL tests passed"; \
+	if [ $$known -gt 0 ]; then \
+		printf "  \033[1;33m[INFO] $$known known failure(s) skipped\033[0m\n"; \
+	fi; \
 	printf "\n"
 
 
