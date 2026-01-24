@@ -95,8 +95,8 @@ Build from a Developer Command Prompt or Developer PowerShell using CMake:
 
 ```powershell
 cmake -B out/build -S .
-cmake --build out/build --config Release
-ctest -C Release --test-dir out/build   # Run tests
+cmake --build out/build --config Release -j
+ctest -C Release --test-dir out/build -j   # Run tests
 ```
 
 ## Project Status

@@ -104,8 +104,8 @@ cmake --build out/build --config Release -j 8
 
 ### Building the Compiler
 ```powershell
-# Build all targets
-cmake --build out/build --config Release
+# Build all targets in parallel
+cmake --build out/build --config Release -j
 
 # Build specific target
 cmake --build out/build --config Release --target tess
