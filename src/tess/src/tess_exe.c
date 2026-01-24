@@ -15,13 +15,6 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
-#ifdef MOS_WINDOWS
-#include <fcntl.h>
-#include <io.h>
-#include <process.h>
-#else
-#include <sys/wait.h>
-#endif
 
 // -- embed externs --
 extern char const *embed_std_tl;
@@ -400,15 +393,15 @@ static void get_c_compiler(state *self) {
         self->cc = str_init(self->arena, CC);
     }
 #ifdef MOS_WINDOWS
-    else if (0 == system("where cl >nul 2>&1"))
+    else if (platform_command_exists("cl"))
         self->cc = str_init(self->arena, "cl");
-    else if (0 == system("where clang >nul 2>&1")) self->cc = str_init(self->arena, "clang");
-    else if (0 == system("where gcc >nul 2>&1")) self->cc = str_init(self->arena, "gcc");
+    else if (platform_command_exists("clang")) self->cc = str_init(self->arena, "clang");
+    else if (platform_command_exists("gcc")) self->cc = str_init(self->arena, "gcc");
 #else
-    else if (0 == system("command -v cc &> /dev/null"))
+    else if (platform_command_exists("cc"))
         self->cc = str_init(self->arena, "cc");
-    else if (0 == system("command -v gcc &> /dev/null")) self->cc = str_init(self->arena, "gcc");
-    else if (0 == system("command -v clang &> /dev/null")) self->cc = str_init(self->arena, "clang");
+    else if (platform_command_exists("gcc")) self->cc = str_init(self->arena, "gcc");
+    else if (platform_command_exists("clang")) self->cc = str_init(self->arena, "clang");
 #endif
     else self->cc = str_empty();
 
@@ -602,307 +595,129 @@ cleanup_parser:
 }
 
 #ifdef MOS_WINDOWS
-
 static int is_msvc_compiler(state *self) {
     char const *cc = str_cstr(&self->cc);
     return (0 == strcmp(cc, "cl") || 0 == strcmp(cc, "cl.exe"));
 }
+#endif
 
-// Temp file management for Windows builds
-typedef struct {
-    char c_file[MAX_PATH];
-    char obj_file[MAX_PATH];
-} win_temp_files;
+// Build argv array for gcc/clang compiler invocation
+// extra_flags: array of additional flags (e.g., "-shared", "-fPIC")
+// extra_flags_count: number of additional flags
+// use_temp_file: if non-null, use this temp file path; otherwise read from stdin
+static c_string_array build_gcc_argv(state *self, char const **extra_flags, int extra_flags_count,
+                                     char const *temp_file) {
+    char const *cc = str_cstr(&self->cc);
 
-static int win_temp_files_init(win_temp_files *tf) {
-    char temp_path[MAX_PATH];
-    if (GetTempPathA(MAX_PATH, temp_path) == 0) {
-        fprintf(stderr, "failed to get temp path\n");
-        return 1;
-    }
-    DWORD pid = GetCurrentProcessId();
-    snprintf(tf->c_file, MAX_PATH, "%stess_%lu.c", temp_path, (unsigned long)pid);
-    snprintf(tf->obj_file, MAX_PATH, "%stess_%lu.obj", temp_path, (unsigned long)pid);
-    return 0;
-}
+    c_string_array argv = {.alloc = self->arena};
+    array_reserve(argv, self->cflags.size + extra_flags_count + 16);
+    array_push(argv, cc);
 
-static void win_temp_files_cleanup(win_temp_files *tf) {
-    DeleteFileA(tf->c_file);
-    DeleteFileA(tf->obj_file);
-}
+    // clang-format off
+    { char const *_t = "-o"; array_push(argv, _t); }
+    array_push(argv, self->out_path);
+    // clang-format on
 
-// Run a compiler command, capturing stdout (discarded) and forwarding stderr
-// Returns the process exit code, or 1 on failure to launch
-static int win_run_compiler(allocator *arena, char const *cmdline, int verbose) {
-    if (verbose) {
-        fprintf(stderr, "Running: %s\n", cmdline);
+    if (self->optimize) {
+        char const *_t = "-O2";
+        array_push(argv, _t);
     }
 
-    // Create pipes for stdout and stderr
-    HANDLE              stdout_read, stdout_write;
-    HANDLE              stderr_read, stderr_write;
-    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
-
-    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
-        fprintf(stderr, "CreatePipe failed\n");
-        return 1;
-    }
-    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
-
-    if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
-        fprintf(stderr, "CreatePipe failed\n");
-        CloseHandle(stdout_read);
-        CloseHandle(stdout_write);
-        return 1;
-    }
-    SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
-
-    // Set up process startup info
-    STARTUPINFOA si        = {sizeof(STARTUPINFOA)};
-    si.dwFlags             = STARTF_USESTDHANDLES;
-    si.hStdInput           = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput          = stdout_write; // Capture stdout (MSVC prints filename here)
-    si.hStdError           = stderr_write;
-
-    PROCESS_INFORMATION pi = {0};
-
-    // Need mutable command line for CreateProcessA
-    char *cmdline_mut = alloc_malloc(arena, strlen(cmdline) + 1);
-    strcpy(cmdline_mut, cmdline);
-
-    BOOL success = CreateProcessA(NULL, cmdline_mut, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
-
-    CloseHandle(stdout_write);
-    CloseHandle(stderr_write);
-
-    if (!success) {
-        fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
-        CloseHandle(stdout_read);
-        CloseHandle(stderr_read);
-        return 1;
+    forall(i, self->cflags) {
+        char const *cstr = str_cstr(&self->cflags.v[i]);
+        array_push(argv, cstr);
     }
 
-    // Drain stdout (discard MSVC's filename echo) and read stderr
-    char  buf[1024];
-    DWORD bytes_read;
-    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        // Discard stdout output
+    // clang-format off
+    { char const *_t = "-std=c11"; array_push(argv, _t); }
+    { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
+    // clang-format on
+
+    for (int i = 0; i < extra_flags_count; i++) {
+        array_push(argv, extra_flags[i]);
     }
-    CloseHandle(stdout_read);
-    while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        buf[bytes_read] = '\0';
-        fprintf(stderr, "%s", buf);
-    }
-    CloseHandle(stderr_read);
 
-    // Wait for process and get exit code
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exit_code = 0;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-
-    return (int)exit_code;
-}
-
-// Build compiler command line
-// msvc_extra: additional MSVC flags (e.g., S(" /LD") for DLL)
-// gcc_extra: additional GCC/Clang flags (e.g., S(" -shared") for shared lib)
-static void win_build_cmdline(state *self, str_build *cmd, win_temp_files *tf, str msvc_extra,
-                              str gcc_extra) {
-    if (is_msvc_compiler(self)) {
-        str_build_cat(cmd, self->cc);
-        str_build_cat(cmd, S(" /nologo"));
-        if (!str_is_empty(msvc_extra)) str_build_cat(cmd, msvc_extra);
-        if (self->optimize) str_build_cat(cmd, S(" /O2"));
-        forall(i, self->cflags) {
-            str_build_cat(cmd, S(" "));
-            str_build_cat(cmd, self->cflags.v[i]);
-        }
-        str_build_cat(cmd, S(" /Fo"));
-        str_build_cat(cmd, str_init_static(tf->obj_file));
-        str_build_cat(cmd, S(" /Fe"));
-        str_build_cat(cmd, str_init_static(self->out_path));
-        str_build_cat(cmd, S(" /TC "));
-        str_build_cat(cmd, str_init_static(tf->c_file));
+    if (temp_file) {
+        array_push(argv, temp_file);
     } else {
-        str_build_cat(cmd, self->cc);
-        str_build_cat(cmd, S(" -o "));
-        str_build_cat(cmd, str_init_static(self->out_path));
-        if (self->optimize) str_build_cat(cmd, S(" -O2"));
-        forall(i, self->cflags) {
-            str_build_cat(cmd, S(" "));
-            str_build_cat(cmd, self->cflags.v[i]);
-        }
-        str_build_cat(cmd, S(" -std=c11 -Wno-format-security"));
-        if (!str_is_empty(gcc_extra)) str_build_cat(cmd, gcc_extra);
-        str_build_cat(cmd, S(" "));
-        str_build_cat(cmd, str_init_static(tf->c_file));
-    }
-}
-
-int compile_c(state *self) {
-    if (str_is_empty(self->program)) return 1;
-
-    hires_timer cc_timer;
-    hires_timer_init(&cc_timer);
-    hires_timer_start(&cc_timer);
-
-    // Record input size for stats
-    size_t input_size = str_len(self->program);
-
-    win_temp_files tf;
-    if (win_temp_files_init(&tf)) return 1;
-
-    FILE *f = fopen(tf.c_file, "wb");
-    if (!f) {
-        fprintf(stderr, "failed to open temp file for writing\n");
-        return 1;
-    }
-    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
-    fclose(f);
-    str_deinit(default_allocator(), &self->program);
-
-    str_build cmd = str_build_init(self->arena, 256);
-    win_build_cmdline(self, &cmd, &tf, str_empty(), S(" -Wno-unused-value"));
-    str cmdstr = str_build_finish(&cmd);
-
-    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
-    win_temp_files_cleanup(&tf);
-
-    hires_timer_stop(&cc_timer);
-    if (self->report_stats) {
-        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
-        self->stats.cc_input_size = input_size;
-    }
-
-    return result;
-}
-
-#else
-
-int compile_c(state *self) {
-    if (str_is_empty(self->program)) return 1;
-
-    hires_timer cc_timer;
-    hires_timer_init(&cc_timer);
-    hires_timer_start(&cc_timer);
-
-    // Record input size for stats
-    size_t input_size = str_len(self->program);
-
-    int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
-    if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
-        perror("pipe failed");
-        return 1;
-    }
-
-    pid_t pid = fork();
-    if (pid == -1) {
-        perror("fork failed");
-        return 1;
-    }
-
-    int child_res = 0;
-
-    if (pid == 0) {
-        // child process
-        close(stdin_pipe[1]);
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-        dup2(stdin_pipe[0], STDIN_FILENO);
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
-        close(stdin_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        char const *cc = str_cstr(&self->cc);
-
-        // cflags
-        c_string_array argv = {.alloc = self->arena};
-        array_reserve(argv, self->cflags.size + 8);
-        array_push(argv, cc);
-
         // clang-format off
-        {char const *_t = "-o"; array_push(argv, _t);}
-        array_push(argv, self->out_path);
-        // clang-format on
-
-        if (self->optimize) {
-            char const *_t = "-O2";
-            array_push(argv, _t);
-        }
-
-        forall(i, self->cflags) {
-            char const *cstr = str_cstr(&self->cflags.v[i]);
-            array_push(argv, cstr);
-        }
-
-        // clang-format off
-        { char const *_t = "-std=c11"; array_push(argv, _t); }
-        { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
-        { char const *_t = "-Wno-unused-value"; array_push(argv, _t); }
-        { char const *_t = "-Wno-compare-distinct-pointer-types"; array_push(argv, _t); }
         { char const *_t = "-x"; array_push(argv, _t); }
         { char const *_t = "c"; array_push(argv, _t); }
         { char const *_t = "-"; array_push(argv, _t); }
-
-        { char const *_t = null; array_push(argv, _t); }
-        //clang-format on
-
-        child_res = execvp(cc, argv.v);
-        perror("exec failed");
-
-    } else {
-        // parent process
-        close(stdin_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        int ignore = write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
-        (void)ignore;
-        close(stdin_pipe[1]);
-
-        // free self->program
-        str_deinit(default_allocator(), &self->program);
-
-        // read stderr
-        char  buf[1024];
-        FILE *stderr_file = fdopen(stderr_pipe[0], "r");
-        while (fgets(buf, sizeof(buf), stderr_file)) fprintf(stderr, "%s", buf);
-        fclose(stderr_file);
-
-        wait(null);
+        // clang-format on
     }
 
-    hires_timer_stop(&cc_timer);
-    if (self->report_stats) {
-        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
-        self->stats.cc_input_size = input_size;
-    }
+    { char const *_t = null; array_push(argv, _t); }
 
-    return child_res;
+    return argv;
 }
-
-#endif
 
 #ifdef MOS_WINDOWS
 
-int compile_c_obj(state *self) {
+// Build argv array for MSVC compiler invocation
+// msvc_extra_flags: array of additional flags (e.g., "/LD")
+// msvc_extra_flags_count: number of additional flags
+// c_file: path to C source file
+// obj_file: path for object file output
+static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags,
+                                      int msvc_extra_flags_count, char const *c_file,
+                                      char const *obj_file) {
+    c_string_array argv = {.alloc = self->arena};
+    array_reserve(argv, self->cflags.size + msvc_extra_flags_count + 16);
+
+    char const *cc = str_cstr(&self->cc);
+    array_push(argv, cc);
+
+    { char const *_t = "/nologo"; array_push(argv, _t); }
+
+    for (int i = 0; i < msvc_extra_flags_count; i++) {
+        array_push(argv, msvc_extra_flags[i]);
+    }
+
+    if (self->optimize) {
+        char const *_t = "/O2";
+        array_push(argv, _t);
+    }
+
+    forall(i, self->cflags) {
+        char const *cstr = str_cstr(&self->cflags.v[i]);
+        array_push(argv, cstr);
+    }
+
+    // Build /Fo and /Fe with paths
+    str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file));
+    str fe = str_cat(self->arena, S("/Fe"), str_init_static(self->out_path));
+
+    array_push(argv, str_cstr(&fo));
+    array_push(argv, str_cstr(&fe));
+
+    { char const *_t = "/TC"; array_push(argv, _t); }
+    array_push(argv, c_file);
+
+    { char const *_t = null; array_push(argv, _t); }
+
+    return argv;
+}
+
+#endif
+
+int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
 
     hires_timer cc_timer;
     hires_timer_init(&cc_timer);
     hires_timer_start(&cc_timer);
 
-    // Record input size for stats
     size_t input_size = str_len(self->program);
+    int    result     = 0;
 
-    win_temp_files tf;
-    if (win_temp_files_init(&tf)) return 1;
+#ifdef MOS_WINDOWS
+    // Windows: use temp file (required for MSVC, simpler for all Windows compilers)
+    platform_temp_file c_file, obj_file;
+    if (platform_temp_file_create(&c_file, ".c")) return 1;
+    if (platform_temp_file_create(&obj_file, ".obj")) return 1;
 
-    FILE *f = fopen(tf.c_file, "wb");
+    FILE *f = fopen(c_file.path, "wb");
     if (!f) {
         fprintf(stderr, "failed to open temp file for writing\n");
         return 1;
@@ -911,23 +726,47 @@ int compile_c_obj(state *self) {
     fclose(f);
     str_deinit(default_allocator(), &self->program);
 
-    str_build cmd = str_build_init(self->arena, 256);
-    win_build_cmdline(self, &cmd, &tf, S(" /LD"), S(" -shared"));
-    str cmdstr = str_build_finish(&cmd);
+    c_string_array argv;
+    if (is_msvc_compiler(self)) {
+        argv = build_msvc_argv(self, null, 0, c_file.path, obj_file.path);
+    } else {
+        char const *extra[] = {"-Wno-unused-value", "-Wno-compare-distinct-pointer-types"};
+        argv = build_gcc_argv(self, extra, 2, c_file.path);
+    }
 
-    int result = win_run_compiler(self->arena, str_cstr(&cmdstr), self->verbose);
-    win_temp_files_cleanup(&tf);
+    platform_exec_opts opts = {
+        .argv       = (char const *const *)argv.v,
+        .stdin_data = null,
+        .stdin_len  = 0,
+        .verbose    = self->verbose,
+    };
+    result = platform_exec(&opts);
+
+    platform_temp_file_delete(&c_file);
+    platform_temp_file_delete(&obj_file);
+#else
+    // Unix: pipe stdin to compiler
+    char const    *extra[] = {"-Wno-unused-value", "-Wno-compare-distinct-pointer-types"};
+    c_string_array argv    = build_gcc_argv(self, extra, 2, null);
+
+    platform_exec_opts opts = {
+        .argv       = (char const *const *)argv.v,
+        .stdin_data = str_buf(&self->program),
+        .stdin_len  = str_len(self->program),
+        .verbose    = self->verbose,
+    };
+    result = platform_exec(&opts);
+    str_deinit(default_allocator(), &self->program);
+#endif
 
     hires_timer_stop(&cc_timer);
     if (self->report_stats) {
-        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_time_ms    = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
         self->stats.cc_input_size = input_size;
     }
 
     return result;
 }
-
-#else
 
 int compile_c_obj(state *self) {
     if (str_is_empty(self->program)) return 1;
@@ -936,101 +775,66 @@ int compile_c_obj(state *self) {
     hires_timer_init(&cc_timer);
     hires_timer_start(&cc_timer);
 
-    // Record input size for stats
     size_t input_size = str_len(self->program);
+    int    result     = 0;
 
-    int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
-    if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
-        perror("pipe failed");
+#ifdef MOS_WINDOWS
+    // Windows: use temp file (required for MSVC, simpler for all Windows compilers)
+    platform_temp_file c_file, obj_file;
+    if (platform_temp_file_create(&c_file, ".c")) return 1;
+    if (platform_temp_file_create(&obj_file, ".obj")) return 1;
+
+    FILE *f = fopen(c_file.path, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open temp file for writing\n");
         return 1;
     }
+    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
+    fclose(f);
+    str_deinit(default_allocator(), &self->program);
 
-    pid_t pid = fork();
-    if (pid == -1) {
-        perror("fork failed");
-        return 1;
-    }
-
-    int child_res = 0;
-
-    if (pid == 0) {
-        // child process
-        close(stdin_pipe[1]);
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-        dup2(stdin_pipe[0], STDIN_FILENO);
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
-        close(stdin_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        char const *cc = str_cstr(&self->cc);
-
-        // cflags
-        c_string_array argv = {.alloc = self->arena};
-        array_reserve(argv, self->cflags.size + 8);
-        array_push(argv, cc);
-
-        // clang-format off
-        { char const *_t = "-o"; array_push(argv, _t); }
-        array_push(argv, self->out_path);
-
-        if (self->optimize) {
-            char const *_t = "-O2"; array_push(argv, _t);
-        }
-
-        forall(i, self->cflags) {
-            char const *cstr = str_cstr(&self->cflags.v[i]);
-            array_push(argv, cstr);
-        }
-
-        { char const *_t = "-std=c11"; array_push(argv, _t); }
-        { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
-        { char const *_t = "-fPIC"; array_push(argv, _t); }
-        { char const *_t = "-shared"; array_push(argv, _t); }
-        { char const *_t = "-x"; array_push(argv, _t); }
-        { char const *_t = "c"; array_push(argv, _t); }
-        { char const *_t = "-"; array_push(argv, _t); }
-
-        { char const *_t = null; array_push(argv, _t); }
-        // clang-format on
-
-        child_res = execvp(cc, argv.v);
-        perror("exec failed");
-
+    c_string_array argv;
+    if (is_msvc_compiler(self)) {
+        char const *msvc_extra[] = {"/LD"};
+        argv = build_msvc_argv(self, msvc_extra, 1, c_file.path, obj_file.path);
     } else {
-        // parent process
-        close(stdin_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        int ignore = write(stdin_pipe[1], str_buf(&self->program), str_len(self->program));
-        (void)ignore;
-        close(stdin_pipe[1]);
-
-        // free self->program
-        str_deinit(default_allocator(), &self->program);
-
-        // read stderr
-        char  buf[1024];
-        FILE *stderr_file = fdopen(stderr_pipe[0], "r");
-        while (fgets(buf, sizeof(buf), stderr_file)) fprintf(stderr, "%s", buf);
-        fclose(stderr_file);
-
-        wait(null);
+        char const *extra[] = {"-fPIC", "-shared"};
+        argv = build_gcc_argv(self, extra, 2, c_file.path);
     }
+
+    platform_exec_opts opts = {
+        .argv       = (char const *const *)argv.v,
+        .stdin_data = null,
+        .stdin_len  = 0,
+        .verbose    = self->verbose,
+    };
+    result = platform_exec(&opts);
+
+    platform_temp_file_delete(&c_file);
+    platform_temp_file_delete(&obj_file);
+#else
+    // Unix: pipe stdin to compiler
+    char const    *extra[] = {"-fPIC", "-shared"};
+    c_string_array argv    = build_gcc_argv(self, extra, 2, null);
+
+    platform_exec_opts opts = {
+        .argv       = (char const *const *)argv.v,
+        .stdin_data = str_buf(&self->program),
+        .stdin_len  = str_len(self->program),
+        .verbose    = self->verbose,
+    };
+    result = platform_exec(&opts);
+    str_deinit(default_allocator(), &self->program);
+#endif
 
     hires_timer_stop(&cc_timer);
     if (self->report_stats) {
-        self->stats.cc_time_ms = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_time_ms    = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
         self->stats.cc_input_size = input_size;
     }
 
-    return child_res;
+    return result;
 }
-
-#endif
 
 int main(int argc, char *argv[]) {
 
