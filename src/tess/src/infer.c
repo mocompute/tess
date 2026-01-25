@@ -389,6 +389,27 @@ typedef struct {
 } tree_shake_ctx;
 
 hashmap *tree_shake(tl_infer *, ast_node const *);
+void     do_tree_shake(void *, ast_node *);
+
+// Helper for tree shaking value bindings (let_in and reassignment)
+static void tree_shake_value_binding(tree_shake_ctx *ctx, ast_node *value) {
+    if (!value) return;
+
+    tl_infer *self = ctx->self;
+
+    if (ast_node_is_symbol(value)) {
+        str name = ast_node_str(value);
+
+        // if it is a toplevel, recurse through it
+        ast_node *next = toplevel_get(self, name);
+        if (next) ast_node_dfs(ctx, next, do_tree_shake);
+        str_hset_insert(&ctx->recurs, name);
+        str_hset_insert(&ctx->names, name);
+    } else {
+        // recurse into value
+        ast_node_dfs(ctx, value, do_tree_shake);
+    }
+}
 
 void     do_tree_shake(void *ctx_, ast_node *node) {
     tree_shake_ctx *ctx  = ctx_;
@@ -431,44 +452,13 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             str_hset_insert(&ctx->names, name);
         }
     } else if (ast_node_is_let_in(node)) {
-        ast_node *value = node->let_in.value;
-        if (ast_node_is_symbol(value)) {
-            str name = ast_node_str(value); // caution: the value name, not the let's name
-
-            // if it is a toplevel, recurse through it
-            ast_node *next = toplevel_get(self, name);
-            if (next) ast_node_dfs(ctx, next, do_tree_shake);
-            str_hset_insert(&ctx->recurs, name);
-            str_hset_insert(&ctx->names, name);
-        } else if (value) {
-            // recurse into value
-            ast_node *next = value;
-            if (next) ast_node_dfs(ctx, next, do_tree_shake);
-        }
+        tree_shake_value_binding(ctx, node->let_in.value);
 
         // the let-in name
-        {
-            str name = ast_node_str(node->let_in.name);
-            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
-            str_hset_insert(&ctx->names, name);
-        }
+        str name = ast_node_str(node->let_in.name);
+        str_hset_insert(&ctx->names, name);
     } else if (ast_node_is_reassignment(node)) {
-        // Note: duplicate logic for let_in nodes (TODO)
-        ast_node *value = node->assignment.value;
-        if (ast_node_is_symbol(value)) {
-            str name = ast_node_str(value); // caution: the value name, not the let's name
-
-            // if it is a toplevel, recurse through it
-            ast_node *next = toplevel_get(self, name);
-            if (next) ast_node_dfs(ctx, next, do_tree_shake);
-            str_hset_insert(&ctx->recurs, name);
-            str_hset_insert(&ctx->names, name);
-        } else if (value) {
-            // recurse into value
-            ast_node *next = value;
-            if (next) ast_node_dfs(ctx, next, do_tree_shake);
-        }
-
+        tree_shake_value_binding(ctx, node->assignment.value);
     }
 
     else if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
