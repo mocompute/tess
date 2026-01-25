@@ -40,6 +40,12 @@ make -j test-tess          # Compiler unit tests only
 make -j test-tl            # Tess language integration tests only
 ```
 
+### Full Test Suite
+For a complete test run, use the debug configuration with a clean build:
+```bash
+(export CONFIG=debug && make clean && make -j all && make -j test)
+```
+
 ### Single Test Execution
 To run a single Tess language test:
 ```bash
