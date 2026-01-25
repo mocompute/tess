@@ -68,10 +68,8 @@ typedef enum {
     npos_toplevel,
     npos_formal_parameter,
     npos_function_argument,
-    npos_let_in_lhs,
-    npos_let_in_rhs,
+    npos_value_rhs,  // RHS of let-in or assignment (rejects type literals)
     npos_assign_lhs,
-    npos_assign_rhs,
     npos_operand,
     npos_field_name,
 } node_position;
@@ -862,7 +860,7 @@ static int infer_if_then_else(tl_infer *self, ast_node *node) {
 
 static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
-    if (resolve_node(self, node->assignment.value, ctx, npos_assign_rhs)) return 1;
+    if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
 
@@ -874,7 +872,7 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
 static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
-    if (resolve_node(self, node->assignment.value, ctx, npos_assign_rhs)) return 1;
+    if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
 
@@ -1129,8 +1127,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 }
 
 static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
-    if (resolve_node(self, node->let_in.name, ctx, npos_let_in_lhs)) return 1;
-    if (resolve_node(self, node->let_in.value, ctx, npos_let_in_rhs)) return 1;
+    if (resolve_node(self, node->let_in.name, ctx, npos_formal_parameter)) return 1;
+    if (resolve_node(self, node->let_in.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
     if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
@@ -1395,7 +1393,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         assert(ast_node_is_symbol(node->let_in.name));
 
         // process name first, for lexical scope
-        ctx->node_pos = npos_let_in_lhs;
+        ctx->node_pos = npos_formal_parameter;
         if (cb(self, ctx, node->let_in.name)) return 1;
 
         // process node parent before children, because there may be side effects required before traversing
@@ -1404,9 +1402,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
 
         // traverse value first, then traverse name and body
-        ctx->node_pos = npos_let_in_rhs;
+        ctx->node_pos = npos_value_rhs;
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
-        ctx->node_pos = npos_let_in_lhs;
+        ctx->node_pos = npos_formal_parameter;
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->let_in.body, cb)) return 1;
@@ -1594,7 +1592,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         ctx->is_field_name = 1;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
 
-        ctx->node_pos      = npos_assign_rhs;
+        ctx->node_pos      = npos_value_rhs;
         ctx->is_field_name = 0;
         if (traverse_ast(self, ctx, node->assignment.value, cb)) return 1;
 
@@ -1609,7 +1607,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         ctx->is_field_name = 0;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
 
-        ctx->node_pos      = npos_assign_rhs;
+        ctx->node_pos      = npos_value_rhs;
         ctx->is_field_name = 0;
         if (traverse_ast(self, ctx, node->assignment.value, cb)) return 1;
 
@@ -1989,11 +1987,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         maybe_handle_null(self, node);
         break;
 
-    case npos_let_in_lhs:
-        // The lhs of a let-in can be treated the same as a formal parameter.
-        if (resolve_node(self, node, ctx, npos_formal_parameter)) return 1;
-        break;
-
     case npos_assign_lhs:
         if (reject_type_literal(self, node)) return 1;
         // Note: do not add symbol to env from this position: could be a generic re-use with prior type
@@ -2035,8 +2028,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         update_env(self, ctx, node);
     } break;
 
-    case npos_let_in_rhs:
-    case npos_assign_rhs:
+    case npos_value_rhs:
         if (reject_type_literal(self, node)) return 1;
         maybe_handle_null(self, node);
 
