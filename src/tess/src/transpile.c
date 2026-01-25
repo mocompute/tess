@@ -121,6 +121,7 @@ static str   type_to_c(transpile *, tl_polytype *);
 static str   type_to_c_mono(transpile *, tl_monotype *);
 static str   arrow_rhs_to_c(transpile *, tl_polytype *);
 static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
+static void  build_arrow_to_c(transpile *, str_build *, tl_monotype *, str);
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 static str   type_literal_name(tl_monotype *type);
 static void  update_type(transpile *, tl_monotype **);
@@ -142,14 +143,36 @@ static void generate_prototypes(transpile *self, int decl_static) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(self, name, type)) continue;
 
-        str ret = arrow_rhs_to_c(self, type);
+        // Get the return type of this function
+        tl_monotype *arrow    = type->type;
+        tl_monotype *ret_type = arrow->list.xs.v[1]; // RHS of arrow is return type
+
         if (decl_static) cat(self, S("static "));
-        cat(self, ret);
-        cat_sp(self);
-        cat(self, mangle_fun(self, name));
-        cat_open_round(self);
-        cat(self, arrow_to_c_params(self, type, (str_sized){0}));
-        cat_close_round(self);
+
+        // Check if return type is an arrow (function returning function pointer)
+        if (tl_monotype_is_arrow(ret_type)) {
+            // Build function signature: "name(params)"
+            str_build sig = str_build_init(self->transient, 64);
+            str_build_cat(&sig, mangle_fun(self, name));
+            str_build_cat(&sig, S("("));
+            str_build_cat(&sig, arrow_to_c_params(self, type, (str_sized){0}));
+            str_build_cat(&sig, S(")"));
+            str func_sig = str_build_finish(&sig);
+
+            // Use build_arrow_to_c with the signature as the "name"
+            str_build b = str_build_init(self->transient, 80);
+            build_arrow_to_c(self, &b, ret_type, func_sig);
+            cat(self, str_build_finish(&b));
+        } else {
+            // Normal case: non-arrow return type
+            str ret = arrow_rhs_to_c(self, type);
+            cat(self, ret);
+            cat_sp(self);
+            cat(self, mangle_fun(self, name));
+            cat_open_round(self);
+            cat(self, arrow_to_c_params(self, type, (str_sized){0}));
+            cat_close_round(self);
+        }
         cat_semicolon(self);
         cat_nl(self);
     }
@@ -599,20 +622,38 @@ static void generate_toplevels(transpile *self) {
             array_push(params_str, param->symbol.name);
         }
 
-        str ret         = arrow_rhs_to_c(self, poly);
-        int res_is_void = str_eq(ret, S("void"));
-        str res         = str_empty();
+        tl_monotype *ret_mono   = poly->type->list.xs.v[1]; // return type
+        str          ret        = arrow_rhs_to_c(self, poly);
+        int          res_is_void = str_eq(ret, S("void"));
+        str          res        = str_empty();
         if (!res_is_void) {
             res = next_res(self);
         }
 
-        cat(self, ret); // return type
-        cat_sp(self);
-        cat(self, mangle_fun(self, name)); // fun name
+        // Check if return type is an arrow (function returning function pointer)
+        if (tl_monotype_is_arrow(ret_mono)) {
+            // Build function signature: "name(params)"
+            str_build sig = str_build_init(self->transient, 64);
+            str_build_cat(&sig, mangle_fun(self, name));
+            str_build_cat(&sig, S("("));
+            str_build_cat(&sig, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
+            str_build_cat(&sig, S(")"));
+            str func_sig = str_build_finish(&sig);
 
-        cat_open_round(self); // args
-        cat(self, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
-        cat_close_round(self);
+            // Use build_arrow_to_c with the signature as the "name"
+            str_build b = str_build_init(self->transient, 80);
+            build_arrow_to_c(self, &b, ret_mono, func_sig);
+            cat(self, str_build_finish(&b));
+        } else {
+            // Normal case: non-arrow return type
+            cat(self, ret); // return type
+            cat_sp(self);
+            cat(self, mangle_fun(self, name)); // fun name
+
+            cat_open_round(self); // args
+            cat(self, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
+            cat_close_round(self);
+        }
 
         cat_open_curlyln(self); // body
 
