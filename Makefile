@@ -338,6 +338,7 @@ TL_TESTS =					\
 	function_pointer_in_struct_direct_2	\
 	function_pointer_array			\
 	function_pointer_recursive_type		\
+	function_pointer_pointer		\
 	generic_lambda				\
 	global_variables			\
 	hello					\
@@ -438,7 +439,6 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
-	fail_function_pointer_pointer		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -451,7 +451,6 @@ TL_FAIL_TESTS =					\
 TL_KNOWN_FAILURES =				\
 	function_pointer_mutable		\
 	function_pointer_higher_order_return	\
-	function_pointer_pointer		\
 	static_init_generic_function_pointer
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))

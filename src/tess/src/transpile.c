@@ -1918,6 +1918,21 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     fatal("unreachable");
 }
 
+// Returns 0 if type doesn't contain an arrow, otherwise returns
+// the number of Ptr wrappers (for nested pointer stars)
+static int ptr_depth_to_arrow(tl_monotype *type, tl_monotype **out_arrow) {
+    int depth = 0;
+    while (tl_monotype_is_ptr(type)) {
+        depth++;
+        type = tl_monotype_ptr_target(type);
+    }
+    if (tl_monotype_is_arrow(type)) {
+        if (out_arrow) *out_arrow = type;
+        return depth;
+    }
+    return 0;
+}
+
 static void build_arrow_to_c(transpile *, str_build *b, tl_monotype *type, str name);
 
 static void generate_decl(transpile *self, str name, tl_monotype *type) {
@@ -1932,6 +1947,27 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     }
 
     else if (tl_cons_inst == type->tag) {
+        // Special case for Ptr(..Ptr(Arrow)..) - pointer(s) to function pointer
+        tl_monotype *arrow = null;
+        int          ptr_depth = ptr_depth_to_arrow(type, &arrow);
+        if (ptr_depth > 0) {
+            // Generate: int (**...*name)(int) with (ptr_depth + 1) stars
+            str_build b = str_build_init(self->transient, 80);
+
+            // Build the name with appropriate number of stars
+            str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
+            for (int i = 0; i < ptr_depth; i++) {
+                str_build_cat(&stars_b, S("*"));
+            }
+            str_build_cat(&stars_b, name);
+            str name_with_stars = str_build_finish(&stars_b);
+
+            build_arrow_to_c(self, &b, arrow, name_with_stars);
+            cat(self, str_build_finish(&b));
+            cat_semicolonln(self);
+            return;
+        }
+
         str typec;
         if (tl_monotype_is_void(type)) {
             typec = str_init(self->transient, "/*nil*/ void*");
@@ -2315,10 +2351,27 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         } else if (str_eq(S("Void"), cons_name)) {
             return S("void");
         } else if (tl_monotype_is_ptr(mono)) {
+            // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
+            tl_monotype *arrow     = null;
+            int          ptr_depth = ptr_depth_to_arrow(mono, &arrow);
+            if (ptr_depth > 0) {
+                str_build b = str_build_init(self->transient, 64);
+
+                // Build stars string for the pointer depth
+                str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
+                for (int i = 0; i < ptr_depth; i++) {
+                    str_build_cat(&stars_b, S("*"));
+                }
+                str stars = str_build_finish(&stars_b);
+
+                build_arrow_to_c(self, &b, arrow, stars);
+                return str_build_finish(&b);
+            }
+
+            // Normal Ptr handling for non-arrow targets
             tl_monotype *arg   = tl_monotype_ptr_target(mono);
             tl_polytype  wrap  = tl_polytype_wrap(arg);
             str          typec = type_to_c(self, &wrap);
-            // if (str_eq(typec, S("void*"))) fatal("oops");
             return str_cat(self->transient, typec, S("*"));
         }
 
@@ -2346,8 +2399,12 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         }
     }
 
-    else if (tl_monotype_is_arrow(mono))
-        fatal("logic error");
+    else if (tl_monotype_is_arrow(mono)) {
+        // For contexts where we need just the type string (no variable name)
+        str_build b = str_build_init(self->transient, 64);
+        build_arrow_to_c(self, &b, mono, str_empty());
+        return str_build_finish(&b);
+    }
 
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono, null);
@@ -2359,11 +2416,27 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     } else if (tl_monotype_is_tv(mono)) {
         return S("/*tv*/void");
     } else if (tl_monotype_is_ptr(mono)) {
-        // TODO: repeats case from above
+        // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
+        tl_monotype *arrow     = null;
+        int          ptr_depth = ptr_depth_to_arrow(mono, &arrow);
+        if (ptr_depth > 0) {
+            str_build b = str_build_init(self->transient, 64);
+
+            // Build stars string for the pointer depth
+            str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
+            for (int i = 0; i < ptr_depth; i++) {
+                str_build_cat(&stars_b, S("*"));
+            }
+            str stars = str_build_finish(&stars_b);
+
+            build_arrow_to_c(self, &b, arrow, stars);
+            return str_build_finish(&b);
+        }
+
+        // Normal Ptr handling for non-arrow targets
         tl_monotype *arg   = tl_monotype_ptr_target(mono);
         tl_polytype  wrap  = tl_polytype_wrap(arg);
         str          typec = type_to_c(self, &wrap);
-        // if (str_eq(typec, S("void*"))) fatal("oops");
         return str_cat(self->transient, typec, S("*"));
     }
 
