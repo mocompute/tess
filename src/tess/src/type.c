@@ -25,6 +25,15 @@
 
 #define DEBUG_ENV 1
 
+// Helper for cycle detection in recursive type traversals.
+// Returns 1 if ptr was already visited (cycle), 0 otherwise.
+// Always inserts ptr into the seen set.
+static inline int seen_set_visit(hashmap **seen, void *ptr) {
+    if (ptr_hset_contains(*seen, ptr)) return 1;
+    ptr_hset_insert(seen, ptr);
+    return 0;
+}
+
 static void                      dbg(tl_type_env *, char const *restrict fmt, ...);
 static void                      make_unary_tc(tl_type_registry *, str);
 static void                      make_variable_arity_tc(tl_type_registry *, str);
@@ -1108,9 +1117,8 @@ void tl_polytype_merge_quantifiers_sized(allocator *alloc, tl_polytype *self, tl
     self->quantifiers.v    = tv_array.v;
 }
 
-static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap *map, hashmap **seen) {
-    if (!self || ptr_hset_contains(*seen, self)) return;
-    ptr_hset_insert(seen, self);
+static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap **map, hashmap **seen) {
+    if (!self || seen_set_visit(seen, self)) return;
 
     // map: tv -> tv
 
@@ -1124,17 +1132,17 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap *map, hash
     case tl_ellipsis:    break;
 
     case tl_var:         {
-        tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
+        tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
     } break;
 
     case tl_weak: {
         // Every weak tv gets a fresh tv on instantiation.
-        tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
+        tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
         else {
             tl_type_variable fresh = tl_type_subs_fresh(subs);
-            map_set(seen, &self->var, sizeof self->var, &fresh);
+            map_set(map, &self->var, sizeof self->var, &fresh);
             self->var = fresh;
         }
 
@@ -1156,9 +1164,8 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap *map, hash
     }
 }
 
-static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map, hashmap **seen) {
-    if (!self || ptr_hset_contains(*seen, self)) return;
-    ptr_hset_insert(seen, self);
+static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map, hashmap **seen) {
+    if (!self || seen_set_visit(seen, self)) return;
 
     // map: tv -> monotype
 
@@ -1174,11 +1181,11 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
 
     case tl_weak:        {
         // Every weak tv gets a fresh tv on instantiation.
-        tl_type_variable *replace = map_get(map, &self->var, sizeof self->var);
+        tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
         else {
             tl_type_variable fresh = tl_type_subs_fresh(subs);
-            map_set(seen, &self->var, sizeof self->var, &fresh);
+            map_set(map, &self->var, sizeof self->var, &fresh);
             self->var = fresh;
         }
     } break;
@@ -1186,8 +1193,8 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
     case tl_literal:
         //
         if (tl_monotype_is_tv(self->literal) &&
-            map_contains(map, &self->literal->var, sizeof(tl_type_variable)))
-            self->literal = map_get_ptr(map, &self->literal->var, sizeof(tl_type_variable));
+            map_contains(*map, &self->literal->var, sizeof(tl_type_variable)))
+            self->literal = map_get_ptr(*map, &self->literal->var, sizeof(tl_type_variable));
         else replace_tv_mono(self->literal, subs, map, seen);
         break;
 
@@ -1200,8 +1207,8 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap *map,
 
         forall(i, arr) {
             tl_monotype *mono = arr.v[i];
-            if (tl_monotype_is_tv(mono) && map_contains(map, &mono->var, sizeof(tl_type_variable)))
-                arr.v[i] = map_get_ptr(map, &mono->var, sizeof(tl_type_variable));
+            if (tl_monotype_is_tv(mono) && map_contains(*map, &mono->var, sizeof(tl_type_variable)))
+                arr.v[i] = map_get_ptr(*map, &mono->var, sizeof(tl_type_variable));
             else replace_tv_mono(arr.v[i], subs, map, seen);
         }
     } break;
@@ -1221,7 +1228,7 @@ tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_typ
     }
 
     hashmap *seen = hset_create(transient_allocator, 8);
-    replace_tv(fresh, subs, q_to_t, &seen);
+    replace_tv(fresh, subs, &q_to_t, &seen);
 
     return fresh;
 }
@@ -1244,7 +1251,7 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
         fresh = map_get_ptr(q_to_t, &fresh->var, sizeof fresh->var);
         if (!fresh) fatal("unreachable");
     } else {
-        replace_tv_mono(fresh, subs, q_to_t, &seen);
+        replace_tv_mono(fresh, subs, &q_to_t, &seen);
     }
 
 #ifndef NDEBUG
@@ -1303,8 +1310,7 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
 }
 
 static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap **seen) {
-    if (!self || ptr_hset_contains(*seen, self)) return;
-    ptr_hset_insert(seen, self);
+    if (!self || seen_set_visit(seen, self)) return;
 
     switch (self->tag) {
     case tl_integer:
@@ -1520,8 +1526,7 @@ tl_monotype *tl_monotype_clone(allocator *alloc, tl_monotype *orig) {
 
 int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
-    if (ptr_hset_contains(*seen, self)) return 1;
-    ptr_hset_insert(seen, self);
+    if (seen_set_visit(seen, self)) return 1;
 
     switch (self->tag) {
 
@@ -1573,8 +1578,7 @@ int tl_monotype_arrow_is_concrete(tl_monotype *self) {
 
 int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     if (!self) return 0;
-    if (ptr_hset_contains(*seen, self)) return 0;
-    ptr_hset_insert(seen, self);
+    if (seen_set_visit(seen, self)) return 0;
 
     switch (self->tag) {
     case tl_integer:
