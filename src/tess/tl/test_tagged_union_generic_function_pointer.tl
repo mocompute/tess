@@ -23,7 +23,7 @@ main() {
   error := 0
 
   // Test 1: Ok variant with Int value
-  ok_int: Result(Int) := Result_Ok(value = 42)
+  ok_int := Result_Ok(value = 42)
   result1 := case ok_int: Result {
     o: Ok  { o.value }
     e: Err { apply_int_handler(e.handler, e.code) }
@@ -31,7 +31,7 @@ main() {
   error += if result1 == 42 {0} else {1}
 
   // Test 2: Ok variant with Float value
-  ok_float: Result(Float) := Result_Ok(value = 3.14)
+  ok_float := Result_Ok(value = 3.14)
   result2 := case ok_float: Result {
     o: Ok  { o.value }
     e: Err { 0.0 }

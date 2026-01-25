@@ -10,8 +10,8 @@ triple(x: Int) -> Int { x * 3 }
 Processor(T) : { process: (T) -> T }
 
 // Static initialization with Int specialization
-int_doubler: Processor(Int) := Processor(process = double/1)
-int_tripler: Processor(Int) := Processor(process = triple/1)
+int_doubler := Processor(process = double/1)
+int_tripler := Processor(process = triple/1)
 
 // Helper to apply processor
 apply(p: Processor(a), x: a) -> a {

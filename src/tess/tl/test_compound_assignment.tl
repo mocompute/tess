@@ -52,7 +52,7 @@ main() {
   error += if c == -5 {0} else {1}
 
   // Test with floats
-  f : Float := 10.0
+  f := 10.0
   f /= 4.0
   error += if f == 2.5 {0} else {1}
 

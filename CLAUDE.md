@@ -8,9 +8,11 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 
 ## Documentation
 
-The `docs/` directory contains detailed documentation about the compiler's design and implementation. **Always consult these files before reading source code** when learning about a feature or implementation detail:
+The `docs/` directory contains detailed documentation about the compiler's design and implementation.
 
-- `LANGUAGE_REFERENCE.md` - Language syntax and features
+**IMPORTANT: Always read the documentation BEFORE exploring source code.** When learning about the Tess language or compiler internals, start with these documents rather than diving into the C source. The documentation explains design decisions, language semantics, and implementation strategies that are not obvious from reading code alone.
+
+- `LANGUAGE_REFERENCE.md` - Language syntax, features, and type annotation rules
 - `TYPE_SYSTEM.md` - Type system design and implementation
 - `SPECIALIZATION.md` - Generic function specialization
 - `TAGGED_UNIONS.md` - Tagged union implementation

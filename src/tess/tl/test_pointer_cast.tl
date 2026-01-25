@@ -4,7 +4,7 @@
 main() {
   // we automatically decay array to pointer, unlike C
   data := 0x0102030405060708
-  p : Ptr(Int) := CArray(Int, 16) // p's annotation is not required
+  p := CArray(Int, 16)
   p[0] = data
 
   // cast pointer to a different type

@@ -134,6 +134,150 @@ strs := empty(Float)        // Creates Array.T(Float)
 
 This pattern is commonly used in the standard library for functions that need to create values of a generic type.
 
+## Type Annotations
+
+The Tess compiler uses Hindley-Milner style type inference. Annotations are optional in most cases.
+
+### When Type Annotations Can Be Omitted
+
+#### Variable Bindings with Inferrable RHS
+
+| Pattern | Example | Reason |
+|---------|---------|--------|
+| Integer literals | `x := 42` | Literal type is `Int` |
+| Float literals | `x := 3.14` | Literal type is `Float` |
+| Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
+| Tagged union constructors (with constraining fields) | `opt := Option_Some(v = 42)` | Type parameter inferred from field value |
+| CArray decay | `ptr := arr` where `arr := CArray(Int, 10)` | Pointer type matches array element type |
+| Function calls | `result := add(1, 2)` | Return type inferred from function |
+
+#### Function Parameters and Return Types
+
+Functions that are **called directly** can have types inferred:
+
+```tl
+// All annotations can be omitted:
+add(a, b) { a + b }           // Inferred from usage
+apply(f, x) { f(x) }          // Inferred from how arguments are used
+map(f, arr) { ... }           // Inferred from call sites
+```
+
+### When Type Annotations ARE Required
+
+#### C FFI Declarations
+
+```tl
+c_malloc(size: CSize) -> Ptr(any)    // C functions need full signatures
+c_printf(fmt: CString, ...) -> CInt
+```
+
+#### Pointer Casts
+
+```tl
+p : Ptr(Int) := some_ptr              // Casting from different pointer type
+bytes : Ptr(CUnsignedChar) := int_ptr // Explicit cast required
+```
+
+#### C Type Disambiguation
+
+Integer literals default to `Int`, float literals to `Float`. Use annotations to specify C types:
+
+```tl
+x : CInt := 42                  // Force CInt instead of Int
+f : CFloat := 3.14              // Force CFloat instead of Float
+sz : CSize := 1024              // Force CSize
+```
+
+#### c_malloc Return Type
+
+`c_malloc` returns `Ptr(any)` which must be annotated:
+
+```tl
+p : Ptr(Int) := c_malloc(sizeof(Int) * 10)    // Required
+buffer : Ptr(CChar) := c_malloc(256)          // Required
+```
+
+#### Functions Only Used as Function Pointers
+
+When a function is **never called directly** but only stored/passed as a pointer:
+
+```tl
+// Required - only referenced as `double/1`, never called directly
+double(x: Int) -> Int { x * 2 }
+
+// Later used as:
+holder := FnHolder(fn = double/1)
+```
+
+#### Functions with Struct Parameters Containing Function Pointers
+
+When a function takes a struct that has function pointer fields, annotations are required:
+
+```tl
+Handler : { fn: (Int) -> Int }
+
+// Required - even though called directly, the struct has a function pointer field
+apply_handler(h: Handler, x: Int) -> Int {
+  h.fn(x)
+}
+```
+
+#### Tagged Union Variants Without Type-Constraining Fields
+
+When a constructor doesn't constrain all type parameters:
+
+```tl
+T(a) : | Some { v: a }
+       | None
+
+good: T(Int) := T_None()              // Required - None has no field with type `a`
+opt := T_Some(v = 42)                 // Not required - `v = 42` constrains `a = Int`
+```
+
+```tl
+Either(a, b) : | Left  { v: a }
+               | Right { v: b }
+
+x: Either(Int, Bool) := Either_Left(v = 42)   // Required - Left only constrains `a`
+```
+
+#### Functions Returning Untyped Values
+
+```tl
+foo() -> Ptr(any) { return null }     // Required - null has no type
+```
+
+#### Tagged Union Case Expressions
+
+The case expression requires a type annotation:
+
+```tl
+result := case opt: Option {          // `: Option` is required
+  s: Some { s.v }
+  n: None { 0 }
+}
+```
+
+### Quick Reference Table
+
+| Scenario | Annotation Required? |
+|----------|---------------------|
+| Integer literal `42` | No (inferred as `Int`) |
+| Float literal `3.14` | No (inferred as `Float`) |
+| Struct constructor | No (inferred from constructor) |
+| Tagged union with constraining field | No |
+| Tagged union without constraining field | **Yes** |
+| CArray decay to pointer | No |
+| Pointer cast to different type | **Yes** |
+| C type (CInt, CFloat, etc.) | **Yes** |
+| c_malloc result | **Yes** |
+| C FFI function declaration | **Yes** |
+| Function called directly | No (params and return inferred) |
+| Function only used as pointer | **Yes** |
+| Function with struct param containing fn pointer | **Yes** |
+| Case expression type | **Yes** |
+| Return null | **Yes** |
+
 ## Variables and Assignment
 
 Tess distinguishes between **binding** (`:=`) and **mutation** (`=`):

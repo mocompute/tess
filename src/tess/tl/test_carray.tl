@@ -17,7 +17,7 @@ main() {
   error += if arr[4] == 50 {0} else {1}
 
   // Test array decay to pointer
-  ptr : Ptr(CInt) := arr
+  ptr := arr
   error += if ptr[0] == 10 {0} else {1}
   error += if ptr[2] == 30 {0} else {1}
 
