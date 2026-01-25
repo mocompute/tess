@@ -122,11 +122,45 @@ static str   type_to_c_mono(transpile *, tl_monotype *);
 static str   arrow_rhs_to_c(transpile *, tl_polytype *);
 static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
 static void  build_arrow_to_c(transpile *, str_build *, tl_monotype *, str);
+static str   ptr_to_arrow_to_c(transpile *, tl_monotype *);
+static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
+static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 static str   type_literal_name(tl_monotype *type);
 static void  update_type(transpile *, tl_monotype **);
 
 //
+
+// Generates function signature: "ret_type name(params)" or "ret_type (*name(params))(fp_params)"
+// Handles both normal return types and function-pointer return types.
+// Outputs directly to the transpile buffer.
+static void generate_function_signature(transpile *self, str name, tl_polytype *type, str_sized param_names) {
+    tl_monotype *arrow    = type->type;
+    tl_monotype *ret_type = arrow->list.xs.v[1];
+
+    if (tl_monotype_is_arrow(ret_type)) {
+        // Function returning function pointer: ret (*name(params))(fp_params)
+        str_build sig = str_build_init(self->transient, 64);
+        str_build_cat(&sig, mangle_fun(self, name));
+        str_build_cat(&sig, S("("));
+        str_build_cat(&sig, arrow_to_c_params(self, type, param_names));
+        str_build_cat(&sig, S(")"));
+        str func_sig = str_build_finish(&sig);
+
+        str_build b = str_build_init(self->transient, 80);
+        build_arrow_to_c(self, &b, ret_type, func_sig);
+        cat(self, str_build_finish(&b));
+    } else {
+        // Normal return type: ret name(params)
+        str ret = arrow_rhs_to_c(self, type);
+        cat(self, ret);
+        cat_sp(self);
+        cat(self, mangle_fun(self, name));
+        cat_open_round(self);
+        cat(self, arrow_to_c_params(self, type, param_names));
+        cat_close_round(self);
+    }
+}
 
 static void generate_prototypes(transpile *self, int decl_static) {
     forall(i, self->toplevels_sorted) {
@@ -143,36 +177,8 @@ static void generate_prototypes(transpile *self, int decl_static) {
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(self, name, type)) continue;
 
-        // Get the return type of this function
-        tl_monotype *arrow    = type->type;
-        tl_monotype *ret_type = arrow->list.xs.v[1]; // RHS of arrow is return type
-
         if (decl_static) cat(self, S("static "));
-
-        // Check if return type is an arrow (function returning function pointer)
-        if (tl_monotype_is_arrow(ret_type)) {
-            // Build function signature: "name(params)"
-            str_build sig = str_build_init(self->transient, 64);
-            str_build_cat(&sig, mangle_fun(self, name));
-            str_build_cat(&sig, S("("));
-            str_build_cat(&sig, arrow_to_c_params(self, type, (str_sized){0}));
-            str_build_cat(&sig, S(")"));
-            str func_sig = str_build_finish(&sig);
-
-            // Use build_arrow_to_c with the signature as the "name"
-            str_build b = str_build_init(self->transient, 80);
-            build_arrow_to_c(self, &b, ret_type, func_sig);
-            cat(self, str_build_finish(&b));
-        } else {
-            // Normal case: non-arrow return type
-            str ret = arrow_rhs_to_c(self, type);
-            cat(self, ret);
-            cat_sp(self);
-            cat(self, mangle_fun(self, name));
-            cat_open_round(self);
-            cat(self, arrow_to_c_params(self, type, (str_sized){0}));
-            cat_close_round(self);
-        }
+        generate_function_signature(self, name, type, (str_sized){0});
         cat_semicolon(self);
         cat_nl(self);
     }
@@ -622,39 +628,14 @@ static void generate_toplevels(transpile *self) {
             array_push(params_str, param->symbol.name);
         }
 
-        tl_monotype *ret_mono   = poly->type->list.xs.v[1]; // return type
-        str          ret        = arrow_rhs_to_c(self, poly);
-        int          res_is_void = str_eq(ret, S("void"));
-        str          res        = str_empty();
+        str ret         = arrow_rhs_to_c(self, poly);
+        int res_is_void = str_eq(ret, S("void"));
+        str res         = str_empty();
         if (!res_is_void) {
             res = next_res(self);
         }
 
-        // Check if return type is an arrow (function returning function pointer)
-        if (tl_monotype_is_arrow(ret_mono)) {
-            // Build function signature: "name(params)"
-            str_build sig = str_build_init(self->transient, 64);
-            str_build_cat(&sig, mangle_fun(self, name));
-            str_build_cat(&sig, S("("));
-            str_build_cat(&sig, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
-            str_build_cat(&sig, S(")"));
-            str func_sig = str_build_finish(&sig);
-
-            // Use build_arrow_to_c with the signature as the "name"
-            str_build b = str_build_init(self->transient, 80);
-            build_arrow_to_c(self, &b, ret_mono, func_sig);
-            cat(self, str_build_finish(&b));
-        } else {
-            // Normal case: non-arrow return type
-            cat(self, ret); // return type
-            cat_sp(self);
-            cat(self, mangle_fun(self, name)); // fun name
-
-            cat_open_round(self); // args
-            cat(self, arrow_to_c_params(self, poly, (str_sized)sized_all(params_str)));
-            cat_close_round(self);
-        }
-
+        generate_function_signature(self, name, poly, (str_sized)sized_all(params_str));
         cat_open_curlyln(self); // body
 
         assert(tl_monotype_is_list(poly->type));
@@ -1976,6 +1957,45 @@ static int ptr_depth_to_arrow(tl_monotype *type, tl_monotype **out_arrow) {
 
 static void build_arrow_to_c(transpile *, str_build *b, tl_monotype *type, str name);
 
+// Returns C type string for Ptr(..Arrow..) types, e.g. "int (**)(int)"
+// Returns empty string if type is not Ptr-to-arrow.
+static str ptr_to_arrow_to_c(transpile *self, tl_monotype *type) {
+    tl_monotype *arrow = null;
+    int ptr_depth = ptr_depth_to_arrow(type, &arrow);
+    if (ptr_depth == 0) return str_empty();
+
+    // Build stars string for the pointer depth
+    str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
+    for (int i = 0; i < ptr_depth; i++) {
+        str_build_cat(&stars_b, S("*"));
+    }
+    str stars = str_build_finish(&stars_b);
+
+    str_build b = str_build_init(self->transient, 64);
+    build_arrow_to_c(self, &b, arrow, stars);
+    return str_build_finish(&b);
+}
+
+// Returns C declaration for Ptr(..Arrow..) types with name, e.g. "int (**name)(int)"
+// Returns empty string if type is not Ptr-to-arrow.
+static str ptr_to_arrow_decl(transpile *self, tl_monotype *type, str name) {
+    tl_monotype *arrow = null;
+    int ptr_depth = ptr_depth_to_arrow(type, &arrow);
+    if (ptr_depth == 0) return str_empty();
+
+    // Build "*...*name" string
+    str_build stars_b = str_build_init(self->transient, ptr_depth + 8);
+    for (int i = 0; i < ptr_depth; i++) {
+        str_build_cat(&stars_b, S("*"));
+    }
+    str_build_cat(&stars_b, name);
+    str name_with_stars = str_build_finish(&stars_b);
+
+    str_build b = str_build_init(self->transient, 80);
+    build_arrow_to_c(self, &b, arrow, name_with_stars);
+    return str_build_finish(&b);
+}
+
 static void generate_decl(transpile *self, str name, tl_monotype *type) {
     if (tl_arrow == type->tag) {
         // arrow
@@ -1989,22 +2009,9 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
     else if (tl_cons_inst == type->tag) {
         // Special case for Ptr(..Ptr(Arrow)..) - pointer(s) to function pointer
-        tl_monotype *arrow = null;
-        int          ptr_depth = ptr_depth_to_arrow(type, &arrow);
-        if (ptr_depth > 0) {
-            // Generate: int (**...*name)(int) with (ptr_depth + 1) stars
-            str_build b = str_build_init(self->transient, 80);
-
-            // Build the name with appropriate number of stars
-            str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
-            for (int i = 0; i < ptr_depth; i++) {
-                str_build_cat(&stars_b, S("*"));
-            }
-            str_build_cat(&stars_b, name);
-            str name_with_stars = str_build_finish(&stars_b);
-
-            build_arrow_to_c(self, &b, arrow, name_with_stars);
-            cat(self, str_build_finish(&b));
+        str ptr_arrow = ptr_to_arrow_decl(self, type, name);
+        if (!str_is_empty(ptr_arrow)) {
+            cat(self, ptr_arrow);
             cat_semicolonln(self);
             return;
         }
@@ -2393,21 +2400,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return S("void");
         } else if (tl_monotype_is_ptr(mono)) {
             // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
-            tl_monotype *arrow     = null;
-            int          ptr_depth = ptr_depth_to_arrow(mono, &arrow);
-            if (ptr_depth > 0) {
-                str_build b = str_build_init(self->transient, 64);
-
-                // Build stars string for the pointer depth
-                str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
-                for (int i = 0; i < ptr_depth; i++) {
-                    str_build_cat(&stars_b, S("*"));
-                }
-                str stars = str_build_finish(&stars_b);
-
-                build_arrow_to_c(self, &b, arrow, stars);
-                return str_build_finish(&b);
-            }
+            str ptr_arrow = ptr_to_arrow_to_c(self, mono);
+            if (!str_is_empty(ptr_arrow)) return ptr_arrow;
 
             // Normal Ptr handling for non-arrow targets
             tl_monotype *arg   = tl_monotype_ptr_target(mono);
@@ -2458,21 +2452,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         return S("/*tv*/void");
     } else if (tl_monotype_is_ptr(mono)) {
         // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
-        tl_monotype *arrow     = null;
-        int          ptr_depth = ptr_depth_to_arrow(mono, &arrow);
-        if (ptr_depth > 0) {
-            str_build b = str_build_init(self->transient, 64);
-
-            // Build stars string for the pointer depth
-            str_build stars_b = str_build_init(self->transient, ptr_depth + 1);
-            for (int i = 0; i < ptr_depth; i++) {
-                str_build_cat(&stars_b, S("*"));
-            }
-            str stars = str_build_finish(&stars_b);
-
-            build_arrow_to_c(self, &b, arrow, stars);
-            return str_build_finish(&b);
-        }
+        str ptr_arrow = ptr_to_arrow_to_c(self, mono);
+        if (!str_is_empty(ptr_arrow)) return ptr_arrow;
 
         // Normal Ptr handling for non-arrow targets
         tl_monotype *arg   = tl_monotype_ptr_target(mono);
