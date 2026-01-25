@@ -449,9 +449,7 @@ TL_FAIL_TESTS =					\
 	fail_unknown_free_variable
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =				\
-	function_pointer_higher_order_return	\
-	static_init_generic_function_pointer
+TL_KNOWN_FAILURES =
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 

@@ -486,6 +486,15 @@ void     do_tree_shake(void *ctx_, ast_node *node) {
             str name = ast_node_str(pred);
             str_hset_insert(&ctx->names, name);
         }
+    } else if (ast_node_is_symbol(node)) {
+        // Handle bare symbols that may reference toplevel functions (e.g., function pointers in case arms)
+        str       name = ast_node_str(node);
+        ast_node *next = toplevel_get(self, name);
+        if (next && !str_hset_contains(ctx->recurs, name)) {
+            str_hset_insert(&ctx->recurs, name);
+            ast_node_dfs(ctx, next, do_tree_shake);
+            str_hset_insert(&ctx->names, name);
+        }
     }
 }
 
@@ -2720,7 +2729,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     }
 
     // check for nullary type constructors
-    if (ast_node_is_symbol(node)) return specialize_user_type(self, traverse_ctx, node);
+    if (ast_node_is_symbol(node)) return specialize_operand(self, traverse_ctx, node);
     // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, traverse_ctx, node);
     if (ast_node_is_assignment(node)) return specialize_reassignment(self, traverse_ctx, node);

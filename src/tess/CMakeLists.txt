@@ -360,6 +360,3 @@ function(tl_create_known_failure NAME)
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
   )
 endfunction()
-
-tl_create_known_failure(function_pointer_higher_order_return)
-tl_create_known_failure(static_init_generic_function_pointer)
