@@ -56,18 +56,7 @@ main() {
   error += if fn_a(3) == 9 {0} else {1}  // now triple
   error += if fn_b(3) == 6 {0} else {1}  // now double
 
-  // Test 5: Pointer to function pointer (Ptr(Ptr(...)))
-  fp2 := negate/1
-  pp := fp2.&
-  result6 := pp.*(5)  // dereference and invoke: negate(5) = -5
-  error += if result6 == -5 {0} else {1}
-
-  // Mutate through pointer to pointer
-  pp.* = add_one/1
-  result7 := fp2(10)  // fp2 now points to add_one
-  error += if result7 == 11 {0} else {1}
-
-  // Test 6: Multiple mutations to same struct field
+  // Test 5: Multiple mutations to same struct field
   ctx2 := FnCtx(fn = double/1, id = 2)
   sum := ctx2.fn(1)  // 2
   ctx2_ptr := ctx2.&

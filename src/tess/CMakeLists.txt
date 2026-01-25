@@ -362,4 +362,5 @@ endfunction()
 
 tl_create_known_failure(function_pointer_mutable)
 tl_create_known_failure(function_pointer_higher_order_return)
+tl_create_known_failure(function_pointer_pointer)
 tl_create_known_failure(static_init_generic_function_pointer)

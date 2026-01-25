@@ -270,13 +270,15 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
 
 - **MOS tests** (`src/mos/src/test_*.c`) - Unit tests for data structures
 - **Tess tests** (`src/tess/src/test_*.c`) - Compiler unit tests
-- **Tess tests** (`src/tess/tl/test_*.tl`) - Integration tests covering:
-  - Type inference and generics
-  - Lambdas, closures, pattern matching
-  - Memory management, pointers
-  - Module system, mutual recursion
-  - C interoperability
-  - Expected failure tests (prefixed with `fail_`)
+- **Tess language tests** (`src/tess/tl/test_*.tl`) - Integration tests that exercise various language features. These tests include:
+  - **Passing tests** - Tests expected to compile and run successfully, covering:
+    - Type inference and generics
+    - Lambdas, closures, pattern matching
+    - Memory management, pointers
+    - Module system, mutual recursion
+    - C interoperability
+  - **Expected failure tests** (prefixed with `test_fail_`) - Tests that verify the compiler correctly rejects invalid code and produces appropriate error messages
+  - **Known failure tests** - Tests for features that aren't yet implemented or are currently broken; these are tracked separately and expected to fail
 
 ### Testing Requirements
 
@@ -289,7 +291,16 @@ When adding new functionality or fixing bugs, always ensure proper test coverage
 
 ## Build System Notes
 
-The Makefile supports:
+This project has two build systems that must be kept in sync:
+
+1. **Makefile** - Primary build system for Linux and macOS
+2. **CMake** - Primary build system for Windows (also works on Linux/macOS)
+
+**Important:** Any changes to the build system (adding tests, source files, build flags, known failures, etc.) must be applied to both systems:
+- Makefile: `Makefile` in the repository root
+- CMake: `CMakeLists.txt` files (root and `src/*/CMakeLists.txt`)
+
+### Makefile Features
 - Parallel builds with `-j`
 - Multiple configurations (release/debug/asan)
 - Verbose output with `V=1`
@@ -297,4 +308,9 @@ The Makefile supports:
 - Automatic dependency tracking
 - Colored output for build status
 
-CMake and Nix Flake support are also available for alternative build systems.
+### CMake Features
+- Windows support with MSVC, MinGW, and Clang
+- Multi-configuration generators (Visual Studio, Ninja Multi-Config)
+- CTest integration for running tests
+
+Nix Flake support is also available as an alternative build system.
