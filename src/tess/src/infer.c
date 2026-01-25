@@ -638,6 +638,15 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
     return (annotation_parse_result){.parsed = parsed, .type_arguments = parse_ctx.type_arguments};
 }
 
+typedef struct {
+    int wrap_in_literal;      // Wrap parsed type in tl_literal
+    int add_to_lexicals;      // Add type args to ctx->lexical_names
+    int set_annotation_type;  // Set node->symbol.annotation_type
+    int error_if_not_parsed;  // Return error if annotation doesn't parse
+    int check_type_arg_self;  // Check if name is in type_arguments (for formal params)
+} annotation_opts;
+
+static int          constrain_or_set(tl_infer *, ast_node *, tl_polytype *);
 static int          infer_struct_access(tl_infer *, ast_node *);
 static int          add_generic(tl_infer *, ast_node *);
 static int          is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
@@ -646,6 +655,72 @@ static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_n
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
 static void         toplevel_add(tl_infer *, str, ast_node *);
 static void         update_env(tl_infer *, traverse_ctx *, ast_node *);
+
+// Returns: 0 = no annotation, 1 = annotation processed, -1 = error
+static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
+                              ast_node *annotation_source, annotation_opts opts) {
+    if (!annotation_source) return 0;
+
+    annotation_parse_result result = parse_type_annotation(self, ctx, annotation_source);
+
+    if (!result.parsed) {
+        if (opts.error_if_not_parsed) {
+            expected_type(self, node);
+            return -1;
+        }
+        return 0;
+    }
+
+    // Merge type arguments into context
+    if (ctx) {
+        map_merge(&ctx->type_arguments, result.type_arguments);
+
+        if (opts.add_to_lexicals) {
+            str_array arr = str_map_keys(self->transient, result.type_arguments);
+            forall(i, arr) {
+#if DEBUG_RESOLVE
+                dbg(self, "resolve_node: adding type argument to lexicals: '%s'", str_cstr(&arr.v[i]));
+#endif
+                str_hset_insert(&ctx->lexical_names, arr.v[i]);
+            }
+        }
+    }
+
+    tl_monotype *mono = result.parsed;
+
+    // Handle type argument self-reference (for formal parameters)
+    if (opts.check_type_arg_self && ast_node_is_symbol(node)) {
+        str          name  = ast_node_str(node);
+        tl_monotype *found = str_map_get_ptr(result.type_arguments, name);
+        if (found) mono = found;
+    }
+
+    // Wrap in literal if needed
+    if (opts.wrap_in_literal) {
+        mono = tl_monotype_create_literal(self->arena, mono);
+    }
+
+    // Set annotation_type field
+    if (opts.set_annotation_type && ast_node_is_symbol(node)) {
+        node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
+        assert(node->symbol.annotation_type);
+    }
+
+    // Constrain node type
+    tl_polytype *poly = opts.set_annotation_type && ast_node_is_symbol(node)
+                            ? node->symbol.annotation_type
+                            : tl_polytype_absorb_mono(self->arena, mono);
+
+#if DEBUG_RESOLVE
+    str node_str = v2_ast_node_to_string(self->transient, node);
+    str mono_str = tl_monotype_to_string(self->transient, mono);
+    dbg(self, "process_annotation %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
+#endif
+
+    if (constrain_or_set(self, node, poly)) return -1;
+
+    return 1;
+}
 
 // ============================================================================
 // Special Case Handlers
@@ -1885,48 +1960,14 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_toplevel:
     case npos_formal_parameter:
         if (ast_node_is_symbol(node)) {
-            // as a formal parameter, a symbol with a : Type annotation creates a type argument
-            str name = ast_node_str(node);
-
             if (node->symbol.annotation) {
-
-                // parse annotation type: parse_type needs to start at the symbol node being annotated so it
-                // knows how to managed its type arguments. Then we merge the parse context's type arguments
-                // into our own.
-
-                annotation_parse_result result = parse_type_annotation(self, ctx, node);
-                if (!result.parsed) {
-                    expected_type(self, node);
-                    return 1;
-                }
-                if (ctx) {
-                    map_merge(&ctx->type_arguments, result.type_arguments);
-
-                    // Also add type arguments to lexical names. Especially for free variables process.
-
-                    str_array arr = str_map_keys(self->transient, result.type_arguments);
-                    forall(i, arr) {
-#if DEBUG_RESOLVE
-                        dbg(self, "resolve_node: adding type argument to lexicals: '%s'",
-                            str_cstr(&arr.v[i]));
-#endif
-                        str_hset_insert(&ctx->lexical_names, arr.v[i]);
-                    }
-                }
-
-                tl_monotype *mono = result.parsed;
-
-                (void)name;
-                // If annotation is a type argument, grab its wrapped type from the type arguments map. We
-                // need it to be wrapped in a literal.
-                tl_monotype *found;
-                if ((found = str_map_get_ptr(result.type_arguments, name))) mono = found;
-
-                node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
-                assert(node->symbol.annotation_type);
-
-                if (constrain_or_set(self, node, node->symbol.annotation_type)) return 1;
-
+                int res = process_annotation(self, ctx, node, node, (annotation_opts){
+                    .add_to_lexicals = 1,
+                    .set_annotation_type = 1,
+                    .error_if_not_parsed = 1,
+                    .check_type_arg_self = 1,
+                });
+                if (res < 0) return 1;
             } else {
                 ensure_tv(self, &node->type);
             }
@@ -1945,27 +1986,13 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
 
             // A type literal in argument position must be wrapped in literal
-            annotation_parse_result result = parse_type_annotation(self, ctx, node);
-            if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
-
-            if (result.parsed) {
-                tl_monotype *mono = result.parsed;
-
-                mono              = tl_monotype_create_literal(self->arena, mono);
-#if DEBUG_RESOLVE
-                str node_str = v2_ast_node_to_string(self->transient, node);
-                str mono_str = tl_monotype_to_string(self->transient, mono);
-                dbg(self, "npos_function_argument %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
-#endif
-                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, mono))) return 1;
-
-            } else {
+            int res = process_annotation(self, ctx, node, node, (annotation_opts){.wrap_in_literal = 1});
+            if (res < 0) return 1;
+            if (res == 0) {
                 ensure_tv(self, &node->type);
                 update_env(self, ctx, node);
             }
-        }
-
-        else if (ast_node_is_binary_op_struct_access(node)) {
+        } else if (ast_node_is_binary_op_struct_access(node)) {
             return infer_struct_access(self, node);
         }
 
@@ -1985,17 +2012,9 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         // Support annotations on lhs of assignments, such as field names
         if (ast_node_is_symbol(node) && node->symbol.annotation) {
             if (!ctx) fatal("logic error");
-
-            annotation_parse_result result = parse_type_annotation(self, ctx, node->symbol.annotation);
-            if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
-
-            if (result.parsed) {
-                if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, result.parsed)))
-                    return 1;
-            }
-        }
-
-        else if (ast_node_is_binary_op_struct_access(node)) {
+            int res = process_annotation(self, ctx, node, node->symbol.annotation, (annotation_opts){0});
+            if (res < 0) return 1;
+        } else if (ast_node_is_binary_op_struct_access(node)) {
             return infer_struct_access(self, node);
         }
 
@@ -2018,13 +2037,9 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             return infer_struct_access(self, node);
         }
 
-        annotation_parse_result result = parse_type_annotation(self, ctx, node);
-        if (result.parsed) map_merge(&ctx->type_arguments, result.type_arguments);
-
-        if (result.parsed) {
-            tl_monotype *parsed = tl_monotype_create_literal(self->arena, result.parsed);
-            if (constrain_or_set(self, node, tl_polytype_absorb_mono(self->arena, parsed))) return 1;
-        } else {
+        int res = process_annotation(self, ctx, node, node, (annotation_opts){.wrap_in_literal = 1});
+        if (res < 0) return 1;
+        if (res == 0) {
             maybe_handle_null(self, node);
         }
         update_env(self, ctx, node);
