@@ -437,15 +437,15 @@ TL_TESTS =					\
 	while_update_statement
 
 TL_FAIL_TESTS =					\
-	case_float				\
+	fail_case_float				\
 	fail_function_pointer_pointer		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
-	type_alias_partial_specialization	\
-	unknown_free_variable
+	fail_type_alias_partial_specialization	\
+	fail_unknown_free_variable
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

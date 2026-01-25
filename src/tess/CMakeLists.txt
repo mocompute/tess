@@ -334,15 +334,15 @@ tl_create_test(while_statement)
 tl_create_test(while_update_statement)
 
 # Expected failures (tests that verify the compiler correctly rejects invalid code)
-tl_create_build_fail_test(case_float)
+tl_create_build_fail_test(fail_case_float)
 tl_create_build_fail_test(fail_function_pointer_pointer)
 tl_create_build_fail_test(fail_lambda_implicit_return)
 tl_create_build_fail_test(fail_lambda_return)
 tl_create_build_fail_test(fail_monkey_patch)
 tl_create_build_fail_test(fail_tagged_union_missing_case)
 tl_create_build_fail_test(fail_tagged_union_unknown_variant)
-tl_create_build_fail_test(type_alias_partial_specialization)
-tl_create_build_fail_test(unknown_free_variable)
+tl_create_build_fail_test(fail_type_alias_partial_specialization)
+tl_create_build_fail_test(fail_unknown_free_variable)
 
 # Known failures (tests that should work but currently fail due to compiler bugs)
 # These are excluded from the test suite but kept to track compiler issues
