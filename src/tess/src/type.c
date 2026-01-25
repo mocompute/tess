@@ -1215,51 +1215,58 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
     }
 }
 
-tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
+// Internal implementation for polytype instantiation.
+// If args.v is NULL, creates fresh type variables for each quantifier.
+// If args.v is non-NULL, uses the provided monotypes as substitutions.
+static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
+                                             tl_monotype_sized args) {
+    tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
+    hashmap     *seen  = hset_create(transient_allocator, 8);
 
-    tl_monotype *fresh  = tl_monotype_clone(alloc, self->type);
+    if (!args.v) {
+        // Create fresh type variables for each quantifier
+        hashmap *q_to_t = map_create(transient_allocator, sizeof(tl_type_variable), 8);
 
-    hashmap     *q_to_t = map_create(transient_allocator, sizeof(tl_type_variable), 8);
+        forall(i, self->quantifiers) {
+            tl_type_variable tv = tl_type_subs_fresh(subs);
+            map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
+        }
 
-    forall(i, self->quantifiers) {
-        // make a fresh variable for each quantified type variable
-        tl_type_variable tv = tl_type_subs_fresh(subs);
-        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &tv);
+        replace_tv(fresh, subs, &q_to_t, &seen);
+    } else {
+        // Use provided monotypes as substitutions
+        if (self->quantifiers.size != args.size) fatal("logic error");
+
+        hashmap *q_to_t = map_create(transient_allocator, sizeof(tl_monotype *), args.size);
+
+        forall(i, self->quantifiers) {
+            map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
+        }
+
+        if (tl_monotype_is_tv(fresh) && map_contains(q_to_t, &fresh->var, sizeof fresh->var)) {
+            fresh = map_get_ptr(q_to_t, &fresh->var, sizeof fresh->var);
+            if (!fresh) fatal("unreachable");
+        } else {
+            replace_tv_mono(fresh, subs, &q_to_t, &seen);
+        }
+
+#ifndef NDEBUG
+        // assert the argument for a unary type maintains its pointer identity
+        if (tl_cons_inst == fresh->tag && 1 == fresh->cons_inst->args.size)
+            assert(args.v[0] == fresh->cons_inst->args.v[0]);
+#endif
     }
-
-    hashmap *seen = hset_create(transient_allocator, 8);
-    replace_tv(fresh, subs, &q_to_t, &seen);
 
     return fresh;
 }
 
+tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
+    return tl_polytype_instantiate_(alloc, self, subs, (tl_monotype_sized){0});
+}
+
 tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, tl_monotype_sized args,
                                           tl_type_subs *subs) {
-    // Instantiate a quantified polytype with specific monotypes, which may or may not be type variables.
-
-    tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
-    if (self->quantifiers.size != args.size) fatal("logic error");
-
-    hashmap *q_to_t = map_create(transient_allocator, sizeof(tl_monotype *), args.size);
-
-    forall(i, self->quantifiers) {
-        map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
-    }
-
-    hashmap *seen = hset_create(transient_allocator, 8);
-    if (tl_monotype_is_tv(fresh) && map_contains(q_to_t, &fresh->var, sizeof fresh->var)) {
-        fresh = map_get_ptr(q_to_t, &fresh->var, sizeof fresh->var);
-        if (!fresh) fatal("unreachable");
-    } else {
-        replace_tv_mono(fresh, subs, &q_to_t, &seen);
-    }
-
-#ifndef NDEBUG
-    // assert the argument for a unary type maintains its pointer identity
-    if (1 == fresh->cons_inst->args.size) assert(args.v[0] == fresh->cons_inst->args.v[0]);
-#endif
-
-    return fresh;
+    return tl_polytype_instantiate_(alloc, self, subs, args);
 }
 
 tl_monotype *tl_polytype_specialize(allocator *alloc, tl_polytype *self, tl_monotype_sized args) {
