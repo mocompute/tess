@@ -2497,13 +2497,17 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     str *found = instance_lookup_arrow(self, name, arrow);
     if (found) return *found;
 
+    // 2a. Check that name is valid
+    ast_node *toplevel = toplevel_get(self, name);
+    if (!toplevel) return str_empty();
+
     // 3. Create unique instance name(e.g., "identity_0")
     name_and_type key       = make_instance_key(name, arrow);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
 
     // 4. Clone generic function's AST
-    ast_node *generic_node = clone_generic_for_arrow(self, toplevel_get(self, name), arrow, inst_name);
+    ast_node *generic_node = clone_generic_for_arrow(self, toplevel, arrow, inst_name);
 
     // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);

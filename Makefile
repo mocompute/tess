@@ -332,6 +332,7 @@ TL_TESTS =					\
 	for_statement_module			\
 	forward_decl_not_needed			\
 	function_pointer_argument		\
+	function_pointer_mutable		\
 	function_pointer_value			\
 	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
@@ -449,7 +450,6 @@ TL_FAIL_TESTS =					\
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	function_pointer_mutable		\
 	function_pointer_higher_order_return	\
 	static_init_generic_function_pointer
 
