@@ -640,7 +640,6 @@ static int          is_union_struct(tl_infer *, str);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
 static void         toplevel_add(tl_infer *, str, ast_node *);
-static void         update_env(tl_infer *, traverse_ctx *, ast_node *);
 
 // Returns: 0 = no annotation, 1 = annotation processed, -1 = error
 static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annotation_opts opts) {
@@ -1746,23 +1745,31 @@ static int expected_symbol(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
-static void update_env(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+static void sync_with_env(tl_infer *self, traverse_ctx *ctx, ast_node *node, int want_fresh) {
     // If it's a symbol, if it has a type, add it to the environment. If it doesn't have a type, look it up
     // from the environment.
+    if (!ast_node_is_symbol(node)) goto finish;
 
-    if (ast_node_is_symbol(node)) {
-        str name = ast_node_str(node);
-        if (!ctx || !str_map_contains(ctx->type_arguments, name)) {
-            if (node->type) {
-                env_insert_constrain(self, name, node->type, node);
-            } else {
-                ast_node_type_set(node, tl_type_env_lookup(self->env, name));
-            }
-        } else {
-            // a type argument: do nothing
-            ;
-        }
+    str name = ast_node_str(node);
+    if (ctx && str_map_contains(ctx->type_arguments, name)) goto finish;
+
+    if (want_fresh && !node->type) {
+        node->type = tl_polytype_create_fresh_tv(self->arena, self->subs);
     }
+
+    if (node->type) {
+        // A symbol with an existing type: either insert it to the environment, or constrain it with the
+        // existing type if already in env.
+        env_insert_constrain(self, name, node->type, node);
+    } else {
+        // No type: look up its type from the environment, if any
+        tl_polytype *type = tl_type_env_lookup(self->env, name);
+        if (type) ast_node_type_set(node, type);
+    }
+
+finish:
+    // regardless, node must have a type, even if it's a fresh tv
+    if (!node->type) node->type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
 static int reject_type_literal(tl_infer *self, ast_node const *node) {
@@ -1931,46 +1938,11 @@ static void maybe_handle_null(tl_infer *self, ast_node *node) {
 
 static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_position pos) {
     // Note: ctx may be null if this processing is initiated from load_toplevel()
-    //
-    // ==========================================================================
-    // BEHAVIOR SUMMARY FOR FUTURE REFACTORING
-    // ==========================================================================
-    //
-    // Each position has distinct behavior across these dimensions:
-    //   1. Type literal handling: REJECT (error), WRAP (in tl_literal), or REQUIRE (must parse)
-    //   2. Annotation source: `node` vs `node->symbol.annotation`
-    //   3. Struct access handling: whether or not struct access is handled
-    //   4. Fresh TV: when to call ensure_tv (if annotation missing, always, force replace, or never)
-    //   5. update_env: always, conditional on annotation result, or never
-    //   6. maybe_handle_null: always, conditional on annotation result, or never
-    //   7. add_to_lexicals: whether to add symbol name to ctx->lexical_names
-    //   8. Order of operations: varies significantly between positions
-    //
-    // Key insight: the ORDER of operations matters! Calling ensure_tv before update_env
-    // changes behavior - update_env does env_insert_constrain if type is set, but
-    // tl_type_env_lookup if type is not set. Similarly, maybe_handle_null checks
-    // node->type to decide whether to set a pointer type.
-    // ==========================================================================
 
     if (!node) return 0;
 
     switch (pos) {
 
-    // ==========================================================================
-    // npos_toplevel / npos_formal_parameter
-    // ==========================================================================
-    // Used for: top-level declarations, function parameters
-    // Behavior:
-    //   - Type literal: REQUIRE (annotation must parse as type if present)
-    //   - Node type: MUST be a symbol (error otherwise)
-    //   - Annotation source: `node` (not node->symbol.annotation)
-    //   - Struct access: NOT handled (not valid in these positions)
-    //   - Fresh TV: only if annotation is ABSENT (not if parse fails)
-    //   - update_env: ALWAYS called
-    //   - maybe_handle_null: NEVER called
-    //   - add_to_lexicals: ALWAYS for the symbol name (separate from annotation's type args)
-    // Order: annotation_or_ensure_tv -> add_to_lexicals -> update_env
-    // ==========================================================================
     case npos_toplevel:
     case npos_formal_parameter:
         if (!ast_node_is_symbol(node)) return expected_symbol(self, node);
@@ -1987,28 +1959,15 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             str_hset_insert(&ctx->lexical_names, node->symbol.name);
         }
 
-        // Always update environment for declarations
-        update_env(self, ctx, node);
+        // Sync with existing symbol, if any.
+        sync_with_env(self, ctx, node, 0);
         break;
 
-    // ==========================================================================
-    // npos_function_argument
-    // ==========================================================================
-    // Used for: arguments passed to function calls
-    // Behavior:
-    //   - Type literal: WRAP (type literals become tl_literal values)
-    //   - Node type: symbol, nfa, or struct_access accepted
-    //   - Annotation source: `node`
-    //   - Struct access: handled
-    //   - Fresh TV: only if annotation NOT PROCESSED (res == 0)
-    //   - update_env: only if annotation NOT PROCESSED (res == 0)
-    //   - maybe_handle_null: ALWAYS called (handles null/void literals)
-    //   - add_to_lexicals: NEVER
-    // Order: annotation -> (ensure_tv, update_env if res==0) -> maybe_handle_null
-    // Key: update_env is INSIDE the res==0 block, maybe_handle_null is OUTSIDE
-    // ==========================================================================
     case npos_function_argument:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+
+        // handle null/void, if any
+        maybe_handle_null(self, node);
 
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
@@ -2017,33 +1976,14 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
             if (res < 0) return 1;
             if (res == 0) {
-                // Not a type literal: ensure type variable and update environment
-                // Order matters: ensure_tv then update_env
-                ensure_tv(self, &node->type);
-                update_env(self, ctx, node);
+                // Not a type literal: ensure fresh type variable and update environment
+                sync_with_env(self, ctx, node, 1);
             }
-            // If res > 0 (was type literal): skip ensure_tv and update_env
+            // If res > 0 (was type literal): do not sync_with_env
         }
 
-        // Always handle null/void, regardless of whether annotation was processed
-        maybe_handle_null(self, node);
         break;
 
-    // ==========================================================================
-    // npos_assign_lhs
-    // ==========================================================================
-    // Used for: left-hand side of assignments (e.g., `x = ...`, `foo.bar = ...`)
-    // Behavior:
-    //   - Type literal: REJECT (cannot assign to a type)
-    //   - Node type: symbol or struct_access
-    //   - Annotation source: `node`
-    //   - Struct access: handled
-    //   - Fresh TV: only if annotation PROCESSED (res > 0)
-    //   - update_env: only if annotation PROCESSED (res > 0)
-    //   - maybe_handle_null: NEVER
-    //   - add_to_lexicals: NEVER
-    // Order: reject_type_literal -> struct_access -> annotation -> (ensure_tv, update_env if res>0)
-    // ==========================================================================
     case npos_assign_lhs:
         if (reject_type_literal(self, node)) return 1;
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
@@ -2056,97 +1996,45 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (res < 0) return 1;
             if (res > 0) {
                 // Annotation indicates a cast to a new type, update environment
+                sync_with_env(self, ctx, node, 1);
+            } else {
+                // No annotation: assign a fresh type variable
                 ensure_tv(self, &node->type);
-                update_env(self, ctx, node);
             }
         }
         break;
 
-    // ==========================================================================
-    // npos_field_name
-    // ==========================================================================
-    // Used for: field names in struct construction (e.g., `field` in `Foo(field = x)`)
-    // Behavior:
-    //   - Type literal: REJECT (field names cannot be types)
-    //   - Node type: any
-    //   - Annotation source: N/A (no annotation processing)
-    //   - Struct access: handled
-    //   - Fresh TV: NEVER inside case (only final ensure_tv at end of function)
-    //   - update_env: NEVER (field names don't go in env)
-    //   - maybe_handle_null: NEVER
-    //   - add_to_lexicals: NEVER
-    // ==========================================================================
     case npos_field_name:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
         if (reject_type_literal(self, node)) return 1;
+        // assign a fresh type variable to field name
+        ensure_tv(self, &node->type);
         break;
 
-    // ==========================================================================
-    // npos_operand
-    // ==========================================================================
-    // Used for: general operands in expressions
-    // Behavior:
-    //   - Type literal: WRAP (type literals become tl_literal values)
-    //   - Node type: any
-    //   - Annotation source: `node`
-    //   - Struct access: handled
-    //   - Fresh TV: NEVER inside case (only final ensure_tv at end of function)
-    //   - update_env: ALWAYS called
-    //   - maybe_handle_null: only if annotation NOT PROCESSED (res == 0)
-    //   - add_to_lexicals: NEVER
-    // Order: annotation -> (maybe_handle_null if res==0) -> update_env
-    // Key differences from npos_function_argument:
-    //   1. update_env is ALWAYS called (not conditional on res==0)
-    //   2. maybe_handle_null is CONDITIONAL on res==0 (not always)
-    //   3. No ensure_tv inside case (critical for correct env lookup behavior)
-    // ==========================================================================
     case npos_operand: {
         if (!ctx) fatal("logic error");
 
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
+        maybe_handle_null(self, node);
+
         // Try to parse as type literal; if successful, wrap in tl_literal
         int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
         if (res < 0) return 1;
-        if (res == 0) {
-            // Not a type literal: handle null/void
-            // Note: NO ensure_tv here - this is critical! Without a type set,
-            // update_env will do tl_type_env_lookup instead of env_insert_constrain
-            maybe_handle_null(self, node);
-        }
-        // Always update environment (unlike npos_function_argument)
-        update_env(self, ctx, node);
+
+        // always sync with environment
+        sync_with_env(self, ctx, node, 0);
     } break;
 
-    // ==========================================================================
-    // npos_value_rhs
-    // ==========================================================================
-    // Used for: right-hand side of let-in or reassignment
-    // Behavior:
-    //   - Type literal: REJECT (rhs must be a value, not a type)
-    //   - Node type: any
-    //   - Annotation source: N/A (no annotation processing)
-    //   - Struct access: NOT handled (would be processed via traverse_ast)
-    //   - Fresh TV: ALWAYS (ensure fresh type for potential generic names)
-    //   - update_env: ALWAYS called
-    //   - maybe_handle_null: ALWAYS called
-    //   - add_to_lexicals: NEVER
-    // Order: reject_type_literal -> maybe_handle_null -> ensure_tv -> update_env
-    // Note: ensure_tv is ALWAYS called (even if type already set) to handle generics
-    // ==========================================================================
     case npos_value_rhs:
         if (reject_type_literal(self, node)) return 1;
-        // Handle null/void literals first
+
         maybe_handle_null(self, node);
-        // Ensure fresh type for any node - could be a generic name that needs
-        // a new type variable for this usage site
-        ensure_tv(self, &node->type);
-        update_env(self, ctx, node);
+
+        // Ensure fresh type variable for any rhs value node
+        sync_with_env(self, ctx, node, 1);
         break;
     }
-
-    // Final guarantee: every resolved node must have a type
-    ensure_tv(self, &node->type);
 
 #if DEBUG_RESOLVE
     if (ast_node_is_symbol(node)) {
