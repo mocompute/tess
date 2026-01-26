@@ -518,15 +518,6 @@ static int traverse_ctx_is_param(traverse_ctx *self, str name) {
     return str_hset_contains(self->lexical_names, name);
 }
 
-typedef struct {
-    char unused; // MSVC requires at least one struct member
-} infer_ctx;
-
-static infer_ctx *infer_ctx_create(allocator *alloc) {
-    infer_ctx *out = new (alloc, infer_ctx);
-    return out;
-}
-
 static int type_error(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
     return 1;
@@ -2089,8 +2080,6 @@ int is_union_struct(tl_infer *self, str name);
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
 
-    // infer_ctx *ctx = traverse_ctx->user;
-
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
     dbg(self, "infer_traverse_cb: %s:  %s", ast_tag_to_string(node->tag), str_cstr(&node_str));
@@ -2309,8 +2298,8 @@ int is_union_struct(tl_infer *self, str name) {
     return 0;
 }
 
-static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
-                                      ast_node *node, tl_monotype_sized expected_types);
+static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node,
+                                      tl_monotype_sized expected_types);
 
 static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     // divert if type constructor application is actually a type literal
@@ -2399,7 +2388,7 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     // This must be done for both generic and non-generic type constructors,
     // as function pointer arguments need to reference specialized function names.
     if (node->named_application.n_arguments > 0) {
-        if (specialize_value_arguments(self, null, traverse_ctx, node, arr_sized)) {
+        if (specialize_value_arguments(self, traverse_ctx, node, arr_sized)) {
             return 1;
         }
     }
@@ -2515,9 +2504,8 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     return inst_name;
 }
 
-static int specialize_arrow_with_name(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
-                                      ast_node *fun_name_node, tl_monotype *callsite) {
-    (void)ctx;
+static int specialize_arrow_with_name(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *fun_name_node,
+                                      tl_monotype *callsite) {
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
     str instance_name = specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite);
@@ -2661,8 +2649,8 @@ static int is_toplevel_function_name(tl_infer *self, ast_node *arg) {
     return 1;
 }
 
-static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx,
-                                      ast_node *node, tl_monotype_sized expected_types) {
+static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node,
+                                      tl_monotype_sized expected_types) {
     // Visits arguments to check for symbols referring to toplevel functions.
     // When found, specializes the function according to the expected type.
 
@@ -2677,7 +2665,7 @@ static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_c
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) break;
-        if (specialize_arrow_with_name(self, ctx, traverse_ctx, arg, expected_types.v[i])) return 1;
+        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i])) return 1;
 
     next:
         ++i;
@@ -2685,14 +2673,14 @@ static int specialize_value_arguments(tl_infer *self, infer_ctx *ctx, traverse_c
     return 0;
 }
 
-static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *traverse_ctx, ast_node *node,
+static int specialize_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node,
                                 tl_monotype *arrow) {
     // Visits arguments used in node (function call arguments, etc) to check for symbols which refer to
     // toplevel functions. When found, that function is specialized according to the callsite's expected
     // type.
 
     tl_monotype_sized app_args = tl_monotype_arrow_args(arrow)->list.xs;
-    return specialize_value_arguments(self, ctx, traverse_ctx, node, app_args);
+    return specialize_value_arguments(self, traverse_ctx, node, app_args);
 }
 
 // ============================================================================
@@ -2700,7 +2688,6 @@ static int specialize_arguments(tl_infer *self, infer_ctx *ctx, traverse_ctx *tr
 // ============================================================================
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-    infer_ctx *ctx = traverse_ctx->user;
     if (ast_node_is_nfa(node)) {
         str name = ast_node_str(node->named_application.name);
 
@@ -2782,13 +2769,12 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         }
 
         // try to specialize
-        if (specialize_arrow_with_name(self, ctx, traverse_ctx, node->named_application.name,
-                                       callsite->type)) {
+        if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type)) {
             dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
             return 1;
         }
         // and recurse over any arguments which are toplevel functions
-        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) {
+        if (specialize_arguments(self, traverse_ctx, node, callsite->type)) {
             dbg(self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
             return 1;
         }
@@ -2804,7 +2790,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }
-        if (specialize_arguments(self, ctx, traverse_ctx, node, callsite->type)) {
+        if (specialize_arguments(self, traverse_ctx, node, callsite->type)) {
             return 1;
         }
     }
@@ -3343,8 +3329,6 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         fatal("logic error");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
-    infer_ctx    *ctx      = infer_ctx_create(self->transient);
-    traverse->user         = ctx;
     if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
 
     // constrain arrow result type and infer target's type
@@ -3931,8 +3915,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     dbg(self, "-- specialize phase");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
-    infer_ctx    *ctx      = infer_ctx_create(self->transient);
-    traverse->user         = ctx;
 
     if (main) {
         traverse_ast(self, traverse, main, specialize_applications_cb);
