@@ -644,11 +644,11 @@ static void         toplevel_add(tl_infer *, str, ast_node *);
 static void         update_env(tl_infer *, traverse_ctx *, ast_node *);
 
 // Returns: 0 = no annotation, 1 = annotation processed, -1 = error
-static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
-                              ast_node *annotation_source, annotation_opts opts) {
-    if (!annotation_source) return 0;
+static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annotation_opts opts) {
+    if (!node) return 0;
 
-    annotation_parse_result result = parse_type_annotation(self, ctx, annotation_source);
+    // parse_type_annotation knows how to look a symbol node's annotation
+    annotation_parse_result result = parse_type_annotation(self, ctx, node);
 
     if (!result.parsed) {
         if (opts.error_if_not_parsed) {
@@ -1985,7 +1985,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 // Annotation present: parse it, extract type args, set annotation_type
                 // error_if_not_parsed=1 means we error if annotation can't be parsed as type
                 int res = process_annotation(
-                  self, ctx, node, node,
+                  self, ctx, node,
                   (annotation_opts){
                     .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
                     .error_if_not_parsed = 1, // Error if annotation doesn't parse as type
@@ -2031,7 +2031,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
 
             // Try to parse as type literal; if successful, wrap in tl_literal
-            int res = process_annotation(self, ctx, node, node, (annotation_opts){.wrap_in_literal = 1});
+            int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
             if (res < 0) return 1;
             if (res == 0) {
                 // Not a type literal: ensure type variable and update environment
@@ -2069,7 +2069,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node)) {
             if (!ctx) fatal("logic error");
             // No special opts - just parse the annotation if present
-            int res = process_annotation(self, ctx, node, node->symbol.annotation, (annotation_opts){0});
+            int res = process_annotation(self, ctx, node, (annotation_opts){0});
             if (res < 0) return 1;
             if (res > 0) {
                 // Annotation indicates a cast to a new type, update environment
@@ -2123,7 +2123,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Try to parse as type literal; if successful, wrap in tl_literal
-        int res = process_annotation(self, ctx, node, node, (annotation_opts){.wrap_in_literal = 1});
+        int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
         if (res < 0) return 1;
         if (res == 0) {
             // Not a type literal: handle null/void
