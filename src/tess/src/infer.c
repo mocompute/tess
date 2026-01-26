@@ -68,7 +68,7 @@ typedef enum {
     npos_toplevel,
     npos_formal_parameter,
     npos_function_argument,
-    npos_value_rhs,  // RHS of let-in or assignment (rejects type literals)
+    npos_value_rhs, // RHS of let-in or assignment (rejects type literals)
     npos_assign_lhs,
     npos_operand,
     npos_field_name,
@@ -409,7 +409,7 @@ static void tree_shake_value_binding(tree_shake_ctx *ctx, ast_node *value) {
     }
 }
 
-void     do_tree_shake(void *ctx_, ast_node *node) {
+void do_tree_shake(void *ctx_, ast_node *node) {
     tree_shake_ctx *ctx  = ctx_;
     tl_infer       *self = ctx->self;
 
@@ -627,11 +627,10 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
 }
 
 typedef struct {
-    int wrap_in_literal;      // Wrap parsed type in tl_literal
-    int add_to_lexicals;      // Add type args to ctx->lexical_names
-    int set_annotation_type;  // Set node->symbol.annotation_type
-    int error_if_not_parsed;  // Return error if annotation doesn't parse
-    int check_type_arg_self;  // Check if name is in type_arguments (for formal params)
+    int wrap_in_literal;     // Wrap parsed type in tl_literal
+    int add_to_lexicals;     // Add type args to ctx->lexical_names
+    int error_if_not_parsed; // Return error if annotation doesn't parse
+    int check_type_arg_self; // Check if name is in type_arguments (for formal params)
 } annotation_opts;
 
 static int          constrain_or_set(tl_infer *, ast_node *, tl_polytype *);
@@ -688,16 +687,15 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         mono = tl_monotype_create_literal(self->arena, mono);
     }
 
-    // Set annotation_type field
-    if (opts.set_annotation_type && ast_node_is_symbol(node)) {
+    // Set annotation_type field of symbol nodes
+    if (ast_node_is_symbol(node)) {
         node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, mono);
         assert(node->symbol.annotation_type);
     }
 
     // Constrain node type
-    tl_polytype *poly = opts.set_annotation_type && ast_node_is_symbol(node)
-                            ? node->symbol.annotation_type
-                            : tl_polytype_absorb_mono(self->arena, mono);
+    tl_polytype *poly =
+      ast_node_is_symbol(node) ? node->symbol.annotation_type : tl_polytype_absorb_mono(self->arena, mono);
 
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
@@ -1948,7 +1946,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     // Each position has distinct behavior across these dimensions:
     //   1. Type literal handling: REJECT (error), WRAP (in tl_literal), or REQUIRE (must parse)
     //   2. Annotation source: `node` vs `node->symbol.annotation`
-    //   3. Struct access handling: checked FIRST vs in else-if after symbol check
+    //   3. Struct access handling: whether or not struct access is handled
     //   4. Fresh TV: when to call ensure_tv (if annotation missing, always, force replace, or never)
     //   5. update_env: always, conditional on annotation result, or never
     //   6. maybe_handle_null: always, conditional on annotation result, or never
@@ -1973,7 +1971,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     //   - Type literal: REQUIRE (annotation must parse as type if present)
     //   - Node type: MUST be a symbol (error otherwise)
     //   - Annotation source: `node` (not node->symbol.annotation)
-    //   - Struct access: NOT handled (would error as non-symbol)
+    //   - Struct access: NOT handled (not valid in these positions)
     //   - Fresh TV: only if annotation is ABSENT (not if parse fails)
     //   - update_env: ALWAYS called
     //   - maybe_handle_null: NEVER called
@@ -1986,12 +1984,13 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (node->symbol.annotation) {
                 // Annotation present: parse it, extract type args, set annotation_type
                 // error_if_not_parsed=1 means we error if annotation can't be parsed as type
-                int res = process_annotation(self, ctx, node, node, (annotation_opts){
-                    .add_to_lexicals = 1,      // Add type args (e.g., T in `x: T`) to lexical_names
-                    .set_annotation_type = 1,  // Set node->symbol.annotation_type
-                    .error_if_not_parsed = 1,  // Error if annotation doesn't parse as type
-                    .check_type_arg_self = 1,  // Handle self-referential type args
-                });
+                int res = process_annotation(
+                  self, ctx, node, node,
+                  (annotation_opts){
+                    .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
+                    .error_if_not_parsed = 1, // Error if annotation doesn't parse as type
+                    .check_type_arg_self = 1, // Handle self-referential type args
+                  });
                 if (res < 0) return 1;
                 // Note: if annotation present, do NOT call ensure_tv (type comes from annotation)
             } else {
@@ -2017,7 +2016,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     //   - Type literal: WRAP (type literals become tl_literal values)
     //   - Node type: symbol, nfa, or struct_access accepted
     //   - Annotation source: `node`
-    //   - Struct access: in else-if (only checked if NOT symbol/nfa)
+    //   - Struct access: handled
     //   - Fresh TV: only if annotation NOT PROCESSED (res == 0)
     //   - update_env: only if annotation NOT PROCESSED (res == 0)
     //   - maybe_handle_null: ALWAYS called (handles null/void literals)
@@ -2026,6 +2025,8 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     // Key: update_env is INSIDE the res==0 block, maybe_handle_null is OUTSIDE
     // ==========================================================================
     case npos_function_argument:
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
 
@@ -2039,9 +2040,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
                 update_env(self, ctx, node);
             }
             // If res > 0 (was type literal): skip ensure_tv and update_env
-        } else if (ast_node_is_binary_op_struct_access(node)) {
-            // Struct access in argument position (e.g., foo.bar as argument)
-            return infer_struct_access(self, node);
         }
 
         // Always handle null/void, regardless of whether annotation was processed
@@ -2055,30 +2053,30 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     // Behavior:
     //   - Type literal: REJECT (cannot assign to a type)
     //   - Node type: symbol or struct_access
-    //   - Annotation source: `node->symbol.annotation` (NOT `node` - key difference!)
-    //   - Struct access: in else-if (only checked if NOT symbol with annotation)
+    //   - Annotation source: `node`
+    //   - Struct access: handled
     //   - Fresh TV: NEVER (no ensure_tv call)
     //   - update_env: NEVER (don't update env from lhs - could be generic re-use)
     //   - maybe_handle_null: NEVER
     //   - add_to_lexicals: NEVER
-    // Order: reject_type_literal -> annotation_or_struct_access
-    // Note: This is the ONLY position that uses node->symbol.annotation as source
+    // Order: reject_type_literal -> annotation
     // ==========================================================================
     case npos_assign_lhs:
         if (reject_type_literal(self, node)) return 1;
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Support annotations on lhs of assignments, such as field names
-        // Note: annotation source is node->symbol.annotation, NOT node itself
-        if (ast_node_is_symbol(node) && node->symbol.annotation) {
+        if (ast_node_is_symbol(node)) {
             if (!ctx) fatal("logic error");
             // No special opts - just parse the annotation if present
             int res = process_annotation(self, ctx, node, node->symbol.annotation, (annotation_opts){0});
             if (res < 0) return 1;
-        } else if (ast_node_is_binary_op_struct_access(node)) {
-            return infer_struct_access(self, node);
+            if (res > 0) {
+                // Annotation indicates a cast to a new type, update environment
+                ensure_tv(self, &node->type);
+                update_env(self, ctx, node);
+            }
         }
-        // No update_env: could be a generic re-use with prior type information
-        // No ensure_tv: type comes from elsewhere (rhs, prior declaration)
         break;
 
     // ==========================================================================
@@ -2089,21 +2087,15 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     //   - Type literal: REJECT (field names cannot be types)
     //   - Node type: any
     //   - Annotation source: N/A (no annotation processing)
-    //   - Struct access: NOT handled
-    //   - Fresh TV: FORCE (replace existing non-TV type with fresh TV)
+    //   - Struct access: handled
+    //   - Fresh TV: NEVER inside case (only final ensure_tv at end of function)
     //   - update_env: NEVER (field names don't go in env)
     //   - maybe_handle_null: NEVER
     //   - add_to_lexicals: NEVER
-    // Order: reject_type_literal -> force_fresh_tv
-    // Note: The FORCE behavior is unique - replaces concrete types with fresh TV
     // ==========================================================================
     case npos_field_name:
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
         if (reject_type_literal(self, node)) return 1;
-        // Force fresh type variable: if type exists and is NOT a TV, replace it
-        // This handles generic re-instantiation of field names
-        if (node->type && !tl_monotype_is_tv(node->type->type)) {
-            ast_node_type_set(node, tl_polytype_create_fresh_tv(self->arena, self->subs));
-        }
         break;
 
     // ==========================================================================
@@ -2114,25 +2106,21 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     //   - Type literal: WRAP (type literals become tl_literal values)
     //   - Node type: any
     //   - Annotation source: `node`
-    //   - Struct access: checked FIRST (before annotation processing - key difference!)
+    //   - Struct access: handled
     //   - Fresh TV: NEVER inside case (only final ensure_tv at end of function)
     //   - update_env: ALWAYS called
     //   - maybe_handle_null: only if annotation NOT PROCESSED (res == 0)
     //   - add_to_lexicals: NEVER
-    // Order: struct_access_check -> annotation -> (maybe_handle_null if res==0) -> update_env
+    // Order: annotation -> (maybe_handle_null if res==0) -> update_env
     // Key differences from npos_function_argument:
-    //   1. Struct access checked FIRST (not in else-if)
-    //   2. update_env is ALWAYS called (not conditional)
-    //   3. maybe_handle_null is CONDITIONAL (not always)
-    //   4. No ensure_tv inside case (critical for correct env lookup behavior)
+    //   1. update_env is ALWAYS called (not conditional on res==0)
+    //   2. maybe_handle_null is CONDITIONAL on res==0 (not always)
+    //   3. No ensure_tv inside case (critical for correct env lookup behavior)
     // ==========================================================================
     case npos_operand: {
         if (!ctx) fatal("logic error");
 
-        // Check struct access FIRST (before any annotation processing)
-        if (ast_node_is_binary_op_struct_access(node)) {
-            return infer_struct_access(self, node);
-        }
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Try to parse as type literal; if successful, wrap in tl_literal
         int res = process_annotation(self, ctx, node, node, (annotation_opts){.wrap_in_literal = 1});
@@ -3055,30 +3043,32 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
 
     case ast_symbol: {
 
-        // Do not rename symbols found immediately after a struct access
-        if (ctx->is_field) {
-            ctx->is_field = 0;
-            break;
+        str *found;
+        if (!ctx->is_field) {
+            // Do not rename symbols found immediately after a struct access
+            if ((found = str_map_get(ctx->lex, node->symbol.name))) {
+                ast_node_name_replace(node, *found);
+#if DEBUG_RENAME
+                dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
+                    str_buf(&node->symbol.original), str_ilen(node->symbol.name),
+                    str_buf(&node->symbol.name));
+#endif
+            } else if (node->symbol.is_mangled && (found = str_map_get(ctx->lex, node->symbol.original))) {
+                // name was mangled because it conflicts with a toplevel name. But lexical rename is meant
+                // to take precedence over mangling to match toplevel names.
+                ast_node_name_replace(node, *found);
+#if DEBUG_RENAME
+                dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
+                    str_buf(&node->symbol.original), str_ilen(node->symbol.name),
+                    str_buf(&node->symbol.name));
+#endif
+            } else {
+                // a free variable, a field name, a toplevel function name, etc
+            }
         }
 
-        str *found;
-        if ((found = str_map_get(ctx->lex, node->symbol.name))) {
-            ast_node_name_replace(node, *found);
-#if DEBUG_RENAME
-            dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
-                str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
-#endif
-        } else if (node->symbol.is_mangled && (found = str_map_get(ctx->lex, node->symbol.original))) {
-            // name was mangled because it conflicts with a toplevel name. But lexical rename is meant to
-            // take precedence over mangling to match toplevel names.
-            ast_node_name_replace(node, *found);
-#if DEBUG_RENAME
-            dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
-                str_buf(&node->symbol.original), str_ilen(node->symbol.name), str_buf(&node->symbol.name));
-#endif
-        } else {
-            // a free variable, a field name, a toplevel function name, etc
-        }
+        // No matter what, reset field_name processing from this point forward
+        ctx->is_field = 0;
 
         // ensure renamed symbols do not carry a type
         ast_node_type_set(node, null);
