@@ -629,7 +629,6 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
 typedef struct {
     int wrap_in_literal;     // Wrap parsed type in tl_literal
     int add_to_lexicals;     // Add type args to ctx->lexical_names
-    int error_if_not_parsed; // Return error if annotation doesn't parse
     int check_type_arg_self; // Check if name is in type_arguments (for formal params)
 } annotation_opts;
 
@@ -650,13 +649,7 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
     // parse_type_annotation knows how to look a symbol node's annotation
     annotation_parse_result result = parse_type_annotation(self, ctx, node);
 
-    if (!result.parsed) {
-        if (opts.error_if_not_parsed) {
-            expected_type(self, node);
-            return -1;
-        }
-        return 0;
-    }
+    if (!result.parsed) return 0;
 
     // Merge type arguments into context
     if (ctx) {
@@ -1980,29 +1973,19 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     // ==========================================================================
     case npos_toplevel:
     case npos_formal_parameter:
-        if (ast_node_is_symbol(node)) {
-            if (node->symbol.annotation) {
-                // Annotation present: parse it, extract type args, set annotation_type
-                // error_if_not_parsed=1 means we error if annotation can't be parsed as type
-                int res = process_annotation(
-                  self, ctx, node,
-                  (annotation_opts){
-                    .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
-                    .error_if_not_parsed = 1, // Error if annotation doesn't parse as type
-                    .check_type_arg_self = 1, // Handle self-referential type args
-                  });
-                if (res < 0) return 1;
-                // Note: if annotation present, do NOT call ensure_tv (type comes from annotation)
-            } else {
-                // No annotation: assign fresh type variable
-                ensure_tv(self, &node->type);
-            }
+        if (!ast_node_is_symbol(node)) return expected_symbol(self, node);
 
-            if (ctx) {
-                // Add the symbol's own name to lexical_names (distinct from type args added above)
-                str_hset_insert(&ctx->lexical_names, node->symbol.name);
-            }
-        } else return expected_symbol(self, node);
+        if (process_annotation(self, ctx, node,
+                               (annotation_opts){
+                                 .add_to_lexicals = 1, // Add type args (e.g., T in `x: T`) to lexical_names
+                                 .check_type_arg_self = 1, // Handle self-referential type args
+                               }) < 0)
+            return 1;
+
+        if (ctx) {
+            // Add the symbol's own name to lexical_names (distinct from type args added above)
+            str_hset_insert(&ctx->lexical_names, node->symbol.name);
+        }
 
         // Always update environment for declarations
         update_env(self, ctx, node);
@@ -2055,11 +2038,11 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     //   - Node type: symbol or struct_access
     //   - Annotation source: `node`
     //   - Struct access: handled
-    //   - Fresh TV: NEVER (no ensure_tv call)
-    //   - update_env: NEVER (don't update env from lhs - could be generic re-use)
+    //   - Fresh TV: only if annotation PROCESSED (res > 0)
+    //   - update_env: only if annotation PROCESSED (res > 0)
     //   - maybe_handle_null: NEVER
     //   - add_to_lexicals: NEVER
-    // Order: reject_type_literal -> annotation
+    // Order: reject_type_literal -> struct_access -> annotation -> (ensure_tv, update_env if res>0)
     // ==========================================================================
     case npos_assign_lhs:
         if (reject_type_literal(self, node)) return 1;
