@@ -1922,14 +1922,7 @@ static void maybe_handle_null(tl_infer *self, ast_node *node) {
     // Note: special case: if `void` appears, we assign a fresh type variable. The transpiler will detect
     // void nodes and leave the struct field uninitialised.
 
-    if (ast_node_is_nil(node)) {
-        if (!node->type || !tl_monotype_is_ptr(node->type->type)) {
-            ast_node_type_set(
-              node, tl_polytype_absorb_mono(
-                      self->arena,
-                      tl_type_registry_ptr(self->registry, tl_monotype_create_fresh_tv(self->subs))));
-        }
-    } else if (ast_node_is_void(node)) {
+    if (ast_node_is_nil(node) || ast_node_is_void(node)) {
         if (!node->type || !tl_monotype_is_ptr(node->type->type)) {
             ast_node_type_set(node, tl_polytype_create_fresh_tv(self->arena, self->subs));
         }
