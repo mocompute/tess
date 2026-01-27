@@ -8,103 +8,133 @@
 #import <fatal.tl>
 
 // The Array struct.
-T(a) : {
-    v:        Ptr(a),
+Array(T) : {
+    v:        Ptr(T),
     size:     Int,
     capacity: Int,
 }
 
-TPtr = Ptr(T(a))
-
 // -- Synopsis --
 
+// All allocating functions take a Ptr(Allocator) argument as their first or second argument. Variants exist
+// with no allocator argument: these use the default managed allocator.
+
 // Construct an empty array with elements of type a.
-empty(a: Type) -> T(a)
+empty(T: Type) -> Array(T)
 
 // Construct an array with count elements of type a, each initialised to val.
-init(val: a, count: Int) -> T(a)
+init(alloc: Ptr(Allocator), val: T, count: Int) -> Array(T)
+init(val: T, count: Int) -> Array(T)
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
-with_capacity(a: Type, count: Int) -> T(a)
+with_capacity(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
+with_capacity(T: Type, count: Int) -> Array(T)
 
 // Allocate an empty array with elements of type a and an initial capacity of count, and set the size to the
 // capacity, leaving the contents undefined.
-with_capacity_undefined(a: Type, count: Int) -> T(a)
+with_capacity_undefined(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
+with_capacity_undefined(T: Type, count: Int) -> Array(T)
 
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr(T(a)), x: a) -> Void
+push(self: Ptr(Array(T)), alloc: Ptr(Allocator), x: T) -> Void
+push(self: Ptr(Array(T)), x: T) -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr(T(a)), count: Int) -> Void
+reserve(self: Ptr(Array(T)), alloc: Ptr(Allocator), count: Int) -> Void
+reserve(self: Ptr(Array(T)), count: Int) -> Void
 
 // Deallocate array buffer.
-free(self: TPtr) -> Void
-
+free(self: Ptr(Array), alloc: Ptr(Allocator)) -> Void
+free(self: Ptr(Array)) -> Void
 
 
 
 // -- Implementation --
 
-empty(a: Type) -> T(a) {
-    T ( v : Ptr(a) = null, capacity = 0, size = 0 )
+empty(T: Type) -> Array(T) {
+    Array ( v : Ptr(T) = null, capacity = 0, size = 0 )
 }
 
-init(val: a, count: Int) {
-    arr := with_capacity(a, count)
+
+init(alloc, val: T, count) {
+    arr := with_capacity(alloc, T, count)
     arr.size = count
     for p.& in arr { p.* = val }
     arr
 }
 
-free(self) {
-    c_free(self->v)
+init(val: T, count: Int) {
+    init(Alloc.context.managed, val, count)
+}
+
+free(self, alloc) {
+    alloc->free(alloc, self->v)
     self->v = null
 }
 
-with_capacity(a: Type, count: Int) {
-    width      := _type_width_aligned(a)
-    p : Ptr(a) := c_malloc(count * width)
-    T ( v = p, capacity = count, size = 0 )
+free(self) {
+    free(self, Alloc.context.managed)
 }
 
-with_capacity_undefined(a, count) {
-    result := with_capacity(a, count)
+
+with_capacity(alloc, T: Type, count) {
+    width      := _type_width_aligned(T)
+    p : Ptr(T) := alloc->malloc(alloc, count * width)
+    Array ( v = p, capacity = count, size = 0 )
+}
+
+with_capacity(T: Type, count: Int) {
+    with_capacity(Alloc.context.managed, T, count)
+}
+
+with_capacity_undefined(alloc, T: Type, count) {
+    result := with_capacity(alloc, T, count)
     result.size = count
     result
 }
 
+with_capacity_undefined(T: Type, count) {
+    with_capacity_undefined(Alloc.context.managed, T, count)
+}
 
-reserve(self: Ptr(T(a)), count: Int) {
+reserve(self: Ptr(Array(T)), alloc, count: Int) {
     if self->capacity < count {
-        p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+        p := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
         if p == null { _tl_fatal_("oom") }
         self->v = p
         self->capacity = count
     }
 }
 
+reserve(self: Ptr(Array(T)), count: Int) {
+    reserve(self, Alloc.context.managed, count)
+}
 
-push(self, x) {
-    if _is_full(self) { _grow(self, self->capacity + 1) }
+push(self, alloc, x) {
+    if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     self->v[self->size] = x
     self->size = self->size + 1
 }
 
+push(self, x) {
+    push(self, Alloc.context.managed, x)
+}
+
 // -- Iterator interface --
 
-Iter(a) : {
-    v:        Ptr(a),
+Iter(T) : {
+    v:        Ptr(T),
     size:     Int,
     index:    Int,
 }
 
-iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_ptr     (iter: Ptr(Iter(a))) -> Ptr(a)
-iter_value   (iter: Ptr(Iter(a))) -> a
-iter_cond    (iter: Ptr(Iter(a))) -> Bool
-iter_update  (iter: Ptr(Iter(a))) -> Void
-iter_deinit  (iter: Ptr(Iter(a))) -> Void
+iter_init    (arr:  Ptr(Array(T)))-> Iter(T)
+iter_ptr     (iter: Ptr(Iter(T))) -> Ptr(T)
+iter_value   (iter: Ptr(Iter(T))) -> T
+iter_cond    (iter: Ptr(Iter(T))) -> Bool
+iter_update  (iter: Ptr(Iter(T))) -> Void
+iter_deinit  (iter: Ptr(Iter(T))) -> Void
 
 iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr(iter)    { iter->v[iter->index].&                           }
@@ -117,16 +147,16 @@ iter_deinit(iter) {                                                  }
 
 // -- Private functions --
 
-_grow               (self: TPtr, at_least: Int) -> Void
-_is_full            (self: TPtr)                -> Bool
-_type_width_aligned (a: Type)                   -> Int
+_grow               (self: Ptr(T), alloc: Ptr(Allocator), at_least: Int) -> Void
+_is_full            (self: Ptr(T))                                       -> Bool
+_type_width_aligned (T: Type)                                            -> Int
 
 // --
 
 
 _is_full(self) { self->capacity == self->size }
 
-_grow(self, at_least) {
+_grow(self, alloc, at_least) {
     if self->capacity >= at_least { return }
 
     count := self->capacity
@@ -134,10 +164,10 @@ _grow(self, at_least) {
 
     while count < at_least { count = count * 2 }
 
-    reserve(self, count)
+    reserve(self, alloc, count)
 }
 
-_type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
+_type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
 
 
 // -- IndexedArray --
@@ -146,31 +176,31 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 // -- Indexed iterator interface --
 
-IterValuePtr(a) : {
-    ptr:   Ptr(a),
+IterValuePtr(T) : {
+    ptr:   Ptr(T),
     index: Int,
 }
 
-IterValue(a) : {
-    value: a,
+IterValue(T) : {
+    value: T,
     index: Int,
 }
 
-Iter(a) : {
-    v:        Ptr(a),
+Iter(T) : {
+    v:        Ptr(T),
     size:     Int,
     index:    Int,
-    iv:       IterValue(a),
-    ivp:      IterValuePtr(a),
+    iv:       IterValue(T),
+    ivp:      IterValuePtr(T),
 }
 
 
-iter_init    (arr:  Ptr(Array.T(a))) -> Iter(a)
-iter_ptr     (iter: Ptr(Iter(a)))    -> IterValuePtr(a)
-iter_value   (iter: Ptr(Iter(a)))    -> IterValue(a)
-iter_cond    (iter: Ptr(Iter(a)))    -> Bool
-iter_update  (iter: Ptr(Iter(a)))    -> Void
-iter_deinit  (iter: Ptr(Iter(a)))    -> Void
+iter_init    (arr:  Ptr(Array.Array(T))) -> Iter(T)
+iter_ptr     (iter: Ptr(Iter(T)))    -> IterValuePtr(T)
+iter_value   (iter: Ptr(Iter(T)))    -> IterValue(T)
+iter_cond    (iter: Ptr(Iter(T)))    -> Bool
+iter_update  (iter: Ptr(Iter(T)))    -> Void
+iter_deinit  (iter: Ptr(Iter(T)))    -> Void
 
 iter_init(arr)    { Iter (v     = arr->v,
                           size  = arr->size,

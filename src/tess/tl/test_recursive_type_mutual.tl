@@ -2,7 +2,7 @@
 #import <Array.tl>
 
 Tree(a)   : { value : a, children : Ptr(Forest(a)) }
-Forest(a) : { trees : Array.T(Tree(a)) }
+Forest(a) : { trees : Array.Array(Tree(a)) }
 
 main() {
   t1 := Tree(value = 1, children = null)
