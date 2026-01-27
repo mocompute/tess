@@ -123,13 +123,13 @@ The `Type` type allows passing types as function arguments. This is used for gen
 
 ```tl
 // Function that takes a type parameter as a value
-empty(a: Type) -> Array.T(a) {
-  Array.with_capacity(a, 16)
+empty(T: Type) -> Array(T) {
+  with_capacity(T, 16)
 }
 
 // Call with explicit type argument
-arr := empty(Int)           // Creates Array.T(Int)
-strs := empty(Float)        // Creates Array.T(Float)
+arr := empty(Int)           // Creates Array(Int)
+floats := empty(Float)      // Creates Array(Float)
 ```
 
 This pattern is commonly used in the standard library for functions that need to create values of a generic type.
@@ -946,7 +946,7 @@ is_odd(n)  { if n == 0 { false } else { is_even(n - 1) } }
 Types can reference themselves through pointers:
 
 ```tl
-Node(a) : { value: a, next: Ptr(Node(a)) }
+Node(a) : { value: T, next: Ptr(Node(T)) }
 
 n1 := Node(value = 1, next = null)
 n2 := Node(value = 2, next = n1.&)
@@ -955,8 +955,8 @@ n2 := Node(value = 2, next = n1.&)
 Mutually recursive types are also supported—types can reference each other:
 
 ```tl
-Tree(a)   : { value: a, children: Ptr(Forest(a)) }
-Forest(a) : { trees: Array.T(Tree(a)) }
+Tree(a)   : { value: T, children: Ptr(Forest(T)) }
+Forest(a) : { trees: Array.Array(Tree(T)) }
 
 t1 := Tree(value = 1, children = null)
 forest := Forest(trees = Array.with_capacity(Tree(Int), 16))

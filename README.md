@@ -6,7 +6,7 @@ A statically-typed programming language that transpiles to C11.
 
 - **Expression-based** - Almost everything is an expression. Functions implicitly return their last expression—no `return` keyword needed. Control flow constructs like `if` and `case` produce values.
 
-- **Type inference** - Hindley-Milner style inference means most type annotations are optional. The compiler figures out the types so you can focus on the logic.
+- **Type inference** - Hindley-Milner style inference means most type annotations are optional.
 
 - **Pattern matching** - `case` expressions for clean conditional logic, with exhaustiveness checking for tagged unions and support for custom predicates:
   ```tl
@@ -16,7 +16,7 @@ A statically-typed programming language that transpiles to C11.
     else { "other" }
   }
 
-  // Custom predicate for string comparison
+  // Custom predicate for string comparison, using C's strcmp with c_ prefix
   streq(a, b) { 0 == c_strcmp(a, b) }
   msg := case name, streq {
     "Alice" { "hello friend" }
@@ -24,11 +24,9 @@ A statically-typed programming language that transpiles to C11.
   }
   ```
 
-- **Clear intent** - `:=` declares a new binding, `=` mutates an existing one. No confusion about whether you're creating or modifying.
-
 - **Minimal syntax** - No semicolons. Colons always introduce types. Braces delimit blocks uniformly. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
 
-- **Generics** - Polymorphic functions and types with automatic specialization. Write once, use with any type:
+- **Generics** - Polymorphic functions and types with automatic specialization.
   ```tl
   Vec2(T) : { x: T, y: T }   // Define a generic type
 
@@ -49,7 +47,7 @@ A statically-typed programming language that transpiles to C11.
           | Square { length: Float }
   ```
 
-- **Tail call optimization** - Guaranteed by the language. 
+- **Tail call optimization** - Guaranteed by the language.
 
 - **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix.
 
@@ -66,13 +64,13 @@ add(p1, p2) {
 }
 
 main() {
-  a := Point(x = 1, x = 2)
-  b := Point(x = 3, x = 4)
+  a := Point(x = 1, y = 2)
+  b := Point(x = 3, y = 4)
   result := add(a, b)
   c_printf("(%d, %d)\n", result.x, result.y)
 
-  af := Point(x = 1.2, x = 2.3)
-  bf := Point(x = 3.4, x = 4.5)
+  af := Point(x = 1.2, y = 2.3)
+  bf := Point(x = 3.4, y = 4.5)
   result := add(af, bf)
   c_printf("(%f, %f)\n", result.x, result.y)
   0

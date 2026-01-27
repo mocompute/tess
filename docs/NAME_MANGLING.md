@@ -487,7 +487,7 @@ Tagged unions generate internal helper types that also get mangled:
 ```tl
 #module Types
 
-Option(a) : Some(a) | None
+Option(a) : | Some(a) | None
 
 // Generated internal names:
 // _OptionTag_  → Types__OptionTag_

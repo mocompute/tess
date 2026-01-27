@@ -76,11 +76,10 @@ case shape.&: Shape {
         c->radius = 5  // c is Ptr(Circle)
         void
     }
-    else { void }
+    else { }
 }
 ```
 
-Note: Empty arms must use `{ void }`, not `{ }`.
 
 ---
 
