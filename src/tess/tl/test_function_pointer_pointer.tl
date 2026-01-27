@@ -3,8 +3,8 @@
 
 // Test: Pointer to function pointer (Ptr((Int) -> Int))
 
-negate(x: Int) -> Int { 0 - x }
-add_one(x: Int) -> Int { x + 1 }
+negate(x)  { 0 - x }
+add_one(x) { x + 1 }
 
 main() {
   error := 0
