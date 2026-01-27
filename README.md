@@ -49,7 +49,7 @@ A statically-typed programming language that transpiles to C11.
           | Square { length: Float }
   ```
 
-- **Tail call optimization** - Guaranteed by the language. Write recursive algorithms without worrying about stack overflow.
+- **Tail call optimization** - Guaranteed by the language. 
 
 - **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix.
 
@@ -66,13 +66,13 @@ add(p1, p2) {
 }
 
 main() {
-  a := Point(1, 2)
-  b := Point(3, 4)
+  a := Point(x = 1, x = 2)
+  b := Point(x = 3, x = 4)
   result := add(a, b)
   c_printf("(%d, %d)\n", result.x, result.y)
 
-  af := Point(1.2, 2.3)
-  bf := Point(3.4, 4.5)
+  af := Point(x = 1.2, x = 2.3)
+  bf := Point(x = 3.4, x = 4.5)
   result := add(af, bf)
   c_printf("(%f, %f)\n", result.x, result.y)
   0
