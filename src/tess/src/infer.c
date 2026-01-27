@@ -3433,17 +3433,12 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
     // get the arrow type from the annotation, or else from the result of inference
     tl_polytype *arrow = null;
-    if (name_node->symbol.annotation_type) {
-        arrow = name_node->symbol.annotation_type;
-        // since arrow does not come from env, ensure it's fully substituted
-        tl_polytype_substitute(self->arena, arrow, self->subs);
-    } else {
-        tl_polytype *tmp = tl_type_env_lookup(self->env, name);
-        if (!tmp) fatal("runtime error");
-        arrow = tmp;
 
-        if (!arrow) fatal("runtime error");
-    }
+    // get the arrow type from inference, or else from the annotation, if any
+    arrow = tl_type_env_lookup(self->env, name);
+    if (!arrow) arrow = name_node->symbol.annotation_type;
+    tl_polytype_substitute(self->arena, arrow, self->subs);
+    if (!arrow) fatal("runtime error");
 
     tl_polytype_generalize(arrow, self->env, self->subs);
 
