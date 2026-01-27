@@ -337,6 +337,7 @@ tl_create_test(while_update_statement)
 
 # Expected failures (tests that verify the compiler correctly rejects invalid code)
 tl_create_build_fail_test(fail_case_float)
+tl_create_build_fail_test(fail_concrete_fun_mismatch)
 tl_create_build_fail_test(fail_lambda_implicit_return)
 tl_create_build_fail_test(fail_lambda_return)
 tl_create_build_fail_test(fail_monkey_patch)

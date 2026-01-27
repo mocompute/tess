@@ -2761,12 +2761,15 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         if (tl_polytype_is_concrete_no_weak(type)) {
             // however, if any of the args is an arrow type, it must follow the non-concrete path
             if (!tl_monotype_arrow_has_arrow(type->type)) {
-                str tmp = tl_polytype_to_string(self->transient, type);
-                dbg(self,
-                    "specialize_applications_cb: type is concrete, ignoring callsite type. Concrete : %s",
-                    str_cstr(&tmp));
-                str_deinit(self->transient, &tmp);
                 callsite = type;
+                {
+                    str tmp = tl_polytype_to_string(self->transient, type);
+                    dbg(
+                      self,
+                      "specialize_applications_cb: type is concrete, ignoring callsite type. Concrete : %s",
+                      str_cstr(&tmp));
+                    str_deinit(self->transient, &tmp);
+                }
             }
         }
 

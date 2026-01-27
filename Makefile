@@ -440,6 +440,7 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
+	fail_concrete_fun_mismatch		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
