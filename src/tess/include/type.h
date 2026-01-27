@@ -150,6 +150,7 @@ int                    tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
 int                    tl_monotype_is_arrow(tl_monotype *);
 int                    tl_monotype_is_ptr(tl_monotype *);
 int                    tl_monotype_is_unary(tl_monotype *);
+int                    tl_monotype_arrow_has_arrow(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
 int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
@@ -208,6 +209,8 @@ str         tl_polytype_to_string(allocator *, tl_polytype *);
 
 int         tl_polytype_is_scheme(tl_polytype *);
 int         tl_polytype_is_concrete(tl_polytype *);
+int         tl_polytype_is_concrete_no_arrow(tl_polytype *);
+int         tl_polytype_is_concrete_no_weak(tl_polytype *);
 int         tl_polytype_is_type_constructor(tl_polytype *);
 int         tl_polytype_is_nullary(tl_polytype *);
 int         tl_polytype_is_unary(tl_polytype *);

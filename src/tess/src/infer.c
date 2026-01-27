@@ -2755,11 +2755,27 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         // remember this callsite is specialized
         ast_node_set_is_specialized(node);
 
-        // Important: use _with variant to copy free variables info to the arrow, which is added to the
-        // environment further down.
-        callsite = make_arrow_with(self, traverse_ctx, node, type);
+        // if the generic function type is concrete with no weak vars and no arrow args, use its type rather
+        // than callsite
+        if (tl_polytype_is_concrete_no_weak(type)) {
+            // however, if any of the args is an arrow type, it must follow the non-concrete path
+            if (!tl_monotype_arrow_has_arrow(type->type)) {
+                str tmp = tl_polytype_to_string(self->transient, type);
+                dbg(self,
+                    "specialize_applications_cb: type is concrete, ignoring callsite type. Concrete : %s",
+                    str_cstr(&tmp));
+                str_deinit(self->transient, &tmp);
+                callsite = type;
+            }
+        }
+
         if (!callsite) {
-            return 1;
+            // Important: use _with variant to copy free variables info to the arrow, which is added to the
+            // environment further down.
+            callsite = make_arrow_with(self, traverse_ctx, node, type);
+            if (!callsite) {
+                return 1;
+            }
         }
 
         if (self->verbose) {
@@ -3447,8 +3463,12 @@ static int add_generic(tl_infer *self, ast_node *node) {
     add_free_variables_to_arrow(self, infer_target, arrow);
     tl_type_env_insert(self->env, name, arrow);
 
-    dbg(self, "-- done add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
-        str_buf(&orig_name));
+    {
+        str tmp = tl_polytype_to_string(self->transient, arrow);
+        dbg(self, "-- done add_generic: %.*s (%.*s): type : %s --", str_ilen(name), str_buf(&name),
+            str_ilen(orig_name), str_buf(&orig_name), str_cstr(&tmp));
+        str_deinit(self->transient, &tmp);
+    }
 
     return 0;
 }

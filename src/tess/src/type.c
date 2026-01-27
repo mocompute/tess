@@ -1630,6 +1630,7 @@ int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized arr) {
 }
 
 int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
+    // FIXME: the name of this function is misleading
     return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(self);
 }
 
@@ -1722,6 +1723,28 @@ int tl_monotype_has_ptr(tl_monotype *self) {
     }
 }
 
+int tl_monotype_arrow_has_arrow(tl_monotype *self) {
+    int has_arrow = 0;
+    if (tl_monotype_is_arrow(self)) {
+        // A tl_arrow is a list of size 2, left and right. Left is a list of args.
+        assert(tl_arrow == self->tag);
+        assert(2 == self->list.xs.size);
+        tl_monotype_sized args   = self->list.xs.v[0]->list.xs;
+        tl_monotype      *result = self->list.xs.v[1];
+
+        has_arrow                = tl_monotype_is_arrow(result);
+        if (!has_arrow) {
+            forall(i, args) {
+                if (tl_monotype_is_arrow(args.v[i])) {
+                    has_arrow = 1;
+                    break;
+                }
+            }
+        }
+    }
+    return has_arrow;
+}
+
 int tl_monotype_is_type_literal(tl_monotype *self) {
     return (tl_literal == self->tag);
 }
@@ -1758,6 +1781,14 @@ int tl_polytype_is_scheme(tl_polytype *poly) {
 
 int tl_polytype_is_concrete(tl_polytype *self) {
     return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(self->type);
+}
+
+int tl_polytype_is_concrete_no_arrow(tl_polytype *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete_no_arrow(self->type);
+}
+
+int tl_polytype_is_concrete_no_weak(tl_polytype *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete_no_weak(self->type);
 }
 
 int tl_polytype_is_type_constructor(tl_polytype *self) {
