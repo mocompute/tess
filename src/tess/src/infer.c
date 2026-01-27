@@ -2756,7 +2756,8 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         ast_node_set_is_specialized(node);
 
         // if the generic function type is concrete with no weak vars and no arrow args, use its type rather
-        // than callsite
+        // than callsite, because the callsite should not override any concrete constraints identified at
+        // the time the function is defined.
         if (tl_polytype_is_concrete_no_weak(type)) {
             // however, if any of the args is an arrow type, it must follow the non-concrete path
             if (!tl_monotype_arrow_has_arrow(type->type)) {
