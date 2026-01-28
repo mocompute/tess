@@ -40,6 +40,7 @@ struct parser {
     u32                    files_index;
     char_csized            current_file_data;
     hashmap               *modules_seen; // str hset
+    hashmap               *nested_type_parents; // str hset: types that have nested types
 
     ast_node              *result;
     token_array            tokens;
@@ -170,6 +171,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
     self->modules_seen            = hset_create(self->parent_alloc, 32);
+    self->nested_type_parents     = hset_create(self->parent_alloc, 32);
     self->result                  = null;
     self->tokens                  = (token_array){0};
     self->error                   = (struct parser_error){0};
@@ -209,6 +211,7 @@ void parser_destroy(parser **self) {
     if ((*self)->module_symbols) hset_destroy(&(*self)->module_symbols);
     hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
+    hset_destroy(&(*self)->nested_type_parents);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
     arena_destroy(&(*self)->speculative);
@@ -1573,6 +1576,33 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
             return 1;
         }
     }
+    // Check if left side is a type with nested types (dot syntax for nested structs / tagged union variants)
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout)) {
+        str parent_name = (*inout)->symbol.name;
+        str module      = (*inout)->symbol.module;
+
+        // Cross-module case: use original (unmangled) name
+        if ((*inout)->symbol.is_mangled && !str_is_empty((*inout)->symbol.original))
+            parent_name = (*inout)->symbol.original;
+
+        if (str_hset_contains(self->nested_type_parents, parent_name)) {
+            ast_node *to_mangle = null;
+            if (ast_node_is_symbol(right))   to_mangle = right;
+            else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
+
+            if (to_mangle) {
+                unmangle_name(self, to_mangle);
+                to_mangle->symbol.name = str_cat_3(self->ast_arena, parent_name, S("_"), to_mangle->symbol.name);
+                if (!str_is_empty(module))
+                    mangle_name_for_module(self, to_mangle, module);
+                else
+                    mangle_name(self, to_mangle);
+                *inout = right;
+                return 1;
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -2596,6 +2626,7 @@ static int parse_struct_fields(parser *self, str parent_prefix,
                                                       used_type_args, nested_fields);
             add_module_symbol(self, nested_name);
             mangle_name(self, nested_name);
+            str_hset_insert(&self->nested_type_parents, parent_prefix);
             array_push(*out_nested_utds, nested_utd);
 
             // Record info for annotation rewriting
@@ -3124,6 +3155,7 @@ static int toplevel_tagged_union(parser *self) {
     }
 
     str tu_name_str = tu_name->symbol.name;
+    str_hset_insert(&self->nested_type_parents, tu_name_str);
 
     // Collect variants: { name, fields[] }
     typedef struct {

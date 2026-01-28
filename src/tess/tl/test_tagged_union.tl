@@ -11,9 +11,9 @@ main() {
   error := 0
 
   // Test constructor functions
-  circle := Foo.Shape_Circle(radius = 2.0)
-  square := Foo.Shape_Square(length = 1.5)
-  none   := Foo.Shape_None()
+  circle := Foo.Shape.Circle(radius = 2.0)
+  square := Foo.Shape.Square(length = 1.5)
+  none   := Foo.Shape.None()
 
   // Test 1: Exhaustive case expression (all variants covered, no else needed)
   area1 := case circle: Foo.Shape {

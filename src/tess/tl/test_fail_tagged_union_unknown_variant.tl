@@ -9,7 +9,7 @@ Point : { x: Float, y: Float }
 #module main
 
 main() {
-  s := Foo.Shape_Circle(radius = 2.0)
+  s := Foo.Shape.Circle(radius = 2.0)
 
   // Error: Point is not a valid variant of Shape
   case s: Foo.Shape {
