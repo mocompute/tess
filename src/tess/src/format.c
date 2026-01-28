@@ -280,16 +280,18 @@ static char *normalize_ops(allocator *alloc, char const *line) {
 // ---------------------------------------------------------------------------
 
 enum {
-    ALIGN_ARROW,  // ->
-    ALIGN_COLONEQ, // :=
     ALIGN_COLON,  // : (not := or ::)
+    ALIGN_COLONEQ, // :=
+    ALIGN_OPEN_PAREN, // ( at depth 0
+    ALIGN_ARROW,  // ->
     ALIGN_EQ,     // = (standalone)
+    ALIGN_OPEN_BRACE, // { inline body
+    ALIGN_CLOSE_BRACE, // } inline body end
     ALIGN_COUNT
 };
 
-// Find the column of an alignment token in a line, at paren depth 0,
-// outside strings/chars/comments. Returns -1 if not found.
-static int find_align_token(char const *line, int token_type) {
+// Check if a line contains a return-type arrow (-> at paren depth 0, not member access)
+static int has_arrow(char const *line) {
     int in_str = 0, in_chr = 0, paren = 0;
     int len = (int)strlen(line);
     for (int i = 0; i < len; i++) {
@@ -309,6 +311,64 @@ static int find_align_token(char const *line, int token_type) {
         if (c == '/' && i + 1 < len && line[i + 1] == '/') break;
         if (c == '(') { paren++; continue; }
         if (c == ')') { paren--; continue; }
+        if (paren != 0) continue;
+        if (c == '-' && i + 1 < len && line[i + 1] == '>') {
+            char prev = (i > 0) ? line[i - 1] : '\0';
+            if (is_ident_char(prev) || prev == ')') continue;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Find the column of an alignment token in a line, at paren depth 0,
+// outside strings/chars/comments. Returns -1 if not found.
+static int find_align_token(char const *line, int token_type) {
+    int in_str = 0, in_chr = 0, paren = 0, brace = 0;
+    int len = (int)strlen(line);
+    for (int i = 0; i < len; i++) {
+        char c = line[i];
+        if (in_str) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '"') in_str = 0;
+            continue;
+        }
+        if (in_chr) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '\'') in_chr = 0;
+            continue;
+        }
+        if (c == '"') { in_str = 1; continue; }
+        if (c == '\'') { in_chr = 1; continue; }
+        if (c == '/' && i + 1 < len && line[i + 1] == '/') break;
+
+        if (c == '(') { paren++; }
+        if (c == ')') { paren--; }
+        if (c == '{') { brace++; }
+        if (c == '}') { brace--; }
+
+        if (token_type == ALIGN_OPEN_PAREN) {
+            if (c == '(' && paren == 1 && brace == 0) {
+                return i;
+            }
+            continue;
+        }
+
+        if (token_type == ALIGN_OPEN_BRACE) {
+            if (c == '{' && brace == 1 && paren == 0) {
+                return i;
+            }
+            continue;
+        }
+
+        if (token_type == ALIGN_CLOSE_BRACE) {
+            // Find last } at brace depth 0
+            if (c == '}' && brace == 0 && paren == 0) {
+                return i;
+            }
+            continue;
+        }
+
         if (paren != 0) continue;
 
         char next = (i + 1 < len) ? line[i + 1] : '\0';
@@ -337,6 +397,8 @@ static int find_align_token(char const *line, int token_type) {
                 return i;
             }
             break;
+        default:
+            break;
         }
     }
     return -1;
@@ -355,11 +417,57 @@ static int is_comment_line(char const *line) {
     return t[0] == '/' && t[1] == '/';
 }
 
+// Pad a line so the token at `col` moves to `target_col`.
+// Inserts spaces into the whitespace region before the token.
+static char *pad_to_column(allocator *alloc, char const *line, int col, int target_col) {
+    int pad = target_col - col;
+    if (pad <= 0) return NULL;
+    int old_len = (int)strlen(line);
+    int new_len = old_len + pad;
+    char *new_line = alloc_malloc(alloc, new_len + 1);
+
+    int ws_start = col;
+    while (ws_start > 0 && line[ws_start - 1] == ' ') ws_start--;
+
+    memcpy(new_line, line, ws_start);
+    int orig_ws = col - ws_start;
+    memset(new_line + ws_start, ' ', orig_ws + pad);
+    memcpy(new_line + ws_start + orig_ws + pad, line + col, old_len - col + 1);
+
+    return new_line;
+}
+
+// Right-pad: insert spaces just before position `col` to move it to `target_col`.
+static char *rpad_before_token(allocator *alloc, char const *line, int col, int target_col) {
+    int pad = target_col - col;
+    if (pad <= 0) return NULL;
+    int old_len = (int)strlen(line);
+    int new_len = old_len + pad;
+    char *new_line = alloc_malloc(alloc, new_len + 1);
+
+    memcpy(new_line, line, col);
+    memset(new_line + col, ' ', pad);
+    memcpy(new_line + col + pad, line + col, old_len - col + 1);
+
+    return new_line;
+}
+
 // Try to align a group of lines on a particular token type.
 // Returns 1 if alignment was performed.
 static int try_align_token(allocator *alloc, char **lines, int start, int end, int token_type) {
     int max_col = 0;
     int all_match = 1;
+
+    // For paren/brace alignment, require all lines to have arrows
+    if (token_type == ALIGN_OPEN_PAREN || token_type == ALIGN_OPEN_BRACE ||
+        token_type == ALIGN_CLOSE_BRACE) {
+        for (int i = start; i < end; i++) {
+            if (is_comment_line(lines[i])) continue;
+            if (lines[i][0] == '\0') continue;
+            if (!has_arrow(lines[i])) { all_match = 0; break; }
+        }
+        if (!all_match) return 0;
+    }
 
     // First pass: check all non-comment lines have the token
     for (int i = start; i < end; i++) {
@@ -378,33 +486,23 @@ static int try_align_token(allocator *alloc, char **lines, int start, int end, i
         int col = find_align_token(lines[i], token_type);
         if (col < 0 || col == max_col) continue;
 
-        int pad = max_col - col;
-        int old_len = (int)strlen(lines[i]);
-        int new_len = old_len + pad;
-        char *new_line = alloc_malloc(alloc, new_len + 1);
-
-        // Find the start of whitespace before the token
-        int ws_start = col;
-        while (ws_start > 0 && lines[i][ws_start - 1] == ' ') ws_start--;
-
-        // Copy up to ws_start
-        memcpy(new_line, lines[i], ws_start);
-        // Insert padding (original whitespace + extra)
-        int orig_ws = col - ws_start;
-        memset(new_line + ws_start, ' ', orig_ws + pad);
-        // Copy from token onward
-        memcpy(new_line + ws_start + orig_ws + pad, lines[i] + col, old_len - col + 1);
-
-        lines[i] = new_line;
+        char *new_line;
+        if (token_type == ALIGN_CLOSE_BRACE) {
+            new_line = rpad_before_token(alloc, lines[i], col, max_col);
+        } else {
+            new_line = pad_to_column(alloc, lines[i], col, max_col);
+        }
+        if (new_line) lines[i] = new_line;
     }
     return 1;
 }
 
-// Align a group of consecutive same-indent lines
+// Align a group of consecutive same-indent lines.
+// Apply all matching token types sequentially.
 static void align_group(allocator *alloc, char **lines, int start, int end) {
     if (end - start < 2) return;
     for (int t = 0; t < ALIGN_COUNT; t++) {
-        if (try_align_token(alloc, lines, start, end, t)) return;
+        try_align_token(alloc, lines, start, end, t);
     }
 }
 
