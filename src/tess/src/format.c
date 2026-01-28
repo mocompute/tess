@@ -280,7 +280,7 @@ static char *normalize_ops(allocator *alloc, char const *line) {
 // ---------------------------------------------------------------------------
 
 enum {
-    ALIGN_COLON,  // : (not := or ::)
+    ALIGN_COLON_VALUE, // value after `: ` (right-pads after colon)
     ALIGN_COLONEQ, // :=
     ALIGN_OPEN_PAREN, // ( at depth 0
     ALIGN_ARROW,  // ->
@@ -375,6 +375,14 @@ static int find_align_token(char const *line, int token_type) {
         char prev = (i > 0) ? line[i - 1] : '\0';
 
         switch (token_type) {
+        case ALIGN_COLON_VALUE:
+            if (c == ':' && next != '=' && next != ':') {
+                // Return column of first non-space after `: `
+                int j = i + 1;
+                while (j < len && line[j] == ' ') j++;
+                if (j < len) return j;
+            }
+            break;
         case ALIGN_ARROW:
             if (c == '-' && next == '>') {
                 // Exclude member access: ident-> or )->
@@ -384,9 +392,6 @@ static int find_align_token(char const *line, int token_type) {
             break;
         case ALIGN_COLONEQ:
             if (c == ':' && next == '=') return i;
-            break;
-        case ALIGN_COLON:
-            if (c == ':' && next != '=' && next != ':') return i;
             break;
         case ALIGN_EQ:
             if (c == '=' && next != '=') {
@@ -487,7 +492,7 @@ static int try_align_token(allocator *alloc, char **lines, int start, int end, i
         if (col < 0 || col == max_col) continue;
 
         char *new_line;
-        if (token_type == ALIGN_CLOSE_BRACE) {
+        if (token_type == ALIGN_CLOSE_BRACE || token_type == ALIGN_COLON_VALUE) {
             new_line = rpad_before_token(alloc, lines[i], col, max_col);
         } else {
             new_line = pad_to_column(alloc, lines[i], col, max_col);
