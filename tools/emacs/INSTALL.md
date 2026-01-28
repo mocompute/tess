@@ -8,13 +8,13 @@ Add to your `~/.emacs` or `~/.emacs.d/init.el`:
 
 ```elisp
 ;; Add the tools directory to load-path
-(add-to-list 'load-path "/path/to/tess/tools")
+(add-to-list 'load-path "/path/to/tess/tools/emacs")
 
 ;; Load tl-mode
 (require 'tl-mode)
 ```
 
-Replace `/path/to/tess/tools` with the actual path to this directory.
+Replace `/path/to/tess/tools/emacs` with the actual path to this directory.
 
 ### Option 2: Copy to Emacs Directory
 
@@ -37,7 +37,7 @@ If you use `use-package`:
 
 ```elisp
 (use-package tl-mode
-  :load-path "/path/to/tess/tools"
+  :load-path "/path/to/tess/tools/emacs"
   :mode "\\.tl\\'"
   :config
   ;; Optional: customize indentation
