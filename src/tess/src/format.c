@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define INDENT_WIDTH 4
+#define COMMENT_COL 40
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -535,6 +536,71 @@ static int is_struct_opener(char const *line) {
 }
 
 // Run alignment pass over all output lines
+// Find column of a same-line comment (// not inside string/char).
+// Returns -1 if no same-line comment or if the line is comment-only.
+static int find_same_line_comment(char const *line) {
+    int in_str = 0, in_chr = 0;
+    // Skip leading whitespace to check for comment-only lines
+    char const *trimmed = ltrim(line);
+    if (trimmed[0] == '/' && trimmed[1] == '/') return -1;
+    if (trimmed[0] == '\0') return -1;
+
+    for (int i = 0; line[i]; i++) {
+        if (in_str) {
+            if (line[i] == '\\' && line[i + 1]) { i++; continue; }
+            if (line[i] == '"') in_str = 0;
+        } else if (in_chr) {
+            if (line[i] == '\\' && line[i + 1]) { i++; continue; }
+            if (line[i] == '\'') in_chr = 0;
+        } else {
+            if (line[i] == '"') in_str = 1;
+            else if (line[i] == '\'') in_chr = 1;
+            else if (line[i] == '/' && line[i + 1] == '/') return i;
+        }
+    }
+    return -1;
+}
+
+// Align same-line comments within a group of consecutive same-indent lines.
+static void align_comments(allocator *alloc, char **lines, int start, int end) {
+    // First pass: find max code_end across lines with same-line comments
+    int max_code_end = 0;
+    int has_any = 0;
+    for (int i = start; i < end; i++) {
+        int cc = find_same_line_comment(lines[i]);
+        if (cc < 0) continue;
+        has_any = 1;
+        // code_end = last non-space char before the //
+        int ce = cc;
+        while (ce > 0 && lines[i][ce - 1] == ' ') ce--;
+        if (ce > max_code_end) max_code_end = ce;
+    }
+    if (!has_any) return;
+
+    int target = max_code_end + 1;
+    if (target < COMMENT_COL) target = COMMENT_COL;
+
+    // Second pass: rewrite lines
+    for (int i = start; i < end; i++) {
+        int cc = find_same_line_comment(lines[i]);
+        if (cc < 0) continue;
+        // Find code_end for this line
+        int ce = cc;
+        while (ce > 0 && lines[i][ce - 1] == ' ') ce--;
+
+        int comment_len = (int)strlen(lines[i] + cc);
+        int pad = target - ce;
+        if (pad < 1) pad = 1;
+        int total = ce + pad + comment_len;
+        char *buf = alloc_malloc(alloc, total + 1);
+        memcpy(buf, lines[i], ce);
+        memset(buf + ce, ' ', pad);
+        memcpy(buf + ce + pad, lines[i] + cc, comment_len);
+        buf[total] = '\0';
+        lines[i] = buf;
+    }
+}
+
 static void align_pass(allocator *alloc, char **lines, int nlines) {
     // Build a brace-depth array and track opener lines per depth level
     int *depth_at = alloc_calloc(alloc, nlines, sizeof(int));
@@ -589,6 +655,7 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
         }
 
         align_group(alloc, lines, group_start, i, in_function);
+        align_comments(alloc, lines, group_start, i);
     }
 }
 
