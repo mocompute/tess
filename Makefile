@@ -365,6 +365,7 @@ TL_TESTS =					\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
 	mutual_recursion_both_referenced	\
+	nested_struct				\
 	nested_struct_access			\
 	nested_lambda_context			\
 	number_formats				\

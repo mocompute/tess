@@ -185,6 +185,34 @@ function(tl_create_build_fail_test NAME)
   )
 endfunction()
 
+# Known failures (tests that should work but currently fail due to compiler bugs)
+# These are excluded from the test suite but kept to track compiler issues
+function(tl_create_known_failure NAME)
+  set(TEST_NAME test-tl-${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
+  add_test(NAME ${TEST_NAME}
+    COMMAND
+    ${CMAKE_COMMAND} -E echo "KNOWN FAILURE: test_${NAME} (skipped)"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  set_tests_properties(${TEST_NAME} PROPERTIES
+    LABELS "known_failure"
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
+  )
+endfunction()
+
+# Known fail-failures (expected-failure tests that the compiler doesn't reject yet)
+function(tl_create_known_fail_failure NAME)
+  set(TEST_NAME test-tl-${NAME})
+  add_test(NAME ${TEST_NAME}
+    COMMAND ${CMAKE_COMMAND} -E echo "KNOWN FAIL FAILURE: test_${NAME} (skipped)"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  set_tests_properties(${TEST_NAME} PROPERTIES
+    LABELS "known_fail_failure"
+  )
+endfunction()
+
 tl_create_test(address_of)
 tl_create_test(alignof)
 tl_create_test(alloc_align)
@@ -264,6 +292,7 @@ tl_create_test(mutual_recursion)
 tl_create_test(mutual_recursion_module)
 tl_create_test(mutual_recursion_module_apply)
 tl_create_test(mutual_recursion_both_referenced)
+tl_create_test(nested_struct)
 tl_create_test(nested_struct_access)
 tl_create_test(nested_lambda_context)
 tl_create_test(number_formats)
@@ -344,6 +373,7 @@ tl_create_test(while_update_statement)
 # Expected failures (tests that verify the compiler correctly rejects invalid code)
 tl_create_build_fail_test(fail_case_float)
 tl_create_build_fail_test(fail_concrete_fun_mismatch)
+tl_create_build_fail_test(fail_generic_unused_type_param)
 tl_create_build_fail_test(fail_lambda_implicit_return)
 tl_create_build_fail_test(fail_lambda_return)
 tl_create_build_fail_test(fail_monkey_patch)
@@ -352,32 +382,4 @@ tl_create_build_fail_test(fail_tagged_union_unknown_variant)
 tl_create_build_fail_test(fail_type_alias_partial_specialization)
 tl_create_build_fail_test(fail_unknown_free_variable)
 
-# Known failures (tests that should work but currently fail due to compiler bugs)
-# These are excluded from the test suite but kept to track compiler issues
-# Known fail-failures (expected-failure tests that the compiler doesn't reject yet)
-function(tl_create_known_fail_failure NAME)
-  set(TEST_NAME test-tl-${NAME})
-  add_test(NAME ${TEST_NAME}
-    COMMAND ${CMAKE_COMMAND} -E echo "KNOWN FAIL FAILURE: test_${NAME} (skipped)"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
-  set_tests_properties(${TEST_NAME} PROPERTIES
-    LABELS "known_fail_failure"
-  )
-endfunction()
-
-tl_create_build_fail_test(fail_generic_unused_type_param)
-
-function(tl_create_known_failure NAME)
-  set(TEST_NAME test-tl-${NAME})
-  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
-  add_test(NAME ${TEST_NAME}
-    COMMAND
-    ${CMAKE_COMMAND} -E echo "KNOWN FAILURE: test_${NAME} (skipped)"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
-  set_tests_properties(${TEST_NAME} PROPERTIES
-    LABELS "known_failure"
-    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
-  )
-endfunction()
+# Known failures: these should work but a compiler bug makes them fail

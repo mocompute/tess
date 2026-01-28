@@ -2516,6 +2516,143 @@ static int toplevel_enum(parser *self) {
     return result_ast_node(self, r);
 }
 
+// Forward declarations needed by parse_struct_fields
+static u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
+                                   ast_node_array fields, ast_node ***out_used_type_args);
+static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
+                                   ast_node_array fields);
+
+// Nested struct name tracking for annotation rewriting
+typedef struct {
+    str bare_name;    // e.g. "Bar"
+    str prefixed_name; // e.g. "Foo_Bar"
+    u8  n_type_args;
+    ast_node **type_args;
+} nested_struct_info;
+
+// Try to parse a nested struct header: identifier ':' '{'
+// On success, sets self->result to the identifier node and returns 0.
+// On failure, returns nonzero and a_try backtracks consumed tokens.
+static int a_nested_struct_header(parser *self) {
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *ident = self->result;
+    if (a_try(self, a_colon)) return 1;
+    if (a_try(self, a_open_curly)) return 1;
+    self->result = ident;
+    return 0;
+}
+
+// Parse struct fields between { and }, handling nested struct definitions recursively.
+// parent_prefix: name prefix for nested structs (e.g. "Foo")
+// parent_n_type_args/parent_type_args: type params inherited from parent
+// out_fields: populated with the parent's fields (nested struct entries removed)
+// out_nested_utds: collects desugared nested struct UTD nodes
+// Returns 0 on success, nonzero on failure.
+static int parse_struct_fields(parser *self, str parent_prefix,
+                               u8 parent_n_type_args, ast_node **parent_type_args,
+                               ast_node_array *out_fields, ast_node_array *out_nested_utds) {
+
+    // Track nested struct names for annotation rewriting
+    struct {
+        nested_struct_info *v;
+        allocator          *alloc;
+        u32                 size;
+        u32                 cap;
+    } nested_infos = {.v = null, .alloc = self->ast_arena};
+
+    while (1) {
+        int saw_comma = 0;
+        if (0 == a_try(self, a_comma)) saw_comma = 1;
+        if (0 == a_try(self, a_close_curly)) break;
+        if (!saw_comma && out_fields->size) {
+            if (a_try(self, a_comma)) return 1;
+        }
+
+        // Try parsing a nested struct: identifier ':' '{'
+        // a_try handles backtracking if the pattern doesn't match
+        if (0 == a_try(self, a_nested_struct_header)) {
+            ast_node *nested_ident = self->result;
+            // a_nested_struct_header consumed identifier, ':', and '{'
+            // Now parse the nested struct body (fields until '}')
+            str nested_bare_name = nested_ident->symbol.name;
+            str prefixed_name = str_cat_3(self->ast_arena, parent_prefix, S("_"), nested_bare_name);
+
+            // Recursively parse nested struct fields
+            ast_node_array nested_fields = {.alloc = self->ast_arena};
+            int res = parse_struct_fields(self, prefixed_name,
+                                          parent_n_type_args, parent_type_args,
+                                          &nested_fields, out_nested_utds);
+            if (res) return res;
+            array_shrink(nested_fields);
+
+            // Determine which parent type params are used by this nested struct
+            ast_node **used_type_args   = null;
+            u8         n_used_type_args = collect_used_type_params(
+              self, parent_n_type_args, parent_type_args, nested_fields, &used_type_args);
+
+            // Create the nested struct UTD
+            ast_node *nested_name = ast_node_create_sym(self->ast_arena, prefixed_name);
+            ast_node *nested_utd  = create_struct_utd(self, nested_name, n_used_type_args,
+                                                      used_type_args, nested_fields);
+            add_module_symbol(self, nested_name);
+            mangle_name(self, nested_name);
+            array_push(*out_nested_utds, nested_utd);
+
+            // Record info for annotation rewriting
+            nested_struct_info info = {
+              .bare_name     = nested_bare_name,
+              .prefixed_name = prefixed_name,
+              .n_type_args   = n_used_type_args,
+              .type_args     = used_type_args,
+            };
+            array_push(nested_infos, info);
+
+            continue; // don't add as a field
+        }
+
+        // Not a nested struct — parse as regular field
+        if (a_try(self, a_param)) return saw_comma ? 2 : 1;
+        array_push(*out_fields, self->result);
+    }
+    array_shrink(*out_fields);
+
+    // Rewrite field annotations: replace bare nested names with prefixed + parameterized versions
+    if (nested_infos.size) {
+        forall(fi, *out_fields) {
+            ast_node *ann = out_fields->v[fi]->symbol.annotation;
+            if (!ann) continue;
+
+            for (u32 ni = 0; ni < nested_infos.size; ni++) {
+                nested_struct_info *info = &nested_infos.v[ni];
+
+                // Check if annotation is a bare symbol matching the nested name
+                if (ast_node_is_symbol(ann) && str_eq(ann->symbol.name, info->bare_name)) {
+                    if (info->n_type_args) {
+                        // Replace with Foo_Bar(T1, ...)
+                        ast_node_sized args = {
+                          .size = info->n_type_args,
+                          .v    = alloc_malloc(self->ast_arena, info->n_type_args * sizeof(ast_node *))};
+                        for (u8 j = 0; j < info->n_type_args; j++) {
+                            args.v[j] = ast_node_clone(self->ast_arena, info->type_args[j]);
+                        }
+                        ast_node *new_name = ast_node_create_sym(self->ast_arena, info->prefixed_name);
+                        mangle_name(self, new_name);
+                        ast_node *new_ann = ast_node_create_nfa(self->ast_arena, new_name, args);
+                        out_fields->v[fi]->symbol.annotation = new_ann;
+                    } else {
+                        // Replace with just Foo_Bar (no type params)
+                        ann->symbol.name = info->prefixed_name;
+                        mangle_name(self, ann);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
@@ -2525,21 +2662,26 @@ static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_open_curly)) return 1;
 
-    ast_node_array fields = {.alloc = self->ast_arena};
-    while (1) {
-        int saw_comma = 0;
-        if (0 == a_try(self, a_comma)) saw_comma = 1; // optional comma
-        if (0 == a_try(self, a_close_curly)) break;
-        if (!saw_comma && fields.size) {
-            // require comma separators
-            if (a_try(self, a_comma)) return 1;
-        }
+    // Extract parent name and type args
+    ast_node  *parent_name     = null;
+    u8         n_type_args     = 0;
+    ast_node **type_args       = null;
 
-        // this syntax overlaps with enums, so we can't exit parse too early
-        if (a_try(self, a_param)) return saw_comma ? 2 : 1; // far enough along to exit parse
-        array_push(fields, self->result);
-    }
-    array_shrink(fields);
+    if (ast_node_is_symbol(type_ident)) {
+        parent_name = type_ident;
+    } else if (ast_node_is_nfa(type_ident)) {
+        parent_name = type_ident->named_application.name;
+        n_type_args = type_ident->named_application.n_arguments;
+        type_args   = type_ident->named_application.arguments;
+    } else fatal("logic error");
+
+    str parent_prefix = parent_name->symbol.name;
+
+    // Parse fields, collecting nested struct UTDs
+    ast_node_array fields      = {.alloc = self->ast_arena};
+    ast_node_array nested_utds = {.alloc = self->ast_arena};
+    int res = parse_struct_fields(self, parent_prefix, n_type_args, type_args, &fields, &nested_utds);
+    if (res) return res;
 
     ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
     r->user_type_def.is_union = 0;
@@ -2586,6 +2728,21 @@ static int toplevel_struct(parser *self) {
     // happening.
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
+
+    // If there are nested structs, return a body with nested UTDs first, then parent
+    if (nested_utds.size) {
+        ast_node_array result_nodes = {.alloc = self->ast_arena};
+        forall(i, nested_utds) {
+            array_push(result_nodes, nested_utds.v[i]);
+        }
+        array_push(result_nodes, r);
+        array_shrink(result_nodes);
+
+        ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)array_sized(result_nodes));
+        set_node_file(self, body);
+        return result_ast_node(self, body);
+    }
+
     return result_ast_node(self, r);
 }
 
