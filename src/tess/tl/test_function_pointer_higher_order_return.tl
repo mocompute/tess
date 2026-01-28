@@ -34,25 +34,25 @@ main() {
   error := 0
 
   // Test 1: Get double operation and apply
-  op1 := Op_Double()
+  op1 := Op.Double()
   fn1 := get_operation(op1)
   result1 := fn1(5)
   error += if result1 == 10 {0} else {1}
 
   // Test 2: Get triple operation and apply
-  op2 := Op_Triple()
+  op2 := Op.Triple()
   fn2 := get_operation(op2)
   result2 := fn2(5)
   error += if result2 == 15 {0} else {1}
 
   // Test 3: Get negate operation and apply
-  op3 := Op_Negate()
+  op3 := Op.Negate()
   fn3 := get_operation(op3)
   result3 := fn3(7)
   error += if result3 == -7 {0} else {1}
 
   // Test 4: Get add_one operation and apply
-  op4 := Op_AddOne()
+  op4 := Op.AddOne()
   fn4 := get_operation(op4)
   result4 := fn4(10)
   error += if result4 == 11 {0} else {1}
@@ -68,8 +68,8 @@ main() {
   error += if result6 == 12 {0} else {1}
 
   // Test 7: Chain get_operation calls
-  op_a := Op_Triple()
-  op_b := Op_AddOne()
+  op_a := Op.Triple()
+  op_b := Op.AddOne()
   fn_a := get_operation(op_a)
   fn_b := get_operation(op_b)
   // Apply both: triple(2) + add_one(2) = 6 + 3 = 9

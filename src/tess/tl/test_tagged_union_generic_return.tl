@@ -4,7 +4,7 @@ T(a) : | Some { v: a }
        | None
 
 make_some(x) {
-    T_Some(v = x)
+    T.Some(v = x)
 }
 
 main() {
