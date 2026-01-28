@@ -290,37 +290,6 @@ enum {
     ALIGN_COUNT
 };
 
-// Check if a line contains a return-type arrow (-> at paren depth 0, not member access)
-static int has_arrow(char const *line) {
-    int in_str = 0, in_chr = 0, paren = 0;
-    int len = (int)strlen(line);
-    for (int i = 0; i < len; i++) {
-        char c = line[i];
-        if (in_str) {
-            if (c == '\\' && i + 1 < len) { i++; continue; }
-            if (c == '"') in_str = 0;
-            continue;
-        }
-        if (in_chr) {
-            if (c == '\\' && i + 1 < len) { i++; continue; }
-            if (c == '\'') in_chr = 0;
-            continue;
-        }
-        if (c == '"') { in_str = 1; continue; }
-        if (c == '\'') { in_chr = 1; continue; }
-        if (c == '/' && i + 1 < len && line[i + 1] == '/') break;
-        if (c == '(') { paren++; continue; }
-        if (c == ')') { paren--; continue; }
-        if (paren != 0) continue;
-        if (c == '-' && i + 1 < len && line[i + 1] == '>') {
-            char prev = (i > 0) ? line[i - 1] : '\0';
-            if (is_ident_char(prev) || prev == ')') continue;
-            return 1;
-        }
-    }
-    return 0;
-}
-
 // Find the column of an alignment token in a line, at paren depth 0,
 // outside strings/chars/comments. Returns -1 if not found.
 static int find_align_token(char const *line, int token_type) {
@@ -465,17 +434,6 @@ static char *rpad_before_token(allocator *alloc, char const *line, int col, int 
 static int try_align_token(allocator *alloc, char **lines, int start, int end, int token_type) {
     int max_col = 0;
     int all_match = 1;
-
-    // For paren/brace alignment, require all lines to have arrows
-    if (token_type == ALIGN_OPEN_PAREN || token_type == ALIGN_OPEN_BRACE ||
-        token_type == ALIGN_CLOSE_BRACE) {
-        for (int i = start; i < end; i++) {
-            if (is_comment_line(lines[i])) continue;
-            if (lines[i][0] == '\0') continue;
-            if (!has_arrow(lines[i])) { all_match = 0; break; }
-        }
-        if (!all_match) return 0;
-    }
 
     // First pass: check all non-comment lines have the token
     for (int i = start; i < end; i++) {
