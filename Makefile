@@ -453,6 +453,9 @@ TL_FAIL_TESTS =					\
 	fail_type_alias_partial_specialization	\
 	fail_unknown_free_variable
 
+# Expected-failure tests that the compiler doesn't reject yet
+TL_KNOWN_FAIL_FAILURES = fail_generic_unused_type_param
+
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =
 
@@ -492,6 +495,18 @@ test-tl: build-tl-tests
 		count_fail=$$((count_fail + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_fail expected failure tests\n\n"; \
+	count_known_fail=0; \
+	known_fail=0; \
+	for name in $(TL_KNOWN_FAIL_FAILURES); do \
+		if ! ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAIL_FAILURES)\n"; \
+		else \
+			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
+			known_fail=$$((known_fail + 1)); \
+		fi; \
+		count_known_fail=$$((count_known_fail + 1)); \
+	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
 		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
@@ -503,7 +518,7 @@ test-tl: build-tl-tests
 		count_known=$$((count_known + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known known failure tests\n"; \
-	total=$$((count_pass + count_fail + count_known)); \
+	total=$$((count_pass + count_fail + count_known_fail + count_known)); \
 	printf "  \033[1;36m[TOTAL]\033[0m $$total tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \

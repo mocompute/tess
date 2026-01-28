@@ -354,6 +354,20 @@ tl_create_build_fail_test(fail_unknown_free_variable)
 
 # Known failures (tests that should work but currently fail due to compiler bugs)
 # These are excluded from the test suite but kept to track compiler issues
+# Known fail-failures (expected-failure tests that the compiler doesn't reject yet)
+function(tl_create_known_fail_failure NAME)
+  set(TEST_NAME test-tl-${NAME})
+  add_test(NAME ${TEST_NAME}
+    COMMAND ${CMAKE_COMMAND} -E echo "KNOWN FAIL FAILURE: test_${NAME} (skipped)"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  set_tests_properties(${TEST_NAME} PROPERTIES
+    LABELS "known_fail_failure"
+  )
+endfunction()
+
+tl_create_known_fail_failure(fail_generic_unused_type_param)
+
 function(tl_create_known_failure NAME)
   set(TEST_NAME test-tl-${NAME})
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
