@@ -797,7 +797,7 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     }
 
     ensure_tv(self, &node->type);
-    if (!node->return_.is_break_statement)
+    if (!node->return_.is_break_statement && node->return_.value)
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
 
     if (ctx->result_type)

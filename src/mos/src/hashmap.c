@@ -193,7 +193,7 @@ static int grow_buckets(hashmap **map) {
     // the new map. Then release the old map's buffers, and overwrite
     // its struct with the new map.
 
-    u64 new_buckets = (u64)((*map)->n_cells * 2);
+    u64 new_buckets = ((*map)->n_cells * 2ULL);
 
     if (new_buckets > UINT32_MAX) {
         dbg("map grow_buckets: too many buckets\n");

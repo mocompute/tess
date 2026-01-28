@@ -107,7 +107,7 @@ void platform_temp_file_delete(platform_temp_file *tf) {
 
 int platform_exec(platform_exec_opts const *opts) {
     // Build command line from argv
-    char cmdline[8192];
+    char   cmdline[8192];
     size_t pos = 0;
     for (int i = 0; opts->argv[i] != NULL; i++) {
         if (i > 0) cmdline[pos++] = ' ';
@@ -126,8 +126,8 @@ int platform_exec(platform_exec_opts const *opts) {
     }
 
     // Create pipes for stdout and stderr
-    HANDLE stdout_read, stdout_write;
-    HANDLE stderr_read, stderr_write;
+    HANDLE              stdout_read, stdout_write;
+    HANDLE              stderr_read, stderr_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
     if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
@@ -145,15 +145,15 @@ int platform_exec(platform_exec_opts const *opts) {
     SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
 
     // Set up process startup info
-    STARTUPINFOA si = {sizeof(STARTUPINFOA)};
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = stdout_write;
-    si.hStdError = stderr_write;
+    STARTUPINFOA si             = {sizeof(STARTUPINFOA)};
+    si.dwFlags                  = STARTF_USESTDHANDLES;
+    si.hStdInput                = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput               = stdout_write;
+    si.hStdError                = stderr_write;
 
-    PROCESS_INFORMATION pi = {0};
+    PROCESS_INFORMATION pi      = {0};
 
-    BOOL success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+    BOOL                success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
 
     CloseHandle(stdout_write);
     CloseHandle(stderr_write);
@@ -166,7 +166,7 @@ int platform_exec(platform_exec_opts const *opts) {
     }
 
     // Drain stdout (discard) and read stderr
-    char buf[1024];
+    char  buf[1024];
     DWORD bytes_read;
     while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
         // Discard stdout output
@@ -191,6 +191,8 @@ int platform_exec(platform_exec_opts const *opts) {
 #else
 
 int platform_exec(platform_exec_opts const *opts) {
+    if (!opts->argv[0]) return -1;
+
     if (opts->verbose) {
         fprintf(stderr, "Running:");
         for (int i = 0; opts->argv[i] != NULL; i++) {
@@ -241,12 +243,14 @@ int platform_exec(platform_exec_opts const *opts) {
     close(stdin_pipe[1]);
 
     // Read and forward stderr
-    char buf[1024];
+    char  buf[1024];
     FILE *stderr_file = fdopen(stderr_pipe[0], "r");
-    while (fgets(buf, sizeof(buf), stderr_file)) {
-        fprintf(stderr, "%s", buf);
+    if (stderr_file) {
+        while (fgets(buf, sizeof(buf), stderr_file)) {
+            fprintf(stderr, "%s", buf);
+        }
+        fclose(stderr_file);
     }
-    fclose(stderr_file);
 
     // Wait for child and get exit status
     int status;
