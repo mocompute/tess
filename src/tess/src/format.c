@@ -317,6 +317,8 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
     int in_c_block = 0;
     int consecutive_blanks = 0;
     int pipe_col = -1; // column of first | in a tagged union definition
+    int prev_was_multiline = 0; // previous toplevel construct was multi-line
+    int last_output_was_blank = 1; // start of file counts as "blank"
 
     for (int i = 0; i < nlines; i++) {
         char const *trimmed = ltrim(lines[i]);
@@ -326,6 +328,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             consecutive_blanks++;
             if (consecutive_blanks <= 2) {
                 str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 1;
             }
             continue;
         }
@@ -335,6 +338,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         if (!in_c_block && starts_with(trimmed, "#ifc")) {
             str_build_cat(&sb, str_init(alloc, trimmed));
             str_build_cat(&sb, S("\n"));
+            last_output_was_blank = 0;
             in_c_block = 1;
             continue;
         }
@@ -345,10 +349,12 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 in_c_block = 0;
                 str_build_cat(&sb, str_init(alloc, trimmed));
                 str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 0;
             } else {
                 // Preserve original line (with original indentation)
                 str_build_cat(&sb, str_init(alloc, lines[i]));
                 str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 0;
             }
             continue;
         }
@@ -356,12 +362,20 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         // #endc outside C block (shouldn't happen but handle gracefully)
         // #module, #import, #include — indent 0
         if (trimmed[0] == '#') {
+            // Ensure blank line after a multi-line construct before a directive
+            if (prev_was_multiline && !last_output_was_blank) {
+                str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 1;
+            }
+            prev_was_multiline = 0;
             str_build_cat(&sb, str_init(alloc, trimmed));
             str_build_cat(&sb, S("\n"));
+            last_output_was_blank = 0;
             continue;
         }
 
         // Check if line starts with }
+        int prev_depth = depth;
         if (trimmed[0] == '}') {
             // Count leading } braces to determine how much to dedent
             depth--;
@@ -380,6 +394,38 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         } else {
             // Reset pipe_col when we hit a non-pipe, non-blank line
             pipe_col = -1;
+        }
+
+        // Compute net braces to determine depth after this line
+        int net = count_net_braces(trimmed);
+        int depth_after;
+        if (trimmed[0] == '}') {
+            depth_after = depth + net + 1; // +1 because we pre-decremented
+        } else {
+            depth_after = depth + net;
+        }
+        if (depth_after < 0) depth_after = 0;
+
+        // Blank line separation for toplevel multi-line constructs
+        if (depth == 0 && prev_depth == 0) {
+            // At toplevel: if previous construct was multi-line, ensure blank line
+            if (prev_was_multiline && !last_output_was_blank) {
+                str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 1;
+            }
+            // If this line starts a multi-line construct, ensure blank line before it
+            if (depth_after > 0 && !last_output_was_blank) {
+                str_build_cat(&sb, S("\n"));
+                last_output_was_blank = 1;
+            }
+            prev_was_multiline = 0;
+        }
+
+        // Detect end of multi-line construct (depth returning to 0)
+        if (depth_after == 0 && prev_depth > 0) {
+            prev_was_multiline = 1;
+        } else if (depth_after == 0 && depth == 0 && prev_depth == 0) {
+            // Single-line at depth 0, don't set prev_was_multiline
         }
 
         // Emit indent
@@ -406,17 +452,10 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
 
         str_build_cat(&sb, str_init(alloc, content));
         str_build_cat(&sb, S("\n"));
+        last_output_was_blank = 0;
 
-        // Update depth based on net braces
-        int net = count_net_braces(trimmed);
-        // We already decremented for leading }, so add it back for net count
-        if (trimmed[0] == '}') {
-            // We already handled the leading }, net already includes it
-            depth += net + 1; // +1 because we pre-decremented
-        } else {
-            depth += net;
-        }
-        if (depth < 0) depth = 0;
+        // Update depth
+        depth = depth_after;
     }
 
     str result = str_build_finish(&sb);
