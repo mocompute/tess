@@ -316,6 +316,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
     int depth = 0;
     int in_c_block = 0;
     int consecutive_blanks = 0;
+    int pipe_col = -1; // column of first | in a tagged union definition
 
     for (int i = 0; i < nlines; i++) {
         char const *trimmed = ltrim(lines[i]);
@@ -370,9 +371,15 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         int indent = depth * INDENT_WIDTH;
 
         // Check for tagged union continuation line starting with |
-        // These get indented relative to the type definition
         if (trimmed[0] == '|') {
-            indent += INDENT_WIDTH * 2;
+            if (pipe_col > 0) {
+                indent = pipe_col;
+            } else {
+                indent += INDENT_WIDTH * 2;
+            }
+        } else {
+            // Reset pipe_col when we hit a non-pipe, non-blank line
+            pipe_col = -1;
         }
 
         // Emit indent
@@ -380,12 +387,24 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             str_build_cat(&sb, S(" "));
 
         // Normalize operators for code lines (not comment-only lines)
+        char const *content;
         if (starts_with(trimmed, "//")) {
-            str_build_cat(&sb, str_init(alloc, trimmed));
+            content = trimmed;
         } else {
-            char *normalized = normalize_ops(alloc, trimmed);
-            str_build_cat(&sb, str_init(alloc, normalized));
+            content = normalize_ops(alloc, trimmed);
         }
+
+        // Detect tagged union definition: "Name : | ..." or "Name(x) : | ..."
+        // After normalization the pattern is ": | " somewhere in the line
+        {
+            char const *p = strstr(content, ": | ");
+            if (p && pipe_col < 0) {
+                // Column of | = indent + offset of | in content
+                pipe_col = indent + (int)(p - content) + 2;
+            }
+        }
+
+        str_build_cat(&sb, str_init(alloc, content));
         str_build_cat(&sb, S("\n"));
 
         // Update depth based on net braces
