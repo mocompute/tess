@@ -138,7 +138,7 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 }
 ```
 
-This recursive step is crucial: when specializing `T_Some(v: Int)`, the body contains calls like `_TUnion_(Some = ...)` that must also be specialized.
+This recursive step is crucial: when specializing `T.Some(v: Int)` (internally `T_Some`), the body contains calls like `_TUnion_(Some = ...)` that must also be specialized.
 
 ---
 

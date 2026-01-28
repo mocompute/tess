@@ -50,11 +50,15 @@ Either(a, b) : | Left  { v: a }
 
 ### Construction
 
+Variant constructors use dot syntax (`Type.Variant`):
+
 ```tess
-circle := Shape_Circle(radius = 2.0)
-some_int := Option_Some(value = 42)
-left := Either_Left(v = "hello")
+circle := Shape.Circle(radius = 2.0)
+some_int := Option.Some(value = 42)
+left := Either.Left(v = "hello")
 ```
+
+Internally, the compiler mangles these to underscore-separated names (e.g., `Shape_Circle`) for C output.
 
 ### Pattern Matching (Case Expression)
 
@@ -101,10 +105,10 @@ For `Shape : | Circle { radius: Float } | Square { length: Float }`:
 5. Shape        : { tag: _ShapeTag_, u: _ShapeUnion_ }   // Wrapper struct
 ```
 
-Plus constructor functions:
+Plus constructor functions (accessed as `Shape.Circle(...)`, `Shape.Square(...)`):
 ```
-Shape_Circle(radius: Float) -> Shape { ... }
-Shape_Square(length: Float) -> Shape { ... }
+Shape_Circle(radius: Float) -> Shape { ... }    // internal mangled name
+Shape_Square(length: Float) -> Shape { ... }    // internal mangled name
 ```
 
 ### 3.2 Detailed Breakdown
@@ -260,7 +264,7 @@ When the parser originally passed ALL parent type params to each variant, it cre
 
 When a tagged union constructor is specialized, the specialization must cascade through all nested type constructions in the function body. This is handled by `post_specialize()` in `infer.c`.
 
-**Example:** For `Option(a) : | Some { value: a } | None`, calling `Option_Some(value = 42)`:
+**Example:** For `Option(a) : | Some { value: a } | None`, calling `Option.Some(value = 42)`:
 
 1. **Initial specialization:** `Option_Some` becomes `Option_Some_0(value: Int) -> Option_0(Int)`
 
@@ -468,7 +472,8 @@ The `is_union` field in `ast_case` has three possible values:
 | Tag enum | `_` + name + `Tag_` | `_ShapeTag_` |
 | Internal union | `_` + name + `Union_` | `_ShapeUnion_` |
 | Wrapper struct | name | `Shape` |
-| Constructor | name + `_` + variant | `Shape_Circle` |
+| Constructor (user syntax) | name + `.` + variant | `Shape.Circle` |
+| Constructor (internal) | name + `_` + variant | `Shape_Circle` |
 
 ### 8.3 Error Types
 

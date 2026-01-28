@@ -326,11 +326,11 @@ make_iterator(coll) -> Box(() -> Option(T)) {
   idx := 0
   box(() {
     if idx < coll.size {
-      result := Option_Some(v = coll.v[idx])
+      result := Option.Some(v = coll.v[idx])
       idx = idx + 1
       result
     } else {
-      Option_None()
+      Option.None()
     }
   })
 }

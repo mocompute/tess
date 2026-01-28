@@ -225,6 +225,29 @@ The parser resolves `Math.add` by:
 2. Finding the arity-mangled name `add__2` in that module's symbol table
 3. Applying module prefix: `Math_add__2`
 
+### Nested Type Dot Syntax
+
+The dot operator is also used to access nested types (nested structs and tagged union variants). The parser resolves `Type.Child` by:
+
+1. Checking if the left side is a known module (handled by module mangling above)
+2. If not, checking if the left side's original name is in `nested_type_parents`
+3. Verifying the candidate child name (`Type_Child`) exists in the appropriate module's symbol table
+4. If verified, rewriting to the mangled form and applying module prefix if cross-module
+
+**Same-module example:**
+```tl
+Shape : | Circle { radius: Float } | Square { length: Float }
+c := Shape.Circle(radius = 2.0)     // Resolves to Shape_Circle(...)
+```
+
+**Cross-module chained dots:**
+```tl
+c := Mod.Shape.Circle(radius = 2.0)
+// Step 1: Mod.Shape → Mod_Shape (module mangling)
+// Step 2: Mod_Shape.Circle → checks "Shape" in nested_type_parents
+//         → builds Shape_Circle → applies module "Mod" → Mod_Shape_Circle
+```
+
 ---
 
 ## Generic Specialization Naming
@@ -487,11 +510,19 @@ Tagged unions generate internal helper types that also get mangled:
 ```tl
 #module Types
 
-Option(a) : | Some(a) | None
+Option(a) : | Some { v: a } | None
 
+// User syntax for constructors:
+//   Types.Option.Some(v = 42)
+//   Types.Option.None()
+//
 // Generated internal names:
-// _OptionTag_  → Types__OptionTag_
-// _OptionUnion_ → Types__OptionUnion_
+// Option_Some  → Types_Option_Some   (constructor function)
+// Option_None  → Types_Option_None   (constructor function)
+// _OptionTag_  → Types__OptionTag_   (tag enum)
+// _OptionUnion_ → Types__OptionUnion_ (internal union)
 ```
+
+The dot syntax `Type.Variant` is desugared to the underscore form `Type_Variant` during parsing, before module mangling is applied.
 
 See [TAGGED_UNIONS.md](TAGGED_UNIONS.md) for details on tagged union implementation.

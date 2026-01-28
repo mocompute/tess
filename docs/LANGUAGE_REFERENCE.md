@@ -147,7 +147,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 | Integer literals | `x := 42` | Literal type is `Int` |
 | Float literals | `x := 3.14` | Literal type is `Float` |
 | Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
-| Tagged union constructors (with constraining fields) | `opt := Option_Some(v = 42)` | Type parameter inferred from field value |
+| Tagged union constructors (with constraining fields) | `opt := Option.Some(v = 42)` | Type parameter inferred from field value |
 | CArray decay | `ptr := arr` where `arr := CArray(Int, 10)` | Pointer type matches array element type |
 | Function calls | `result := add(1, 2)` | Return type inferred from function |
 
@@ -230,15 +230,15 @@ When a constructor doesn't constrain all type parameters:
 T(a) : | Some { v: a }
        | None
 
-good: T(Int) := T_None()              // Required - None has no field with type `a`
-opt := T_Some(v = 42)                 // Not required - `v = 42` constrains `a = Int`
+good: T(Int) := T.None()              // Required - None has no field with type `a`
+opt := T.Some(v = 42)                 // Not required - `v = 42` constrains `a = Int`
 ```
 
 ```tl
 Either(a, b) : | Left  { v: a }
                | Right { v: b }
 
-x: Either(Int, Bool) := Either_Left(v = 42)   // Required - Left only constrains `a`
+x: Either(Int, Bool) := Either.Left(v = 42)   // Required - Left only constrains `a`
 ```
 
 #### Functions Returning Untyped Values
@@ -809,6 +809,38 @@ buf.size = 0           // Initialize later
 
 This is useful when a field will be set immediately after construction or when working with low-level memory patterns.
 
+### Nested Structs
+
+Structs can contain nested struct definitions. Nested types are accessed using dot syntax (`Parent.Child`):
+
+```tl
+Outer(T) : {
+  Inner : {
+    value: T
+  }
+  contents: Inner
+}
+
+inner := Outer.Inner(value = 42)
+outer := Outer(contents = inner)
+outer.contents.value   // 42
+```
+
+Nested structs are desugared internally with underscore-separated names (e.g., `Outer_Inner`), but the user-facing syntax is always `Parent.Child`. This also works across modules:
+
+```tl
+#module Shapes
+Canvas : {
+  Layer : {
+    name: CString
+  }
+  base: Layer
+}
+
+#module main
+layer := Shapes.Canvas.Layer(name = "bg")
+```
+
 ## Enums
 
 ```tl
@@ -842,7 +874,7 @@ n := v.the_int
 Shape : | Circle    { radius: Float }
         | Square    { length: Float }
 
-s := Foo.Shape_Circle(radius = 2.0)
+s := Foo.Shape.Circle(radius = 2.0)
 
 // The type annotation on `s` is required, as are the annotations on
 // each of the conditions.
@@ -851,6 +883,18 @@ area := case s: Foo.Shape {
   sq: Square { sq.length * sq.length }
 }
 ```
+
+Variant constructors use dot syntax: `Type.Variant(...)`. For same-module usage:
+
+```tl
+#module main
+Shape : | Circle { radius: Float }
+        | Square { length: Float }
+
+c := Shape.Circle(radius = 2.0)
+```
+
+For cross-module usage, chain the module and type dots: `Module.Type.Variant(...)`.
 
 `case` expressions of this form for tagged unions must be exhaustive:
 there must be one arm per variant in the union, or else there must be
