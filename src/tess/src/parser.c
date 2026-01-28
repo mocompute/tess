@@ -1591,14 +1591,34 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
             else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
 
             if (to_mangle) {
-                unmangle_name(self, to_mangle);
-                to_mangle->symbol.name = str_cat_3(self->ast_arena, parent_name, S("_"), to_mangle->symbol.name);
+                // Build candidate child name and verify it exists in the correct module's symbols
+                str child_name     = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
+                                   ? to_mangle->symbol.original : to_mangle->symbol.name;
+                str candidate_name = str_cat_3(self->ast_arena, parent_name, S("_"), child_name);
+
+                // Look up in the appropriate module's symbol table
+                hashmap *syms = null;
                 if (!str_is_empty(module))
-                    mangle_name_for_module(self, to_mangle, module);
-                else
-                    mangle_name(self, to_mangle);
-                *inout = right;
-                return 1;
+                    syms = str_map_get_ptr(self->module_symbols, module);
+                else if (!str_is_empty(self->current_module))
+                    syms = str_map_get_ptr(self->module_symbols, self->current_module);
+
+                int found = 0;
+                if (syms) found = str_hset_contains(syms, candidate_name);
+                // Same-module in main (no module prefix): check current_module_symbols
+                if (!found && str_is_empty(module))
+                    found = str_hset_contains(self->current_module_symbols, candidate_name);
+
+                if (found) {
+                    unmangle_name(self, to_mangle);
+                    to_mangle->symbol.name = candidate_name;
+                    if (!str_is_empty(module))
+                        mangle_name_for_module(self, to_mangle, module);
+                    else
+                        mangle_name(self, to_mangle);
+                    *inout = right;
+                    return 1;
+                }
             }
         }
     }

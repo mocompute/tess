@@ -367,6 +367,7 @@ TL_TESTS =					\
 	mutual_recursion_both_referenced	\
 	nested_struct				\
 	nested_struct_access			\
+	nested_type_cross_module_conflict	\
 	nested_lambda_context			\
 	number_formats				\
 	number_separators			\
@@ -453,7 +454,8 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
 	fail_unknown_free_variable		\
-	fail_generic_unused_type_param
+	fail_generic_unused_type_param		\
+	fail_nested_type_cross_module_conflict
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =
