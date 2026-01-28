@@ -376,10 +376,12 @@ static int find_align_token(char const *line, int token_type) {
 
         switch (token_type) {
         case ALIGN_COLON_VALUE:
-            if (c == ':' && next != '=' && next != ':') {
-                // Return column of first non-space after `: `
+            if (c == ':' && next != ':') {
+                // Skip past spaces after colon to find the value
                 int j = i + 1;
                 while (j < len && line[j] == ' ') j++;
+                // Exclude := (which after normalization is `: =` or `:=`)
+                if (j < len && line[j] == '=') break;
                 if (j < len) return j;
             }
             break;
@@ -397,7 +399,8 @@ static int find_align_token(char const *line, int token_type) {
             if (c == '=' && next != '=') {
                 // Exclude :=, !=, >=, <=, +=, -=, *=, /=
                 if (prev == ':' || prev == '!' || prev == '>' || prev == '<' ||
-                    prev == '+' || prev == '-' || prev == '*' || prev == '/')
+                    prev == '+' || prev == '-' || prev == '*' || prev == '/' ||
+                    prev == '=')
                     continue;
                 return i;
             }
@@ -502,12 +505,39 @@ static int try_align_token(allocator *alloc, char **lines, int start, int end, i
     return 1;
 }
 
+// Try to align consecutive sub-runs of lines that have the token.
+// Unlike try_align_token, this doesn't require ALL lines to match.
+static void align_subruns(allocator *alloc, char **lines, int start, int end, int token_type) {
+    int i = start;
+    while (i < end) {
+        // Skip lines that don't have the token
+        if (is_comment_line(lines[i]) || lines[i][0] == '\0' ||
+            find_align_token(lines[i], token_type) < 0) {
+            i++;
+            continue;
+        }
+        // Found start of a sub-run
+        int run_start = i;
+        while (i < end && !is_comment_line(lines[i]) && lines[i][0] != '\0' &&
+               find_align_token(lines[i], token_type) >= 0) {
+            i++;
+        }
+        if (i - run_start >= 2) {
+            try_align_token(alloc, lines, run_start, i, token_type);
+        }
+    }
+}
+
 // Align a group of consecutive same-indent lines.
 // Apply all matching token types sequentially.
 static void align_group(allocator *alloc, char **lines, int start, int end) {
     if (end - start < 2) return;
     for (int t = 0; t < ALIGN_COUNT; t++) {
-        try_align_token(alloc, lines, start, end, t);
+        if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ) {
+            align_subruns(alloc, lines, start, end, t);
+        } else {
+            try_align_token(alloc, lines, start, end, t);
+        }
     }
 }
 
