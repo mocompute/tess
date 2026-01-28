@@ -366,7 +366,7 @@ function(tl_create_known_fail_failure NAME)
   )
 endfunction()
 
-tl_create_known_fail_failure(fail_generic_unused_type_param)
+tl_create_build_fail_test(fail_generic_unused_type_param)
 
 function(tl_create_known_failure NAME)
   set(TEST_NAME test-tl-${NAME})

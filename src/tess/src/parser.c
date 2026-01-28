@@ -66,6 +66,8 @@ typedef int (*parse_fun)(parser *);
 typedef int (*parse_fun_s)(parser *, char const *);
 typedef int (*parse_fun_int)(parser *, int);
 
+static int annotation_uses_type_param(ast_node *node, str param_name);
+
 // -- overview --
 
 static int           toplevel(parser *);
@@ -2559,6 +2561,24 @@ static int toplevel_struct(parser *self) {
     forall(i, fields) {
         r->user_type_def.field_names[i]       = fields.v[i];
         r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
+    }
+
+    // Check for unused type parameters
+    if (r->user_type_def.n_type_arguments) {
+        for (u8 j = 0; j < r->user_type_def.n_type_arguments; j++) {
+            int used = 0;
+            for (u32 i = 0; i < r->user_type_def.n_fields; i++) {
+                if (annotation_uses_type_param(r->user_type_def.field_annotations[i],
+                                               r->user_type_def.type_arguments[j]->symbol.name)) {
+                    used = 1;
+                    break;
+                }
+            }
+            if (!used) {
+                self->error.tag = tl_err_unused_type_parameter;
+                return 2; // a stopping error
+            }
+        }
     }
 
     // Note: mangle_name has several escapes, including not mangling names on their first usage in the

@@ -451,10 +451,11 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
-	fail_unknown_free_variable
+	fail_unknown_free_variable		\
+	fail_generic_unused_type_param
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES = fail_generic_unused_type_param
+TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =
