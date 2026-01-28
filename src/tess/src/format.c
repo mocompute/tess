@@ -488,9 +488,12 @@ static void align_subruns(allocator *alloc, char **lines, int start, int end, in
 
 // Align a group of consecutive same-indent lines.
 // Apply all matching token types sequentially.
-static void align_group(allocator *alloc, char **lines, int start, int end) {
+// If in_function is set, skip paren/brace alignment.
+static void align_group(allocator *alloc, char **lines, int start, int end, int in_function) {
     if (end - start < 2) return;
     for (int t = 0; t < ALIGN_COUNT; t++) {
+        if (in_function && (t == ALIGN_OPEN_PAREN || t == ALIGN_OPEN_BRACE || t == ALIGN_CLOSE_BRACE))
+            continue;
         if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ) {
             align_subruns(alloc, lines, start, end, t);
         } else {
@@ -499,11 +502,72 @@ static void align_group(allocator *alloc, char **lines, int start, int end) {
     }
 }
 
+// Check if a line is a struct/union opener (contains `: {` or `: |` at paren depth 0)
+static int is_struct_opener(char const *line) {
+    int in_str = 0, in_chr = 0, paren = 0;
+    int len = (int)strlen(line);
+    for (int i = 0; i < len; i++) {
+        char c = line[i];
+        if (in_str) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '"') in_str = 0;
+            continue;
+        }
+        if (in_chr) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '\'') in_chr = 0;
+            continue;
+        }
+        if (c == '"') { in_str = 1; continue; }
+        if (c == '\'') { in_chr = 1; continue; }
+        if (c == '/' && i + 1 < len && line[i + 1] == '/') break;
+        if (c == '(') { paren++; continue; }
+        if (c == ')') { paren--; continue; }
+        if (c == ':' && paren == 0) {
+            // Check if followed by optional spaces then { or |
+            int j = i + 1;
+            while (j < len && line[j] == ' ') j++;
+            if (j < len && (line[j] == '{' || line[j] == '|'))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 // Run alignment pass over all output lines
 static void align_pass(allocator *alloc, char **lines, int nlines) {
+    // Build a brace-depth array and track opener lines per depth level
+    int *depth_at = alloc_calloc(alloc, nlines, sizeof(int));
+    int *opener_line = alloc_calloc(alloc, nlines + 1, sizeof(int)); // opener_line[depth] = line index
+    int cur_depth = 0;
+
+    for (int i = 0; i < nlines; i++) {
+        char const *trimmed = ltrim(lines[i]);
+        // Dedent for leading }
+        if (trimmed[0] == '}') {
+            cur_depth--;
+            if (cur_depth < 0) cur_depth = 0;
+        }
+        depth_at[i] = cur_depth;
+        int net = count_net_braces(lines[i]);
+        int new_depth;
+        if (trimmed[0] == '}') {
+            new_depth = cur_depth + net + 1;
+        } else {
+            new_depth = cur_depth + net;
+        }
+        if (new_depth < 0) new_depth = 0;
+        // If depth increased, record this line as the opener for the new depth
+        if (new_depth > cur_depth) {
+            for (int d = cur_depth + 1; d <= new_depth && d < nlines; d++)
+                opener_line[d] = i;
+        }
+        cur_depth = new_depth;
+    }
+
+    // Now run alignment groups
     int i = 0;
     while (i < nlines) {
-        // Skip blank lines and directives
         if (lines[i][0] == '\0' || ltrim(lines[i])[0] == '#') { i++; continue; }
 
         int group_start = i;
@@ -515,7 +579,16 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
             i++;
         }
 
-        align_group(alloc, lines, group_start, i);
+        // Determine if this group is inside a function body
+        int in_function = 0;
+        int d = depth_at[group_start];
+        if (d > 0) {
+            int ol = opener_line[d];
+            if (!is_struct_opener(lines[ol]))
+                in_function = 1;
+        }
+
+        align_group(alloc, lines, group_start, i, in_function);
     }
 }
 
