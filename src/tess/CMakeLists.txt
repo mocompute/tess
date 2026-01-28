@@ -105,6 +105,7 @@ endfunction()
 
 tess_create_test(tess)
 tess_create_test(type_v2)
+tess_create_test(format)
 
 # -- tesslang tests --
 
