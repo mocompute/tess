@@ -161,7 +161,9 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
     while bucket != null {
         if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof(_BumpHeader))) == 1 &&
            Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size))        == -1
-          { return bucket }
+        {
+            return bucket
+        }
         bucket = bucket->next
     }
 
