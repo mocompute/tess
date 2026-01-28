@@ -71,7 +71,7 @@ Should return: `tl-mode`
 Run the test suite to verify installation:
 
 ```bash
-cd /path/to/tess/tools
+cd /path/to/tess/tools/emacs
 emacs --batch -l test-tl-mode.el
 ```
 
@@ -177,14 +177,14 @@ M-x unload-feature RET tl-mode RET
 
 ## Getting Help
 
-- Check the README: `tools/README.md`
+- Check the README: `tools/emacs/README.md`
 - View inline documentation: `M-x describe-mode` (in a TL buffer)
 - Check function documentation: `C-h f tl-mode RET`
 - Report issues: [Tess GitHub repository](https://github.com/tess-lang/tess/issues)
 
 ## Requirements
 
-- Emacs 24.4 or later
+- A recent version of Emacs
 - No external dependencies
 
 ## Next Steps

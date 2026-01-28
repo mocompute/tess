@@ -43,7 +43,7 @@ A major mode for editing Tess language (`.tl`) files in Emacs.
 
 ```elisp
 (use-package tl-mode
-  :load-path "path/to/tess/tools"
+  :load-path "path/to/tess/tools/emacs"
   :mode "\\.tl\\'")
 ```
 
@@ -88,14 +88,14 @@ All items appear in a single list in the order they appear in the file. Module n
 Run the test suite:
 
 ```bash
-cd tools
+cd tools/emacs
 emacs --batch -l test-tl-mode.el
 ```
 
 Test indentation:
 
 ```bash
-cd tools
+cd tools/emacs
 emacs --batch -l test-indentation.el
 ```
 
@@ -138,15 +138,11 @@ factorial(n: Int) -> Int {
 
 ## Requirements
 
-- Emacs 24.4 or later
+- A recent version of Emacs.
 
 ## License
 
 Same as the Tess project.
-
-## Contributing
-
-Contributions are welcome! Please test your changes with the included test suite.
 
 ## See Also
 
