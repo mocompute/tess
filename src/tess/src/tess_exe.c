@@ -1,6 +1,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "file.h"
+#include "format.h"
 #include "infer.h"
 #include "parser.h"
 #include "str.h"
@@ -14,7 +15,6 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 #include <string.h>
-
 
 // -- embed externs --
 extern char const *embed_std_tl;
@@ -45,6 +45,8 @@ typedef struct {
     int             help;
     int             optimize;
 
+    int             in_place;
+
     int             is_library;
     int             is_executable;
 
@@ -60,7 +62,7 @@ typedef struct {
         size_t transpile_peak_mem;
         size_t transpile_final_mem;
         double cc_time_ms;
-        size_t cc_input_size;  // Size of C source passed to compiler
+        size_t cc_input_size; // Size of C source passed to compiler
     } stats;
 } state;
 
@@ -71,6 +73,7 @@ noreturn void usage(int status, char const *argv0) {
     puts("Commands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o required)\n");
+    printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("\nOptions:\n");
@@ -78,6 +81,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -V, --version          print version and exit\n");
     printf("    -I <path>              add <path> to import search path. Multiple ok.\n");
     printf("    -o <path>              write output to path instead of stdout\n");
+    printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -114,6 +118,7 @@ void state_init(state *self) {
     self->no_standard_includes = 0;
     self->help                 = 0;
     self->optimize             = 0;
+    self->in_place             = 0;
     self->is_library           = 0;
     self->is_executable        = 0;
 }
@@ -131,6 +136,7 @@ void state_gather_single_options(state *self, char *str) {
         case 'h': self->help = 1; break;
         case 'v': self->verbose = 1; break;
         case 'V': version(); break;
+        case 'i': self->in_place = 1; break;
         case 'O': self->optimize = 1; break;
         default:  usage(1, self->argv0); break;
         }
@@ -143,6 +149,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
+    else if (0 == strcmp("--in-place", str)) self->in_place = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--", str)) /* ignore */
@@ -420,19 +427,16 @@ static void get_c_compiler(state *self) {
 // -- stats formatting helpers --
 
 static void format_memory(char *buf, size_t sz, size_t bytes) {
-    if (bytes < 1024)
-        snprintf(buf, sz, "%zu B", bytes);
-    else if (bytes < 1024 * 1024)
-        snprintf(buf, sz, "%.1f KB", bytes / 1024.0);
-    else
-        snprintf(buf, sz, "%.2f MB", bytes / (1024.0 * 1024.0));
+    if (bytes < 1024) snprintf(buf, sz, "%zu B", bytes);
+    else if (bytes < 1024 * 1024) snprintf(buf, sz, "%.1f KB", bytes / 1024.0);
+    else snprintf(buf, sz, "%.2f MB", bytes / (1024.0 * 1024.0));
 }
 
 static void print_stats_header(void) {
     fprintf(stderr, "\n=== Compilation Statistics ===\n\n");
     fprintf(stderr, "%-20s %12s %12s %12s\n", "Phase", "Time (ms)", "Peak Mem", "Final Mem");
-    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------",
-            "------------", "------------");
+    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------", "------------",
+            "------------");
 }
 
 static void print_stats_row(char const *phase, double time_ms, size_t peak_mem, size_t final_mem) {
@@ -451,8 +455,8 @@ static void print_stats_row_no_mem(char const *phase, double time_ms, size_t inp
 static void print_stats_footer(double total_ms, size_t total_peak) {
     char peak_buf[32];
     format_memory(peak_buf, sizeof peak_buf, total_peak);
-    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------",
-            "------------", "------------");
+    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------", "------------",
+            "------------");
     fprintf(stderr, "%-20s %12.3f %12s\n", "TOTAL", total_ms, peak_buf);
     fprintf(stderr, "\n");
 }
@@ -460,7 +464,7 @@ static void print_stats_footer(double total_ms, size_t total_peak) {
 int compile(state *self) {
     if (self->words.size < 2) usage(1, self->argv0);
 
-    int             error       = 0;
+    int error = 0;
 
     // Stats collection
     hires_timer phase_timer;
@@ -517,7 +521,7 @@ int compile(state *self) {
         self->stats.parse_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats ast_stats, token_stats;
         parser_get_arena_stats(parser, &ast_stats, &token_stats);
-        self->stats.parse_peak_mem = ast_stats.peak_allocated + token_stats.peak_allocated;
+        self->stats.parse_peak_mem  = ast_stats.peak_allocated + token_stats.peak_allocated;
         self->stats.parse_final_mem = ast_stats.allocated + token_stats.allocated;
     }
 
@@ -538,7 +542,7 @@ int compile(state *self) {
         self->stats.infer_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats infer_arena_stats;
         tl_infer_get_arena_stats(infer, &infer_arena_stats);
-        self->stats.infer_peak_mem = infer_arena_stats.peak_allocated;
+        self->stats.infer_peak_mem  = infer_arena_stats.peak_allocated;
         self->stats.infer_final_mem = infer_arena_stats.allocated;
     }
 
@@ -561,7 +565,7 @@ int compile(state *self) {
         self->stats.transpile_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats tp_arena_stats;
         transpile_get_arena_stats(transpile, &tp_arena_stats);
-        self->stats.transpile_peak_mem = tp_arena_stats.peak_allocated;
+        self->stats.transpile_peak_mem  = tp_arena_stats.peak_allocated;
         self->stats.transpile_final_mem = tp_arena_stats.allocated;
     }
 
@@ -607,7 +611,7 @@ static int is_msvc_compiler(state *self) {
 // use_temp_file: if non-null, use this temp file path; otherwise read from stdin
 static c_string_array build_gcc_argv(state *self, char const **extra_flags, int extra_flags_count,
                                      char const *temp_file) {
-    char const *cc = str_cstr(&self->cc);
+    char const    *cc   = str_cstr(&self->cc);
 
     c_string_array argv = {.alloc = self->arena};
     array_reserve(argv, self->cflags.size + extra_flags_count + 16);
@@ -647,7 +651,10 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
         // clang-format on
     }
 
-    { char const *_t = null; array_push(argv, _t); }
+    {
+        char const *_t = null;
+        array_push(argv, _t);
+    }
 
     return argv;
 }
@@ -668,7 +675,10 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
     char const *cc = str_cstr(&self->cc);
     array_push(argv, cc);
 
-    { char const *_t = "/nologo"; array_push(argv, _t); }
+    {
+        char const *_t = "/nologo";
+        array_push(argv, _t);
+    }
 
     for (int i = 0; i < msvc_extra_flags_count; i++) {
         array_push(argv, msvc_extra_flags[i]);
@@ -733,14 +743,14 @@ int compile_c(state *self) {
         argv = build_msvc_argv(self, null, 0, c_file.path, obj_file.path);
     } else {
         char const *extra[] = {"-Wno-unused-value", "-Wno-compare-distinct-pointer-types"};
-        argv = build_gcc_argv(self, extra, 2, c_file.path);
+        argv                = build_gcc_argv(self, extra, 2, c_file.path);
     }
 
     platform_exec_opts opts = {
-        .argv       = (char const *const *)argv.v,
-        .stdin_data = null,
-        .stdin_len  = 0,
-        .verbose    = self->verbose,
+      .argv       = (char const *const *)argv.v,
+      .stdin_data = null,
+      .stdin_len  = 0,
+      .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
 
@@ -748,14 +758,14 @@ int compile_c(state *self) {
     platform_temp_file_delete(&obj_file);
 #else
     // Unix: pipe stdin to compiler
-    char const    *extra[] = {"-Wno-unused-value", "-Wno-compare-distinct-pointer-types"};
-    c_string_array argv    = build_gcc_argv(self, extra, 2, null);
+    char const        *extra[] = {"-Wno-unused-value", "-Wno-compare-distinct-pointer-types"};
+    c_string_array     argv    = build_gcc_argv(self, extra, 2, null);
 
-    platform_exec_opts opts = {
-        .argv       = (char const *const *)argv.v,
-        .stdin_data = str_buf(&self->program),
-        .stdin_len  = str_len(self->program),
-        .verbose    = self->verbose,
+    platform_exec_opts opts    = {
+         .argv       = (char const *const *)argv.v,
+         .stdin_data = str_buf(&self->program),
+         .stdin_len  = str_len(self->program),
+         .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
     str_deinit(default_allocator(), &self->program);
@@ -798,17 +808,17 @@ int compile_c_obj(state *self) {
     c_string_array argv;
     if (is_msvc_compiler(self)) {
         char const *msvc_extra[] = {"/LD"};
-        argv = build_msvc_argv(self, msvc_extra, 1, c_file.path, obj_file.path);
+        argv                     = build_msvc_argv(self, msvc_extra, 1, c_file.path, obj_file.path);
     } else {
         char const *extra[] = {"-fPIC", "-shared"};
-        argv = build_gcc_argv(self, extra, 2, c_file.path);
+        argv                = build_gcc_argv(self, extra, 2, c_file.path);
     }
 
     platform_exec_opts opts = {
-        .argv       = (char const *const *)argv.v,
-        .stdin_data = null,
-        .stdin_len  = 0,
-        .verbose    = self->verbose,
+      .argv       = (char const *const *)argv.v,
+      .stdin_data = null,
+      .stdin_len  = 0,
+      .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
 
@@ -816,14 +826,14 @@ int compile_c_obj(state *self) {
     platform_temp_file_delete(&obj_file);
 #else
     // Unix: pipe stdin to compiler
-    char const    *extra[] = {"-fPIC", "-shared"};
-    c_string_array argv    = build_gcc_argv(self, extra, 2, null);
+    char const        *extra[] = {"-fPIC", "-shared"};
+    c_string_array     argv    = build_gcc_argv(self, extra, 2, null);
 
-    platform_exec_opts opts = {
-        .argv       = (char const *const *)argv.v,
-        .stdin_data = str_buf(&self->program),
-        .stdin_len  = str_len(self->program),
-        .verbose    = self->verbose,
+    platform_exec_opts opts    = {
+         .argv       = (char const *const *)argv.v,
+         .stdin_data = str_buf(&self->program),
+         .stdin_len  = str_len(self->program),
+         .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
     str_deinit(default_allocator(), &self->program);
@@ -836,6 +846,55 @@ int compile_c_obj(state *self) {
     }
 
     return result;
+}
+
+static int format_file(state *self) {
+    char       *data;
+    u32         size;
+    char const *filename = "<stdin>";
+
+    if (self->in_place && self->words.size <= 1) {
+        fprintf(stderr, "error: cannot use --in-place with stdin\n");
+        return 1;
+    }
+
+    if (self->words.size > 1) {
+        filename = self->words.v[1];
+        file_read(self->arena, filename, &data, &size);
+    } else {
+        // Read all of stdin
+        u32 capacity = 64 * 1024;
+        data         = alloc_malloc(self->arena, capacity);
+        size         = 0;
+        for (;;) {
+            size_t n = fread(data + size, 1, capacity - size, stdin);
+            size += (u32)n;
+            if (n == 0) break;
+            if (size == capacity) {
+                u32   new_cap = capacity * 2;
+                char *new_buf = alloc_malloc(self->arena, new_cap);
+                memcpy(new_buf, data, size);
+                data     = new_buf;
+                capacity = new_cap;
+            }
+        }
+    }
+
+    str result = tl_format(self->arena, data, size, filename);
+
+    if (self->in_place) {
+        FILE *f = fopen(filename, "wb");
+        if (!f) {
+            fprintf(stderr, "error: could not open '%s' for writing\n", filename);
+            return 1;
+        }
+        fwrite(str_buf(&result), 1, str_len(result), f);
+        fclose(f);
+    } else {
+        fwrite(str_buf(&result), 1, str_len(result), stdout);
+    }
+
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -896,6 +955,10 @@ int main(int argc, char *argv[]) {
         result = compile_c(&self);
     }
 
+    else if (0 == strcmp("fmt", self.words.v[0])) {
+        result = format_file(&self);
+    }
+
     else if (0 == strcmp("lib-emit-c", self.words.v[0])) {
         hires_timer_start(&timer);
 
@@ -921,22 +984,21 @@ done:
 
     if (self.report_stats && !result) {
         print_stats_header();
-        print_stats_row("Parsing", self.stats.parse_time_ms,
-                        self.stats.parse_peak_mem, self.stats.parse_final_mem);
-        print_stats_row("Type Inference", self.stats.infer_time_ms,
-                        self.stats.infer_peak_mem, self.stats.infer_final_mem);
-        print_stats_row("Transpilation", self.stats.transpile_time_ms,
-                        self.stats.transpile_peak_mem, self.stats.transpile_final_mem);
+        print_stats_row("Parsing", self.stats.parse_time_ms, self.stats.parse_peak_mem,
+                        self.stats.parse_final_mem);
+        print_stats_row("Type Inference", self.stats.infer_time_ms, self.stats.infer_peak_mem,
+                        self.stats.infer_final_mem);
+        print_stats_row("Transpilation", self.stats.transpile_time_ms, self.stats.transpile_peak_mem,
+                        self.stats.transpile_final_mem);
 
-        double total_ms = self.stats.parse_time_ms + self.stats.infer_time_ms +
-                          self.stats.transpile_time_ms;
-        size_t total_peak = self.stats.parse_peak_mem + self.stats.infer_peak_mem +
-                            self.stats.transpile_peak_mem;
+        double total_ms =
+          self.stats.parse_time_ms + self.stats.infer_time_ms + self.stats.transpile_time_ms;
+        size_t total_peak =
+          self.stats.parse_peak_mem + self.stats.infer_peak_mem + self.stats.transpile_peak_mem;
 
         // C compilation phase (only for exe/lib commands)
         if (self.is_executable || self.is_library) {
-            print_stats_row_no_mem("C Compilation", self.stats.cc_time_ms,
-                                   self.stats.cc_input_size);
+            print_stats_row_no_mem("C Compilation", self.stats.cc_time_ms, self.stats.cc_input_size);
             total_ms += self.stats.cc_time_ms;
         }
 

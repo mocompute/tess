@@ -115,6 +115,7 @@ $(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
 TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/ast.c	\
 	$(TESS_SRC_DIR)/src/error.c	\
+	$(TESS_SRC_DIR)/src/format.c	\
 	$(TESS_SRC_DIR)/src/parser.c	\
 	$(TESS_SRC_DIR)/src/tess.c	\
 	$(TESS_SRC_DIR)/src/token.c	\

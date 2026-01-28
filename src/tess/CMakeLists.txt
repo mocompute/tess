@@ -55,6 +55,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tokenizer.h
 
+  ${PROJECT_SOURCE_DIR}/src/tess/include/format.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/infer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/transpile.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
@@ -64,6 +65,7 @@ set(HEADERS
 set(SOURCES
   src/ast.c
   src/error.c
+  src/format.c
   src/parser.c
   src/tess.c
   src/token.c
