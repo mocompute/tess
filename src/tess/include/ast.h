@@ -25,6 +25,7 @@ typedef struct ast_node {
             str              module; // by parser when mangling name for module
             struct ast_node *annotation;
             tl_polytype     *annotation_type;
+            struct ast_node *attributes; // may be null
             int              is_mangled; // by parser for module namespacing
         } symbol;
 
@@ -61,6 +62,11 @@ typedef struct ast_node {
             struct ast_node **nodes;
             u8                n;
         } array;
+
+        struct ast_attribute_set {
+            struct ast_node **nodes;
+            u8                n;
+        } attribute_set;
 
         struct ast_lambda_function {
             struct ast_node **parameters;
@@ -167,10 +173,11 @@ typedef struct ast_node {
             struct ast_node *target; // symbol or nfa
         } type_alias;
 
-        struct ast_type_assertion {
-            struct ast_node *name;       // lvalue
-            struct ast_node *annotation; // type annotation
-        } type_assertion;
+        struct ast_type_predicate {
+            struct ast_node *lhs; // lvalue
+            struct ast_node *rhs; // type annotation
+            int              is_valid;
+        } type_predicate;
     };
 
     char const       *file;
@@ -221,6 +228,7 @@ nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node
 nodiscard ast_node *ast_node_create_reassignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment_op(allocator *, ast_node *, ast_node *,
                                                     ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_attribute_set(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized, ast_node_sized,
                                          ast_node *, ast_node *, int) mallocfun;
@@ -240,7 +248,7 @@ nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_siz
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_type_assertion(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_type_predicate(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
@@ -252,6 +260,8 @@ void                ast_node_name_replace(ast_node *, str);
 ast_node           *ast_node_lvalue(ast_node *);
 ast_node           *ast_node_op_rightmost(ast_node *);
 void                ast_node_type_set(ast_node *, tl_polytype *);
+
+void                ast_node_set_attributes(ast_node *sym, ast_node *attribute_set);
 
 // -- traversal --
 
@@ -311,7 +321,7 @@ int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
-int            ast_node_is_type_assertion(ast_node const *);
+int            ast_node_is_type_predicate(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
 int            ast_node_is_unary_op(ast_node const *);

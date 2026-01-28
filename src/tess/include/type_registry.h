@@ -95,5 +95,6 @@ int          tl_type_registry_is_unary_type(tl_type_registry *, str);
 nodiscard tl_monotype *tl_polytype_specialize_cons(allocator *, tl_polytype *, tl_monotype_sized,
                                                    tl_type_registry *, str);
 tl_polytype           *tl_polytype_nil(allocator *, tl_type_registry *);
+tl_polytype           *tl_polytype_bool(allocator *, tl_type_registry *);
 
 #endif

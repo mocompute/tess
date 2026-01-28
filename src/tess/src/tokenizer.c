@@ -169,6 +169,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_dot_2,
         in_ampersand,
         in_vertical_bar,
+        in_open_square,
+        in_close_square,
 
         start_number,
         start_number_sign,
@@ -278,10 +280,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 state = stop;
                 break;
 
-            case '[':
-                replace_token(self->strings, &res, tok_open_square);
-                state = stop;
-                break;
+            case '[': state = in_open_square; continue;
+            case ']': state = in_close_square; continue;
 
             case ')':
                 replace_token(self->strings, &res, tok_close_round);
@@ -290,11 +290,6 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
             case '}':
                 replace_token(self->strings, &res, tok_close_curly);
-                state = stop;
-                break;
-
-            case ']':
-                replace_token(self->strings, &res, tok_close_square);
                 state = stop;
                 break;
 
@@ -365,6 +360,40 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
                 replace_token(self->strings, &res, tok_colon);
                 state = stop;
                 break;
+            }
+        } break;
+
+        case in_open_square:
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_open_square);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            if ('[' == c) {
+                replace_token(self->strings, &res, tok_double_open_square);
+                state = stop;
+            } else {
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_open_square);
+                state = stop;
+            }
+            break;
+
+        case in_close_square: {
+            if (self->pos == end) {
+                replace_token(self->strings, &res, tok_close_square);
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            if (']' == c) {
+                replace_token(self->strings, &res, tok_double_close_square);
+                state = stop;
+            } else {
+                reverse_pos(self);
+                replace_token(self->strings, &res, tok_close_square);
+                state = stop;
             }
         } break;
 

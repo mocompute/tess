@@ -62,6 +62,8 @@
     X(tl_err_expected_colon, "expected_colon")                                                             \
     X(tl_err_expected_colon_equal, "expected_colon_equal")                                                 \
     X(tl_err_expected_double_colon, "expected_double_colon")                                               \
+    X(tl_err_expected_double_open_square, "expected_double_open_square")                                   \
+    X(tl_err_expected_double_close_square, "expected_double_close_square")                                 \
     X(tl_err_expected_end_of_block, "expected_end_of_block")                                               \
     X(tl_err_expected_end_of_expression, "expected_end_of_expression")                                     \
     X(tl_err_expected_open_round, "expected_open_round")                                                   \
@@ -76,6 +78,7 @@
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \
     X(tl_err_type_exists, "type_exists")                                                                   \
+    X(tl_err_attributes_exist, "attributes_exist")                                                         \
     X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
     X(tl_err_unexpected_else, "unexpected_else")                                                           \
                                                                                                            \

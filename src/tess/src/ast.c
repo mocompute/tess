@@ -72,6 +72,13 @@ ast_node *ast_node_create_lfa(allocator *alloc, ast_node *lambda, ast_node_sized
     return self;
 }
 
+ast_node *ast_node_create_attribute_set(allocator *alloc, ast_node_sized nodes) {
+    ast_node *self            = ast_node_create(alloc, ast_attribute_set);
+    self->attribute_set.n     = nodes.size;
+    self->attribute_set.nodes = nodes.v;
+    return self;
+}
+
 ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
     ast_node *self         = ast_node_create(alloc, ast_body);
     self->body.expressions = body;
@@ -193,10 +200,11 @@ ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node 
     return self;
 }
 
-ast_node *ast_node_create_type_assertion(allocator *alloc, ast_node *name, ast_node *annotation) {
-    ast_node *self                  = ast_node_create(alloc, ast_type_assertion);
-    self->type_assertion.name       = name;
-    self->type_assertion.annotation = annotation;
+ast_node *ast_node_create_type_predicate(allocator *alloc, ast_node *name, ast_node *annotation) {
+    ast_node *self                = ast_node_create(alloc, ast_type_predicate);
+    self->type_predicate.lhs      = name;
+    self->type_predicate.rhs      = annotation;
+    self->type_predicate.is_valid = 0;
     return self;
 }
 
@@ -257,19 +265,20 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     // clone the rest of the fields
     switch (clone->tag) {
+    case ast_attribute_set:
     case ast_continue:
     case ast_ellipsis:
     case ast_eof:
     case ast_nil:
     case ast_void:
-    case ast_tuple:    break;
+    case ast_tuple:         break;
 
-    case ast_bool:     clone->bool_.val = orig->bool_.val; break;
-    case ast_i64:      clone->i64.val = orig->i64.val; break;
-    case ast_u64:      clone->u64.val = orig->u64.val; break;
-    case ast_f64:      clone->f64.val = orig->f64.val; break;
+    case ast_bool:          clone->bool_.val = orig->bool_.val; break;
+    case ast_i64:           clone->i64.val = orig->i64.val; break;
+    case ast_u64:           clone->u64.val = orig->u64.val; break;
+    case ast_f64:           clone->f64.val = orig->f64.val; break;
 
-    case ast_arrow:    {
+    case ast_arrow:         {
         struct ast_arrow *vclone = ast_node_arrow(clone), *vorig = ast_node_arrow((ast_node *)orig);
         vclone->left  = ast_node_clone(alloc, vorig->left);
         vclone->right = ast_node_clone(alloc, vorig->right);
@@ -299,6 +308,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         } else vclone->annotation_type = null;
         vclone->is_mangled = vorig->is_mangled;
+
+        vclone->attributes = ast_node_clone(alloc, vorig->attributes);
     } break;
 
     case ast_hash_command: {
@@ -356,9 +367,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->type_alias.target = ast_node_clone(alloc, orig->type_alias.target);
     } break;
 
-    case ast_type_assertion: {
-        clone->type_assertion.name       = ast_node_clone(alloc, orig->type_assertion.name);
-        clone->type_assertion.annotation = ast_node_clone(alloc, orig->type_assertion.annotation);
+    case ast_type_predicate: {
+        clone->type_predicate.lhs      = ast_node_clone(alloc, orig->type_predicate.lhs);
+        clone->type_predicate.rhs      = ast_node_clone(alloc, orig->type_predicate.rhs);
+        clone->type_predicate.is_valid = orig->type_predicate.is_valid;
     } break;
 
     case ast_return:
@@ -496,6 +508,11 @@ void ast_node_type_set(ast_node *self, tl_polytype *type) {
     self->type = type;
 }
 
+void ast_node_set_attributes(ast_node *self, ast_node *attribute_set) {
+    if (!ast_node_is_symbol(self)) fatal("runtime error");
+    self->symbol.attributes = attribute_set;
+}
+
 //
 
 sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
@@ -534,6 +551,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
 
     // process node types that have additional or no-array links
     switch (node->tag) {
+    case ast_attribute_set:
     case ast_continue:
     case ast_ellipsis:
     case ast_eof:
@@ -626,10 +644,10 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->type_alias.target);
         break;
 
-    case ast_type_assertion:
+    case ast_type_predicate:
         //
-        fun(ctx, node->type_assertion.name);
-        fun(ctx, node->type_assertion.annotation);
+        fun(ctx, node->type_predicate.lhs);
+        fun(ctx, node->type_predicate.rhs);
         break;
 
     case ast_body:
@@ -783,7 +801,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_string",
       "ast_symbol",
       "ast_type_alias",
-      "ast_type_assertion",
+      "ast_type_predicate",
       "ast_u64",
       "ast_unary_op",
       "ast_user_type_definition",
@@ -791,7 +809,11 @@ char const *ast_tag_to_string(ast_tag tag) {
     };
 
     static char const *const strings2[] = {
-      "ast_lambda_function", "ast_lambda_function_application", "ast_let", "ast_named_function_application",
+      "ast_lambda_function",
+      "ast_lambda_function_application",
+      "ast_attribute_set",
+      "ast_let",
+      "ast_named_function_application",
       "ast_tuple",
     };
 
@@ -813,6 +835,17 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     str ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
     switch (node->tag) {
+    case ast_attribute_set: {
+        str_build b = str_build_init(alloc, 128);
+        str_build_cat(&b, S("[["));
+        for (u32 i = 0; i < node->attribute_set.n; i++) {
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->attribute_set.nodes[i]));
+            if (i + 1 < node->attribute_set.n) str_build_cat(&b, S(", "));
+        }
+        str_build_cat(&b, S("]]"));
+        return str_build_finish(&b);
+    } break;
+
     case ast_hash_command: {
         str_build b = str_build_init(alloc, 128);
         str_build_cat(&b, S("#"));
@@ -998,12 +1031,12 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     }
 
-    case ast_type_assertion: {
+    case ast_type_predicate: {
         str_build b = str_build_init(alloc, 64);
-        str_build_cat(&b, S("(assertion "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_assertion.name));
+        str_build_cat(&b, S("(predicate "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_predicate.lhs));
         str_build_cat(&b, S(" :: "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_assertion.annotation));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_predicate.rhs));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
     }
@@ -1072,6 +1105,17 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     if (!node) return str_init(alloc, "[null]");
 
     switch (node->tag) {
+    case ast_attribute_set: {
+        str_build b = str_build_init(alloc, 128);
+        str_build_cat(&b, S("[["));
+        for (u32 i = 0; i < node->attribute_set.n; i++) {
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->attribute_set.nodes[i]));
+            if (i + 1 < node->attribute_set.n) str_build_cat(&b, S(", "));
+        }
+        str_build_cat(&b, S("]]"));
+        return str_build_finish(&b);
+    } break;
+
     case ast_binary_op:
     case ast_body:
     case ast_case:
@@ -1097,7 +1141,7 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_tuple:
     case ast_lambda_function_application: return str_init_static(ast_tag_to_string(node->tag));
 
-    case ast_type_assertion:
+    case ast_type_predicate:
     case ast_symbol:                      return v2_ast_node_to_string(alloc, node);
 
     case ast_let:                         {
@@ -1288,11 +1332,12 @@ u64 ast_node_hash(ast_node const *self) {
         for (u32 i = 0; i < self->array.n; ++i) combine_node(self->array.nodes[i]);
 
     switch (self->tag) {
+    case ast_attribute_set:
     case ast_continue:
     case ast_nil:
     case ast_void:
     case ast_ellipsis:
-    case ast_eof:      break;
+    case ast_eof:           break;
 
     case ast_arrow:
         //
@@ -1355,10 +1400,10 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->type_alias.target);
         break;
 
-    case ast_type_assertion:
+    case ast_type_predicate:
         //
-        combine_node(self->type_assertion.name);
-        combine_node(self->type_assertion.annotation);
+        combine_node(self->type_predicate.lhs);
+        combine_node(self->type_predicate.rhs);
         break;
 
     case ast_user_type_definition:
@@ -1460,7 +1505,7 @@ int ast_node_is_nil_or_void(ast_node const *self) {
     return ast_node_is_nil(self) || ast_node_is_void(self);
 }
 int ast_node_is_symbol(ast_node const *self) {
-    return ast_symbol == self->tag;
+    return self && ast_symbol == self->tag;
 }
 int ast_node_is_tuple(ast_node const *self) {
     return ast_tuple == self->tag;
@@ -1468,8 +1513,8 @@ int ast_node_is_tuple(ast_node const *self) {
 int ast_node_is_type_alias(ast_node const *self) {
     return ast_type_alias == self->tag;
 }
-int ast_node_is_type_assertion(ast_node const *self) {
-    return ast_type_assertion == self->tag;
+int ast_node_is_type_predicate(ast_node const *self) {
+    return ast_type_predicate == self->tag;
 }
 int ast_node_is_let(ast_node const *self) {
     return ast_let == self->tag;

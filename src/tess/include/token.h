@@ -35,6 +35,8 @@
     X(tok_close_curly, "close_curly")                                                                      \
     X(tok_open_square, "open_square")                                                                      \
     X(tok_close_square, "close_square")                                                                    \
+    X(tok_double_open_square, "double_open_square")                                                        \
+    X(tok_double_close_square, "double_close_square")                                                      \
     X(tok_equal_sign, "equal_sign")                                                                        \
     X(tok_equal_equal, "equal_equal")                                                                      \
     X(tok_invalid, "invalid")                                                                              \

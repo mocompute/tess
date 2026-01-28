@@ -551,10 +551,65 @@ value := ({
 })
 ```
 
-### Type Assertions
+### Type Predicates
 
 ```tl
-x :: Int            // Assert that x has type Int
+x :: Int            // true if x has type Int
+```
+
+### Attributes
+
+Attributes annotate declarations with metadata that can be queried at compile time.
+
+#### Declaring Attributes
+
+Prefix a declaration with `[[name]]`:
+
+```tl
+[[my_attr]] x := 42
+[[my_attr]] foo() { ... }
+```
+
+Multiple attributes use a comma-separated list:
+
+```tl
+[[attr1, attr2]] bar() { ... }
+```
+
+Attributes can take arguments:
+
+```tl
+[[NFA(42)]] nfa_func() { ... }
+```
+
+Attributes work on both top-level and local declarations:
+
+```tl
+main() {
+    [[local_attr]] x := 123
+}
+```
+
+#### Attribute Predicates
+
+Use `::` with an attribute set on the right-hand side to test whether a symbol has a given attribute. Like type predicates, attribute predicates are evaluated at compile time and produce a boolean value.
+
+```tl
+sym :: [[my_attr]]          // true if sym has attribute my_attr
+foo/0 :: [[my_attr]]        // use arity-mangled name for functions
+```
+
+For attributes with arguments, an exact match requires the same arguments:
+
+```tl
+nfa_func/0 :: [[NFA(42)]]  // true  - exact match
+nfa_func/0 :: [[NFA(99)]]  // false - argument mismatch
+```
+
+A general match (attribute name without arguments) matches regardless of the declared arguments:
+
+```tl
+nfa_func/0 :: [[NFA]]      // true  - matches any NFA(...) attribute
 ```
 
 ## Control Flow

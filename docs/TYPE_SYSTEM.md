@@ -380,19 +380,38 @@ p : Ptr(Int) := c_malloc(...)     // Ptr(any) -> Ptr(Int)
 q : Ptr(Point(Float)) := c_malloc(...)
 ```
 
-## Type Assertions
+## Type Predicates
 
-Use `::` to assert a type (for documentation or disambiguation):
+Use `::` to test a type. The `::` operator is a binary predicate.
 
 ```tl
 x := 42
-x :: Int    // Assert x has type Int
+x :: Int    // true if x has type Int
 
 y := get_value()
-y :: Point(Int)  // Assert the return type
+y :: Point(Int)
+y
 ```
 
-Type assertions are checked at compile time and generate no runtime code.
+Type predicates are checked at compile time and produce an expression
+with a boolean value.
+
+### Attribute Predicates
+
+The `::` operator also serves as an **attribute predicate** when the right-hand side is an attribute set (`[[...]]`) instead of a type. Attribute predicates test whether a symbol was declared with a given attribute.
+
+```tl
+[[my_attr]] x := 42
+x :: [[my_attr]]        // true
+x :: [[other]]          // false
+```
+
+For attributes with arguments (e.g., `[[NFA(42)]]`), two matching modes apply:
+
+- **Exact match**: `sym :: [[NFA(42)]]` — matches only if the attribute has the same arguments.
+- **General match**: `sym :: [[NFA]]` — matches any `NFA(...)` attribute regardless of arguments.
+
+Like type predicates, attribute predicates are resolved at compile time and produce a boolean value.
 
 ## Void and Unit
 

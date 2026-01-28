@@ -113,12 +113,15 @@ static int           a_arrow(parser *);
 static int           a_bool(parser *);
 static int           a_close_round(parser *);
 static int           a_colon(parser *);
+static int           a_double_open_square(parser *);
+static int           a_double_close_square(parser *);
 static int           a_vertical_bar(parser *);
 static int           a_char(parser *);
 static int           a_comma(parser *);
 static int           a_ellipsis(parser *);
 static int           a_equal_sign(parser *);
 static int           a_identifier(parser *);
+static int           a_attributed_identifier(parser *);
 static int           a_nil(parser *);
 static int           a_null(parser *);
 static int           a_number(parser *);
@@ -632,7 +635,6 @@ static int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_logical_or:
     case tok_arrow:
     case tok_ampersand:
-    case tok_open_square:
     case tok_plus:
     case tok_minus:
     case tok_bar:
@@ -648,14 +650,17 @@ static int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_close_round:
     case tok_open_curly:
     case tok_close_curly:
+    case tok_open_square:
     case tok_close_square:
+    case tok_double_open_square:
+    case tok_double_close_square:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
     case tok_string:
     case tok_char:
     case tok_comment:
-    case tok_hash_command: return 1;
+    case tok_hash_command:        return 1;
     }
 
     if (!op) return 1;
@@ -678,25 +683,25 @@ static int a_binary_operator(parser *self, int min_prec) {
         } else return 1;
         break;
 
-    case tok_bang_equal:   op = "!="; break;
-    case tok_star:         op = "*"; break;
-    case tok_dot:          op = "."; break;
-    case tok_equal_equal:  op = "=="; break;
-    case tok_logical_and:  op = "&&"; break;
-    case tok_logical_or:   op = "||"; break;
-    case tok_arrow:        op = "->"; break;
-    case tok_ampersand:    op = "&"; break;
-    case tok_open_square:  op = "["; break;
-    case tok_plus:         op = "+"; break;
-    case tok_minus:        op = "-"; break;
-    case tok_bar:          op = "|"; break;
+    case tok_bang_equal:          op = "!="; break;
+    case tok_star:                op = "*"; break;
+    case tok_dot:                 op = "."; break;
+    case tok_equal_equal:         op = "=="; break;
+    case tok_logical_and:         op = "&&"; break;
+    case tok_logical_or:          op = "||"; break;
+    case tok_arrow:               op = "->"; break;
+    case tok_ampersand:           op = "&"; break;
+    case tok_open_square:         op = "["; break;
+    case tok_plus:                op = "+"; break;
+    case tok_minus:               op = "-"; break;
+    case tok_bar:                 op = "|"; break;
+    case tok_double_colon:        op = "::"; break;
 
     case tok_bang:
     case tok_comma:
     case tok_c_block:
     case tok_colon:
     case tok_colon_equal:
-    case tok_double_colon:
     case tok_semicolon:
     case tok_ellipsis:
     case tok_open_round:
@@ -704,13 +709,15 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_open_curly:
     case tok_close_curly:
     case tok_close_square:
+    case tok_double_open_square:
+    case tok_double_close_square:
     case tok_equal_sign:
     case tok_invalid:
     case tok_number:
     case tok_string:
     case tok_char:
     case tok_comment:
-    case tok_hash_command: return 1;
+    case tok_hash_command:        return 1;
     }
 
     if (!op) return 1;
@@ -757,6 +764,8 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_close_curly:
     case tok_open_square:
     case tok_close_square:
+    case tok_double_open_square:
+    case tok_double_close_square:
     case tok_equal_sign:
     case tok_equal_equal:
     case tok_invalid:
@@ -764,7 +773,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_string:
     case tok_char:
     case tok_comment:
-    case tok_hash_command: return 1;
+    case tok_hash_command:        return 1;
     }
 
     if (!op) return 1;
@@ -777,6 +786,30 @@ static int a_unary_operator(parser *self, int min_prec) {
 
 static int unmangle_arity(str name);
 static str unmangle_arity_qualified_name(allocator *alloc, str name);
+
+static int a_attribute_set(parser *self) {
+    if (a_try(self, a_double_open_square)) return 1;
+
+    ast_node_array items = {.alloc = self->ast_arena};
+    if (0 == a_try(self, a_double_close_square)) goto done;
+
+    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) {
+        array_push(items, self->result);
+    }
+
+    while (1) {
+        if (0 == a_try(self, a_double_close_square)) break;
+        if (a_try(self, a_comma)) return 1;
+        if (0 == a_try(self, a_identifier) || 0 == a_try(self, a_funcall)) {
+            array_push(items, self->result);
+        }
+    }
+
+done:;
+
+    ast_node *out = ast_node_create_attribute_set(self->ast_arena, (ast_node_sized)sized_all(items));
+    return result_ast_node(self, out);
+}
 
 static int a_identifier(parser *p) {
     if (next_token(p)) return 1;
@@ -808,14 +841,34 @@ static int a_identifier(parser *p) {
             str base = unmangle_arity_qualified_name(p->ast_arena, name);
             assert(!str_is_empty(base));
             str mangled = mangle_str_for_arity(p->ast_arena, base, (u8)arity);
-            return result_ast_str_(p, ast_symbol, mangled);
+            result_ast_str_(p, ast_symbol, mangled);
+            goto success;
         }
 
-        return result_ast_str_(p, ast_symbol, name);
+        result_ast_str_(p, ast_symbol, name);
+        goto success;
     }
 
 error:
     p->error.tag = tl_err_expected_identifier;
+    return 1;
+
+success:
+    return 0;
+}
+
+static int a_attributed_identifier(parser *self) {
+    // All identifiers may now have an attribute set, denoted by a [[...]] expression immediately preceding
+    // the identifer. This will be tokenized as `[[, <zero or more tokens>, ]]`
+
+    ast_node *attributes = null;
+    if (0 == a_try(self, a_attribute_set)) {
+        attributes = self->result;
+    }
+    if (0 == a_try(self, a_identifier)) {
+        ast_node_set_attributes(self->result, attributes);
+        return 0;
+    }
     return 1;
 }
 
@@ -895,6 +948,20 @@ static int a_colon(parser *p) {
     return 1;
 }
 
+static int a_double_open_square(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_double_open_square == p->token.tag) return result_ast_str(p, ast_symbol, "[[");
+    p->error.tag = tl_err_expected_double_open_square;
+    return 1;
+}
+
+static int a_double_close_square(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_double_close_square == p->token.tag) return result_ast_str(p, ast_symbol, "]]");
+    p->error.tag = tl_err_expected_double_close_square;
+    return 1;
+}
+
 static int a_star(parser *p) {
     if (next_token(p)) return 1;
     if (tok_star == p->token.tag) return result_ast_str(p, ast_symbol, "*");
@@ -919,15 +986,6 @@ static int a_colon_equal(parser *p) {
     if (tok_colon_equal == p->token.tag) return result_ast_str(p, ast_symbol, ":=");
 
     p->error.tag = tl_err_expected_colon_equal;
-    return 1;
-}
-
-static int a_double_colon(parser *p) {
-    if (next_token(p)) return 1;
-
-    if (tok_double_colon == p->token.tag) return result_ast_str(p, ast_symbol, "::");
-
-    p->error.tag = tl_err_expected_double_colon;
     return 1;
 }
 
@@ -1013,7 +1071,7 @@ static int a_type_identifier(parser *self) {
     if (0 == a_try(self, a_ellipsis)) {
         return 0;
     }
-    if (0 == a_try(self, a_identifier)) {
+    if (0 == a_try(self, a_attributed_identifier)) {
         // Look for module-qualified identifier
         ast_node *ident = self->result;
 
@@ -1051,7 +1109,7 @@ static int a_type_annotation(parser *self) {
 }
 
 static int a_param(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *ident = self->result;
     ast_node *ann   = null;
     if (0 == a_try(self, a_type_annotation)) {
@@ -1082,7 +1140,7 @@ static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *no
 }
 
 static int a_funcall(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *name = self->result;
 
     if (a_try(self, a_open_round)) return 1;
@@ -1118,7 +1176,7 @@ done:
 }
 
 static int a_type_constructor(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *name = self->result;
 
     if (a_try(self, a_open_round)) return 1;
@@ -1211,11 +1269,12 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;
-    if (0 == a_try(self, a_identifier)) {
+    if (0 == a_try(self, a_attributed_identifier)) {
         dbg(self, "a_value: '%s'", str_cstr(&self->result->symbol.name));
         mangle_name(self, self->result);
         return 0;
     }
+    if (0 == a_try(self, a_attribute_set)) return 0;
 
     self->error.tag = tl_err_expected_value;
     return 1;
@@ -1228,6 +1287,7 @@ static int operator_precedence(char const *op, int is_prefix) {
         int         p;
     };
     static struct item const infix[] = {
+
       {"=", 5},
       {"+=", 5},
       {"-=", 5},
@@ -1246,29 +1306,30 @@ static int operator_precedence(char const *op, int is_prefix) {
       {"&&", 20},
       {"|", 30},
       {"&", 40},
-      //
+
+      {"::", 50},
       {"==", 50},
       {"!=", 50},
-      //
+
       {"<", 60},
       {"<=", 60},
       {">=", 60},
       {">", 60},
-      //
+
       {"<<", 70},
       {">>", 70},
-      //
+
       {"+", 80},
       {"-", 80},
-      //
+
       {"*", 90},
       {"/", 90},
       {"%", 90},
-      //
+
       {".", 110},
       {"->", 110},
       {"[", 110},
-      //
+
       {null, 0},
     };
 
@@ -1609,7 +1670,13 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             if (0 == str_cmp_c(op->symbol.name, "["))
                 if (a_try(self, a_close_square)) return null;
 
-            ast_node *binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
+            // Note: special case: detect type predicate with binop ::
+            ast_node *binop = null;
+            if (0 == str_cmp_c(op->symbol.name, "::")) {
+                binop = ast_node_create_type_predicate(self->ast_arena, left, right);
+            } else {
+                binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
+            }
             set_node_file(self, binop);
             left = binop;
 
@@ -1853,7 +1920,7 @@ static int a_reassignment(parser *self) {
 
 static int a_field_assignment(parser *self) {
     // x = val (for type literals)
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *name = self->result;
 
     ast_node *ann  = null;
@@ -2154,20 +2221,6 @@ static int a_for_statement(parser *self) {
     return result_ast_node(self, let_iter_init);
 }
 
-static int a_type_assertion(parser *self) {
-
-    ast_node *lval = parse_lvalue(self);
-    if (!lval) return 1;
-
-    if (a_try(self, a_double_colon)) return 1;
-
-    if (a_try(self, a_type_identifier)) return 1;
-    ast_node *ann = self->result;
-
-    ast_node *a   = ast_node_create_type_assertion(self->ast_arena, lval, ann);
-    return result_ast_node(self, a);
-}
-
 static int a_statement(parser *self) {
     if (0 == a_try(self, a_assignment)) return 0;
     if (0 == a_try(self, a_reassignment)) return 0;
@@ -2176,7 +2229,6 @@ static int a_statement(parser *self) {
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
-    if (0 == a_try(self, a_type_assertion)) return 0;
 
     return 1;
 }
@@ -2205,7 +2257,7 @@ static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_no
 static int toplevel_defun(parser *self) {
     // TODO: a portion is duplicated with a_type_arrow, but this function needs access to the params that
     // a_type_arrow embeds in an arrow.
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node      *name   = self->result;
     ast_node_array params = {.alloc = self->ast_arena};
 
@@ -2281,7 +2333,7 @@ static int toplevel_assign(parser *self) {
 }
 
 static int toplevel_forward(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *name = self->result;
 
     if (a_try(self, a_type_arrow)) return 1;
@@ -2301,7 +2353,7 @@ static int toplevel_forward(parser *self) {
 }
 
 static int toplevel_symbol_annotation(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *ident = self->result;
 
     if (a_try(self, a_type_annotation)) return 2;
@@ -2399,7 +2451,7 @@ static int toplevel_hash(parser *self) {
 static int toplevel_type_alias(parser *self) {
     ast_node *name = null;
     // FIXME: this accepts funcalls as alias names, but we may not want to support that.
-    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) name = self->result;
+    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_attributed_identifier)) name = self->result;
     else return 1;
     if (a_try(self, a_equal_sign)) return 1;
 
@@ -2414,7 +2466,7 @@ static int toplevel_type_alias(parser *self) {
 }
 
 static int toplevel_enum(parser *self) {
-    if (a_try(self, a_identifier)) return 1;
+    if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *name = self->result;
 
     if (a_try(self, a_colon)) return 1;
@@ -2428,7 +2480,7 @@ static int toplevel_enum(parser *self) {
             // require comma separators
             if (a_try(self, a_comma)) return 1;
         }
-        if (a_try(self, a_identifier))
+        if (a_try(self, a_attributed_identifier))
             return 1; // enum must be an identifier; not mangled because access is through the type name
         array_push(idents, self->result);
     }
@@ -3113,7 +3165,7 @@ static int toplevel(parser *self) {
 
     // Switch to speculative arena for all allocations during pattern matching
     allocator *permanent = self->ast_arena;
-    self->ast_arena = self->speculative;
+    self->ast_arena      = self->speculative;
 
     while (!is_eof(self)) {
 

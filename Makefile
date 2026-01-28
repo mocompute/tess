@@ -300,6 +300,7 @@ TL_TESTS =					\
 	assignment_by_op			\
 	atexit					\
 	_Exit					\
+	attributes				\
 	binop					\
 	bitwise_operators			\
 	block_expression			\
@@ -350,6 +351,7 @@ TL_TESTS =					\
 	let_in_basic				\
 	let_in_expression			\
 	logical_and				\
+	logical_expression			\
 	logical_or				\
 	malloc_free				\
 	malloc_free_is_null			\
@@ -409,8 +411,9 @@ TL_TESTS =					\
 	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
 	type_alias_module_simple_direct		\
-	type_assertion				\
-	type_assertion_field			\
+	type_predicate				\
+	type_predicate_field			\
+	type_predicate_generic			\
 	tagged_union				\
 	tagged_union_generic_basic		\
 	tagged_union_generic_case		\
@@ -452,6 +455,7 @@ TL_FAIL_TESTS =					\
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =
 
+
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
@@ -477,7 +481,7 @@ test-tl: build-tl-tests
 		fi; \
 		count_pass=$$((count_pass + 1)); \
 	done; \
-	printf "  \033[1;36m[COUNT]\033[0m $$count_pass passing tests\n\n"; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_pass expected passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
 		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \

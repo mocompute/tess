@@ -1,7 +1,6 @@
 #ifndef TESS_AST_TAGS_H
 #define TESS_AST_TAGS_H
 
-#include "types.h"
 #include "util.h"
 
 #ifndef MOS_TAG_NAME
@@ -37,7 +36,7 @@ typedef enum ast_tag {
     ast_string,
     ast_symbol,
     ast_type_alias,
-    ast_type_assertion,
+    ast_type_predicate,
     ast_u64,
     ast_unary_op,
     ast_user_type_definition,
@@ -45,6 +44,7 @@ typedef enum ast_tag {
 
     ast_lambda_function = BIT(TL_AST_BIT_ARRAY),
     ast_lambda_function_application,
+    ast_attribute_set,
     ast_let,
     ast_named_function_application,
     ast_tuple,

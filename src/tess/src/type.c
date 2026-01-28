@@ -481,6 +481,11 @@ tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
     return tl_polytype_absorb_mono(alloc, nil);
 }
 
+tl_polytype *tl_polytype_bool(allocator *alloc, tl_type_registry *self) {
+    tl_monotype *bool_ = tl_type_registry_bool(self);
+    return tl_polytype_absorb_mono(alloc, bool_);
+}
+
 tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
     arr[0]            = arg;
