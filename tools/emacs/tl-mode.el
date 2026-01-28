@@ -55,6 +55,12 @@
   :safe 'integerp
   :group 'tl)
 
+(defcustom tl-format-command "tess"
+  "Path to the tess executable used for formatting."
+  :type 'string
+  :safe 'stringp
+  :group 'tl)
+
 ;;; Syntax Table
 
 (defvar tl-mode-syntax-table
@@ -298,6 +304,55 @@ Used to detect when we should reset to column 0."
         (tl-indent-line))
       (forward-line 1))))
 
+;;; Formatting
+
+(defun tl-format-buffer ()
+  "Format the current buffer using `tess fmt'."
+  (interactive)
+  (let ((output-buf (generate-new-buffer " *tl-fmt-output*"))
+        (stderr-file (make-temp-file "tl-fmt-stderr"))
+        (original-point (point)))
+    (unwind-protect
+        (let ((exit-code (call-process-region (point-min) (point-max)
+                                              tl-format-command
+                                              nil (list output-buf stderr-file)
+                                              nil "fmt")))
+          (if (zerop exit-code)
+              (let ((formatted (with-current-buffer output-buf (buffer-string))))
+                (erase-buffer)
+                (insert formatted)
+                (goto-char (min original-point (point-max))))
+            (message "tess fmt failed: %s"
+                     (string-trim
+                      (with-temp-buffer
+                        (insert-file-contents stderr-file)
+                        (buffer-string))))))
+      (kill-buffer output-buf)
+      (delete-file stderr-file))))
+
+(defun tl-format-region (start end)
+  "Format the region from START to END using `tess fmt'."
+  (interactive "r")
+  (let ((output-buf (generate-new-buffer " *tl-fmt-output*"))
+        (stderr-file (make-temp-file "tl-fmt-stderr")))
+    (unwind-protect
+        (let ((exit-code (call-process-region start end
+                                              tl-format-command
+                                              nil (list output-buf stderr-file)
+                                              nil "fmt")))
+          (if (zerop exit-code)
+              (let ((formatted (with-current-buffer output-buf (buffer-string))))
+                (delete-region start end)
+                (goto-char start)
+                (insert formatted))
+            (message "tess fmt failed: %s"
+                     (string-trim
+                      (with-temp-buffer
+                        (insert-file-contents stderr-file)
+                        (buffer-string))))))
+      (kill-buffer output-buf)
+      (delete-file stderr-file))))
+
 ;;; Imenu Support
 
 (defun tl-imenu-create-index ()
@@ -321,6 +376,14 @@ Returns a list of (name . position) pairs for all functions, types, and modules.
 
     ;; Return in forward order (reverse because we pushed)
     (nreverse index)))
+
+;;; Keymap
+
+(defvar tl-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-f") #'tl-format-buffer)
+    map)
+  "Keymap for `tl-mode'.")
 
 ;;; Mode Definition
 
