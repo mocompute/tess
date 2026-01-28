@@ -61,6 +61,12 @@
   :safe 'stringp
   :group 'tl)
 
+(defcustom tl-format-on-save nil
+  "When non-nil, automatically format the buffer before saving."
+  :type 'boolean
+  :safe 'booleanp
+  :group 'tl)
+
 ;;; Syntax Table
 
 (defvar tl-mode-syntax-table
@@ -330,6 +336,11 @@ Used to detect when we should reset to column 0."
       (kill-buffer output-buf)
       (delete-file stderr-file))))
 
+(defun tl-format-on-save-hook ()
+  "Format the buffer before saving if `tl-format-on-save' is non-nil."
+  (when tl-format-on-save
+    (tl-format-buffer)))
+
 (defun tl-format-region (start end)
   "Format the region from START to END using `tess fmt'."
   (interactive "r")
@@ -420,7 +431,10 @@ functions, lambdas, closures, and C interoperability.
 
   ;; Beginning/end of defun
   (setq-local beginning-of-defun-function #'tl-beginning-of-defun)
-  (setq-local end-of-defun-function #'tl-end-of-defun))
+  (setq-local end-of-defun-function #'tl-end-of-defun)
+
+  ;; Format on save
+  (add-hook 'before-save-hook #'tl-format-on-save-hook nil t))
 
 (defun tl-beginning-of-defun (&optional arg)
   "Move backward to the beginning of a function definition.
