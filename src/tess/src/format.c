@@ -276,6 +276,159 @@ static char *normalize_ops(allocator *alloc, char const *line) {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-line token alignment
+// ---------------------------------------------------------------------------
+
+enum {
+    ALIGN_ARROW,  // ->
+    ALIGN_COLONEQ, // :=
+    ALIGN_COLON,  // : (not := or ::)
+    ALIGN_EQ,     // = (standalone)
+    ALIGN_COUNT
+};
+
+// Find the column of an alignment token in a line, at paren depth 0,
+// outside strings/chars/comments. Returns -1 if not found.
+static int find_align_token(char const *line, int token_type) {
+    int in_str = 0, in_chr = 0, paren = 0;
+    int len = (int)strlen(line);
+    for (int i = 0; i < len; i++) {
+        char c = line[i];
+        if (in_str) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '"') in_str = 0;
+            continue;
+        }
+        if (in_chr) {
+            if (c == '\\' && i + 1 < len) { i++; continue; }
+            if (c == '\'') in_chr = 0;
+            continue;
+        }
+        if (c == '"') { in_str = 1; continue; }
+        if (c == '\'') { in_chr = 1; continue; }
+        if (c == '/' && i + 1 < len && line[i + 1] == '/') break;
+        if (c == '(') { paren++; continue; }
+        if (c == ')') { paren--; continue; }
+        if (paren != 0) continue;
+
+        char next = (i + 1 < len) ? line[i + 1] : '\0';
+        char prev = (i > 0) ? line[i - 1] : '\0';
+
+        switch (token_type) {
+        case ALIGN_ARROW:
+            if (c == '-' && next == '>') {
+                // Exclude member access: ident-> or )->
+                if (i > 0 && (is_ident_char(prev) || prev == ')')) continue;
+                return i;
+            }
+            break;
+        case ALIGN_COLONEQ:
+            if (c == ':' && next == '=') return i;
+            break;
+        case ALIGN_COLON:
+            if (c == ':' && next != '=' && next != ':') return i;
+            break;
+        case ALIGN_EQ:
+            if (c == '=' && next != '=') {
+                // Exclude :=, !=, >=, <=, +=, -=, *=, /=
+                if (prev == ':' || prev == '!' || prev == '>' || prev == '<' ||
+                    prev == '+' || prev == '-' || prev == '*' || prev == '/')
+                    continue;
+                return i;
+            }
+            break;
+        }
+    }
+    return -1;
+}
+
+// Count leading spaces
+static int leading_spaces(char const *line) {
+    int n = 0;
+    while (line[n] == ' ') n++;
+    return n;
+}
+
+// Returns 1 if the line (after indent) is a comment-only line
+static int is_comment_line(char const *line) {
+    char const *t = ltrim(line);
+    return t[0] == '/' && t[1] == '/';
+}
+
+// Try to align a group of lines on a particular token type.
+// Returns 1 if alignment was performed.
+static int try_align_token(allocator *alloc, char **lines, int start, int end, int token_type) {
+    int max_col = 0;
+    int all_match = 1;
+
+    // First pass: check all non-comment lines have the token
+    for (int i = start; i < end; i++) {
+        if (is_comment_line(lines[i])) continue;
+        if (lines[i][0] == '\0') continue;
+        int col = find_align_token(lines[i], token_type);
+        if (col < 0) { all_match = 0; break; }
+        if (col > max_col) max_col = col;
+    }
+    if (!all_match) return 0;
+
+    // Second pass: pad each line
+    for (int i = start; i < end; i++) {
+        if (is_comment_line(lines[i])) continue;
+        if (lines[i][0] == '\0') continue;
+        int col = find_align_token(lines[i], token_type);
+        if (col < 0 || col == max_col) continue;
+
+        int pad = max_col - col;
+        int old_len = (int)strlen(lines[i]);
+        int new_len = old_len + pad;
+        char *new_line = alloc_malloc(alloc, new_len + 1);
+
+        // Find the start of whitespace before the token
+        int ws_start = col;
+        while (ws_start > 0 && lines[i][ws_start - 1] == ' ') ws_start--;
+
+        // Copy up to ws_start
+        memcpy(new_line, lines[i], ws_start);
+        // Insert padding (original whitespace + extra)
+        int orig_ws = col - ws_start;
+        memset(new_line + ws_start, ' ', orig_ws + pad);
+        // Copy from token onward
+        memcpy(new_line + ws_start + orig_ws + pad, lines[i] + col, old_len - col + 1);
+
+        lines[i] = new_line;
+    }
+    return 1;
+}
+
+// Align a group of consecutive same-indent lines
+static void align_group(allocator *alloc, char **lines, int start, int end) {
+    if (end - start < 2) return;
+    for (int t = 0; t < ALIGN_COUNT; t++) {
+        if (try_align_token(alloc, lines, start, end, t)) return;
+    }
+}
+
+// Run alignment pass over all output lines
+static void align_pass(allocator *alloc, char **lines, int nlines) {
+    int i = 0;
+    while (i < nlines) {
+        // Skip blank lines and directives
+        if (lines[i][0] == '\0' || ltrim(lines[i])[0] == '#') { i++; continue; }
+
+        int group_start = i;
+        int group_indent = leading_spaces(lines[i]);
+
+        while (i < nlines && lines[i][0] != '\0' &&
+               ltrim(lines[i])[0] != '#' &&
+               leading_spaces(lines[i]) == group_indent) {
+            i++;
+        }
+
+        align_group(alloc, lines, group_start, i);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main formatter
 // ---------------------------------------------------------------------------
 
@@ -311,8 +464,21 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         }
     }
 
-    // Phase 2-5: Process lines
-    str_build sb = str_build_init(alloc, size + 256);
+    // Phase 2-5: Process lines — collect into out_lines array
+    int out_cap = nlines * 2 + 16;
+    char **out_lines = alloc_calloc(alloc, out_cap, sizeof(char *));
+    int out_count = 0;
+
+    #define EMIT_LINE(s) do { \
+        if (out_count >= out_cap) { \
+            out_cap *= 2; \
+            char **new_out = alloc_calloc(alloc, out_cap, sizeof(char *)); \
+            memcpy(new_out, out_lines, out_count * sizeof(char *)); \
+            out_lines = new_out; \
+        } \
+        out_lines[out_count++] = (s); \
+    } while(0)
+
     int depth = 0;
     int in_c_block = 0;
     int consecutive_blanks = 0;
@@ -327,7 +493,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         if (trimmed[0] == '\0') {
             consecutive_blanks++;
             if (consecutive_blanks <= 2) {
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
             continue;
@@ -336,8 +502,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
 
         // #ifc — enter C block
         if (!in_c_block && starts_with(trimmed, "#ifc")) {
-            str_build_cat(&sb, str_init(alloc, trimmed));
-            str_build_cat(&sb, S("\n"));
+            EMIT_LINE(alloc_strdup(alloc, trimmed));
             last_output_was_blank = 0;
             in_c_block = 1;
             continue;
@@ -347,13 +512,11 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         if (in_c_block) {
             if (starts_with(trimmed, "#endc")) {
                 in_c_block = 0;
-                str_build_cat(&sb, str_init(alloc, trimmed));
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, trimmed));
                 last_output_was_blank = 0;
             } else {
                 // Preserve original line (with original indentation)
-                str_build_cat(&sb, str_init(alloc, lines[i]));
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, lines[i]));
                 last_output_was_blank = 0;
             }
             continue;
@@ -364,12 +527,11 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         if (trimmed[0] == '#') {
             // Ensure blank line after a multi-line construct before a directive
             if (prev_was_multiline && !last_output_was_blank) {
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
             prev_was_multiline = 0;
-            str_build_cat(&sb, str_init(alloc, trimmed));
-            str_build_cat(&sb, S("\n"));
+            EMIT_LINE(alloc_strdup(alloc, trimmed));
             last_output_was_blank = 0;
             continue;
         }
@@ -410,12 +572,12 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         if (depth == 0 && prev_depth == 0) {
             // At toplevel: if previous construct was multi-line, ensure blank line
             if (prev_was_multiline && !last_output_was_blank) {
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
             // If this line starts a multi-line construct, ensure blank line before it
             if (depth_after > 0 && !last_output_was_blank) {
-                str_build_cat(&sb, S("\n"));
+                EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
             prev_was_multiline = 0;
@@ -428,10 +590,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             // Single-line at depth 0, don't set prev_was_multiline
         }
 
-        // Emit indent
-        for (int s = 0; s < indent; s++)
-            str_build_cat(&sb, S(" "));
-
+        // Build indented line
         // Normalize operators for code lines (not comment-only lines)
         char const *content;
         if (starts_with(trimmed, "//")) {
@@ -450,12 +609,27 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             }
         }
 
-        str_build_cat(&sb, str_init(alloc, content));
-        str_build_cat(&sb, S("\n"));
+        int content_len = (int)strlen(content);
+        char *full_line = alloc_malloc(alloc, indent + content_len + 1);
+        memset(full_line, ' ', indent);
+        memcpy(full_line + indent, content, content_len + 1);
+        EMIT_LINE(full_line);
         last_output_was_blank = 0;
 
         // Update depth
         depth = depth_after;
+    }
+
+    #undef EMIT_LINE
+
+    // Phase 6: Alignment pass
+    align_pass(alloc, out_lines, out_count);
+
+    // Phase 7: Concatenate into str_build
+    str_build sb = str_build_init(alloc, size + 256);
+    for (int i = 0; i < out_count; i++) {
+        str_build_cat(&sb, str_init(alloc, out_lines[i]));
+        str_build_cat(&sb, S("\n"));
     }
 
     str result = str_build_finish(&sb);
