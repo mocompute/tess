@@ -134,6 +134,9 @@
       ("^[ \t]*\\(#\\(?:module\\|import\\|include\\|ifc\\|endc\\)\\)\\>"
        (1 font-lock-preprocessor-face))
 
+      ;; Attributes [[...]]
+      ("\\[\\[\\([^]]*\\)\\]\\]" . font-lock-preprocessor-face)
+
       ;; Keywords
       (,keywords-regexp . font-lock-keyword-face)
 
