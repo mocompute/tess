@@ -55,7 +55,7 @@
   :safe 'integerp
   :group 'tl)
 
-(defcustom tl-format-command "tess"
+(defcustom tl-tess-executable "tess"
   "Path to the tess executable used for formatting."
   :type 'string
   :safe 'stringp
@@ -314,7 +314,7 @@ Used to detect when we should reset to column 0."
         (original-point (point)))
     (unwind-protect
         (let ((exit-code (call-process-region (point-min) (point-max)
-                                              tl-format-command
+                                              tl-tess-executable
                                               nil (list output-buf stderr-file)
                                               nil "fmt")))
           (if (zerop exit-code)
@@ -337,7 +337,7 @@ Used to detect when we should reset to column 0."
         (stderr-file (make-temp-file "tl-fmt-stderr")))
     (unwind-protect
         (let ((exit-code (call-process-region start end
-                                              tl-format-command
+                                              tl-tess-executable
                                               nil (list output-buf stderr-file)
                                               nil "fmt")))
           (if (zerop exit-code)
