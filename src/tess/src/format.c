@@ -1019,6 +1019,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
     int consecutive_blanks    = 0;
     int pipe_col              = -1; // column of first | in a tagged union definition
     int prev_was_multiline    = 0;  // previous toplevel construct was multi-line
+    int prev_was_comment      = 0;  // previous line was a comment
     int last_output_was_blank = 1;  // start of file counts as "blank"
 
     // Continuation line tracking
@@ -1129,7 +1130,8 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 last_output_was_blank = 1;
             }
             // If this line starts a multi-line construct, ensure blank line before it
-            if (depth_after > 0 && !last_output_was_blank) {
+            // (but not if the previous line was a comment attached to this construct)
+            if (depth_after > 0 && !last_output_was_blank && !prev_was_comment) {
                 EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
@@ -1200,6 +1202,9 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             }
         }
         } // end if (!comment)
+
+        // Track whether this line was a comment
+        prev_was_comment = starts_with(trimmed, "//");
 
         // Update depth
         depth = depth_after;

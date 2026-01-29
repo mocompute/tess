@@ -200,6 +200,16 @@ static int test_blank_lines(void) {
         "a := 1\n"
         "b := 2\n");
 
+    error += check(alloc, "no blank line between comment and multi-line construct",
+        "// The Array struct.\n"
+        "Array(T): {\n"
+        "    v: Ptr(T),\n"
+        "}",
+        "// The Array struct.\n"
+        "Array(T): {\n"
+        "    v: Ptr(T),\n"
+        "}\n");
+
     arena_destroy(&alloc);
     return error;
 }
