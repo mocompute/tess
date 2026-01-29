@@ -82,6 +82,12 @@ is_empty(arr: Array(T))         -> Bool
 contains(arr: Array(T), val: T) -> Bool
 index_of(arr: Array(T), val: T) -> Int
 
+// Sorting.
+sort  (self: Ptr(Array(T)), tmp_alloc: Ptr(Allocator), cmp: (T, T) -> Int)                  -> Void
+sort  (self: Ptr(Array(T)), cmp: (T, T) -> Int)                                             -> Void
+sorted(alloc: Ptr(Allocator), tmp_alloc: Ptr(Allocator), arr: Array(T), cmp: (T, T) -> Int) -> Array(T)
+sorted(arr: Array(T), cmp: (T, T) -> Int)                                                   -> Array(T)
+
 // Reordering.
 reverse(self: Ptr(Array(T)))                 -> Void
 swap   (self: Ptr(Array(T)), i: Int, j: Int) -> Void
@@ -472,6 +478,72 @@ find_value(arr: Array(T), f: (T) -> Bool) -> T {
     }
     _tl_fatal_("Array.find_value: no matching element")
     arr.v[0]
+}
+
+
+// -- Sorting --
+
+_merge(v: Ptr(T), tmp: Ptr(T), lo: Int, mid: Int, hi: Int, cmp: (T, T) -> Int, width: Int) {
+    c_memcpy(tmp[lo].&, v[lo].&, (hi - lo) * width)
+    i := lo
+    j := mid
+    k := lo
+    while i < mid && j < hi {
+        if cmp(tmp[i], tmp[j]) <= 0 {
+            v[k] = tmp[i]
+            i    = i + 1
+        } else {
+            v[k] = tmp[j]
+            j    = j + 1
+        }
+        k = k + 1
+    }
+    while i < mid, i += 1 {
+        v[k] = tmp[i]
+        k    = k + 1
+    }
+    while j < hi, j += 1 {
+        v[k] = tmp[j]
+        k    = k + 1
+    }
+}
+
+sort(self: Ptr(Array(T)), tmp_alloc, cmp: (T, T) -> Int) {
+    n := self->size
+    if n <= 1 { return void }
+    width       := _type_width_aligned(T)
+    tmp: Ptr(T) := tmp_alloc->malloc(tmp_alloc, n * width)
+    if tmp == null { _tl_fatal_("Array.sort: oom") }
+    w := 1
+    while w < n {
+        i := 0
+        while i < n {
+            mid := i + w
+            if mid > n { mid = n }
+            hi := i + w * 2
+            if hi > n { hi = n }
+            if mid < hi {
+                _merge(self->v, tmp, i, mid, hi, cmp, width)
+            }
+            i = i + w * 2
+        }
+        w = w * 2
+    }
+    tmp_alloc->free(tmp_alloc, tmp)
+}
+
+sort(self: Ptr(Array(T)), cmp: (T, T) -> Int) {
+    sort(self, Alloc.context.transient, cmp)
+}
+
+sorted(alloc, tmp_alloc, arr: Array(T), cmp: (T, T) -> Int) -> Array(T) {
+    result := clone(alloc, arr)
+    sort(result.&, tmp_alloc, cmp)
+    result
+}
+
+sorted(arr: Array(T), cmp: (T, T) -> Int) -> Array(T) {
+    sorted(Alloc.context.managed, Alloc.context.transient, arr, cmp)
 }
 
 

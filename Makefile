@@ -298,6 +298,7 @@ TL_TESTS =					\
 	array_api				\
 	array_comprehensive			\
 	array_index_binary_op			\
+	array_sort				\
 	arity_overload				\
 	assignment_by_op			\
 	atexit					\
