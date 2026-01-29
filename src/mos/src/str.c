@@ -309,6 +309,22 @@ str str_replace_char(allocator *alloc, str s, char find, char replace) {
     return out;
 }
 
+str str_replace_char_str(allocator *alloc, str s, char find, str replace) {
+    span      src     = str_span(&s);
+    span      rep     = str_span(&replace);
+    str_build builder = str_build_init(alloc, (u32)src.len);
+
+    for (size_t i = 0; i < src.len; ++i) {
+        if (src.buf[i] == find) {
+            array_push_many(builder, rep.buf, rep.len);
+        } else {
+            array_push(builder, src.buf[i]);
+        }
+    }
+
+    return str_build_finish(&builder);
+}
+
 size_t str_len(str self) {
     if (is_small(self)) return self.small.len;
     return self.big.len;

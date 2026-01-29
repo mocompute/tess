@@ -294,6 +294,49 @@ static int test_replace_char(void) {
     return error;
 }
 
+static int test_replace_char_str(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // Basic replacement
+    str r = str_replace_char_str(alloc, S("Foo.Bar"), '.', S("__"));
+    error += str_eq(r, S("Foo__Bar")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Replace with empty string (deletion)
+    r = str_replace_char_str(alloc, S("a.b.c"), '.', S(""));
+    error += str_eq(r, S("abc")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // No occurrences
+    r = str_replace_char_str(alloc, S("hello"), '.', S("__"));
+    error += str_eq(r, S("hello")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Empty input string
+    r = str_replace_char_str(alloc, S(""), '.', S("__"));
+    error += str_eq(r, S("")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // All characters replaced
+    r = str_replace_char_str(alloc, S("..."), '.', S("ab"));
+    error += str_eq(r, S("ababab")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Large string (exceeds small string optimization)
+    r = str_replace_char_str(alloc, S("a.b.c.d.e.f.g.h.i.j.k.l"), '.', S("::"));
+    error += str_eq(r, S("a::b::c::d::e::f::g::h::i::j::k::l")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Multi-char replacement that grows significantly
+    r = str_replace_char_str(alloc, S("x.x.x"), '.', S("-----"));
+    error += str_eq(r, S("x-----x-----x")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -323,6 +366,7 @@ int main(void) {
     T(test_parse_cnum_binary);
     T(test_prefix_char);
     T(test_replace_char);
+    T(test_replace_char_str);
 
     return error;
 }
