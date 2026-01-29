@@ -385,5 +385,7 @@ tl_create_build_fail_test(fail_tagged_union_missing_case)
 tl_create_build_fail_test(fail_tagged_union_unknown_variant)
 tl_create_build_fail_test(fail_type_alias_partial_specialization)
 tl_create_build_fail_test(fail_unknown_free_variable)
+tl_create_build_fail_test(fail_double_underscore)
+tl_create_build_fail_test(fail_double_underscore_module)
 
 # Known failures: these should work but a compiler bug makes them fail

@@ -44,7 +44,7 @@ str str_init_small(char const *in) {
 }
 
 str str_init_static(char const *in) {
-    // danger zone: do not deinit or modify this
+    // danger zone: do not deinit or modify the str returned from this function
     return (str){.big = {.buf = (char *)in, .len = strlen(in)}};
 }
 
@@ -372,6 +372,19 @@ int str_ends_with(str data, str suffix) {
     char const *suffix_buf = str_buf(&suffix);
     size_t      index      = data_len - suffix_len;
     return 0 == memcmp(data_buf + index, suffix_buf, suffix_len);
+}
+
+int str_contains(str haystack, str needle) {
+    size_t hlen = str_len(haystack);
+    size_t nlen = str_len(needle);
+    if (nlen == 0) return 1;
+    if (nlen > hlen) return 0;
+    char const *hbuf = str_buf(&haystack);
+    char const *nbuf = str_buf(&needle);
+    for (size_t i = 0; i <= hlen - nlen; i++) {
+        if (0 == memcmp(hbuf + i, nbuf, nlen)) return 1;
+    }
+    return 0;
 }
 
 int str_contains_char(str s, char c) {

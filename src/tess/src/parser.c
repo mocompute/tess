@@ -835,6 +835,15 @@ static int a_identifier(parser *p) {
             }
         }
 
+        // reject identifiers containing __ to avoid collisions with mangled names
+        // exceptions: __init (compiler-recognized) and c__* (C interop prefix)
+        if (str_contains(str_init_static(p->token.s), S("__"))
+            && 0 != strcmp(p->token.s, "__init")
+            && 0 != strncmp(p->token.s, "c__", 3)) {
+            p->error.tag = tl_err_double_underscore_in_identifier;
+            return 2;
+        }
+
         // check for reserved words, which are not allowed as identifiers
         if (is_reserved(p->token.s)) goto error;
 
@@ -2483,6 +2492,12 @@ static int toplevel_hash(parser *self) {
             str module          = argument;
             self->skip_module   = 0;
             self->expect_module = 0;
+
+            // reject module names containing __ to avoid collisions with mangled names
+            if (str_contains(module, S("__"))) {
+                self->error.tag = tl_err_double_underscore_in_identifier;
+                return 2;
+            }
 
             // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
             str parent = str_empty();

@@ -457,7 +457,9 @@ TL_FAIL_TESTS =					\
 	fail_unknown_free_variable		\
 	fail_generic_unused_type_param		\
 	fail_nested_module_no_parent			\
-	fail_nested_type_cross_module_conflict
+	fail_nested_type_cross_module_conflict	\
+	fail_double_underscore			\
+	fail_double_underscore_module
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =

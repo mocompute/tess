@@ -106,6 +106,22 @@ static int test_ends_with(void) {
     return error;
 }
 
+static int test_contains(void) {
+    int error = 0;
+
+    error += 1 == str_contains(S("hello world"), S("world")) ? 0 : 1;
+    error += 1 == str_contains(S("hello world"), S("hello")) ? 0 : 1;
+    error += 0 == str_contains(S("hello world"), S("xyz")) ? 0 : 1;
+    error += 1 == str_contains(S("foo__bar"), S("__")) ? 0 : 1;
+    error += 0 == str_contains(S("foo_bar"), S("__")) ? 0 : 1;
+    error += 1 == str_contains(S(""), S("")) ? 0 : 1;
+    error += 0 == str_contains(S(""), S("a")) ? 0 : 1;
+    error += 1 == str_contains(S("a"), S("")) ? 0 : 1;
+    error += 1 == str_contains(S("a"), S("a")) ? 0 : 1;
+
+    return error;
+}
+
 static int test_contains_char(void) {
     int error = 0;
 
@@ -359,6 +375,7 @@ int main(void) {
     T(test_dcat);
     T(test_build);
     T(test_ends_with);
+    T(test_contains);
     T(test_contains_char);
     T(test_struct_layout);
     T(test_cmp);

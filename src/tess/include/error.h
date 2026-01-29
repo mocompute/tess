@@ -81,6 +81,7 @@
     X(tl_err_attributes_exist, "attributes_exist")                                                         \
     X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
     X(tl_err_unexpected_else, "unexpected_else")                                                           \
+    X(tl_err_double_underscore_in_identifier, "double_underscore_in_identifier")                           \
                                                                                                            \
     /* analyzer */                                                                                         \
     X(tl_err_expected_pointer, "expected_pointer")                                                         \
