@@ -99,6 +99,18 @@ static int test_normalize_ops(void) {
         "x:int",
         "x: int\n");
 
+    error += check(alloc, "colon no space before",
+        "Shape : { x : Int }",
+        "Shape: { x: Int }\n");
+
+    error += check(alloc, "space before open brace",
+        "main(){",
+        "main() {\n");
+
+    error += check(alloc, "space before open brace general",
+        "f(x){0}",
+        "f(x) {0}\n");
+
     error += check(alloc, ":= spaced",
         "x:=1",
         "x := 1\n");
@@ -364,9 +376,9 @@ static int test_pipe_alignment(void) {
         "Name : | A\n"
         "| B\n"
         "| C",
-        "Name : | A\n"
-        "       | B\n"
-        "       | C\n");
+        "Name: | A\n"
+        "      | B\n"
+        "      | C\n");
 
     arena_destroy(&alloc);
     return error;
@@ -384,7 +396,7 @@ static int test_align_colon_value(void) {
         "x: int\n"
         "yy: int\n"
         "}",
-        "Point : {\n"
+        "Point: {\n"
         "    x:  int\n"
         "    yy: int\n"
         "}\n");
@@ -516,10 +528,10 @@ static int test_idempotency(void) {
 
     char const *inputs[] = {
         "f() {\n    x := 1\n    y := 2\n}\n",
-        "Name : | A\n       | B\n       | C\n",
+        "Name: | A\n      | B\n      | C\n",
         "#module foo\n#import bar\n\nf(x: int) -> int\n",
         "f() {\n    if cond &&\n       cond2 {\n        x\n    }\n}\n",
-        "Point : {\n    x:  int\n    yy: int\n}\n",
+        "Point: {\n    x:  int\n    yy: int\n}\n",
     };
     int n = (int)(sizeof(inputs) / sizeof(inputs[0]));
 

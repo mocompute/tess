@@ -255,8 +255,8 @@ static char *normalize_ops(allocator *alloc, char const *line) {
 
         // Colon: context-dependent
         if (c == ':') {
-            // Just emit `: ` — colon in type annotations
-            // But not if it's already followed by space or is part of ::
+            // Remove trailing spaces before colon
+            while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
             EMIT_CHAR(out, ':');
             if (next != ' ' && next != '\0' && next != ':' && next != '=') EMIT_CHAR(out, ' ');
             continue;
@@ -345,6 +345,12 @@ static char *normalize_ops(allocator *alloc, char const *line) {
         if (c == ' ' || c == '\t') {
             if (out.size == 0 || out.v[out.size - 1] == ' ') continue;
             EMIT_CHAR(out, ' ');
+            continue;
+        }
+
+        if (c == '{') {
+            if (out.size > 0 && out.v[out.size - 1] != ' ') EMIT_CHAR(out, ' ');
+            EMIT_CHAR(out, c);
             continue;
         }
 
