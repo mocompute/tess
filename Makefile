@@ -297,6 +297,7 @@ TL_TESTS =					\
 	arithmetic_unary_op			\
 	array_api				\
 	array_comprehensive			\
+	array_foreach				\
 	array_index_binary_op			\
 	array_reduce				\
 	arity_overload				\
@@ -350,6 +351,7 @@ TL_TESTS =					\
 	lambda_arg_unused			\
 	lambda_basic				\
 	lambda_apply				\
+	lambda_arg_annotated			\
 	lambda_capture_mutate			\
 	lambda_immediate			\
 	lambda_immediate_type_argument		\
@@ -469,8 +471,7 @@ TL_FAIL_TESTS =					\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =		\
-	array_foreach
+TL_KNOWN_FAILURES =
 
 
 

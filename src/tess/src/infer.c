@@ -3242,6 +3242,12 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
 
         // this ensures the environment is also updated, since symbol types are in the env
         env_insert_constrain(self, ast_node_str(param), callsite_type, param);
+
+        // Force-update the env entry to the concrete callsite type.  env_insert_constrain only
+        // constrains (unifies) when the name already exists, which keeps the old type-variable
+        // entry and loses metadata such as free-variable lists.  Overwriting ensures the env
+        // carries the full callsite type including free variables.
+        tl_type_env_insert(self->env, ast_node_str(param), callsite_type);
     }
 
     tl_monotype *inst_result = tl_monotype_sized_last(callsite->list.xs);
