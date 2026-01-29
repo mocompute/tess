@@ -295,6 +295,7 @@ TL_TESTS =					\
 	apply_generic_through_pointer		\
 	apply_lambda				\
 	arithmetic_unary_op			\
+	array_api				\
 	array_comprehensive			\
 	array_index_binary_op			\
 	arity_overload				\
