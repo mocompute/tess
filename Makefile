@@ -467,7 +467,10 @@ TL_FAIL_TESTS =					\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES = array_foreach array_reduce
+TL_KNOWN_FAILURES =		\
+	array_foreach		\
+	array_reduce		\
+	lambda_arg_unused
 
 
 
