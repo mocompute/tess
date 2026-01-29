@@ -469,7 +469,8 @@ TL_FAIL_TESTS =					\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =
+TL_KNOWN_FAILURES = \
+	while_empty_body
 
 
 

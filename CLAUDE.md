@@ -286,7 +286,9 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
     - Module system, mutual recursion
     - C interoperability
   - **Expected failure tests** (prefixed with `test_fail_`) - Tests that verify the compiler correctly rejects invalid code and produces appropriate error messages
-  - **Known failure tests** - Tests for features that aren't yet implemented or are currently broken; these are tracked separately and expected to fail
+  - **Known failure tests** - Tests for features that aren't yet implemented or are currently broken; these are tracked separately and expected to fail. There are two categories:
+    - **Known failures** (`TL_KNOWN_FAILURES` in Makefile, `tl_create_known_failure()` in CMake) - Tests that should compile and run successfully but currently fail due to compiler bugs or missing features
+    - **Known fail-failures** (`TL_KNOWN_FAIL_FAILURES` in Makefile, `tl_create_known_fail_failure()` in CMake) - Expected-failure tests (`test_fail_*`) that the compiler doesn't reject yet
 
 ### Testing Requirements
 
