@@ -2,14 +2,13 @@
 #import <string.tl>
 
 main() {
-  s1 := "hello"
-  case s1, (a, b) { 0 == c_strcmp(a, b) } {
-    "world"    { 1 }
-    "there"    { 1 }
-    "hello"    { 0 }
-  }
+    s1 := "hello"
+    case s1, (a, b) { 0 == c_strcmp(a, b) } {
+        "world" { 1 }
+        "there" { 1 }
+        "hello" { 0 }
+    }
 }
-
 
 
 // ./tess c src/tess/tl/test_case_pred_lambda.tl | cc -O -x c - -S -masm=intel -o -

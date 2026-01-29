@@ -3,5 +3,5 @@
 foo() -> Ptr(any) { return null }
 
 main() {
-  if null == foo() { 0 } else { 1 }
+    if null == foo() { 0 } else { 1 }
 }

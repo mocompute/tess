@@ -1,19 +1,19 @@
 #module Option
 
-T(a) : | Some { v: a }
-       | None
+T(a): | Some { v: a }
+      | None
 
 test1() {
     error := 0
 
-    good := T.Some(v = 123)
+    good   := T.Some(v = 123)
     result := case good: T {
         x: Some { x.v }
         n: None { 456 }
     }
     error += if result - 123 == 0 {0} else {1}
 
-    good := T.Some(v = 0.5)
+    good   := T.Some(v = 0.5)
     result := case good: T {
         x: Some { x.v }
         n: None { 45.6 }

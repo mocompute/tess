@@ -1,5 +1,5 @@
 #module A
-Base : {x: Int}
+Base: {x: Int}
 
 #module B
 Alias1 = A.Base
@@ -8,6 +8,7 @@ Alias1 = A.Base
 Alias2 = B.Alias1
 
 #module main
+
 main() {
     // Direct usage: construct using chained alias
     v := C.Alias2(x = 42)

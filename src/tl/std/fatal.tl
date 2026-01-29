@@ -4,4 +4,4 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-_tl_fatal_      (s: CString)   -> any
+_tl_fatal_ (s: CString) -> any

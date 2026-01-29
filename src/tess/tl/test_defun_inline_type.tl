@@ -1,6 +1,6 @@
 #module main
-add(l : Int, r : Int) { l + r }
+add(l: Int, r: Int) { l + r }
 
 main() {
-  add(-1, 1)
+    add(-1, 1)
 }

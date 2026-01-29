@@ -8,14 +8,14 @@
 
 [[NFA(42)]] nfa_attr() { 0 }
 
-[[struct_attr]] MyStruct : { x: Int }
+[[struct_attr]] MyStruct: { x: Int }
 
-[[enum_attr]] MyEnum : { A, B }
+[[enum_attr]] MyEnum: { A, B }
 
-[[forward_attr]] forward_decl : () -> Int
-forward_decl() { 42}
+[[forward_attr]] forward_decl: () -> Int
+forward_decl                   () { 42}
 
-forward_decl2 : () -> Int
+forward_decl2:                () -> Int
 [[forward_attr]] forward_decl2() { 42 }
 
 has_param_attr([[interesting]] x) { if x :: [[interesting]] {x} else {0} }
@@ -23,8 +23,8 @@ has_param_attr([[interesting]] x) { if x :: [[interesting]] {x} else {0} }
 main() {
     error := 0
 
-    error += if sym :: [[symbol_attribute]] {0} else {1}
-    error += if foo/0 :: [[function_attribute]] {0} else {1}
+    error += if sym ::        [[symbol_attribute]] {0} else {1}
+    error += if foo/0 ::      [[function_attribute]] {0} else {1}
     error += if multiple/0 :: [[attr1]] {0} else {1}
     error += if multiple/0 :: [[attr2]] {0} else {1}
 
@@ -49,10 +49,10 @@ main() {
 
     // negative match on struct and enum
     error += if MyStruct :: [[bad]] {1} else {0}
-    error += if MyEnum :: [[bad]] {1} else {0}
+    error += if MyEnum ::   [[bad]] {1} else {0}
 
     // forward decl: accept attributes on either (but not both) occurrences
-    error += if forward_decl/0 :: [[forward_attr]] {0} else {1}
+    error += if forward_decl/0 ::  [[forward_attr]] {0} else {1}
     error += if forward_decl2/0 :: [[forward_attr]] {0} else {1}
 
     // lambda parameter

@@ -2,10 +2,10 @@
 #import <stdlib.tl>
 #import <Unsafe.tl>
 
-Arr(a) : {
-  v:            Ptr(a),
-  size:         Int,
-  capacity:     Int,
+Arr(a): {
+    v:        Ptr(a),
+    size:     Int,
+    capacity: Int,
 }
 
 // This annotation is not required, but it is helpful for documentation: it reads: "`map` is a function of two arguments.
@@ -17,69 +17,69 @@ map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
 // Argument type annotations are not required.
 map(f, arr) {
 
-  // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
-  // Because `malloc` returns `void*`, the `: Ptr(b)` type annotation is required.
-  out_p : Ptr(b) := c_malloc(sizeof(b) * arr.size)
-  out := Arr(v = out_p, size = arr.size, capacity = arr.size)
+    // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
+    // Because `malloc` returns `void*`, the `: Ptr(b)` type annotation is required.
+    out_p: Ptr(b) := c_malloc(sizeof(b) * arr.size)
+    out           := Arr(v = out_p, size = arr.size, capacity = arr.size)
 
-  i := 0
-  while i < arr.size {
-    mapped := f(arr.v[i])
-    out.v[i] = mapped
-    i = i + 1
-  }
-  out
+    i := 0
+    while i < arr.size {
+        mapped := f(arr.v[i])
+        out.v[i] = mapped
+        i        = i + 1
+    }
+    out
 }
 
-add1(x)  { x + 1 }
+add1 (x) { x + 1   }
 add1f(x) { x + 1.0 }
 
 main() {
 
-  error := 0
+    error := 0
 
-  vals := Arr(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+    vals := Arr(v = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
 
-  vals.v[0] = 0
-  vals.v[1] = 1
-  vals.v[2] = 2
-  vals.v[3] = 3
-  vals.size = 4
+    vals.v[0] = 0
+    vals.v[1] = 1
+    vals.v[2] = 2
+    vals.v[3] = 3
+    vals.size = 4
 
-  res := map(add1/1, vals)
+    res := map(add1/1, vals)
 
-  // verify that map does not mutate its argument
-  sum := 0
-  i := 0
-  while i < vals.size, i = i + 1 {
-    sum = sum + vals.v[i]
-  }
-  c_assert(sum == 6)
-  error += sum - 6
+    // verify that map does not mutate its argument
+    sum := 0
+    i   := 0
+    while i < vals.size, i = i + 1 {
+        sum = sum + vals.v[i]
+    }
+    c_assert(sum == 6)
+    error += sum - 6
 
-  // verify that map returns an array with mapped values
-  sum := 0
-  i := 0
-  while i < vals.size, i = i + 1 {
-    sum = sum + res.v[i]
-  }
-  c_assert(sum == 10)
-  error += sum - 10
+    // verify that map returns an array with mapped values
+    sum := 0
+    i   := 0
+    while i < vals.size, i = i + 1 {
+        sum = sum + res.v[i]
+    }
+    c_assert(sum == 10)
+    error += sum - 10
 
-  floats := Arr(v = c_malloc(sizeof(Float) * 4), size = 0, capacity = 4)
-  floats.v[0] = 0.0
-  floats.v[1] = 1.0
-  floats.v[2] = 2.0
-  floats.v[3] = 3.0
-  floats.size = 4
+    floats := Arr(v = c_malloc(sizeof(Float) * 4), size = 0, capacity = 4)
+    floats.v[0] = 0.0
+    floats.v[1] = 1.0
+    floats.v[2] = 2.0
+    floats.v[3] = 3.0
+    floats.size = 4
 
-  floats_res := map(add1f/1, floats)
-  sum := 0.0
-  i := 0
-  while i < floats.size, i = i + 1 {
-    sum = sum + floats_res.v[i]
-  }
+    floats_res := map(add1f/1, floats)
+    sum        := 0.0
+    i          := 0
+    while i < floats.size, i = i + 1 {
+        sum = sum + floats_res.v[i]
+    }
 
-  error += Unsafe.float_to_int(sum - 10.0)
-  error
+    error += Unsafe.float_to_int(sum - 10.0)
+    error
 }

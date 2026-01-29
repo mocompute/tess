@@ -3,9 +3,9 @@
 // _tl_sizeof_ (x : a) -> Int
 // sizeof(T) { _tl_sizeof_(T) }
 
-Point(a) : {x : a, y : a }
+Point(a): {x: a, y: a }
 
 main() {
-  x := 42
-  if (sizeof(Int) + sizeof(x) == sizeof(Point(Int))) { 0 } else { 1 }
+    x := 42
+    if (sizeof(Int) + sizeof(x) == sizeof(Point(Int))) { 0 } else { 1 }
 }

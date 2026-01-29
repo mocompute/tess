@@ -8,5 +8,5 @@ f() { 42 }
 Foo__f() { 43 }
 
 main() {
-  res := Foo.f() - 43
+    res := Foo.f() - 43
 }

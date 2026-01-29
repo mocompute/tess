@@ -1,7 +1,7 @@
 #module main
 
-Shape : | Circle { radius: Int }
-        | Square { length: Int }
+Shape: | Circle { radius: Int }
+       | Square { length: Int }
 
 main() {
     shape := Shape.Circle(radius = 3)

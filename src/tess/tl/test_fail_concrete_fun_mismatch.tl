@@ -4,6 +4,6 @@
 f(x: Int) { x }
 
 main() {
-    f(0.5)                      // error: expected Int
+    f(0.5)                              // error: expected Int
     0
 }

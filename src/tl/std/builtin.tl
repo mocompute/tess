@@ -3,11 +3,11 @@
 
 // Symbols in the builtin module are available without qualification.
 
-_tl_sizeof_     (x : T)        -> CSize
-_tl_alignof_    (x : T)        -> CSize
+_tl_sizeof_  (x: T) -> CSize
+_tl_alignof_ (x: T) -> CSize
 
-Byte = CUnsignedChar
+Byte    = CUnsignedChar
 CString = Ptr(CChar)
 
-sizeof(T)  { _tl_sizeof_(T) }
+sizeof (T) { _tl_sizeof_(T)  }
 alignof(T) { _tl_alignof_(T) }

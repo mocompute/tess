@@ -1,5 +1,5 @@
 #module main
 
 main() {
-  (x: Type) { sizeof(x) } (Int) - 8
+    (x: Type) { sizeof(x) } (Int) - 8
 }

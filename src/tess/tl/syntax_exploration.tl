@@ -73,15 +73,15 @@
 // Used to define a function:
 
 let fact x =
-    if   lte x 1
-    then 1
-    else mul x (fact (decr x))
+    if lte x 1
+then 1
+else mul x (fact (decr x))
 
 // Top level: struct
 
 struct Point =
-    x : int,
-    y : int
+    x: int,
+y: int
 end
 
 
@@ -93,23 +93,23 @@ end
 
 // Matching let expression
 
-let p = Point 1 2 in
+let p                   = Point 1 2 in
 let (left = x, top = y) = p in ...
 
 // The ellipsis...
 
 struct Big =
-  a : int,
-  b : int,
-  c : int,
-  d : string,
-  // etc
+    a: int,
+b: int,
+c: int,
+d: string,
+// etc
 end
 
-let b = Big // ...
+let b                     = Big         // ...
 let (val = a, rest = ...) = b in
-  // val =>  takes value of field a
-  // rest => a labelled tuple of the remaining fields, e.g. (b = 1, c = 2, d = "hello")
+// val =>  takes value of field a
+// rest => a labelled tuple of the remaining fields, e.g. (b = 1, c = 2, d = "hello")
 
 
 // Block expression
@@ -146,27 +146,27 @@ let (val = a, rest = ...) = b in
 //
 
 
-let p = Point 1 2 in
+let p      = Point 1 2 in
 let result =
-  match p in
-  | (0 = x) -> "zero"
-  | (1 = x) -> "one"
-  end
+    match p in
+        | (0 = x) -> "zero"
+        | (1 = x) -> "one"
+end
 
 // Matching on simple values
 let result =
-  match val in
-  | 0 -> "zero"
-  | 1 -> "one"
-  | else -> "something else"
-  end
+    match val in
+        | 0    -> "zero"
+        | 1    -> "one"
+        | else -> "something else"
+end
 
 // Binding symbols to match
-let p = Point 1 2 in
-  let result =
+let p      = Point 1 2 in
+let result =
     match p in
-    | (top = y) -> mul top 3
-    end
+        | (top = y) -> mul top 3
+end
 // => result = 6
 
 
@@ -178,10 +178,9 @@ let p = Point 1 2 in
 
 
 let xs = [0, 1, 2] in
-  xs.(0) := 1
-  xs.[0] := 1
-  xs[1] := 1
-
+xs.(0) := 1
+xs.[0] := 1
+xs[1]  := 1
 
 
 sizeof (struct Point)
@@ -190,33 +189,31 @@ sizeof (typeof Point)
 
 typeof (Point)
 
-let Point_array_create n : int -> *Point =
-  let sz = mul n (_tl_sizeoft_ Point) in
-  c_malloc sz
+let Point_array_create n: int -> *Point =
+    let sz = mul n (_tl_sizeoft_ Point) in
+c_malloc sz
 
 // made by compiler when a struct is defined
-let Point_tl_sizeof : () -> int
-let Point_tl_offset : int -> int // convert integer array index to byte offset
+let Point_tl_sizeof: ()  -> int
+let Point_tl_offset: int -> int         // convert integer array index to byte offset
 
 // what about allocator-aware interface??
-let Point_anew : int -> *Point   // allocate array of size n?
-let Point_aget : (*Point, int) -> Point
-let Point_aset : (*Point, int, Point) -> ?
+let Point_anew: int -> *Point           // allocate array of size n?
+let Point_aget: (*Point, int) -> Point
+let Point_aset: (*Point, int, Point) -> ?
 or
-let Point_aget : (*Point, int) -> *Point
+let Point_aget: (*Point, int) -> *Point
 
-  (Point_aget ptr 3).*.x := 1
-  (Point_aget ptr 3).* := (Point new val)
-
-
+(Point_aget ptr 3).*.x := 1
+(Point_aget ptr 3).*   := (Point new val)
 
 
 let points = Point_array_create 10 in
-  points.(3) := (Point 1 2)
-  Point_array_set points 3 (Point 1 2)
-  Point_array_get points 3
-  Point_aset points 3 (Point 1 2)
-  Point_aget points 3
+points.(3) := (Point 1 2)
+Point_array_set points 3 (Point 1 2)
+Point_array_get points 3
+Point_aset points 3 (Point 1 2)
+Point_aget points 3
 
 
 //
@@ -224,14 +221,12 @@ let points = Point_array_create 10 in
 //
 
 let res =
-  cond
-  | eq val 0 -> ...
-  | eq val 1 -> ...
-  | lt val 10 -> ...
-  | else -> ...
-  end
-
-
+    cond
+        | eq val 0  -> ...
+        | eq val 1  -> ...
+        | lt val 10 -> ...
+        | else      -> ...
+end
 
 
 //
@@ -239,37 +234,37 @@ let res =
 //
 
 let x1 = val in
-  x1 |> step1 |> step2 |> step3
+x1 | > step1 | > step2 | > step3
 end
 // or with keyword "it"
 pipe x1 = initval
-  in  step1 it
-  and step2 it extra
-  and step3 flipped it more
-  and it became a function
+in step1 it
+and step2 it extra
+and step3 flipped it more
+and it became a function
 end
 // again, prefer prefix notation for everything
 
 let x1 = initval
-    then step1 it
-    then step2 it extra
-    then step3 flip it
-    then it x y z
+then step1 it
+then step2 it extra
+then step3 flip it
+then it x y z
 
 
 let res =
     with initval
-    do step1 it
-    do step2 it extra
-    do step3 flip it
-    do it ()
-    end
+do step1 it
+do step2 it extra
+do step3 flip it
+do it ()
+end
 
 let res =
-  with it = initval
-  do step1 it
-  do step2 it
-  end
+    with it = initval
+do step1 it
+do step2 it
+end
 
 // equivalent to
 let res = initval in
@@ -277,7 +272,7 @@ let res = step1 res in
 let res = step2 extra in
 let res = step3 flip res in
 let res = res ()
-in  res
+in res
 
 
 //
@@ -286,14 +281,14 @@ in  res
 
 // Tuple notation instead of curried
 
-let add : a * a -> a
+let add: a * a -> a
 let add (l, r) = l + r
 
 // inline type annotation is unambiguous this way
-let add (l, r) : a * a -> a = l + r
-let foo () = 42
-let unary(x) = 1
-let main () = add (1, 2) ; foo() ; unary(3)
+let add  (l, r): a * a -> a = l + r
+let foo  ()                 = 42
+let unary(x)                = 1
+let main ()                 = add (1, 2) ; foo() ; unary(3)
 
 vs
 let main () = add 1 2
@@ -301,16 +296,15 @@ let main () = add 1 2
 
 // also visually more obvious that it's a function, since we use the same let keyword
 
-let val = 123
+let val   = 123
 let foo x = 123
 
 vs
 
-let val = 123
+let val     = 123
 let foo (x) = 123
 
 let lam = fun (x, y) -> x + y
-
 
 
 //
@@ -318,30 +312,28 @@ let lam = fun (x, y) -> x + y
 //
 
 - everything is an expression: has a value
-- early return using 'return' and 'break'
-- conditional control flow: cond
-- looping control flow: for
+    - early return using 'return' and 'break'
+    - conditional control flow: cond
+    - looping control flow:     for
 
 foo(x) {
-  a = 1 b = 2
-  c = add(a, b)
-  do_something()
-  l = () { a }
-  if l() { ... } else if { ... } else { ... }
-  for ( ... ) { ... }
-  l()
+    a = 1 b = 2
+    c = add(a, b)
+    do_something()
+    l = () { a }
+    if l() { ... } else if { ... } else { ... }
+    for ( ... ) { ... }
+    l()
 
- // sugar for if-elseif-else:
- cond {
-  (expr) { ... }
-  (expr) { ... }
-  ()     { ... }
-  }
+    // sugar for if-elseif-else:
+    cond {
+        (expr) { ... }
+        (expr) { ... }
+        () { ... }
+    }
 
-  // lambda functions
-  f = (...) { ... }
-
-
+    // lambda functions
+    f = (...) { ... }
 
 
 }
@@ -349,53 +341,53 @@ foo(x) {
 vs
 
 let foo x =
- let a = 1 in
- let b = 2 in
- let c = add a b in
- let _ = do_something ()
- let l = fun () -> a in
- l ()
+    let a = 1 in
+let b = 2 in
+let c = add a b in
+let _ = do_something ()
+let l = fun () -> a in
+l ()
 
 
- EBNF
- definition   =
- concat       ,
- termination  ;
- alternation  |
- optional     [ ... ] none or once
- repetition   { ... } none or more
- grouping     ( ... )
- terminal     " ... "
- comment      (* ... *)
- special      ? ... ?
- exception    -
+EBNF
+definition =
+    concat,
+termination ;
+alternation |
+optional [ ... ] none or once
+repetition { ... } none or more
+grouping ( ... )
+terminal " ... "
+comment (* ... * )
+special ? ... ?
+exception -
 
 
- // v3 struct
- // use : to introduce new type
+// v3 struct
+// use : to introduce new type
 
- : Empty { }
+    : Empty { }
 
- : Basic { x : Int y : Int }
+: Basic { x: Int y: Int }
 
- : Point(a) { x : a y : a }
+: Point(a) { x: a y: a }
 
- : Int
+: Int
 
- a : Int = 0
+a: Int = 0
 
 
- main() {
+main() {
 
-   : Local(a) { foo : a } // local scope, entire function
+    : Local(a) { foo: a }               // local scope, entire function
 
-   obj = Local(foo = 123)
-   p = Point(x = 1, y = 2)
-   p = Point { x = 1, y = 2 }
-   p = Point(3, 4)
-   // named initialisers, but not for funcalls, because that makes param names part of the API
+    obj = Local(foo = 123)
+    p   = Point(x = 1, y = 2)
+    p   = Point { x = 1, y = 2 }
+    p   = Point(3, 4)
+    // named initialisers, but not for funcalls, because that makes param names part of the API
 
- }
+}
 
 
 //
@@ -406,30 +398,30 @@ Exploring new syntax for type arguments, struct declarations:
 
 Consistent use of { } for type arguments, rather than ( ):
 
-Point(a) { x : a, y : a } becomes
-Point{a} { x : a, y : a }
+Point(a) { x:  a, y: a } becomes
+Point    {a            } { x: a, y: a }
 
 // do struct definitions need an introducing token?
-Point { a } { x : a, y : a }
-id    { a } ( x : a ) { x }
+Point { a } { x: a, y: a }
+id    { a } ( x: a ) { x }
 
-id {a} (x : a) { x }
+id {a} (x: a) { x }
 
 // no type args, no fields, no params
-Min { }
+Min     { }
 min ( ) { }
 
 // no type args, one field, one param
-One { a : Int }
-one ( a : Int ) { ... }
+One            { a: Int }
+one ( a: Int ) { ...    }
 
 // one type arg, no field, no param
 TA { a } { }
 ta { a } ( ) { ... }
 
 // one type arg, one field, one param
-OneOne { a } { x : a }
-oneone { a } ( x : a ) { ... }
+OneOne { a } { x: a }
+oneone { a } ( x: a ) { ... }
 
 // type literal uses braces and initializers, e.g. as a formal argument:
 foo(Point { x = 1, y = 2 })
@@ -438,15 +430,14 @@ foo(Point { x = 1, y = 2 }, arg2, ...) { ... }
 But: could we do without type arguments as a special syntactic structure, and
 think about type identifiers as first class?
 
-array_new{T}(count: Int) -> Ptr(T)
-call: array_new{Point{Int}}(16)
-or:   array_new(Point(Int), 16)
+array_new {T}                (count: Int) -> Ptr(T)
+call: array_new {Point {Int}}(16)
+or:   array_new              (Point(Int), 16)
 
 vs.
 
-array_new(T : Type, count : Int) -> Ptr(T)
+array_new(T: Type, count: Int) -> Ptr(T)
 array_new(Point(Int), 16)
-
 
 
 //
@@ -455,10 +446,10 @@ array_new(Point(Int), 16)
 
 // sugar for Ptr(foo) ?
 
-transient_alloc   (sz: CSize)              -> *.any
-transient_clear   (num: CSize,  sz: CSize) -> *.any
-transient_realloc (p: *.any, sz: CSize)    -> *.any
-transient_free    (p: *.any)               -> Void
+transient_alloc   (sz: CSize)             -> *.any
+transient_clear   (num: CSize, sz: CSize) -> *.any
+transient_realloc (p: *.any, sz: CSize)   -> *.any
+transient_free    (p: *.any)              -> Void
 
 // Other examples, prefix "pointer to `type`"
 *.Map(String, Int)
@@ -472,17 +463,17 @@ transient_free    (p)       { context.transient->free(context.transient, p)     
 
 context.transient->malloc(., sz)
 
-context.transient |> context.transient->malloc(sz)
+context.transient | > context.transient->malloc(sz)
 
 // because it's a field which contains a function pointer, it's a pain
 context.transient.(context.transient->malloc)(sz)
 
-foo.bar() === bar(foo)
+foo.bar() == = bar(foo)
 // but currently, we read that as foo's field bar is a fun ptr, which we call with zero args
 
 // typical usage:
-foo.x     // is a field
-foo.bar() // is a method bar(this=foo.&)
+foo.x                                   // is a field
+foo.bar()                               // is a method bar(this=foo.&)
 
 
 // could we have special sugar for that?

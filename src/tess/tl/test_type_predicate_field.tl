@@ -1,8 +1,8 @@
 #module main
 
-Foo : {
-    i : Int,
-    f : Float,
+Foo: {
+    i: Int,
+    f: Float,
 }
 
 t() {

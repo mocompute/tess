@@ -1,3 +1,3 @@
 #module main
-any : { | x: Int | y: Float }
-main() { 0 }
+any:   { | x: Int | y: Float }
+main() { 0                   }

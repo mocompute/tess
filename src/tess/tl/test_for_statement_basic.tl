@@ -3,18 +3,18 @@
 
 main() {
 
-  // xs := Array.with_capacity_undefined(Int, 4)
-  xs := Array.init(0, 4)
+    // xs := Array.with_capacity_undefined(Int, 4)
+    xs := Array.init(0, 4)
 
-  i := 1
-  for x.& in xs {
-    x.* = i
-    i = i + 1
-  }
+    i := 1
+    for x.& in xs {
+        x.* = i
+        i   = i + 1
+    }
 
-  sum := 0
-  for x in xs {
-    sum = sum + x
-  }
-  sum - 10
+    sum := 0
+    for x in xs {
+        sum = sum + x
+    }
+    sum - 10
 }

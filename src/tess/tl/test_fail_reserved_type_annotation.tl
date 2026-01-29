@@ -1,3 +1,3 @@
 #module main
-any : Int
+any: Int
 main() { 0 }

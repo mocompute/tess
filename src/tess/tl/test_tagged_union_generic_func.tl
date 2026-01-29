@@ -1,7 +1,7 @@
 #module main
 
-T(a) : | Some { v: a }
-       | None
+T(a): | Some { v: a }
+      | None
 
 unwrap(opt: T(a), default: a) -> a {
     case opt: T {

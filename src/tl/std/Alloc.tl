@@ -18,34 +18,34 @@ typedef double max_align_t;
 // Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_PERIODIC_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
 initialTransientSize: CSize := 0
-initialPeriodicSize : CSize := 0
+initialPeriodicSize:  CSize := 0
 
-Allocator : {
+Allocator: {
     malloc:  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any),
-    calloc:  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any),
+    calloc:  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any),
     realloc: (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any),
     free:    (a: Ptr(Allocator), p: Ptr(any))            -> Void,
 }
 
-Context : {
+Context: {
     transient: Ptr(Allocator),
     periodic:  Ptr(Allocator),
     managed:   Ptr(Allocator),
 }
 
 // Bump allocator bucket header. A bucket is a header followed by zero or more _BumpBlocks.
-_BumpHeader : {
+_BumpHeader: {
     next:     Ptr(_BumpHeader),
     capacity: CSize,
     size:     CSize,
 }
 
 // Bump allocator block allocated by a client. Client data follows the size field.
-_BumpBlock : {
-    size:     CSize,
+_BumpBlock: {
+    size: CSize,
 }
 
-BumpAllocator : {
+BumpAllocator: {
     allocator: Allocator,
     parent:    Ptr(Allocator),
     head:      Ptr(_BumpHeader),
@@ -57,19 +57,19 @@ align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
 
 transient_alloc   (sz: CSize)              -> Ptr(any)
-transient_clear   (num: CSize,  sz: CSize) -> Ptr(any)
+transient_clear   (num: CSize, sz: CSize)  -> Ptr(any)
 transient_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
 transient_free    (p: Ptr(any))            -> Void
 
-periodic_alloc    (sz: CSize)              -> Ptr(any)
-periodic_clear    (num: CSize,  sz: CSize) -> Ptr(any)
-periodic_realloc  (p: Ptr(any), sz: CSize) -> Ptr(any)
-periodic_free     (p: Ptr(any))            -> Void
+periodic_alloc   (sz: CSize)              -> Ptr(any)
+periodic_clear   (num: CSize, sz: CSize)  -> Ptr(any)
+periodic_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
+periodic_free    (p: Ptr(any))            -> Void
 
-managed_alloc     (sz: CSize)              -> Ptr(any)
-managed_clear     (num: CSize,  sz: CSize) -> Ptr(any)
-managed_realloc   (p: Ptr(any), sz: CSize) -> Ptr(any)
-managed_free      (p: Ptr(any))            -> Void
+managed_alloc   (sz: CSize)              -> Ptr(any)
+managed_clear   (num: CSize, sz: CSize)  -> Ptr(any)
+managed_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
+managed_free    (p: Ptr(any))            -> Void
 
 // -- Implementation --
 
@@ -88,19 +88,19 @@ align_max(n: CSize) {
 // Access them via managed_alloc, etc.
 
 _malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
-_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any) { c_calloc(num, sz) }
+_calloc  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any) { c_calloc(num, sz) }
 _realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
 _free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
 
 // -- BumpAllocator --
 
 _bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any)
-_bump_calloc  (a: Ptr(Allocator), num: CSize,  sz: CSize) -> Ptr(any)
+_bump_calloc  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any)
 _bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
 _bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
 
 bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
-    out : Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
+    out: Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
     out->parent = alloc
     size := next_power_of_two(size)
     size = if size == 0 { 16 } else { size }
@@ -114,19 +114,19 @@ bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
 }
 
 bump_destroy(alloc: Ptr(Allocator)) {
-    bump : Ptr(BumpAllocator) := alloc
+    bump: Ptr(BumpAllocator) := alloc
     bump->parent->free(alloc, bump)
 }
 
 _bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
-    p: Ptr(Byte) := bucket                      // cast
-    p += bucket->size                           // advance to free section
+    p: Ptr(Byte) := bucket              // cast
+    p += bucket->size                   // advance to free section
 
-    block: Ptr(_BumpBlock) := p                 // cast to block header and set size
+    block: Ptr(_BumpBlock) := p         // cast to block header and set size
     block->size = sz
 
-    bucket->size += sz + sizeof(_BumpBlock)     // advance bucket size past header and requested size
-    c_assert(bucket->size <= bucket->capacity)  // this function assumes capacity
+    bucket->size += sz + sizeof(_BumpBlock)    // advance bucket size past header and requested size
+    c_assert(bucket->size <= bucket->capacity) // this function assumes capacity
 
     res: Ptr(Byte) := block                     // cast
     Unsafe.pointer_add(res, sizeof(_BumpBlock)) // advance pointer past header and return it
@@ -160,7 +160,7 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
     c_assert(bucket != null)
     while bucket != null {
         if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof(_BumpHeader))) == 1 &&
-           Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size))        == -1
+           Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size)) == -1
         {
             return bucket
         }
@@ -173,18 +173,18 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
 _BumpHeader_create(alloc, capacity) {
     c_assert(capacity > sizeof(_BumpHeader))
     out: Ptr(_BumpHeader) := alloc->malloc(alloc, capacity)
-    out->next             = null
-    out->capacity         = capacity
-    out->size             = sizeof(_BumpHeader)
+    out->next     = null
+    out->capacity = capacity
+    out->size     = sizeof(_BumpHeader)
     out
 }
 
 _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
-    arena : Ptr(BumpAllocator) := a
+    arena: Ptr(BumpAllocator) := a
 
-    bucket := arena->head
-    last : Ptr(_BumpHeader) := null
-    last_capacity := 0
+    bucket                 := arena->head
+    last: Ptr(_BumpHeader) := null
+    last_capacity          := 0
 
     sz = align_max(sz)
     if 0 == sz { return null }
@@ -201,7 +201,7 @@ _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
     }
 
     // otherwise, need to allocate a new bucket
-    needed := sz + sizeof(_BumpHeader)
+    needed       := sz + sizeof(_BumpHeader)
     new_capacity := last_capacity * 2
     if new_capacity < needed { new_capacity = next_power_of_two(needed) }
     if new_capacity == 0 { return null } // overflow
@@ -217,7 +217,7 @@ _bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
 
     sz = align_max(sz)
     arena: Ptr(BumpAllocator) := a
-    bucket := _find_bucket(arena, p)
+    bucket                    := _find_bucket(arena, p)
     if bucket == null {
         c_assert(0)
         return null
@@ -243,7 +243,7 @@ _bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
         }
     }
 
-    if sz < cur_size { return p } // cannot shrink non-last block
+    if sz < cur_size { return p }       // cannot shrink non-last block
 
     // allocate new block, copy data, release old block if possible
     new_block := _bump_malloc(a, sz)
@@ -256,7 +256,7 @@ _bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
 _bump_calloc(a: Ptr(Allocator), num: CSize, sz: CSize) -> Ptr(any) {
     sz = align_max(sz)
     out := _bump_malloc(a, num * sz)
-    if out != null { c_memset(out, 0xCD, num * sz) }  // TODO: uses 0xCD for debugging, not 0x00
+    if out != null { c_memset(out, 0xCD, num * sz) } // TODO: uses 0xCD for debugging, not 0x00
     out
 }
 
@@ -264,9 +264,9 @@ _bump_free(a: Ptr(Allocator), p: Ptr(any)) -> Void {
     if p == null { return void }
 
     arena: Ptr(BumpAllocator) := a
-    bucket := _find_bucket(arena, p)
+    bucket                    := _find_bucket(arena, p)
     if bucket == null {
-        c_assert(0) // attempt to free unknown pointer
+        c_assert(0)                     // attempt to free unknown pointer
         return void
     }
 
@@ -306,17 +306,17 @@ transient_free    (p)       { context.transient->free(context.transient, p)     
 
 // -- periodic --
 
-periodic_alloc    (sz)      { context.periodic->malloc(context.periodic, sz)        }
-periodic_clear    (num, sz) { context.periodic->calloc(context.periodic, num, sz)   }
-periodic_realloc  (p, sz)   { context.periodic->realloc(context.periodic, p, sz)    }
-periodic_free     (p)       { context.periodic->free(context.periodic, p)           }
+periodic_alloc   (sz)      { context.periodic->malloc(context.periodic, sz)      }
+periodic_clear   (num, sz) { context.periodic->calloc(context.periodic, num, sz) }
+periodic_realloc (p, sz)   { context.periodic->realloc(context.periodic, p, sz)  }
+periodic_free    (p)       { context.periodic->free(context.periodic, p)         }
 
 // -- managed --
 
-managed_alloc     (sz)      { context.managed->malloc(context.managed, sz)          }
-managed_clear     (num, sz) { context.managed->calloc(context.managed, num, sz)     }
-managed_realloc   (p, sz)   { context.managed->realloc(context.managed, p, sz)      }
-managed_free      (p)       { context.managed->free(context.managed, p)             }
+managed_alloc   (sz)      { context.managed->malloc(context.managed, sz)      }
+managed_clear   (num, sz) { context.managed->calloc(context.managed, num, sz) }
+managed_realloc (p, sz)   { context.managed->realloc(context.managed, p, sz)  }
+managed_free    (p)       { context.managed->free(context.managed, p)         }
 
 // -- initialisation --
 
@@ -331,22 +331,22 @@ managed_free      (p)       { context.managed->free(context.managed, p)         
 #endif
 #endc
 
-c_TL_ALLOC_TRANSIENT_SIZE : CSize
-c_TL_ALLOC_PERIODIC_SIZE  : CSize
+c_TL_ALLOC_TRANSIENT_SIZE: CSize
+c_TL_ALLOC_PERIODIC_SIZE:  CSize
 
 _managed := Allocator(
-    malloc  = _malloc/2,
-    calloc  = _calloc/3,
-    realloc = _realloc/3,
-    free    = _free/2
-)
+                      malloc  = _malloc/2,
+                      calloc  = _calloc/3,
+                      realloc = _realloc/3,
+                      free    = _free/2
+                      )
 
 // Allocation Context. Public so that user code can (carefully) install its own allocators dynamically.
 context := Context(
-    transient = void,           // initialized in __init()
-    periodic  = void,           // initialized in __init()
-    managed   = _managed.&
-)
+                   transient = void,    // initialized in __init()
+                   periodic  = void,    // initialized in __init()
+                   managed   = _managed.&
+                   )
 
 
 // Module init

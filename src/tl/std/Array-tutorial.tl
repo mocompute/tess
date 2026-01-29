@@ -54,7 +54,7 @@
 //
 // Int is a builtin type, corresponding to C `long long`, which is guaranteed by the C standard to be a
 // signed integer at least 64 bits long.
-T(a) : {
+T(a): {
     v:        Ptr(a),
     size:     Int,
     capacity: Int,
@@ -105,8 +105,6 @@ reserve(self: Ptr(T(a)), count: Int) -> Void
 free(self: TPtr) -> Void
 
 
-
-
 // -- Implementation --
 
 empty(a: Type) {
@@ -120,7 +118,7 @@ empty(a: Type) {
     // The field `v` includes a type annotation, which is required here to ensure the compiler knows what
     // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
     // arguments provided to the generic `T` type constructor.
-    T ( v : Ptr(a) = null, capacity = 0, size = 0 )
+    T ( v: Ptr(a) = null, capacity = 0, size = 0 )
 }
 
 init(val: a, count: Int) {
@@ -128,7 +126,7 @@ init(val: a, count: Int) {
     // argument to `with_capacity`, which is expecting a type argument. Type arguments to a function expecting
     // a type argument may be type literals, such as `Int`, or another type argument.
     arr := with_capacity(a, count)
-    arr.size = count
+    arr.size             = count
     for p.& in arr { p.* = val }
     arr
 }
@@ -152,14 +150,14 @@ with_capacity(a: Type, count: Int) {
     //
     // This statement also introduces the use of a type variable (`a`) as a type argument to another function
     // call.
-    width      := _type_width_aligned(a)
+    width := _type_width_aligned(a)
 
     // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
     // since `c_malloc` is declared as returning a generic type, the annotation effectively casts the return
     // value to the expected type of the variable `p`. In this case, the annotation is NOT needed, because the
     // type of `p` can be inferred by its point of use in the `v = p` assignment of the type constructor on
     // the next line.
-    p : Ptr(a) := c_malloc(count * width)
+    p: Ptr(a) := c_malloc(count * width)
     T ( v = p, capacity = count, size = 0 )
 }
 
@@ -175,7 +173,7 @@ reserve(self: Ptr(T(a)), count: Int) {
     // This is an if statement. Round braces are optional around the condition.
     if self->capacity < count {
         // The `: Ptr(a)` annotation is required here, so the compiler knows what concrete type to assign to `p`
-        p : Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
+        p: Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
 
         // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
         if p == null { _tl_fatal_("oom") }
@@ -198,30 +196,29 @@ push(self, x) {
 
 // The iterator struct. This is used to provide a public iterator interface over an Array using the `for`
 // statement.
-Iter(a) : {
-    v:        Ptr(a),
-    size:     Int,
-    index:    Int,
+Iter(a): {
+    v:     Ptr(a),
+    size:  Int,
+    index: Int,
 }
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
 // implements the `for` statement. See the bottom of this file for another iterator module, IndexedArray.
 // See also parser.c `a_for_statement` for documentation of how a for loop desugars into calls to these
 // functions.
-iter_init    (arr:  Ptr(T(a)))    -> Iter(a)
-iter_ptr     (iter: Ptr(Iter(a))) -> Ptr(a) // when loop variable is `it.&`
-iter_value   (iter: Ptr(Iter(a))) -> a      // when loop variable is `it`
-iter_cond    (iter: Ptr(Iter(a))) -> Bool
-iter_update  (iter: Ptr(Iter(a))) -> Void
-iter_deinit  (iter: Ptr(Iter(a))) -> Void
+iter_init   (arr: Ptr(T(a)))     -> Iter(a)
+iter_ptr    (iter: Ptr(Iter(a))) -> Ptr(a) // when loop variable is `it.&`
+iter_value  (iter: Ptr(Iter(a))) -> a      // when loop variable is `it`
+iter_cond   (iter: Ptr(Iter(a))) -> Bool
+iter_update (iter: Ptr(Iter(a))) -> Void
+iter_deinit (iter: Ptr(Iter(a))) -> Void
 
-iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
-iter_ptr(iter)    { iter->v[iter->index].&                           }
-iter_value(iter)  { iter->v[iter->index]                             }
-iter_cond(iter)   { iter->index < iter->size                         }
+iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
+iter_ptr   (iter) { iter->v[iter->index].&                           }
+iter_value (iter) { iter->v[iter->index]                             }
+iter_cond  (iter) { iter->index < iter->size                         }
 iter_update(iter) { iter->index = iter->index + 1                    }
 iter_deinit(iter) {                                                  }
-
 
 
 // -- Private functions --
@@ -266,8 +263,6 @@ _grow(self, at_least) {
 _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 
-
-
 // Start a new module. A single file may contain multiple modules, but the same module cannot be implemented
 // using multiple #module sections. That is, once we start a new module, we cannot re-open a previously
 // defined module.
@@ -275,39 +270,39 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 // -- Indexed iterator interface --
 
-IterValuePtr(a) : {
+IterValuePtr(a): {
     ptr:   Ptr(a),
     index: Int,
 }
 
-IterValue(a) : {
+IterValue(a): {
     value: a,
     index: Int,
 }
 
-Iter(a) : {
-    v:        Ptr(a),
-    size:     Int,
-    index:    Int,
-    iv:       IterValue(a),
-    ivp:      IterValuePtr(a),
+Iter(a): {
+    v:     Ptr(a),
+    size:  Int,
+    index: Int,
+    iv:    IterValue(a),
+    ivp:   IterValuePtr(a),
 }
 
 
-iter_init    (arr:  Ptr(Array.T(a))) -> Iter(a)
-iter_ptr     (iter: Ptr(Iter(a)))    -> IterValuePtr(a)
-iter_value   (iter: Ptr(Iter(a)))    -> IterValue(a)
-iter_cond    (iter: Ptr(Iter(a)))    -> Bool
-iter_update  (iter: Ptr(Iter(a)))    -> Void
-iter_deinit  (iter: Ptr(Iter(a)))    -> Void
+iter_init   (arr: Ptr(Array.T(a))) -> Iter(a)
+iter_ptr    (iter: Ptr(Iter(a)))   -> IterValuePtr(a)
+iter_value  (iter: Ptr(Iter(a)))   -> IterValue(a)
+iter_cond   (iter: Ptr(Iter(a)))   -> Bool
+iter_update (iter: Ptr(Iter(a)))   -> Void
+iter_deinit (iter: Ptr(Iter(a)))   -> Void
 
-iter_init(arr)    { Iter (v = arr->v, size = arr->size, index = 0,
-                          iv  = IterValue   (value = void, index = 0),
-                          ivp = IterValuePtr(ptr   = null, index = 0))
-                  }
+iter_init(arr) { Iter (v = arr->v, size = arr->size, index = 0,
+                       iv  = IterValue (value = void, index = 0),
+                       ivp = IterValuePtr(ptr = null, index = 0))
+}
 
-iter_ptr(iter)    { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp     }
-iter_value(iter)  { iter->iv.value = iter->v[iter->index]   iter->iv.index  = iter->index iter->iv      }
-iter_cond(iter)   { iter->index < iter->size                                                            }
-iter_update(iter) { iter->index = iter->index + 1                                                       }
-iter_deinit(iter) {                                                                                     }
+iter_ptr   (iter) { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp }
+iter_value (iter) { iter->iv.value = iter->v[iter->index] iter->iv.index = iter->index iter->iv     }
+iter_cond  (iter) { iter->index < iter->size                                                        }
+iter_update(iter) { iter->index = iter->index + 1                                                   }
+iter_deinit(iter) {                                                                                 }

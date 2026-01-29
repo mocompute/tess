@@ -1,7 +1,7 @@
 #module main
-foo : { }
+foo: { }
 
 main() {
-  ts := foo()
-  0
+    ts := foo()
+    0
 }

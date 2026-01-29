@@ -7,5 +7,5 @@ global := 123
 val := 456
 
 main() {
-  val - Foo.global - 333
+    val - Foo.global - 333
 }

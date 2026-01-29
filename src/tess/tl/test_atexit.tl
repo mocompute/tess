@@ -5,6 +5,6 @@
 foo() { c_printf("goodbye.\n") }
 
 main() {
-  c_atexit(foo/0)
-  0
+    c_atexit(foo/0)
+    0
 }

@@ -1,3 +1,3 @@
 #module main
-any : { A, B, C }
-main() { 0 }
+any:   { A, B, C }
+main() { 0       }

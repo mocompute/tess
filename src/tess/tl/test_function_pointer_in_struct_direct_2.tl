@@ -4,15 +4,15 @@
 // Return type annotation is required because this function will not be specialized, because it is only
 // every referenced through a function pointer.
 malloc(count: CSize) -> Ptr(Int) {
-  c_malloc(count)
+    c_malloc(count)
 }
 
-Ctx(t1) : {
-  malloc_fun: t1,
+Ctx(t1): {
+    malloc_fun: t1,
 }
 
 init() {
-  Ctx(malloc_fun = malloc/1)
+    Ctx(malloc_fun = malloc/1)
 }
 
 
@@ -20,8 +20,8 @@ init() {
 #import <stdlib.tl>
 
 main() {
-  ctx := Foo.init()
-  p := ctx.malloc_fun(16)
-  c_free(p)
-  0
+    ctx := Foo.init()
+    p   := ctx.malloc_fun(16)
+    c_free(p)
+    0
 }

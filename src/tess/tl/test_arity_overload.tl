@@ -4,8 +4,8 @@
 // add(x: Int, y: Int) -> Int
 // add(x: Int, y: Int, z: Int) -> Int
 
-add(x) { x }
-add(x, y) { x + y }
+add(x)       { x         }
+add(x, y)    { x + y     }
 add(x, y, z) { x + y + z }
 
 main() {

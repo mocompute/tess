@@ -1,11 +1,11 @@
 #module main
 
 f(n) {
-  if n <= 0 { n } else { f(n-1) }
+    if n <= 0 { n } else { f(n - 1) }
 }
 
 main() {
-  f(100000)
+    f(100000)
 }
 
 // ./tess c src/tess/tl/test_tail_call.tl | cc -x c - -O -S -o - -masm=intel

@@ -1,7 +1,8 @@
 #module main
+
 main() {
-  obj := 1
-  ptr := obj.&
-  ptr.* = 0
-  obj
+    obj := 1
+    ptr := obj.&
+    ptr.* = 0
+    obj
 }

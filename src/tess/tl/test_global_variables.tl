@@ -5,5 +5,5 @@ two := 2
 foo() { one + two }
 
 main() {
-  foo () - 3
+    foo () - 3
 }

@@ -4,5 +4,5 @@
 my__var := 42
 
 main() {
-  my__var
+    my__var
 }

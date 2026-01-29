@@ -5,7 +5,7 @@ Shape: | Circle { radius: Float }
 
 #module B
 
-Shape : { x: Int, y: Int }
+Shape: { x: Int, y: Int }
 
 #module main
 

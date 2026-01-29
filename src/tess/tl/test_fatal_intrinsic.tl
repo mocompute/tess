@@ -5,18 +5,18 @@
 // Note: We don't actually call it since it terminates the program
 
 conditionally_fail(should_fail: Bool) {
-  if should_fail {
-    _tl_fatal_("This error should never be reached")
-  }
-  void
+    if should_fail {
+        _tl_fatal_("This error should never be reached")
+    }
+    void
 }
 
 main() {
-  error := 0
+    error := 0
 
-  // Call the function but with false to avoid actual termination
-  conditionally_fail(false)
+    // Call the function but with false to avoid actual termination
+    conditionally_fail(false)
 
-  // If we reach here, the test passed (the function compiled correctly)
-  error
+    // If we reach here, the test passed (the function compiled correctly)
+    error
 }

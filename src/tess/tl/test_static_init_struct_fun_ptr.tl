@@ -2,11 +2,11 @@
 #import <stdlib.tl>
 
 malloc(count: CSize) -> Ptr(any) {
-  c_malloc(count)
+    c_malloc(count)
 }
 
-Ctx : {
-  malloc_fun: (n: CSize) -> Ptr(any),
+Ctx: {
+    malloc_fun: (n: CSize) -> Ptr(any),
 }
 
 allocator := Ctx(malloc_fun = malloc/1)
@@ -16,7 +16,7 @@ allocator := Ctx(malloc_fun = malloc/1)
 #import <stdlib.tl>
 
 main() {
-  p := Foo.allocator.malloc_fun(16)
-  c_free(p)
-  0
+    p := Foo.allocator.malloc_fun(16)
+    c_free(p)
+    0
 }
