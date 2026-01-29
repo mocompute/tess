@@ -348,6 +348,7 @@ TL_TESTS =					\
 	hello					\
 	lambda_basic				\
 	lambda_apply				\
+	lambda_capture_mutate			\
 	lambda_immediate			\
 	lambda_immediate_type_argument		\
 	let_in_basic				\
@@ -467,6 +468,7 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =
+
 
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))

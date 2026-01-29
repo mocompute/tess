@@ -1237,7 +1237,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, a_expression)) return 1;
+        if (a_try(self, a_body_element)) return 1;
         array_push(exprs, self->result);
     }
 
