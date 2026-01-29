@@ -8,7 +8,7 @@
 #import <fatal.tl>
 
 // The Array struct.
-Array(T) : {
+Array(T): {
     v:        Ptr(T),
     size:     Int,
     capacity: Int,
@@ -24,42 +24,41 @@ empty(T: Type) -> Array(T)
 
 // Construct an array with count elements of type a, each initialised to val.
 init(alloc: Ptr(Allocator), val: T, count: Int) -> Array(T)
-init(val: T, count: Int) -> Array(T)
+init(val: T, count: Int)                        -> Array(T)
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
 with_capacity(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
-with_capacity(T: Type, count: Int) -> Array(T)
+with_capacity(T: Type, count: Int)                        -> Array(T)
 
 // Allocate an empty array with elements of type a and an initial capacity of count, and set the size to the
 // capacity, leaving the contents undefined.
 with_capacity_undefined(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
-with_capacity_undefined(T: Type, count: Int) -> Array(T)
+with_capacity_undefined(T: Type, count: Int)                        -> Array(T)
 
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
 push(self: Ptr(Array(T)), alloc: Ptr(Allocator), x: T) -> Void
-push(self: Ptr(Array(T)), x: T) -> Void
+push(self: Ptr(Array(T)), x: T)                        -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
 reserve(self: Ptr(Array(T)), alloc: Ptr(Allocator), count: Int) -> Void
-reserve(self: Ptr(Array(T)), count: Int) -> Void
+reserve(self: Ptr(Array(T)), count: Int)                        -> Void
 
 // Deallocate array buffer.
 free(self: Ptr(Array), alloc: Ptr(Allocator)) -> Void
-free(self: Ptr(Array)) -> Void
-
+free(self: Ptr(Array))                        -> Void
 
 
 // -- Implementation --
 
 empty(T: Type) -> Array(T) {
-    Array ( v : Ptr(T) = null, capacity = 0, size = 0 )
+    Array ( v: Ptr(T) = null, capacity = 0, size = 0 )
 }
 
 
 init(alloc, val: T, count) {
     arr := with_capacity(alloc, T, count)
-    arr.size = count
+    arr.size             = count
     for p.& in arr { p.* = val }
     arr
 }
@@ -79,8 +78,8 @@ free(self) {
 
 
 with_capacity(alloc, T: Type, count) {
-    width      := _type_width_aligned(T)
-    p : Ptr(T) := alloc->malloc(alloc, count * width)
+    width     := _type_width_aligned(T)
+    p: Ptr(T) := alloc->malloc(alloc, count * width)
     Array ( v = p, capacity = count, size = 0 )
 }
 
@@ -102,7 +101,7 @@ reserve(self: Ptr(Array(T)), alloc, count: Int) {
     if self->capacity < count {
         p := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
         if p == null { _tl_fatal_("oom") }
-        self->v = p
+        self->v        = p
         self->capacity = count
     }
 }
@@ -114,7 +113,7 @@ reserve(self: Ptr(Array(T)), count: Int) {
 push(self, alloc, x) {
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     self->v[self->size] = x
-    self->size = self->size + 1
+    self->size          = self->size + 1
 }
 
 push(self, x) {
@@ -123,26 +122,25 @@ push(self, x) {
 
 // -- Iterator interface --
 
-Iter(T) : {
-    v:        Ptr(T),
-    size:     Int,
-    index:    Int,
+Iter(T): {
+    v:     Ptr(T),
+    size:  Int,
+    index: Int,
 }
 
-iter_init    (arr:  Ptr(Array(T)))-> Iter(T)
-iter_ptr     (iter: Ptr(Iter(T))) -> Ptr(T)
-iter_value   (iter: Ptr(Iter(T))) -> T
-iter_cond    (iter: Ptr(Iter(T))) -> Bool
-iter_update  (iter: Ptr(Iter(T))) -> Void
-iter_deinit  (iter: Ptr(Iter(T))) -> Void
+iter_init   (arr: Ptr(Array(T))) -> Iter(T)
+iter_ptr    (iter: Ptr(Iter(T))) -> Ptr(T)
+iter_value  (iter: Ptr(Iter(T))) -> T
+iter_cond   (iter: Ptr(Iter(T))) -> Bool
+iter_update (iter: Ptr(Iter(T))) -> Void
+iter_deinit (iter: Ptr(Iter(T))) -> Void
 
-iter_init(arr)    { Iter ( v = arr->v, size = arr->size, index = 0 ) }
-iter_ptr(iter)    { iter->v[iter->index].&                           }
-iter_value(iter)  { iter->v[iter->index]                             }
-iter_cond(iter)   { iter->index < iter->size                         }
+iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
+iter_ptr   (iter) { iter->v[iter->index].&                           }
+iter_value (iter) { iter->v[iter->index]                             }
+iter_cond  (iter) { iter->index < iter->size                         }
 iter_update(iter) { iter->index = iter->index + 1                    }
 iter_deinit(iter) {                                                  }
-
 
 
 // -- Private functions --
@@ -176,40 +174,40 @@ _type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
 
 // -- Indexed iterator interface --
 
-IterValuePtr(T) : {
+IterValuePtr(T): {
     ptr:   Ptr(T),
     index: Int,
 }
 
-IterValue(T) : {
+IterValue(T): {
     value: T,
     index: Int,
 }
 
-Iter(T) : {
-    v:        Ptr(T),
-    size:     Int,
-    index:    Int,
-    iv:       IterValue(T),
-    ivp:      IterValuePtr(T),
+Iter(T): {
+    v:     Ptr(T),
+    size:  Int,
+    index: Int,
+    iv:    IterValue(T),
+    ivp:   IterValuePtr(T),
 }
 
 
-iter_init    (arr:  Ptr(Array.Array(T))) -> Iter(T)
-iter_ptr     (iter: Ptr(Iter(T)))    -> IterValuePtr(T)
-iter_value   (iter: Ptr(Iter(T)))    -> IterValue(T)
-iter_cond    (iter: Ptr(Iter(T)))    -> Bool
-iter_update  (iter: Ptr(Iter(T)))    -> Void
-iter_deinit  (iter: Ptr(Iter(T)))    -> Void
+iter_init   (arr: Ptr(Array.Array(T))) -> Iter(T)
+iter_ptr    (iter: Ptr(Iter(T)))       -> IterValuePtr(T)
+iter_value  (iter: Ptr(Iter(T)))       -> IterValue(T)
+iter_cond   (iter: Ptr(Iter(T)))       -> Bool
+iter_update (iter: Ptr(Iter(T)))       -> Void
+iter_deinit (iter: Ptr(Iter(T)))       -> Void
 
-iter_init(arr)    { Iter (v     = arr->v,
-                          size  = arr->size,
-                          index = 0,
-                          iv    = IterValue   (value = void, index = 0),
-                          ivp   = IterValuePtr(ptr   = null, index = 0)) }
+iter_init(arr) { Iter (v = arr->v,
+                       size  = arr->size,
+                       index = 0,
+                       iv    = IterValue (value = void, index = 0),
+                       ivp   = IterValuePtr(ptr = null, index = 0)) }
 
-iter_ptr(iter)    { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp     }
-iter_value(iter)  { iter->iv.value = iter->v[iter->index]   iter->iv.index  = iter->index iter->iv      }
-iter_cond(iter)   { iter->index < iter->size                                                            }
-iter_update(iter) { iter->index = iter->index + 1                                                       }
-iter_deinit(iter) {                                                                                     }
+iter_ptr   (iter) { iter->ivp.ptr  = iter->v[iter->index].& iter->ivp.index = iter->index iter->ivp }
+iter_value (iter) { iter->iv.value = iter->v[iter->index] iter->iv.index = iter->index iter->iv     }
+iter_cond  (iter) { iter->index < iter->size                                                        }
+iter_update(iter) { iter->index = iter->index + 1                                                   }
+iter_deinit(iter) {                                                                                 }
