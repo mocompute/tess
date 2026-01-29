@@ -53,6 +53,10 @@ static int test_indent_basic(void) {
         "    }\n"
         "}\n");
 
+    error += check(alloc, "}} dedents two levels",
+        "a() {\nb() {\nx\n}}",
+        "a() {\n    b() {\n        x\n}}\n");
+
     error += check(alloc, "} dedents",
         "f() {\n"
         "x\n"
@@ -400,6 +404,12 @@ static int test_pipe_alignment(void) {
         "      | B\n"
         "      | C\n");
 
+    error += check(alloc, "comment between pipe variants",
+        "Name: | A\n// comment\n| B",
+        "Name: | A\n"
+        "      // comment\n"
+        "      | B\n");
+
     arena_destroy(&alloc);
     return error;
 }
@@ -552,6 +562,8 @@ static int test_idempotency(void) {
         "#module foo\n#import bar\n\nf(x: int) -> int\n",
         "f() {\n    if cond &&\n       cond2 {\n        x\n    }\n}\n",
         "Point: {\n    x:  int\n    yy: int\n}\n",
+        "a() {\n    b() {\n        x\n}}\n",
+        "Name: | A\n      // comment\n      | B\n",
     };
     int n = (int)(sizeof(inputs) / sizeof(inputs[0]));
 

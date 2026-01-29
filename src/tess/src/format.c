@@ -744,15 +744,17 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
     for (int i = 0; i < nlines; i++) {
         char const *trimmed = ltrim(lines[i]);
         // Dedent for leading }
+        int cc = 0;
         if (trimmed[0] == '}') {
-            cur_depth--;
+            while (trimmed[cc] == '}') cc++;
+            cur_depth -= cc;
             if (cur_depth < 0) cur_depth = 0;
         }
         depth_at[i] = cur_depth;
         int net     = count_net_braces(lines[i]);
         int new_depth;
-        if (trimmed[0] == '}') {
-            new_depth = cur_depth + net + 1;
+        if (cc > 0) {
+            new_depth = cur_depth + net + cc;
         } else {
             new_depth = cur_depth + net;
         }
@@ -1037,6 +1039,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
+            prev_was_comment = 0;
             continue;
         }
         consecutive_blanks = 0;
@@ -1046,6 +1049,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             EMIT_LINE(alloc_strdup(alloc, trimmed));
             last_output_was_blank = 0;
             in_c_block            = 1;
+            prev_was_comment      = 0;
             continue;
         }
 
@@ -1060,6 +1064,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 EMIT_LINE(alloc_strdup(alloc, lines[i]));
                 last_output_was_blank = 0;
             }
+            prev_was_comment = 0;
             continue;
         }
 
@@ -1074,22 +1079,29 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             prev_was_multiline = 0;
             EMIT_LINE(alloc_strdup(alloc, trimmed));
             last_output_was_blank = 0;
+            prev_was_comment      = 0;
             continue;
         }
 
         // Check if line starts with }
         int prev_depth = depth;
+        int close_count = 0;
         if (trimmed[0] == '}') {
-            // Count leading } braces to determine how much to dedent
-            depth--;
+            while (trimmed[close_count] == '}') close_count++;
+            depth -= close_count;
             if (depth < 0) depth = 0;
         }
 
         int indent = depth * INDENT_WIDTH;
 
         // Continuation line indentation (comments skip continuation)
-        if (starts_with(trimmed, "//")) {
+        int is_comment = trimmed[0] == '/' && trimmed[1] == '/';
+        if (is_comment) {
             // Comment lines use normal indent, not continuation
+            // But if inside a pipe group, use pipe_col
+            if (pipe_col > 0) {
+                indent = pipe_col;
+            }
         } else if (cont_indent >= 0) {
             if (cont_paren_depth == 0 && trimmed[0] == '{') {
                 // Standalone { after a binary-op continuation — use base indent
@@ -1107,16 +1119,16 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             } else {
                 indent += INDENT_WIDTH * 2;
             }
-        } else {
-            // Reset pipe_col when we hit a non-pipe, non-blank line
+        } else if (!is_comment) {
+            // Reset pipe_col when we hit a non-pipe, non-blank, non-comment line
             pipe_col = -1;
         }
 
         // Compute net braces to determine depth after this line
         int net = count_net_braces(trimmed);
         int depth_after;
-        if (trimmed[0] == '}') {
-            depth_after = depth + net + 1; // +1 because we pre-decremented
+        if (close_count > 0) {
+            depth_after = depth + net + close_count; // +close_count because we pre-decremented
         } else {
             depth_after = depth + net;
         }
@@ -1148,7 +1160,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         // Build indented line
         // Normalize operators for code lines (not comment-only lines)
         char const *content;
-        if (starts_with(trimmed, "//")) {
+        if (is_comment) {
             content = trimmed;
         } else {
             content = normalize_ops(alloc, trimmed);
@@ -1172,39 +1184,39 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         last_output_was_blank = 0;
 
         // Update continuation state (skip for comment-only lines)
-        if (!starts_with(trimmed, "//")) {
-        cont_paren_depth += count_net_parens(trimmed);
+        if (!is_comment) {
+            cont_paren_depth += count_net_parens(trimmed);
 
-        int next_starts_binop = (i + 1 < nlines) && starts_with_binary_op(ltrim(lines[i + 1]));
+            int next_starts_binop = (i + 1 < nlines) && starts_with_binary_op(ltrim(lines[i + 1]));
 
-        if (cont_indent < 0) {
-            // Not currently in continuation — check if this line starts one
-            if (cont_paren_depth > 0) {
-                // Unclosed paren — align to column after the last unclosed (
-                int pcol = find_last_unclosed_paren_col(content);
-                if (pcol >= 0) {
-                    cont_indent = indent + pcol + 1;
-                } else {
-                    cont_indent = indent + INDENT_WIDTH;
+            if (cont_indent < 0) {
+                // Not currently in continuation — check if this line starts one
+                if (cont_paren_depth > 0) {
+                    // Unclosed paren — align to column after the last unclosed (
+                    int pcol = find_last_unclosed_paren_col(content);
+                    if (pcol >= 0) {
+                        cont_indent = indent + pcol + 1;
+                    } else {
+                        cont_indent = indent + INDENT_WIDTH;
+                    }
+                    cont_base_indent = indent;
+                } else if (ends_with_binary_op(trimmed) || next_starts_binop) {
+                    // Binary op continuation
+                    int kw           = keyword_cont_width(trimmed);
+                    cont_indent      = indent + kw;
+                    cont_base_indent = indent;
                 }
-                cont_base_indent = indent;
-            } else if (ends_with_binary_op(trimmed) || next_starts_binop) {
-                // Binary op continuation
-                int kw           = keyword_cont_width(trimmed);
-                cont_indent      = indent + kw;
-                cont_base_indent = indent;
-            }
-        } else {
-            // Already in continuation — check if it ends
-            if (cont_paren_depth <= 0 && !ends_with_binary_op(trimmed) && !next_starts_binop) {
-                cont_indent      = -1;
-                cont_paren_depth = 0;
+            } else {
+                // Already in continuation — check if it ends
+                if (cont_paren_depth <= 0 && !ends_with_binary_op(trimmed) && !next_starts_binop) {
+                    cont_indent      = -1;
+                    cont_paren_depth = 0;
+                }
             }
         }
-        } // end if (!comment)
 
         // Track whether this line was a comment
-        prev_was_comment = starts_with(trimmed, "//");
+        prev_was_comment = is_comment;
 
         // Update depth
         depth = depth_after;
