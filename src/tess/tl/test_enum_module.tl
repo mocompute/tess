@@ -6,8 +6,8 @@ DupTag :  {tFoo, tBar, tZero }
 #module main
 
 #ifc
-// Use C to force cast of enum to int: note the mangled C type name `Foo_EnumTag`
-int enum_tag_to_int(Foo_EnumTag x) { return x; }
+// Use C to force cast of enum to int: note the mangled C type name `Foo__EnumTag`
+int enum_tag_to_int(Foo__EnumTag x) { return x; }
 #endc
 
 // Type declaration required

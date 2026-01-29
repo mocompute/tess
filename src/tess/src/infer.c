@@ -4241,7 +4241,7 @@ int is_c_struct_symbol(str name) {
 }
 
 int is_module_init(str name) {
-    return str_ends_with(name, S("___init__0"));
+    return str_ends_with(name, S("____init__0"));
 }
 
 //

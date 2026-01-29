@@ -1607,7 +1607,7 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                 str child_name = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
                                    ? to_mangle->symbol.original
                                    : to_mangle->symbol.name;
-                str candidate_name = str_cat_3(self->ast_arena, parent_name, S("_"), child_name);
+                str candidate_name = str_cat_3(self->ast_arena, parent_name, S("__"), child_name);
 
                 // Look up in the appropriate module's symbol table
                 hashmap *syms = null;
@@ -1840,8 +1840,8 @@ static str unmangled_name(ast_node *name) {
 }
 
 static str mangle_str_for_module(parser *self, str name, str module) {
-    str safe_module = str_replace_char(self->ast_arena, module, '.', '_');
-    return str_cat_3(self->ast_arena, safe_module, S("_"), name);
+    str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
+    return str_cat_3(self->ast_arena, safe_module, S("__"), name);
 }
 
 str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
@@ -1852,7 +1852,7 @@ static str tagged_union_tag_name(parser *self, ast_node *tu_name) {
     str unmangled = unmangled_name(tu_name);
     if (str_is_empty(unmangled)) return unmangled;
 
-    str tag_name = str_cat_3(self->ast_arena, S("_"), unmangled, S("Tag_"));
+    str tag_name = str_cat_3(self->ast_arena, S("__"), unmangled, S("__Tag_"));
     return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
 }
 
@@ -1860,7 +1860,7 @@ static str tagged_union_union_name(parser *self, ast_node *tu_name) {
     str unmangled = unmangled_name(tu_name);
     if (str_is_empty(unmangled)) return unmangled;
 
-    str tag_name = str_cat_3(self->ast_arena, S("_"), unmangled, S("Union_"));
+    str tag_name = str_cat_3(self->ast_arena, S("__"), unmangled, S("__Union_"));
     return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
 }
 
@@ -2646,7 +2646,7 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
             // a_nested_struct_header consumed identifier, ':', and '{'
             // Now parse the nested struct body (fields until '}')
             str nested_bare_name = nested_ident->symbol.name;
-            str prefixed_name    = str_cat_3(self->ast_arena, parent_prefix, S("_"), nested_bare_name);
+            str prefixed_name    = str_cat_3(self->ast_arena, parent_prefix, S("__"), nested_bare_name);
 
             // Recursively parse nested struct fields
             ast_node_array nested_fields = {.alloc = self->ast_arena};
@@ -3016,7 +3016,7 @@ static ast_node *create_variant_constructor(parser *self,
     allocator *arena = self->ast_arena;
 
     // 1. Create function name: Shape_Circle
-    str       func_name_str = str_cat_3(arena, tu_name_str, S("_"), var_name_str);
+    str       func_name_str = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
     ast_node *func_name     = ast_node_create_sym(arena, func_name_str);
 
     // 2. Clone variant fields as function parameters
@@ -3077,8 +3077,8 @@ static ast_node *create_variant_constructor(parser *self,
       ast_node_create_nfa(arena, inner_call_name, (ast_node_sized)array_sized(inner_args));
     set_node_file(self, inner_call);
 
-    // Union construction: _ShapeUnion_(Circle = innerCall)
-    str       union_name_str               = str_cat_3(arena, S("_"), tu_name_str, S("Union_"));
+    // Union construction: __Shape__Union_(Circle = innerCall)
+    str       union_name_str               = str_cat_3(arena, S("__"), tu_name_str, S("__Union_"));
     ast_node *union_arg_name               = ast_node_create_sym(arena, var_name_str);
     ast_node *union_assign                 = ast_node_create_assignment(arena, union_arg_name, inner_call);
     union_assign->assignment.is_field_name = 1;
@@ -3094,8 +3094,8 @@ static ast_node *create_variant_constructor(parser *self,
       ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
     set_node_file(self, union_call);
 
-    // Tag access: _ShapeTag_.Circle
-    str       tag_name_str = str_cat_3(arena, S("_"), tu_name_str, S("Tag_"));
+    // Tag access: __Shape__Tag_.Circle
+    str       tag_name_str = str_cat_3(arena, S("__"), tu_name_str, S("__Tag_"));
     ast_node *tag_type     = ast_node_create_sym(arena, tag_name_str);
     mangle_name(self, tag_type);
     ast_node *dot_op      = ast_node_create_sym_c(arena, ".");
@@ -3245,9 +3245,9 @@ static int toplevel_tagged_union(parser *self) {
     // Generate all the desugared type definitions
     ast_node_array result_nodes = {.alloc = self->ast_arena};
 
-    // 1. Tag enum: _ShapeTag_ : { Circle, Square, Rectangle }
+    // 1. Tag enum: __Shape__Tag_ : { Circle, Square, Rectangle }
     {
-        str            tag_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
+        str            tag_name_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Tag_"));
         ast_node      *tag_name     = ast_node_create_sym(self->ast_arena, tag_name_str);
 
         ast_node_array tag_idents   = {.alloc = self->ast_arena};
@@ -3279,9 +3279,9 @@ static int toplevel_tagged_union(parser *self) {
         array_push(result_nodes, var_struct);
     }
 
-    // 3. Union type: _ShapeUnion_ : { | Circle: Circle | Square: Square | ... }
+    // 3. Union type: __Shape__Union_ : { | Circle: Circle | Square: Square | ... }
     {
-        str       union_name_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
+        str       union_name_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Union_"));
         ast_node *union_name     = ast_node_create_sym(self->ast_arena, union_name_str);
 
         // Build union fields: each field name is the variant name, annotation is the variant type
@@ -3339,20 +3339,20 @@ static int toplevel_tagged_union(parser *self) {
         // Build wrapper fields: tag and u
         ast_node_array wrapper_fields = {.alloc = self->ast_arena};
 
-        // Field: tag: _ShapeTag_
+        // Field: tag: __Shape__Tag_
         {
             ast_node *tag_field    = ast_node_create_sym_c(self->ast_arena, "tag");
-            str       tag_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Tag_"));
+            str       tag_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Tag_"));
             ast_node *tag_ann      = ast_node_create_sym(self->ast_arena, tag_type_str);
             mangle_name(self, tag_ann);
             tag_field->symbol.annotation = tag_ann;
             array_push(wrapper_fields, tag_field);
         }
 
-        // Field: u: _ShapeUnion_ (or _ShapeUnion_(T) for generics)
+        // Field: u: __Shape__Union_ (or __Shape__Union_(T) for generics)
         {
             ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, "u");
-            str       union_type_str = str_cat_3(self->ast_arena, S("_"), tu_name_str, S("Union_"));
+            str       union_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Union_"));
 
             ast_node *u_ann          = null;
             if (n_type_args) {

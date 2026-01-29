@@ -328,7 +328,7 @@ static void generate_one_user_type(transpile *self, ast_node *node) {
         forall(i, def->field_names) {
             // mangle name: name_field
             cat(self, def->name);
-            cat(self, S("_"));
+            cat(self, S("__"));
             cat(self, def->field_names.v[i]);
             if (i + 1 < def->field_names.size) cat_commasp(self);
             cat_nl(self);
@@ -1337,7 +1337,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         // Build tag value name: TagEnumName_VariantName
         // e.g., Foo__ShapeTag_ + "_" + Circle -> Foo__ShapeTag__Circle
-        str tag_value_name = str_cat_3(self->transient, tag_enum_name, S("_"), variant_name);
+        str tag_value_name = str_cat_3(self->transient, tag_enum_name, S("__"), variant_name);
 
         // Generate: if (expr.tag == TagEnumValue) {
         if (i == 0) {
@@ -1570,7 +1570,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         }
 
         if (left_type && tl_monotype_is_enum(left_type)) {
-            str mangled = str_cat_3(self->transient, name, S("_"), ast_node_str(node->binary_op.right));
+            str mangled = str_cat_3(self->transient, name, S("__"), ast_node_str(node->binary_op.right));
             return mangled;
         }
     }
