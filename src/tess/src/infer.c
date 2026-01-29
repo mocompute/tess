@@ -3200,8 +3200,13 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
     assert(callsite_args.size == params.size);
 
     forall(i, params) {
-        ast_node *param = params.v[i];
-        param->type     = tl_polytype_absorb_mono(self->arena, callsite_args.v[i]);
+        ast_node    *param         = params.v[i];
+        tl_polytype *callsite_type = tl_polytype_absorb_mono(self->arena, callsite_args.v[i]);
+        if (!ast_node_is_symbol(param)) fatal("runtime error");
+        ast_node_type_set(param, callsite_type);
+
+        // this ensures the environment is also updated, since symbol types are in the env
+        env_insert_constrain(self, ast_node_str(param), callsite_type, param);
     }
 
     tl_monotype *inst_result = tl_monotype_sized_last(callsite->list.xs);
