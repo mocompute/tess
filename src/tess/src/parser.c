@@ -1550,6 +1550,18 @@ begin_body:
 //
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
+    // Nested module resolution: if left is a module and "left.right" is also a module,
+    // synthesize a combined module reference (e.g., Foo.Bar) for the next dot iteration.
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
+        str_hset_contains(self->modules_seen, (*inout)->symbol.name) &&
+        ast_node_is_symbol(right)) {
+        str combined = str_cat_3(self->ast_arena, (*inout)->symbol.name, S("."), right->symbol.name);
+        if (str_hset_contains(self->modules_seen, combined)) {
+            right->symbol.name = combined;
+            *inout = right;
+            return 1;
+        }
+    }
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
         str_hset_contains(self->modules_seen, (*inout)->symbol.name)) {
         ast_node *to_mangle = null;
@@ -1830,7 +1842,8 @@ static str unmangled_name(ast_node *name) {
 }
 
 static str mangle_str_for_module(parser *self, str name, str module) {
-    return str_cat_3(self->ast_arena, module, S("_"), name);
+    str safe_module = str_replace_char(self->ast_arena, module, '.', '_');
+    return str_cat_3(self->ast_arena, safe_module, S("_"), name);
 }
 
 str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
@@ -2472,6 +2485,7 @@ static int toplevel_hash(parser *self) {
             str module          = argument;
             self->skip_module   = 0;
             self->expect_module = 0;
+
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
             else {
                 // save current module symbols, if any

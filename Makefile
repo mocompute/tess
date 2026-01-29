@@ -361,6 +361,7 @@ TL_TESTS =					\
 	mapper_lambda				\
 	module_basic				\
 	module_init				\
+	module_nested				\
 	mutual_recursion			\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\

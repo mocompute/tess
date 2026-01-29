@@ -298,6 +298,17 @@ void str_resize(allocator *alloc, str *self, size_t len) {
     self->big.len = len;
 }
 
+str str_replace_char(allocator *alloc, str s, char find, char replace) {
+    span   src      = str_span(&s);
+    size_t len      = src.len;
+
+    str    out      = str_copy(alloc, s);
+    span   out_span = str_span(&out);
+
+    for (size_t i = 0; i < len; ++i) out_span.buf[i] = src.buf[i] == find ? replace : src.buf[i];
+    return out;
+}
+
 size_t str_len(str self) {
     if (is_small(self)) return self.small.len;
     return self.big.len;
@@ -489,7 +500,7 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
         parse_start = buf + 2; // Skip "0b" prefix
     }
 
-    errno = 0;
+    errno               = 0;
 
     char         *p_end = 0;
     long long int i     = strtoll(parse_start, &p_end, base);

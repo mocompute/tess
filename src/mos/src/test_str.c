@@ -219,6 +219,39 @@ static int test_cat_multi(void) {
     return error;
 }
 
+static int test_replace_char(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // Basic replacement
+    str r = str_replace_char(alloc, S("Foo.Bar.Baz"), '.', '_');
+    error += str_eq(r, S("Foo_Bar_Baz")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // No occurrences
+    r = str_replace_char(alloc, S("hello"), '.', '_');
+    error += str_eq(r, S("hello")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Empty string
+    r = str_replace_char(alloc, S(""), '.', '_');
+    error += str_eq(r, S("")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // All characters replaced
+    r = str_replace_char(alloc, S("..."), '.', '_');
+    error += str_eq(r, S("___")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // Large string (exceeds small string optimization)
+    r = str_replace_char(alloc, S("a.b.c.d.e.f.g.h.i.j.k.l"), '.', '_');
+    error += str_eq(r, S("a_b_c_d_e_f_g_h_i_j_k_l")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -245,6 +278,7 @@ int main(void) {
     T(test_cmp);
     T(test_cat_multi);
     T(test_parse_cnum_binary);
+    T(test_replace_char);
 
     return error;
 }
