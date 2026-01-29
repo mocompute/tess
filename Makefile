@@ -571,7 +571,31 @@ test:
 	fi
 
 
-.PHONY: clean cleanall install test
+# ------------------------------------------------------------------------------
+# Tags
+# ------------------------------------------------------------------------------
+
+# Function definitions: name(...) ... {
+ETAGS_TL_RE_FUNC := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*(.*{/\1/'
+# Struct/union definitions without type params: Name : { or Name : |
+ETAGS_TL_RE_TYPE := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*:[ \t]*[{|]/\1/'
+# Struct/union definitions with type params: Name(T) : { or Name(T) : |
+ETAGS_TL_RE_GTYPE := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)([^)]*)[ \t]*:[ \t]*[{|]/\1/'
+# Type aliases: Name = Type (single =, not :=)
+ETAGS_TL_RE_ALIAS := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*=[^=]/\1/'
+# Module declarations: #module Name
+ETAGS_TL_RE_MOD := --regex='/^\#module[ \t]+\([a-zA-Z_][a-zA-Z0-9_]*\)/\1/'
+# Global bindings: name := expr
+ETAGS_TL_RE_BIND := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*:=[^=]/\1/'
+
+tags:
+	etags --language=none \
+	    $(ETAGS_TL_RE_FUNC) $(ETAGS_TL_RE_TYPE) $(ETAGS_TL_RE_GTYPE) \
+	    $(ETAGS_TL_RE_ALIAS) $(ETAGS_TL_RE_MOD) $(ETAGS_TL_RE_BIND) \
+	    `find src -name '*.tl'`
+	etags --append src/mos/src/*.[ch] src/tess/src/*.[ch]
+
+.PHONY: clean cleanall install test tags
 .PHONY: test-mos test-tess test-tl
 .PHONY: build-mos-benchmarks bench-mos
 .DEFAULT_GOAL := all
