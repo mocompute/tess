@@ -1,0 +1,235 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased] - 2026-01-23 to 2026-01-30
+
+### Highlights
+
+- New code formatter with sophisticated formatting capabilities
+- Comprehensive array library with functional programming operations
+- Attributes system for function and parameter annotations
+- Arity-based function overloading
+
+### Added
+
+- **Code Formatter**: New `tess fmt` subcommand with sophisticated formatting capabilities including multi-line token alignment (`:`, `->`, `:=`, `=`), continuation line indentation, and comment alignment. Supports stdin/stdout and in-place editing with `-i` flag. Includes format-on-save support in Emacs `tl-mode.el`.
+- **Array Standard Library**: Comprehensive Array.tl API with element access, mutation, sizing, reordering, bulk operations, search functions, and functional programming operations (`map`, `filter`, `reduce`, `foreach`, `any_of`, `all`, `find`, `find_value`).
+- **Attributes System**: New `[[attribute]]` syntax for function and parameter annotations with predicate support (e.g., `x :: [[attribute]]`).
+- **Arity-based Function Overloading**: Functions with the same name but different parameter counts can now coexist. Function pointers use `/arity` suffix syntax (e.g., `foo/2`).
+- **Nested Structures and Modules**: Support for nested struct definitions and dotted module names (e.g., `#module Foo.Bar`). Added dot syntax for nested types and tagged union variants (e.g., `Shape.Circle`).
+- **Short-circuit Evaluation**: Proper short-circuit semantics for `||` and `&&` operators.
+- **Compiler Performance Tools**: New `--stats` flag showing per-phase memory and timing statistics, and `--time` flag for elapsed time reporting. Parser now uses speculative arenas for memory-efficient backtracking.
+- **MOS Library Utilities**: New string utilities (`str_contains`, `str_starts_with`, `str_replace_char`, etc.), platform abstraction layer (`platform_command_exists`, `platform_temp_file_create/delete`, `platform_exec`, `hires_timer`), and arena statistics API.
+- **Documentation**: Added NAME_MANGLING.md, FAQ.md, comprehensive type annotation guidelines, and documentation for attributes, type predicates, and function pointers.
+
+### Changed
+
+- **Name Mangling**: Changed separator from single underscore to double underscore (`__`) to prevent collisions. Parser now rejects identifiers containing `__` (except compiler-recognized prefixes like `__init` and `c__*`).
+- **Type System**: Improved generic specialization to avoid over-generalization of concrete functions. Enhanced validation to reject unused generic type parameters in struct definitions.
+- **Test Infrastructure**: Reorganized test categories (passing tests, expected failures, known failures, known fail-failures) with improved output and count summaries. Added 9 new function pointer integration tests.
+- **Build System**: Enforced test-first development approach. Synchronized Makefile and CMake test definitions and known failures. Separated benchmarks from tests.
+
+### Deprecated
+
+### Removed
+
+- **Positional Struct Initialization**: Removed support for positional struct value initialization. Only named field initialization is now supported.
+
+### Fixed
+
+- Fixed MSVC misoptimization of small string writes through `str_span` alias.
+- Fixed specialization issues with lambda arguments, annotated parameters, and unused parameters causing undefined function references.
+- Fixed tree shaking incorrectly removing specialized functions referenced as bare symbols or in case expressions.
+- Fixed C code generation for functions returning function pointers.
+- Fixed buffer overflow in `str_resize`, over-allocation in `str_fmt`, and input validation in `str_parse_num`.
+- Fixed negative literals being misidentified as binary operators in formatter.
+- Fixed cross-module symbol corruption during parser second pass.
+- Fixed Windows compatibility issues including debug build GUI dialogs, incorrect use of temporary return values, and macro conflicts.
+
+### Security
+
+## [Unreleased] - 2026-01-16 to 2026-01-22
+
+### Highlights
+
+- Generic tagged unions with full implementation and comprehensive documentation
+- Complete Emacs mode and GitHub Actions CI
+- Extensive Windows/MSVC compatibility work (22+ commits)
+- Binary literals, scientific notation, logical OR operator, block expressions
+- Breaking changes: Tagged union syntax and reassignment type semantics
+
+### Added
+
+- **Generic Tagged Unions**: Full support for generic/polymorphic tagged unions (e.g., `Option(a)`, `Either(a, b)`) with specialization machinery, 9 comprehensive test cases, and 482-line technical documentation (TAGGED_UNIONS.md). Added mutable case binding syntax, exhaustiveness checking, and else clauses in case/match expressions.
+- **Language Features**: Binary literal support with `0b`/`0B` prefix, scientific notation with signed exponents, logical OR operator (`||`), block expressions, return statements without arguments, and `String = Ptr(CChar)` type alias in standard library.
+- **Developer Tooling**: Complete Emacs major mode (`tl-mode.el`) with syntax highlighting, intelligent indentation, imenu navigation, and comprehensive test suite (1,071 lines). GitHub Actions CI workflow for automated Linux, macOS, and Windows builds. Version flag (`--version`) with automatic version extraction.
+- **Build System**: Automatic standard library include paths (searches `<exe_dir>/../lib/tess/std` and `<cwd>/src/tl/std` without requiring `-I` flags). Added `--no-standard-includes` flag to disable automatic includes.
+- **Documentation**: Major expansion of LANGUAGE_REFERENCE.md with 200+ lines covering key characteristics, syntax examples, for-in loop iterator interface, mutually recursive types, and case/match predicates. Created 13 new test files covering previously undocumented features. Test-first approach documented in CLAUDE.md.
+- **Windows Support**: Full Windows platform abstraction layer with MSVC-specific compiler invocation, proper command-line building, temp file handling, and cross-platform thread-local storage compatibility.
+
+### Changed
+
+- **Breaking Syntax Changes**: Tagged union syntax changed from `Name = | ...` to `Name : | ...`. Reassignments now always have void type to prevent confusing patterns.
+- **Type System**: Removed experimental `String` builtin type and `escape_constraint` mechanism, replaced with simpler `Ptr(CChar)` alias. Improved error messages for type inference failures and tagged union issues.
+- **Compiler Behavior**: Compiler now rejects returning lambda functions (limitation documented). Parser now allows `{ }` as sugar for `{ void }`.
+- **Build & Testing**: Refactored number parsing in tokenizer. Optimized string operations. Simplified arena allocator. Emacs imenu changed to flat list for better usability. Windows CI updated to build and test Release configuration.
+
+### Deprecated
+
+### Removed
+
+- Removed support for `alignof(expr)` due to MSVC incompatibility (kept `alignof(Type)` only).
+- Removed experimental `String` builtin type and type constraint escape mechanism.
+- Removed 75 lines of obsolete documentation from DEV.md.
+- Removed zlib dependency from CMake.
+
+### Fixed
+
+- Fixed extensive Windows/MSVC compatibility issues (22+ commits): struct alignment, `_Thread_local` compatibility, empty struct emission, `typeof` and VLA usage, `max_align_t` typedef, temp file handling and race conditions, CMake compatibility, `alignof(expr)` usage, flexible array members, temp filename echo, and numerous warnings.
+- Fixed bugs in Array.tl `reserve()`, break/continue statements in loops, generic tagged union case expressions, `ast_case` node cloning, returns from void functions, and string library operations.
+- Fixed syntax errors in documentation, install target in Makefile, CMake version header generation, and missing test registrations.
+
+### Security
+
+## [Unreleased] - 2026-01-01 to 2026-01-15
+
+### Highlights
+
+- Type alias system expansion with module-qualified aliases and 13 new test files
+- Module initialization system with `Module.__init()` infrastructure
+- Major refactoring of type inference (reduced by ~270 lines)
+- Case expression improvements with binary predicates and else cases
+- Better cross-compiler support (GCC-15, Clang-19)
+
+### Added
+
+- **Type Alias System**: Expanded support for module-qualified type aliases, direct type alias usage as constructors, type aliases of enums, and generic type aliases with improved type literal unification. Added 13 new comprehensive test files covering local aliases, cross-module aliases, chained aliases, and generic aliases. Known limitation: Partial specialization of type aliases not yet supported (tracked with test).
+- **Module Initialization System**: Support for `Module.__init()` functions that are automatically called at program startup in correct dependency order. Enables per-module initialization logic (initially used in `Alloc.tl` for default allocator setup).
+- **Case Expression Improvements**: Support for binary predicates with proper type inference, `else` cases, explicit specialization of generic predicates, and improved handling of function pointers in case expressions.
+- **MOS Library**: Added `str_ends_with()` function with unit tests and `platform.c` source file.
+- **Testing Infrastructure**: Added tests for monkey patch prevention, specialized type constructor regression, allocator improvements, and language feature exploration.
+
+### Changed
+
+- **Type System Improvements**: Improved type alias compatibility for concrete alias target types, integer type literal unification logic, binary operator field name inference, and let-in annotation types as casts.
+- **Allocator System**: Improved transient allocator initialization logic (simplified from 22 lines to 5), renamed allocator helper functions for clarity, enhanced module initialization for proper allocator setup.
+- **Major Refactoring of Type Inference**: Decomposed massive `infer_traverse_cb()` function (reduced by ~270 lines) into focused helpers: `infer_case()` (58 lines), `infer_let_in()` (92 lines), `infer_named_function_application()` (97 lines), and other extracted helpers. Added documentation with section headers and algorithm overview. Consolidated and cleaned up ~85 lines for improved readability.
+- **Build System**: Improved C compiler flag detection to avoid passing unsupported flags, updated Nix flake with build commands and improved Clang-19 compatibility, removed `-O` flag from debug builds for better debugging.
+- **Documentation**: Added comprehensive CLAUDE.md (168 lines) documenting Windows/CMake build instructions. Updated documentation with type alias usage examples.
+
+### Deprecated
+
+### Removed
+
+- Removed duplicate code in `infer.c`, unnecessary imports of `builtin.tl` from 10 type alias test files, `TYPE_ALIAS_TODO.md` after completing related work, and accidental debug flag from Makefile.
+
+### Fixed
+
+- Fixed specialized type constructor bug where type constructors weren't properly handled during specialization (added regression test).
+- Fixed token line number tracking in tokenizer (off-by-one errors).
+- Fixed incorrect buffer length calculation in `infer.c` (caught by GCC warnings).
+- Fixed binary operator field name logic edge cases.
+- Fixed install target to properly copy standard library files.
+- Fixed compilation under GCC-15 and warnings in Nix build environment.
+- Fixed Clang workaround to work with Clang-19.
+- Fixed transient allocator initialization and lifecycle management issues.
+
+### Security
+
+## [Unreleased] - 2025-12-01 to 2025-12-31
+
+### Highlights
+
+- Iterator interface with for-loops and comprehensive language feature additions
+- Type system maturity: Recursive types, type aliases, fixed-width integers, float types
+- Standard library growth: Bump allocator, major Array.tl expansion, new utility modules
+- Developer infrastructure: Comprehensive Makefile, Emacs mode, 6 major docs, 60+ new tests
+- Performance and quality improvements with memory optimizations
+
+### Added
+
+- **Iterator Interface & For Loops**: Comprehensive iterator interface for collections enabling for-statement iteration with `break` and `continue` keywords.
+- **Language Features**: C Array support with automatic pointer decay, anonymous lambda arguments, return type annotations, compound assignment operators (`+=`, `-=`, etc.), octal (`0o`) and hexadecimal (`0x`) integer literals, type predicates for runtime type checking, explicit pointer casting, and special `null` literal handling.
+- **Type System Enhancements**: Proper recursive and mutually recursive type definitions with placeholder-based resolution, fixed-width integer types (`CInt8`, `CUInt8`, `CInt16`, `CUInt16`, `CInt32`, `CUInt32`, `CInt64`, `CUInt64`), float types (`CFloat`, `CDouble`, `CLongDouble`), comprehensive type alias system with generic parameters and module scoping, improved void/unit type handling with `ast_void`, and `Ptr(any)` support as equivalent to `void*`.
+- **Standard Library**: Complete bump allocator in `Alloc.tl` with alignment support and reset functionality. Major Array.tl expansion with iterator interface, initialization functions (`Array.init`, `Array.with_capacity_undefined`, `Array.empty`), comprehensive documentation and tutorial. Added `Unsafe.tl` for low-level operations, `fatal.tl` for error handling, and C library bindings (`atexit`, `_Exit`, `c_assert`).
+- **Build System & Tooling**: Comprehensive Makefile supporting multiple configurations (release, debug, asan), parallel builds, test execution, colored output, and installation. CLI options: `--time` flag for performance measurement and `--verbose-ast` for detailed AST output. Complete Emacs major mode with syntax highlighting, indentation, and imenu support.
+- **Documentation**: Extensive documentation in `docs/` including LANGUAGE_REFERENCE.md, TYPE_SYSTEM.md, SPECIALIZATION.md, TAGGED_UNIONS.md, NAME_MANGLING.md, FAQ.md, CLAUDE.md for Claude Code guidance, and README.md.
+- **Testing**: 60+ new tests covering iterators, for-statements, type system features, tagged unions, function pointers, integer/float types, pointer operations, control flow, assignment operators, lambdas, and expected-failure tests for error validation.
+
+### Changed
+
+- **Type Inference**: Added post-inference pass to catch unresolved types early. Refactored generic specialization for better handling of operands, reassignments, and type constructors. Improved constraint generation and satisfaction for let-in expressions, reassignments, and function pointers. Enhanced error messages for better debugging.
+- **Parser**: Made commas optional for separating body elements. Added dedicated `ast_reassignment` node for body element assignments. Improved function pointer parsing in reassignment contexts.
+- **Transpiler**: Fixed void function body generation. Added type updating pass for C function calls. Added `_Thread_local` qualifier to toplevel values. Added proper pointer cast code generation. Added C comments in verbose mode for debugging.
+- **Build System**: Added initial Windows/MSVC support with CMake improvements. Improved cross-platform compatibility for macOS, Linux, and Windows.
+- **Performance**: Multiple memory optimizations including reduced allocations, avoided excessive `map_destroy` calls, reduced string creation in non-verbose mode, extensive use of transient allocator, memoized `parse_type`, and reduced default map load factor.
+
+### Deprecated
+
+### Removed
+
+- Removed obsolete type system functions (`admit_generic_pointers`, `canonicalize_user_types`, redundant specials map, various memoization).
+- Removed `tl_weak <-> void` hack after proper void type implementation.
+- Removed excessive debug output (printfs, env dbg, resolve_node messages).
+- Removed various unused functions, dead code paths, and obsolete C++ preprocessing options.
+
+### Fixed
+
+- Fixed recursive type handling, type annotation handling, struct field type assertions, unresolved types at reassignment sites, `return_null` return type constraints, type constructor specialization `is_specialized` flag, and buffer overflow with very long type names.
+- Fixed parser line number tracking (off-by-one error), dot operator parsing, and range checking error.
+- Fixed double-dereference bug in pointer handling, reassignment code generation, emission of functions with weak type variables, hash function ancestor detection, and boolean condition handling for `c_assert`.
+- Fixed test output using `printf` instead of `echo` for escape sequences. Updated float size tests for macOS compatibility.
+
+### Security
+
+## [Unreleased] - 2025-11-01 to 2025-11-30
+
+### Highlights
+
+- Complete module system with `#module` directive, namespaces, and two-pass parsing
+- Major type system enhancements: recursive types, type literals, type aliases, arrow type annotations
+- User-defined types: enums, unions, tagged unions, empty structs
+- Case expressions for pattern matching with predicates
+- C interoperability improvements: direct compiler invocation, `#ifc` blocks, C character literals
+- Breaking changes: Nil→Void rename, struct literal syntax changed to round braces `()`
+
+### Added
+
+- **Module System**: Complete module system with `#module` directive, module namespaces, `-I` flag for include paths, two-pass parsing for forward references, module qualifier support in type annotations, and auto-loading of `builtin.tl`.
+- **Type System Enhancements**: Full support for recursive and mutually recursive types with pointer recursion detection. Major type literal rework during inference phase with `tl_literal` monotype variant. Type alias declarations and arrow type annotations for function types.
+- **User-Defined Types**: Full enum support with C emission, complete union implementation including parsing and C code generation, tagged union variants with type checking, and empty struct support.
+- **Control Flow**: Case expressions for pattern matching, case-with-predicate for advanced matching with ident and lambda predicates, while-update loops combining condition and update expressions, improved if expressions with void handling.
+- **C Interoperability**: Direct C compiler invocation via fork/exec, `#ifc .. #endc` blocks for raw C code, C character literal support, integer type unification between C types, `c_struct_` syntax for C struct interop, `String`/`Ptr(CChar)` casting, boolean to integer conversions.
+- **Build & Tooling**: `#line` directive emission for debugging, `--no-line-directive` flag, CMake build-fail test support, number separator support (underscore in numeric literals).
+- **Standard Library**: Added Alloc.tl memory allocation interface, expanded Array.tl with tutorial comments, string comparison with `strcmp` bindings, `alignof` intrinsic (`_tl_alignof_`), `_tl_fatal_` intrinsic for fatal errors.
+- **Testing**: 130+ test files covering recursive types, case expressions, module system, enums/unions, C interop, type annotations, lambdas/closures, while-update statements, and regression tests.
+
+### Changed
+
+- **Breaking Changes**: Renamed `Nil` type to `Void` throughout. Added `void` as keyword alias for `nil`. Changed struct literal syntax from `{}` to `()`. Removed `cond` expression (superseded by case). Removed `break` expression with value. Made `#module main` declaration required. Increased operator precedence for `.`, `->`, and `[`.
+- **Type System Refactoring**: Major refactoring to parse types during inference phase. Improved type literal processing in operand positions. Enhanced handling of type arguments in function argument and annotation positions. Better distinction between type vs value contexts. Canonicalization of user types for recursive type support. Improved occurs check to allow `Ptr(self)`.
+- **Parser Improvements**: Cleaned up type constructor parsing and creation. Better error reporting with file/line/column tracking on all AST nodes. Improved binary operator parsing, especially with integers. Better bitwise operator handling.
+- **Code Quality**: Removed unnecessary type clone operations for performance. Improved name mangling for forward declarations and module symbols. Better handling of symbol namespaces and lexical scoping. Thread-local transient allocator for recursive type queries.
+- **Build System**: Removed Doxygen from CMake, removed GLFW/GLAD/GNU readline from Nix flake, removed REPL stubs, removed `v3_` prefix from test names.
+
+### Deprecated
+
+### Removed
+
+- Removed `cond` expression, `break` expression with value, `PtrOrNull` union, unity file support, `ptr_or_null` type, `ast_any` AST node variant, and ellipsis type.
+- Removed Doxygen documentation generation, GLFW/GLAD graphics library support, GNU readline REPL stubs, and numerous dead/unused functions.
+- Removed debugging printfs, logging statements, stub functions, and unnecessary type annotations.
+
+### Fixed
+
+- Fixed type variable sugar with proper type literal arguments, literal unification issues, type args in function positions, type divergence in `let_in` expressions, `sizeof` with type literals, type literal symbol handling, union/struct test failures, and potential type divergence bugs.
+- Fixed hash computation for recursive types, forward declaration emission, filename string lifetime in `#ifc` blocks, and emission of unspecialized types.
+- Fixed broken unary operator parsing, line number tracking (was skipping lines), and binary operator typing with bitwise operations.
+- Fixed three incorrect array indexing bugs in erase operations, incorrect in-place array erase loop, multiple ASAN fixes, and added defensive clone operations for use-after-free prevention.
+- Fixed name conflicts between mangled names and lexical names, handling of unknown free variables with proper detection/reporting, string comparison for sorting, function return type constraints, forced `main()` to return `CInt`, and improved error messages for unknown symbols.
+
+### Security
