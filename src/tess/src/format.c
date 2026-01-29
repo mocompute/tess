@@ -932,6 +932,7 @@ static int ends_with_binary_op(char const *line) {
 // Excludes *, &, | which could be unary/dereference/address-of/pipe.
 static int starts_with_binary_op(char const *trimmed) {
     if (trimmed[0] == '\0') return 0;
+    if (trimmed[0] == '/' && trimmed[1] == '/') return 0;
     char c0 = trimmed[0];
     char c1 = trimmed[1];
     // Two-char operators
@@ -1085,8 +1086,10 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
 
         int indent = depth * INDENT_WIDTH;
 
-        // Continuation line indentation
-        if (cont_indent >= 0) {
+        // Continuation line indentation (comments skip continuation)
+        if (starts_with(trimmed, "//")) {
+            // Comment lines use normal indent, not continuation
+        } else if (cont_indent >= 0) {
             if (cont_paren_depth == 0 && trimmed[0] == '{') {
                 // Standalone { after a binary-op continuation — use base indent
                 indent      = cont_base_indent;
@@ -1166,7 +1169,8 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         EMIT_LINE(full_line);
         last_output_was_blank = 0;
 
-        // Update continuation state
+        // Update continuation state (skip for comment-only lines)
+        if (!starts_with(trimmed, "//")) {
         cont_paren_depth += count_net_parens(trimmed);
 
         int next_starts_binop = (i + 1 < nlines) && starts_with_binary_op(ltrim(lines[i + 1]));
@@ -1195,6 +1199,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 cont_paren_depth = 0;
             }
         }
+        } // end if (!comment)
 
         // Update depth
         depth = depth_after;

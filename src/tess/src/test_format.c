@@ -361,6 +361,16 @@ static int test_continuation_next_line_binop(void) {
         "    *y\n"
         "}\n");
 
+    error += check(alloc, "comment lines not indented as continuation",
+        "// line 1\n"
+        "//\n"
+        "// line 3\n"
+        "x := 1",
+        "// line 1\n"
+        "//\n"
+        "// line 3\n"
+        "x := 1\n");
+
     arena_destroy(&alloc);
     return error;
 }
