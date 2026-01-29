@@ -452,18 +452,27 @@ TL_TESTS =					\
 TL_FAIL_TESTS =					\
 	fail_case_float				\
 	fail_concrete_fun_mismatch		\
+	fail_double_underscore			\
+	fail_double_underscore_module		\
+	fail_generic_unused_type_param		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
+	fail_nested_module_no_parent		\
+	fail_nested_type_cross_module_conflict	\
+	fail_reserved_type_alias		\
+	fail_reserved_type_annotation		\
+	fail_reserved_type_assign		\
+	fail_reserved_type_enum			\
+	fail_reserved_type_forward		\
+	fail_reserved_type_fun			\
+	fail_reserved_type_struct		\
+	fail_reserved_type_tu			\
+	fail_reserved_type_union		\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
-	fail_unknown_free_variable		\
-	fail_generic_unused_type_param		\
-	fail_nested_module_no_parent			\
-	fail_nested_type_cross_module_conflict	\
-	fail_double_underscore			\
-	fail_double_underscore_module
+	fail_unknown_free_variable
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =

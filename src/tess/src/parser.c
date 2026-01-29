@@ -340,6 +340,27 @@ static int is_reserved(char const *s) {
     return 0;
 }
 
+static int is_reserved_type_keyword(char const *s) {
+    static char const *strings[] = {
+      "any",
+      "void",
+      null,
+    };
+    char const **it = strings;
+    while (*it != null)
+        if (0 == strcmp(*it++, s)) return 1;
+
+    return 0;
+}
+
+static int is_reserved_type_name(ast_node const *name) {
+    // Check for reserved type keywords to disallow
+    if (!ast_node_is_symbol(name)) return 0;
+    str word = ast_node_str(name);
+    if (is_reserved_type_keyword(str_cstr(&word))) return 1;
+    return 0;
+}
+
 int is_arithmetic_operator(char const *s) {
     static char const *strings[] = {
       "+", "-", "*", "/", "%", null,
@@ -2368,6 +2389,9 @@ decl_done:
 
     if (a_try(self, a_open_curly)) return 1;
 
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(name)) return ERROR_STOP;
+
     ast_node_array exprs = {.alloc = self->ast_arena};
 
     while (1) {
@@ -2402,6 +2426,9 @@ static int toplevel_assign(parser *self) {
     ast_node *value = parse_expression(self, INT_MIN);
     if (!value) return ERROR_STOP;
 
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(name)) return ERROR_STOP;
+
     ast_node *n = ast_node_create_let_in(self->ast_arena, name, value, null);
     return result_ast_node(self, n);
 }
@@ -2412,6 +2439,9 @@ static int toplevel_forward(parser *self) {
 
     if (a_try(self, a_type_arrow)) return 1;
     ast_node *arrow = self->result;
+
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(name)) return ERROR_STOP;
 
     // attach to name
     name->symbol.annotation = arrow;
@@ -2432,6 +2462,9 @@ static int toplevel_symbol_annotation(parser *self) {
 
     if (a_try(self, a_type_annotation)) return ERROR_STOP;
     ast_node *ann = self->result;
+
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(ident)) return ERROR_STOP;
 
     assert(ast_node_is_symbol(ident));
     ident->symbol.annotation = ann;
@@ -2549,6 +2582,9 @@ static int toplevel_type_alias(parser *self) {
     if (0 == a_try(self, a_type_identifier)) target = self->result;
     else return 1;
 
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(name)) return ERROR_STOP;
+
     add_module_symbol(self, name);
     mangle_name(self, name);
     ast_node *node = ast_node_create_type_alias(self->ast_arena, name, target);
@@ -2561,6 +2597,10 @@ static int toplevel_enum(parser *self) {
 
     if (a_try(self, a_colon)) return 1;
     if (a_try(self, a_open_curly)) return 1;
+
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(name)) return ERROR_STOP;
+
     ast_node_array idents = {.alloc = self->ast_arena};
     while (1) {
         int saw_comma = 0;
@@ -2750,6 +2790,9 @@ static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_open_curly)) return 1;
 
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(type_ident)) return ERROR_STOP;
+
     // Extract parent name and type args
     ast_node  *parent_name = null;
     u8         n_type_args = 0;
@@ -2855,6 +2898,9 @@ static int toplevel_union(parser *self) {
     array_shrink(fields);
 
     // TODO: combine with toplevel_struct
+
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(type_ident)) return ERROR_STOP;
 
     ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
     r->user_type_def.is_union = 1;
@@ -3211,6 +3257,9 @@ static int toplevel_tagged_union(parser *self) {
         return 1;
     }
 
+    // Check for reserved type keywords to disallow
+    if (is_reserved_type_name(tu_name)) return ERROR_STOP;
+
     str tu_name_str = tu_name->symbol.name;
     str_hset_insert(&self->nested_type_parents, tu_name_str);
 
@@ -3248,6 +3297,9 @@ static int toplevel_tagged_union(parser *self) {
             }
         }
         array_shrink(fields);
+
+        // Check for reserved type keywords to disallow
+        if (is_reserved_type_name(var_name)) return ERROR_STOP;
 
         variant v = {.name = var_name, .fields = fields};
         array_push(variants, v);
