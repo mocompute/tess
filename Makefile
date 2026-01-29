@@ -298,6 +298,7 @@ TL_TESTS =					\
 	array_api				\
 	array_comprehensive			\
 	array_index_binary_op			\
+	array_reduce				\
 	arity_overload				\
 	assignment_by_op			\
 	atexit					\
@@ -346,6 +347,7 @@ TL_TESTS =					\
 	generic_lambda				\
 	global_variables			\
 	hello					\
+	lambda_arg_unused			\
 	lambda_basic				\
 	lambda_apply				\
 	lambda_capture_mutate			\
@@ -468,9 +470,7 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =		\
-	array_foreach		\
-	array_reduce		\
-	lambda_arg_unused
+	array_foreach
 
 
 

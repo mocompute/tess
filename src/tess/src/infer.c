@@ -2747,6 +2747,41 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (ast_node_is_assignment(arg))
             if (specialize_reassignment(self, traverse_ctx, arg)) return 1;
 
+        // Handle let_in_lambda arguments: specialize the lambda via its name
+        if (ast_node_is_let_in_lambda(arg)) {
+            ast_node *name_node = arg->let_in.name;
+
+            if (!ast_node_is_symbol(name_node) || !is_toplevel_function_name(self, name_node))
+                fatal("runtime error");
+            if (i >= expected_types.size) fatal("runtime error");
+
+            tl_monotype *expected = expected_types.v[i];
+            if (!tl_monotype_is_arrow(expected)) fatal("runtime error");
+
+            str old_name = name_node->symbol.name;
+
+            // Specialize the lambda argument
+            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected)) return 1;
+
+            str new_name = name_node->symbol.name;
+
+            // Update body references to use the specialized name: recall that hoisted lambdas have a unique
+            // body: just a symbol with the mangled name of the hoised function. See
+            // parser.c:maybe_wrap_lambda_function_in_let_in
+            if (!str_eq(old_name, new_name)) {
+                ast_node *body = arg->let_in.body;
+
+                if (!ast_node_is_body(body)) fatal("runtime error");
+                forall(j, body->body.expressions) {
+                    ast_node *expr = body->body.expressions.v[j];
+                    if (ast_node_is_symbol(expr) && str_eq(expr->symbol.name, old_name))
+                        ast_node_name_replace(expr, new_name);
+                }
+            }
+
+            goto next;
+        }
+
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) break;
