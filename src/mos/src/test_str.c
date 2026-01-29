@@ -106,6 +106,18 @@ static int test_ends_with(void) {
     return error;
 }
 
+static int test_contains_char(void) {
+    int error = 0;
+
+    error += 1 == str_contains_char(S("Foo.Bar"), '.') ? 0 : 1;
+    error += 0 == str_contains_char(S("FooBar"), '.') ? 0 : 1;
+    error += 0 == str_contains_char(S(""), '.') ? 0 : 1;
+    error += 1 == str_contains_char(S("."), '.') ? 0 : 1;
+    error += 1 == str_contains_char(S("a.b.c"), '.') ? 0 : 1;
+
+    return error;
+}
+
 static int test_struct_layout(void) {
     // str is a union of 'big' (span) and 'small' (buffer + bitfields).
     // MSVC adds padding before unsigned int bitfields for alignment,
@@ -219,6 +231,36 @@ static int test_cat_multi(void) {
     return error;
 }
 
+static int test_prefix_char(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+    str        prefix;
+
+    // Found: basic case
+    error += 1 == str_prefix_char(alloc, S("Foo.Bar"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("Foo")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: dot at start
+    error += 1 == str_prefix_char(alloc, S(".Bar"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: multiple dots, returns prefix before first
+    error += 1 == str_prefix_char(alloc, S("A.B.C"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("A")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Not found
+    error += 0 == str_prefix_char(alloc, S("FooBar"), '.', &prefix) ? 0 : 1;
+
+    // Not found: empty string
+    error += 0 == str_prefix_char(alloc, S(""), '.', &prefix) ? 0 : 1;
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 static int test_replace_char(void) {
     int        error = 0;
     allocator *alloc = leak_detector_create();
@@ -274,10 +316,12 @@ int main(void) {
     T(test_dcat);
     T(test_build);
     T(test_ends_with);
+    T(test_contains_char);
     T(test_struct_layout);
     T(test_cmp);
     T(test_cat_multi);
     T(test_parse_cnum_binary);
+    T(test_prefix_char);
     T(test_replace_char);
 
     return error;

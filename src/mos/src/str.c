@@ -358,6 +358,19 @@ int str_ends_with(str data, str suffix) {
     return 0 == memcmp(data_buf + index, suffix_buf, suffix_len);
 }
 
+int str_contains_char(str s, char c) {
+    span sp = str_span(&s);
+    return memchr(sp.buf, c, sp.len) != null;
+}
+
+int str_prefix_char(allocator *alloc, str s, char c, str *prefix) {
+    span  sp = str_span(&s);
+    char *p  = memchr(sp.buf, c, sp.len);
+    if (!p) return 0;
+    *prefix = str_init_n(alloc, sp.buf, (size_t)(p - sp.buf));
+    return 1;
+}
+
 int str_eq(str lhs, str rhs) {
     return 0 == str_cmp(lhs, rhs);
 }

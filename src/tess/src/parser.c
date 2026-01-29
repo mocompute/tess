@@ -2485,13 +2485,13 @@ static int toplevel_hash(parser *self) {
             self->expect_module = 0;
 
             // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
-            span  mod_span = str_span(&module);
-            char *dot      = memchr(mod_span.buf, '.', mod_span.len);
-            if (dot && !str_hset_contains(self->modules_seen, str_init_n(self->ast_arena, mod_span.buf,
-                                                                         (size_t)(dot - mod_span.buf)))) {
+            str parent = str_empty();
+            if (str_prefix_char(self->transient, module, '.', &parent) &&
+                !str_hset_contains(self->modules_seen, parent)) {
                 self->error.tag = tl_err_nested_module_parent_not_found;
-                return 2; // stop parsing error
+                return 2;
             }
+            str_deinit(self->transient, &parent);
 
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
             else {

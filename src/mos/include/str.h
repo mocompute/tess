@@ -90,6 +90,8 @@ int         str_cmp_v(void const *, void const *);
 int         str_cmp_c(str, char const *);
 int         str_cmp_nc(str, char const *, size_t);
 int         str_ends_with(str, str);
+int         str_contains_char(str, char);
+int         str_prefix_char(allocator *, str, char, str *);
 int         str_eq(str, str);
 u32         str_hash32(str);
 u64         str_hash64(str);
