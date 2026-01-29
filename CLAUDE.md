@@ -290,12 +290,13 @@ The compiler heavily uses arena allocators (`arena_create()`, `arena_destroy()`)
 
 ### Testing Requirements
 
-When adding new functionality or fixing bugs, always ensure proper test coverage:
-- Add tests incrementally as part of implementation, not at the end
-- For multi-step implementation plans, add and verify tests at each step before proceeding
+**Always take a test-first approach.** Write tests BEFORE writing the implementation, not after:
+- For each new feature or change, first write a test that exercises the desired behavior, verify it fails (or add it to known failures), and only then write the implementation to make it pass
+- For multi-step implementation plans, write and verify the test for each step before writing the code for that step
 - New MOS library functions should have corresponding unit tests in `src/mos/src/test_*.c`
 - New compiler features should have Tess integration tests in `src/tess/tl/test_*.tl`
 - Run `make -j test` to verify all tests pass before committing
+- **Bug investigation workflow**: When you suspect a bug or are asked to work on one, first write a minimal test case that demonstrates the specific bug and add it to the known failure tests in **both** build systems (Makefile and CMake). Verify that the test actually fails before doing any further analysis or fix work. This prevents wasting time chasing imaginary bugs.
 
 ## Build System Notes
 
