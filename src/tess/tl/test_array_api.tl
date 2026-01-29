@@ -404,6 +404,40 @@ test_find_value() {
     error
 }
 
+test_foreach() {
+    error := 0
+    arr   := Array.empty(Int)
+    Array.push(arr.&, 1)
+    Array.push(arr.&, 2)
+    Array.push(arr.&, 3)
+    count := 0
+    Array.foreach(arr, (x) { count = count + 1 })
+    if count != 3 { error += 1 }
+    Array.free(arr.&)
+    error
+}
+
+test_reduce() {
+    error := 0
+    arr   := Array.empty(Int)
+    Array.push(arr.&, 1)
+    Array.push(arr.&, 2)
+    Array.push(arr.&, 3)
+    Array.push(arr.&, 4)
+    sum := Array.reduce(arr, 0, (acc, x) { acc + x })
+    if sum != 10 { error += 1 }
+    // With initial value
+    sum2 := Array.reduce(arr, 100, (acc, x) { acc + x })
+    if sum2 != 110 { error += 1 }
+    // Empty array
+    e    := Array.empty(Int)
+    sum3 := Array.reduce(e, 42, (acc, x) { acc + x })
+    if sum3 != 42 { error += 1 }
+    Array.free(arr.&)
+    error
+}
+
+
 main() {
     error := 0
     error += test_get()
@@ -431,5 +465,7 @@ main() {
     error += test_all()
     error += test_find()
     error += test_find_value()
+    error += test_foreach()
+    error += test_reduce()
     error
 }

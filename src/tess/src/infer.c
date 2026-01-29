@@ -2751,8 +2751,7 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (ast_node_is_let_in_lambda(arg)) {
             ast_node *name_node = arg->let_in.name;
 
-            if (!ast_node_is_symbol(name_node) || !is_toplevel_function_name(self, name_node))
-                fatal("runtime error");
+            if (!ast_node_is_symbol(name_node)) fatal("runtime error");
             if (i >= expected_types.size) fatal("runtime error");
 
             tl_monotype *expected = expected_types.v[i];
@@ -2784,7 +2783,7 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
 
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
-        if (i >= expected_types.size) break;
+        if (i >= expected_types.size) fatal("runtime error");
         if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i])) return 1;
 
     next:

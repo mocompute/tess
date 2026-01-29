@@ -297,9 +297,7 @@ TL_TESTS =					\
 	arithmetic_unary_op			\
 	array_api				\
 	array_comprehensive			\
-	array_foreach				\
 	array_index_binary_op			\
-	array_reduce				\
 	arity_overload				\
 	assignment_by_op			\
 	atexit					\
