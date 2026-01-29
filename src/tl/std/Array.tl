@@ -381,7 +381,7 @@ index_of(arr: Array(T), val: T) -> Int {
         if arr.v[i] == val { return i }
         i = i + 1
     }
-        -1
+    -1
 }
 
 // -- Construction --
@@ -473,7 +473,7 @@ find(arr: Array(T), f: (T) -> Bool) -> Int {
         if f(arr.v[i]) { return i }
         i = i + 1
     }
-        -1
+    -1
 }
 
 find_value(arr: Array(T), f: (T) -> Bool) -> T {

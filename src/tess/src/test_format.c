@@ -385,6 +385,20 @@ static int test_continuation_next_line_binop(void) {
         "// line 3\n"
         "x := 1\n");
 
+    error += check(alloc, "negative literal does not trigger continuation",
+        "f() {\n"
+        "while i < n {\n"
+        "i = i + 1\n"
+        "}\n"
+        "-1\n"
+        "}",
+        "f() {\n"
+        "    while i < n {\n"
+        "        i = i + 1\n"
+        "    }\n"
+        "    -1\n"
+        "}\n");
+
     arena_destroy(&alloc);
     return error;
 }

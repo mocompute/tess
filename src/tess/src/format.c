@@ -949,7 +949,11 @@ static int starts_with_binary_op(char const *trimmed) {
     if (c0 == '<' && c1 == '<') return 1;
     if (c0 == '>' && c1 == '>') return 1;
     // Single-char unambiguous binary ops
-    if (c0 == '+' || c0 == '-' || c0 == '/' || c0 == '%') return 1;
+    if (c0 == '+' || c0 == '-') {
+        if (!isdigit((unsigned char)c1)) return 1;
+    } else if (c0 == '/' || c0 == '%') {
+        return 1;
+    }
     return 0;
 }
 
