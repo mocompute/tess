@@ -50,45 +50,57 @@ free(self: Ptr(Array), alloc: Ptr(Allocator)) -> Void
 free(self: Ptr(Array))                        -> Void
 
 // Element access (bounds-checked).
-get(arr: Array(T), index: Int)   -> T
+get  (arr: Array(T), index: Int) -> T
 front(arr: Array(T))             -> T
-back(arr: Array(T))              -> T
+back (arr: Array(T))             -> T
 
 // Removal / mutation.
-pop(self: Ptr(Array(T)))                                       -> T
-clear(self: Ptr(Array(T)))                                     -> Void
-insert(self: Ptr(Array(T)), alloc: Ptr(Allocator), index: Int, val: T) -> Void
-insert(self: Ptr(Array(T)), index: Int, val: T)                        -> Void
-remove(self: Ptr(Array(T)), index: Int)                        -> T
-swap_remove(self: Ptr(Array(T)), index: Int)                   -> T
+pop        (self: Ptr(Array(T)))                                            -> T
+clear      (self: Ptr(Array(T)))                                            -> Void
+insert     (self: Ptr(Array(T)), alloc: Ptr(Allocator), index: Int, val: T) -> Void
+insert     (self: Ptr(Array(T)), index: Int, val: T)                        -> Void
+remove     (self: Ptr(Array(T)), index: Int)                                -> T
+swap_remove(self: Ptr(Array(T)), index: Int)                                -> T
 
 // Sizing.
-resize(self: Ptr(Array(T)), alloc: Ptr(Allocator), count: Int, val: T) -> Void
-resize(self: Ptr(Array(T)), count: Int, val: T)                        -> Void
-shrink_to_fit(self: Ptr(Array(T)), alloc: Ptr(Allocator))              -> Void
-shrink_to_fit(self: Ptr(Array(T)))                                     -> Void
-truncate(self: Ptr(Array(T)), count: Int)                              -> Void
+resize       (self: Ptr(Array(T)), alloc: Ptr(Allocator), count: Int, val: T) -> Void
+resize       (self: Ptr(Array(T)), count: Int, val: T)                        -> Void
+shrink_to_fit(self: Ptr(Array(T)), alloc: Ptr(Allocator))                     -> Void
+shrink_to_fit(self: Ptr(Array(T)))                                            -> Void
+truncate     (self: Ptr(Array(T)), count: Int)                                -> Void
 
 // Bulk operations.
 append(self: Ptr(Array(T)), alloc: Ptr(Allocator), other: Array(T)) -> Void
 append(self: Ptr(Array(T)), other: Array(T))                        -> Void
-clone(alloc: Ptr(Allocator), arr: Array(T))                         -> Array(T)
-clone(arr: Array(T))                                                -> Array(T)
-slice(alloc: Ptr(Allocator), arr: Array(T), start: Int, end: Int)   -> Array(T)
-slice(arr: Array(T), start: Int, end: Int)                          -> Array(T)
+clone (alloc: Ptr(Allocator), arr: Array(T))                        -> Array(T)
+clone (arr: Array(T))                                               -> Array(T)
+slice (alloc: Ptr(Allocator), arr: Array(T), start: Int, end: Int)  -> Array(T)
+slice (arr: Array(T), start: Int, end: Int)                         -> Array(T)
 
 // Search / query.
-is_empty(arr: Array(T))                      -> Bool
-contains(arr: Array(T), val: T)              -> Bool
-index_of(arr: Array(T), val: T)              -> Int
+is_empty(arr: Array(T))         -> Bool
+contains(arr: Array(T), val: T) -> Bool
+index_of(arr: Array(T), val: T) -> Int
 
 // Reordering.
-reverse(self: Ptr(Array(T)))                  -> Void
-swap(self: Ptr(Array(T)), i: Int, j: Int)     -> Void
+reverse(self: Ptr(Array(T)))                 -> Void
+swap   (self: Ptr(Array(T)), i: Int, j: Int) -> Void
 
 // Construction.
 from_ptr(alloc: Ptr(Allocator), ptr: Ptr(T), len: Int) -> Array(T)
 from_ptr(ptr: Ptr(T), len: Int)                        -> Array(T)
+
+// Functional operations.
+map       (alloc: Ptr(Allocator), arr: Array(T), f: (T) -> U)    -> Array(U)
+map       (arr: Array(T), f: (T) -> U)                           -> Array(U)
+filter    (alloc: Ptr(Allocator), arr: Array(T), f: (T) -> Bool) -> Array(T)
+filter    (arr: Array(T), f: (T) -> Bool)                        -> Array(T)
+reduce    (arr: Array(T), init: U, f: (U, T) -> U)               -> U
+foreach   (arr: Array(T), f: (T) -> Void)                        -> Void
+any_of    (arr: Array(T), f: (T) -> Bool)                        -> Bool
+all       (arr: Array(T), f: (T) -> Bool)                        -> Bool
+find      (arr: Array(T), f: (T) -> Bool)                        -> Int
+find_value(arr: Array(T), f: (T) -> Bool)                        -> T
 
 
 // -- Implementation --
@@ -197,13 +209,13 @@ insert(self: Ptr(Array(T)), alloc, index: Int, val: T) {
     if index < 0 || index > self->size { _tl_fatal_("Array.insert: index out of bounds") }
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     if index < self->size {
-        width := _type_width_aligned(T)
-        dst : Ptr(T) := self->v[index + 1].&
-        src : Ptr(T) := self->v[index].&
+        width       := _type_width_aligned(T)
+        dst: Ptr(T) := self->v[index + 1].&
+        src: Ptr(T) := self->v[index].&
         c_memmove(dst, src, (self->size - index) * width)
     }
     self->v[index] = val
-    self->size = self->size + 1
+    self->size     = self->size + 1
 }
 
 insert(self: Ptr(Array(T)), index: Int, val: T) {
@@ -215,9 +227,9 @@ remove(self: Ptr(Array(T)), index: Int) -> T {
     val := self->v[index]
     self->size = self->size - 1
     if index < self->size {
-        width := _type_width_aligned(T)
-        dst : Ptr(T) := self->v[index].&
-        src : Ptr(T) := self->v[index + 1].&
+        width       := _type_width_aligned(T)
+        dst: Ptr(T) := self->v[index].&
+        src: Ptr(T) := self->v[index + 1].&
         c_memmove(dst, src, (self->size - index) * width)
     }
     val
@@ -243,7 +255,7 @@ resize(self: Ptr(Array(T)), alloc, count: Int, val: T) {
         i := self->size
         while i < count {
             self->v[i] = val
-            i = i + 1
+            i          = i + 1
         }
     }
     self->size = count
@@ -257,13 +269,13 @@ shrink_to_fit(self: Ptr(Array(T)), alloc) {
     if self->size < self->capacity {
         if self->size == 0 {
             alloc->free(alloc, self->v)
-            self->v = null
+            self->v        = null
             self->capacity = 0
         } else {
             width := _type_width_aligned(T)
-            p := alloc->realloc(alloc, self->v, self->size * width)
+            p     := alloc->realloc(alloc, self->v, self->size * width)
             if p != null {
-                self->v = p
+                self->v        = p
                 self->capacity = self->size
             }
         }
@@ -308,8 +320,8 @@ reverse(self: Ptr(Array(T))) {
 append(self: Ptr(Array(T)), alloc, other: Array(T)) {
     if other.size == 0 { return void }
     _grow(self, alloc, self->size + other.size)
-    width := _type_width_aligned(T)
-    dst : Ptr(T) := self->v[self->size].&
+    width       := _type_width_aligned(T)
+    dst: Ptr(T) := self->v[self->size].&
     c_memcpy(dst, other.v, other.size * width)
     self->size = self->size + other.size
 }
@@ -337,8 +349,8 @@ slice(alloc, arr: Array(T), start: Int, end: Int) -> Array(T) {
     if len == 0 { return empty(T) }
     result := with_capacity(alloc, T, len)
     result.size = len
-    width := _type_width_aligned(T)
-    src : Ptr(T) := arr.v[start].&
+    width       := _type_width_aligned(T)
+    src: Ptr(T) := arr.v[start].&
     c_memcpy(result.v, src, len * width)
     result
 }
@@ -369,7 +381,7 @@ index_of(arr: Array(T), val: T) -> Int {
         if arr.v[i] == val { return i }
         i = i + 1
     }
-    -1
+        -1
 }
 
 // -- Construction --
@@ -385,6 +397,93 @@ from_ptr(alloc, ptr: Ptr(T), len: Int) -> Array(T) {
 
 from_ptr(ptr: Ptr(T), len: Int) -> Array(T) {
     from_ptr(Alloc.context.managed, ptr, len)
+}
+
+
+// -- Functional operations --
+
+map(alloc, arr: Array(T), f: (T) -> U) -> Array(U) {
+    result := with_capacity(alloc, U, arr.size)
+    result.size = arr.size
+    i := 0
+    while i < arr.size {
+        result.v[i] = f(arr.v[i])
+        i           = i + 1
+    }
+    result
+}
+
+map(arr: Array(T), f: (T) -> U) -> Array(U) {
+    map(Alloc.context.managed, arr, f)
+}
+
+filter(alloc, arr: Array(T), f: (T) -> Bool) -> Array(T) {
+    result := empty(T)
+    i      := 0
+    while i < arr.size {
+        if f(arr.v[i]) { push(result.&, alloc, arr.v[i]) }
+        i = i + 1
+    }
+    result
+}
+
+filter(arr: Array(T), f: (T) -> Bool) -> Array(T) {
+    filter(Alloc.context.managed, arr, f)
+}
+
+reduce(arr: Array(T), init: U, f: (U, T) -> U) -> U {
+    acc := init
+    i   := 0
+    while i < arr.size {
+        acc = f(acc, arr.v[i])
+        i   = i + 1
+    }
+    acc
+}
+
+foreach(arr: Array(T), f: (T) -> Void) -> Void {
+    i := 0
+    while i < arr.size {
+        f(arr.v[i])
+        i = i + 1
+    }
+}
+
+any_of(arr: Array(T), f: (T) -> Bool) -> Bool {
+    i := 0
+    while i < arr.size {
+        if f(arr.v[i]) { return 1 }
+        i = i + 1
+    }
+    0
+}
+
+all(arr: Array(T), f: (T) -> Bool) -> Bool {
+    i := 0
+    while i < arr.size {
+        if !f(arr.v[i]) { return 0 }
+        i = i + 1
+    }
+    1
+}
+
+find(arr: Array(T), f: (T) -> Bool) -> Int {
+    i := 0
+    while i < arr.size {
+        if f(arr.v[i]) { return i }
+        i = i + 1
+    }
+        -1
+}
+
+find_value(arr: Array(T), f: (T) -> Bool) -> T {
+    i := 0
+    while i < arr.size {
+        if f(arr.v[i]) { return arr.v[i] }
+        i = i + 1
+    }
+    _tl_fatal_("Array.find_value: no matching element")
+    arr.v[0]
 }
 
 

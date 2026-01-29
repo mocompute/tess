@@ -391,3 +391,5 @@ tl_create_build_fail_test(fail_double_underscore)
 tl_create_build_fail_test(fail_double_underscore_module)
 
 # Known failures: these should work but a compiler bug makes them fail
+tl_create_known_failure(array_foreach)
+tl_create_known_failure(array_reduce)
