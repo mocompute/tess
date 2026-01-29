@@ -456,6 +456,7 @@ TL_FAIL_TESTS =					\
 	fail_type_alias_partial_specialization	\
 	fail_unknown_free_variable		\
 	fail_generic_unused_type_param		\
+	fail_nested_module_no_parent			\
 	fail_nested_type_cross_module_conflict
 
 # Expected-failure tests that the compiler doesn't reject yet

@@ -39,7 +39,7 @@ struct parser {
     str_sized              files;
     u32                    files_index;
     char_csized            current_file_data;
-    hashmap               *modules_seen; // str hset
+    hashmap               *modules_seen;        // str hset
     hashmap               *nested_type_parents; // str hset: types that have nested types
 
     ast_node              *result;
@@ -1553,12 +1553,11 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
     // Nested module resolution: if left is a module and "left.right" is also a module,
     // synthesize a combined module reference (e.g., Foo.Bar) for the next dot iteration.
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
-        str_hset_contains(self->modules_seen, (*inout)->symbol.name) &&
-        ast_node_is_symbol(right)) {
+        str_hset_contains(self->modules_seen, (*inout)->symbol.name) && ast_node_is_symbol(right)) {
         str combined = str_cat_3(self->ast_arena, (*inout)->symbol.name, S("."), right->symbol.name);
         if (str_hset_contains(self->modules_seen, combined)) {
             right->symbol.name = combined;
-            *inout = right;
+            *inout             = right;
             return 1;
         }
     }
@@ -1588,7 +1587,8 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
             return 1;
         }
     }
-    // Check if left side is a type with nested types (dot syntax for nested structs / tagged union variants)
+    // Check if left side is a type with nested types (dot syntax for nested structs / tagged union
+    // variants)
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout)) {
         str parent_name = (*inout)->symbol.name;
         str module      = (*inout)->symbol.module;
@@ -1599,19 +1599,19 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
 
         if (str_hset_contains(self->nested_type_parents, parent_name)) {
             ast_node *to_mangle = null;
-            if (ast_node_is_symbol(right))   to_mangle = right;
+            if (ast_node_is_symbol(right)) to_mangle = right;
             else if (ast_node_is_nfa(right)) to_mangle = right->named_application.name;
 
             if (to_mangle) {
                 // Build candidate child name and verify it exists in the correct module's symbols
-                str child_name     = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
-                                   ? to_mangle->symbol.original : to_mangle->symbol.name;
+                str child_name = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
+                                   ? to_mangle->symbol.original
+                                   : to_mangle->symbol.name;
                 str candidate_name = str_cat_3(self->ast_arena, parent_name, S("_"), child_name);
 
                 // Look up in the appropriate module's symbol table
                 hashmap *syms = null;
-                if (!str_is_empty(module))
-                    syms = str_map_get_ptr(self->module_symbols, module);
+                if (!str_is_empty(module)) syms = str_map_get_ptr(self->module_symbols, module);
                 else if (!str_is_empty(self->current_module))
                     syms = str_map_get_ptr(self->module_symbols, self->current_module);
 
@@ -1624,10 +1624,8 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                 if (found) {
                     unmangle_name(self, to_mangle);
                     to_mangle->symbol.name = candidate_name;
-                    if (!str_is_empty(module))
-                        mangle_name_for_module(self, to_mangle, module);
-                    else
-                        mangle_name(self, to_mangle);
+                    if (!str_is_empty(module)) mangle_name_for_module(self, to_mangle, module);
+                    else mangle_name(self, to_mangle);
                     *inout = right;
                     return 1;
                 }
@@ -2486,6 +2484,15 @@ static int toplevel_hash(parser *self) {
             self->skip_module   = 0;
             self->expect_module = 0;
 
+            // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
+            span  mod_span = str_span(&module);
+            char *dot      = memchr(mod_span.buf, '.', mod_span.len);
+            if (dot && !str_hset_contains(self->modules_seen, str_init_n(self->ast_arena, mod_span.buf,
+                                                                         (size_t)(dot - mod_span.buf)))) {
+                self->error.tag = tl_err_nested_module_parent_not_found;
+                return 2; // stop parsing error
+            }
+
             if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
             else {
                 // save current module symbols, if any
@@ -2581,16 +2588,16 @@ static int toplevel_enum(parser *self) {
 }
 
 // Forward declarations needed by parse_struct_fields
-static u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
-                                   ast_node_array fields, ast_node ***out_used_type_args);
+static u8        collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
+                                          ast_node_array fields, ast_node ***out_used_type_args);
 static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
                                    ast_node_array fields);
 
 // Nested struct name tracking for annotation rewriting
 typedef struct {
-    str bare_name;    // e.g. "Bar"
-    str prefixed_name; // e.g. "Foo_Bar"
-    u8  n_type_args;
+    str        bare_name;     // e.g. "Bar"
+    str        prefixed_name; // e.g. "Foo_Bar"
+    u8         n_type_args;
     ast_node **type_args;
 } nested_struct_info;
 
@@ -2612,9 +2619,9 @@ static int a_nested_struct_header(parser *self) {
 // out_fields: populated with the parent's fields (nested struct entries removed)
 // out_nested_utds: collects desugared nested struct UTD nodes
 // Returns 0 on success, nonzero on failure.
-static int parse_struct_fields(parser *self, str parent_prefix,
-                               u8 parent_n_type_args, ast_node **parent_type_args,
-                               ast_node_array *out_fields, ast_node_array *out_nested_utds) {
+static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type_args,
+                               ast_node **parent_type_args, ast_node_array *out_fields,
+                               ast_node_array *out_nested_utds) {
 
     // Track nested struct names for annotation rewriting
     struct {
@@ -2639,25 +2646,24 @@ static int parse_struct_fields(parser *self, str parent_prefix,
             // a_nested_struct_header consumed identifier, ':', and '{'
             // Now parse the nested struct body (fields until '}')
             str nested_bare_name = nested_ident->symbol.name;
-            str prefixed_name = str_cat_3(self->ast_arena, parent_prefix, S("_"), nested_bare_name);
+            str prefixed_name    = str_cat_3(self->ast_arena, parent_prefix, S("_"), nested_bare_name);
 
             // Recursively parse nested struct fields
             ast_node_array nested_fields = {.alloc = self->ast_arena};
-            int res = parse_struct_fields(self, prefixed_name,
-                                          parent_n_type_args, parent_type_args,
+            int res = parse_struct_fields(self, prefixed_name, parent_n_type_args, parent_type_args,
                                           &nested_fields, out_nested_utds);
             if (res) return res;
             array_shrink(nested_fields);
 
             // Determine which parent type params are used by this nested struct
-            ast_node **used_type_args   = null;
-            u8         n_used_type_args = collect_used_type_params(
-              self, parent_n_type_args, parent_type_args, nested_fields, &used_type_args);
+            ast_node **used_type_args = null;
+            u8 n_used_type_args       = collect_used_type_params(self, parent_n_type_args, parent_type_args,
+                                                                 nested_fields, &used_type_args);
 
             // Create the nested struct UTD
             ast_node *nested_name = ast_node_create_sym(self->ast_arena, prefixed_name);
-            ast_node *nested_utd  = create_struct_utd(self, nested_name, n_used_type_args,
-                                                      used_type_args, nested_fields);
+            ast_node *nested_utd =
+              create_struct_utd(self, nested_name, n_used_type_args, used_type_args, nested_fields);
             add_module_symbol(self, nested_name);
             mangle_name(self, nested_name);
             str_hset_insert(&self->nested_type_parents, parent_prefix);
@@ -2728,9 +2734,9 @@ static int toplevel_struct(parser *self) {
     if (a_try(self, a_open_curly)) return 1;
 
     // Extract parent name and type args
-    ast_node  *parent_name     = null;
-    u8         n_type_args     = 0;
-    ast_node **type_args       = null;
+    ast_node  *parent_name = null;
+    u8         n_type_args = 0;
+    ast_node **type_args   = null;
 
     if (ast_node_is_symbol(type_ident)) {
         parent_name = type_ident;
@@ -3415,7 +3421,8 @@ static int toplevel(parser *self) {
         int res = 0;
 
         if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
-        if (0 == a_try(self, toplevel_hash)) goto success_hash;
+        if (0 == (res = a_try(self, toplevel_hash))) goto success_hash;
+        else if (2 == res) goto error;
         if (0 == a_try(self, toplevel_type_alias)) goto success;
 
         // Tagged union must come before enum/struct since both start with identifier
