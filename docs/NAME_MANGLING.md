@@ -53,6 +53,14 @@ Specialization: Math_add__2_0   (if generic, specialized instance)
 | Builtin module symbols | Yes | No | No |
 | Types | No | Yes | If generic |
 
+### Reserved Identifier Pattern
+
+Because the compiler uses `__` (double underscore) as a separator in mangled names, user-defined identifiers and module names containing `__` are rejected by the parser. This prevents accidental collisions with compiler-generated names.
+
+Two exceptions are allowed:
+- **`__init`** - The compiler-recognized module initialization function
+- **`c_*` prefixed symbols** - C interop bindings (e.g., `c__Exit` wrapping C's `_Exit`)
+
 ---
 
 ## Arity Mangling

@@ -1083,3 +1083,5 @@ The standard library follows these conventions:
 | `_tl_name_` | Compiler intrinsics | `_tl_sizeof_`, `_tl_fatal_` |
 
 Single-letter names like `a`, `b`, `T` are conventionally used for type parameters in generic definitions.
+
+**Note:** Identifiers containing `__` (double underscore) are reserved for compiler name mangling and will be rejected by the parser. The only exceptions are `__init` (module initialization) and `c_` prefixed C interop symbols (e.g., `c__Exit`).
