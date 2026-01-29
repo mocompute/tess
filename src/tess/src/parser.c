@@ -24,6 +24,9 @@
 
 #define PARSER_ARENA_SIZE 1024
 
+// All non-zero returns from a_try parsing functions signal a backtrack, except for this:
+#define ERROR_STOP        2 // signal to stop parsing rather than backtrack
+
 struct parser {
     allocator             *parent_alloc;
     allocator             *file_arena;
@@ -837,11 +840,10 @@ static int a_identifier(parser *p) {
 
         // reject identifiers containing __ to avoid collisions with mangled names
         // exceptions: __init (compiler-recognized) and c__* (C interop prefix)
-        if (str_contains(str_init_static(p->token.s), S("__"))
-            && 0 != strcmp(p->token.s, "__init")
-            && 0 != strncmp(p->token.s, "c__", 3)) {
+        if (str_contains(str_init_static(p->token.s), S("__")) && 0 != strcmp(p->token.s, "__init") &&
+            0 != strncmp(p->token.s, "c__", 3)) {
             p->error.tag = tl_err_double_underscore_in_identifier;
-            return 2;
+            return ERROR_STOP;
         }
 
         // check for reserved words, which are not allowed as identifiers
@@ -1049,8 +1051,8 @@ static int a_type_arrow(parser *self) {
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto decl_done;
-        if (a_try(self, a_comma)) return 2;
-        if (a_try(self, a_param)) return 2;
+        if (a_try(self, a_comma)) return ERROR_STOP;
+        if (a_try(self, a_param)) return ERROR_STOP;
         array_push(params, self->result);
     }
 
@@ -2370,7 +2372,7 @@ decl_done:
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, a_body_element)) return 2; // stop parsing
+        if (a_try(self, a_body_element)) return ERROR_STOP; // stop parsing
         array_push(exprs, self->result);
     }
 
@@ -2398,7 +2400,7 @@ static int toplevel_assign(parser *self) {
 
     if (a_try(self, a_colon_equal)) return 1;
     ast_node *value = parse_expression(self, INT_MIN);
-    if (!value) return 2;
+    if (!value) return ERROR_STOP;
 
     ast_node *n = ast_node_create_let_in(self->ast_arena, name, value, null);
     return result_ast_node(self, n);
@@ -2428,7 +2430,7 @@ static int toplevel_symbol_annotation(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *ident = self->result;
 
-    if (a_try(self, a_type_annotation)) return 2;
+    if (a_try(self, a_type_annotation)) return ERROR_STOP;
     ast_node *ann = self->result;
 
     assert(ast_node_is_symbol(ident));
@@ -2496,7 +2498,7 @@ static int toplevel_hash(parser *self) {
             // reject module names containing __ to avoid collisions with mangled names
             if (str_contains(module, S("__"))) {
                 self->error.tag = tl_err_double_underscore_in_identifier;
-                return 2;
+                return ERROR_STOP;
             }
 
             // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
@@ -2504,7 +2506,7 @@ static int toplevel_hash(parser *self) {
             if (str_prefix_char(self->transient, module, '.', &parent) &&
                 !str_hset_contains(self->modules_seen, parent)) {
                 self->error.tag = tl_err_nested_module_parent_not_found;
-                return 2;
+                return ERROR_STOP;
             }
             str_deinit(self->transient, &parent);
 
@@ -2697,7 +2699,7 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
         }
 
         // Not a nested struct — parse as regular field
-        if (a_try(self, a_param)) return saw_comma ? 2 : 1;
+        if (a_try(self, a_param)) return saw_comma ? ERROR_STOP : 1;
         array_push(*out_fields, self->result);
     }
     array_shrink(*out_fields);
@@ -2804,7 +2806,7 @@ static int toplevel_struct(parser *self) {
             }
             if (!used) {
                 self->error.tag = tl_err_unused_type_parameter;
-                return 2; // a stopping error
+                return ERROR_STOP; // a stopping error
             }
         }
     }
@@ -2847,7 +2849,7 @@ static int toplevel_union(parser *self) {
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
         if (a_try(self, a_vertical_bar)) return 1;
-        if (a_try(self, a_param)) return 2; // exit parse
+        if (a_try(self, a_param)) return ERROR_STOP; // exit parse
         array_push(fields, self->result);
     }
     array_shrink(fields);
@@ -3228,7 +3230,7 @@ static int toplevel_tagged_union(parser *self) {
 
     while (1) {
         // Parse variant name (must be an identifier, not mangled since access is through type)
-        if (a_try(self, a_identifier)) return 2;
+        if (a_try(self, a_identifier)) return ERROR_STOP;
         ast_node *var_name = self->result;
 
         // Parse optional struct body { field: Type, ... }
@@ -3239,9 +3241,9 @@ static int toplevel_tagged_union(parser *self) {
                 if (0 == a_try(self, a_comma)) saw_comma = 1;
                 if (0 == a_try(self, a_close_curly)) break;
                 if (!saw_comma && fields.size) {
-                    if (a_try(self, a_comma)) return 2;
+                    if (a_try(self, a_comma)) return ERROR_STOP;
                 }
-                if (a_try(self, a_param)) return 2;
+                if (a_try(self, a_param)) return ERROR_STOP;
                 array_push(fields, self->result);
             }
         }
@@ -3437,33 +3439,33 @@ static int toplevel(parser *self) {
 
         if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
         if (0 == (res = a_try(self, toplevel_hash))) goto success_hash;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
         if (0 == a_try(self, toplevel_type_alias)) goto success;
 
         // Tagged union must come before enum/struct since both start with identifier
         if (0 == (res = a_try(self, toplevel_tagged_union))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_enum))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_struct))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_union))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_defun))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_assign))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_forward))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_symbol_annotation))) goto success;
-        else if (2 == res) goto error;
+        else if (ERROR_STOP == res) goto error;
 
         self->error.tag = tl_err_expected_toplevel;
         // Fall through to cleanup_fail
