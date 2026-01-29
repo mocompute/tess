@@ -253,9 +253,8 @@ resize(self: Ptr(Array(T)), alloc, count: Int, val: T) {
     if count > self->size {
         _grow(self, alloc, count)
         i := self->size
-        while i < count {
+        while i < count, i += 1 {
             self->v[i] = val
-            i          = i + 1
         }
     }
     self->size = count
@@ -307,9 +306,8 @@ swap(self: Ptr(Array(T)), i: Int, j: Int) {
 reverse(self: Ptr(Array(T))) {
     i := 0
     j := self->size - 1
-    while i < j {
+    while i < j, i += 1 {
         swap(self, i, j)
-        i = i + 1
         j = j - 1
     }
 }
@@ -368,18 +366,16 @@ is_empty(arr: Array(T)) -> Bool {
 
 contains(arr: Array(T), val: T) -> Bool {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if arr.v[i] == val { return 1 }
-        i = i + 1
     }
     0
 }
 
 index_of(arr: Array(T), val: T) -> Int {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if arr.v[i] == val { return i }
-        i = i + 1
     }
     -1
 }
@@ -406,9 +402,8 @@ map(alloc, arr: Array(T), f: (T) -> U) -> Array(U) {
     result := with_capacity(alloc, U, arr.size)
     result.size = arr.size
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         result.v[i] = f(arr.v[i])
-        i           = i + 1
     }
     result
 }
@@ -420,9 +415,8 @@ map(arr: Array(T), f: (T) -> U) -> Array(U) {
 filter(alloc, arr: Array(T), f: (T) -> Bool) -> Array(T) {
     result := empty(T)
     i      := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if f(arr.v[i]) { push(result.&, alloc, arr.v[i]) }
-        i = i + 1
     }
     result
 }
@@ -434,53 +428,47 @@ filter(arr: Array(T), f: (T) -> Bool) -> Array(T) {
 reduce(arr: Array(T), init: U, f: (U, T) -> U) -> U {
     acc := init
     i   := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         acc = f(acc, arr.v[i])
-        i   = i + 1
     }
     acc
 }
 
 foreach(arr: Array(T), f: (T) -> Void) -> Void {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         f(arr.v[i])
-        i = i + 1
     }
 }
 
 any_of(arr: Array(T), f: (T) -> Bool) -> Bool {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if f(arr.v[i]) { return 1 }
-        i = i + 1
     }
     0
 }
 
 all(arr: Array(T), f: (T) -> Bool) -> Bool {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if !f(arr.v[i]) { return 0 }
-        i = i + 1
     }
     1
 }
 
 find(arr: Array(T), f: (T) -> Bool) -> Int {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if f(arr.v[i]) { return i }
-        i = i + 1
     }
     -1
 }
 
 find_value(arr: Array(T), f: (T) -> Bool) -> T {
     i := 0
-    while i < arr.size {
+    while i < arr.size, i += 1 {
         if f(arr.v[i]) { return arr.v[i] }
-        i = i + 1
     }
     _tl_fatal_("Array.find_value: no matching element")
     arr.v[0]

@@ -5,7 +5,7 @@ test_get() {
     error := 0
     arr   := Array.init(0, 5)
     i     := 0
-    while i < 5 { arr.v[i] = i * 10 i = i + 1 }
+    while i < 5, i += 1 { arr.v[i] = i * 10 }
     if Array.get(arr, 0) != 0 { error += 1 }
     if Array.get(arr, 2) != 20 { error += 1 }
     if Array.get(arr, 4) != 40 { error += 1 }
@@ -205,7 +205,7 @@ test_slice() {
     error := 0
     arr   := Array.empty(Int)
     i     := 0
-    while i < 5 { Array.push(arr.&, i * 10) i = i + 1 }
+    while i < 5, i += 1 { Array.push(arr.&, i * 10) }
     // slice [1, 4) -> [10, 20, 30]
     s := Array.slice(arr, 1, 4)
     if s.size != 3 { error += 1 }
