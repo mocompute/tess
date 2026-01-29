@@ -353,6 +353,326 @@ static int test_replace_char_str(void) {
     return error;
 }
 
+static int test_starts_with(void) {
+    int error = 0;
+
+    error += 1 == str_starts_with(S("abcdef"), S("abc")) ? 0 : 1;
+    error += 1 == str_starts_with(S("abcdef"), S("abcdef")) ? 0 : 1;
+    error += 1 == str_starts_with(S("abcdef"), S("")) ? 0 : 1;
+    error += 0 == str_starts_with(S("abcdef"), S("x")) ? 0 : 1;
+    error += 0 == str_starts_with(S("abcdef"), S("abcdefg")) ? 0 : 1;
+    error += 1 == str_starts_with(S(""), S("")) ? 0 : 1;
+    error += 0 == str_starts_with(S(""), S("a")) ? 0 : 1;
+
+    return error;
+}
+
+static int test_str_empty_and_move(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    str        e     = str_empty();
+    error += 1 == str_is_empty(e) ? 0 : 1;
+    error += 0 == str_len(e) ? 0 : 1;
+
+    str s = str_init(alloc, "hello");
+    error += 0 == str_is_empty(s) ? 0 : 1;
+
+    str moved = str_move(&s);
+    error += 1 == str_is_empty(s) ? 0 : 1;
+    error += str_eq(moved, S("hello")) ? 0 : 1;
+
+    str_deinit(alloc, &moved);
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_resize(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // small -> big
+    str s = str_init(alloc, "hi");
+    error += 2 == str_len(s) ? 0 : 1;
+    str_resize(alloc, &s, 20);
+    error += 20 == str_len(s) ? 0 : 1;
+    span sp = str_span(&s);
+    error += sp.buf[0] == 'h' ? 0 : 1;
+    error += sp.buf[1] == 'i' ? 0 : 1;
+
+    // big -> big
+    str_resize(alloc, &s, 30);
+    error += 30 == str_len(s) ? 0 : 1;
+    sp = str_span(&s);
+    error += sp.buf[0] == 'h' ? 0 : 1;
+    error += sp.buf[1] == 'i' ? 0 : 1;
+
+    // big -> small
+    str_resize(alloc, &s, 2);
+    error += 2 == str_len(s) ? 0 : 1;
+    sp = str_span(&s);
+    error += sp.buf[0] == 'h' ? 0 : 1;
+    error += sp.buf[1] == 'i' ? 0 : 1;
+
+    str_deinit(alloc, &s);
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_slice(void) {
+    int error = 0;
+
+    str s = S("abcdef");
+
+    // normal slice
+    span sl = str_slice_len(&s, 1, 3);
+    error += 3 == sl.len ? 0 : 1;
+    error += 0 == memcmp(sl.buf, "bcd", 3) ? 0 : 1;
+
+    // slice past end clamps
+    sl = str_slice_len(&s, 4, 100);
+    error += 2 == sl.len ? 0 : 1;
+    error += 0 == memcmp(sl.buf, "ef", 2) ? 0 : 1;
+
+    // start past end
+    sl = str_slice_len(&s, 100, 1);
+    error += 0 == sl.len ? 0 : 1;
+
+    // zero length
+    sl = str_slice_len(&s, 0, 0);
+    error += 0 == sl.len ? 0 : 1;
+
+    // slice_left
+    sl = str_slice_left(&s, 3);
+    error += 3 == sl.len ? 0 : 1;
+    error += 0 == memcmp(sl.buf, "def", 3) ? 0 : 1;
+
+    // slice_left past end
+    sl = str_slice_left(&s, 100);
+    error += 0 == sl.len ? 0 : 1;
+
+    return error;
+}
+
+static int test_hash(void) {
+    int error = 0;
+
+    // same input -> same output
+    error += str_hash32(S("hello")) == str_hash32(S("hello")) ? 0 : 1;
+    error += str_hash64(S("hello")) == str_hash64(S("hello")) ? 0 : 1;
+
+    // different input -> likely different
+    error += str_hash32(S("hello")) != str_hash32(S("world")) ? 0 : 1;
+    error += str_hash64(S("hello")) != str_hash64(S("world")) ? 0 : 1;
+
+    // empty string hashes consistently
+    error += str_hash32(S("")) == str_hash32(S("")) ? 0 : 1;
+
+    return error;
+}
+
+static int test_cstr(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // small string
+    str s = str_init(alloc, "hi");
+    char const *cs = str_cstr(&s);
+    error += 0 == strcmp(cs, "hi") ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    // big string
+    s = str_init(alloc, "this is a longer string for testing");
+    cs = str_cstr(&s);
+    error += 0 == strcmp(cs, "this is a longer string for testing") ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_parse_num(void) {
+    int error = 0;
+    i64 i;
+    u64 u;
+    f64 f;
+
+    // i64
+    error += 1 == str_parse_num(S("42"), &i, &u, &f) ? 0 : 1;
+    error += 42 == i ? 0 : 1;
+
+    error += 1 == str_parse_num(S("-100"), &i, &u, &f) ? 0 : 1;
+    error += -100 == i ? 0 : 1;
+
+    // u64 (large positive)
+    error += 2 == str_parse_num(S("18446744073709551615"), &i, &u, &f) ? 0 : 1;
+    error += 18446744073709551615ULL == u ? 0 : 1;
+
+    // f64
+    error += 3 == str_parse_num(S("3.14"), &i, &u, &f) ? 0 : 1;
+    error += f > 3.13 && f < 3.15 ? 0 : 1;
+
+    // error
+    error += 0 == str_parse_num(S("notanumber"), &i, &u, &f) ? 0 : 1;
+
+    // oversized input rejected
+    str big = S("1234567890123456789012345678901234567890123456789012345678901234");
+    error += 0 == str_parse_num(big, &i, &u, &f) ? 0 : 1;
+
+    return error;
+}
+
+static int test_init_num(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+    i64        iv;
+    u64        uv;
+    f64        fv;
+
+    // i64 round-trip
+    str s = str_init_i64(alloc, -42);
+    error += 1 == str_parse_num(s, &iv, &uv, &fv) ? 0 : 1;
+    error += -42 == iv ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    // u64 round-trip
+    s = str_init_u64(alloc, 12345);
+    error += 1 == str_parse_num(s, &iv, &uv, &fv) ? 0 : 1;
+    error += 12345 == iv ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    // f64 round-trip
+    s = str_init_f64(alloc, 2.5);
+    error += 3 == str_parse_num(s, &iv, &uv, &fv) ? 0 : 1;
+    error += fv > 2.4 && fv < 2.6 ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_parse_words(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // basic words
+    str_array words = {.alloc = alloc};
+    str_parse_words(S("hello world"), &words);
+    error += 2 == words.size ? 0 : 1;
+    if (words.size == 2) {
+        error += str_eq(words.v[0], S("hello")) ? 0 : 1;
+        error += str_eq(words.v[1], S("world")) ? 0 : 1;
+    }
+    for (u32 i = 0; i < words.size; ++i) str_deinit(alloc, &words.v[i]);
+    array_free(words);
+
+    // quoted string
+    words = (str_array){.alloc = alloc};
+    str_parse_words(S("foo \"bar baz\" qux"), &words);
+    error += 3 == words.size ? 0 : 1;
+    if (words.size == 3) {
+        error += str_eq(words.v[0], S("foo")) ? 0 : 1;
+        error += str_eq(words.v[1], S("\"bar baz\"")) ? 0 : 1;
+        error += str_eq(words.v[2], S("qux")) ? 0 : 1;
+    }
+    for (u32 i = 0; i < words.size; ++i) str_deinit(alloc, &words.v[i]);
+    array_free(words);
+
+    // empty input
+    words = (str_array){.alloc = alloc};
+    str_parse_words(S(""), &words);
+    error += 0 == words.size ? 0 : 1;
+    array_free(words);
+
+    // only spaces
+    words = (str_array){.alloc = alloc};
+    str_parse_words(S("   "), &words);
+    error += 0 == words.size ? 0 : 1;
+    array_free(words);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_cat_array(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // normal case
+    str  parts[] = {S("hello"), S(" "), S("world")};
+    str  r       = str_cat_array(alloc, (str_sized){.v = parts, .size = 3});
+    error += str_eq(r, S("hello world")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // empty array
+    r = str_cat_array(alloc, (str_sized){.v = null, .size = 0});
+    error += str_is_empty(r) ? 0 : 1;
+
+    // single element
+    str one[] = {S("solo")};
+    r         = str_cat_array(alloc, (str_sized){.v = one, .size = 1});
+    error += str_eq(r, S("solo")) ? 0 : 1;
+    str_deinit(alloc, &r);
+
+    // all empty elements
+    str empties[] = {S(""), S(""), S("")};
+    r             = str_cat_array(alloc, (str_sized){.v = empties, .size = 3});
+    error += str_is_empty(r) ? 0 : 1;
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_copy(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    // small string copy
+    str s = str_init(alloc, "hi");
+    str c = str_copy(alloc, s);
+    error += str_eq(s, c) ? 0 : 1;
+    str_deinit(alloc, &s);
+    str_deinit(alloc, &c);
+
+    // big string copy
+    s = str_init(alloc, "this is a longer string for testing copy");
+    c = str_copy(alloc, s);
+    error += str_eq(s, c) ? 0 : 1;
+    str_deinit(alloc, &s);
+    str_deinit(alloc, &c);
+
+    // copy_span
+    str  orig = S("abcdef");
+    span sp   = str_span(&orig);
+    c         = str_copy_span(alloc, sp);
+    error += str_eq(c, S("abcdef")) ? 0 : 1;
+    str_deinit(alloc, &c);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
+static int test_str_fmt(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+
+    str s = str_fmt(alloc, "%s %d", "hello", 42);
+    error += str_eq(s, S("hello 42")) ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    s = str_fmt(alloc, "%d", 0);
+    error += str_eq(s, S("0")) ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    // longer format
+    s = str_fmt(alloc, "the quick %s fox jumps over the %s dog", "brown", "lazy");
+    error += str_eq(s, S("the quick brown fox jumps over the lazy dog")) ? 0 : 1;
+    str_deinit(alloc, &s);
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -384,6 +704,18 @@ int main(void) {
     T(test_prefix_char);
     T(test_replace_char);
     T(test_replace_char_str);
+    T(test_starts_with);
+    T(test_str_empty_and_move);
+    T(test_resize);
+    T(test_slice);
+    T(test_hash);
+    T(test_cstr);
+    T(test_parse_num);
+    T(test_init_num);
+    T(test_parse_words);
+    T(test_cat_array);
+    T(test_copy);
+    T(test_str_fmt);
 
     return error;
 }

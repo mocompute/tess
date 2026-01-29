@@ -90,6 +90,7 @@ int         str_cmp(str, str);
 int         str_cmp_v(void const *, void const *);
 int         str_cmp_c(str, char const *);
 int         str_cmp_nc(str, char const *, size_t);
+int         str_starts_with(str, str);
 int         str_ends_with(str, str);
 int         str_contains(str haystack, str needle);
 int         str_contains_char(str, char);

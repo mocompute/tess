@@ -126,8 +126,9 @@ str str_fmt(allocator *alloc, char const *restrict fmt, ...) {
     va_end(args);
     if (len < 0) fatal("str_fmt error");
 
-    // .len must not include terminating null character
-    str out = {.big = {.len = len - 1, .buf = alloc_malloc(alloc, len + 1)}};
+    // len includes the null terminator written by vsnprintf.
+    // That null byte also serves as the extra byte for str_cstr.
+    str out = {.big = {.len = len - 1, .buf = alloc_malloc(alloc, len)}};
 
     // args2 already has saved state from va_copy - use it directly
     vsnprintf(out.big.buf, len, fmt, args2);
@@ -245,8 +246,25 @@ str str_cat_6(allocator *alloc, str one, str two, str three, str four, str five,
 }
 
 str str_cat_array(allocator *alloc, str_sized arr) {
-    str out = str_empty();
-    forall(i, arr) str_dcat(alloc, &out, arr.v[i]);
+    if (!arr.size) return str_empty();
+    if (arr.size == 1) return str_copy(alloc, arr.v[0]);
+
+    size_t total = 0;
+    forall(i, arr) total += str_len(arr.v[i]);
+
+    if (!total) return str_empty();
+
+    str out;
+    if (total <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = total, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = total, .buf = alloc_malloc(alloc, total + 1)}};
+    span   out_span = str_span(&out);
+
+    size_t off      = 0;
+    forall(i, arr) {
+        span s = str_span(&arr.v[i]);
+        memcpy(out_span.buf + off, s.buf, s.len);
+        off += s.len;
+    }
     return out;
 }
 
@@ -277,7 +295,7 @@ void str_resize(allocator *alloc, str *self, size_t len) {
         if (!is_small(*self)) {
             self->small.tag = STR_SMALL;
             self->small.len = len;
-            memcpy(&self->small.buf[0], old.buf, old.len);
+            memcpy(&self->small.buf[0], old.buf, len);
             alloc_free(alloc, old.buf);
         }
         self->small.len = len;
@@ -299,11 +317,13 @@ void str_resize(allocator *alloc, str *self, size_t len) {
 }
 
 str str_replace_char(allocator *alloc, str s, char find, char replace) {
-    span   src      = str_span(&s);
-    size_t len      = src.len;
+    span   src = str_span(&s);
+    size_t len = src.len;
 
-    str    out      = str_copy(alloc, s);
-    span   out_span = str_span(&out);
+    str    out;
+    if (len <= MOS_STR_MAX_SMALL) out = (str){.small = {.len = len, .tag = STR_SMALL}};
+    else out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
+    span out_span = str_span(&out);
 
     for (size_t i = 0; i < len; ++i) out_span.buf[i] = src.buf[i] == find ? replace : src.buf[i];
     return out;
@@ -361,6 +381,16 @@ int str_cmp_nc(str lhs, char const *rhs, size_t max) {
     if (max > rhs_len) max = rhs_len;
 
     return memcmp(left.buf, rhs, max);
+}
+
+int str_starts_with(str data, str prefix) {
+    size_t data_len   = str_len(data);
+    size_t prefix_len = str_len(prefix);
+    if (data_len < prefix_len) return 0;
+
+    char const *data_buf   = str_buf(&data);
+    char const *prefix_buf = str_buf(&prefix);
+    return 0 == memcmp(data_buf, prefix_buf, prefix_len);
 }
 
 int str_ends_with(str data, str suffix) {
@@ -459,16 +489,14 @@ span str_slice_left(str *self, size_t start) {
 
 ispan str_ispan(str *self) {
     size_t len;
-    ispan  out;
     if (is_small(*self)) {
         len = self->small.len;
-        out = (ispan){.len = self->small.len, .buf = self->small.buf};
     } else {
         len = self->big.len;
-        out = (ispan){.len = (int)self->big.len, .buf = self->big.buf};
     }
     if (len > INT_MAX) fatal("overflow");
-    return out;
+    if (is_small(*self)) return (ispan){.len = (int)len, .buf = self->small.buf};
+    else return (ispan){.len = (int)len, .buf = self->big.buf};
 }
 
 char const *str_buf(str const *self) {
@@ -580,7 +608,7 @@ int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
 
     char buf[64];
     span s = str_span(&self);
-    if (s.len > 63) s.len = 63;
+    if (s.len > 63) return 0;
     memcpy(&buf[0], &s.buf[0], s.len);
     buf[s.len] = '\0';
 
