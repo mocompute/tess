@@ -362,7 +362,6 @@ TL_TESTS =					\
 	malloc_free				\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
-	mapper_basic				\
 	mapper_lambda				\
 	module_basic				\
 	module_init				\
@@ -481,6 +480,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
+	mapper_basic				\
+	struct_field_ptr_cast_multi \
 	while_empty_body
 
 

@@ -38,8 +38,7 @@ main() {
 
     error := 0
 
-    buf: Ptr(Int) := c_malloc(sizeof(Int) * 4)
-    vals          := Arr(v = buf, size = 0, capacity = 4)
+    vals := Arr(v: Ptr(Int) = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
 
     vals.v[0] = 0
     vals.v[1] = 1
@@ -67,8 +66,8 @@ main() {
     c_assert(sum == 10)
     error += sum - 10
 
-    buf: Ptr(Float) := c_malloc(sizeof(Float) * 4)
-    floats          := Arr(v = buf, size = 0, capacity = 4)
+
+    floats := Arr(v: Ptr(Float) = c_malloc(sizeof(Float) * 4), size = 0, capacity = 4)
     floats.v[0] = 0.0
     floats.v[1] = 1.0
     floats.v[2] = 2.0
