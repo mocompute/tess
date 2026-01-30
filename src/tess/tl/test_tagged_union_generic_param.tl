@@ -1,16 +1,17 @@
 #module main
 
-T(a): | Some { v: a }
-      | None
+// renamed due to new conflict with builtin Some/None
+T(a): | MySome { v: a }
+      | MyNone
 
-unwrap(opt: T(Int)) -> Int {
+my_unwrap(opt: T(Int)) -> Int {
     case opt: T {
-        s: Some { s.v }
-        n: None { 0 }
+        s: MySome { s.v }
+        n: MyNone { 0 }
     }
 }
 
 main() {
-    val := Some(42)
-    unwrap(val) - 42
+    val := MySome(42)
+    my_unwrap(val) - 42
 }

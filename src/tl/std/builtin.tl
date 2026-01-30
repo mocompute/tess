@@ -11,3 +11,15 @@ CString = Ptr(CChar)
 
 sizeof (T) { _tl_sizeof_(T)  }
 alignof(T) { _tl_alignof_(T) }
+
+// Option type
+
+Option(T): | Some { v: T }
+           | None
+
+unwrap(opt: Option(T), default: T) -> T {
+    case opt: Option {
+        s: Some { s.v }
+        n: None { default }
+    }
+}

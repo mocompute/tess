@@ -6,7 +6,7 @@ Pair(a): { x: a, y: a }
 // Tagged union that references an existing generic type as a variant
 Shape(T): | Circle { radius: T }
           | Foo.Pair(T)
-          | None
+          | MyNone
 
 #module main
 
@@ -23,7 +23,7 @@ main() {
     r1 := case shape: Foo.Shape {
         c: Circle { c.radius }
         p: Pair { p.x + p.y }
-        n: None { 0 }
+        n: MyNone { 0 }
     }
     error += if r1 == 3 {0} else {1}
 
@@ -32,7 +32,7 @@ main() {
     r2     := case circle: Foo.Shape {
         c: Circle { c.radius }
         p: Pair { 0.0 }
-        n: None { 0.0 }
+        n: MyNone { 0.0 }
     }
     error += if r2 >= 3.0 {0} else {1}
 

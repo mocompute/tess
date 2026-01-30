@@ -3,7 +3,7 @@
 // Tagged union definition
 Shape: | Circle { radius: Float }
        | Square { length: Float }
-       | None
+       | MyNone
 
 #module main
 
@@ -14,13 +14,13 @@ main() {
     // Circle() is a module-level function returning Shape
     circle := Foo.Circle(2.0)
     square := Foo.Square(1.5)
-    none   := Foo.None()
+    none   := Foo.MyNone()
 
     // Test 1: Exhaustive case expression
     area1 := case circle: Foo.Shape {
         c:  Circle { c.radius * c.radius * 3.14159 }
         sq: Square { sq.length * sq.length }
-        n:  None { 0.0 }
+        n:  MyNone { 0.0 }
     }
     error += if area1 >= 12.0 {0} else {1}
 

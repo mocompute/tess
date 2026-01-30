@@ -307,6 +307,7 @@ TL_TESTS =					\
 	binop					\
 	bitwise_operators			\
 	block_expression			\
+	builtin_option				\
 	c_div					\
 	c_symbol_annotation			\
 	c_struct				\

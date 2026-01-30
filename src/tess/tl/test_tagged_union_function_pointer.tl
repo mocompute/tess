@@ -16,7 +16,7 @@ FnCtx: { fn: (Int) -> Int }
 // Tagged union that uses the struct in a variant
 Callback: | Handler { ctx: FnCtx }
           | Value { n: Int }
-          | None
+          | MyNone
 
           // Helper to apply callback safely
 apply_handler(ctx: FnCtx, x: Int) -> Int {
@@ -32,7 +32,7 @@ main() {
     result1  := case handler1: Callback {
         h: Handler { apply_handler(h.ctx, 5) }
         v: Value { v.n }
-        n: None { 0 }
+        n: MyNone { 0 }
     }
     error += if result1 == 10 {0} else {1}
 
@@ -50,16 +50,16 @@ main() {
     result3 := case val: Callback {
         h: Handler { 0 }
         v: Value { v.n }
-        n: None { 0 }
+        n: MyNone { 0 }
     }
     error += if result3 == 42 {0} else {1}
 
-    // Test 4: None variant
-    none_cb := None()
+    // Test 4: MyNone variant
+    none_cb := MyNone()
     result4 := case none_cb: Callback {
         h: Handler { 99 }
         v: Value { 99 }
-        n: None { 7 }
+        n: MyNone { 7 }
     }
     error += if result4 == 7 {0} else {1}
 

@@ -1,13 +1,13 @@
 #module main
 
-T(a): | Some { v: a }
-      | None
+T(a): | Has { v: a }
+      | Empty
 
-make_some(x) {
-    Some(x)
+make_has(x) {
+    Has(x)
 }
 
 main() {
-    val := make_some(42)
+    val := make_has(42)
     0
 }

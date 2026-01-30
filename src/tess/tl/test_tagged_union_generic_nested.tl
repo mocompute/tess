@@ -1,9 +1,9 @@
 #module main
 
-Option(a): | Some { v: a }
-           | None
+MyOption(a): | Has { v: a }
+             | Empty
 
 main() {
-    nested := Some(Some(42))
+    nested := Has(Has(42))
     0
 }

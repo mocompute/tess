@@ -1,21 +1,22 @@
 #module main
 
-T(a): | Some { v: a }
-      | None
+// renamed due to new conflict with builtin Some/None
+T(a): | MySome { v: a }
+      | MyNone
 
-unwrap(opt: T(a), default: a) -> a {
+my_unwrap(opt: T(a), default: a) -> a {
     case opt: T {
-        s: Some { s.v }
-        n: None { default }
+        s: MySome { s.v }
+        n: MyNone { default }
     }
 }
 
 main() {
-    val := Some(42)
+    val := MySome(42)
 
     // Testing polymorphism of T and unwrap
-    val_float := Some(0.5)
-    if unwrap(val_float, 0.0) != 0.5 { return 1 }
+    val_float := MySome(0.5)
+    if my_unwrap(val_float, 0.0) != 0.5 { return 1 }
 
-    unwrap(val, 0) - 42
+    my_unwrap(val, 0) - 42
 }

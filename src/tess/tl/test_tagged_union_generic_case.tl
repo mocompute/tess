@@ -1,14 +1,15 @@
 #module main
 
-T(a): | Some { v: a }
-      | None
+// renamed due to new conflict with builtin Some/None
+T(a): | MySome { v: a }
+      | MyNone
 
 main() {
-    good := Some(123)
+    good := MySome(123)
 
     res := case good: T {
-        s: Some { s.v }
-        n: None { 0 }
+        s: MySome { s.v }
+        n: MyNone { 0 }
     }
     res - 123
 }

@@ -6,14 +6,14 @@ Special: { x: Float, y: Float }
 // Tagged union referencing an existing type from main using main.Special
 Shape: | Circle { radius: Float }
        | main.Special
-       | None
+       | MyNone
 
 main() {
     error := 0
 
     // Construct using unscoped constructor functions
     circle := Circle(3.0)
-    none   := None()
+    none   := MyNone()
 
     // Construct the existing type normally
     sp := Special(x = 1.0, y = 2.0)
@@ -25,7 +25,7 @@ main() {
     r1 := case shape: Shape {
         c: Circle  { c.radius }
         s: Special { s.x + s.y }
-        n: None    { 0.0 }
+        n: MyNone    { 0.0 }
     }
     error += if r1 >= 3.0 {0} else {1}
 
@@ -33,7 +33,7 @@ main() {
     r2 := case circle: Shape {
         c: Circle  { c.radius }
         s: Special { 0.0 }
-        n: None    { 0.0 }
+        n: MyNone    { 0.0 }
     }
     error += if r2 >= 3.0 {0} else {1}
 

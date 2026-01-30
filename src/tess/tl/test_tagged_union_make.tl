@@ -2,7 +2,7 @@
 
 Shape: | Circle { radius: Float }
        | Square { length: Float }
-       | None
+       | MyNone
 
 #module main
 
@@ -30,11 +30,11 @@ main() {
     }
     error += if r2 >= 4.0 {0} else {1}
 
-    // Test 3: Wrap None
-    n := Foo.Shape.None()
-    shape3 := Foo.make_Shape_None(n)
+    // Test 3: Wrap MyNone
+    n := Foo.Shape.MyNone()
+    shape3 := Foo.make_Shape_MyNone(n)
     r3 := case shape3: Foo.Shape {
-        n: None { 1.0 }
+        n: MyNone { 1.0 }
         else { 0.0 }
     }
     error += if r3 >= 1.0 {0} else {1}

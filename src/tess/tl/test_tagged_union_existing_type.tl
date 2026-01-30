@@ -6,7 +6,7 @@ Special: { x: Float, y: Float }
 // Tagged union that references an existing type as a variant
 Shape: | Circle { radius: Float }
        | Foo.Special
-       | None
+       | MyNone
 
 #module main
 
@@ -15,7 +15,7 @@ main() {
 
     // Construct using unscoped constructor functions (positional args)
     circle := Foo.Circle(3.0)
-    none   := Foo.None()
+    none   := Foo.MyNone()
 
     // Construct the existing type normally
     sp := Foo.Special(x = 1.0, y = 2.0)
@@ -27,7 +27,7 @@ main() {
     r1 := case shape: Foo.Shape {
         c: Circle  { c.radius }
         s: Special { s.x + s.y }
-        n: None    { 0.0 }
+        n: MyNone    { 0.0 }
     }
     error += if r1 >= 3.0 {0} else {1}
 
@@ -35,7 +35,7 @@ main() {
     r2 := case circle: Foo.Shape {
         c: Circle  { c.radius }
         s: Special { 0.0 }
-        n: None    { 0.0 }
+        n: MyNone    { 0.0 }
     }
     error += if r2 >= 3.0 {0} else {1}
 
