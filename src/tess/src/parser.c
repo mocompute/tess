@@ -3470,6 +3470,21 @@ static int toplevel_tagged_union(parser *self) {
                 array_shrink(ta);
                 existing_type_args   = ta.v;
                 n_existing_type_args = (u8)ta.size;
+
+                // Validate: each type arg must be a type parameter of the parent union
+                for (u8 k = 0; k < n_existing_type_args; k++) {
+                    int found = 0;
+                    for (u8 j = 0; j < n_type_args; j++) {
+                        if (str_eq(existing_type_args[k]->symbol.name, type_args[j]->symbol.name)) {
+                            found = 1;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        self->error.tag = tl_err_invalid_existing_type_arg;
+                        return ERROR_STOP;
+                    }
+                }
             }
         }
 

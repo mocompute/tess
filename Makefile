@@ -481,6 +481,7 @@ TL_FAIL_TESTS =					\
 	fail_reserved_type_union		\
 	fail_tagged_union_duplicate_variant	\
 	fail_tagged_union_missing_case		\
+	fail_tagged_union_existing_type_bad_type_arg \
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
 	fail_unknown_free_variable
