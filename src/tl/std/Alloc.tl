@@ -119,8 +119,8 @@ bump_destroy(alloc: Ptr(Allocator)) {
 }
 
 _bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
-    p: Ptr(Byte) := bucket              // cast
-    p += bucket->size                   // advance to free section
+    p: Ptr(Byte) := bucket                  // cast
+    p = Unsafe.pointer_add(p, bucket->size) // advance to free section
 
     block: Ptr(_BumpBlock) := p         // cast to block header and set size
     block->size = sz
