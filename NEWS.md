@@ -5,7 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] - 2026-01-23 to 2026-01-30
+## [Unreleased] - 2026-01-30
+
+### Highlights
+
+- Major tagged union redesign with scoped variants, unscoped constructors, and make functions (breaking change)
+- Support for existing types as tagged union variants with module-qualified syntax
+- New stable merge sort implementation for arrays with 136 test cases
+- Comprehensive standard library API reference documentation
+
+### Added
+
+- **Tagged Union Tests**: 5 new comprehensive tests covering unscoped constructors (`Circle(2.0)`), scoped variant structs (`Shape.Circle`), make functions (`make_Shape_Circle`), existing types as variants, and duplicate variant detection.
+- **Standard Library Documentation**: New STANDARD_LIBRARY.md (358 lines) providing complete API reference for Array, Alloc, builtin functions, and stdlib bindings.
+- **Array Sorting Functions**: Implemented stable bottom-up merge sort with `sort()` and `sorted()` functions, including comparator support and allocator variants (136 test cases).
+- **Etags Support**: New `make tags` target with TL-aware regexes matching only definitions (functions, structs, unions, type aliases, modules, global bindings) while skipping forward declarations.
+- **Reserved Type Keyword Validation**: 9 new expected-failure tests covering rejection of `any` and `void` as identifiers in all parser contexts (functions, structs, tagged unions, type aliases, enums, etc.).
+- **Build Scripts**: PowerShell equivalents for CMake configuration and build-test scripts (`cmake-configure.ps1`, `cmake-build-test.ps1`) for Windows support.
+
+### Changed
+
+- **Tagged Union Desugaring (Breaking Change)**: Fundamental redesign of tagged union implementation:
+  - Variant structs now scoped under union type (e.g., `Shape__Circle`) and accessed via dot syntax (`Shape.Circle`)
+  - Constructor functions unscoped at module level (e.g., `Circle(2.0)`) returning the wrapped union type
+  - Added per-variant make functions (e.g., `make_Shape_Circle`) that wrap bare variant values
+  - Support for existing types as variants using module-qualified syntax (`| Foo.Special`, with `main.Type` for main module types)
+  - All 13 existing tagged union tests updated to new syntax
+- **Tagged Union Documentation**: Extensively rewritten TAGGED_UNIONS.md (+180 lines net, now 308 lines total) to document scoped variant structs, unscoped constructors, make functions, existing type variants, and double-underscore naming conventions.
+- **Language Reference**: Updated LANGUAGE_REFERENCE.md with three tagged union construction methods, existing type variant syntax, and corrected examples throughout (80+ lines changed).
+- **Build Scripts Organization**: Moved CMake helper scripts to `tools/` directory with renamed filenames (`cmake-configure`, `cmake-build-test`) to avoid autotools name clashes, improved shell portability and added Windows PowerShell equivalents.
+- **Array Tutorial**: Synchronized Array-tutorial.tl with current Array.tl API: renamed `T(a)` to `Array(T)`, added allocator parameters with default-allocator overloads (223 lines changed).
+- **Standard Library Type Correctness**: Changed malloc family functions to properly return `Ptr(any)` instead of using cast workarounds.
+- **IndexedArray Naming**: Renamed `IndexedArray` to `Array.Indexed` following submodule syntax conventions.
+- **Mass Formatting**: Applied `tess fmt` to all 179 .tl source and test files (2,324 insertions, 2,307 deletions).
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- **Type Parameter Propagation**: Fixed forward declaration parameter annotations not being copied to function definitions, which caused `free_variable_not_found` errors when type variables from annotations were used in function body.
+- **Type Environment Pollution**: Fixed struct field names with type annotations incorrectly polluting the type environment, causing conflicts when the same struct was constructed with different type parameters.
+- **Ptr Cast in Struct Fields**: Fixed Ptr cast annotations in struct field initialization (e.g., `Foo(v: Ptr(Int) = c_malloc(...))`) by adding cast detection in both constraint and specialization phases.
+- **Generic Existing Type Variants**: Fixed tagged union variants using generic existing types by parsing explicit type args (e.g., `| Foo.Pair(a)`) and properly wiring them to union field annotations.
+- **Invalid Type Args Validation**: Added validation to reject invalid type arguments in existing type variant syntax (e.g., `| Foo.Pair(b)` where `b` is not a parent union type parameter), preventing crashes in type.c.
+- **Reserved Type Keywords**: Added parser checks to reject `any` and `void` when used as identifiers in all contexts (function definitions, structs, tagged unions, type aliases, enums, unions, forward declarations, annotations).
+- **Formatter Pipe Alignment**: Fixed `pipe_col` leaking across blank lines and into comments by resetting on blank lines and skipping pipe group detection on comment lines.
+
+### Security
+
+## [Unreleased] - 2026-01-23 to 2026-01-29
 
 ### Highlights
 
