@@ -440,6 +440,7 @@ TL_TESTS =					\
 	tagged_union_scoped_variant		\
 	tagged_union_make			\
 	tagged_union_existing_type		\
+	tagged_union_existing_type_generic	\
 	tagged_union_existing_type_main		\
 	tagged_union_function_pointer		\
 	tagged_union_generic_function_pointer	\
