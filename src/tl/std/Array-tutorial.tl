@@ -37,37 +37,29 @@
 // argument, and returns a pointer to an arbitrary type `T`. See `Array.reserve()` for the syntax used to
 // cast the return value from `c_malloc` to its appropriate type.
 #import <stdlib.tl>
+#import <stdio.tl>
+#import <fatal.tl>
+#import <string.tl>
 
-// The Array struct. Conventionally, when a module primarily provides functions which operate on a single
-// struct, that struct is called `T`. This avoids redundant module-qualified struct names, like
-// `Array.Array`.
+// The Array struct.
 //
-// The syntax `T(a)` looks like a function call. In this context, at the top level of the file and followed
-// by a `:`, it introduces a type definition. The `(a)` portion indicates that this is a generic type, with
-// `a` being used as a type variable. Any legal identifier may be used as a type variable. Conventionally,
-// either lowercase single letters such as `a` and `b` are used, or uppercase single letters such as `T` and
-// `U` are used. In this case, since `T` is used to actually name the main struct type of this module, a
-// lowercase `a` is more appropriate.
+// The syntax `Array(T)` looks like a function call. In this context, at the top level of the file and
+// followed by a `:`, it introduces a type definition. The `(T)` portion indicates that this is a generic
+// type, with `T` being used as a type variable. Any legal identifier may be used as a type variable.
+// Conventionally, either lowercase single letters such as `a` and `b` are used, or uppercase single letters
+// such as `T` and `U` are used.
 //
-// `Ptr(a)` is a builtin type, indicating a pointer to an arbitrary type `a`. In this case, the `a` is the
-// generic type variable declared by `T(a)`.
+// `Ptr(T)` is a builtin type, indicating a pointer to an arbitrary type `T`. In this case, the `T` is the
+// generic type variable declared by `Array(T)`.
 //
 // Int is a builtin type, corresponding to C `long long`, which is guaranteed by the C standard to be a
 // signed integer at least 64 bits long.
-T(a): {
-    v:        Ptr(a),
+Array(T): {
+    v:        Ptr(T),
     size:     Int,
     capacity: Int,
 }
 
-
-// This syntax declares a type alias. `TPtr` may be used in place of `Ptr(T(a))` in all contexts. However,
-// since this is a generic type (using the type variable `a`), note that use of `TPtr` in a type annotation
-// does NOT provide access to `a`. To understand the consequence of this, refer to the definition of
-// `reserve()` below: notice that it must use `Ptr(T(a))` because the body of the function needs to refer to
-// the `a` type variable explicitly. In practice, most generic function implementations do not need to refer
-// explicitly to its type argument. TL does NOT support parameterized type aliases (`TPtr(a) = Ptr(T(a))`).
-TPtr = Ptr(T(a))
 
 // -- Synopsis --
 
@@ -75,115 +67,148 @@ TPtr = Ptr(T(a))
 // demonstrates the syntax used for forward declarations. Forward declarations for functions are NOT
 // required, but they can provide useful documentation.
 
-// The declaration `(a: Type, ...)` below demonstrates the use of a generic type argument. In C++, the
+// The declaration `(T: Type, ...)` below demonstrates the use of a generic type argument. In C++, the
 // corresponding syntax would be `template<typename T> with_capacity<T>(...)` but in TL, type arguments are
 // declared alongside other formal parameters. Conventionally, they appear first. `Type` is a builtin type
 // constructor which takes a single argument being the identifier or type constructor of a type, but
 // conversion between callsite usage and consumer usage is handled automatically.
 
-// Construct an empty array with elements of type a.
-empty(a: Type) -> T(a)
+// All allocating functions take a Ptr(Allocator) argument as their first or second argument. Variants exist
+// with no allocator argument: these use the default managed allocator (`Alloc.context.managed`).
 
-// Construct an array with count elements of type a, each initialised to val.
-init(val: a, count: Int) -> T(a)
+// Construct an empty array with elements of type T.
+empty(T: Type) -> Array(T)
 
-// Allocate an empty array with elements of type a and an initial capacity of count.
-with_capacity(a: Type, count: Int) -> T(a)
+// Construct an array with count elements of type T, each initialised to val.
+init(alloc: Ptr(Allocator), val: T, count: Int) -> Array(T)
+init(val: T, count: Int)                        -> Array(T)
 
-// Allocate an empty array with elements of type a and an initial capacity of count, and set the size to the
+// Allocate an empty array with elements of type T and an initial capacity of count.
+with_capacity(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
+with_capacity(T: Type, count: Int)                        -> Array(T)
+
+// Allocate an empty array with elements of type T and an initial capacity of count, and set the size to the
 // capacity, leaving the contents undefined.
-with_capacity_undefined(a: Type, count: Int) -> T(a)
+with_capacity_undefined(alloc: Ptr(Allocator), T: Type, count: Int) -> Array(T)
+with_capacity_undefined(T: Type, count: Int)                        -> Array(T)
 
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr(T(a)), x: a) -> Void
+push(self: Ptr(Array(T)), alloc: Ptr(Allocator), x: T) -> Void
+push(self: Ptr(Array(T)), x: T)                        -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr(T(a)), count: Int) -> Void
+reserve(self: Ptr(Array(T)), alloc: Ptr(Allocator), count: Int) -> Void
+reserve(self: Ptr(Array(T)), count: Int)                        -> Void
 
 // Deallocate array buffer.
-free(self: TPtr) -> Void
+free(self: Ptr(Array), alloc: Ptr(Allocator)) -> Void
+free(self: Ptr(Array))                        -> Void
 
 
 // -- Implementation --
 
-empty(a: Type) {
-    // The syntax `T( ... )` below indicates a type constructor. Here, the type `T` is defined earlier in the
-    // file. A type constructor must include every field; it is not permitted to omit any field. The syntax
-    // `field = value` is used exclusively for type constructors. Although the syntax is similar to a function
-    // call with named arguments, ordinary TL functions do NOT support named arguments. This helps visually
-    // distinguish function calls from type constructors, and is an opinionated language design choice to
-    // exclude parameter names from the formal API of TL libraries.
+empty(T: Type) {
+    // The syntax `Array( ... )` below indicates a type constructor. Here, the type `Array` is defined
+    // earlier in the file. A type constructor must include every field; it is not permitted to omit any
+    // field. The syntax `field = value` is used exclusively for type constructors. Although the syntax is
+    // similar to a function call with named arguments, ordinary TL functions do NOT support named arguments.
+    // This helps visually distinguish function calls from type constructors, and is an opinionated language
+    // design choice to exclude parameter names from the formal API of TL libraries.
     //
     // The field `v` includes a type annotation, which is required here to ensure the compiler knows what
-    // concrete type of `T(a)` to specialize. It determines the specialization by examining the type of the
-    // arguments provided to the generic `T` type constructor.
-    T ( v: Ptr(a) = null, capacity = 0, size = 0 )
+    // concrete type of `Array(T)` to specialize. It determines the specialization by examining the type of
+    // the arguments provided to the generic `Array` type constructor.
+    Array ( v: Ptr(T) = null, capacity = 0, size = 0 )
 }
 
-init(val: a, count: Int) {
-    // Note that `a` in the annotation of the `val` parameter is a type argument. It can be supplied as an
+init(alloc, val: T, count) {
+    // Note that `T` in the annotation of the `val` parameter is a type argument. It can be supplied as an
     // argument to `with_capacity`, which is expecting a type argument. Type arguments to a function expecting
     // a type argument may be type literals, such as `Int`, or another type argument.
-    arr := with_capacity(a, count)
+    arr := with_capacity(alloc, T, count)
     arr.size             = count
     for p.& in arr { p.* = val }
     arr
 }
 
-free(self) {
-    // `c_free` is transpiled to `free` and access the C stdlib.h `free` function. `->` is used in this
-    // context as the member access through pointer operator, identical to C.
-    c_free(self->v)
+// Default-allocator overload. Functions that allocate memory accept an explicit allocator argument. For
+// convenience, an overload with no allocator argument is provided which uses the default managed allocator
+// from `Alloc.context.managed`. This pattern is used throughout the Array module.
+init(val: T, count: Int) {
+    init(Alloc.context.managed, val, count)
+}
 
-    // The field `v` is defined with the type `Ptr(a)`. `null` is compatible with any Ptr type, similar to C
+free(self, alloc) {
+    // The allocator interface provides free, malloc, and realloc functions. Instead of calling C stdlib
+    // functions directly, we use the allocator's methods. This allows users to supply custom allocators.
+    alloc->free(alloc, self->v)
+
+    // The field `v` is defined with the type `Ptr(T)`. `null` is compatible with any Ptr type, similar to C
     // NULL or nullptr.
     self->v = null
 }
 
+free(self) {
+    free(self, Alloc.context.managed)
+}
+
 // The first formal parameter of this function is given the annotation `Type`. This is a special type which
 // indicates a literal type argument, such as `Int` or `Ptr(T)`.
-with_capacity(a: Type, count: Int) {
+with_capacity(alloc, T: Type, count) {
 
     // The `:=` operator indicates a variable declaration. Variables must be declared at the point of their
     // first use. Subsequently, a new value may be assigned to the variable using the `=` operator.
     //
-    // This statement also introduces the use of a type variable (`a`) as a type argument to another function
+    // This statement also introduces the use of a type variable (`T`) as a type argument to another function
     // call.
-    width := _type_width_aligned(a)
+    width := _type_width_aligned(T)
 
     // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
-    // since `c_malloc` is declared as returning a generic type, the annotation effectively casts the return
-    // value to the expected type of the variable `p`. In this case, the annotation is NOT needed, because the
-    // type of `p` can be inferred by its point of use in the `v = p` assignment of the type constructor on
-    // the next line.
-    p: Ptr(a) := c_malloc(count * width)
-    T ( v = p, capacity = count, size = 0 )
+    // since `alloc->malloc` returns a generic type, the annotation effectively casts the return value to the
+    // expected type of the variable `p`. In this case, the annotation is NOT needed, because the type of `p`
+    // can be inferred by its point of use in the `v = p` assignment of the type constructor on the next
+    // line.
+    p: Ptr(T) := alloc->malloc(alloc, count * width)
+    Array ( v = p, capacity = count, size = 0 )
+}
+
+with_capacity(T: Type, count: Int) {
+    with_capacity(Alloc.context.managed, T, count)
 }
 
 // The type annotations can be left off, and the previous declaration at the top of the file will be used.
-with_capacity_undefined(a, count) {
-    result := with_capacity(a, count)
+with_capacity_undefined(alloc, T, count) {
+    result := with_capacity(alloc, T, count)
     result.size = count
     result
 }
 
-
-reserve(self: Ptr(T(a)), count: Int) {
-    // This is an if statement. Round braces are optional around the condition.
-    if self->capacity < count {
-        // The `: Ptr(a)` annotation is required here, so the compiler knows what concrete type to assign to `p`
-        p: Ptr(a) := c_realloc(self->v, count * _type_width_aligned(a))
-
-        // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
-        if p == null { _tl_fatal_("oom") }
-        self->v = p
-    }
+with_capacity_undefined(T, count) {
+    with_capacity_undefined(Alloc.context.managed, T, count)
 }
 
 
-push(self, x) {
-    if _is_full(self) { _grow(self, self->capacity + 1) }
+reserve(self: Ptr(Array(T)), alloc, count: Int) {
+    // This is an if statement. Round braces are optional around the condition.
+    if self->capacity < count {
+        // The `: Ptr(T)` annotation is required here, so the compiler knows what concrete type to assign to `p`
+        p: Ptr(T) := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
+
+        // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
+        if p == null { _tl_fatal_("oom") }
+        self->v        = p
+        self->capacity = count
+    }
+}
+
+reserve(self: Ptr(Array(T)), count: Int) {
+    reserve(self, Alloc.context.managed, count)
+}
+
+
+push(self, alloc, x) {
+    if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
 
     // Assigning to an array element through a pointer is identical to C.
     self->v[self->size] = x
@@ -192,12 +217,16 @@ push(self, x) {
     self->size = self->size + 1
 }
 
+push(self, x) {
+    push(self, Alloc.context.managed, x)
+}
+
 // -- Iterator interface --
 
 // The iterator struct. This is used to provide a public iterator interface over an Array using the `for`
 // statement.
-Iter(a): {
-    v:     Ptr(a),
+Iter(T): {
+    v:     Ptr(T),
     size:  Int,
     index: Int,
 }
@@ -206,12 +235,12 @@ Iter(a): {
 // implements the `for` statement. See the bottom of this file for another iterator module, Array.Indexed.
 // See also parser.c `a_for_statement` for documentation of how a for loop desugars into calls to these
 // functions.
-iter_init   (arr: Ptr(T(a)))     -> Iter(a)
-iter_ptr    (iter: Ptr(Iter(a))) -> Ptr(a) // when loop variable is `it.&`
-iter_value  (iter: Ptr(Iter(a))) -> a      // when loop variable is `it`
-iter_cond   (iter: Ptr(Iter(a))) -> Bool
-iter_update (iter: Ptr(Iter(a))) -> Void
-iter_deinit (iter: Ptr(Iter(a))) -> Void
+iter_init   (arr: Ptr(Array(T)))  -> Iter(T)
+iter_ptr    (iter: Ptr(Iter(T)))  -> Ptr(T)
+iter_value  (iter: Ptr(Iter(T)))  -> T
+iter_cond   (iter: Ptr(Iter(T)))  -> Bool
+iter_update (iter: Ptr(Iter(T)))  -> Void
+iter_deinit (iter: Ptr(Iter(T)))  -> Void
 
 iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr   (iter) { iter->v[iter->index].&                           }
@@ -229,9 +258,9 @@ iter_deinit(iter) {                                                  }
 
 // Forward declarations are NOT required, but they can be useful for documentation.
 
-_grow               (self: TPtr, at_least: Int) -> Void
-_is_full            (self: TPtr)                -> Bool
-_type_width_aligned (a: Type)                   -> Int
+_grow               (self: Ptr(Array(T)), alloc: Ptr(Allocator), at_least: Int) -> Void
+_is_full            (self: Ptr(Array(T)))                                       -> Bool
+_type_width_aligned (T: Type)                                                   -> Int
 
 // --
 
@@ -239,7 +268,7 @@ _type_width_aligned (a: Type)                   -> Int
 // The type annotation above carries forward to the function definition.
 _is_full(self) { self->capacity == self->size }
 
-_grow(self, at_least) {
+_grow(self, alloc, at_least) {
     // This `if` statement demonstrates the use of the return statement. Not that unlike C, the return statement
     // must always state an explicit value to return. `void` may be used to indicate a void return.
     if self->capacity >= at_least { return void }
@@ -254,13 +283,13 @@ _grow(self, at_least) {
 
     // Notice that there is no need here to add a `void` expression, since the call to `reserve()` itself
     // returns `void`.
-    reserve(self, count)
+    reserve(self, alloc, count)
 }
 
-// `a` is annotated as a type argument, which are handled carefully to interface with C's sizeof and alignof
+// `T` is annotated as a type argument, which are handled carefully to interface with C's sizeof and alignof
 // builtins. If you examine the TL `builtin` module you'll see sizeof and alignof are implemented as
 // wrappers around TL intrinsic functions.
-_type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
+_type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
 
 
 // Start a new module. A single file may contain multiple modules, but the same module cannot be implemented
@@ -270,31 +299,31 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 
 // -- Indexed iterator interface --
 
-IterValuePtr(a): {
-    ptr:   Ptr(a),
+IterValuePtr(T): {
+    ptr:   Ptr(T),
     index: Int,
 }
 
-IterValue(a): {
-    value: a,
+IterValue(T): {
+    value: T,
     index: Int,
 }
 
-Iter(a): {
-    v:     Ptr(a),
+Iter(T): {
+    v:     Ptr(T),
     size:  Int,
     index: Int,
-    iv:    IterValue(a),
-    ivp:   IterValuePtr(a),
+    iv:    IterValue(T),
+    ivp:   IterValuePtr(T),
 }
 
 
-iter_init   (arr: Ptr(Array.T(a))) -> Iter(a)
-iter_ptr    (iter: Ptr(Iter(a)))   -> IterValuePtr(a)
-iter_value  (iter: Ptr(Iter(a)))   -> IterValue(a)
-iter_cond   (iter: Ptr(Iter(a)))   -> Bool
-iter_update (iter: Ptr(Iter(a)))   -> Void
-iter_deinit (iter: Ptr(Iter(a)))   -> Void
+iter_init   (arr: Ptr(Array.Array(T))) -> Iter(T)
+iter_ptr    (iter: Ptr(Iter(T)))       -> IterValuePtr(T)
+iter_value  (iter: Ptr(Iter(T)))       -> IterValue(T)
+iter_cond   (iter: Ptr(Iter(T)))       -> Bool
+iter_update (iter: Ptr(Iter(T)))       -> Void
+iter_deinit (iter: Ptr(Iter(T)))       -> Void
 
 iter_init(arr) { Iter (v = arr->v, size = arr->size, index = 0,
                        iv  = IterValue (value = void, index = 0),
