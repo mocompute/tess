@@ -1044,6 +1044,9 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 last_output_was_blank = 1;
             }
             prev_was_comment = 0;
+            pipe_col         = -1;
+            cont_indent      = -1;
+            cont_paren_depth = 0;
             continue;
         }
         consecutive_blanks = 0;
@@ -1088,7 +1091,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         }
 
         // Check if line starts with }
-        int prev_depth = depth;
+        int prev_depth  = depth;
         int close_count = 0;
         if (trimmed[0] == '}') {
             while (trimmed[close_count] == '}') close_count++;
@@ -1102,8 +1105,9 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         int is_comment = trimmed[0] == '/' && trimmed[1] == '/';
         if (is_comment) {
             // Comment lines use normal indent, not continuation
-            // But if inside a pipe group, use pipe_col
-            if (pipe_col > 0) {
+            // But if inside a pipe group, use pipe_col — unless the comment
+            // was at the left margin in the source (no leading whitespace).
+            if (pipe_col > 0 && lines[i][0] != '/') {
                 indent = pipe_col;
             }
         } else if (cont_indent >= 0) {
@@ -1172,8 +1176,9 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
 
         // Detect tagged union definition: "Name : | ..." or "Name(x) : | ..."
         // After normalization the pattern is ": | " somewhere in the line
+        // Skip comment lines — commented-out code shouldn't start a pipe group.
         {
-            char const *p = strstr(content, ": | ");
+            char const *p = is_comment ? NULL : strstr(content, ": | ");
             if (p && pipe_col < 0) {
                 // Column of | = indent + offset of | in content
                 pipe_col = indent + (int)(p - content) + 2;

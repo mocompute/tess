@@ -418,11 +418,27 @@ static int test_pipe_alignment(void) {
         "      | B\n"
         "      | C\n");
 
-    error += check(alloc, "comment between pipe variants",
-        "Name: | A\n// comment\n| B",
+    error += check(alloc, "indented comment between pipe variants",
+        "Name: | A\n      // comment\n| B",
         "Name: | A\n"
         "      // comment\n"
         "      | B\n");
+
+    error += check(alloc, "left-margin comment in pipe group stays at margin",
+        "Name: | A\n// comment\n| B",
+        "Name: | A\n"
+        "// comment\n"
+        "      | B\n");
+
+    error += check(alloc, "blank line resets pipe alignment",
+        "Option(T): | Some { v: T }\n           | None\n\n// Result type\n\nResult(T, E): | Ok(T)\n              | Err(E)\n",
+        "Option(T): | Some { v: T }\n"
+        "           | None\n"
+        "\n"
+        "// Result type\n"
+        "\n"
+        "Result(T, E): | Ok(T)\n"
+        "              | Err(E)\n");
 
     arena_destroy(&alloc);
     return error;
