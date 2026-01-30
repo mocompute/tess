@@ -356,6 +356,40 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                     node->let.name->symbol.attributes = (*p)->symbol.attributes;
                 }
 
+                // copy parameter annotations over
+                if ((*p)->symbol.annotation) {
+                    // The annotation is an AST arrow, which includes param annotations, if any. These are
+                    // important to copy over, because they may declare type arguments.
+                    ast_node *ast_arrow = (*p)->symbol.annotation;
+                    assert(ast_node_is_arrow(ast_arrow));
+                    ast_node *ast_param_tuple = ast_arrow->arrow.left;
+                    assert(ast_node_is_tuple(ast_param_tuple));
+
+                    tl_polytype *arrow = (*p)->symbol.annotation_type;
+                    assert(arrow && tl_monotype_is_arrow(arrow->type));
+                    tl_monotype *param_tuple = arrow->type->list.xs.v[0];
+                    assert(tl_tuple == param_tuple->tag);
+                    ast_arguments_iter iter = ast_node_arguments_iter(node);
+                    ast_node          *arg;
+                    u32                i = 0;
+                    while ((arg = ast_arguments_next(&iter))) {
+                        if (i >= param_tuple->list.xs.size) fatal("runtime error");
+                        if (i >= ast_param_tuple->tuple.n_elements) fatal("runtime error");
+
+                        if (!ast_node_is_symbol(arg)) goto next;
+
+                        // Do not overwrite let node's annotated parameters
+                        if (arg->symbol.annotation) goto next;
+
+                        arg->symbol.annotation = ast_param_tuple->tuple.elements[i];
+                        arg->symbol.annotation_type =
+                          tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[i]);
+
+                    next:
+                        i++;
+                    }
+                }
+
                 // replace prior symbol entry with let node
                 *p = node;
             } else {

@@ -19,8 +19,7 @@ map(f, arr) {
 
     // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
     // Because `malloc` returns `void*`, the `: Ptr(b)` type annotation is required.
-    out_p: Ptr(b) := c_malloc(sizeof(b) * arr.size)
-    out           := Arr(v = out_p, size = arr.size, capacity = arr.size)
+    out := Arr(v: Ptr(b) = c_malloc(sizeof(b) * arr.size), size = arr.size, capacity = arr.size)
 
     i := 0
     while i < arr.size {

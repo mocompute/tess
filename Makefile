@@ -408,6 +408,7 @@ TL_TESTS =					\
 	struct_generic_function_signature	\
 	struct_construction			\
 	struct_field_ptr_cast			\
+	struct_field_ptr_cast_inline		\
 	struct_field_ptr_cast_multi		\
 	tail_call				\
 	type_alias_generic			\
