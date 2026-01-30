@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 usage() {
-    echo "configure <build type> <build_dir> [options...]"
+    echo "cmake-configure <build_type> <build_dir> [cmake options...]"
     echo
-    echo "Example: CC=clang CXX=clang++ ./configure Debug build-asan -DMOS_ASAN=YES"
+    echo "Example: CC=clang CXX=clang++ ./tools/cmake-configure.sh Debug build-asan -DMOS_ASAN=YES"
     echo
 }
 
@@ -14,23 +14,18 @@ fi
 
 build_type=$1
 shift
+
+build_dir=$1
+shift
+if [[ $build_dir == -* ]]; then usage; exit 1; fi
+
 export CMAKE_BUILD_TYPE="$build_type"
 
 # Configure a shared CPM download cache
 export CPM_SOURCE_CACHE="$(pwd)/.cache/CPM"
 echo "Using CPM cache: $CPM_SOURCE_CACHE"
 
-build_dir=$1
-shift
-if [[ $build_dir == -* ]]; then usage; exit 1; fi
-
-
-if [ -d "$build_dir" ]; then
-    echo "Deleting directory: $build_dir"
-    rm -rf "$build_dir"
-else
-    mkdir -p "$build_dir"
-fi
+rm -rf "$build_dir"
 
 echo "Configuring with cmake into '$build_dir'."
 echo

@@ -1,7 +1,7 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 usage() {
-    echo "test <build_dir> [options...]"
+    echo "cmake-build-test <build_dir> [ctest options...]"
 }
 
 if [ $# -lt 1 ]; then usage; exit 1; fi
