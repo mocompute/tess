@@ -436,6 +436,11 @@ TL_TESTS =					\
 	tagged_union_generic_return		\
 	tagged_union_mutable_case		\
 	tagged_union_option			\
+	tagged_union_unscoped			\
+	tagged_union_scoped_variant		\
+	tagged_union_make			\
+	tagged_union_existing_type		\
+	tagged_union_existing_type_main		\
 	tagged_union_function_pointer		\
 	tagged_union_generic_function_pointer	\
 	type_literal_generic			\
@@ -484,11 +489,7 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
-	while_empty_body \
-	tagged_union_unscoped \
-	tagged_union_scoped_variant \
-	tagged_union_make \
-	tagged_union_existing_type
+	while_empty_body
 
 
 

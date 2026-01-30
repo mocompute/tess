@@ -10,10 +10,10 @@ Shape: | Circle { radius: Float }
 main() {
     error := 0
 
-    // Test constructor functions
-    circle := Foo.Shape.Circle(radius = 2.0)
-    square := Foo.Shape.Square(length = 1.5)
-    none   := Foo.Shape.None()
+    // Test constructor functions (unscoped, positional args)
+    circle := Foo.Circle(2.0)
+    square := Foo.Square(1.5)
+    none   := Foo.None()
 
     // Test 1: Exhaustive case expression (all variants covered, no else needed)
     area1 := case circle: Foo.Shape {

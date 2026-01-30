@@ -7,7 +7,7 @@ Shape = | Circle { radius: Float }
 #module main
 
 main() {
-    s := Foo.Shape.Circle(radius = 2.0)
+    s := Foo.Circle(2.0)
 
     // Error: Missing case for 'None' variant (no else arm)
     case s: Foo.Shape {

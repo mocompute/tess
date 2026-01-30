@@ -17,8 +17,8 @@ Shape: { x: Int, y: Int }
 main() {
     error := 0
 
-    // A.Shape.Circle — cross-module tagged union variant (should work)
-    circle := A.Shape.Circle(radius = 2.0)
+    // A.Circle — cross-module unscoped constructor (should work)
+    circle := A.Circle(2.0)
     area   := case circle: A.Shape {
         c: Circle { c.radius * c.radius }
         s: Square { s.length * s.length }

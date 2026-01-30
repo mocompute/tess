@@ -11,6 +11,6 @@ unwrap(opt: T(Int)) -> Int {
 }
 
 main() {
-    val := T.Some(v = 42)
+    val := Some(42)
     unwrap(val) - 42
 }

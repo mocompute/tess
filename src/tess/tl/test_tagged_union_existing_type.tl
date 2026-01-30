@@ -5,7 +5,7 @@ Special: { x: Float, y: Float }
 
 // Tagged union that references an existing type as a variant
 Shape: | Circle { radius: Float }
-       | Special
+       | Foo.Special
        | None
 
 #module main

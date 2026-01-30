@@ -4,7 +4,7 @@ T(a): | Some { v: a }
       | None
 
 main() {
-    good := T.Some(v = 123)
+    good := Some(123)
 
     res := case good: T {
         s: Some { s.v }

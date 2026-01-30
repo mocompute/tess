@@ -4,7 +4,7 @@ Shape: | Circle { radius: Int }
        | Square { length: Int }
 
 main() {
-    shape := Shape.Circle(radius = 3)
+    shape := Circle(3)
 
     // Mutable pattern matching - modify the radius
     case shape.&: Shape {

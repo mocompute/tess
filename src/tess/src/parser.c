@@ -3078,8 +3078,8 @@ static ast_node *create_variant_constructor(parser *self,
     (void)type_args;
     allocator *arena = self->ast_arena;
 
-    // 1. Create function name: Shape_Circle
-    str       func_name_str = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
+    // 1. Create function name: unscoped at module level (e.g., "Circle")
+    str       func_name_str = var_name_str;
     ast_node *func_name     = ast_node_create_sym(arena, func_name_str);
 
     // 2. Clone variant fields as function parameters
@@ -3133,8 +3133,9 @@ static ast_node *create_variant_constructor(parser *self,
     }
     array_shrink(inner_args);
 
-    // Inner call just passes field arguments - type parameters are inferred
-    ast_node *inner_call_name = ast_node_create_sym(arena, var_name_str);
+    // Inner call constructs the scoped variant struct (e.g., Shape__Circle)
+    str       var_struct_str  = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
+    ast_node *inner_call_name = ast_node_create_sym(arena, var_struct_str);
     mangle_name(self, inner_call_name);
     ast_node *inner_call =
       ast_node_create_nfa(arena, inner_call_name, (ast_node_sized)array_sized(inner_args));
@@ -3208,6 +3209,155 @@ static ast_node *create_variant_constructor(parser *self,
     return let;
 }
 
+// Helper to create a make function for wrapping a variant value into the tagged union.
+// E.g., make_Shape_Circle(v: Shape__Circle) -> Shape { ... }
+// Takes a single positional argument of the variant struct type.
+static ast_node *create_variant_make_function(parser *self,
+                                              str     tu_name_str,  // e.g., "Shape"
+                                              str     var_name_str, // e.g., "Circle"
+                                              u8 n_type_args,
+                                              ast_node **type_args,
+                                              ast_node_array var_fields, // variant fields (for type param filtering)
+                                              int is_existing_type, // 1 if variant references a pre-existing type
+                                              str existing_module)  // module name for existing type
+{
+    allocator *arena = self->ast_arena;
+
+    // 1. Create function name: make_Shape_Circle
+    str       func_name_str = str_cat_3(arena, S("make_"), tu_name_str,
+                                        str_cat(arena, S("_"), var_name_str));
+    ast_node *func_name     = ast_node_create_sym(arena, func_name_str);
+
+    // 2. Single parameter: v with variant struct type annotation
+    //    For existing types, use module-mangled original name; for new variants, use scoped name
+    str var_struct_str;
+    if (is_existing_type) {
+        if (str_eq(existing_module, S("main")))
+            var_struct_str = var_name_str;
+        else
+            var_struct_str = mangle_str_for_module(self, var_name_str, existing_module);
+    } else {
+        var_struct_str = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
+    }
+    ast_node *param = ast_node_create_sym_c(arena, "v");
+
+    // Build type annotation for the parameter: Shape__Circle or Shape__Circle(a) for generics
+    ast_node **var_type_args = null;
+    u8         var_n_type_args =
+      collect_used_type_params(self, n_type_args, type_args, var_fields, &var_type_args);
+
+    if (var_n_type_args) {
+        ast_node_sized args = {.size = var_n_type_args,
+                               .v    = alloc_malloc(arena, var_n_type_args * sizeof(ast_node *))};
+        for (u8 i = 0; i < var_n_type_args; i++) {
+            args.v[i] = ast_node_clone(arena, var_type_args[i]);
+        }
+        ast_node *param_type_name = ast_node_create_sym(arena, var_struct_str);
+        // For existing types, name is already fully mangled; skip mangle_name
+        if (!is_existing_type) mangle_name(self, param_type_name);
+        param->symbol.annotation = ast_node_create_nfa(arena, param_type_name, args);
+    } else {
+        ast_node *param_type = ast_node_create_sym(arena, var_struct_str);
+        // For existing types, name is already fully mangled; skip mangle_name
+        if (!is_existing_type) mangle_name(self, param_type);
+        param->symbol.annotation = param_type;
+    }
+
+    ast_node_array params = {.alloc = arena};
+    array_push(params, param);
+    array_shrink(params);
+
+    // 3. Build the return type annotation: Shape or Shape(T)
+    ast_node *return_type = null;
+    if (n_type_args) {
+        ast_node_sized args = {.size = n_type_args,
+                               .v    = alloc_malloc(arena, n_type_args * sizeof(ast_node *))};
+        for (u8 i = 0; i < n_type_args; i++) {
+            args.v[i] = ast_node_clone(arena, type_args[i]);
+        }
+        ast_node *wrapper_name = ast_node_create_sym(arena, tu_name_str);
+        mangle_name(self, wrapper_name);
+        return_type = ast_node_create_nfa(arena, wrapper_name, args);
+    } else {
+        return_type = ast_node_create_sym(arena, tu_name_str);
+        mangle_name(self, return_type);
+    }
+
+    // 4. Build arrow annotation
+    ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
+    set_node_file(self, param_tuple);
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type);
+    set_node_file(self, arrow);
+    func_name->symbol.annotation = arrow;
+
+    // 5. Build body: wrap the argument in union + tag + wrapper struct
+    // Union construction: __Shape__Union_(Circle = v)
+    str       union_name_str               = str_cat_3(arena, S("__"), tu_name_str, S("__Union_"));
+    ast_node *union_arg_name               = ast_node_create_sym(arena, var_name_str);
+    ast_node *union_arg_val                = ast_node_create_sym_c(arena, "v");
+    ast_node *union_assign                 = ast_node_create_assignment(arena, union_arg_name, union_arg_val);
+    union_assign->assignment.is_field_name = 1;
+    set_node_file(self, union_assign);
+    ast_node_array union_args = {.alloc = arena};
+    array_push(union_args, union_assign);
+    array_shrink(union_args);
+
+    ast_node *union_call_name = ast_node_create_sym(arena, union_name_str);
+    mangle_name(self, union_call_name);
+    ast_node *union_call =
+      ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
+    set_node_file(self, union_call);
+
+    // Tag access: __Shape__Tag_.Circle
+    str       tag_name_str = str_cat_3(arena, S("__"), tu_name_str, S("__Tag_"));
+    ast_node *tag_type     = ast_node_create_sym(arena, tag_name_str);
+    mangle_name(self, tag_type);
+    ast_node *dot_op      = ast_node_create_sym_c(arena, ".");
+    ast_node *tag_variant = ast_node_create_sym(arena, var_name_str);
+    ast_node *tag_access  = ast_node_create_binary_op(arena, dot_op, tag_type, tag_variant);
+    set_node_file(self, tag_access);
+
+    // Wrapper construction: Shape(tag = tagAccess, u = unionCall)
+    ast_node *tag_arg_name               = ast_node_create_sym_c(arena, "tag");
+    ast_node *tag_assign                 = ast_node_create_assignment(arena, tag_arg_name, tag_access);
+    tag_assign->assignment.is_field_name = 1;
+    set_node_file(self, tag_assign);
+
+    ast_node *u_arg_name               = ast_node_create_sym_c(arena, "u");
+    ast_node *u_assign                 = ast_node_create_assignment(arena, u_arg_name, union_call);
+    u_assign->assignment.is_field_name = 1;
+    set_node_file(self, u_assign);
+
+    ast_node_array wrapper_args = {.alloc = arena};
+    array_push(wrapper_args, tag_assign);
+    array_push(wrapper_args, u_assign);
+    array_shrink(wrapper_args);
+
+    ast_node *wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
+    mangle_name(self, wrapper_call_name);
+    ast_node *wrapper_call =
+      ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized)array_sized(wrapper_args));
+    set_node_file(self, wrapper_call);
+
+    // Create body
+    ast_node_array body_exprs = {.alloc = arena};
+    array_push(body_exprs, wrapper_call);
+    array_shrink(body_exprs);
+    ast_node *body = ast_node_create_body(arena, (ast_node_sized)array_sized(body_exprs));
+    set_node_file(self, body);
+
+    // Create the function (let) node
+    add_module_symbol(self, func_name);
+    mangle_name(self, func_name);
+    ast_node *let = ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(params), body);
+    set_node_parameters(self, let, &params);
+    let->let.name = func_name;
+    let->let.body = body;
+    set_node_file(self, let);
+
+    return let;
+}
+
 // Tagged union syntax:
 //   Shape = | Circle { radius: Float }
 //           | Square { length: Float }
@@ -3263,10 +3413,12 @@ static int toplevel_tagged_union(parser *self) {
     str tu_name_str = tu_name->symbol.name;
     str_hset_insert(&self->nested_type_parents, tu_name_str);
 
-    // Collect variants: { name, fields[] }
+    // Collect variants: { name, fields[], is_existing_type, existing_module }
     typedef struct {
         ast_node      *name;
         ast_node_array fields;
+        int            is_existing_type;  // 1 if variant references a pre-existing type
+        str            existing_module;   // module name for existing type (e.g., "Foo" from | Foo.Special)
     } variant;
 
     // Must match array_t layout: { v, alloc, size, capacity }
@@ -3278,13 +3430,25 @@ static int toplevel_tagged_union(parser *self) {
     } variants = {.v = null, .alloc = self->ast_arena};
 
     while (1) {
-        // Parse variant name (must be an identifier, not mangled since access is through type)
+        // Parse variant name: either bare identifier (new variant) or Module.Type (existing type)
         if (a_try(self, a_identifier)) return ERROR_STOP;
         ast_node *var_name = self->result;
 
-        // Parse optional struct body { field: Type, ... }
+        int is_existing     = 0;
+        str existing_module = str_empty();
+
+        // Check for dot: Module.Type means existing type reference
+        if (0 == a_try(self, a_dot)) {
+            // var_name is the module name, parse the actual type name
+            existing_module = var_name->symbol.name;
+            if (a_try(self, a_identifier)) return ERROR_STOP;
+            var_name    = self->result;
+            is_existing = 1;
+        }
+
+        // Parse optional struct body { field: Type, ... } — only for new variants
         ast_node_array fields = {.alloc = self->ast_arena};
-        if (0 == a_try(self, a_open_curly)) {
+        if (!is_existing && 0 == a_try(self, a_open_curly)) {
             while (1) {
                 int saw_comma = 0;
                 if (0 == a_try(self, a_comma)) saw_comma = 1;
@@ -3301,7 +3465,8 @@ static int toplevel_tagged_union(parser *self) {
         // Check for reserved type keywords to disallow
         if (is_reserved_type_name(var_name)) return ERROR_STOP;
 
-        variant v = {.name = var_name, .fields = fields};
+        variant v = {.name = var_name, .fields = fields, .is_existing_type = is_existing,
+                     .existing_module = existing_module};
         array_push(variants, v);
 
         // Check for next variant or end
@@ -3332,10 +3497,16 @@ static int toplevel_tagged_union(parser *self) {
         array_push(result_nodes, tag_enum);
     }
 
-    // 2. Variant structs: Circle : { radius: Float }, Square : { ... }, etc.
+    // 2. Variant structs: Shape__Circle : { radius: Float }, etc.
+    //    Scoped under tagged union type, accessed as Shape.Circle via nested_type_parents.
+    //    Skip for existing types (they already have a struct definition).
     forall(i, variants) {
-        variant  *v        = &variants.v[i];
-        ast_node *var_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
+        variant *v = &variants.v[i];
+        if (v->is_existing_type) continue;
+
+        str      var_name_str = str_cat_3(self->ast_arena, tu_name_str,
+                                          S("__"), v->name->symbol.name);
+        ast_node *var_name    = ast_node_create_sym(self->ast_arena, var_name_str);
 
         // For generics, determine which type params are actually used by this variant's fields
         ast_node **var_type_args = null;
@@ -3367,17 +3538,32 @@ static int toplevel_tagged_union(parser *self) {
             u8         n_used_type_args =
               collect_used_type_params(self, n_type_args, type_args, v->fields, &used_type_args);
 
+            // For existing types, use module-mangled original name; for new variants, use scoped name
+            str var_struct_name;
+            if (v->is_existing_type) {
+                // Existing type from another module: mangle as Module__Type
+                // For "main" module, the name is unmangled (main is implicit)
+                if (str_eq(v->existing_module, S("main")))
+                    var_struct_name = v->name->symbol.name;
+                else
+                    var_struct_name = mangle_str_for_module(self, v->name->symbol.name,
+                                                            v->existing_module);
+            } else {
+                var_struct_name = str_cat_3(self->ast_arena, tu_name_str,
+                                            S("__"), v->name->symbol.name);
+            }
+
             ast_node *field_ann = null;
             if (n_used_type_args) {
                 // Generic variant with used type params
                 ast_node_sized args          = {.size = n_used_type_args, .v = used_type_args};
-                ast_node      *var_type_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
-                mangle_name(self, var_type_name);
+                ast_node      *var_type_name = ast_node_create_sym(self->ast_arena, var_struct_name);
+                if (!v->is_existing_type) mangle_name(self, var_type_name);
                 field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args);
             } else {
                 // Non-generic variant (no fields or no type params used)
-                field_ann = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
-                mangle_name(self, field_ann);
+                field_ann = ast_node_create_sym(self->ast_arena, var_struct_name);
+                if (!v->is_existing_type) mangle_name(self, field_ann);
             }
 
             field_name->symbol.annotation = field_ann;
@@ -3460,13 +3646,24 @@ static int toplevel_tagged_union(parser *self) {
         array_push(result_nodes, wrapper_utd);
     }
 
-    // 5. Constructor functions for each variant
+    // 5. Constructor functions for each variant (skip for existing types)
     forall(i, variants) {
         variant  *v    = &variants.v[i];
+        if (v->is_existing_type) continue;
 
         ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
                                                     type_args, v->fields);
         array_push(result_nodes, ctor);
+    }
+
+    // 6. Make functions for each variant: make_Shape_Circle(v: Shape__Circle) -> Shape
+    forall(i, variants) {
+        variant  *v    = &variants.v[i];
+
+        ast_node *make = create_variant_make_function(self, tu_name_str, v->name->symbol.name, n_type_args,
+                                                      type_args, v->fields, v->is_existing_type,
+                                                      v->existing_module);
+        array_push(result_nodes, make);
     }
 
     array_shrink(result_nodes);

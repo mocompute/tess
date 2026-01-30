@@ -23,7 +23,7 @@ main() {
     error := 0
 
     // Test 1: Ok variant with Int value
-    ok_int  := Result.Ok(value = 42)
+    ok_int  := Ok(42)
     result1 := case ok_int: Result {
         o: Ok { o.value }
         e: Err { apply_int_handler(e.handler, e.code) }
@@ -31,7 +31,7 @@ main() {
     error += if result1 == 42 {0} else {1}
 
     // Test 2: Ok variant with Float value
-    ok_float := Result.Ok(value = 3.14)
+    ok_float := Ok(3.14)
     result2  := case ok_float: Result {
         o: Ok { o.value }
         e: Err { 0.0 }
@@ -40,7 +40,7 @@ main() {
 
     // Test 3: Err variant with double handler
     h1                                := IntHandler(fn = double_int/1)
-    err1:                 Result(Int) := Result.Err(code = 5, handler = h1)
+    err1:                 Result(Int) := Err(5, h1)
     result3                           := case err1: Result {
         o: Ok { 0 }
         e: Err { apply_int_handler(e.handler, e.code) }
@@ -49,7 +49,7 @@ main() {
 
     // Test 4: Err variant with negate handler
     h2                                := IntHandler(fn = negate/1)
-    err2:                 Result(Int) := Result.Err(code = 7, handler = h2)
+    err2:                 Result(Int) := Err(7, h2)
     result4                           := case err2: Result {
         o: Ok { 0 }
         e: Err { apply_int_handler(e.handler, e.code) }
