@@ -699,14 +699,14 @@ for x in Module collection { ... }
 for x.& in Module collection { ... }
 ```
 
-For example, `IndexedArray` provides both the value and its index:
+For example, `Array.Indexed` provides both the value and its index:
 
 ```tl
-for it in IndexedArray xs {
+for it in Array.Indexed xs {
   c_printf("index=%d value=%d\n", it.index, it.value)
 }
 
-for it.& in IndexedArray xs {
+for it.& in Array.Indexed xs {
   it.ptr.* = it.index * 2    // Modify element using pointer
 }
 ```
@@ -724,7 +724,7 @@ Iterator modules must implement these functions:
 | `iter_update` | `(Ptr(Iter)) -> Void` | Advance to next element |
 | `iter_deinit` | `(Ptr(Iter)) -> Void` | Clean up iterator resources |
 
-The `Iter` type can contain arbitrary fields accessible in the loop body (like `index` in `IndexedArray`).
+The `Iter` type can contain arbitrary fields accessible in the loop body (like `index` in `Array.Indexed`).
 
 #### Desugaring
 

@@ -595,9 +595,9 @@ _grow(self, alloc, at_least) {
 _type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
 
 
-// -- IndexedArray --
+// -- Array.Indexed --
 
-#module IndexedArray
+#module Array.Indexed
 
 // -- Indexed iterator interface --
 

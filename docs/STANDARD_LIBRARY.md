@@ -144,16 +144,16 @@ for x in arr { c_printf("%d\n", x) }
 for p.& in arr { p.* = p.* + 1 }
 ```
 
-The `IndexedArray` sub-module provides indexed iteration, yielding both the element and its index:
+The `Array.Indexed` sub-module provides indexed iteration, yielding both the element and its index:
 
 ```tl
 // By value: it.value and it.index
-for it in IndexedArray arr {
+for it in Array.Indexed arr {
     c_printf("arr[%d] = %d\n", it.index, it.value)
 }
 
 // By pointer: it.ptr and it.index
-for it.& in IndexedArray arr {
+for it.& in Array.Indexed arr {
     it.ptr.* = it.index
 }
 ```

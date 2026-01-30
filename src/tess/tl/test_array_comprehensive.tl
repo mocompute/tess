@@ -201,8 +201,8 @@ test_zero_capacity() {
 test_indexed_iterator() {
     error := 0
     arr   := Array.with_capacity_undefined(Int, 4)
-    // Use IndexedArray to set values: ptr.* = index
-    for it.& in IndexedArray arr {
+    // Use Array.Indexed to set values: ptr.* = index
+    for it.& in Array.Indexed arr {
         it.ptr.* = it.index
     }
     // Verify elements are 0, 1, 2, 3

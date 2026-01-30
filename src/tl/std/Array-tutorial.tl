@@ -203,7 +203,7 @@ Iter(a): {
 }
 
 // The required iterator functions. They are called automatically by the compiler-generated code which
-// implements the `for` statement. See the bottom of this file for another iterator module, IndexedArray.
+// implements the `for` statement. See the bottom of this file for another iterator module, Array.Indexed.
 // See also parser.c `a_for_statement` for documentation of how a for loop desugars into calls to these
 // functions.
 iter_init   (arr: Ptr(T(a)))     -> Iter(a)
@@ -266,7 +266,7 @@ _type_width_aligned(a: Type) { Alloc.align(sizeof(a), alignof(a)) }
 // Start a new module. A single file may contain multiple modules, but the same module cannot be implemented
 // using multiple #module sections. That is, once we start a new module, we cannot re-open a previously
 // defined module.
-#module IndexedArray
+#module Array.Indexed
 
 // -- Indexed iterator interface --
 
