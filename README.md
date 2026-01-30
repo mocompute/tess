@@ -30,8 +30,8 @@ A statically-typed programming language that transpiles to C11.
   ```tl
   Vec2(T) : { x: T, y: T }   // Define a generic type
 
-  vi := Vec2(1, 2)           // Vec2(Int)
-  vf := Vec2(1.0, 2.0)       // Vec2(Float)
+  vi := Vec2(x = 1, y = 2)           // Vec2(Int)
+  vf := Vec2(x = 1.0, y = 2.0)       // Vec2(Float)
   ```
 
 - **Function overloading** - Define multiple functions with the same name but different arities. The compiler resolves calls by argument count:

@@ -147,7 +147,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 | Integer literals | `x := 42` | Literal type is `Int` |
 | Float literals | `x := 3.14` | Literal type is `Float` |
 | Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
-| Tagged union constructors (with constraining fields) | `opt := Option.Some(v = 42)` | Type parameter inferred from field value |
+| Tagged union constructors (with constraining fields) | `opt := Some(42)` | Type parameter inferred from argument value |
 | CArray decay | `ptr := arr` where `arr := CArray(Int, 10)` | Pointer type matches array element type |
 | Function calls | `result := add(1, 2)` | Return type inferred from function |
 
@@ -230,15 +230,15 @@ When a constructor doesn't constrain all type parameters:
 T(a) : | Some { v: a }
        | None
 
-good: T(Int) := T.None()              // Required - None has no field with type `a`
-opt := T.Some(v = 42)                 // Not required - `v = 42` constrains `a = Int`
+good: T(Int) := None()                // Required - None has no field with type `a`
+opt := Some(42)                       // Not required - argument constrains `a = Int`
 ```
 
 ```tl
 Either(a, b) : | Left  { v: a }
                | Right { v: b }
 
-x: Either(Int, Bool) := Either.Left(v = 42)   // Required - Left only constrains `a`
+x: Either(Int, Bool) := Left(42)     // Required - Left only constrains `a`
 ```
 
 #### Functions Returning Untyped Values
@@ -826,7 +826,7 @@ outer := Outer(contents = inner)
 outer.contents.value   // 42
 ```
 
-Nested structs are desugared internally with underscore-separated names (e.g., `Outer_Inner`), but the user-facing syntax is always `Parent.Child`. This also works across modules:
+Nested structs are desugared internally with double-underscore-separated names (e.g., `Outer__Inner`), but the user-facing syntax is always `Parent.Child`. This also works across modules:
 
 ```tl
 #module Shapes
@@ -870,46 +870,78 @@ n := v.the_int
 ## Tagged Unions
 
 ```tl
-#module Foo
 Shape : | Circle    { radius: Float }
         | Square    { length: Float }
+        | None
+```
 
-s := Foo.Shape.Circle(radius = 2.0)
+### Construction
 
-// The type annotation on `s` is required, as are the annotations on
-// each of the conditions.
-area := case s: Foo.Shape {
+There are three ways to construct tagged union values:
+
+**Unscoped constructor functions** take positional arguments and return the wrapped tagged union:
+
+```tl
+s := Circle(2.0)              // returns Shape
+n := None()                   // returns Shape
+```
+
+From another module, prefix with the module name:
+
+```tl
+s := Foo.Circle(2.0)          // returns Foo.Shape
+```
+
+**Scoped type constructors** use named arguments and return the bare variant struct (not the tagged union):
+
+```tl
+c := Shape.Circle(radius = 2.0)   // returns bare Circle struct
+```
+
+**Make functions** wrap a bare variant struct into the tagged union:
+
+```tl
+c := Shape.Circle(radius = 2.0)   // bare Circle struct
+s := make_Shape_Circle(c)         // wrapped Shape
+```
+
+### Existing Types as Variants
+
+A variant can reference a pre-existing type using module-qualified syntax:
+
+```tl
+#module Geo
+
+Point: { x: Float, y: Float }
+
+Shape: | Circle { radius: Float }
+       | Geo.Point
+       | None
+```
+
+For types in the `main` module, use `main.TypeName`. A bare name (e.g., `| None`) always creates a new variant. No constructor function is generated for existing type variants — use the type's own constructor and the make function.
+
+### Pattern Matching (Case Expression)
+
+```tl
+area := case s: Shape {
   c:  Circle { c.radius * c.radius * 3.14159  }
   sq: Square { sq.length * sq.length }
 }
 ```
 
-Variant constructors use dot syntax: `Type.Variant(...)`. For same-module usage:
-
-```tl
-#module main
-Shape : | Circle { radius: Float }
-        | Square { length: Float }
-
-c := Shape.Circle(radius = 2.0)
-```
-
-For cross-module usage, chain the module and type dots: `Module.Type.Variant(...)`.
-
-`case` expressions of this form for tagged unions must be exhaustive:
-there must be one arm per variant in the union, or else there must be
-an `else` arm.
+The type annotation (`: Shape`) is required. `case` expressions for tagged unions must be exhaustive: there must be one arm per variant, or an `else` arm.
 
 ### Mutable tagged union case
 
 ```tl
-case s.&: Foo.Shape {
+case s.&: Shape {
   c:  Circle { c->radius *= 2.0  }
   sq: Square { sq->length * sq->length }
 }
 ```
 
-Use this syntax to access pointers to the each variant. Note the `.&`
+Use this syntax to access pointers to each variant. Note the `.&`
 suffix on the case variable. This is the same syntax used to access
 mutable iterators with the `for` statement.
 
