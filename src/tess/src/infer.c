@@ -2073,14 +2073,16 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (reject_type_literal(self, node)) return 1;
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
-        // Take symbol's existing type
+        // Take symbol's existing type: this ensures let-in symbols retain their type info through
+        // subsequent mutations.
         sync_with_env(self, ctx, node, 0);
         break;
 
     case npos_field_name:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
         if (reject_type_literal(self, node)) return 1;
-        // assign a fresh type variable to field name
+
+        // assign a fresh type variable to field name, because we can't know its generic instantiated type
         ensure_tv(self, &node->type);
         break;
 

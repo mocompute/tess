@@ -17,8 +17,12 @@ test1() {
     }
     error += if result - 0.5 == 0.0 {0} else {1}
 
-    nopt: Option(Float) := None()
-    // when using None() variant, the variable must be annotated
+
+    // Test an alternative to casting at the point of assignment: declare an uninitialized variable of the correct type,
+    // and compiler will infer the correct type on a later mutation (assignment)
+    nopt: Option(Float) := void
+    nopt = None()
+
     result := case nopt: Option {
         x: Some { x.v }
         n: None { 3.14 }
