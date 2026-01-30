@@ -69,8 +69,9 @@ typedef enum {
     npos_toplevel,
     npos_formal_parameter,
     npos_function_argument,
-    npos_value_rhs, // RHS of let-in or assignment (rejects type literals)
-    npos_assign_lhs,
+    npos_value_rhs,    // RHS of let-in or assignment (rejects type literals)
+    npos_assign_lhs,   // LHS of struct field assignment
+    npos_reassign_lhs, // LHS of reassignment to let-in symbol
     npos_operand,
     npos_field_name,
 } node_position;
@@ -902,6 +903,9 @@ static int infer_if_then_else(tl_infer *self, ast_node *node) {
 }
 
 static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    // Struct field assignment only
+    if (!node->assignment.is_field_name) fatal("runtime error");
+
     ctx->is_field_name = node->assignment.is_field_name;
     if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
     ctx->is_field_name = 0;
@@ -910,15 +914,17 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
 
     if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
-    if (constrain(self, node->type, node->assignment.name->type, node)) return 1;
+
+    // Do not constrain name type because field names are not unique
 
     return 0;
 }
 
 static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
-    ctx->is_field_name = node->assignment.is_field_name;
-    if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
-    ctx->is_field_name = 0;
+    // Reassign to let-in bound symbol
+    if (node->assignment.is_field_name) fatal("runtime error");
+
+    if (resolve_node(self, node->assignment.name, ctx, npos_reassign_lhs)) return 1;
     if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
@@ -2053,22 +2059,21 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (reject_type_literal(self, node)) return 1;
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
-        // Support annotations on lhs of assignments, such as field names
+        // Support annotations on lhs of field name assignments
         if (ast_node_is_symbol(node)) {
             if (!ctx) fatal("logic error");
-            // No special opts - just parse the annotation if present
+            // No special opts - just parse the annotation if present, which mutates the ctx
             int res = process_annotation(self, ctx, node, (annotation_opts){0});
             if (res < 0) return 1;
-            if (res > 0 && !ctx->is_field_name) {
-                // Annotation indicates a cast to a new type, update environment.
-                // Field names in struct construction are labels, not bindings —
-                // they must not be inserted into the env.
-                sync_with_env(self, ctx, node, 1);
-            } else {
-                // No annotation: assign a fresh type variable
-                ensure_tv(self, &node->type);
-            }
+            ensure_tv(self, &node->type);
         }
+        break;
+
+    case npos_reassign_lhs:
+        if (reject_type_literal(self, node)) return 1;
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+
+        ensure_tv(self, &node->type);
         break;
 
     case npos_field_name:
