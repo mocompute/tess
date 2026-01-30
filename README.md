@@ -105,6 +105,7 @@ This is a research project exploring what a minimal, C-like language might look 
 
 - **[Language Reference](docs/LANGUAGE_REFERENCE.md)** - Complete syntax guide
 - **[Array Tutorial](src/tl/std/Array-tutorial.tl)** - Tutorial introduction to Tess through the Array implementation
+- **[Standard Library Reference](docs/STANDARD_LIBRARY.md)** - API reference for Array, Alloc, and other modules
 - **[All Documentation](docs/)** - Type system, specialization, and compiler internals
 
 ## Standard Library
