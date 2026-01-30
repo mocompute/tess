@@ -1280,7 +1280,24 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                     return 1;
                 }
                 assert(found < (i32)inst->cons_inst->args.size);
-                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+
+                int is_cast = 0;
+                if (ast_node_is_symbol(arg->assignment.name) &&
+                    arg->assignment.name->symbol.annotation_type &&
+                    tl_monotype_is_ptr(arg->assignment.name->symbol.annotation_type->type)) {
+                    is_cast = 1;
+                }
+                if (is_cast) {
+                    tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
+                    // Constrain annotation type against struct field to propagate concrete type info
+                    if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
+                    // Constrain value type against annotation permissively (cast)
+                    self->is_constrain_ignore_error = 1;
+                    constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
+                    self->is_constrain_ignore_error = 0;
+                } else {
+                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+                }
             } else {
                 // In this branch, node is a type literal.
             }
@@ -2437,12 +2454,22 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
                 continue;
             }
 
+            // For struct field assignments with a Ptr annotation (cast), use the
+            // annotation type instead of the value type for specialization.
+            tl_polytype *arg_type = arg->type;
+            if (ast_node_is_assignment(arg) &&
+                ast_node_is_symbol(arg->assignment.name) &&
+                arg->assignment.name->symbol.annotation_type &&
+                tl_monotype_is_ptr(arg->assignment.name->symbol.annotation_type->type)) {
+                arg_type = arg->assignment.name->symbol.annotation_type;
+            }
+
             tl_monotype *mono = null;
-            if (!tl_polytype_is_concrete(arg->type)) {
-                mono = tl_polytype_instantiate(self->arena, arg->type, self->subs);
+            if (!tl_polytype_is_concrete(arg_type)) {
+                mono = tl_polytype_instantiate(self->arena, arg_type, self->subs);
                 tl_monotype_substitute(self->arena, mono, self->subs, null);
             } else {
-                mono = arg->type->type;
+                mono = arg_type->type;
             }
 
             array_push(arr, mono);

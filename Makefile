@@ -407,6 +407,7 @@ TL_TESTS =					\
 	struct_generic				\
 	struct_generic_function_signature	\
 	struct_construction			\
+	struct_field_ptr_cast			\
 	tail_call				\
 	type_alias_generic			\
 	type_alias_local			\
