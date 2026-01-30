@@ -16,11 +16,11 @@ c_getenv       (name: CString)                       -> CString
 c_system       (str: CString)                        -> Int
 c_rand         ()                                    -> CInt
 c_srand        (seed: CUnsignedInt)                  -> Void
-c_aligned_alloc(alignment: CSize, size: CSize)       -> Ptr(T)
-c_calloc       (num: CSize, size_each: CSize)        -> Ptr(T)
+c_aligned_alloc(alignment: CSize, size: CSize)       -> Ptr(any)
+c_calloc       (num: CSize, size_each: CSize)        -> Ptr(any)
 c_free         (ptr: Ptr(T))                         -> Void
-c_malloc       (size: CSize)                         -> Ptr(T)
-c_realloc      (ptr: Ptr(T), size: CSize)            -> Ptr(T)
+c_malloc       (size: CSize)                         -> Ptr(any)
+c_realloc      (ptr: Ptr(T), size: CSize)            -> Ptr(any)
 c_exit         (status: CInt)                        -> Void
 c_abort        ()                                    -> Void
 

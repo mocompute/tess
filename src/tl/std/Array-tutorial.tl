@@ -30,12 +30,6 @@
 // The directive `#include` is also supported (see the contents of <stdlib.tl> for example). `#include`
 // simply includes the given C file in the transpiled output. All `#include` directives are hoisted to the
 // top of the transpiled output file.
-//
-// Any C function may be called directly, using the prefix `c_`, e.g. `c_malloc(1024)`. TL type information
-// is required, however, for the program to successfully type check. For example, `c_malloc` is declared
-// like this: `c_malloc(size: CSize) -> Ptr(T)` This indicates the function takes a single C `size_t`
-// argument, and returns a pointer to an arbitrary type `T`. See `Array.reserve()` for the syntax used to
-// cast the return value from `c_malloc` to its appropriate type.
 #import <stdlib.tl>
 #import <stdio.tl>
 #import <fatal.tl>
@@ -235,12 +229,12 @@ Iter(T): {
 // implements the `for` statement. See the bottom of this file for another iterator module, Array.Indexed.
 // See also parser.c `a_for_statement` for documentation of how a for loop desugars into calls to these
 // functions.
-iter_init   (arr: Ptr(Array(T)))  -> Iter(T)
-iter_ptr    (iter: Ptr(Iter(T)))  -> Ptr(T)
-iter_value  (iter: Ptr(Iter(T)))  -> T
-iter_cond   (iter: Ptr(Iter(T)))  -> Bool
-iter_update (iter: Ptr(Iter(T)))  -> Void
-iter_deinit (iter: Ptr(Iter(T)))  -> Void
+iter_init   (arr: Ptr(Array(T))) -> Iter(T)
+iter_ptr    (iter: Ptr(Iter(T))) -> Ptr(T)
+iter_value  (iter: Ptr(Iter(T))) -> T
+iter_cond   (iter: Ptr(Iter(T))) -> Bool
+iter_update (iter: Ptr(Iter(T))) -> Void
+iter_deinit (iter: Ptr(Iter(T))) -> Void
 
 iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr   (iter) { iter->v[iter->index].&                           }
