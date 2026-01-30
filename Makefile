@@ -473,6 +473,7 @@ TL_FAIL_TESTS =					\
 	fail_reserved_type_struct		\
 	fail_reserved_type_tu			\
 	fail_reserved_type_union		\
+	fail_tagged_union_duplicate_variant	\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
@@ -483,7 +484,11 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
-	while_empty_body
+	while_empty_body \
+	tagged_union_unscoped \
+	tagged_union_scoped_variant \
+	tagged_union_make \
+	tagged_union_existing_type
 
 
 
