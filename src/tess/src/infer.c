@@ -727,8 +727,7 @@ static int is_std_function(ast_node *node) {
 }
 
 static int is_ptr_cast_annotation(ast_node *node) {
-    return ast_node_is_symbol(node) &&
-           node->symbol.annotation_type &&
+    return ast_node_is_symbol(node) && node->symbol.annotation_type &&
            tl_monotype_is_ptr(node->symbol.annotation_type->type);
 }
 
@@ -869,7 +868,9 @@ static int infer_if_then_else(tl_infer *self, ast_node *node) {
 }
 
 static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    ctx->is_field_name = node->assignment.is_field_name;
     if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
+    ctx->is_field_name = 0;
     if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
@@ -881,7 +882,9 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 }
 
 static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    ctx->is_field_name = node->assignment.is_field_name;
     if (resolve_node(self, node->assignment.name, ctx, npos_assign_lhs)) return 1;
+    ctx->is_field_name = 0;
     if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
@@ -1614,7 +1617,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
 
     case ast_assignment:
         ctx->node_pos      = npos_assign_lhs;
-        ctx->is_field_name = 1;
+        ctx->is_field_name = node->assignment.is_field_name;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
 
         ctx->node_pos      = npos_value_rhs;
@@ -1629,7 +1632,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_reassignment_op:
         // don't traverse op, it's just an operator
         ctx->node_pos      = npos_assign_lhs;
-        ctx->is_field_name = 0;
+        ctx->is_field_name = node->assignment.is_field_name;
         if (traverse_ast(self, ctx, node->assignment.name, cb)) return 1;
 
         ctx->node_pos      = npos_value_rhs;
@@ -2022,8 +2025,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             // No special opts - just parse the annotation if present
             int res = process_annotation(self, ctx, node, (annotation_opts){0});
             if (res < 0) return 1;
-            if (res > 0) {
-                // Annotation indicates a cast to a new type, update environment
+            if (res > 0 && !ctx->is_field_name) {
+                // Annotation indicates a cast to a new type, update environment.
+                // Field names in struct construction are labels, not bindings —
+                // they must not be inserted into the env.
                 sync_with_env(self, ctx, node, 1);
             } else {
                 // No annotation: assign a fresh type variable
