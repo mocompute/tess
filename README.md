@@ -60,7 +60,7 @@ A statically-typed programming language that transpiles to C11.
 Point(a) : { x: a, y: a }
 
 add(p1, p2) {
-  Point(p1.x + p2.x, p1.y + p2.y)
+  Point(x = p1.x + p2.x, y = p1.y + p2.y)
 }
 
 main() {

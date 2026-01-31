@@ -148,7 +148,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 | Float literals | `x := 3.14` | Literal type is `Float` |
 | Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
 | Tagged union constructors (with constraining fields) | `opt := Some(42)` | Type parameter inferred from argument value |
-| CArray decay | `ptr := arr` where `arr := CArray(Int, 10)` | Pointer type matches array element type |
+| CArray declaration | `arr: CArray(Int, 10) := void` | CArray is a type annotation |
 | Function calls | `result := add(1, 2)` | Return type inferred from function |
 
 #### Function Parameters and Return Types
@@ -267,7 +267,8 @@ result := case opt: Option {          // `: Option` is required
 | Struct constructor | No (inferred from constructor) |
 | Tagged union with constraining field | No |
 | Tagged union without constraining field | **Yes** |
-| CArray decay to pointer | No |
+| CArray declaration | **Yes** (type annotation required) |
+| CArray decay to pointer | **Yes** (explicit `Ptr(T)` annotation) |
 | Pointer cast to different type | **Yes** |
 | C type (CInt, CFloat, etc.) | **Yes** |
 | c_malloc result | **Yes** |
@@ -978,12 +979,27 @@ b : Ptr(Byte) := p    // Cast to different pointer type
 
 ### Array Decay
 
-`CArray` types automatically decay to pointers when needed, similar to C:
+`CArray` is used as a type annotation to declare fixed-size C arrays. Decay to pointer must be explicit:
 
 ```tl
-buffer := CArray(CChar, 256)
-ptr : CString := buffer      // CArray decays to Ptr
-c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
+buffer: CArray(CChar, 256) := void    // Declare a fixed-size array
+ptr: Ptr(CChar) := buffer             // Explicit decay to pointer
+c_strcpy(ptr, "hello")                // Pass pointer to C functions
+```
+
+CArray supports direct indexing without decay:
+
+```tl
+arr: CArray(Int, 5) := void
+arr[0] = 42                           // Direct indexing on CArray
+```
+
+CArray fields in structs automatically decay to pointers on access:
+
+```tl
+Buffer: { data: CArray(CChar, 256), len: CInt }
+b := Buffer(data = void, len = 0)
+data_ptr: Ptr(CChar) := b.data        // Struct field access decays to Ptr
 ```
 
 ## C Interoperability

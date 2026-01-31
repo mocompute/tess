@@ -140,8 +140,8 @@ Generic structs are also specialized:
 Point(a) : { x: a, y: a }
 
 main() {
-  p1 := Point(1, 2)       // Creates Point_Int
-  p2 := Point(1.0, 2.0)   // Creates Point_Float
+  p1 := Point(x = 1, y = 2)       // Creates Point_Int
+  p2 := Point(x = 1.0, y = 2.0)   // Creates Point_Float
 }
 ```
 
@@ -153,8 +153,8 @@ Specialization happens at each call site. A generic function called with differe
 first(pair) { pair.x }
 
 main() {
-  p1 := Point(1, 2)
-  p2 := Point(1.0, 2.0)
+  p1 := Point(x = 1, y = 2)
+  p2 := Point(x = 1.0, y = 2.0)
 
   a := first(p1)    // Specializes first for Point(Int)
   b := first(p2)    // Specializes first for Point(Float)
