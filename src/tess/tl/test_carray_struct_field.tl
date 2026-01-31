@@ -40,10 +40,17 @@ main() {
     error += if row0_ptr[0] == 1 {0} else {1}
     error += if row1_ptr[2] == 6 {0} else {1}
 
-    // Test 4: Nested struct with CArray (access inner struct directly to avoid copy semantics)
-    // FIXME: actually test the nested thing. There could be a pre-existing bug with chained access.
-    w := Wrapper(buf = Buffer(data = void, len = 0), id = 42)
-    error += if w.id == 42 {0} else {1}
+    // Test 4: CArray field access through pointer (the dangling pointer bug).
+    // Without the lvalue fix, b2.data would copy Buffer to a temporary, then decay the CArray
+    // in the temporary to a pointer — a dangling pointer once the temporary is gone.
+    b2 := Buffer(data = void, len = 0)
+    bp := b2.&
+    field_ptr: Ptr(CChar) := bp->data
+    c_strcpy(field_ptr, "World")
+    error += if c_strlen(field_ptr) == 5 {0} else {1}
+    // Verify the write went into b2, not a dead temporary
+    check_ptr: Ptr(CChar) := b2.data
+    error += if c_strlen(check_ptr) == 5 {0} else {1}
 
     error
 }

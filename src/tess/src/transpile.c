@@ -1582,7 +1582,16 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         return generate_short_circuit_op(self, type, node, ctx, 0);
     }
 
-    str left = generate_expr(self, null, node->binary_op.left, ctx); // types null
+    // When accessing a CArray struct field, generate the left operand as an lvalue to avoid copying
+    // the struct into a temporary. Otherwise the CArray decays to a pointer into the dead temporary.
+    int carray_field = is_struct_access_operator(str_cstr(&op)) &&
+                       node->binary_op.right->type &&
+                       tl_monotype_is_inst_of(node->binary_op.right->type->type, S("CArray"));
+
+    int save_lvalue = ctx->want_lvalue;
+    if (carray_field) ctx->want_lvalue = 1;
+    str left = generate_expr(self, null, node->binary_op.left, ctx);
+    ctx->want_lvalue = save_lvalue;
     str right;
 
     // Note: special case if right hand is a funcall of a struct member

@@ -98,17 +98,7 @@ _small_len(s: Str) -> CSize {
 
 _buf(s: Ptr(Str)) -> Ptr(CChar) {
     if _is_small(s.*) {
-        // FIXME: BUG WORKAROUND: Accessing a CArray field in a struct (e.g. s->small.buf) first copies the
-        // enclosing struct into a temporary, then decays the CArray to a pointer into that temporary.
-        // The returned pointer is dangling because the temporary is destroyed at the end of the
-        // expression. This is a compiler bug -- CArray struct field access should decay to a pointer
-        // into the original struct, not a copy.
-        //
-        // Workaround: since the buffer is at offset 0 of both _Small and the Str union, we cast
-        // the Str pointer directly to Ptr(CChar) via Ptr(any).
-        p: Ptr(any)   := s
-        r: Ptr(CChar) := p
-        return r
+        return s->small.buf
     }
     s->big.buf
 }
@@ -120,10 +110,7 @@ _make_tag_len(n: CSize) -> Byte {
 _init_small(src: Ptr(CChar), n: CSize) -> Str {
     s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
-        // FIXME: BUG WORKAROUND: Cannot use s.small.buf here -- see _buf() for explanation.
-        // The buffer is at offset 0 of the Str union, so we cast s.& directly.
-        p:   Ptr(any)   := s.&
-        dst: Ptr(CChar) := p
+        dst: Ptr(CChar) := s.small.buf
         c_memcpy(dst, src, n)
     }
     s
@@ -316,9 +303,7 @@ _cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count:
 
     if total <= _STR_MAX_SMALL {
         s := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
-        // FIXME: BUG WORKAROUND: Cannot use s.small.buf here -- see _buf() for explanation.
-        p:   Ptr(any)   := s.&
-        dst: Ptr(CChar) := p
+        dst: Ptr(CChar) := s.small.buf
         off: CSize      := 0
         j:   CSize      := 0
         while j < count, j += 1 {
