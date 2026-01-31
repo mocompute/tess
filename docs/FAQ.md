@@ -28,7 +28,7 @@ intermediate representation, it has several compelling properties. It
 is an ISO-standardised language with decades of stability, whereas
 LLVM IR offers no stability guarantees and often breaks between
 releases. C has multiple independent native code backends: GCC, Clang,
-MSVC, TCC, and others, each with mature optimization pipelines,
+MSVC, ICC, and others, each with mature optimization pipelines,
 whereas LLVM is a single implementation. This means a language
 targeting C inherits broad platform support, competitive optimizations
 improved over decades, and a choice of toolchains without taking on LLVM
