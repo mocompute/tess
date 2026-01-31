@@ -426,6 +426,7 @@ TL_TESTS =					\
 	type_alias_module_simple_direct		\
 	type_predicate				\
 	type_predicate_field			\
+	type_predicate_branch			\
 	type_predicate_generic			\
 	tagged_union				\
 	tagged_union_generic_basic		\
