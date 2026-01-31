@@ -1949,6 +1949,11 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
         struct_type = struct_type->literal;
     }
 
+    // Const(T) is transparent for field access: unwrap to access T's fields
+    if (tl_monotype_is_const(struct_type)) {
+        struct_type = tl_monotype_const_target(struct_type);
+    }
+
     if (tl_monotype_is_inst(struct_type)) {
         // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
         // fun_ptr is a function pointer.

@@ -1,14 +1,13 @@
 #module main
-#import <stdlib.tl>
 
-// Compound assignment through const pointer
-mutate_compound(p: Ptr(Const(Int))) {
-    p.* += 1    // error: const violation via compound assignment
+Point: { x: Int, y: Int }
+
+mutate_field(p: Ptr(Const(Point))) {
+    p->x = 10    // error: const violation
     0
 }
 
 main() {
-    p: Ptr(Int) := c_malloc(8)
-    p.* = 42
-    mutate_compound(p)
+    p := Point(x = 1, y = 2)
+    mutate_field(p.&)
 }

@@ -2,12 +2,19 @@
 #import <stdio.tl>
 #import <stdlib.tl>
 
+Point: { x: Int, y: Int }
+
 read_through_const_ptr(p: Ptr(Const(Int))) {
     p.*
 }
 
 add_one_through_const(p: Ptr(Const(Int))) {
     p.* + 1
+}
+
+// Struct field access through const pointer
+read_point(p: Ptr(Const(Point))) {
+    p->x + p->y
 }
 
 main() {
@@ -23,5 +30,14 @@ main() {
     c_printf("val2 = %d\n", val2)
 
     c_free(p)
+
+    // Struct: const pointer to Point
+    pt: Ptr(Point) := c_malloc(_tl_sizeof_(Point))
+    pt->x = 10
+    pt->y = 20
+    sum := read_point(pt)
+    c_printf("sum = %d\n", sum)
+
+    c_free(pt)
     0
 }
