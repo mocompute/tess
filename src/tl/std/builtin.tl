@@ -17,14 +17,25 @@ alignof(T) { _tl_alignof_(T) }
 Option(T): | Some { v: T }
            | None
 
-unwrap(opt: Option(T), default: T) -> T {
-    case opt: Option {
-        s: Some { s.v }
-        n: None { default }
-    }
-}
-
 // Result type
 
 Result(T, U): | Ok { v: T }
               | Err { v: U }
+
+// Unwrap: extract the value from an Option or Result, or return a default.
+unwrap(opt_or_res, default: T) -> T {
+    if opt_or_res :: Option(T) {
+        case opt_or_res: Option(T) {
+            s: Some { s.v }
+            n: None { default }
+        }
+    } else if opt_or_res :: Result(T, U) {
+        case opt_or_res: Result(T, U) {
+            o: Ok { o.v }
+            e: Err { default }
+        }
+    }
+    else {
+        _tl_fatal_("unwrap: invalid type")
+    }
+}
