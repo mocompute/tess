@@ -12,8 +12,8 @@ main() {
     points := make_points(8)
     rects  := make_rects()
 
-    Array.push(points.&, Point(0, 1))
-    Array.push(points.&, Point(2, 3))
+    Array.push(points.&, Point(x = 0, y = 1))
+    Array.push(points.&, Point(x = 2, y = 3))
     Array.push(rects.&, Rect(topleft = points.v[0], botright = points.v[1]))
 
     res := points.v[0].x

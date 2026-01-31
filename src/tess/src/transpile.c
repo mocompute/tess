@@ -1040,32 +1040,6 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
     if (type) {
 
-        // Note: special case: handle CArray and automatic decay to pointer: we do not support C
-        // pointer-to-array
-        {
-            ast_node *nfa = node->let_in.value;
-            if (ast_node_is_nfa(nfa) && str_eq(ast_node_str(nfa->named_application.name), S("CArray"))) {
-                tl_monotype *array_type = tl_polytype_concrete(nfa->type);
-                assert(tl_monotype_is_inst(array_type) && 2 == array_type->cons_inst->args.size);
-                tl_monotype *element_type = array_type->cons_inst->args.v[0];
-                i32          count        = tl_monotype_integer(array_type->cons_inst->args.v[1]);
-                if (count < 0) fatal("runtime error");
-
-                str typec    = type_to_c_mono(self, element_type);
-                str arr_name = str_fmt(self->transient, "%s_array_", str_cstr(&name));
-                str line =
-                  str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&arr_name), count);
-                cat(self, line);
-
-                // decay array to pointer:
-                line = str_fmt(self->transient, "%s* %s = %s;\n", str_cstr(&typec), str_cstr(&name),
-                               str_cstr(&arr_name));
-                cat(self, line);
-
-                goto continue_body;
-            }
-        }
-
         if (ast_node_is_void(node->let_in.value)) {
             // binding a symbol to void means to declare it without initialising it
             generate_decl(self, name, type);
@@ -1121,8 +1095,6 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             }
         }
     }
-
-continue_body:;
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
     if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {
@@ -2042,6 +2014,15 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     }
 
     else if (tl_cons_inst == type->tag) {
+        // Special case for CArray(T, N) - emit as T name[N]
+        if (tl_monotype_is_inst_of(type, S("CArray")) && type->cons_inst->args.size == 2) {
+            str typec = type_to_c_mono(self, type->cons_inst->args.v[0]);
+            i32 count = tl_monotype_integer(type->cons_inst->args.v[1]);
+            str line  = str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&name), count);
+            cat(self, line);
+            return;
+        }
+
         // Special case for Ptr(..Ptr(Arrow)..) - pointer(s) to function pointer
         str ptr_arrow = ptr_to_arrow_decl(self, type, name);
         if (!str_is_empty(ptr_arrow)) {
@@ -2441,6 +2422,14 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             tl_monotype *arg   = tl_monotype_ptr_target(mono);
             tl_polytype  wrap  = tl_polytype_wrap(arg);
             str          typec = type_to_c(self, &wrap);
+            return str_cat(self->transient, typec, S("*"));
+        }
+
+        else if (str_eq(S("CArray"), cons_name) && mono->cons_inst->args.size == 2) {
+            // CArray(T, N) renders as T* (decayed pointer)
+            tl_monotype *element  = mono->cons_inst->args.v[0];
+            tl_polytype  wrap_el  = tl_polytype_wrap(element);
+            str          typec    = type_to_c(self, &wrap_el);
             return str_cat(self->transient, typec, S("*"));
         }
 

@@ -15,7 +15,7 @@ main() {
     error := 0
 
     // Test 1: Array of structs containing function pointers
-    fns := CArray(FnHolder, 4)
+    fns: CArray(FnHolder, 4) := void
     fns[0] = FnHolder(fn = double/1)
     fns[1] = FnHolder(fn = triple/1)
     fns[2] = FnHolder(fn = negate/1)
@@ -49,7 +49,7 @@ main() {
     error += if sum == 11 {0} else {1}
 
     // Test 7: Decay array to pointer and invoke
-    ptr     := fns
+    ptr: Ptr(FnHolder) := fns
     result7 := ptr[1].fn(4)             // triple(4) = 12
     error += if result7 == 12 {0} else {1}
 

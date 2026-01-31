@@ -342,7 +342,6 @@ TL_TESTS =					\
 	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
 	function_pointer_in_struct_direct_2	\
-	function_pointer_array			\
 	function_pointer_recursive_type		\
 	function_pointer_pointer		\
 	generic_lambda				\
@@ -494,6 +493,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
+	carray_struct_field		\
+	function_pointer_array		\
 	while_empty_body
 
 

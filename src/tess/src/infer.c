@@ -590,7 +590,6 @@ static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_no
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
-static int  is_carray_constructor(ast_node *);
 static int  is_std_function(ast_node *);
 
 typedef struct {
@@ -752,10 +751,6 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 // ============================================================================
 // Special Case Handlers
 // ============================================================================
-
-static int is_carray_constructor(ast_node *node) {
-    return ast_node_is_nfa(node) && str_eq(ast_node_str(node->named_application.name), S("CArray"));
-}
 
 static int is_std_function(ast_node *node) {
     return ast_node_is_std_application(node);
@@ -1192,34 +1187,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
     if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
-    if (is_carray_constructor(node->let_in.value)) {
-        ast_node *nfa = node->let_in.value;
-        if (2 != nfa->named_application.n_arguments) {
-            wrong_number_of_arguments(self, nfa);
-            return 1;
-        }
-        ast_node **args = nfa->named_application.arguments;
-        if (ast_i64 != args[1]->tag) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_integer, .node = args[1]}));
-            return 1;
-        }
-
-        tl_monotype *parsed_type = tl_type_registry_parse_type(self->registry, args[0]);
-        if (!parsed_type) {
-            expected_type(self, args[0]);
-            return 1;
-        }
-
-        tl_monotype *inst =
-          tl_type_registry_instantiate_carray(self->registry, parsed_type, (i32)args[1]->i64.val);
-        if (constrain_pm(self, node->let_in.value->type, inst, node)) return 1;
-
-        tl_monotype *ptr = tl_type_registry_ptr(self->registry, parsed_type);
-        if (constrain_pm(self, node->let_in.name->type, ptr, node->let_in.name)) return 1;
-        return 0;
-    }
-
-    else if (ast_node_is_lambda_function(node->let_in.value)) {
+    if (ast_node_is_lambda_function(node->let_in.value)) {
         str name = node->let_in.name->symbol.name;
 
         if (add_generic(self, node)) return 1;
@@ -1257,7 +1225,16 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
             }
 
-            if (constrain(self, name_type, value_type, node) && !is_cast) return 1;
+            // Skip constraint for CArray-to-Ptr casts: CArray and Ptr are different type
+            // constructors so unification would corrupt type state.
+            int skip = 0;
+            if (is_cast && value_type) {
+                tl_polytype_substitute(self->arena, value_type, self->subs);
+                skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
+            }
+            if (!skip) {
+                if (constrain(self, name_type, value_type, node) && !is_cast) return 1;
+            }
             self->is_constrain_ignore_error = 0;
         }
 

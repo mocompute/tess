@@ -1,11 +1,13 @@
 #module main
 
 main() {
-    // we automatically decay array to pointer, unlike C
-    p := CArray(Int, 16)
-    p[0] = 123456
+    arr: CArray(Int, 16) := void
+    arr[0] = 123456
 
-    // this gives a Int**, unlike C
+    // explicit decay to pointer
+    p: Ptr(Int) := arr
+
+    // this gives a Int**
     pp := p.&
 
     // double dereference

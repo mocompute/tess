@@ -617,6 +617,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         goto top_success;
     }
 
+    else if (ast_i64 == node->tag) {
+        result = tl_monotype_create_integer(self->alloc, (i32)node->i64.val);
+        goto top_success;
+    }
+
     else if (ast_node_is_nfa(node)) {
         // a type constructor with args: Array(Float), Map(Int, Int), etc.
         // Note: `Ptr(T)` (if T is not a registered type name) is sugar for `Ptr(T: Type, T)`
@@ -721,6 +726,13 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             result = mono;
 
             // FIXME: we don't support literal Union types.
+        } else if (str_eq(name, S("CArray")) && args.size == 2) {
+            // CArray(T, N) has 1 quantifier but 2 args (element type + integer count)
+            result = tl_type_registry_instantiate_carray(self, args.v[0],
+                                                         tl_monotype_integer(args.v[1]));
+        } else if (type_constructor->quantifiers.size != args.size) {
+            // Arg count doesn't match quantifier count — not a valid type instantiation
+            result = null;
         } else {
             result = tl_polytype_instantiate_with(self->alloc, type_constructor,
                                                   (tl_monotype_sized)array_sized(args), self->subs);
