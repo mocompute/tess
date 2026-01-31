@@ -1,5 +1,5 @@
 #module main
-#import <String.tl>
+#import <Str.tl>
 #import <stdio.tl>
 #import <string.tl>
 

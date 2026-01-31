@@ -7,7 +7,7 @@
 #import <fatal.tl>
 
 // Small string optimization: strings of 14 bytes or fewer are stored inline (no heap allocation).
-// The String type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
+// The Str type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
 // Tag value 0x01 indicates a small string; big strings have tag_len determined by the pointer value,
@@ -26,77 +26,77 @@ _Small: {
     tag_len: Byte,
 }
 
-String: { | big: _Big | small: _Small }
+Str: { | big: _Big | small: _Small }
 
 // -- Synopsis --
 
 // Construction.
-empty     ()                                               -> String
-from_cstr (alloc: Ptr(Allocator), s: CString)              -> String
-from_cstr (s: CString)                                     -> String
-from_bytes(alloc: Ptr(Allocator), s: Ptr(CChar), n: CSize) -> String
-from_bytes(s: Ptr(CChar), n: CSize)                        -> String
-copy      (alloc: Ptr(Allocator), s: String)               -> String
-copy      (s: String)                                      -> String
-from_int  (alloc: Ptr(Allocator), n: Int)                  -> String
-from_int  (n: Int)                                         -> String
-from_float(alloc: Ptr(Allocator), f: Float)                -> String
-from_float(f: Float)                                       -> String
+empty     ()                                               -> Str
+from_cstr (alloc: Ptr(Allocator), s: CString)              -> Str
+from_cstr (s: CString)                                     -> Str
+from_bytes(alloc: Ptr(Allocator), s: Ptr(CChar), n: CSize) -> Str
+from_bytes(s: Ptr(CChar), n: CSize)                        -> Str
+copy      (alloc: Ptr(Allocator), s: Str)                  -> Str
+copy      (s: Str)                                         -> Str
+from_int  (alloc: Ptr(Allocator), n: Int)                  -> Str
+from_int  (n: Int)                                         -> Str
+from_float(alloc: Ptr(Allocator), f: Float)                -> Str
+from_float(f: Float)                                       -> Str
 
 // Queries.
-len       (s: String)               -> CSize
-is_empty  (s: String)               -> Bool
-_is_small (s: String)               -> Bool
-byte_at   (s: String, index: CSize) -> Byte
-cstr      (s: Ptr(String))          -> CString
+len       (s: Str)               -> CSize
+is_empty  (s: Str)               -> Bool
+_is_small (s: Str)               -> Bool
+byte_at   (s: Str, index: CSize) -> Byte
+cstr      (s: Ptr(Str))          -> CString
 
 // Comparison.
-eq           (a: String, b: String)             -> Bool
-cmp          (a: String, b: String)             -> Int
-starts_with  (s: String, prefix: String)        -> Bool
-ends_with    (s: String, suffix: String)        -> Bool
-contains     (haystack: String, needle: String) -> Bool
-contains_byte(s: String, b: Byte)               -> Bool
+eq           (a: Str, b: Str)             -> Bool
+cmp          (a: Str, b: Str)             -> Int
+starts_with  (s: Str, prefix: Str)        -> Bool
+ends_with    (s: Str, suffix: Str)        -> Bool
+contains     (haystack: Str, needle: Str) -> Bool
+contains_byte(s: Str, b: Byte)            -> Bool
 
 // Concatenation.
-cat   (alloc: Ptr(Allocator), a: String, b: String)                       -> String
-cat   (a: String, b: String)                                              -> String
-cat_3 (alloc: Ptr(Allocator), a: String, b: String, c: String)            -> String
-cat_3 (a: String, b: String, c: String)                                   -> String
-cat_4 (alloc: Ptr(Allocator), a: String, b: String, c: String, d: String) -> String
-cat_4 (a: String, b: String, c: String, d: String)                        -> String
-push  (self: Ptr(String), alloc: Ptr(Allocator), other: String)           -> Void
-push  (self: Ptr(String), other: String)                                  -> Void
+cat   (alloc: Ptr(Allocator), a: Str, b: Str)                 -> Str
+cat   (a: Str, b: Str)                                        -> Str
+cat_3 (alloc: Ptr(Allocator), a: Str, b: Str, c: Str)         -> Str
+cat_3 (a: Str, b: Str, c: Str)                                -> Str
+cat_4 (alloc: Ptr(Allocator), a: Str, b: Str, c: Str, d: Str) -> Str
+cat_4 (a: Str, b: Str, c: Str, d: Str)                        -> Str
+push  (self: Ptr(Str), alloc: Ptr(Allocator), other: Str)     -> Void
+push  (self: Ptr(Str), other: Str)                            -> Void
 
 // Slicing.
-slice (alloc: Ptr(Allocator), s: String, start: CSize, end: CSize) -> String
-slice (s: String, start: CSize, end: CSize)                        -> String
+slice (alloc: Ptr(Allocator), s: Str, start: CSize, end: CSize) -> Str
+slice (s: Str, start: CSize, end: CSize)                        -> Str
 
 // Search.
-index_of_byte(s: String, b: Byte) -> Int
+index_of_byte(s: Str, b: Byte) -> Int
 
 // Mutation.
-replace_byte(alloc: Ptr(Allocator), s: String, find: Byte, replace: Byte) -> String
-replace_byte(s: String, find: Byte, replace: Byte)                        -> String
+replace_byte(alloc: Ptr(Allocator), s: Str, find: Byte, replace: Byte) -> Str
+replace_byte(s: Str, find: Byte, replace: Byte)                        -> Str
 
 // Memory.
-free(self: Ptr(String), alloc: Ptr(Allocator)) -> Void
-free(self: Ptr(String))                        -> Void
+free(self: Ptr(Str), alloc: Ptr(Allocator)) -> Void
+free(self: Ptr(Str))                        -> Void
 
 
 // -- Implementation --
 
 // -- Private helpers --
 
-_is_small(s: String) -> Bool {
+_is_small(s: Str) -> Bool {
     (s.small.tag_len & 0x0F) == _STR_SMALL_TAG
 }
 
-_small_len(s: String) -> CSize {
+_small_len(s: Str) -> CSize {
     (s.small.tag_len & 0xF0) >> 4
 }
 
-_buf(s: Ptr(String)) -> Ptr(CChar) {
+_buf(s: Ptr(Str)) -> Ptr(CChar) {
     if _is_small(s.*) {
         // FIXME: BUG WORKAROUND: Accessing a CArray field in a struct (e.g. s->small.buf) first copies the
         // enclosing struct into a temporary, then decays the CArray to a pointer into that temporary.
@@ -104,8 +104,8 @@ _buf(s: Ptr(String)) -> Ptr(CChar) {
         // expression. This is a compiler bug -- CArray struct field access should decay to a pointer
         // into the original struct, not a copy.
         //
-        // Workaround: since the buffer is at offset 0 of both _Small and the String union, we cast
-        // the String pointer directly to Ptr(CChar) via Ptr(any).
+        // Workaround: since the buffer is at offset 0 of both _Small and the Str union, we cast
+        // the Str pointer directly to Ptr(CChar) via Ptr(any).
         p: Ptr(any)   := s
         r: Ptr(CChar) := p
         return r
@@ -117,11 +117,11 @@ _make_tag_len(n: CSize) -> Byte {
     ((n & 0x0F) << 4) | _STR_SMALL_TAG
 }
 
-_init_small(src: Ptr(CChar), n: CSize) -> String {
-    s := String(small = _Small(buf = void, tag_len = _make_tag_len(n)))
+_init_small(src: Ptr(CChar), n: CSize) -> Str {
+    s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
         // FIXME: BUG WORKAROUND: Cannot use s.small.buf here -- see _buf() for explanation.
-        // The buffer is at offset 0 of the String union, so we cast s.& directly.
+        // The buffer is at offset 0 of the Str union, so we cast s.& directly.
         p:   Ptr(any)   := s.&
         dst: Ptr(CChar) := p
         c_memcpy(dst, src, n)
@@ -129,45 +129,45 @@ _init_small(src: Ptr(CChar), n: CSize) -> String {
     s
 }
 
-_init_big(alloc: Ptr(Allocator), src: Ptr(CChar), n: CSize) -> String {
+_init_big(alloc: Ptr(Allocator), src: Ptr(CChar), n: CSize) -> Str {
     buf: Ptr(CChar) := alloc->malloc(alloc, n + 1)
-    if buf == null { _tl_fatal_("String: out of memory") }
+    if buf == null { _tl_fatal_("Str: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
-    String(big = _Big(len = n, buf = buf))
+    Str(big = _Big(len = n, buf = buf))
 }
 
 
 // -- Construction --
 
-empty() -> String {
-    String(small = _Small(buf = void, tag_len = _make_tag_len(0)))
+empty() -> Str {
+    Str(small = _Small(buf = void, tag_len = _make_tag_len(0)))
 }
 
-from_bytes(alloc, s: Ptr(CChar), n: CSize) -> String {
+from_bytes(alloc, s: Ptr(CChar), n: CSize) -> Str {
     if n <= _STR_MAX_SMALL { return _init_small(s, n) }
     _init_big(alloc, s, n)
 }
 
-from_bytes(s: Ptr(CChar), n: CSize) -> String {
+from_bytes(s: Ptr(CChar), n: CSize) -> Str {
     from_bytes(Alloc.context.managed, s, n)
 }
 
-from_cstr(alloc, s: CString) -> String {
+from_cstr(alloc, s: CString) -> Str {
     n := c_strlen(s)
     from_bytes(alloc, s, n)
 }
 
-from_cstr(s: CString) -> String {
+from_cstr(s: CString) -> Str {
     from_cstr(Alloc.context.managed, s)
 }
 
-copy(alloc, s: String) -> String {
+copy(alloc, s: Str) -> Str {
     n := len(s)
     p := _buf(s.&)
     from_bytes(alloc, p, n)
 }
 
-copy(s: String) -> String {
+copy(s: Str) -> Str {
     copy(Alloc.context.managed, s)
 }
 
@@ -183,48 +183,48 @@ static long long tl_string_snprintf_float(char *buf, size_t sz, double f) {
 c_tl_string_snprintf_int  (buf: Ptr(CChar), sz: CSize, n: Int)   -> Int
 c_tl_string_snprintf_float(buf: Ptr(CChar), sz: CSize, f: Float) -> Int
 
-from_int(alloc, n: Int) -> String {
+from_int(alloc, n: Int) -> Str {
     buf: CArray(CChar, 32) := void
     ptr: Ptr(CChar)        := buf
     written                := c_tl_string_snprintf_int(ptr, 32, n)
     from_bytes(alloc, ptr, written)
 }
 
-from_int(n: Int) -> String {
+from_int(n: Int) -> Str {
     from_int(Alloc.context.managed, n)
 }
 
-from_float(alloc, f: Float) -> String {
+from_float(alloc, f: Float) -> Str {
     buf: CArray(CChar, 32) := void
     ptr: Ptr(CChar)        := buf
     written                := c_tl_string_snprintf_float(ptr, 32, f)
     from_bytes(alloc, ptr, written)
 }
 
-from_float(f: Float) -> String {
+from_float(f: Float) -> Str {
     from_float(Alloc.context.managed, f)
 }
 
 
 // -- Queries --
 
-len(s: String) -> CSize {
+len(s: Str) -> CSize {
     if _is_small(s) { return _small_len(s) }
     s.big.len
 }
 
-is_empty(s: String) -> Bool {
+is_empty(s: Str) -> Bool {
     len(s) == 0
 }
 
-byte_at(s: String, index: CSize) -> Byte {
+byte_at(s: Str, index: CSize) -> Byte {
     n := len(s)
-    if index >= n { _tl_fatal_("String.byte_at: index out of bounds") }
+    if index >= n { _tl_fatal_("Str.byte_at: index out of bounds") }
     p := _buf(s.&)
     p[index]
 }
 
-cstr(s: Ptr(String)) -> CString {
+cstr(s: Ptr(Str)) -> CString {
     n := len(s.*)
     p := _buf(s)
     p[n] = 0
@@ -235,7 +235,7 @@ cstr(s: Ptr(String)) -> CString {
 
 // -- Comparison --
 
-eq(a: String, b: String) -> Bool {
+eq(a: Str, b: Str) -> Bool {
     la := len(a)
     lb := len(b)
     if la != lb { return 0 }
@@ -245,7 +245,7 @@ eq(a: String, b: String) -> Bool {
     c_memcmp(pa, pb, la) == 0
 }
 
-cmp(a: String, b: String) -> Int {
+cmp(a: Str, b: Str) -> Int {
     la      := len(a)
     lb      := len(b)
     pa      := _buf(a.&)
@@ -260,7 +260,7 @@ cmp(a: String, b: String) -> Int {
     0
 }
 
-starts_with(s: String, prefix: String) -> Bool {
+starts_with(s: Str, prefix: Str) -> Bool {
     sn := len(s)
     pn := len(prefix)
     if pn > sn { return 0 }
@@ -270,7 +270,7 @@ starts_with(s: String, prefix: String) -> Bool {
     c_memcmp(sp, pp, pn) == 0
 }
 
-ends_with(s: String, suffix: String) -> Bool {
+ends_with(s: Str, suffix: Str) -> Bool {
     sn := len(s)
     xn := len(suffix)
     if xn > sn { return 0 }
@@ -281,7 +281,7 @@ ends_with(s: String, suffix: String) -> Bool {
     c_memcmp(tail, xp, xn) == 0
 }
 
-contains(haystack: String, needle: String) -> Bool {
+contains(haystack: Str, needle: Str) -> Bool {
     hn := len(haystack)
     nn := len(needle)
     if nn == 0 { return 1 }
@@ -296,7 +296,7 @@ contains(haystack: String, needle: String) -> Bool {
     0
 }
 
-contains_byte(s: String, b: Byte) -> Bool {
+contains_byte(s: Str, b: Byte) -> Bool {
     n        := len(s)
     sp       := _buf(s.&)
     i: CSize := 0
@@ -309,13 +309,13 @@ contains_byte(s: String, b: Byte) -> Bool {
 
 // -- Concatenation --
 
-_cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count: CSize) -> String {
+_cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count: CSize) -> Str {
     total: CSize := 0
     i:     CSize := 0
     while i < count, i += 1 { total = total + lens[i] }
 
     if total <= _STR_MAX_SMALL {
-        s := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
+        s := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         // FIXME: BUG WORKAROUND: Cannot use s.small.buf here -- see _buf() for explanation.
         p:   Ptr(any)   := s.&
         dst: Ptr(CChar) := p
@@ -332,7 +332,7 @@ _cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count:
     }
 
     buf: Ptr(CChar) := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("String: out of memory") }
+    if buf == null { _tl_fatal_("Str: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < count, j += 1 {
@@ -342,10 +342,10 @@ _cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count:
         }
         off = off + lens[j]
     }
-    String(big = _Big(len = total, buf = buf))
+    Str(big = _Big(len = total, buf = buf))
 }
 
-cat(alloc, a: String, b: String) -> String {
+cat(alloc, a: Str, b: Str) -> Str {
     bufs: CArray(Ptr(CChar), 2) := void
     lens: CArray(CSize, 2)      := void
     bufs[0] = _buf(a.&) lens[0] = len(a)
@@ -355,11 +355,11 @@ cat(alloc, a: String, b: String) -> String {
     _cat_impl(alloc, bp, lp, 2)
 }
 
-cat(a: String, b: String) -> String {
+cat(a: Str, b: Str) -> Str {
     cat(Alloc.context.managed, a, b)
 }
 
-cat_3(alloc, a: String, b: String, c: String) -> String {
+cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
     bufs: CArray(Ptr(CChar), 3) := void
     lens: CArray(CSize, 3)      := void
     bufs[0] = _buf(a.&) lens[0] = len(a)
@@ -370,11 +370,11 @@ cat_3(alloc, a: String, b: String, c: String) -> String {
     _cat_impl(alloc, bp, lp, 3)
 }
 
-cat_3(a: String, b: String, c: String) -> String {
+cat_3(a: Str, b: Str, c: Str) -> Str {
     cat_3(Alloc.context.managed, a, b, c)
 }
 
-cat_4(alloc, a: String, b: String, c: String, d: String) -> String {
+cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
     bufs: CArray(Ptr(CChar), 4) := void
     lens: CArray(CSize, 4)      := void
     bufs[0] = _buf(a.&) lens[0] = len(a)
@@ -386,26 +386,26 @@ cat_4(alloc, a: String, b: String, c: String, d: String) -> String {
     _cat_impl(alloc, bp, lp, 4)
 }
 
-cat_4(a: String, b: String, c: String, d: String) -> String {
+cat_4(a: Str, b: Str, c: Str, d: Str) -> Str {
     cat_4(Alloc.context.managed, a, b, c, d)
 }
 
-push(self: Ptr(String), alloc, other: String) {
+push(self: Ptr(Str), alloc, other: Str) {
     result := cat(alloc, self.*, other)
     free(self, alloc)
     self.* = result
 }
 
-push(self: Ptr(String), other: String) {
+push(self: Ptr(Str), other: Str) {
     push(self, Alloc.context.managed, other)
 }
 
 
 // -- Slicing --
 
-slice(alloc, s: String, start: CSize, end: CSize) -> String {
+slice(alloc, s: Str, start: CSize, end: CSize) -> Str {
     n := len(s)
-    if start > end || end > n { _tl_fatal_("String.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_("Str.slice: index out of bounds") }
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
@@ -413,14 +413,14 @@ slice(alloc, s: String, start: CSize, end: CSize) -> String {
     from_bytes(alloc, src, slen)
 }
 
-slice(s: String, start: CSize, end: CSize) -> String {
+slice(s: Str, start: CSize, end: CSize) -> Str {
     slice(Alloc.context.managed, s, start, end)
 }
 
 
 // -- Search --
 
-index_of_byte(s: String, b: Byte) -> Int {
+index_of_byte(s: Str, b: Byte) -> Int {
     n        := len(s)
     sp       := _buf(s.&)
     i: CSize := 0
@@ -433,7 +433,7 @@ index_of_byte(s: String, b: Byte) -> Int {
 
 // -- Mutation --
 
-replace_byte(alloc, s: String, find: Byte, replace: Byte) -> String {
+replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
     result   := copy(alloc, s)
     n        := len(result)
     rp       := _buf(result.&)
@@ -444,20 +444,20 @@ replace_byte(alloc, s: String, find: Byte, replace: Byte) -> String {
     result
 }
 
-replace_byte(s: String, find: Byte, replace: Byte) -> String {
+replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
     replace_byte(Alloc.context.managed, s, find, replace)
 }
 
 
 // -- Memory --
 
-free(self: Ptr(String), alloc) {
+free(self: Ptr(Str), alloc) {
     if !_is_small(self.*) {
         alloc->free(alloc, self->big.buf)
     }
     self.* = empty()
 }
 
-free(self: Ptr(String)) {
+free(self: Ptr(Str)) {
     free(self, Alloc.context.managed)
 }
