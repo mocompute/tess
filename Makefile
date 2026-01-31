@@ -337,6 +337,7 @@ TL_TESTS =					\
 	for_statement_module			\
 	forward_decl_not_needed			\
 	function_pointer_argument		\
+	function_pointer_array			\
 	function_pointer_mutable		\
 	function_pointer_value			\
 	function_pointer_in_struct		\
@@ -494,7 +495,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	carray_struct_field		\
-	function_pointer_array		\
 	while_empty_body
 
 

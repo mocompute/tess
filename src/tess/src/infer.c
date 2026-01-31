@@ -966,7 +966,11 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (tl_monotype_has_ptr(left->type->type)) {
             tl_monotype *target = tl_monotype_ptr_target(left->type->type);
             if (constrain_pm(self, node->type, target, node)) return 1;
+        } else if (tl_monotype_is_inst_of(left->type->type, S("CArray"))) {
+            tl_monotype *target = left->type->type->cons_inst->args.v[0];
+            if (constrain_pm(self, node->type, target, node)) return 1;
         }
+
     } else if (is_struct_access_operator(op)) {
         if (infer_struct_access(self, node)) return 1;
     } else {

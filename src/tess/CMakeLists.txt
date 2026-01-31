@@ -264,6 +264,7 @@ tl_create_test(for_statement_basic)
 tl_create_test(for_statement_module)
 tl_create_test(forward_decl_not_needed)
 tl_create_test(function_pointer_argument)
+tl_create_test(function_pointer_array)
 tl_create_test(function_pointer_mutable)
 tl_create_test(function_pointer_value)
 tl_create_test(function_pointer_in_struct)
@@ -417,5 +418,4 @@ tl_create_build_fail_test(fail_reserved_type_union)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(carray_struct_field)
-tl_create_known_failure(function_pointer_array)
 tl_create_known_failure(while_empty_body)
