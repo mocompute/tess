@@ -428,6 +428,7 @@ TL_TESTS =					\
 	type_predicate_field			\
 	type_predicate_branch			\
 	type_predicate_generic			\
+	type_predicate_generic_type		\
 	tagged_union				\
 	tagged_union_generic_basic		\
 	tagged_union_generic_case		\
@@ -492,7 +493,7 @@ TL_FAIL_TESTS =					\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES = \
+TL_KNOWN_FAILURES =			\
 	while_empty_body
 
 

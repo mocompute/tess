@@ -1142,6 +1142,33 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
     ast_node const *no          = node->if_then_else.no;
     tl_monotype    *result_type = yes->type->type;
 
+    // Compile-time type predicates: skip dead branches entirely to avoid generating
+    // invalid C code (e.g., accessing Result fields on an Option type).
+    if (ast_type_predicate == cond->tag) {
+        if (cond->type_predicate.is_valid) {
+            // Predicate is true: emit only the yes branch
+            str res = str_empty();
+            if (should_assign_result(ctx, result_type)) {
+                res = next_res(self);
+                generate_decl(self, res, result_type);
+            }
+            str yes_str = generate_expr(self, null, yes, ctx);
+            if (should_assign_result(ctx, result_type)) {
+                generate_assign(self, res, yes_str);
+            } else {
+                cat(self, yes_str);
+                cat_semicolonln(self);
+            }
+            return res;
+        } else {
+            // Predicate is false: emit only the else branch
+            if (no && !ast_node_is_nil_or_void(no)) {
+                return generate_expr(self, null, no, ctx);
+            }
+            return str_empty();
+        }
+    }
+
     str             cond_str    = generate_expr(self, null, cond, ctx);
 
     str             res         = str_empty();
@@ -2470,11 +2497,9 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     }
 
     else {
-        // FIXME: it seems this should always be an error, no? TODO: better error reporting.
         // do not fatal here: instead return a valid type, but caller will probably not use it.
         str tmp = tl_monotype_to_string(self->transient, mono);
         if (self->verbose) fprintf(stderr, "can't render a type variable: %s\n", str_cstr(&tmp));
-        fatal("can't render a type variable");
         return S("/*untyped*/void*");
     }
 

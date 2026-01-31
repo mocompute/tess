@@ -1037,17 +1037,23 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype *wrapper_type = expr_type->type;
         tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
 
-        // If expression type is not yet concrete, use the type annotation (e.g., T in "case x: T")
-        // This handles cross-module generic functions where the type is still a type variable
-        // during Phase 3 (inference) and won't be resolved until Phase 5 (specialization).
-        if (!tl_monotype_is_inst(wrapper_type) && node->case_.union_annotation) {
+        // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
+        // use it as the wrapper type. This is essential for generic functions with type-predicate
+        // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
+        // where different branches constrain the same variable to different tagged union types.
+        // Without this, the first branch's constraint would permanently unify the variable's type,
+        // making subsequent branches fail. The constraint is non-fatal here because after
+        // specialization, only the matching branch will be valid.
+        if (node->case_.union_annotation) {
             annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
             if (result.parsed && tl_monotype_is_inst(result.parsed)) {
                 wrapper_type = result.parsed;
-                // Constrain expression type to match annotation
-                if (constrain_pm(self, expr_type, wrapper_type, node->case_.expression)) {
-                    return 1;
-                }
+                // Constrain expression type to match annotation (non-fatal: in generic functions,
+                // a prior branch may have already constrained to a different type)
+                int save                        = self->is_constrain_ignore_error;
+                self->is_constrain_ignore_error = 1;
+                constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+                self->is_constrain_ignore_error = save;
             }
         }
 
@@ -2204,7 +2210,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         int save                        = self->is_constrain_ignore_error;
         self->is_constrain_ignore_error = 1;
 
-        if (constrain_pm(self, node->type_predicate.lhs->type, type, node)) {
+        if (!type || constrain_pm(self, node->type_predicate.lhs->type, type, node)) {
             node->type_predicate.is_valid = 0;
         } else {
             node->type_predicate.is_valid = 1;
