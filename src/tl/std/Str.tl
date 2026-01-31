@@ -25,7 +25,7 @@ _Small: {
     tag_len: Byte,
 }
 
-Str: { | big:   _Big 
+Str: { | big: _Big
        | small: _Small }
 
 // -- Synopsis --
@@ -97,10 +97,7 @@ _small_len(s: Str) -> CSize {
 }
 
 _buf(s: Ptr(Str)) -> Ptr(CChar) {
-    if _is_small(s.*) {
-        return s->small.buf
-    }
-    s->big.buf
+    return if _is_small(s.*) { s->small.buf } else { s->big.buf }
 }
 
 _make_tag_len(n: CSize) -> Byte {
@@ -131,8 +128,13 @@ empty() -> Str {
 }
 
 from_bytes(alloc, s: Ptr(CChar), n: CSize) -> Str {
-    if n <= _STR_MAX_SMALL { return _init_small(s, n) }
-    _init_big(alloc, s, n)
+    return
+    if n <= _STR_MAX_SMALL {
+        _init_small(s, n)
+    }
+    else {
+        _init_big(alloc, s, n)
+    }
 }
 
 from_bytes(s: Ptr(CChar), n: CSize) -> Str {
@@ -196,8 +198,7 @@ from_float(f: Float) -> Str {
 // -- Queries --
 
 len(s: Str) -> CSize {
-    if _is_small(s) { return _small_len(s) }
-    s.big.len
+    return if _is_small(s) { _small_len(s) } else { s.big.len }
 }
 
 is_empty(s: Str) -> Bool {
@@ -223,13 +224,7 @@ cstr(s: Ptr(Str)) -> CString {
 // -- Comparison --
 
 eq(a: Str, b: Str) -> Bool {
-    la := len(a)
-    lb := len(b)
-    if la != lb { return 0 }
-    if la == 0 { return 1 } // FIXME 
-    pa := _buf(a.&)
-    pb := _buf(b.&)
-    c_memcmp(pa, pb, la) == 0
+    0 == cmp(a, b)
 }
 
 cmp(a: Str, b: Str) -> Int {
@@ -242,9 +237,7 @@ cmp(a: Str, b: Str) -> Int {
         r := c_memcmp(pa, pb, min_len)
         if r != 0 { return r }
     }
-    if la < lb { return - 1 }
-    if la > lb { return 1 }
-    0
+    return if la < lb { - 1 } else if la > lb { 1 } else { 0 }
 }
 
 starts_with(s: Str, prefix: Str) -> Bool {
@@ -302,7 +295,7 @@ _cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count:
     while i < count, i += 1 { total = total + lens[i] }
 
     if total <= _STR_MAX_SMALL {
-        s := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
+        s               := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr(CChar) := s.small.buf
         off: CSize      := 0
         j:   CSize      := 0
