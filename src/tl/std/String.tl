@@ -10,10 +10,10 @@
 // The String type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
-// Tag value 0x10 indicates a small string; big strings have tag_len determined by the pointer value,
+// Tag value 0x01 indicates a small string; big strings have tag_len determined by the pointer value,
 // which in practice never has its upper nibble equal to 1.
 
-_STR_SMALL_TAG: Byte  := 0x10
+_STR_SMALL_TAG: Byte  := 0x01
 _STR_MAX_SMALL: CSize := 14
 
 _Big: {
@@ -89,11 +89,11 @@ free(self: Ptr(String))                        -> Void
 // -- Private helpers --
 
 _is_small(s: String) -> Bool {
-    (s.small.tag_len & 0xF0) == _STR_SMALL_TAG
+    (s.small.tag_len & 0x0F) == _STR_SMALL_TAG
 }
 
 _small_len(s: String) -> CSize {
-    s.small.tag_len & 0x0F
+    (s.small.tag_len & 0xF0) >> 4
 }
 
 _buf(s: Ptr(String)) -> Ptr(CChar) {
@@ -114,7 +114,7 @@ _buf(s: Ptr(String)) -> Ptr(CChar) {
 }
 
 _make_tag_len(n: CSize) -> Byte {
-    _STR_SMALL_TAG | n
+    ((n & 0x0F) << 4) | _STR_SMALL_TAG
 }
 
 _init_small(src: Ptr(CChar), n: CSize) -> String {
