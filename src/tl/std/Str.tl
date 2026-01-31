@@ -10,8 +10,7 @@
 // The Str type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
-// Tag value 0x01 indicates a small string; big strings have tag_len determined by the pointer value,
-// which in practice never has its upper nibble equal to 1.
+// Tag value 0x01 indicates a small string.
 
 _STR_SMALL_TAG: Byte  := 0x01
 _STR_MAX_SMALL: CSize := 14
@@ -26,7 +25,8 @@ _Small: {
     tag_len: Byte,
 }
 
-Str: { | big: _Big | small: _Small }
+Str: { | big:   _Big 
+       | small: _Small }
 
 // -- Synopsis --
 
@@ -226,7 +226,7 @@ eq(a: Str, b: Str) -> Bool {
     la := len(a)
     lb := len(b)
     if la != lb { return 0 }
-    if la == 0 { return 1 }
+    if la == 0 { return 1 } // FIXME 
     pa := _buf(a.&)
     pb := _buf(b.&)
     c_memcmp(pa, pb, la) == 0
@@ -239,7 +239,7 @@ cmp(a: Str, b: Str) -> Int {
     pb      := _buf(b.&)
     min_len := if la < lb { la } else { lb }
     if min_len > 0 {
-        r: CInt := c_memcmp(pa, pb, min_len)
+        r := c_memcmp(pa, pb, min_len)
         if r != 0 { return r }
     }
     if la < lb { return - 1 }
