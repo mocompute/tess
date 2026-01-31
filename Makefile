@@ -319,6 +319,7 @@ TL_TESTS =					\
 	case_pred_lambda			\
 	char_literal				\
 	closure_fun_ptr				\
+	const					\
 	compound_assignment			\
 	defun_inline_type			\
 	dynamic_array				\
@@ -466,6 +467,9 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
+	fail_const_mutation			\
+	fail_const_field_mutation		\
+	fail_const_index_mutation		\
 	fail_concrete_fun_mismatch		\
 	fail_double_underscore			\
 	fail_double_underscore_module		\
@@ -492,7 +496,8 @@ TL_FAIL_TESTS =					\
 	fail_unknown_free_variable
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =
+TL_KNOWN_FAIL_FAILURES =		\
+	fail_const_strip
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\

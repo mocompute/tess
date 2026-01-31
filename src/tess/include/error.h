@@ -113,7 +113,8 @@
     X(tl_err_cannot_return_lambda, "cannot_return_lambda")                                                 \
     X(tl_err_unused_type_parameter, "unused_type_parameter")                                               \
     X(tl_err_nested_module_parent_not_found, "nested_module_parent_not_found")                             \
-    X(tl_err_invalid_existing_type_arg, "invalid_existing_type_arg")
+    X(tl_err_invalid_existing_type_arg, "invalid_existing_type_arg")                                       \
+    X(tl_err_const_violation, "const_violation")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

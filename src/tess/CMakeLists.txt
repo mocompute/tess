@@ -246,6 +246,7 @@ tl_create_test(case_pred_ident)
 tl_create_test(case_pred_lambda)
 tl_create_test(char_literal)
 tl_create_test(closure_fun_ptr)
+tl_create_test(const)
 tl_create_test(compound_assignment)
 tl_create_test(defun_inline_type)
 tl_create_test(dynamic_array)
@@ -393,6 +394,9 @@ tl_create_test(while_update_statement)
 
 # Expected failures (tests that verify the compiler correctly rejects invalid code)
 tl_create_build_fail_test(fail_case_float)
+tl_create_build_fail_test(fail_const_mutation)
+tl_create_build_fail_test(fail_const_field_mutation)
+tl_create_build_fail_test(fail_const_index_mutation)
 tl_create_build_fail_test(fail_concrete_fun_mismatch)
 tl_create_build_fail_test(fail_generic_unused_type_param)
 tl_create_build_fail_test(fail_nested_module_no_parent)
@@ -417,6 +421,9 @@ tl_create_build_fail_test(fail_reserved_type_fun)
 tl_create_build_fail_test(fail_reserved_type_struct)
 tl_create_build_fail_test(fail_reserved_type_tu)
 tl_create_build_fail_test(fail_reserved_type_union)
+
+# Known fail-failures: expected-failure tests that the compiler doesn't reject yet
+tl_create_known_fail_failure(fail_const_strip)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(while_empty_body)

@@ -915,6 +915,37 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Check if the LHS of a reassignment involves dereferencing a Ptr(Const(T)).
+// Returns 1 if a const violation is detected.
+static int check_const_violation(tl_infer *self, ast_node *lhs) {
+    if (!lhs) return 0;
+
+    // ptr.* = value: unary dereference of a const pointer
+    if (lhs->tag == ast_unary_op && str_eq(ast_node_str(lhs->unary_op.op), S("*"))) {
+        ast_node *operand = lhs->unary_op.operand;
+        if (operand->type && operand->type->type) {
+            tl_monotype *t = operand->type->type;
+            tl_monotype_substitute(self->arena, t, self->subs, null);
+            if (tl_monotype_is_ptr_to_const(t)) return 1;
+        }
+    }
+
+    // ptr->field = value, ptr.field = value, or ptr[i] = value
+    if (lhs->tag == ast_binary_op) {
+        str op = ast_node_str(lhs->binary_op.op);
+        if (str_eq(op, S("->")) || str_eq(op, S(".")) || str_eq(op, S("["))) {
+            ast_node *left = lhs->binary_op.left;
+            if (left->type && left->type->type) {
+                tl_monotype *t = left->type->type;
+                tl_monotype_substitute(self->arena, t, self->subs, null);
+                if (tl_monotype_is_ptr_to_const(t)) return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     // Reassign to let-in bound symbol
     if (node->assignment.is_field_name) fatal("runtime error");
@@ -923,6 +954,12 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     if (resolve_node(self, node->assignment.value, ctx, npos_value_rhs)) return 1;
 
     ensure_tv(self, &node->type);
+
+    // Check for const violations on the LHS
+    if (check_const_violation(self, node->assignment.name)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+        return 1;
+    }
 
     // reassignment nodes have void type
     tl_monotype *nil = tl_type_registry_nil(self->registry);

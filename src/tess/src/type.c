@@ -73,6 +73,9 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     // Ptr is unary type constructor
     make_unary_tc(self, S("Ptr"));
 
+    // Const is unary type constructor
+    make_unary_tc(self, S("Const"));
+
     // Union has variable arity
     make_variable_arity_tc(self, S("Union"));
 
@@ -1722,6 +1725,22 @@ int tl_monotype_is_ptr(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("Ptr"));
 }
 
+int tl_monotype_is_const(tl_monotype *self) {
+    return tl_monotype_is_inst_of(self, S("Const"));
+}
+
+tl_monotype *tl_monotype_const_target(tl_monotype *self) {
+    assert(tl_monotype_is_const(self));
+    assert(self->cons_inst->args.size == 1);
+    return self->cons_inst->args.v[0];
+}
+
+int tl_monotype_is_ptr_to_const(tl_monotype *self) {
+    if (!tl_monotype_is_ptr(self)) return 0;
+    tl_monotype *target = tl_monotype_ptr_target(self);
+    return tl_monotype_is_const(target);
+}
+
 int tl_monotype_is_ptr_or_null(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("PtrOrNull"));
 }
@@ -2279,6 +2298,14 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
             return unify_type_constructor_union(subs, right, left, cb, user, seen);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
+            // Const coercion: Const(T) unifies with T by unwrapping the Const.
+            // This handles Ptr(T) ↔ Ptr(Const(T)) transitively via unify_list.
+            if (tl_monotype_is_const(left) && !tl_monotype_is_const(right)) {
+                return tl_type_subs_unify_mono(subs, tl_monotype_const_target(left), right, cb, user, seen);
+            }
+            if (tl_monotype_is_const(right) && !tl_monotype_is_const(left)) {
+                return tl_type_subs_unify_mono(subs, left, tl_monotype_const_target(right), cb, user, seen);
+            }
             if (cb) cb(user, left, right);
             return 1;
         }

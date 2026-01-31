@@ -1963,6 +1963,8 @@ static int ptr_depth_to_arrow(tl_monotype *type, tl_monotype **out_arrow) {
         depth++;
         type = tl_monotype_ptr_target(type);
     }
+    // Skip Const wrapper (e.g. Ptr(Const(Arrow(...))))
+    if (tl_monotype_is_const(type)) type = tl_monotype_const_target(type);
     if (tl_monotype_is_arrow(type)) {
         if (out_arrow) *out_arrow = type;
         return depth;
@@ -2427,11 +2429,26 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             str ptr_arrow = ptr_to_arrow_to_c(self, mono);
             if (!str_is_empty(ptr_arrow)) return ptr_arrow;
 
+            // Ptr(Const(T)) -> const T*
+            tl_monotype *arg = tl_monotype_ptr_target(mono);
+            if (tl_monotype_is_const(arg)) {
+                tl_monotype *inner = tl_monotype_const_target(arg);
+                tl_polytype  wrap  = tl_polytype_wrap(inner);
+                str          typec = type_to_c(self, &wrap);
+                return str_cat_3(self->transient, S("const "), typec, S("*"));
+            }
+
             // Normal Ptr handling for non-arrow targets
-            tl_monotype *arg   = tl_monotype_ptr_target(mono);
             tl_polytype  wrap  = tl_polytype_wrap(arg);
             str          typec = type_to_c(self, &wrap);
             return str_cat(self->transient, typec, S("*"));
+        }
+
+        else if (tl_monotype_is_const(mono)) {
+            // Standalone Const(T) -> T (const only meaningful inside Ptr)
+            tl_monotype *inner = tl_monotype_const_target(mono);
+            tl_polytype  wrap  = tl_polytype_wrap(inner);
+            return type_to_c(self, &wrap);
         }
 
         else if (str_eq(S("CArray"), cons_name) && mono->cons_inst->args.size == 2) {
@@ -2487,8 +2504,16 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         str ptr_arrow = ptr_to_arrow_to_c(self, mono);
         if (!str_is_empty(ptr_arrow)) return ptr_arrow;
 
+        // Ptr(Const(T)) -> const T*
+        tl_monotype *arg = tl_monotype_ptr_target(mono);
+        if (tl_monotype_is_const(arg)) {
+            tl_monotype *inner = tl_monotype_const_target(arg);
+            tl_polytype  wrap  = tl_polytype_wrap(inner);
+            str          typec = type_to_c(self, &wrap);
+            return str_cat_3(self->transient, S("const "), typec, S("*"));
+        }
+
         // Normal Ptr handling for non-arrow targets
-        tl_monotype *arg   = tl_monotype_ptr_target(mono);
         tl_polytype  wrap  = tl_polytype_wrap(arg);
         str          typec = type_to_c(self, &wrap);
         return str_cat(self->transient, typec, S("*"));
