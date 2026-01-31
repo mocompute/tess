@@ -11,10 +11,10 @@ negate    (x: Int) -> Int { 0 - x }
 IntHandler: { fn: (Int) -> Int }
 
 // Generic tagged union with a variant that contains function pointer struct
-Result(T): | Ok { value: T }
-           | Err { code: Int, handler: IntHandler }
+Outcome(T): | Success { value: T }
+            | Failure { code: Int, handler: IntHandler }
 
-           // Helper function to apply handler
+// Helper function to apply handler
 apply_int_handler(h: IntHandler, x: Int) -> Int {
     h.fn(x)
 }
@@ -22,37 +22,37 @@ apply_int_handler(h: IntHandler, x: Int) -> Int {
 main() {
     error := 0
 
-    // Test 1: Ok variant with Int value
-    ok_int  := Ok(42)
-    result1 := case ok_int: Result {
-        o: Ok { o.value }
-        e: Err { apply_int_handler(e.handler, e.code) }
+    // Test 1: Success variant with Int value
+    ok_int  := Success(42)
+    result1 := case ok_int: Outcome {
+        o: Success { o.value }
+        e: Failure { apply_int_handler(e.handler, e.code) }
     }
     error += if result1 == 42 {0} else {1}
 
-    // Test 2: Ok variant with Float value
-    ok_float := Ok(3.14)
-    result2  := case ok_float: Result {
-        o: Ok { o.value }
-        e: Err { 0.0 }
+    // Test 2: Success variant with Float value
+    ok_float := Success(3.14)
+    result2  := case ok_float: Outcome {
+        o: Success { o.value }
+        e: Failure { 0.0 }
     }
     error += if result2 == 3.14 {0} else {1}
 
-    // Test 3: Err variant with double handler
-    h1                                := IntHandler(fn = double_int/1)
-    err1:                 Result(Int) := Err(5, h1)
-    result3                           := case err1: Result {
-        o: Ok { 0 }
-        e: Err { apply_int_handler(e.handler, e.code) }
+    // Test 3: Failure variant with double handler
+    h1                                 := IntHandler(fn = double_int/1)
+    err1:                 Outcome(Int) := Failure(5, h1)
+    result3                            := case err1: Outcome {
+        o: Success { 0 }
+        e: Failure { apply_int_handler(e.handler, e.code) }
     }
     error += if result3 == 10 {0} else {1}
 
-    // Test 4: Err variant with negate handler
-    h2                                := IntHandler(fn = negate/1)
-    err2:                 Result(Int) := Err(7, h2)
-    result4                           := case err2: Result {
-        o: Ok { 0 }
-        e: Err { apply_int_handler(e.handler, e.code) }
+    // Test 4: Failure variant with negate handler
+    h2                                 := IntHandler(fn = negate/1)
+    err2:                 Outcome(Int) := Failure(7, h2)
+    result4                            := case err2: Outcome {
+        o: Success { 0 }
+        e: Failure { apply_int_handler(e.handler, e.code) }
     }
     error += if result4 == -7 {0} else {1}
 

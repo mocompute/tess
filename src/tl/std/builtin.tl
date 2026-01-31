@@ -23,3 +23,8 @@ unwrap(opt: Option(T), default: T) -> T {
         n: None { default }
     }
 }
+
+// Result type
+
+Result(T, U): | Ok { v: T }
+              | Err { v: U }

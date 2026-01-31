@@ -2,11 +2,11 @@
 Status: {Ok, Error, Pending}
 
 #module Bar
-Result = Foo.Status
+Outcome = Foo.Status
 
 #module main
 
 main() {
-    r: Bar.Result := Foo.Status.Ok
+    r: Bar.Outcome := Foo.Status.Ok
     0
 }

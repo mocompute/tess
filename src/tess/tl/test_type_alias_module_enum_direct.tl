@@ -2,12 +2,12 @@
 Status: {Ok, Error, Pending}
 
 #module Bar
-Result = Foo.Status
+Outcome = Foo.Status
 
 #module main
 
 main() {
     // Direct usage: access enum values through the alias
-    r := Bar.Result.Ok
+    r := Bar.Outcome.Ok
     0
 }
