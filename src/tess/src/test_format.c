@@ -430,6 +430,14 @@ static int test_pipe_alignment(void) {
         "// comment\n"
         "      | B\n");
 
+    error += check(alloc, "C union pipes aligned",
+        "CUnion { | A\n"
+        "| B\n"
+        "| C",
+        "CUnion { | A\n"
+        "         | B\n"
+        "         | C\n");
+
     error += check(alloc, "blank line resets pipe alignment",
         "Option(T): | Some { v: T }\n           | None\n\n// Result type\n\nResult(T, E): | Ok(T)\n              | Err(E)\n",
         "Option(T): | Some { v: T }\n"

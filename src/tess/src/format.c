@@ -1174,14 +1174,38 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             content = normalize_ops(alloc, trimmed);
         }
 
-        // Detect tagged union definition: "Name : | ..." or "Name(x) : | ..."
-        // After normalization the pattern is ": | " somewhere in the line
-        // Skip comment lines — commented-out code shouldn't start a pipe group.
+        // Detect pipe group opener: ": | ..." (tagged union) or "{ | ..." (C union)
+        // Scan for first | preceded by : or { (skipping strings/chars/comments).
         {
-            char const *p = is_comment ? NULL : strstr(content, ": | ");
-            if (p && pipe_col < 0) {
-                // Column of | = indent + offset of | in content
-                pipe_col = indent + (int)(p - content) + 2;
+            if (!is_comment && pipe_col < 0) {
+                int found = -1;
+                int in_s = 0, in_c = 0;
+                for (int ci = 0; content[ci]; ci++) {
+                    if (in_s) {
+                        if (content[ci] == '\\' && content[ci + 1]) { ci++; continue; }
+                        if (content[ci] == '"') in_s = 0;
+                        continue;
+                    }
+                    if (in_c) {
+                        if (content[ci] == '\\' && content[ci + 1]) { ci++; continue; }
+                        if (content[ci] == '\'') in_c = 0;
+                        continue;
+                    }
+                    if (content[ci] == '"') { in_s = 1; continue; }
+                    if (content[ci] == '\'') { in_c = 1; continue; }
+                    if (content[ci] == '/' && content[ci + 1] == '/') break;
+                    if (content[ci] == '|') {
+                        int j = ci - 1;
+                        while (j >= 0 && content[j] == ' ') j--;
+                        if (j >= 0 && (content[j] == ':' || content[j] == '{')) {
+                            found = ci;
+                        }
+                        break;
+                    }
+                }
+                if (found >= 0) {
+                    pipe_col = indent + found;
+                }
             }
         }
 
