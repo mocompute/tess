@@ -235,6 +235,7 @@ tl_create_test(binop)
 tl_create_test(bitwise_operators)
 tl_create_test(block_expression)
 tl_create_test(builtin_option)
+tl_create_test(carray_struct_field)
 tl_create_test(c_div)
 tl_create_test(c_symbol_annotation)
 tl_create_test(c_struct)
@@ -417,5 +418,4 @@ tl_create_build_fail_test(fail_reserved_type_tu)
 tl_create_build_fail_test(fail_reserved_type_union)
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(carray_struct_field)
 tl_create_known_failure(while_empty_body)

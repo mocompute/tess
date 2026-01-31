@@ -308,6 +308,7 @@ TL_TESTS =					\
 	bitwise_operators			\
 	block_expression			\
 	builtin_option				\
+	carray_struct_field			\
 	c_div					\
 	c_symbol_annotation			\
 	c_struct				\
@@ -494,7 +495,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
-	carray_struct_field		\
 	while_empty_body
 
 

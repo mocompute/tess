@@ -1953,8 +1953,15 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
                     if (constrain_pm(self, node->type, result_type, node)) return 1;
                 } else {
                     if (constrain_pm(self, right->type, field_type, node)) return 1;
-                    if (constrain_pm(self, node->type, field_type, node)) return 1;
-                    if (constrain(self, node->type, right->type, node)) return 1;
+
+                    if (tl_monotype_is_inst_of(field_type, S("CArray"))) {
+                        tl_monotype *target   = field_type->cons_inst->args.v[0];
+                        tl_monotype *ptr_type = tl_type_registry_ptr(self->registry, target);
+                        if (constrain_pm(self, node->type, ptr_type, node)) return 1;
+                    } else {
+                        if (constrain_pm(self, node->type, field_type, node)) return 1;
+                        if (constrain(self, node->type, right->type, node)) return 1;
+                    }
                 }
             } else {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
