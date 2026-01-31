@@ -932,8 +932,9 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
 
     // ptr->field = value, ptr.field = value, or ptr[i] = value
     if (lhs->tag == ast_binary_op) {
-        str op = ast_node_str(lhs->binary_op.op);
-        if (str_eq(op, S("->")) || str_eq(op, S(".")) || str_eq(op, S("["))) {
+        str         op   = ast_node_str(lhs->binary_op.op);
+        char const *op_s = str_cstr(&op);
+        if (is_struct_access_operator(op_s) || is_index_operator(op_s)) {
             ast_node *left = lhs->binary_op.left;
             if (left->type && left->type->type) {
                 tl_monotype *t = left->type->type;
