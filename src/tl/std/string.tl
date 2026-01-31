@@ -7,7 +7,7 @@ c_strcpy   (dst: CString, src: CString)           -> CString
 c_strncpy  (dst: CString, src: CString, n: CSize) -> CString
 c_strcat   (s1: CString, s2: CString)             -> CString
 c_strncat  (s1: CString, s2: CString, n: CSize)   -> CString
-c_memcmp   (p1: Ptr(T), p2: Ptr(T))               -> CInt
+c_memcmp   (p1: Ptr(T), p2: Ptr(T), n: CSize)     -> CInt
 c_strcmp   (s1: CString, s2: CString)             -> CInt
 c_strncmp  (s1: CString, s2: CString, n: CSize)   -> CInt
 c_strcoll  (s1: CString, s2: CString)             -> CInt

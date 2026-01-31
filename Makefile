@@ -404,6 +404,7 @@ TL_TESTS =					\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
 	strcmp					\
+	string					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
