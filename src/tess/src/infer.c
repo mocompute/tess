@@ -1037,6 +1037,7 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype *int_type = tl_type_registry_int(self->registry);
         if (constrain_pm(self, right->type, int_type, node)) return 1;
 
+        // needed
         tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
         tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
@@ -1064,7 +1065,7 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     str op = ast_node_str(node->unary_op.op);
     if (str_eq(op, S("*"))) {
-        tl_polytype_substitute(self->arena, operand->type, self->subs);
+        tl_polytype_substitute(self->arena, operand->type, self->subs); // needed
         if (tl_monotype_has_ptr(operand->type->type)) {
             assert(!tl_polytype_is_scheme(operand->type));
             tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
@@ -1111,7 +1112,7 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
         // Get wrapper type and extract valid variants
         tl_monotype *wrapper_type = expr_type->type;
-        tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+        tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
 
         // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
         // use it as the wrapper type. This is essential for generic functions with type-predicate
@@ -1310,7 +1311,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // constructors so unification would corrupt type state.
             int skip = 0;
             if (is_cast && value_type) {
-                tl_polytype_substitute(self->arena, value_type, self->subs);
+                // tl_polytype_substitute(self->arena, value_type, self->subs);
                 skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
             }
             if (!skip) {
@@ -1953,8 +1954,8 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
 
     tl_monotype *struct_type = null;
 
-    tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-    tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+    // tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
+    // tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
     // handle -> vs . access
     if (0 == strcmp("->", op)) {
@@ -1982,7 +1983,7 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     }
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
-    tl_monotype_substitute(self->arena, struct_type, self->subs, null);
+    tl_monotype_substitute(self->arena, struct_type, self->subs, null); // needed
 
     if (tl_monotype_is_type_literal(struct_type)) {
         // enum access is through a type literal
@@ -2064,8 +2065,8 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
 
 end_struct_access_op:
     // always substitute operands immediately
-    tl_polytype_substitute(self->arena, node->binary_op.left->type, self->subs);
-    tl_polytype_substitute(self->arena, node->binary_op.right->type, self->subs);
+    // tl_polytype_substitute(self->arena, node->binary_op.left->type, self->subs);
+    // tl_polytype_substitute(self->arena, node->binary_op.right->type, self->subs);
     return 0;
 }
 
@@ -2557,7 +2558,7 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         // needs all variant types from the inferred type.
         if (node->type && tl_monotype_is_inst(node->type->type)) {
             tl_monotype *mono = node->type->type;
-            tl_monotype_substitute(self->arena, mono, self->subs, null);
+            // tl_monotype_substitute(self->arena, mono, self->subs, null);
             arr_sized = mono->cons_inst->args;
         } else {
             return 0; // Type not ready yet
@@ -2587,7 +2588,7 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             tl_monotype *mono = null;
             if (!tl_polytype_is_concrete(arg_type)) {
                 mono = tl_polytype_instantiate(self->arena, arg_type, self->subs);
-                tl_monotype_substitute(self->arena, mono, self->subs, null);
+                tl_monotype_substitute(self->arena, mono, self->subs, null); // needed
             } else {
                 mono = arg_type->type;
             }
@@ -2755,8 +2756,9 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
 
     tl_polytype *value_type = node->type;
 
-    // Note: important: need to substitute to ensure type is concrete if possible
-    tl_polytype_substitute(self->arena, value_type, self->subs);
+    // Note: important: need to substitute to ensure type is concrete if possible.
+    // seems not needed now
+    // tl_polytype_substitute(self->arena, value_type, self->subs);
 
     if (!value_type || !tl_monotype_is_arrow(value_type->type)) return 0;
     if (!tl_polytype_is_concrete(value_type)) return 0;
@@ -3462,7 +3464,7 @@ static tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, as
         tl_monotype *right = null;
         if (result_type) {
             right = result_type->type;
-            tl_monotype_substitute(self->arena, right, self->subs, null);
+            // tl_monotype_substitute(self->arena, right, self->subs, null);
         } else {
             right = tl_type_registry_nil(self->registry);
         }
@@ -3738,7 +3740,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     // get the arrow type from inference, or else from the annotation, if any
     arrow = tl_type_env_lookup(self->env, name);
     if (!arrow) arrow = name_node->symbol.annotation_type;
-    tl_polytype_substitute(self->arena, arrow, self->subs);
+    // tl_polytype_substitute(self->arena, arrow, self->subs);
     if (!arrow) fatal("runtime error");
 
     tl_polytype_generalize(arrow, self->env, self->subs);
