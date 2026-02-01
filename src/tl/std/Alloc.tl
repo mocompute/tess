@@ -15,10 +15,9 @@ typedef double max_align_t;
 
 // -- Synopsis --
 
-// Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_PERIODIC_SIZE before importing (e.g. with -D in CFLAGS) to
+// Define TL_ALLOC_TRANSIENT_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
 initialTransientSize: CSize := 0
-initialPeriodicSize:  CSize := 0
 
 Allocator: {
     malloc:  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any),
@@ -29,8 +28,8 @@ Allocator: {
 
 Context: {
     transient: Ptr(Allocator),
-    periodic:  Ptr(Allocator),
     managed:   Ptr(Allocator),
+    default:   Ptr(Allocator),
 }
 
 // Bump allocator bucket header. A bucket is a header followed by zero or more _BumpBlocks.
@@ -60,11 +59,6 @@ transient_alloc   (sz: CSize)              -> Ptr(any)
 transient_clear   (num: CSize, sz: CSize)  -> Ptr(any)
 transient_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
 transient_free    (p: Ptr(any))            -> Void
-
-periodic_alloc   (sz: CSize)              -> Ptr(any)
-periodic_clear   (num: CSize, sz: CSize)  -> Ptr(any)
-periodic_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
-periodic_free    (p: Ptr(any))            -> Void
 
 managed_alloc   (sz: CSize)              -> Ptr(any)
 managed_clear   (num: CSize, sz: CSize)  -> Ptr(any)
@@ -304,13 +298,6 @@ transient_clear   (num, sz) { context.transient->calloc(context.transient, num, 
 transient_realloc (p, sz)   { context.transient->realloc(context.transient, p, sz)  }
 transient_free    (p)       { context.transient->free(context.transient, p)         }
 
-// -- periodic --
-
-periodic_alloc   (sz)      { context.periodic->malloc(context.periodic, sz)      }
-periodic_clear   (num, sz) { context.periodic->calloc(context.periodic, num, sz) }
-periodic_realloc (p, sz)   { context.periodic->realloc(context.periodic, p, sz)  }
-periodic_free    (p)       { context.periodic->free(context.periodic, p)         }
-
 // -- managed --
 
 managed_alloc   (sz)      { context.managed->malloc(context.managed, sz)      }
@@ -325,14 +312,9 @@ managed_free    (p)       { context.managed->free(context.managed, p)         }
 #ifndef TL_ALLOC_TRANSIENT_SIZE
 #define TL_ALLOC_TRANSIENT_SIZE 4096
 #endif
-
-#ifndef TL_ALLOC_PERIODIC_SIZE
-#define TL_ALLOC_PERIODIC_SIZE  4096
-#endif
 #endc
 
 c_TL_ALLOC_TRANSIENT_SIZE: CSize
-c_TL_ALLOC_PERIODIC_SIZE:  CSize
 
 _managed := Allocator(
                       malloc  = _malloc/2,
@@ -344,16 +326,13 @@ _managed := Allocator(
 // Allocation Context. Public so that user code can (carefully) install its own allocators dynamically.
 context := Context(
                    transient = void,    // initialized in __init()
-                   periodic  = void,    // initialized in __init()
-                   managed   = _managed.&
+                   managed   = _managed.&,
+                   default   = _managed.&
                    )
 
 
 // Module init
 __init() {
     initialTransientSize = c_TL_ALLOC_TRANSIENT_SIZE
-    initialPeriodicSize  = c_TL_ALLOC_PERIODIC_SIZE
-
-    context.transient = bump_create(context.managed, initialTransientSize)
-    context.periodic  = bump_create(context.managed, initialPeriodicSize)
+    context.transient    = bump_create(context.managed, initialTransientSize)
 }

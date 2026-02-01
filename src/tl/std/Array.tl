@@ -124,7 +124,7 @@ init(alloc, val: T, count) {
 }
 
 init(val: T, count: Int) {
-    init(Alloc.context.managed, val, count)
+    init(Alloc.context.default, val, count)
 }
 
 free(self, alloc) {
@@ -133,7 +133,7 @@ free(self, alloc) {
 }
 
 free(self) {
-    free(self, Alloc.context.managed)
+    free(self, Alloc.context.default)
 }
 
 
@@ -144,7 +144,7 @@ with_capacity(alloc, T: Type, count) {
 }
 
 with_capacity(T: Type, count: Int) {
-    with_capacity(Alloc.context.managed, T, count)
+    with_capacity(Alloc.context.default, T, count)
 }
 
 with_capacity_undefined(alloc, T: Type, count) {
@@ -154,7 +154,7 @@ with_capacity_undefined(alloc, T: Type, count) {
 }
 
 with_capacity_undefined(T: Type, count) {
-    with_capacity_undefined(Alloc.context.managed, T, count)
+    with_capacity_undefined(Alloc.context.default, T, count)
 }
 
 reserve(self: Ptr(Array(T)), alloc, count: Int) {
@@ -167,7 +167,7 @@ reserve(self: Ptr(Array(T)), alloc, count: Int) {
 }
 
 reserve(self: Ptr(Array(T)), count: Int) {
-    reserve(self, Alloc.context.managed, count)
+    reserve(self, Alloc.context.default, count)
 }
 
 push(self, alloc, x) {
@@ -177,7 +177,7 @@ push(self, alloc, x) {
 }
 
 push(self, x) {
-    push(self, Alloc.context.managed, x)
+    push(self, Alloc.context.default, x)
 }
 
 
@@ -225,7 +225,7 @@ insert(self: Ptr(Array(T)), alloc, index: Int, val: T) {
 }
 
 insert(self: Ptr(Array(T)), index: Int, val: T) {
-    insert(self, Alloc.context.managed, index, val)
+    insert(self, Alloc.context.default, index, val)
 }
 
 remove(self: Ptr(Array(T)), index: Int) -> T {
@@ -267,7 +267,7 @@ resize(self: Ptr(Array(T)), alloc, count: Int, val: T) {
 }
 
 resize(self: Ptr(Array(T)), count: Int, val: T) {
-    resize(self, Alloc.context.managed, count, val)
+    resize(self, Alloc.context.default, count, val)
 }
 
 shrink_to_fit(self: Ptr(Array(T)), alloc) {
@@ -288,7 +288,7 @@ shrink_to_fit(self: Ptr(Array(T)), alloc) {
 }
 
 shrink_to_fit(self: Ptr(Array(T))) {
-    shrink_to_fit(self, Alloc.context.managed)
+    shrink_to_fit(self, Alloc.context.default)
 }
 
 truncate(self: Ptr(Array(T)), count: Int) {
@@ -331,7 +331,7 @@ append(self: Ptr(Array(T)), alloc, other: Array(T)) {
 }
 
 append(self: Ptr(Array(T)), other: Array(T)) {
-    append(self, Alloc.context.managed, other)
+    append(self, Alloc.context.default, other)
 }
 
 clone(alloc, arr: Array(T)) -> Array(T) {
@@ -344,7 +344,7 @@ clone(alloc, arr: Array(T)) -> Array(T) {
 }
 
 clone(arr: Array(T)) -> Array(T) {
-    clone(Alloc.context.managed, arr)
+    clone(Alloc.context.default, arr)
 }
 
 slice(alloc, arr: Array(T), start: Int, end: Int) -> Array(T) {
@@ -360,7 +360,7 @@ slice(alloc, arr: Array(T), start: Int, end: Int) -> Array(T) {
 }
 
 slice(arr: Array(T), start: Int, end: Int) -> Array(T) {
-    slice(Alloc.context.managed, arr, start, end)
+    slice(Alloc.context.default, arr, start, end)
 }
 
 
@@ -398,7 +398,7 @@ from_ptr(alloc, ptr: Ptr(T), len: Int) -> Array(T) {
 }
 
 from_ptr(ptr: Ptr(T), len: Int) -> Array(T) {
-    from_ptr(Alloc.context.managed, ptr, len)
+    from_ptr(Alloc.context.default, ptr, len)
 }
 
 
@@ -415,7 +415,7 @@ map(alloc, arr: Array(T), f: (T) -> U) -> Array(U) {
 }
 
 map(arr: Array(T), f: (T) -> U) -> Array(U) {
-    map(Alloc.context.managed, arr, f)
+    map(Alloc.context.default, arr, f)
 }
 
 filter(alloc, arr: Array(T), f: (T) -> Bool) -> Array(T) {
@@ -428,7 +428,7 @@ filter(alloc, arr: Array(T), f: (T) -> Bool) -> Array(T) {
 }
 
 filter(arr: Array(T), f: (T) -> Bool) -> Array(T) {
-    filter(Alloc.context.managed, arr, f)
+    filter(Alloc.context.default, arr, f)
 }
 
 reduce(arr: Array(T), init: U, f: (U, T) -> U) -> U {
@@ -543,7 +543,7 @@ sorted(alloc, tmp_alloc, arr: Array(T), cmp: (T, T) -> Int) -> Array(T) {
 }
 
 sorted(arr: Array(T), cmp: (T, T) -> Int) -> Array(T) {
-    sorted(Alloc.context.managed, Alloc.context.transient, arr, cmp)
+    sorted(Alloc.context.default, Alloc.context.transient, arr, cmp)
 }
 
 

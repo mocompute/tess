@@ -207,12 +207,12 @@ The `Alloc.context` global holds three allocator pointers:
 | Context | Purpose | Default Implementation |
 |---------|---------|----------------------|
 | `transient` | Short-lived scratch allocations (e.g. sort temporaries) | Bump allocator (4 KB default) |
-| `periodic` | Allocations freed periodically (e.g. per-frame) | Bump allocator (4 KB default) |
 | `managed` | Long-lived allocations freed individually | C `malloc`/`free` |
+| `default` | Pointer to the allocator to be used by default in standard library | either |
 
-Array functions that omit the allocator argument use `context.managed` by default.
+Array functions that omit the allocator argument use `context.default` by default.
 
-Override default bump allocator sizes by defining `TL_ALLOC_TRANSIENT_SIZE` and `TL_ALLOC_PERIODIC_SIZE` via `-D` in CFLAGS before compilation.
+Override default bump allocator sizes by defining `TL_ALLOC_TRANSIENT_SIZE` via `-D` in CFLAGS before compilation.
 
 ### Bump Allocator
 
@@ -242,7 +242,7 @@ managed_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
 managed_free    (p: Ptr(any))            -> Void
 ```
 
-The same pattern exists for `transient_*` and `periodic_*`.
+The same pattern exists for `transient_*`.
 
 ---
 

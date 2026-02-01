@@ -138,7 +138,7 @@ from_bytes(alloc, s: Ptr(CChar), n: CSize) -> Str {
 }
 
 from_bytes(s: Ptr(CChar), n: CSize) -> Str {
-    from_bytes(Alloc.context.managed, s, n)
+    from_bytes(Alloc.context.default, s, n)
 }
 
 from_cstr(alloc, s: CString) -> Str {
@@ -147,7 +147,7 @@ from_cstr(alloc, s: CString) -> Str {
 }
 
 from_cstr(s: CString) -> Str {
-    from_cstr(Alloc.context.managed, s)
+    from_cstr(Alloc.context.default, s)
 }
 
 copy(alloc, s: Str) -> Str {
@@ -157,7 +157,7 @@ copy(alloc, s: Str) -> Str {
 }
 
 copy(s: Str) -> Str {
-    copy(Alloc.context.managed, s)
+    copy(Alloc.context.default, s)
 }
 
 #ifc
@@ -180,7 +180,7 @@ from_int(alloc, n: Int) -> Str {
 }
 
 from_int(n: Int) -> Str {
-    from_int(Alloc.context.managed, n)
+    from_int(Alloc.context.default, n)
 }
 
 from_float(alloc, f: Float) -> Str {
@@ -191,7 +191,7 @@ from_float(alloc, f: Float) -> Str {
 }
 
 from_float(f: Float) -> Str {
-    from_float(Alloc.context.managed, f)
+    from_float(Alloc.context.default, f)
 }
 
 
@@ -334,7 +334,7 @@ cat(alloc, a: Str, b: Str) -> Str {
 }
 
 cat(a: Str, b: Str) -> Str {
-    cat(Alloc.context.managed, a, b)
+    cat(Alloc.context.default, a, b)
 }
 
 cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
@@ -349,7 +349,7 @@ cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
 }
 
 cat_3(a: Str, b: Str, c: Str) -> Str {
-    cat_3(Alloc.context.managed, a, b, c)
+    cat_3(Alloc.context.default, a, b, c)
 }
 
 cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
@@ -365,7 +365,7 @@ cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
 }
 
 cat_4(a: Str, b: Str, c: Str, d: Str) -> Str {
-    cat_4(Alloc.context.managed, a, b, c, d)
+    cat_4(Alloc.context.default, a, b, c, d)
 }
 
 push(self: Ptr(Str), alloc, other: Str) {
@@ -375,7 +375,7 @@ push(self: Ptr(Str), alloc, other: Str) {
 }
 
 push(self: Ptr(Str), other: Str) {
-    push(self, Alloc.context.managed, other)
+    push(self, Alloc.context.default, other)
 }
 
 
@@ -392,7 +392,7 @@ slice(alloc, s: Str, start: CSize, end: CSize) -> Str {
 }
 
 slice(s: Str, start: CSize, end: CSize) -> Str {
-    slice(Alloc.context.managed, s, start, end)
+    slice(Alloc.context.default, s, start, end)
 }
 
 
@@ -423,7 +423,7 @@ replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
 }
 
 replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
-    replace_byte(Alloc.context.managed, s, find, replace)
+    replace_byte(Alloc.context.default, s, find, replace)
 }
 
 
@@ -437,5 +437,5 @@ free(self: Ptr(Str), alloc) {
 }
 
 free(self: Ptr(Str)) {
-    free(self, Alloc.context.managed)
+    free(self, Alloc.context.default)
 }
