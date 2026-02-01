@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-01-30 to 2026-02-01 (576c968..4699c0d)
+
+### Highlights
+
+- Const-correctness support with `Const(T)` type qualifier for const pointers with full compiler enforcement
+- C array type redesign from value constructor to type annotation syntax with explicit pointer decay
+- String standard library (`Str` module) with small string optimization supporting 14-byte inline strings
+- Option and Result builtin types with generic unwrap support
+- Centralized C keyword escaping throughout the transpiler
+
+### Added
+
+- **Const(T) type qualifier**: New type wrapper for const pointers that generates `const T*` in C output. The compiler enforces const correctness by rejecting mutation through const pointers, supporting implicit coercion from `Ptr(T)` to `Ptr(Const(T))`, detecting and rejecting const stripping at any pointer nesting level, and allowing struct field reads through `Ptr(Const(Struct))` while preventing mutations. Includes 8 new tests covering const correctness scenarios and expected failures.
+- **String standard library (Str module)**: Comprehensive string type (367 lines of tests) with small string optimization that stores strings of 14 bytes or fewer inline without heap allocation. Features construction, comparison, concatenation, slicing, search operations, C interoperability, and dual allocator API.
+- **Option and Result builtin types**: Added standard tagged union types to builtin module (`Option(T)` for optional values, `Result(T, U)` for error handling) with generic `unwrap()` function using compile-time type predicates to handle both types.
+- **Type-predicate branching over generic tagged unions**: Support for compile-time type predicates in generic functions that branch over different tagged union types with automatic dead branch elimination in transpiled C code.
+- **C keyword escaping system**: New `escape_c_keyword()` helper that automatically prefixes C reserved words with `tl_kw_` when emitting identifiers, covering variable declarations, struct fields, tagged union variants, function parameters, and local variables.
+- **Documentation enhancements**: Extensive updates covering const pointer syntax and semantics, CArray type annotation syntax, named struct construction, and allocator API changes. Added incompatibility notes for `Const(T)` with generic type parameters.
+
+### Changed
+
+- **CArray syntax redesign (Breaking Change)**: Changed C arrays from value-position constructor (`arr := CArray(Int, 5)`) to type annotation syntax (`arr: CArray(Int, 5) := void`). Pointer decay is now explicit via `Ptr` cast annotations, array size is part of the type, and automatic pointer decay works for CArray struct field access.
+- **Allocator API simplification**: Removed `.periodic` allocator and standardized on `Alloc.context.default` as the default allocator across Array.tl and Str.tl standard library modules.
+- **String module renamed to Str**: Renamed `String` module to `Str` to avoid naming conflicts with C standard library `string.tl` bindings.
+- **C standard library bindings**: Updated `stdio.tl`, `stdlib.tl`, and `string.tl` with `Const()` wrappers on const-correct parameters (e.g., `fopen`, `atoi`, `strlen`, `strcmp`).
+- **Type inference improvements**: Enhanced constraint handling to prefer explicit case annotations as wrapper types in generic functions, make constraints non-fatal during generic pass for multi-branch type predicates, ensure reassignment LHS uses symbol's existing type, and support type-annotated void declarations followed by unannotated assignments.
+
+### Deprecated
+
+### Removed
+
+- **Periodic allocator**: Removed `Alloc.context.periodic` from the standard library allocator API.
+
+### Fixed
+
+- **CArray struct field dangling pointer bug**: Fixed critical bug where accessing a CArray field in a struct would create a pointer into a dead temporary by generating lvalue-mode expressions for the entire access chain.
+- **Formatter pipe alignment**: Fixed formatter to detect pipe alignment for C union syntax (`{ |`) in addition to tagged union syntax (`: |`).
+- **C standard library bindings**: Fixed `c_memcmp` declaration in `string.tl` (was missing size parameter).
+- **Name conflicts with Option type**: Updated 16 tagged union test files to avoid naming conflicts after adding `Option` to the builtin module.
+- **Type inference edge cases**: Fixed const stripping detection at any pointer nesting level, struct field access through `Ptr(Const(Struct))`, and reassignment type inference to preserve symbol types.
+
+### Security
+
 ## [Unreleased] - 2026-01-30 (660c97f..576c968)
 
 ### Highlights

@@ -335,7 +335,7 @@ The project maintains a changelog in `NEWS.md` following the [Keep a Changelog](
 Each dated section in `NEWS.md` follows this structure:
 
 ```markdown
-## [Unreleased] - YYYY-MM-DD to YYYY-MM-DD
+## [Unreleased] - YYYY-MM-DD to YYYY-MM-DD (git commit range)
 
 ### Highlights
 
@@ -373,7 +373,7 @@ When adding a new changelog entry for a time period:
 
    Example agent prompt:
    ```
-   Research the git commits from [start-date] to [end-date] in this repository.
+   Research the git commits from [start-commit] to [end-commit] in this repository.
    Look at the commit messages and the actual code changes to understand what work
    has been done during that period. Identify broad themes and categorize them into
    these sections: Added, Changed, Deprecated, Removed, Fixed, Security.
@@ -415,7 +415,7 @@ When adding a new changelog entry for a time period:
 ### Example Entry Structure
 
 ```markdown
-## [Unreleased] - 2026-01-23 to 2026-01-30
+## [Unreleased] - 2026-01-28 to 2026-01-30 (660c97f..576c968)
 
 ### Highlights
 
