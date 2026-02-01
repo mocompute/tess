@@ -278,7 +278,6 @@ test_sso_boundary() {
     // Verify cstr() didn't corrupt the string
     if Str.len(s14) != 14 { error += 1 }
     if !Str._is_small(s14) { error += 1 }
-    Str.free(s14.&)
 
     // 15 bytes should be big
     s15 := "123456789012345"
@@ -286,7 +285,6 @@ test_sso_boundary() {
     if Str._is_small(s15) { error += 1 }
     cs15 := Str.cstr(s15.&)
     if c_strcmp(cs15, c"123456789012345") != 0 { error += 1 }
-    Str.free(s15.&)
     error
 }
 
