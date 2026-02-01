@@ -206,6 +206,10 @@ Instead, use the full generic type or create a fully specialized alias.
 
 User-defined types (structs, unions, enums) introduce **type constructors**.
 
+### Built-in Type Constructors
+
+`Ptr(T)` and `Const(T)` are built-in unary type constructors. `Const(T)` is a type qualifier primarily used inside `Ptr` to express read-only pointer access: `Ptr(Const(T))`. The compiler enforces const correctness by rejecting mutation through const pointers and preventing implicit removal of const qualifiers.
+
 ### Struct Type Constructors
 
 ```tl
@@ -311,6 +315,35 @@ Pointers can be implicitly cast:
 p : Ptr(Int) := c_malloc(...)
 q : Ptr(Byte) := p  // Implicit cast
 ```
+
+### Const Pointer Coercion
+
+`Ptr(T)` implicitly coerces to `Ptr(Const(T))` (adding const is safe):
+
+```tl
+read(p: Ptr(Const(Int))) { p.* }
+
+main() {
+  p : Ptr(Int) := c_malloc(8)
+  p.* = 42
+  val := read(p)     // OK: Ptr(Int) -> Ptr(Const(Int))
+}
+```
+
+The reverse is rejected — `Ptr(Const(T))` does not coerce to `Ptr(T)`:
+
+```tl
+write(p: Ptr(Int)) { p.* = 10; 0 }
+
+pass(p: Ptr(Const(Int))) {
+  write(p)            // Error: cannot strip const
+}
+```
+
+Const stripping is also rejected through nested pointer levels:
+`Ptr(Ptr(Const(T)))` cannot coerce to `Ptr(Ptr(T))`.
+
+In the generated C code, `Ptr(Const(T))` transpiles to `const T*`.
 
 ### No Implicit Numeric Coercion
 

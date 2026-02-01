@@ -99,9 +99,12 @@ Module initialization functions are called in dependency order before `main()` e
 ### Pointer Types
 
 ```tl
-Ptr(T)          // Pointer to type T
-CArray(T, N)    // C-style fixed-size array
+Ptr(T)              // Mutable pointer to type T
+Ptr(Const(T))       // Const pointer to type T (read-only)
+CArray(T, N)        // C-style fixed-size array
 ```
+
+`Const(T)` is a built-in type qualifier. See [Const Pointers](#const-pointers) for details.
 
 ### Generic Types
 
@@ -977,6 +980,49 @@ p : Ptr(Int) := c_malloc(sizeof(Int) * 10)
 b : Ptr(Byte) := p    // Cast to different pointer type
 ```
 
+### Const Pointers
+
+`Ptr(Const(T))` declares a pointer through which the target cannot be modified.
+It transpiles to `const T*` in C.
+
+```tl
+read_value(p: Ptr(Const(Int))) {
+    p.*                       // OK: reading through const pointer
+}
+
+read_point(p: Ptr(Const(Point))) {
+    p->x + p->y              // OK: reading struct fields through const pointer
+}
+```
+
+**Implicit coercion:** A mutable pointer can be passed where a const pointer is expected:
+
+```tl
+p : Ptr(Int) := c_malloc(8)
+p.* = 42
+val := read_value(p)         // OK: Ptr(Int) -> Ptr(Const(Int))
+```
+
+**Mutation through const pointers is rejected:**
+
+```tl
+mutate(p: Ptr(Const(Int))) {
+    p.* = 10                  // Error: const violation
+}
+```
+
+**Stripping const is rejected.** A const pointer cannot be passed where a mutable pointer is expected:
+
+```tl
+write(p: Ptr(Int)) { p.* = 10; 0 }
+
+pass(p: Ptr(Const(Int))) {
+    write(p)                  // Error: const violation
+}
+```
+
+This applies at any pointer nesting level: `Ptr(Ptr(Const(T)))` cannot be passed where `Ptr(Ptr(T))` is expected.
+
 ### Array Decay
 
 `CArray` is used as a type annotation to declare fixed-size C arrays. Decay to pointer must be explicit:
@@ -1019,6 +1065,13 @@ Functions with the `c_` prefix map directly to C functions:
 ```tl
 c_printf(fmt: CString, ...) -> CInt     // Declares printf
 c_malloc(size: CSize) -> Ptr(any)       // Declares malloc
+```
+
+Use `Ptr(Const(T))` for C functions that take `const` pointer parameters:
+
+```tl
+c_strlen(s: Ptr(Const(CChar))) -> CSize           // const char*
+c_strcmp(a: Ptr(Const(CChar)), b: Ptr(Const(CChar))) -> CInt
 ```
 
 To call a C function named `foo`, declare it as `c_foo` in Tess.
