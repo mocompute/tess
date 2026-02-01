@@ -1385,7 +1385,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         if (is_pointer) cat(self, S("&"));
         cat(self, expr_str);
         cat(self, S(".u."));
-        cat(self, variant_name);
+        cat(self, escape_c_keyword(self->transient, variant_name));
         cat_semicolonln(self);
 
         // Generate arm body
