@@ -308,6 +308,7 @@ TL_TESTS =					\
 	bitwise_operators			\
 	block_expression			\
 	builtin_option				\
+	c_keywords				\
 	carray_struct_field			\
 	c_div					\
 	c_symbol_annotation			\

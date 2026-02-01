@@ -129,6 +129,29 @@ static void  exit_error(char const *file, u32 line, char const *restrict fmt, ..
 static str   type_literal_name(tl_monotype *type);
 static void  update_type(transpile *, tl_monotype **);
 
+// Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
+// Returns the original name unchanged if it is not a C keyword.
+static str escape_c_keyword(allocator *alloc, str name) {
+    static const char *c_keywords[] = {
+        "auto",     "break",    "case",     "char",           "const",    "continue",
+        "default",  "do",       "double",   "else",           "enum",     "extern",
+        "float",    "for",      "goto",     "if",             "inline",   "int",
+        "long",     "register", "restrict", "return",         "short",    "signed",
+        "sizeof",   "static",   "struct",   "switch",         "typedef",  "union",
+        "unsigned", "void",     "volatile", "while",
+        // C11
+        "_Alignas", "_Alignof", "_Atomic",  "_Bool",          "_Complex", "_Generic",
+        "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local",
+        NULL
+    };
+    for (const char **kw = c_keywords; *kw; ++kw) {
+        if (0 == str_cmp_c(name, *kw)) {
+            return str_cat(alloc, S("tl_kw_"), name);
+        }
+    }
+    return name;
+}
+
 //
 
 // Generates function signature: "ret_type name(params)" or "ret_type (*name(params))(fp_params)"
@@ -479,6 +502,9 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
         return remove_c_prefix(self->transient, name);
     }
 
+    // escape identifiers that clash with C reserved keywords
+    name = escape_c_keyword(self->transient, name);
+
     if (ctx && str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
     {
         // generate reference through context
@@ -505,7 +531,7 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
 
     forall(i, fvs) {
         cat_dot(self);
-        cat(self, fvs.v[i]);
+        cat(self, escape_c_keyword(self->transient, fvs.v[i]));
         cat_assign(self);
         cat_ampersand(self);
         cat_open_round(self);
@@ -573,7 +599,7 @@ static void generate_toplevel_values(transpile *self) {
         if (!tl_polytype_is_concrete(type)) continue;
 
         str value = generate_expr(self, type->type, node->let_in.value, null);
-        generate_assign_lhs(self, name);
+        generate_assign_lhs(self, escape_c_keyword(self->transient, name));
         cat(self, value);
         cat_semicolonln(self);
     }
@@ -698,7 +724,7 @@ static void generate_assign_op(transpile *self, str lhs, str rhs, str op) {
 static void generate_assign_field(transpile *self, str lhs, str field, str rhs) {
     cat(self, lhs);
     cat_dot(self);
-    cat(self, field);
+    cat(self, escape_c_keyword(self->transient, field));
     cat_assign(self);
     cat(self, rhs);
     cat_semicolonln(self);
@@ -800,7 +826,7 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
         if (!str_is_empty(arg_value)) {
             cat(self, res);
             cat_dot(self);
-            cat(self, ast_node_str(arg->assignment.name));
+            cat(self, escape_c_keyword(self->transient, ast_node_str(arg->assignment.name)));
             cat_assign(self);
             cat(self, arg_value);
             cat_semicolonln(self);
@@ -841,7 +867,7 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
         if (!str_is_empty(arg_value)) {
             cat(self, res);
             cat_dot(self);
-            cat(self, def->field_names.v[i]);
+            cat(self, escape_c_keyword(self->transient, def->field_names.v[i]));
             cat_assign(self);
             cat(self, arg_value);
             cat_semicolonln(self);
@@ -1037,6 +1063,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
     str          name = ast_node_str(node->let_in.name);
     tl_monotype *type = env_lookup(self, name); // may be null
+    name              = escape_c_keyword(self->transient, name);
 
     if (type) {
 
@@ -1141,9 +1168,9 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
         }
     }
 
-    str             cond_str    = generate_expr(self, null, cond, ctx);
+    str cond_str = generate_expr(self, null, cond, ctx);
 
-    str             res         = str_empty();
+    str res      = str_empty();
     if (should_assign_result(ctx, result_type)) {
         res = next_res(self);
         generate_decl(self, res, result_type);
@@ -1200,8 +1227,9 @@ static str generate_inline_lambda_with_args(transpile *self, tl_monotype *result
         assert(ast_node_is_symbol(param));
         assert(!param->type->quantifiers.size);
 
-        generate_decl(self, param->symbol.name, param->type->type);
-        generate_assign_lhs(self, param->symbol.name);
+        str pname = escape_c_keyword(self->transient, param->symbol.name);
+        generate_decl(self, pname, param->type->type);
+        generate_assign_lhs(self, pname);
         cat(self, args_res.v[i]);
         cat_semicolonln(self);
     }
@@ -1350,7 +1378,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         cat(self, S(") {\n"));
 
         // Generate binding: VariantType binding = expr.u.VariantName;
-        str binding_name = ast_node_str(cond);
+        str binding_name = escape_c_keyword(self->transient, ast_node_str(cond));
         generate_decl(self, binding_name, variant_type);
         cat(self, binding_name);
         cat(self, S(" = "));
@@ -1584,13 +1612,12 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
     // When accessing a CArray struct field, generate the left operand as an lvalue to avoid copying
     // the struct into a temporary. Otherwise the CArray decays to a pointer into the dead temporary.
-    int carray_field = is_struct_access_operator(str_cstr(&op)) &&
-                       node->binary_op.right->type &&
+    int carray_field = is_struct_access_operator(str_cstr(&op)) && node->binary_op.right->type &&
                        tl_monotype_is_inst_of(node->binary_op.right->type->type, S("CArray"));
 
     int save_lvalue = ctx->want_lvalue;
     if (carray_field) ctx->want_lvalue = 1;
-    str left = generate_expr(self, null, node->binary_op.left, ctx);
+    str left         = generate_expr(self, null, node->binary_op.left, ctx);
     ctx->want_lvalue = save_lvalue;
     str right;
 
@@ -2014,6 +2041,7 @@ static str ptr_to_arrow_decl(transpile *self, tl_monotype *type, str name) {
 }
 
 static void generate_decl(transpile *self, str name, tl_monotype *type) {
+    name = escape_c_keyword(self->transient, name);
     if (tl_arrow == type->tag) {
         // arrow
 
@@ -2082,6 +2110,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 }
 
 static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) {
+    name = escape_c_keyword(self->transient, name);
     if (tl_arrow == type->tag) {
         // arrow
 
@@ -2439,8 +2468,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             }
 
             // Normal Ptr handling for non-arrow targets
-            tl_polytype  wrap  = tl_polytype_wrap(arg);
-            str          typec = type_to_c(self, &wrap);
+            tl_polytype wrap  = tl_polytype_wrap(arg);
+            str         typec = type_to_c(self, &wrap);
             return str_cat(self->transient, typec, S("*"));
         }
 
@@ -2453,9 +2482,9 @@ static str type_to_c(transpile *self, tl_polytype *type) {
 
         else if (str_eq(S("CArray"), cons_name) && mono->cons_inst->args.size == 2) {
             // CArray(T, N) renders as T* (decayed pointer)
-            tl_monotype *element  = mono->cons_inst->args.v[0];
-            tl_polytype  wrap_el  = tl_polytype_wrap(element);
-            str          typec    = type_to_c(self, &wrap_el);
+            tl_monotype *element = mono->cons_inst->args.v[0];
+            tl_polytype  wrap_el = tl_polytype_wrap(element);
+            str          typec   = type_to_c(self, &wrap_el);
             return str_cat(self->transient, typec, S("*"));
         }
 
@@ -2514,8 +2543,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         }
 
         // Normal Ptr handling for non-arrow targets
-        tl_polytype  wrap  = tl_polytype_wrap(arg);
-        str          typec = type_to_c(self, &wrap);
+        tl_polytype wrap  = tl_polytype_wrap(arg);
+        str         typec = type_to_c(self, &wrap);
         return str_cat(self->transient, typec, S("*"));
     }
 
@@ -2617,13 +2646,14 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
 
     for (u32 i = 0, n = params.size; i < n; ++i) {
         tl_monotype *arg = params.v[i];
+        str pname = (i < param_names.size) ? escape_c_keyword(self->transient, param_names.v[i]) : str_empty();
         if (tl_monotype_is_arrow(arg)) {
-            build_arrow_to_c(self, &b, arg, (i < param_names.size) ? param_names.v[i] : str_empty());
+            build_arrow_to_c(self, &b, arg, pname);
         } else {
             str_build_cat(&b, type_to_c_mono(self, arg));
-            if (i < param_names.size) {
+            if (!str_is_empty(pname)) {
                 str_build_cat(&b, S(" "));
-                str_build_cat(&b, param_names.v[i]);
+                str_build_cat(&b, pname);
             }
         }
 
