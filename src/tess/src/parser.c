@@ -42,8 +42,9 @@ struct parser {
     str_sized              files;
     u32                    files_index;
     char_csized            current_file_data;
-    hashmap               *modules_seen;        // str hset
-    hashmap               *nested_type_parents; // str hset: types that have nested types
+    hashmap               *modules_seen;         // str hset
+    hashmap               *module_preludes_seen; // str hset: modules declared with #module_prelude
+    hashmap               *nested_type_parents;  // str hset: types that have nested types
 
     ast_node              *result;
     token_array            tokens;
@@ -174,6 +175,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_file_data.v     = null;
     self->current_file_data.size  = 0;
     self->modules_seen            = hset_create(self->parent_alloc, 32);
+    self->module_preludes_seen    = hset_create(self->parent_alloc, 32);
     self->nested_type_parents     = hset_create(self->parent_alloc, 32);
     self->result                  = null;
     self->tokens                  = (token_array){0};
@@ -215,6 +217,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->nested_type_parents);
+    hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
     arena_destroy(&(*self)->speculative);
@@ -2520,10 +2523,11 @@ static int toplevel_hash(parser *self) {
             tokenizer_set_file(self->tokenizer, argument);
         }
 
-        else if (str_eq(command, S("module"))) {
+        else if (str_eq(command, S("module_prelude")) || str_eq(command, S("module"))) {
             // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
             // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
             // #unity_file directive is seen.
+            int is_prelude      = str_eq(command, S("module_prelude"));
             str module          = argument;
             self->skip_module   = 0;
             self->expect_module = 0;
@@ -2548,19 +2552,26 @@ static int toplevel_hash(parser *self) {
                 // save current module symbols, if any
                 save_current_module_symbols(self);
 
-                str_hset_insert(&self->modules_seen, module);
+                // Prelude: don't add to modules_seen
+                if (!is_prelude) str_hset_insert(&self->modules_seen, module);
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
                 else self->current_module = module;
 
                 // Only reset during first pass. During second pass, current_module_symbols may point
                 // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
                 // corrupt module_symbols.
+
                 if (self->is_symbol_pass) {
                     hset_reset(self->current_module_symbols);
                 }
 
-                // load module symbols, if any
+                // load module symbols, if any (for re-opened modules, this pre-populates with prelude
+                // symbols)
                 load_module_symbols(self);
+            }
+
+            if (is_prelude) {
+                str_hset_insert(&self->module_preludes_seen, module);
             }
         }
     }
@@ -3212,32 +3223,28 @@ static ast_node *create_variant_constructor(parser *self,
 // Helper to create a make function for wrapping a variant value into the tagged union.
 // E.g., make_Shape_Circle(v: Shape__Circle) -> Shape { ... }
 // Takes a single positional argument of the variant struct type.
-static ast_node *create_variant_make_function(parser *self,
-                                              str     tu_name_str,  // e.g., "Shape"
-                                              str     var_name_str, // e.g., "Circle"
-                                              u8 n_type_args,
-                                              ast_node **type_args,
-                                              ast_node_array var_fields, // variant fields (for type param filtering)
-                                              int is_existing_type, // 1 if variant references a pre-existing type
-                                              str existing_module,  // module name for existing type
-                                              ast_node **existing_type_args, // explicit type args for generic existing types
-                                              u8 n_existing_type_args)
-{
+static ast_node *
+create_variant_make_function(parser *self,
+                             str     tu_name_str,  // e.g., "Shape"
+                             str     var_name_str, // e.g., "Circle"
+                             u8 n_type_args, ast_node **type_args,
+                             ast_node_array var_fields,       // variant fields (for type param filtering)
+                             int            is_existing_type, // 1 if variant references a pre-existing type
+                             str            existing_module,  // module name for existing type
+                             ast_node **existing_type_args, // explicit type args for generic existing types
+                             u8         n_existing_type_args) {
     allocator *arena = self->ast_arena;
 
     // 1. Create function name: make_Shape_Circle
-    str       func_name_str = str_cat_3(arena, S("make_"), tu_name_str,
-                                        str_cat(arena, S("_"), var_name_str));
-    ast_node *func_name     = ast_node_create_sym(arena, func_name_str);
+    str func_name_str   = str_cat_3(arena, S("make_"), tu_name_str, str_cat(arena, S("_"), var_name_str));
+    ast_node *func_name = ast_node_create_sym(arena, func_name_str);
 
     // 2. Single parameter: v with variant struct type annotation
     //    For existing types, use module-mangled original name; for new variants, use scoped name
     str var_struct_str;
     if (is_existing_type) {
-        if (str_eq(existing_module, S("main")))
-            var_struct_str = var_name_str;
-        else
-            var_struct_str = mangle_str_for_module(self, var_name_str, existing_module);
+        if (str_eq(existing_module, S("main"))) var_struct_str = var_name_str;
+        else var_struct_str = mangle_str_for_module(self, var_name_str, existing_module);
     } else {
         var_struct_str = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
     }
@@ -3301,10 +3308,10 @@ static ast_node *create_variant_make_function(parser *self,
 
     // 5. Build body: wrap the argument in union + tag + wrapper struct
     // Union construction: __Shape__Union_(Circle = v)
-    str       union_name_str               = str_cat_3(arena, S("__"), tu_name_str, S("__Union_"));
-    ast_node *union_arg_name               = ast_node_create_sym(arena, var_name_str);
-    ast_node *union_arg_val                = ast_node_create_sym_c(arena, "v");
-    ast_node *union_assign                 = ast_node_create_assignment(arena, union_arg_name, union_arg_val);
+    str       union_name_str = str_cat_3(arena, S("__"), tu_name_str, S("__Union_"));
+    ast_node *union_arg_name = ast_node_create_sym(arena, var_name_str);
+    ast_node *union_arg_val  = ast_node_create_sym_c(arena, "v");
+    ast_node *union_assign   = ast_node_create_assignment(arena, union_arg_name, union_arg_val);
     union_assign->assignment.is_field_name = 1;
     set_node_file(self, union_assign);
     ast_node_array union_args = {.alloc = arena};
@@ -3426,10 +3433,11 @@ static int toplevel_tagged_union(parser *self) {
     typedef struct {
         ast_node      *name;
         ast_node_array fields;
-        int            is_existing_type;  // 1 if variant references a pre-existing type
-        str            existing_module;   // module name for existing type (e.g., "Foo" from | Foo.Special)
-        ast_node     **existing_type_args;  // explicit type args for generic existing types (e.g., (a) in | Foo.Pair(a))
-        u8             n_existing_type_args;
+        int            is_existing_type; // 1 if variant references a pre-existing type
+        str            existing_module;  // module name for existing type (e.g., "Foo" from | Foo.Special)
+        ast_node *
+          *existing_type_args; // explicit type args for generic existing types (e.g., (a) in | Foo.Pair(a))
+        u8 n_existing_type_args;
     } variant;
 
     // Must match array_t layout: { v, alloc, size, capacity }
@@ -3443,10 +3451,10 @@ static int toplevel_tagged_union(parser *self) {
     while (1) {
         // Parse variant name: either bare identifier (new variant) or Module.Type (existing type)
         if (a_try(self, a_identifier)) return ERROR_STOP;
-        ast_node *var_name = self->result;
+        ast_node *var_name        = self->result;
 
-        int is_existing     = 0;
-        str existing_module = str_empty();
+        int       is_existing     = 0;
+        str       existing_module = str_empty();
 
         // Check for dot: Module.Type means existing type reference
         ast_node **existing_type_args   = null;
@@ -3462,7 +3470,8 @@ static int toplevel_tagged_union(parser *self) {
             if (0 == a_try(self, a_open_round)) {
                 ast_node_array ta = {.alloc = self->ast_arena};
                 while (1) {
-                    if (0 == a_try(self, a_comma)) { /* skip comma */ }
+                    if (0 == a_try(self, a_comma)) { /* skip comma */
+                    }
                     if (0 == a_try(self, a_close_round)) break;
                     if (a_try(self, a_identifier)) return ERROR_STOP;
                     array_push(ta, self->result);
@@ -3507,9 +3516,11 @@ static int toplevel_tagged_union(parser *self) {
         // Check for reserved type keywords to disallow
         if (is_reserved_type_name(var_name)) return ERROR_STOP;
 
-        variant v = {.name = var_name, .fields = fields, .is_existing_type = is_existing,
-                     .existing_module = existing_module,
-                     .existing_type_args = existing_type_args,
+        variant v = {.name                 = var_name,
+                     .fields               = fields,
+                     .is_existing_type     = is_existing,
+                     .existing_module      = existing_module,
+                     .existing_type_args   = existing_type_args,
                      .n_existing_type_args = n_existing_type_args};
         array_push(variants, v);
 
@@ -3548,9 +3559,8 @@ static int toplevel_tagged_union(parser *self) {
         variant *v = &variants.v[i];
         if (v->is_existing_type) continue;
 
-        str      var_name_str = str_cat_3(self->ast_arena, tu_name_str,
-                                          S("__"), v->name->symbol.name);
-        ast_node *var_name    = ast_node_create_sym(self->ast_arena, var_name_str);
+        str       var_name_str = str_cat_3(self->ast_arena, tu_name_str, S("__"), v->name->symbol.name);
+        ast_node *var_name     = ast_node_create_sym(self->ast_arena, var_name_str);
 
         // For generics, determine which type params are actually used by this variant's fields
         ast_node **var_type_args = null;
@@ -3593,14 +3603,11 @@ static int toplevel_tagged_union(parser *self) {
             if (v->is_existing_type) {
                 // Existing type from another module: mangle as Module__Type
                 // For "main" module, the name is unmangled (main is implicit)
-                if (str_eq(v->existing_module, S("main")))
-                    var_struct_name = v->name->symbol.name;
+                if (str_eq(v->existing_module, S("main"))) var_struct_name = v->name->symbol.name;
                 else
-                    var_struct_name = mangle_str_for_module(self, v->name->symbol.name,
-                                                            v->existing_module);
+                    var_struct_name = mangle_str_for_module(self, v->name->symbol.name, v->existing_module);
             } else {
-                var_struct_name = str_cat_3(self->ast_arena, tu_name_str,
-                                            S("__"), v->name->symbol.name);
+                var_struct_name = str_cat_3(self->ast_arena, tu_name_str, S("__"), v->name->symbol.name);
             }
 
             ast_node *field_ann = null;
@@ -3698,7 +3705,7 @@ static int toplevel_tagged_union(parser *self) {
 
     // 5. Constructor functions for each variant (skip for existing types)
     forall(i, variants) {
-        variant  *v    = &variants.v[i];
+        variant *v = &variants.v[i];
         if (v->is_existing_type) continue;
 
         ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
@@ -3710,10 +3717,9 @@ static int toplevel_tagged_union(parser *self) {
     forall(i, variants) {
         variant  *v    = &variants.v[i];
 
-        ast_node *make = create_variant_make_function(self, tu_name_str, v->name->symbol.name, n_type_args,
-                                                      type_args, v->fields, v->is_existing_type,
-                                                      v->existing_module, v->existing_type_args,
-                                                      v->n_existing_type_args);
+        ast_node *make = create_variant_make_function(
+          self, tu_name_str, v->name->symbol.name, n_type_args, type_args, v->fields, v->is_existing_type,
+          v->existing_module, v->existing_type_args, v->n_existing_type_args);
         array_push(result_nodes, make);
     }
 
