@@ -44,12 +44,16 @@ static int test_tess_token_string(void) {
 }
 
 static int test_tokenizer_basic(void) {
-    int         error = 0;
+    int            error = 0;
 
-    char const *input = "  (  )  ";
+    char const    *input = "  (  )  ";
 
-    allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = (u32)strlen(input)}, "");
+    allocator     *alloc = default_allocator();
+    tokenizer_opts opts  = {
+       .input = (char_csized){.v = input, .size = (u32)strlen(input)},
+       .file  = "",
+    };
+    tokenizer *t = tokenizer_create(alloc, &opts);
     if (!t) return ++error;
 
     {
@@ -88,12 +92,16 @@ static int test_tokenizer_basic(void) {
 }
 
 static int test_tokenizer_string(void) {
-    int         error = 0;
+    int            error = 0;
 
-    char const *input = " \"abcdef\"  ";
+    char const    *input = " \"abcdef\"  ";
 
-    allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = strlen(input)}, "");
+    allocator     *alloc = default_allocator();
+    tokenizer_opts opts  = {
+       .input = (char_csized){.v = input, .size = strlen(input)},
+       .file  = "",
+    };
+    tokenizer *t = tokenizer_create(alloc, &opts);
     if (!t) return ++error;
 
     {
@@ -114,11 +122,15 @@ static int test_tokenizer_string(void) {
 
 static int test_tokenizer_terminal_static_string(void) {
     // regression test for ASAN
-    int         error = 0;
+    int            error = 0;
 
-    char const *input = "-";
-    allocator  *alloc = default_allocator();
-    tokenizer  *t     = tokenizer_create(alloc, (char_csized){.v = input, .size = strlen(input)}, "");
+    char const    *input = "-";
+    allocator     *alloc = default_allocator();
+    tokenizer_opts opts  = {
+       .input = (char_csized){.v = input, .size = strlen(input)},
+       .file  = "",
+    };
+    tokenizer *t = tokenizer_create(alloc, &opts);
     if (!t) return ++error;
 
     {

@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "hashmap.h"
 #include "str.h"
 #include "token.h"
 
@@ -13,16 +14,20 @@
 #define TOKENIZER_LINE_START 1
 
 struct tokenizer {
-    allocator  *parent;
-    allocator  *strings;
-    char_csized input;
-    str         file;
-    u32         line;
-    u32         pos;
-    u32         col;
+    allocator     *parent;
+    allocator     *strings;
+    tokenizer_opts opts;
 
-    token_array backtrack;
-    char_array  buf;
+    char_csized    input; // also in opts
+    str            file;
+    hashmap       *defines; // str hset
+
+    u32            line;
+    u32            pos;
+    u32            col;
+
+    token_array    backtrack;
+    char_array     buf;
 };
 
 // -- statics --
@@ -36,14 +41,18 @@ static void tok_error(tokenizer *self, tokenizer_error *err, tl_error_tag tag) {
 
 // -- allocation and deallocation --
 
-tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *file) {
+tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
     self->strings   = arena_create(alloc, 4096);
-    self->input     = input;
+    self->opts      = *opts;
+    self->input     = self->opts.input;
+    self->file      = str_init(self->parent, self->opts.file); // parent's lifetime
+
+    self->defines   = hset_create(self->strings, 8);
+
     self->pos       = 0;
-    self->file      = str_init(self->parent, file); // parent's lifetime
     self->line      = TOKENIZER_LINE_START;
     self->col       = 0;
 
@@ -52,10 +61,17 @@ tokenizer *tokenizer_create(allocator *alloc, char_csized input, char const *fil
     array_reserve(self->buf, 32);
     array_reserve(self->backtrack, 8);
 
+    // load defines set
+    forall(i, self->opts.defines) {
+        str_hset_insert(&self->defines, self->opts.defines.v[i]);
+    }
+
     return self;
 }
 
 void tokenizer_destroy(tokenizer **self) {
+    hset_destroy(&(*self)->defines);
+
     arena_destroy(&(*self)->strings);
 
     array_free((*self)->backtrack);

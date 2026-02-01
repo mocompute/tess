@@ -3838,6 +3838,7 @@ int parser_next(parser *self) {
     if (!self->tokenizer) {
 
         // A new tokenizer is created for each file being parsed.
+        tokenizer_opts tok_opts   = {0};
 
         self->error.tag           = tl_err_ok;
         self->tokenizer_error.tag = tl_err_ok;
@@ -3846,7 +3847,10 @@ int parser_next(parser *self) {
         if (self->opts.prelude && !self->prelude_consumed) {
             self->prelude_consumed = 1;
             char_csized data       = {.v = self->opts.prelude, .size = strlen(self->opts.prelude)};
-            self->tokenizer        = tokenizer_create(self->parent_alloc, data, "<prelude>");
+
+            tok_opts.input         = data;
+            tok_opts.file          = "<prelude>";
+            self->tokenizer        = tokenizer_create(self->parent_alloc, &tok_opts);
         } else {
             if ((i32)self->files_index >= (i32)self->files.size) {
                 self->error.tag = tl_err_eof;
@@ -3865,7 +3869,9 @@ int parser_next(parser *self) {
             file_read(self->file_arena, file, (char **)&self->current_file_data.v,
                       &self->current_file_data.size);
 
-            self->tokenizer     = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+            tok_opts.input      = self->current_file_data;
+            tok_opts.file       = file;
+            self->tokenizer     = tokenizer_create(self->parent_alloc, &tok_opts);
             self->expect_module = 1;
         }
     }

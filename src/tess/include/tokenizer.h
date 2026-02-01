@@ -14,6 +14,12 @@ typedef struct tokenizer_error {
     u16          col;
 } tokenizer_error;
 
+typedef struct {
+    char_csized input;
+    char const *file;
+    str_array   defines;
+} tokenizer_opts;
+
 typedef struct tokenizer tokenizer;
 
 // -- allocation and deallocation --
@@ -21,7 +27,7 @@ typedef struct tokenizer tokenizer;
 // Memory buffers of tokens created by the tokenizer are managed by
 // the tokenizer and are freed by tokenizer_destroy.
 
-nodiscard tokenizer *tokenizer_create(allocator *, char_csized, char const *) mallocfun;
+nodiscard tokenizer *tokenizer_create(allocator *, tokenizer_opts const *) mallocfun;
 void                 tokenizer_destroy(tokenizer **);
 
 // -- parsing --
