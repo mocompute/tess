@@ -422,8 +422,9 @@ tl_create_build_fail_test(fail_reserved_type_struct)
 tl_create_build_fail_test(fail_reserved_type_tu)
 tl_create_build_fail_test(fail_reserved_type_union)
 
+tl_create_build_fail_test(fail_const_strip)
+
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
-tl_create_known_fail_failure(fail_const_strip)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(while_empty_body)

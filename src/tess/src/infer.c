@@ -841,6 +841,8 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static int check_const_strip_in_call(tl_infer *, tl_monotype *, tl_polytype *, ast_node *);
+
 static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     tl_monotype *inst =
       tl_polytype_instantiate(self->arena, node->lambda_application.lambda->type, self->subs);
@@ -857,6 +859,7 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
             str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
     }
 
+    if (check_const_strip_in_call(self, inst, app, node)) return 1;
     tl_polytype wrap = tl_polytype_wrap(inst);
     if (constrain(self, &wrap, app, node)) return 1;
 
@@ -915,17 +918,43 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Check if a function call strips const from pointer arguments.
+// Compares function parameter types against callsite argument types before unification.
+// Returns 1 if a const violation is detected (arg is Ptr(Const(T)) but param is Ptr(T)).
+static int check_const_strip_in_call(tl_infer *self, tl_monotype *func_type, tl_polytype *callsite,
+                                     ast_node *node) {
+    if (!tl_monotype_is_arrow(func_type)) return 0;
+    tl_monotype *call_mono = callsite->type;
+    if (!tl_monotype_is_arrow(call_mono)) return 0;
+
+    tl_monotype_sized func_params = tl_monotype_arrow_get_args(func_type);
+    tl_monotype_sized call_args   = tl_monotype_arrow_get_args(call_mono);
+
+    u32               n           = func_params.size < call_args.size ? func_params.size : call_args.size;
+    for (u32 i = 0; i < n; ++i) {
+        tl_monotype *param = func_params.v[i];
+        tl_monotype *arg   = call_args.v[i];
+        // Check: param is Ptr(T) non-const, arg is Ptr(Const(T))
+        if (tl_monotype_is_ptr(param) && !tl_monotype_is_ptr_to_const(param) &&
+            tl_monotype_is_ptr_to_const(arg)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Check if the LHS of a reassignment involves dereferencing a Ptr(Const(T)).
 // Returns 1 if a const violation is detected.
 static int check_const_violation(tl_infer *self, ast_node *lhs) {
     if (!lhs) return 0;
+    (void)self;
 
     // ptr.* = value: unary dereference of a const pointer
     if (lhs->tag == ast_unary_op && str_eq(ast_node_str(lhs->unary_op.op), S("*"))) {
         ast_node *operand = lhs->unary_op.operand;
         if (operand->type && operand->type->type) {
             tl_monotype *t = operand->type->type;
-            tl_monotype_substitute(self->arena, t, self->subs, null);
             if (tl_monotype_is_ptr_to_const(t)) return 1;
         }
     }
@@ -938,7 +967,6 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
             ast_node *left = lhs->binary_op.left;
             if (left->type && left->type->type) {
                 tl_monotype *t = left->type->type;
-                tl_monotype_substitute(self->arena, t, self->subs, null);
                 if (tl_monotype_is_ptr_to_const(t)) return 1;
             }
         }
@@ -1392,6 +1420,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
                 str_cstr(&app_str));
         }
+        if (check_const_strip_in_call(self, inst, app, node)) return 1;
         tl_polytype wrap = tl_polytype_wrap(inst);
         if (constrain(self, &wrap, app, node)) return 1;
     }
