@@ -341,6 +341,7 @@ tl_create_test(struct_generic)
 tl_create_test(struct_generic_function_signature)
 tl_create_test(struct_construction)
 tl_create_test(struct_field_ptr_cast)
+tl_create_test(struct_field_ptr_cast_multi)
 tl_create_test(struct_field_ptr_cast_inline)
 tl_create_test_optimized(tail_call)
 tl_create_test(tagged_union)
@@ -432,4 +433,3 @@ tl_create_build_fail_test(fail_const_strip_nested)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(while_empty_body)
-tl_create_known_failure(struct_field_ptr_cast_multi)

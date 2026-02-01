@@ -413,6 +413,7 @@ TL_TESTS =					\
 	struct_generic_function_signature	\
 	struct_construction			\
 	struct_field_ptr_cast			\
+	struct_field_ptr_cast_multi		\
 	struct_field_ptr_cast_inline		\
 	tail_call				\
 	type_alias_generic			\
@@ -504,8 +505,7 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
-	while_empty_body		\
-	struct_field_ptr_cast_multi
+	while_empty_body
 
 
 

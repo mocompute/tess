@@ -4099,15 +4099,23 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 static void update_specialized_types(tl_infer *self) {
     update_types_ctx ctx  = {.in_progress = hset_create(self->transient, 8)};
 
-    hashmap_iterator iter = {0};
-    while (map_iter(self->env->map, &iter)) {
-        tl_polytype **poly = iter.data;
-        update_types_one_type(self, &ctx, poly);
+    // Snapshot the env keys before iterating. update_types_one_type may trigger
+    // specialize_type_constructor_ which inserts new entries into the env. Robin Hood
+    // hashing can relocate existing entries on insertion, invalidating any data pointers
+    // obtained from a prior map_iter call.
+    str_array env_keys = str_map_keys(self->transient, self->env->map);
+    forall(ki, env_keys) {
+        tl_polytype *poly = tl_type_env_lookup(self->env, env_keys.v[ki]);
+        if (!poly) continue;
+        tl_polytype *orig = poly;
+        update_types_one_type(self, &ctx, &poly);
+        if (poly != orig) tl_type_env_insert(self->env, env_keys.v[ki], poly);
     }
+    array_free(env_keys);
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     traverse->user         = &ctx;
-    iter                   = (hashmap_iterator){0};
+    hashmap_iterator iter  = {0};
     ast_node *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
