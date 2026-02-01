@@ -423,6 +423,7 @@ tl_create_build_fail_test(fail_reserved_type_tu)
 tl_create_build_fail_test(fail_reserved_type_union)
 
 tl_create_build_fail_test(fail_const_strip)
+tl_create_build_fail_test(fail_const_strip_nested)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 

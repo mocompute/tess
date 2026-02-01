@@ -471,6 +471,7 @@ TL_FAIL_TESTS =					\
 	fail_const_field_mutation		\
 	fail_const_index_mutation		\
 	fail_const_strip			\
+	fail_const_strip_nested			\
 	fail_concrete_fun_mismatch		\
 	fail_double_underscore			\
 	fail_double_underscore_module		\

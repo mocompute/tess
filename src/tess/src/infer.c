@@ -918,9 +918,24 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Walk two types through Ptr layers in parallel. Returns 1 if the arg type
+// has Const at any nesting level where the param type does not.
+static int types_strip_const(tl_monotype *param, tl_monotype *arg) {
+    while (tl_monotype_is_ptr(param) && tl_monotype_is_ptr(arg)) {
+        tl_monotype *pt = tl_monotype_ptr_target(param);
+        tl_monotype *at = tl_monotype_ptr_target(arg);
+        if (tl_monotype_is_const(at) && !tl_monotype_is_const(pt)) return 1;
+        // Unwrap Const if present on both sides before continuing
+        if (tl_monotype_is_const(pt)) pt = tl_monotype_const_target(pt);
+        if (tl_monotype_is_const(at)) at = tl_monotype_const_target(at);
+        param = pt;
+        arg   = at;
+    }
+    return 0;
+}
+
 // Check if a function call strips const from pointer arguments.
 // Compares function parameter types against callsite argument types before unification.
-// Returns 1 if a const violation is detected (arg is Ptr(Const(T)) but param is Ptr(T)).
 static int check_const_strip_in_call(tl_infer *self, tl_monotype *func_type, tl_polytype *callsite,
                                      ast_node *node) {
     if (!tl_monotype_is_arrow(func_type)) return 0;
@@ -932,11 +947,7 @@ static int check_const_strip_in_call(tl_infer *self, tl_monotype *func_type, tl_
 
     u32               n           = func_params.size < call_args.size ? func_params.size : call_args.size;
     for (u32 i = 0; i < n; ++i) {
-        tl_monotype *param = func_params.v[i];
-        tl_monotype *arg   = call_args.v[i];
-        // Check: param is Ptr(T) non-const, arg is Ptr(Const(T))
-        if (tl_monotype_is_ptr(param) && !tl_monotype_is_ptr_to_const(param) &&
-            tl_monotype_is_ptr_to_const(arg)) {
+        if (types_strip_const(func_params.v[i], call_args.v[i])) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
             return 1;
         }
