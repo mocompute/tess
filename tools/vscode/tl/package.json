@@ -1,0 +1,55 @@
+{
+  "name": "tl",
+  "displayName": "TL Language",
+  "description": "Language support for the TL programming language (Tess)",
+  "version": "0.1.0",
+  "publisher": "tess-lang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:tl"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "tl",
+        "aliases": [
+          "TL",
+          "tl"
+        ],
+        "extensions": [
+          ".tl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tl",
+        "scopeName": "source.tl",
+        "path": "./syntaxes/tl.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "TL",
+      "properties": {
+        "tl.tessExecutable": {
+          "type": "string",
+          "default": "tess",
+          "description": "Path to the tess executable used for formatting."
+        },
+        "tl.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically format TL files on save."
+        }
+      }
+    }
+  }
+}

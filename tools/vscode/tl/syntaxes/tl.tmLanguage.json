@@ -1,0 +1,182 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TL",
+  "scopeName": "source.tl",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#directives" },
+    { "include": "#attributes" },
+    { "include": "#embedded-c" },
+    { "include": "#strings" },
+    { "include": "#c-strings" },
+    { "include": "#characters" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#builtins" },
+    { "include": "#types" },
+    { "include": "#function-definition" },
+    { "include": "#type-constructor" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.tl",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.directive.tl",
+          "match": "^\\s*#(?:module|import|include|ifc|endc)\\b"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "name": "meta.attribute.tl",
+          "match": "\\[\\[[^\\]]*\\]\\]",
+          "captures": {
+            "0": { "name": "entity.other.attribute-name.tl" }
+          }
+        }
+      ]
+    },
+    "embedded-c": {
+      "patterns": [
+        {
+          "name": "meta.embedded.block.c.tl",
+          "begin": "^\\s*#ifc\\b",
+          "end": "^\\s*#endc\\b",
+          "beginCaptures": {
+            "0": { "name": "keyword.control.directive.tl" }
+          },
+          "endCaptures": {
+            "0": { "name": "keyword.control.directive.tl" }
+          },
+          "contentName": "meta.embedded.block.c"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.tl",
+          "begin": "(?<!c)\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.tl",
+              "match": "\\\\[0nrt'\"\\\\]"
+            }
+          ]
+        }
+      ]
+    },
+    "c-strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.c.tl",
+          "begin": "c\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.tl",
+              "match": "\\\\[0nrt'\"\\\\]"
+            }
+          ]
+        }
+      ]
+    },
+    "characters": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.tl",
+          "match": "'(?:\\\\[0nrt'\"\\\\]|[^'])'",
+          "captures": {
+            "0": { "name": "string.quoted.single.tl" }
+          }
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.tl",
+          "match": "\\b0[xX][0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.tl",
+          "match": "\\b0[bB][01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.tl",
+          "match": "\\b[0-9][0-9_]*\\.[0-9_]*(?:[eE][+-]?[0-9_]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.float.tl",
+          "match": "\\b[0-9][0-9_]*[eE][+-]?[0-9_]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.tl",
+          "match": "\\b[0-9][0-9_]*\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.tl",
+          "match": "\\b(?:if|else|case|while|for|return)\\b"
+        },
+        {
+          "name": "constant.language.tl",
+          "match": "\\b(?:void|null|true|false)\\b"
+        },
+        {
+          "name": "support.type.tl",
+          "match": "\\b(?:Type|Void|any)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.tl",
+          "match": "\\b(?:sizeof|alignof)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.tl",
+          "match": "\\b(?:Int|Float|Bool|Byte|CChar|CShort|CInt|CLong|CLongLong|CSize|CPtrDiff|CUnsignedChar|CUnsignedShort|CUnsignedInt|CUnsignedLong|CUnsignedLongLong|CInt8|CInt16|CInt32|CInt64|CUInt8|CUInt16|CUInt32|CUInt64|CFloat|CDouble|CLongDouble|Ptr|CArray|Array|Iter)\\b"
+        }
+      ]
+    },
+    "function-definition": {
+      "patterns": [
+        {
+          "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "entity.name.function.tl" }
+          }
+        }
+      ]
+    },
+    "type-constructor": {
+      "patterns": [
+        {
+          "match": "\\b([A-Z][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "support.type.tl" }
+          }
+        }
+      ]
+    }
+  }
+}
