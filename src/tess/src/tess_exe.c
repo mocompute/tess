@@ -17,7 +17,7 @@
 #include <string.h>
 
 // -- embed externs --
-extern char const *embed_std_tl;
+extern char const *embed_prelude_tl;
 
 #include "version.h"
 
@@ -478,6 +478,7 @@ int compile(state *self) {
     parser_opts     parser_opts = {
           .registry = tl_infer_get_registry(infer),
           .files    = files_in_order(self, paths),
+          .prelude  = embed_prelude_tl,
     };
 
     // === PARSING PHASE ===
@@ -499,7 +500,10 @@ int compile(state *self) {
 
     hashmap *syms = parser_take_module_symbols(parser);
     parser_destroy(&parser);
+
+    // parser second pass
     parser = parser_create(default_allocator(), &parser_opts);
+
     parser_set_module_symbols(parser, syms);
 
     if (self->verbose_parse) {

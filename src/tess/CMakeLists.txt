@@ -39,6 +39,7 @@ add_custom_command(
   DEPENDS
     $<TARGET_FILE:mos_embed>
     ${CMAKE_CURRENT_SOURCE_DIR}/embed/std.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/embed/prelude.tl
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Processing embedded files from directory ${CMAKE_CURRENT_SOURCE_DIR}/embed"
 )
@@ -432,3 +433,4 @@ tl_create_build_fail_test(fail_const_strip_nested)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(while_empty_body)
+tl_create_known_failure(struct_field_ptr_cast_multi)

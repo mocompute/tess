@@ -63,6 +63,7 @@ struct parser {
     int                    indent_level;
     int                    in_function_application; // enable greedy parsing
     int                    skip_module;             // skip parsing until next module or file
+    int                    prelude_consumed;        // prelude string has been parsed
     int expect_module; // expect a module immediately after a #unity_file before any terms
     int is_symbol_pass;
 };
@@ -191,6 +192,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->indent_level            = 0;
     self->in_function_application = 0;
     self->skip_module             = 0;
+    self->prelude_consumed        = 0;
     self->expect_module           = 0;
     self->is_symbol_pass          = 0;
 
@@ -2496,7 +2498,6 @@ static void save_current_module_symbols(parser *self) {
 }
 
 static void load_module_symbols(parser *self) {
-    if (self->is_symbol_pass) return;
     str module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
     if (str_map_contains(self->module_symbols, module_name)) {
         // Don't destroy current_module_symbols here - after the first load, it points to a hashmap
@@ -3818,25 +3819,32 @@ int parser_next(parser *self) {
         self->error.tag           = tl_err_ok;
         self->tokenizer_error.tag = tl_err_ok;
 
-        if ((i32)self->files_index >= (i32)self->files.size) {
-            self->error.tag = tl_err_eof;
-            return 1;
+        // Parse the prelude string before any files.
+        if (self->opts.prelude && !self->prelude_consumed) {
+            self->prelude_consumed = 1;
+            char_csized data       = {.v = self->opts.prelude, .size = strlen(self->opts.prelude)};
+            self->tokenizer        = tokenizer_create(self->parent_alloc, data, "<prelude>");
+        } else {
+            if ((i32)self->files_index >= (i32)self->files.size) {
+                self->error.tag = tl_err_eof;
+                return 1;
+            }
+
+            // free prior data
+            if (self->current_file_data.v) {
+                alloc_free(self->file_arena, (void *)self->current_file_data.v);
+                self->current_file_data.v    = null;
+                self->current_file_data.size = 0;
+            }
+
+            // read file
+            char const *file = str_cstr(&self->files.v[self->files_index++]);
+            file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                      &self->current_file_data.size);
+
+            self->tokenizer     = tokenizer_create(self->parent_alloc, self->current_file_data, file);
+            self->expect_module = 1;
         }
-
-        // free prior data
-        if (self->current_file_data.v) {
-            alloc_free(self->file_arena, (void *)self->current_file_data.v);
-            self->current_file_data.v    = null;
-            self->current_file_data.size = 0;
-        }
-
-        // read file
-        char const *file = str_cstr(&self->files.v[self->files_index++]);
-        file_read(self->file_arena, file, (char **)&self->current_file_data.v,
-                  &self->current_file_data.size);
-
-        self->tokenizer     = tokenizer_create(self->parent_alloc, self->current_file_data, file);
-        self->expect_module = 1;
     }
 
     int res = toplevel(self);

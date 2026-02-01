@@ -15,25 +15,25 @@
 _STR_SMALL_TAG: Byte  := 0x01
 _STR_MAX_SMALL: CSize := 14
 
-_Big: {
-    len: CSize,
-    buf: Ptr(CChar),
-}
+// The following are in prelude.tl:
+// _Big: {
+//     len: CSize,
+//     buf: Ptr(CChar),
+// }
+// _Small: {
+//     buf:     CArray(CChar, 15),
+//     tag_len: CUnsignedChar,
+// }
+// Str: { | big: _Big
+//        | small: _Small }
+// from_cstr (s: CString) -> Str
 
-_Small: {
-    buf:     CArray(CChar, 15),
-    tag_len: Byte,
-}
-
-Str: { | big: _Big
-       | small: _Small }
 
 // -- Synopsis --
 
 // Construction.
 empty     ()                                               -> Str
 from_cstr (alloc: Ptr(Allocator), s: CString)              -> Str
-from_cstr (s: CString)                                     -> Str
 from_bytes(alloc: Ptr(Allocator), s: Ptr(CChar), n: CSize) -> Str
 from_bytes(s: Ptr(CChar), n: CSize)                        -> Str
 copy      (alloc: Ptr(Allocator), s: Str)                  -> Str

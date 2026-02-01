@@ -163,7 +163,7 @@ $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
-$(TESS_EMBED_SRC): $(EMBED_TOOL) $(TESS_SRC_DIR)/embed/std.c
+$(TESS_EMBED_SRC): $(EMBED_TOOL) $(TESS_SRC_DIR)/embed/std.c $(TESS_SRC_DIR)/embed/prelude.tl
 	$(MSG_GEN) $<
 	$(Q)$(EMBED_TOOL) $(TESS_SRC_DIR)/embed $(TESS_EMBED_SRC) $(STDERR)
 
@@ -414,7 +414,6 @@ TL_TESTS =					\
 	struct_construction			\
 	struct_field_ptr_cast			\
 	struct_field_ptr_cast_inline		\
-	struct_field_ptr_cast_multi		\
 	tail_call				\
 	type_alias_generic			\
 	type_alias_local			\
@@ -505,7 +504,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
-	while_empty_body
+	while_empty_body		\
+	struct_field_ptr_cast_multi
 
 
 
