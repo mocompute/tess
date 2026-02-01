@@ -345,6 +345,23 @@ Const stripping is also rejected through nested pointer levels:
 
 In the generated C code, `Ptr(Const(T))` transpiles to `const T*`.
 
+### Const and Generic Type Parameters
+
+`Const(T)` cannot currently be used with generic type parameters. When a generic function uses the same type variable `T` in both a `Ptr(T)` and a `Ptr(Const(T))` position, unification fails because `T` would need to be both `X` and `Const(X)` simultaneously:
+
+```tl
+// Does NOT work — T unifies to conflicting types:
+c_memcpy(dst: Ptr(T), src: Ptr(Const(T)), n: CSize) -> Ptr(T)
+
+// Works — use Ptr(T) for both when T is generic:
+c_memcpy(dst: Ptr(T), src: Ptr(T), n: CSize) -> Ptr(T)
+
+// Works — Const is fine with concrete types:
+c_strcmp(s1: Ptr(Const(CChar)), s2: Ptr(Const(CChar))) -> CInt
+```
+
+This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr(T)` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
+
 ### No Implicit Numeric Coercion
 
 `Int` and `Float` are not implicitly convertible:

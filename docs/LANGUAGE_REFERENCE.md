@@ -1023,6 +1023,8 @@ pass(p: Ptr(Const(Int))) {
 
 This applies at any pointer nesting level: `Ptr(Ptr(Const(T)))` cannot be passed where `Ptr(Ptr(T))` is expected.
 
+**Limitation:** `Const(T)` cannot be used with generic type parameters. A function like `f(dst: Ptr(T), src: Ptr(Const(T)))` will fail because `T` cannot unify with both `X` and `Const(X)`. Use `Ptr(T)` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr(Const(CChar))`.
+
 ### Array Decay
 
 `CArray` is used as a type annotation to declare fixed-size C arrays. Decay to pointer must be explicit:
