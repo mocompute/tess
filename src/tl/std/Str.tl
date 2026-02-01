@@ -1,4 +1,4 @@
-#module String
+#module Str
 #import <Alloc.tl>
 #import <Unsafe.tl>
 #import <string.tl>
