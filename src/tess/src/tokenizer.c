@@ -171,6 +171,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_vertical_bar,
         in_open_square,
         in_close_square,
+        in_c,
 
         start_number,
         start_number_sign,
@@ -213,7 +214,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         num_decimal,
         num_hex,
         num_binary,
-    } number_format  = num_decimal;
+    } number_format = num_decimal;
+    enum {
+        str_str,
+        str_c,
+    } string_format  = str_str;
 
     size_t const end = self->input.size;
 
@@ -236,16 +241,22 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
             char const c = next_char(self);
 
             switch (c) {
-            case '=':  state = in_equal; break;
-            case '&':  state = in_ampersand; break;
-            case '|':  state = in_vertical_bar; break;
-            case '-':  state = in_minus; break;
-            case '+':  state = in_plus; break;
-            case '*':  state = in_star; break;
-            case '/':  state = in_forward_slash; break;
-            case '%':  state = in_percent; break;
+            case '=': state = in_equal; break;
+            case '&': state = in_ampersand; break;
+            case '|': state = in_vertical_bar; break;
+            case '-': state = in_minus; break;
+            case '+': state = in_plus; break;
+            case '*': state = in_star; break;
+            case '/': state = in_forward_slash; break;
+            case '%': state = in_percent; break;
+            case 'c': state = in_c; continue;
 
-            case '"':  state = start_string; continue;
+            case '"': {
+                string_format = str_str;
+                state         = start_string;
+                continue;
+            }
+
             case '\'': state = start_char; continue;
 
             case '\n': continue;
@@ -316,6 +327,23 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
                 // else skip char
                 break;
+            }
+        } break;
+
+        case in_c: {
+            if (self->pos == end) {
+                replace_token_s(self->strings, &res, tok_symbol, "c");
+                state = stop;
+                goto finish;
+            }
+            char const c = next_char(self);
+            if ('"' == c) {
+                string_format = str_c;
+                state         = start_string;
+            } else {
+                reverse_pos(self); // return char
+                reverse_pos(self); // return `c`
+                state = start_symbol;
             }
         } break;
 
@@ -1007,7 +1035,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, tok_string, self->buf.v, self->buf.size);
+            replace_token_sn(self->strings, &res, string_format == str_str ? tok_string : tok_c_string,
+                             self->buf.v, self->buf.size);
             state = stop;
         } break;
 

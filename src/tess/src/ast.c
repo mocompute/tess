@@ -297,7 +297,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_symbol:
     case ast_string:
-    case ast_char:   {
+    case ast_c_string:
+    case ast_char:     {
         struct ast_symbol *vclone = ast_node_sym(clone), *vorig = ast_node_sym((ast_node *)orig);
         vclone->name            = str_copy(alloc, vorig->name);
         vclone->original        = str_copy(alloc, vorig->original);
@@ -461,7 +462,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 }
 
 str ast_node_str(ast_node const *node) {
-    if (ast_symbol != node->tag && ast_string != node->tag) fatal("expected symbol or string");
+    if (ast_symbol != node->tag && ast_string != node->tag && ast_c_string != node->tag)
+        fatal("expected symbol or string");
     return node->symbol.name;
 }
 
@@ -564,6 +566,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_u64:
     case ast_f64:
     case ast_string:
+    case ast_c_string:
     case ast_char:
     case ast_tuple:
         //
@@ -799,6 +802,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_reassignment_op",
       "ast_return",
       "ast_string",
+      "ast_c_string",
       "ast_symbol",
       "ast_type_alias",
       "ast_type_predicate",
@@ -911,6 +915,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_u64:      snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
     case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
+    case ast_c_string: return str_cat_3(alloc, S("c\""), node->symbol.name, S("\""));
     case ast_char:     return str_cat_3(alloc, S("'"), node->symbol.name, S("'"));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
     case ast_nil:      return S("()");
@@ -1124,6 +1129,7 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_i64:
     case ast_u64:
     case ast_string:
+    case ast_c_string:
     case ast_char:
     case ast_bool:
     case ast_nil:
@@ -1236,7 +1242,8 @@ str_sized ast_nodes_get_names(allocator *alloc, ast_node_slice nodes) {
 //
 
 struct ast_symbol *ast_node_sym(ast_node *node) {
-    assert(node->tag == ast_symbol || node->tag == ast_string || node->tag == ast_char);
+    assert(node->tag == ast_symbol || node->tag == ast_string || node->tag == ast_c_string ||
+           node->tag == ast_char);
     return &node->symbol;
 }
 
@@ -1382,8 +1389,9 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_string:
+    case ast_c_string:
     case ast_symbol:
-    case ast_char:   {
+    case ast_char:     {
         hash = str_hash64_combine(hash, self->symbol.name);
     } break;
 
@@ -1506,6 +1514,12 @@ int ast_node_is_nil_or_void(ast_node const *self) {
 }
 int ast_node_is_symbol(ast_node const *self) {
     return self && ast_symbol == self->tag;
+}
+int ast_node_is_string(ast_node const *self) {
+    return self && ast_string == self->tag;
+}
+int ast_node_is_c_string(ast_node const *self) {
+    return self && ast_c_string == self->tag;
 }
 int ast_node_is_tuple(ast_node const *self) {
     return ast_tuple == self->tag;

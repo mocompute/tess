@@ -479,6 +479,12 @@ tl_monotype *tl_type_registry_char(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("CChar"));
 }
 
+tl_monotype *tl_type_registry_str(tl_type_registry *self) {
+    tl_monotype *mono = tl_type_registry_instantiate(self, S("Str"));
+    if (!mono) fatal("attempt to create a string without standard library <Str.tl>");
+    return mono;
+}
+
 tl_polytype *tl_polytype_nil(allocator *alloc, tl_type_registry *self) {
     tl_monotype *nil = tl_type_registry_nil(self);
     return tl_polytype_absorb_mono(alloc, nil);
@@ -731,8 +737,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // FIXME: we don't support literal Union types.
         } else if (str_eq(name, S("CArray")) && args.size == 2) {
             // CArray(T, N) has 1 quantifier but 2 args (element type + integer count)
-            result = tl_type_registry_instantiate_carray(self, args.v[0],
-                                                         tl_monotype_integer(args.v[1]));
+            result = tl_type_registry_instantiate_carray(self, args.v[0], tl_monotype_integer(args.v[1]));
         } else if (type_constructor->quantifiers.size != args.size) {
             // Arg count doesn't match quantifier count — not a valid type instantiation
             result = null;

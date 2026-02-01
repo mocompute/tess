@@ -77,7 +77,7 @@ tl_monotype *tl_type_registry_nil(tl_type_registry *);
 tl_monotype *tl_type_registry_int(tl_type_registry *);
 tl_monotype *tl_type_registry_float(tl_type_registry *);
 tl_monotype *tl_type_registry_bool(tl_type_registry *);
-tl_monotype *tl_type_registry_string(tl_type_registry *);
+tl_monotype *tl_type_registry_str(tl_type_registry *);
 tl_monotype *tl_type_registry_char(tl_type_registry *);
 tl_monotype *tl_type_registry_ptr(tl_type_registry *, tl_monotype *);
 tl_monotype *tl_type_registry_ptr_char(tl_type_registry *);

@@ -132,18 +132,14 @@ static void  update_type(transpile *, tl_monotype **);
 // Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
 // Returns the original name unchanged if it is not a C keyword.
 static str escape_c_keyword(allocator *alloc, str name) {
-    static const char *c_keywords[] = {
-        "auto",     "break",    "case",     "char",           "const",    "continue",
-        "default",  "do",       "double",   "else",           "enum",     "extern",
-        "float",    "for",      "goto",     "if",             "inline",   "int",
-        "long",     "register", "restrict", "return",         "short",    "signed",
-        "sizeof",   "static",   "struct",   "switch",         "typedef",  "union",
-        "unsigned", "void",     "volatile", "while",
-        // C11
-        "_Alignas", "_Alignof", "_Atomic",  "_Bool",          "_Complex", "_Generic",
-        "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local",
-        NULL
-    };
+    static const char *c_keywords[] = {"auto", "break", "case", "char", "const", "continue", "default",
+                                       "do", "double", "else", "enum", "extern", "float", "for", "goto",
+                                       "if", "inline", "int", "long", "register", "restrict", "return",
+                                       "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
+                                       "union", "unsigned", "void", "volatile", "while",
+                                       // C11
+                                       "_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Generic",
+                                       "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local", NULL};
     for (const char **kw = c_keywords; *kw; ++kw) {
         if (0 == str_cmp_c(name, *kw)) {
             return str_cat(alloc, S("tl_kw_"), name);
@@ -1922,7 +1918,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_char:
         return generate_str(self, str_cat_3(self->transient, S("'"), node->symbol.name, S("'")), type);
-    case ast_string:
+    case ast_c_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
     case ast_symbol: {
@@ -1966,6 +1962,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;
 
+    case ast_string:
     case ast_hash_command:
     case ast_type_alias:   fatal("logic error");
 
@@ -2646,7 +2643,8 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
 
     for (u32 i = 0, n = params.size; i < n; ++i) {
         tl_monotype *arg = params.v[i];
-        str pname = (i < param_names.size) ? escape_c_keyword(self->transient, param_names.v[i]) : str_empty();
+        str          pname =
+          (i < param_names.size) ? escape_c_keyword(self->transient, param_names.v[i]) : str_empty();
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, pname);
         } else {
@@ -2767,7 +2765,7 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
 
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
-    if (ast_string != arg->tag) {
+    if (ast_c_string != arg->tag) {
         // FIXME: report error
         fatal("expected string");
     }

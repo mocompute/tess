@@ -56,7 +56,7 @@ struct parser {
     str                    current_module;
     hashmap               *current_module_symbols; // hset str
     hashmap               *builtin_module_symbols; // hset str
-    hashmap               *module_symbols;         // map str -> hashmap* of hset str
+    hashmap               *module_symbols;         // map str (mod name) -> hashmap* of hset str
 
     u32                    next_var_name;
     int                    verbose;
@@ -136,6 +136,7 @@ static int           a_number(parser *);
 static int           a_open_round(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
+static int           a_c_string(parser *);
 static int           the_symbol(parser *, char const *const);
 
 static int           string_to_number(parser *, char const *const);
@@ -692,6 +693,7 @@ static int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
+    case tok_c_string:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;
@@ -749,6 +751,7 @@ static int a_binary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
+    case tok_c_string:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;
@@ -805,6 +808,7 @@ static int a_unary_operator(parser *self, int min_prec) {
     case tok_invalid:
     case tok_number:
     case tok_string:
+    case tok_c_string:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;
@@ -925,12 +929,30 @@ static int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-static int a_string(parser *p) {
+static int a_c_string(parser *p) {
     if (next_token(p)) return 1;
 
-    if (tok_string == p->token.tag) return result_ast_str(p, ast_string, p->token.s);
+    if (tok_c_string == p->token.tag) return result_ast_str(p, ast_c_string, p->token.s);
 
     p->error.tag = tl_err_expected_string;
+    return 1;
+}
+
+static int a_string(parser *self) {
+    if (next_token(self)) return 1;
+
+    if (tok_string == self->token.tag) {
+        ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
+        args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);
+        args.v[0]->tag      = ast_c_string;
+        set_node_file(self, args.v[0]);
+
+        ast_node *str_from_cstr = ast_node_create_sym_c(self->ast_arena, "Str__from_cstr__1");
+        ast_node *r             = ast_node_create_nfa(self->ast_arena, str_from_cstr, args);
+        return result_ast_node(self, r);
+    }
+
+    self->error.tag = tl_err_expected_string;
     return 1;
 }
 
@@ -1307,6 +1329,7 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
+    if (0 == a_try(self, a_c_string)) return 0;
     if (0 == a_try(self, a_char)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;

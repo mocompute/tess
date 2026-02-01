@@ -319,6 +319,8 @@ int            ast_node_is_nil(ast_node const *);
 int            ast_node_is_void(ast_node const *);
 int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
+int            ast_node_is_string(ast_node const *);
+int            ast_node_is_c_string(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_type_predicate(ast_node const *);

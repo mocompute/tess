@@ -1786,6 +1786,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_f64:
     case ast_i64:
     case ast_string:
+    case ast_c_string:
     case ast_char:
     case ast_symbol:
     case ast_u64:
@@ -2327,10 +2328,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
-    case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
-    case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
+    case ast_c_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
+    case ast_string:   fatal("logic error"); // parser should not generate
+    case ast_char:     return infer_literal_type(self, node, tl_type_registry_char);
+    case ast_f64:      return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_i64:      return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64: // FIXME unsigned
         return infer_literal_type(self, node, tl_type_registry_int);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
@@ -3341,6 +3343,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_hash_command:
     case ast_continue:
     case ast_string:
+    case ast_c_string:
     case ast_char:
     case ast_nil:
     case ast_void:
