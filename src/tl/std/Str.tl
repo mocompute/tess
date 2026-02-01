@@ -26,7 +26,9 @@ _STR_MAX_SMALL: CSize := 14
 // }
 // Str: { | big: _Big
 //        | small: _Small }
-// from_cstr (s: CString) -> Str
+//
+// from_literal is directly invoked by compiler to generate string literals
+// from_literal (s: CString) -> Str
 
 
 // -- Synopsis --
@@ -104,6 +106,7 @@ _make_tag_len(n: CSize) -> Byte {
     ((n & 0x0F) << 4) | _STR_SMALL_TAG
 }
 
+
 _init_small(src: Ptr(CChar), n: CSize) -> Str {
     s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
@@ -148,6 +151,10 @@ from_cstr(alloc, s: CString) -> Str {
 
 from_cstr(s: CString) -> Str {
     from_cstr(Alloc.context.default, s)
+}
+
+from_literal(s: CString) -> Str {
+    from_cstr(Alloc.context.string_literals, s)
 }
 
 copy(alloc, s: Str) -> Str {

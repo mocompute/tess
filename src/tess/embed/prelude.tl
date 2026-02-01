@@ -15,4 +15,4 @@ _Small: {
 Str: { | big: _Big
        | small: _Small }
 
-from_cstr(s: Ptr(CChar)) -> Str
+from_literal(s: Ptr(CChar)) -> Str

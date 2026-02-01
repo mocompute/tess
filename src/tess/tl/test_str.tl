@@ -18,7 +18,6 @@ test_from_cstr_small() {
     s     := "hello"
     if Str.len(s) != 5 { error += 1 }
     if Str.is_empty(s) { error += 1 }
-    Str.free(s.&)
     error
 }
 
@@ -27,7 +26,6 @@ test_from_cstr_big() {
     s     := "this is a longer string!!"
     if Str.len(s) != 25 { error += 1 }
     if Str.is_empty(s) { error += 1 }
-    Str.free(s.&)
     error
 }
 
@@ -52,7 +50,7 @@ test_copy_small() {
     c     := Str.copy(s)
     if Str.len(c) != 5 { error += 1 }
     // Should be independent
-    Str.free(s.&)
+    s = Str.empty()                     // cannot free Str literal
     if Str.len(c) != 5 { error += 1 }
     Str.free(c.&)
     error
@@ -63,7 +61,7 @@ test_copy_big() {
     s     := "this is a longer string!!"
     c     := Str.copy(s)
     if Str.len(c) != 25 { error += 1 }
-    Str.free(s.&)
+    s = Str.empty()                     // cannot free Str literal
     if Str.len(c) != 25 { error += 1 }
     Str.free(c.&)
     error
@@ -76,12 +74,10 @@ test_cstr() {
     s     := "hello"
     cs    := Str.cstr(s.&)
     if c_strcmp(cs, c"hello") != 0 { error += 1 }
-    Str.free(s.&)
 
     s2  := "this is a longer string!!"
     cs2 := Str.cstr(s2.&)
     if c_strcmp(cs2, c"this is a longer string!!") != 0 { error += 1 }
-    Str.free(s2.&)
     error
 }
 
@@ -100,9 +96,6 @@ test_eq() {
     e2 := Str.empty()
     if !Str.eq(e1, e2) { error += 1 }
 
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
     error
 }
 
@@ -114,9 +107,6 @@ test_cmp() {
     if Str.cmp(a, b) >= 0 { error += 1 }
     if Str.cmp(b, a) <= 0 { error += 1 }
     if Str.cmp(a, c) != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
     error
 }
 
@@ -129,9 +119,6 @@ test_starts_with() {
     if !Str.starts_with(s, a) { error += 1 }
     if Str.starts_with(s, b) { error += 1 }
     if !Str.starts_with(s, e) { error += 1 }
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
     error
 }
 
@@ -144,9 +131,6 @@ test_ends_with() {
     if !Str.ends_with(s, a) { error += 1 }
     if Str.ends_with(s, b) { error += 1 }
     if !Str.ends_with(s, e) { error += 1 }
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
     error
 }
 
@@ -159,9 +143,6 @@ test_contains() {
     if !Str.contains(s, a) { error += 1 }
     if Str.contains(s, b) { error += 1 }
     if !Str.contains(s, e) { error += 1 }
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
     error
 }
 
@@ -170,7 +151,6 @@ test_contains_byte() {
     s     := "hello"
     if !Str.contains_byte(s, 104) { error += 1 } // 'h'
     if Str.contains_byte(s, 122) { error += 1 }  // 'z'
-    Str.free(s.&)
     error
 }
 
@@ -184,8 +164,6 @@ test_cat_small_small() {
     if Str.len(c) != 8 { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hi there") != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
     Str.free(c.&)
     error
 }
@@ -198,8 +176,6 @@ test_cat_to_big() {
     if Str.len(c) != 22 { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hello beautiful world!") != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
     Str.free(c.&)
     error
 }
@@ -213,7 +189,6 @@ test_push() {
     cs := Str.cstr(s.&)
     if c_strcmp(cs, c"hello world") != 0 { error += 1 }
     Str.free(s.&)
-    Str.free(b.&)
     error
 }
 
@@ -225,9 +200,6 @@ test_cat_3() {
     r     := Str.cat_3(a, b, c)
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"one two three") != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
     Str.free(r.&)
     error
 }
@@ -240,7 +212,6 @@ test_byte_at() {
     if Str.byte_at(s, 0) != 97 { error += 1 } // 'a'
     if Str.byte_at(s, 1) != 98 { error += 1 } // 'b'
     if Str.byte_at(s, 2) != 99 { error += 1 } // 'c'
-    Str.free(s.&)
     error
 }
 
@@ -270,7 +241,6 @@ test_index_of_byte() {
     if Str.index_of_byte(s, 108) != 2 { error += 1 }  // 'l'
     if Str.index_of_byte(s, 111) != 4 { error += 1 }  // 'o'
     if Str.index_of_byte(s, 122) != -1 { error += 1 } // 'z' not found
-    Str.free(s.&)
     error
 }
 
@@ -328,7 +298,6 @@ test_replace_byte() {
     r     := Str.replace_byte(s, 108, 114) // 'l' -> 'r'
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"herro") != 0 { error += 1 }
-    Str.free(s.&)
     Str.free(r.&)
     error
 }

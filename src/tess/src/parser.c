@@ -947,7 +947,7 @@ static int a_string(parser *self) {
         args.v[0]->tag      = ast_c_string;
         set_node_file(self, args.v[0]);
 
-        ast_node *str_from_cstr = ast_node_create_sym_c(self->ast_arena, "Str__from_cstr__1");
+        ast_node *str_from_cstr = ast_node_create_sym_c(self->ast_arena, "Str__from_literal__1");
         ast_node *r             = ast_node_create_nfa(self->ast_arena, str_from_cstr, args);
         return result_ast_node(self, r);
     }
