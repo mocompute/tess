@@ -11,6 +11,7 @@
     X(tl_err_eof, "eof")                                                                                   \
     X(tl_err_indent_too_long, "indent_too_long")                                                           \
     X(tl_err_invalid_token, "invalid_token")                                                               \
+    X(tl_err_unexpected_endif, "unexpected_endif")                                                         \
                                                                                                            \
     /* parser */                                                                                           \
     X(tl_err_reserved_keyword, "reserved_keyword")                                                         \

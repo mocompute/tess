@@ -2,6 +2,7 @@
 
 #include "alloc.h"
 #include "array.h"
+#include "error.h"
 #include "hashmap.h"
 #include "str.h"
 #include "token.h"
@@ -16,6 +17,7 @@
 struct tokenizer {
     allocator     *parent;
     allocator     *strings;
+    allocator     *transient;
     tokenizer_opts opts;
 
     char_csized    input; // also in opts
@@ -46,6 +48,7 @@ tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
 
     self->parent    = alloc;
     self->strings   = arena_create(alloc, 4096);
+    self->transient = arena_create(alloc, 4096);
     self->opts      = *opts;
     self->input     = self->opts.input;
     self->file      = str_init(self->parent, self->opts.file); // parent's lifetime
@@ -72,6 +75,7 @@ tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
 void tokenizer_destroy(tokenizer **self) {
     hset_destroy(&(*self)->defines);
 
+    arena_destroy(&(*self)->transient);
     arena_destroy(&(*self)->strings);
 
     array_free((*self)->backtrack);
@@ -241,8 +245,13 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     // starting position for number or symbol or indent
     size_t start_capture = 0;
 
+    // ifdef/endif tracking
+    int skip_depth = 0;
+
     // return value, to be copied to *out
     token res = {.file = str_cstr(&self->file)};
+
+start:
 
     while (1) {
 
@@ -251,6 +260,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         case start: {
             if (self->pos >= end) {
                 tok_error(self, out_err, tl_err_eof);
+                goto finish;
+            }
+
+            if (skip_depth < 0) {
+                tok_error(self, out_err, tl_err_unexpected_endif);
                 goto finish;
             }
 
@@ -925,12 +939,40 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
 
         } break;
 
-        case stop_hash_command:
+        case stop_hash_command: {
+
             assert(self->pos >= start_capture);
-            replace_token_sn(self->strings, &res, tok_hash_command, self->input.v + start_capture,
-                             self->pos - start_capture);
+            size_t      len       = self->pos - start_capture;
+            char const *str_start = self->input.v + start_capture;
+            str         command   = str_init_n(self->transient, str_start, len);
+
+            str_array   words     = {.alloc = self->transient};
+            str_parse_words(command, &words);
+
+            if (0 == skip_depth && words.size == 2) {
+                if (str_eq(words.v[0], S("define"))) {
+                    str_hset_insert(&self->defines, words.v[1]);
+                } else if (str_eq(words.v[0], S("ifdef"))) {
+                    if (!str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
+                } else if (str_eq(words.v[0], S("ifndef"))) {
+                    if (str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
+                } else {
+                    goto other_hash;
+                }
+                state = start;
+                continue;
+            } else if (words.size == 1 && str_eq(words.v[0], S("endif"))) {
+                skip_depth -= 1;
+                state = start;
+                continue;
+            }
+
+        other_hash:
+            str_deinit(self->transient, &command);
+            replace_token_sn(self->strings, &res, tok_hash_command, str_start, len);
             state = stop;
-            break;
+
+        } break;
 
         case start_char: {
             self->buf.size = 0;
@@ -1061,6 +1103,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     }
 
 finish:
+
+    if (0 != skip_depth) goto start;
 
     if (start == state) {
         if (out_err) tok_error(self, out_err, tl_err_eof);
