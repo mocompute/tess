@@ -103,9 +103,6 @@
     (modify-syntax-entry ?\[ "(]" table)
     (modify-syntax-entry ?\] ")[" table)
 
-    ;; Underscores are part of identifiers
-    (modify-syntax-entry ?_ "w" table)
-
     table)
   "Syntax table for `tl-mode'.")
 
