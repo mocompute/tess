@@ -1,4 +1,5 @@
 #module main
+#import <Str.tl>
 
 [[symbol_attribute]] sym := 123
 

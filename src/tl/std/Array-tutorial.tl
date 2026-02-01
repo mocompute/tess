@@ -190,7 +190,7 @@ reserve(self: Ptr(Array(T)), alloc, count: Int) {
         p: Ptr(T) := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
 
         // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
-        if p == null { _tl_fatal_("oom") }
+        if p == null { _tl_fatal_(c"oom") }
         self->v        = p
         self->capacity = count
     }

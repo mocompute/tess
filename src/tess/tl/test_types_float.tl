@@ -15,9 +15,9 @@ main() {
     ld: CLongDouble := f
     error += if sizeof(ld) >= sizeof(CDouble) {0} else {1}
 
-    c_printf("sizeof CFloat = %u\n", sizeof(CFloat))
-    c_printf("sizeof CDouble = %u\n", sizeof(CDouble))
-    c_printf("sizeof CLongDouble = %u\n", sizeof(CLongDouble))
+    c_printf(c"sizeof CFloat = %u\n", sizeof(CFloat))
+    c_printf(c"sizeof CDouble = %u\n", sizeof(CDouble))
+    c_printf(c"sizeof CLongDouble = %u\n", sizeof(CLongDouble))
 
     error
 

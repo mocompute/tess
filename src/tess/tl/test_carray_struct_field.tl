@@ -14,7 +14,7 @@ main() {
     error := 0
 
     // Test 1: Basic CArray struct field write/read via explicit decay
-    b := Buffer(data = void, len = 0)
+    b                    := Buffer(data = void, len = 0)
     data_ptr: Ptr(CChar) := b.data
     data_ptr[0] = 'H'
     data_ptr[1] = 'i'
@@ -23,12 +23,12 @@ main() {
     error += if data_ptr[1] == 'i' {0} else {1}
 
     // Test 2: CArray field decay to pointer (pass to C function)
-    c_strcpy(data_ptr, "Hello")
+    c_strcpy(data_ptr, c"Hello")
     b.len = c_strlen(data_ptr)
     error += if b.len == 5 {0} else {1}
 
     // Test 3: Multiple CArray fields
-    m := Matrix(row0 = void, row1 = void)
+    m                   := Matrix(row0 = void, row1 = void)
     row0_ptr: Ptr(CInt) := m.row0
     row1_ptr: Ptr(CInt) := m.row1
     row0_ptr[0] = 1
@@ -43,10 +43,10 @@ main() {
     // Test 4: CArray field access through pointer (the dangling pointer bug).
     // Without the lvalue fix, b2.data would copy Buffer to a temporary, then decay the CArray
     // in the temporary to a pointer — a dangling pointer once the temporary is gone.
-    b2 := Buffer(data = void, len = 0)
-    bp := b2.&
+    b2                    := Buffer(data = void, len = 0)
+    bp                    := b2.&
     field_ptr: Ptr(CChar) := bp->data
-    c_strcpy(field_ptr, "World")
+    c_strcpy(field_ptr, c"World")
     error += if c_strlen(field_ptr) == 5 {0} else {1}
     // Verify the write went into b2, not a dead temporary
     check_ptr: Ptr(CChar) := b2.data

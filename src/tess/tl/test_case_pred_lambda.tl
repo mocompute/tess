@@ -2,11 +2,11 @@
 #import <string.tl>
 
 main() {
-    s1 := "hello"
+    s1 := c"hello"
     case s1, (a, b) { 0 == c_strcmp(a, b) } {
-        "world" { 1 }
-        "there" { 1 }
-        "hello" { 0 }
+        c"world" { 1 }
+        c"there" { 1 }
+        c"hello" { 0 }
     }
 }
 

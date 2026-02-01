@@ -22,9 +22,9 @@ main() {
     error += if ptr[2] == 30 {0} else {1}
 
     // Test CArray of CChar (used for string buffers)
-    buffer: CArray(CChar, 256) := void
-    buf_ptr: Ptr(CChar) := buffer
-    c_strcpy(buf_ptr, "Hello, World!")
+    buffer:  CArray(CChar, 256) := void
+    buf_ptr: Ptr(CChar)         := buffer
+    c_strcpy(buf_ptr, c"Hello, World!")
 
     // Test that CArray decays properly to CString (Ptr(CChar))
     len := c_strlen(buf_ptr)

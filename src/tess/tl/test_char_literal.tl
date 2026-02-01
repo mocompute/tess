@@ -3,6 +3,6 @@
 
 main() {
     c := '\0'
-    c_printf("char c = %i\n", c)
+    c_printf(c"char c = %i\n", c)
     c
 }

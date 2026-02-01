@@ -2,16 +2,16 @@
 #import <stdio.tl>
 
 main() {
-    data := 0x0102030405060708
+    data                 := 0x0102030405060708
     arr: CArray(Int, 16) := void
     arr[0] = data
 
     // explicit decay to pointer, then cast to a different type
-    p: Ptr(Int) := arr
+    p: Ptr(Int)           := arr
     b: Ptr(CUnsignedChar) := p
-    c_printf("b[0] = 0x%x\n", b[0])
-    c_printf("b[1] = 0x%x\n", b[1])
-    c_printf("b[2] = 0x%x\n", b[2])
+    c_printf(c"b[0] = 0x%x\n", b[0])
+    c_printf(c"b[1] = 0x%x\n", b[1])
+    c_printf(c"b[2] = 0x%x\n", b[2])
 
     pp := p.&
 

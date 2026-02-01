@@ -115,7 +115,7 @@ _init_small(src: Ptr(CChar), n: CSize) -> Str {
 
 _init_big(alloc: Ptr(Allocator), src: Ptr(CChar), n: CSize) -> Str {
     buf: Ptr(CChar) := alloc->malloc(alloc, n + 1)
-    if buf == null { _tl_fatal_("Str: out of memory") }
+    if buf == null { _tl_fatal_(c"Str: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
     Str(big = _Big(len = n, buf = buf))
 }
@@ -207,7 +207,7 @@ is_empty(s: Str) -> Bool {
 
 byte_at(s: Str, index: CSize) -> Byte {
     n := len(s)
-    if index >= n { _tl_fatal_("Str.byte_at: index out of bounds") }
+    if index >= n { _tl_fatal_(c"Str.byte_at: index out of bounds") }
     p := _buf(s.&)
     p[index]
 }
@@ -310,7 +310,7 @@ _cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count:
     }
 
     buf: Ptr(CChar) := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("Str: out of memory") }
+    if buf == null { _tl_fatal_(c"Str: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < count, j += 1 {
@@ -383,7 +383,7 @@ push(self: Ptr(Str), other: Str) {
 
 slice(alloc, s: Str, start: CSize, end: CSize) -> Str {
     n := len(s)
-    if start > end || end > n { _tl_fatal_("Str.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_(c"Str.slice: index out of bounds") }
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
