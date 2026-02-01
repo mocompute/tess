@@ -184,6 +184,17 @@
       ))
   "Font lock keywords for TL mode.")
 
+;;; Syntax Propertize
+
+(defun tl-syntax-propertize (start end)
+  "Apply syntax properties to C string prefixes (c\"...\") from START to END."
+  (goto-char start)
+  (funcall
+   (syntax-propertize-rules
+    ("\\(c\\)\\(\"\\)\\(?:[^\"\\\\]\\|\\\\.\\)*\\(\"\\)"
+     (1 "|") (2 ".") (3 "|")))
+   start end))
+
 ;;; Indentation
 
 (defun tl-indent-line ()
@@ -414,6 +425,9 @@ functions, lambdas, closures, and C interoperability.
 
   ;; Font lock
   (setq-local font-lock-defaults '(tl-font-lock-keywords))
+
+  ;; Syntax propertize (for c"..." string prefix)
+  (setq-local syntax-propertize-function #'tl-syntax-propertize)
 
   ;; Indentation
   (setq-local indent-line-function #'tl-indent-line)
