@@ -493,14 +493,16 @@ int str_eq(str lhs, str rhs) {
     return 0 == str_cmp(lhs, rhs);
 }
 
+// Do not use str_span here: MSVC whole-program optimization (/GL + LTCG) mishandles the pointer
+// that str_span returns into the by-value parameter's small-string buffer.
 u32 str_hash32(str self) {
-    span s = str_span(&self);
-    return hash32(&s.buf[0], s.len);
+    if (is_small(self)) return hash32(self.small.buf, self.small.len);
+    return hash32(self.big.buf, self.big.len);
 }
 
 u64 str_hash64(str self) {
-    span s = str_span(&self);
-    return hash64(&s.buf[0], s.len);
+    if (is_small(self)) return hash64(self.small.buf, self.small.len);
+    return hash64(self.big.buf, self.big.len);
 }
 
 u32 str_hash32_combine(u32 hash, str self) {
