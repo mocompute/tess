@@ -4236,16 +4236,26 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         traverse_ast(self, traverse, main, specialize_applications_cb);
     } else {
         assert(self->opts.is_library);
-        ast_node *node = null;
+        ast_node     *node         = null;
+        traverse_ctx *traverse_ctx = traverse_ctx_create(self->transient);
         forall(i, nodes) {
             node = nodes.v[i];
 
             if (ast_node_is_let(node)) {
-                ast_node *name = toplevel_name_node(node);
-                if (!name->symbol.annotation_type) {
-                    str fun_name = ast_node_str(name);
-                    dbg(self, "skipping '%s' due to lack of annotation", str_cstr(&fun_name));
-                    continue;
+                ast_node *name     = toplevel_name_node(node);
+                str       fun_name = ast_node_str(name);
+                if (str_eq(fun_name, S("main"))) continue;
+                tl_polytype *type = tl_type_env_lookup(self->env, fun_name);
+                if (tl_polytype_is_concrete(type)) {
+                    dbg(self, "library: exporting '%s'", str_cstr(&fun_name));
+                    tl_polytype *callsite = make_arrow_with(self, traverse_ctx, node, type);
+                    if (!callsite) {
+                        dbg(self, "library: exporting '%s' failed: arrow", str_cstr(&fun_name));
+                        continue;
+                    }
+
+                    str inst_name = specialize_arrow(self, traverse_ctx, fun_name, callsite->type);
+                    dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
                 }
             }
         }
