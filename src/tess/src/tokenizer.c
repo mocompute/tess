@@ -173,6 +173,11 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         return 0;
     }
 
+    // ifdef/endif tracking
+    int skip_depth = 0;
+
+start:; // loop point for skip_depth > 0
+
     // state machine
     enum {
         start,
@@ -227,6 +232,7 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
         in_ifc,
         stop_hash_command,
 
+        error,
         stop,
     } state = start;
 
@@ -245,13 +251,8 @@ int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     // starting position for number or symbol or indent
     size_t start_capture = 0;
 
-    // ifdef/endif tracking
-    int skip_depth = 0;
-
     // return value, to be copied to *out
     token res = {.file = str_cstr(&self->file)};
-
-start:
 
     while (1) {
 
@@ -951,26 +952,45 @@ start:
 
             if (0 == skip_depth && words.size == 2) {
                 if (str_eq(words.v[0], S("define"))) {
+
                     str_hset_insert(&self->defines, words.v[1]);
-                } else if (str_eq(words.v[0], S("ifdef"))) {
+                    fprintf(stderr, "DEBUG: #define %s, skip_depth=%i\n", str_cstr(&words.v[1]),
+                            skip_depth);
+                } else if (str_eq(words.v[0], S("undef"))) {
+                    str_hset_remove(self->defines, words.v[1]);
+                    fprintf(stderr, "DEBUG: #undef %s, skip_depth=%i\n", str_cstr(&words.v[1]), skip_depth);
+                }
+
+                else if (str_eq(words.v[0], S("ifdef"))) {
                     if (!str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
+                    fprintf(stderr, "DEBUG: #ifdef %s, skip_depth=%i\n", str_cstr(&words.v[1]), skip_depth);
                 } else if (str_eq(words.v[0], S("ifndef"))) {
                     if (str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
+                    fprintf(stderr, "DEBUG: #ifndef %s, skip_depth=%i\n", str_cstr(&words.v[1]),
+                            skip_depth);
                 } else {
                     goto other_hash;
                 }
+
                 state = start;
-                continue;
+                goto conditional_hash;
             } else if (words.size == 1 && str_eq(words.v[0], S("endif"))) {
-                skip_depth -= 1;
+                if (skip_depth) skip_depth -= 1;
+                fprintf(stderr, "DEBUG: #endif, skip_depth=%i\n", skip_depth);
+
                 state = start;
-                continue;
+                goto conditional_hash;
             }
 
         other_hash:
             str_deinit(self->transient, &command);
             replace_token_sn(self->strings, &res, tok_hash_command, str_start, len);
             state = stop;
+            continue;
+
+        conditional_hash:
+            str_deinit(self->transient, &command);
+            continue;
 
         } break;
 
@@ -1098,13 +1118,12 @@ start:
             state = stop;
         } break;
 
-        case stop: goto finish; break;
+        case error:
+        case stop:  goto finish; break;
         }
     }
 
 finish:
-
-    if (0 != skip_depth) goto start;
 
     if (start == state) {
         if (out_err) tok_error(self, out_err, tl_err_eof);
@@ -1112,17 +1131,23 @@ finish:
     }
 
     else if (stop == state) {
+        if (0 != skip_depth) goto start;
+
         res.file = str_cstr(&self->file);
         res.line = self->line;
         res.col  = self->col;
         alloc_copy(out, &res);
         return 0;
+    } else if (error == state) {
+        fprintf(stderr, "DEBUG: tokenizer error = %i\n", out_err->tag);
+        return 1;
+    }
 
-    } else {
+    else {
         assert(0);
     }
 
-    return 0;
+    return 1;
 }
 
 // -- backtracking --

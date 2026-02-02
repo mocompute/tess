@@ -482,12 +482,6 @@ static int next_token(parser *p) {
 
         if (tok_comment == p->token.tag) continue;
 
-        if (0) {
-            char *str = token_to_string(p->transient, &p->token);
-            dbg(p, "next_token: %s", str);
-            alloc_free(p->transient, str);
-        }
-
         tokens_push_back(p, &p->token);
         return 0;
     }
