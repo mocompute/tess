@@ -2284,6 +2284,10 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     if (left->cons_inst->def->is_variable_args)
         return unify_type_constructor_union(subs, left, right, cb, user, seen);
 
+    // Unification ignores Const type wrapper
+    if (tl_monotype_is_const(left)) left = tl_monotype_const_target(left);
+    if (tl_monotype_is_const(right)) right = tl_monotype_const_target(right);
+
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
 
@@ -2302,14 +2306,6 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
             return unify_type_constructor_union(subs, right, left, cb, user, seen);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
-            // Const coercion: Const(T) unifies with T by unwrapping the Const.
-            // This handles Ptr(T) ↔ Ptr(Const(T)) transitively via unify_list.
-            if (tl_monotype_is_const(left) && !tl_monotype_is_const(right)) {
-                return tl_type_subs_unify_mono(subs, tl_monotype_const_target(left), right, cb, user, seen);
-            }
-            if (tl_monotype_is_const(right) && !tl_monotype_is_const(left)) {
-                return tl_type_subs_unify_mono(subs, left, tl_monotype_const_target(right), cb, user, seen);
-            }
             if (cb) cb(user, left, right);
             return 1;
         }
