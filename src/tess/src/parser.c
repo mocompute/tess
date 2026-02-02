@@ -3832,7 +3832,7 @@ int parser_next(parser *self) {
     if (!self->tokenizer) {
 
         // A new tokenizer is created for each file being parsed.
-        tokenizer_opts tok_opts   = {0};
+        tokenizer_opts tok_opts   = {.defines = self->opts.defines};
 
         self->error.tag           = tl_err_ok;
         self->tokenizer_error.tag = tl_err_ok;
