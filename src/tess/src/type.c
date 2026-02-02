@@ -1512,20 +1512,18 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
     if (found) return found;
 
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
+    *clone             = (tl_monotype){.tag = orig->tag, .is_const_annotated = orig->is_const_annotated};
     map_set_ptr(mapping, &orig, sizeof(void *), clone);
 
     switch (orig->tag) {
-    case tl_placeholder: fatal("unreachable");
-    case tl_any:         *clone = (tl_monotype){.tag = tl_any}; return clone;
-    case tl_ellipsis:    *clone = (tl_monotype){.tag = tl_ellipsis}; return clone;
-    case tl_integer:     *clone = (tl_monotype){.tag = tl_integer, .integer = orig->integer}; return clone;
-    case tl_var:         *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
-    case tl_weak:        *clone = (tl_monotype){.tag = tl_weak, .var = orig->var}; return clone;
+
+    case tl_var:
+    case tl_weak: clone->var = orig->var; return clone;
 
     case tl_cons_inst:
         // copy the tl_type_constructor_inst struct
-        *clone =
-          (tl_monotype){.tag = tl_cons_inst, .cons_inst = alloc_malloc(alloc, sizeof *clone->cons_inst)};
+
+        clone->cons_inst  = alloc_malloc(alloc, sizeof *clone->cons_inst);
         *clone->cons_inst = *orig->cons_inst;
 
         // clone the args list
@@ -1534,17 +1532,18 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
 
         break;
 
-    case tl_literal:
-        *clone =
-          (tl_monotype){.tag = tl_literal, .literal = tl_monotype_clone_(alloc, orig->literal, mapping)};
-        break;
-
     case tl_arrow:
     case tl_tuple:
-        *clone          = (tl_monotype){.tag  = orig->tag,
-                                        .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs, mapping)}};
+        clone->list.xs  = tl_monotype_sized_clone(alloc, orig->list.xs, mapping);
         clone->list.fvs = orig->list.fvs; // shallow copy
         break;
+
+    case tl_integer:     clone->integer = orig->integer; return clone;
+    case tl_literal:     clone->literal = tl_monotype_clone_(alloc, orig->literal, mapping); break;
+
+    case tl_any:
+    case tl_ellipsis:    return clone;
+    case tl_placeholder: fatal("unreachable");
     }
 
     return clone;
