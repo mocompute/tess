@@ -1512,20 +1512,18 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
     if (found) return found;
 
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
+    *clone             = (tl_monotype){.tag = orig->tag};
     map_set_ptr(mapping, &orig, sizeof(void *), clone);
 
     switch (orig->tag) {
-    case tl_placeholder: fatal("unreachable");
-    case tl_any:         *clone = (tl_monotype){.tag = tl_any}; return clone;
-    case tl_ellipsis:    *clone = (tl_monotype){.tag = tl_ellipsis}; return clone;
-    case tl_integer:     *clone = (tl_monotype){.tag = tl_integer, .integer = orig->integer}; return clone;
-    case tl_var:         *clone = (tl_monotype){.tag = tl_var, .var = orig->var}; return clone;
-    case tl_weak:        *clone = (tl_monotype){.tag = tl_weak, .var = orig->var}; return clone;
+
+    case tl_var:
+    case tl_weak: clone->var = orig->var; return clone;
 
     case tl_cons_inst:
         // copy the tl_type_constructor_inst struct
-        *clone =
-          (tl_monotype){.tag = tl_cons_inst, .cons_inst = alloc_malloc(alloc, sizeof *clone->cons_inst)};
+
+        clone->cons_inst  = alloc_malloc(alloc, sizeof *clone->cons_inst);
         *clone->cons_inst = *orig->cons_inst;
 
         // clone the args list
@@ -1534,17 +1532,18 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
 
         break;
 
-    case tl_literal:
-        *clone =
-          (tl_monotype){.tag = tl_literal, .literal = tl_monotype_clone_(alloc, orig->literal, mapping)};
-        break;
-
     case tl_arrow:
     case tl_tuple:
-        *clone          = (tl_monotype){.tag  = orig->tag,
-                                        .list = {.xs = tl_monotype_sized_clone(alloc, orig->list.xs, mapping)}};
+        clone->list.xs  = tl_monotype_sized_clone(alloc, orig->list.xs, mapping);
         clone->list.fvs = orig->list.fvs; // shallow copy
         break;
+
+    case tl_integer:     clone->integer = orig->integer; return clone;
+    case tl_literal:     clone->literal = tl_monotype_clone_(alloc, orig->literal, mapping); break;
+
+    case tl_any:
+    case tl_ellipsis:    return clone;
+    case tl_placeholder: fatal("unreachable");
     }
 
     return clone;
@@ -2303,14 +2302,6 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
             return unify_type_constructor_union(subs, right, left, cb, user, seen);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
-            // Const coercion: Const(T) unifies with T by unwrapping the Const.
-            // This handles Ptr(T) ↔ Ptr(Const(T)) transitively via unify_list.
-            if (tl_monotype_is_const(left) && !tl_monotype_is_const(right)) {
-                return tl_type_subs_unify_mono(subs, tl_monotype_const_target(left), right, cb, user, seen);
-            }
-            if (tl_monotype_is_const(right) && !tl_monotype_is_const(left)) {
-                return tl_type_subs_unify_mono(subs, left, tl_monotype_const_target(right), cb, user, seen);
-            }
             if (cb) cb(user, left, right);
             return 1;
         }
@@ -2376,6 +2367,10 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     swap(pair.left, pair.right);
     if (hset_contains(*seen, &pair, sizeof(pair))) return 0;
     hset_insert(seen, &pair, sizeof(pair));
+
+    // Unification ignores Const type wrapper
+    if (tl_monotype_is_const(left)) left = tl_monotype_const_target(left);
+    if (tl_monotype_is_const(right)) right = tl_monotype_const_target(right);
 
     // `any` types unify with everything but are not concrete, so they don't resolve type variables
     if (tl_monotype_is_any(left) || tl_monotype_is_any(right)) return 0;

@@ -33,22 +33,22 @@ _STR_LITERAL_TAG: Byte := 0x02
 //        | small: _Small }
 //
 // from_literal is directly invoked by compiler to generate string literals
-// from_literal (s: CString) -> Str
+// from_literal(s: Ptr(Const(CChar))) -> Str
 
 
 // -- Synopsis --
 
 // Construction.
-empty     ()                                               -> Str
-from_cstr (alloc: Ptr(Allocator), s: CString)              -> Str
-from_bytes(alloc: Ptr(Allocator), s: Ptr(CChar), n: CSize) -> Str
-from_bytes(s: Ptr(CChar), n: CSize)                        -> Str
-copy      (alloc: Ptr(Allocator), s: Str)                  -> Str
-copy      (s: Str)                                         -> Str
-from_int  (alloc: Ptr(Allocator), n: Int)                  -> Str
-from_int  (n: Int)                                         -> Str
-from_float(alloc: Ptr(Allocator), f: Float)                -> Str
-from_float(f: Float)                                       -> Str
+empty     ()                                                      -> Str
+from_cstr (alloc: Ptr(Allocator), s: Ptr(Const(CChar)))           -> Str
+from_bytes(alloc: Ptr(Allocator), s: Ptr(Const(CChar)), n: CSize) -> Str
+from_bytes(s: Ptr(Const(CChar)), n: CSize)                        -> Str
+copy      (alloc: Ptr(Allocator), s: Str)                         -> Str
+copy      (s: Str)                                                -> Str
+from_int  (alloc: Ptr(Allocator), n: Int)                         -> Str
+from_int  (n: Int)                                                -> Str
+from_float(alloc: Ptr(Allocator), f: Float)                       -> Str
+from_float(f: Float)                                              -> Str
 
 // Queries.
 len       (s: Str)               -> CSize
@@ -140,7 +140,7 @@ static void tl_str_literal_set_add(void *p) {
                 size_t h = (size_t)old_keys[i] * 2654435761u;
                 h &= new_cap - 1;
                 while (new_keys[h]) h = (h + 1) & (new_cap - 1);
-                new_keys[h] = old_keys[i];
+                new_keys[h]           = old_keys[i];
             }
         }
         free(old_keys);
@@ -191,7 +191,7 @@ _is_literal(s: Str) -> Bool {
 #endif
 
 
-_init_small(src: Ptr(CChar), n: CSize) -> Str {
+_init_small(src: Ptr(Const(CChar)), n: CSize) -> Str {
     s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
         dst: Ptr(CChar) := s.small.buf
@@ -200,7 +200,7 @@ _init_small(src: Ptr(CChar), n: CSize) -> Str {
     s
 }
 
-_init_big(alloc: Ptr(Allocator), src: Ptr(CChar), n: CSize) -> Str {
+_init_big(alloc: Ptr(Allocator), src: Ptr(Const(CChar)), n: CSize) -> Str {
     buf: Ptr(CChar) := alloc->malloc(alloc, n + 1)
     if buf == null { _tl_fatal_(c"Str: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
@@ -214,7 +214,7 @@ empty() -> Str {
     Str(small = _Small(buf = void, tag_len = _make_tag_len(0)))
 }
 
-from_bytes(alloc, s: Ptr(CChar), n: CSize) -> Str {
+from_bytes(alloc, s: Ptr(Const(CChar)), n: CSize) -> Str {
     return
     if n <= _STR_MAX_SMALL {
         _init_small(s, n)
@@ -224,31 +224,36 @@ from_bytes(alloc, s: Ptr(CChar), n: CSize) -> Str {
     }
 }
 
-from_bytes(s: Ptr(CChar), n: CSize) -> Str {
+from_bytes(s: Ptr(Const(CChar)), n: CSize) -> Str {
     from_bytes(Alloc.context.default, s, n)
 }
 
-from_cstr(alloc, s: CString) -> Str {
+from_cstr(alloc, s: Ptr(Const(CChar))) -> Str {
     n := c_strlen(s)
     from_bytes(alloc, s, n)
 }
 
-from_cstr(s: CString) -> Str {
+from_cstr(s: Ptr(Const(CChar))) -> Str {
     from_cstr(Alloc.context.default, s)
 }
 
+
 #ifdef DEBUG
+
 from_literal(s: CString) -> Str {
     r := from_cstr(Alloc.context.string_literals, s)
     _mark_literal(r.&)
     r
 }
+
 #endif
 
 #ifndef DEBUG
-from_literal(s: CString) -> Str {
+
+from_literal(s: Ptr(Const(CChar))) -> Str {
     from_cstr(Alloc.context.string_literals, s)
 }
+
 #endif
 
 copy(alloc, s: Str) -> Str {
@@ -277,7 +282,9 @@ from_int(alloc, n: Int) -> Str {
     buf: CArray(CChar, 32) := void
     ptr: Ptr(CChar)        := buf
     written                := c_tl_string_snprintf_int(ptr, 32, n)
-    from_bytes(alloc, ptr, written)
+    if written < 0 { _tl_fatal_(c"from_int: underflow") }
+    n: CSize := written
+    from_bytes(alloc, ptr, n)
 }
 
 from_int(n: Int) -> Str {
@@ -288,7 +295,10 @@ from_float(alloc, f: Float) -> Str {
     buf: CArray(CChar, 32) := void
     ptr: Ptr(CChar)        := buf
     written                := c_tl_string_snprintf_float(ptr, 32, f)
-    from_bytes(alloc, ptr, written)
+    if written < 0 { _tl_fatal_(c"from_int: underflow") }
+    n: CSize := written
+    from_bytes(alloc, ptr, n)
+
 }
 
 from_float(f: Float) -> Str {
@@ -470,6 +480,7 @@ cat_4(a: Str, b: Str, c: Str, d: Str) -> Str {
 }
 
 #ifdef DEBUG
+
 push(self: Ptr(Str), alloc, other: Str) {
     if _is_literal(self.*) {
         _tl_fatal_(c"Str.push: cannot push to a string literal")
@@ -478,14 +489,17 @@ push(self: Ptr(Str), alloc, other: Str) {
     free(self, alloc)
     self.* = result
 }
+
 #endif
 
 #ifndef DEBUG
+
 push(self: Ptr(Str), alloc, other: Str) {
     result := cat(alloc, self.*, other)
     free(self, alloc)
     self.* = result
 }
+
 #endif
 
 push(self: Ptr(Str), other: Str) {
@@ -544,6 +558,7 @@ replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
 // -- Memory --
 
 #ifdef DEBUG
+
 free(self: Ptr(Str), alloc) {
     if _is_literal(self.*) {
         _tl_fatal_(c"Str.free: cannot free a string literal")
@@ -553,15 +568,18 @@ free(self: Ptr(Str), alloc) {
     }
     self.* = empty()
 }
+
 #endif
 
 #ifndef DEBUG
+
 free(self: Ptr(Str), alloc) {
     if !_is_small(self.*) {
         alloc->free(alloc, self->big.buf)
     }
     self.* = empty()
 }
+
 #endif
 
 free(self: Ptr(Str)) {
