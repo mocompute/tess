@@ -321,6 +321,7 @@ TL_TESTS =					\
 	char_literal				\
 	closure_fun_ptr				\
 	conditional_compile_define		\
+	conditional_compile_nested		\
 	const					\
 	compound_assignment			\
 	defun_inline_type			\

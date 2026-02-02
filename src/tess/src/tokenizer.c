@@ -950,24 +950,21 @@ start:; // loop point for skip_depth > 0
             str_array   words     = {.alloc = self->transient};
             str_parse_words(command, &words);
 
-            if (0 == skip_depth && words.size == 2) {
-                if (str_eq(words.v[0], S("define"))) {
-
+            // Conditional compilation: #ifdef/#ifndef/#endif track nesting via skip_depth.
+            // When skip_depth > 0, tokens are skipped. #ifdef/#ifndef always increment
+            // skip_depth when already skipping (to match #endif pairs), but #define/#undef
+            // are only processed at depth 0.
+            if (words.size == 2) {
+                if (0 == skip_depth && str_eq(words.v[0], S("define"))) {
                     str_hset_insert(&self->defines, words.v[1]);
-                    fprintf(stderr, "DEBUG: #define %s, skip_depth=%i\n", str_cstr(&words.v[1]),
-                            skip_depth);
-                } else if (str_eq(words.v[0], S("undef"))) {
+                } else if (0 == skip_depth && str_eq(words.v[0], S("undef"))) {
                     str_hset_remove(self->defines, words.v[1]);
-                    fprintf(stderr, "DEBUG: #undef %s, skip_depth=%i\n", str_cstr(&words.v[1]), skip_depth);
                 }
 
                 else if (str_eq(words.v[0], S("ifdef"))) {
-                    if (!str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
-                    fprintf(stderr, "DEBUG: #ifdef %s, skip_depth=%i\n", str_cstr(&words.v[1]), skip_depth);
+                    if (skip_depth || !str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
                 } else if (str_eq(words.v[0], S("ifndef"))) {
-                    if (str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
-                    fprintf(stderr, "DEBUG: #ifndef %s, skip_depth=%i\n", str_cstr(&words.v[1]),
-                            skip_depth);
+                    if (skip_depth || str_hset_contains(self->defines, words.v[1])) skip_depth += 1;
                 } else {
                     goto other_hash;
                 }
@@ -976,7 +973,6 @@ start:; // loop point for skip_depth > 0
                 goto conditional_hash;
             } else if (words.size == 1 && str_eq(words.v[0], S("endif"))) {
                 if (skip_depth) skip_depth -= 1;
-                fprintf(stderr, "DEBUG: #endif, skip_depth=%i\n", skip_depth);
 
                 state = start;
                 goto conditional_hash;
@@ -1139,7 +1135,6 @@ finish:
         alloc_copy(out, &res);
         return 0;
     } else if (error == state) {
-        fprintf(stderr, "DEBUG: tokenizer error = %i\n", out_err->tag);
         return 1;
     }
 
