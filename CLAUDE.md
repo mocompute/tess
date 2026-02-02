@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Rules
+
+- NEVER amend a commit unless the user explicitly gives permission to do so. Always create a new commit instead.
+
 ## Project Overview
 
 Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner-style), generic types/functions, lambdas, closures, and C interoperability. The compiler generates C code which is then compiled to native executables or shared libraries.
