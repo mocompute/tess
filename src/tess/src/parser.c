@@ -2452,6 +2452,9 @@ static int toplevel_assign(parser *self) {
     if (is_reserved_type_name(name)) return ERROR_STOP;
 
     ast_node *n = ast_node_create_let_in(self->ast_arena, name, value, null);
+
+    add_module_symbol(self, name);
+    mangle_name(self, name);
     return result_ast_node(self, n);
 }
 
