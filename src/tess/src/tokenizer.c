@@ -165,7 +165,8 @@ static char peek_char(tokenizer *self, u32 pos) {
 
 static int is_end_of_line(tokenizer *self, char c) {
     if ('\n' == c) return 1;
-    if ('\r' == c && self->pos + 1 < self->input.size && '\n' == self->input.v[self->pos + 1]) return 1;
+    // self->pos points to character after c
+    if ('\r' == c && self->pos < self->input.size && '\n' == self->input.v[self->pos]) return 1;
     return 0;
 }
 
