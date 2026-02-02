@@ -143,6 +143,9 @@
       ("^[ \t]*\\(#\\(?:module\\|import\\|include\\|ifc\\|endc\\)\\)\\>"
        (1 font-lock-preprocessor-face))
 
+      ("^[ \t]*\\(#\\(?:define\\|undef\\|ifdef\\|ifndef\\|endif\\)\\)\\>"
+       (1 font-lock-preprocessor-face))
+
       ;; Attributes [[...]]
       ("\\[\\[\\([^]]*\\)\\]\\]" . font-lock-preprocessor-face)
 

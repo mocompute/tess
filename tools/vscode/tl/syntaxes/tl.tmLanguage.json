@@ -31,6 +31,10 @@
         {
           "name": "keyword.control.directive.tl",
           "match": "^\\s*#(?:module|import|include|ifc|endc)\\b"
+        },
+        {
+          "name": "keyword.conditional.directive.tl",
+          "match": "^\\s*#(?:define|undef|ifdef|ifndef|endif)\\b"
         }
       ]
     },
