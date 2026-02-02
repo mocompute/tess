@@ -17,10 +17,10 @@ if ($BuildDir.StartsWith("-")) {
 
 Push-Location $BuildDir
 try {
-    cmake --build .
+    cmake --build . --config Release
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    ctest @CtestOptions
+    ctest -C Release @CtestOptions
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

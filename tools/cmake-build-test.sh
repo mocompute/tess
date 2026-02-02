@@ -14,4 +14,4 @@ if [[ $build_dir == -* ]]; then usage; exit 1; fi
 # This turns it on:
 # export ASAN_OPTIONS=detect_leaks=1
 
-cd "$build_dir" && ninja && ctest "$@"
+cd "$build_dir" && cmake --build . && ctest "$@"

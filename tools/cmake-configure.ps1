@@ -16,8 +16,6 @@ if ($BuildDir.StartsWith("-")) {
     exit 1
 }
 
-$env:CMAKE_BUILD_TYPE = $BuildType
-
 # Configure a shared CPM download cache
 $env:CPM_SOURCE_CACHE = Join-Path (Get-Location) ".cache/CPM"
 Write-Host "Using CPM cache: $env:CPM_SOURCE_CACHE"
@@ -30,7 +28,7 @@ if (Test-Path $BuildDir) {
 Write-Host "Configuring with cmake into '$BuildDir'."
 Write-Host ""
 
-cmake @CmakeOptions -GNinja -B $BuildDir -S .
+cmake @CmakeOptions "-DCMAKE_BUILD_TYPE=$BuildType" -GNinja -B $BuildDir -S .
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""

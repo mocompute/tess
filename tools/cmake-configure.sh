@@ -19,8 +19,6 @@ build_dir=$1
 shift
 if [[ $build_dir == -* ]]; then usage; exit 1; fi
 
-export CMAKE_BUILD_TYPE="$build_type"
-
 # Configure a shared CPM download cache
 export CPM_SOURCE_CACHE="$(pwd)/.cache/CPM"
 echo "Using CPM cache: $CPM_SOURCE_CACHE"
@@ -30,7 +28,7 @@ rm -rf "$build_dir"
 echo "Configuring with cmake into '$build_dir'."
 echo
 
-if cmake "$@" -GNinja -B "$build_dir" -S .; then
+if cmake "$@" -DCMAKE_BUILD_TYPE="$build_type" -GNinja -B "$build_dir" -S .; then
     echo
     echo "Configuration into '$build_dir' is complete. Build with 'cmake --build $build_dir'."
 else
