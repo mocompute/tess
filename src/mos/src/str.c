@@ -145,7 +145,7 @@ str str_cat(allocator *alloc, str left, str right) {
     // Write directly to out.small.buf / out.big.buf instead of going through str_span.
     // MSVC's optimizer doesn't see writes through a span.buf alias as modifying the local
     // str, so it can return the pre-memcpy (zeroed) value for small strings.
-    str    out;
+    str out;
     if (len <= MOS_STR_MAX_SMALL) {
         out = (str){.small = {.tag = STR_SMALL}};
         memcpy(&out.small.buf[0], &left_span.buf[0], left_span.len);
@@ -170,7 +170,7 @@ str str_cat_3(allocator *alloc, str one, str two, str three) {
     size_t len = s1.len + s2.len + s3.len;
 
     // see str_cat: avoid str_span alias for MSVC
-    str    out;
+    str out;
     if (len <= MOS_STR_MAX_SMALL) {
         out = (str){.small = {.tag = STR_SMALL}};
         memcpy(out.small.buf, s1.buf, s1.len);
@@ -303,7 +303,7 @@ str str_cat_array(allocator *alloc, str_sized arr) {
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (total <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
+        out        = (str){.small = {.tag = STR_SMALL}};
         size_t off = 0;
         forall(i, arr) {
             span s = str_span(&arr.v[i]);
@@ -313,7 +313,7 @@ str str_cat_array(allocator *alloc, str_sized arr) {
         out.small.len = total;
         return out;
     }
-    out = (str){.big = {.len = total, .buf = alloc_malloc(alloc, total + 1)}};
+    out        = (str){.big = {.len = total, .buf = alloc_malloc(alloc, total + 1)}};
     size_t off = 0;
     forall(i, arr) {
         span s = str_span(&arr.v[i]);
@@ -700,7 +700,7 @@ void str_parse_words(str in, str_array *out) {
     int         in_string = 0;
     char const *pos       = start;
 
-    while (pos < end && isspace(*pos)) pos++;
+    while (pos < end && isspace((unsigned char)*pos)) pos++;
     start = pos;
 
     for (; pos < end; ++pos) {
@@ -724,7 +724,7 @@ void str_parse_words(str in, str_array *out) {
             in_string = 1;
             start     = pos; // include quotes
         } else {
-            if (isspace(*pos)) {
+            if (isspace((unsigned char)*pos)) {
                 if (start < pos) {
                     str word = str_init_n(out->alloc, start, pos - start);
                     array_push(*out, word);
