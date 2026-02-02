@@ -166,23 +166,14 @@ endfunction()
 function(tl_create_build_fail_test NAME)
   set(TEST_NAME test-tl-${NAME})
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
-  # Wrap in a shell command to handle both normal errors and aborts/crashes
-  # The test passes if the compiler fails (any non-zero exit or crash)
-  if(WIN32)
-    add_test(NAME ${TEST_NAME}
-      COMMAND ${CMAKE_COMMAND} -E env "ASAN_OPTIONS=detect_leaks=0"
-        cmd /c "$<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl && exit 1 || exit 0"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-  else()
-    add_test(NAME ${TEST_NAME}
-      COMMAND ${CMAKE_COMMAND} -E env "ASAN_OPTIONS=detect_leaks=0"
-        sh -c "$<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl 2>/dev/null && exit 1 || exit 0"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-  endif()
+  add_test(NAME ${TEST_NAME}
+    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
   set_tests_properties(${TEST_NAME} PROPERTIES
+    WILL_FAIL TRUE
     LABELS "expected_failure"
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
   )
 endfunction()
 
@@ -228,18 +219,12 @@ function(tl_create_runtime_fail_test NAME)
     COMMENT "Compiling test_${NAME}.tl"
   )
   add_custom_target(${TEST_NAME} ALL DEPENDS ${TEST_EXE})
-  if(WIN32)
-    add_test(NAME ${TEST_NAME}
-      COMMAND cmd /c "${TEST_EXE} && exit 1 || exit 0"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-  else()
-    add_test(NAME ${TEST_NAME}
-      COMMAND sh -c "${TEST_EXE} 2>/dev/null && exit 1 || exit 0"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-  endif()
+  add_test(NAME ${TEST_NAME}
+    COMMAND ${TEST_EXE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
   set_tests_properties(${TEST_NAME} PROPERTIES
+    WILL_FAIL TRUE
     LABELS "expected_runtime_failure"
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
   )
