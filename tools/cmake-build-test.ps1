@@ -15,10 +15,25 @@ if ($BuildDir.StartsWith("-")) {
 # This turns it on:
 # $env:ASAN_OPTIONS = "detect_leaks=1"
 
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+
 Push-Location $BuildDir
 try {
     cmake --build . --config Release
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # Copy tess.exe to project root
+    $candidates = @(
+        (Join-Path "src" "tess" "Release" "tess.exe"),
+        (Join-Path "src" "tess" "tess.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            Copy-Item $candidate (Join-Path $projectRoot "tess.exe")
+            Write-Host "Copied $candidate to $projectRoot"
+            break
+        }
+    }
 
     ctest -C Release @CtestOptions
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
