@@ -125,58 +125,63 @@ int platform_exec(platform_exec_opts const *opts) {
         fprintf(stderr, "Running: %s\n", cmdline);
     }
 
-    // Create pipes for stdout and stderr
-    HANDLE              stdout_read, stdout_write;
-    HANDLE              stderr_read, stderr_write;
+    // Create a single pipe for both stdout and stderr.
+    // Merging them avoids deadlocks from sequential reads and ensures
+    // we capture MSVC output (which goes to stdout, not stderr).
+    HANDLE              output_read, output_write;
     SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
-    if (!CreatePipe(&stdout_read, &stdout_write, &sa, 0)) {
+    if (!CreatePipe(&output_read, &output_write, &sa, 0)) {
         fprintf(stderr, "CreatePipe failed\n");
         return -1;
     }
-    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
-
-    if (!CreatePipe(&stderr_read, &stderr_write, &sa, 0)) {
-        fprintf(stderr, "CreatePipe failed\n");
-        CloseHandle(stdout_read);
-        CloseHandle(stdout_write);
-        return -1;
-    }
-    SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0);
 
     // Set up process startup info
     STARTUPINFOA si             = {sizeof(STARTUPINFOA)};
     si.dwFlags                  = STARTF_USESTDHANDLES;
     si.hStdInput                = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput               = stdout_write;
-    si.hStdError                = stderr_write;
+    si.hStdOutput               = output_write;
+    si.hStdError                = output_write;
 
     PROCESS_INFORMATION pi      = {0};
 
     BOOL                success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
 
-    CloseHandle(stdout_write);
-    CloseHandle(stderr_write);
+    CloseHandle(output_write);
 
     if (!success) {
         fprintf(stderr, "CreateProcess failed: %lu\n", GetLastError());
-        CloseHandle(stdout_read);
-        CloseHandle(stderr_read);
+        CloseHandle(output_read);
         return -1;
     }
 
-    // Drain stdout (discard) and read stderr
-    char  buf[1024];
-    DWORD bytes_read;
-    while (ReadFile(stdout_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        // Discard stdout output
+    // Read all output (merged stdout+stderr)
+    char   buf[1024];
+    DWORD  bytes_read;
+    char  *captured     = NULL;
+    size_t captured_len = 0;
+    size_t captured_cap = 0;
+
+    while (ReadFile(output_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
+        if (opts->verbose) {
+            // In verbose mode, forward output in real-time
+            buf[bytes_read] = '\0';
+            fprintf(stderr, "%s", buf);
+        } else {
+            // Buffer output for deferred display
+            if (captured_len + bytes_read > captured_cap) {
+                captured_cap = (captured_len + bytes_read) * 2;
+                if (captured_cap < 4096) captured_cap = 4096;
+                char *new_buf = realloc(captured, captured_cap);
+                if (!new_buf) { free(captured); captured = NULL; captured_len = 0; break; }
+                captured = new_buf;
+            }
+            memcpy(captured + captured_len, buf, bytes_read);
+            captured_len += bytes_read;
+        }
     }
-    CloseHandle(stdout_read);
-    while (ReadFile(stderr_read, buf, sizeof(buf) - 1, &bytes_read, NULL) && bytes_read > 0) {
-        buf[bytes_read] = '\0';
-        fprintf(stderr, "%s", buf);
-    }
-    CloseHandle(stderr_read);
+    CloseHandle(output_read);
 
     // Wait for process and get exit code
     WaitForSingleObject(pi.hProcess, INFINITE);
@@ -184,6 +189,12 @@ int platform_exec(platform_exec_opts const *opts) {
     GetExitCodeProcess(pi.hProcess, &exit_code);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+
+    // Print captured output only on error
+    if (!opts->verbose && exit_code != 0 && captured_len > 0) {
+        fwrite(captured, 1, captured_len, stderr);
+    }
+    free(captured);
 
     return (int)exit_code;
 }
@@ -201,8 +212,9 @@ int platform_exec(platform_exec_opts const *opts) {
         fprintf(stderr, "\n");
     }
 
-    int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
-    if (pipe(stdin_pipe) == -1 || pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
+    // Use a single output pipe for both stdout and stderr to avoid deadlocks
+    int stdin_pipe[2], output_pipe[2];
+    if (pipe(stdin_pipe) == -1 || pipe(output_pipe) == -1) {
         perror("pipe failed");
         return -1;
     }
@@ -216,14 +228,12 @@ int platform_exec(platform_exec_opts const *opts) {
     if (pid == 0) {
         // child process
         close(stdin_pipe[1]);
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
+        close(output_pipe[0]);
         dup2(stdin_pipe[0], STDIN_FILENO);
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
+        dup2(output_pipe[1], STDOUT_FILENO);
+        dup2(output_pipe[1], STDERR_FILENO);
         close(stdin_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
+        close(output_pipe[1]);
 
         execvp(opts->argv[0], (char *const *)opts->argv);
         perror("exec failed");
@@ -232,8 +242,7 @@ int platform_exec(platform_exec_opts const *opts) {
 
     // parent process
     close(stdin_pipe[0]);
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
+    close(output_pipe[1]);
 
     // Write stdin data if provided
     if (opts->stdin_data && opts->stdin_len > 0) {
@@ -242,24 +251,49 @@ int platform_exec(platform_exec_opts const *opts) {
     }
     close(stdin_pipe[1]);
 
-    // Read and forward stderr
-    char  buf[1024];
-    FILE *stderr_file = fdopen(stderr_pipe[0], "r");
-    if (stderr_file) {
-        while (fgets(buf, sizeof(buf), stderr_file)) {
-            fprintf(stderr, "%s", buf);
+    // Read merged stdout+stderr
+    char   buf[1024];
+    char  *captured     = NULL;
+    size_t captured_len = 0;
+    size_t captured_cap = 0;
+
+    FILE *output_file = fdopen(output_pipe[0], "r");
+    if (output_file) {
+        size_t n;
+        while ((n = fread(buf, 1, sizeof(buf), output_file)) > 0) {
+            if (opts->verbose) {
+                fwrite(buf, 1, n, stderr);
+            } else {
+                if (captured_len + n > captured_cap) {
+                    captured_cap = (captured_len + n) * 2;
+                    if (captured_cap < 4096) captured_cap = 4096;
+                    char *new_buf = realloc(captured, captured_cap);
+                    if (!new_buf) { free(captured); captured = NULL; captured_len = 0; break; }
+                    captured = new_buf;
+                }
+                memcpy(captured + captured_len, buf, n);
+                captured_len += n;
+            }
         }
-        fclose(stderr_file);
+        fclose(output_file);
     }
 
     // Wait for child and get exit status
     int status;
     waitpid(pid, &status, 0);
 
+    int exit_code = -1;
     if (WIFEXITED(status)) {
-        return WEXITSTATUS(status);
+        exit_code = WEXITSTATUS(status);
     }
-    return -1;
+
+    // Print captured output only on error
+    if (!opts->verbose && exit_code != 0 && captured_len > 0) {
+        fwrite(captured, 1, captured_len, stderr);
+    }
+    free(captured);
+
+    return exit_code;
 }
 
 #endif
