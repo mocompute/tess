@@ -146,7 +146,20 @@ static char *normalize_ops(allocator *alloc, char const *line) {
             break;
         }
 
-        char next = (i + 1 < len) ? line[i + 1] : '\0';
+        char next  = (i + 1 < len) ? line[i + 1] : '\0';
+        char next2 = (i + 2 < len) ? line[i + 2] : '\0';
+
+        // Three-character operators (order matters: check before single-char)
+        if (c == '<' && next == '<' && next2 == '=') {
+            emit_spaced_op(&out, "<<=");
+            i++;
+            continue;
+        }
+        if (c == '>' && next == '>' && next2 == '=') {
+            emit_spaced_op(&out, ">>=");
+            i++;
+            continue;
+        }
 
         // Two-character operators (order matters: check before single-char)
         if (c == ':' && next == '=') {
@@ -228,6 +241,26 @@ static char *normalize_ops(allocator *alloc, char const *line) {
         }
         if (c == '/' && next == '=') {
             emit_spaced_op(&out, "/=");
+            i++;
+            continue;
+        }
+        if (c == '%' && next == '=') {
+            emit_spaced_op(&out, "%=");
+            i++;
+            continue;
+        }
+        if (c == '&' && next == '=') {
+            emit_spaced_op(&out, "&=");
+            i++;
+            continue;
+        }
+        if (c == '^' && next == '=') {
+            emit_spaced_op(&out, "^=");
+            i++;
+            continue;
+        }
+        if (c == '|' && next == '=') {
+            emit_spaced_op(&out, "|=");
             i++;
             continue;
         }
@@ -477,9 +510,10 @@ static int find_align_token(char const *line, int token_type) {
             break;
         case ALIGN_EQ:
             if (c == '=' && next != '=') {
-                // Exclude :=, !=, >=, <=, +=, -=, *=, /=
+                // Exclude :=, !=, >=, <=, +=, -=, *=, /=, &=, ^=, |=
                 if (prev == ':' || prev == '!' || prev == '>' || prev == '<' || prev == '+' ||
-                    prev == '-' || prev == '*' || prev == '/' || prev == '=')
+                    prev == '-' || prev == '*' || prev == '/' || prev == '=' || prev == '&' ||
+                    prev == '^' || prev == '|')
                     continue;
                 return i;
             }
@@ -1182,17 +1216,29 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
                 int in_s = 0, in_c = 0;
                 for (int ci = 0; content[ci]; ci++) {
                     if (in_s) {
-                        if (content[ci] == '\\' && content[ci + 1]) { ci++; continue; }
+                        if (content[ci] == '\\' && content[ci + 1]) {
+                            ci++;
+                            continue;
+                        }
                         if (content[ci] == '"') in_s = 0;
                         continue;
                     }
                     if (in_c) {
-                        if (content[ci] == '\\' && content[ci + 1]) { ci++; continue; }
+                        if (content[ci] == '\\' && content[ci + 1]) {
+                            ci++;
+                            continue;
+                        }
                         if (content[ci] == '\'') in_c = 0;
                         continue;
                     }
-                    if (content[ci] == '"') { in_s = 1; continue; }
-                    if (content[ci] == '\'') { in_c = 1; continue; }
+                    if (content[ci] == '"') {
+                        in_s = 1;
+                        continue;
+                    }
+                    if (content[ci] == '\'') {
+                        in_c = 1;
+                        continue;
+                    }
                     if (content[ci] == '/' && content[ci + 1] == '/') break;
                     if (content[ci] == '|') {
                         int j = ci - 1;
