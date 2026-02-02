@@ -168,14 +168,16 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
     self->argv0 = argv[0];
 
+    // Flags -o, -I, -D accept values with or without a space (e.g. -ofoo or -o foo).
     for (int i = 1; i < argc; ++i) {
         if ('-' == argv[i][0]) {
 
-            if (0 == strcmp("-o", argv[i])) {
-                self->out_path = argv[++i];
+            if (0 == strncmp("-o", argv[i], 2)) {
+                self->out_path = argv[i][2] ? argv[i] + 2 : argv[++i];
                 continue;
-            } else if (0 == strcmp("-I", argv[i])) {
-                str path = str_init(self->arena, argv[++i]);
+            } else if (0 == strncmp("-I", argv[i], 2)) {
+                char const *val = argv[i][2] ? argv[i] + 2 : argv[++i];
+                str         path = str_init(self->arena, val);
                 array_push(self->include_paths, path);
             } else if (0 == strncmp("-D", argv[i], 2)) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
