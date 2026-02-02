@@ -112,9 +112,14 @@ int platform_exec(platform_exec_opts const *opts) {
     for (int i = 0; opts->argv[i] != NULL; i++) {
         if (i > 0) cmdline[pos++] = ' ';
         // Simple quoting for arguments with spaces
-        int needs_quotes = strchr(opts->argv[i], ' ') != NULL;
+        int    needs_quotes = strchr(opts->argv[i], ' ') != NULL;
+        size_t len          = strlen(opts->argv[i]);
+        size_t needed       = len + (needs_quotes ? 2 : 0) + 1; // +1 for NUL
+        if (pos + needed >= sizeof(cmdline)) {
+            fprintf(stderr, "Command line too long (%zu bytes)\n", pos + needed);
+            return -1;
+        }
         if (needs_quotes) cmdline[pos++] = '"';
-        size_t len = strlen(opts->argv[i]);
         memcpy(cmdline + pos, opts->argv[i], len);
         pos += len;
         if (needs_quotes) cmdline[pos++] = '"';
