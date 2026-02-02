@@ -58,7 +58,6 @@ typedef struct tl_monotype {
         tl_literal,
         tl_placeholder
     } tag;
-    int is_const_annotated;
 } tl_monotype;
 
 typedef struct tl_polytype {

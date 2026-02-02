@@ -1512,7 +1512,7 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
     if (found) return found;
 
     tl_monotype *clone = alloc_malloc(alloc, sizeof *clone);
-    *clone             = (tl_monotype){.tag = orig->tag, .is_const_annotated = orig->is_const_annotated};
+    *clone             = (tl_monotype){.tag = orig->tag};
     map_set_ptr(mapping, &orig, sizeof(void *), clone);
 
     switch (orig->tag) {
