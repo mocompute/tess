@@ -163,6 +163,12 @@ static char peek_char(tokenizer *self, u32 pos) {
     return self->input.v[pos];
 }
 
+static int is_end_of_line(tokenizer *self, char c) {
+    if ('\n' == c) return 1;
+    if ('\r' == c && self->pos + 1 < self->input.size && '\n' == self->input.v[self->pos + 1]) return 1;
+    return 0;
+}
+
 int tokenizer_next(tokenizer *self, token *out, tokenizer_error *out_err) {
     assert(out);
     out_err->tag = tl_err_ok;
@@ -290,6 +296,7 @@ start:; // loop point for skip_depth > 0
 
             case '\'': state = start_char; continue;
 
+            case '\r':
             case '\n': continue;
 
             case '.':  state = in_dot; continue;
@@ -877,7 +884,7 @@ start:; // loop point for skip_depth > 0
                 continue;
             }
             char const c = next_char(self);
-            if (c == '\n') {
+            if (is_end_of_line(self, c)) {
                 reverse_pos(self);
                 state = stop_comment;
             }
@@ -911,7 +918,7 @@ start:; // loop point for skip_depth > 0
             }
 
             char const c = next_char(self);
-            if (c == '\n') {
+            if (is_end_of_line(self, c)) {
                 reverse_pos(self);
                 state = stop_hash_command;
                 continue;

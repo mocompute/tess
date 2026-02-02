@@ -1,8 +1,8 @@
 #include "alloc.h"
 #include "array.h"
 #include "file.h"
-#include "hashmap.h"
 #include "format.h"
+#include "hashmap.h"
 #include "infer.h"
 #include "parser.h"
 #include "str.h"
@@ -176,7 +176,7 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 self->out_path = argv[i][2] ? argv[i] + 2 : argv[++i];
                 continue;
             } else if (0 == strncmp("-I", argv[i], 2)) {
-                char const *val = argv[i][2] ? argv[i] + 2 : argv[++i];
+                char const *val  = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         path = str_init(self->arena, val);
                 array_push(self->include_paths, path);
             } else if (0 == strncmp("-D", argv[i], 2)) {
@@ -204,6 +204,7 @@ static void process_import_hash(state *self, str_array *output, char const *data
     // Strip trailing newline so str_parse_words produces exact word counts.
     u32 len = pos - capture_start;
     if (len > 0 && data[pos - 1] == '\n') len -= 1;
+    if (len > 0 && data[pos - 2] == '\r') len -= 1;
 
     str       command = str_init_n(output->alloc, &data[capture_start], len);
     str_array words   = {.alloc = output->alloc};
@@ -237,8 +238,8 @@ static void process_import_hash(state *self, str_array *output, char const *data
 void read_import_lines(state *self, char_csized input, str_array *output) {
     // Note: output includes surrounding "..." marks for reasons
     u32         pos = 0, capture_start = 0;
-    char const *data = input.v;
-    u32         size = input.size;
+    char const *data                                            = input.v;
+    u32         size                                            = input.size;
     enum { start, noise, start_hash, in_hash, stop_hash } state = start;
     while (pos < size) {
         switch (state) {
