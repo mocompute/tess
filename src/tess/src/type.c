@@ -2284,10 +2284,6 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     if (left->cons_inst->def->is_variable_args)
         return unify_type_constructor_union(subs, left, right, cb, user, seen);
 
-    // Unification ignores Const type wrapper
-    if (tl_monotype_is_const(left)) left = tl_monotype_const_target(left);
-    if (tl_monotype_is_const(right)) right = tl_monotype_const_target(right);
-
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
 
@@ -2371,6 +2367,10 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     swap(pair.left, pair.right);
     if (hset_contains(*seen, &pair, sizeof(pair))) return 0;
     hset_insert(seen, &pair, sizeof(pair));
+
+    // Unification ignores Const type wrapper
+    if (tl_monotype_is_const(left)) left = tl_monotype_const_target(left);
+    if (tl_monotype_is_const(right)) right = tl_monotype_const_target(right);
 
     // `any` types unify with everything but are not concrete, so they don't resolve type variables
     if (tl_monotype_is_any(left) || tl_monotype_is_any(right)) return 0;
