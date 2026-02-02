@@ -961,6 +961,10 @@ int main(int argc, char *argv[]) {
     state_init(&self);
     state_gather_options(&self, argc, argv);
 
+    // Auto-define DEBUG or NDEBUG based on optimization mode
+    str auto_def = str_init(self.arena, self.optimize ? "NDEBUG" : "DEBUG");
+    array_push(self.defines, auto_def);
+
     // Populate import_defines hset from -D flags
     forall(i, self.defines) {
         str_hset_insert(&self.import_defines, self.defines.v[i]);

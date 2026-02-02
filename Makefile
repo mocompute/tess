@@ -320,6 +320,7 @@ TL_TESTS =					\
 	case_pred_lambda			\
 	char_literal				\
 	closure_fun_ptr				\
+	conditional_compile_auto_define		\
 	conditional_compile_define		\
 	conditional_compile_import		\
 	conditional_compile_nested		\
