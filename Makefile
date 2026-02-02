@@ -504,6 +504,11 @@ TL_FAIL_TESTS =					\
 	fail_type_alias_partial_specialization	\
 	fail_unknown_free_variable
 
+# Expected runtime failure tests (debug only: must compile, must fail at runtime)
+TL_FAIL_RUNTIME_TESTS =				\
+	fail_str_free_literal			\
+	fail_str_push_literal
+
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =
 
@@ -548,6 +553,21 @@ test-tl: build-tl-tests
 		count_fail=$$((count_fail + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_fail expected failure tests\n\n"; \
+	count_fail_rt=0; \
+	for name in $(TL_FAIL_RUNTIME_TESTS); do \
+		$(MSG_TEST) $$name; \
+		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+			if /tmp/tl_test_$$name 2>/dev/null; then \
+				$(MSG_FAIL2) $$name; \
+				failed=$$((failed + 1)); \
+			fi; \
+		else \
+			$(MSG_FAIL) $$name; \
+			failed=$$((failed + 1)); \
+		fi; \
+		count_fail_rt=$$((count_fail_rt + 1)); \
+	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $$count_fail_rt expected runtime failure tests\n\n"; \
 	count_known_fail=0; \
 	known_fail=0; \
 	for name in $(TL_KNOWN_FAIL_FAILURES); do \
@@ -571,7 +591,7 @@ test-tl: build-tl-tests
 		count_known=$$((count_known + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known known failure tests\n"; \
-	total=$$((count_pass + count_fail + count_known_fail + count_known)); \
+	total=$$((count_pass + count_fail + count_fail_rt + count_known_fail + count_known)); \
 	printf "  \033[1;36m[TOTAL]\033[0m $$total tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \

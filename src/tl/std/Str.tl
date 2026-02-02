@@ -11,9 +11,14 @@
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
 // Tag value 0x01 indicates a small string.
+// In DEBUG mode, tag value 0x02 marks a string literal (cannot be freed).
 
 _STR_SMALL_TAG: Byte  := 0x01
 _STR_MAX_SMALL: CSize := 14
+
+#ifdef DEBUG
+_STR_LITERAL_TAG: Byte := 0x02
+#endif
 
 // The following are in prelude.tl:
 // _Big: {
@@ -91,7 +96,7 @@ free(self: Ptr(Str))                        -> Void
 // -- Private helpers --
 
 _is_small(s: Str) -> Bool {
-    (s.small.tag_len & 0x0F) == _STR_SMALL_TAG
+    (s.small.tag_len & _STR_SMALL_TAG) == _STR_SMALL_TAG
 }
 
 _small_len(s: Str) -> CSize {
@@ -105,6 +110,85 @@ _buf(s: Ptr(Str)) -> Ptr(CChar) {
 _make_tag_len(n: CSize) -> Byte {
     ((n & 0x0F) << 4) | _STR_SMALL_TAG
 }
+
+
+#ifdef DEBUG
+
+// -- Debug: literal string tracking --
+// Small literals are tagged in tag_len (bit 1).
+// Big literals are tracked in a C-level pointer set.
+
+#ifc
+static struct {
+    void  **keys;
+    size_t  cap;
+    size_t  len;
+} tl_str_literal_set;
+
+static void tl_str_literal_set_add(void *p) {
+    if (!tl_str_literal_set.keys) {
+        tl_str_literal_set.cap  = 256;
+        tl_str_literal_set.keys = (void **)calloc(256, sizeof(void *));
+    }
+    if (tl_str_literal_set.len * 2 >= tl_str_literal_set.cap) {
+        size_t  old_cap  = tl_str_literal_set.cap;
+        void  **old_keys = tl_str_literal_set.keys;
+        size_t  new_cap  = old_cap * 2;
+        void  **new_keys = (void **)calloc(new_cap, sizeof(void *));
+        for (size_t i = 0; i < old_cap; i++) {
+            if (old_keys[i]) {
+                size_t h = (size_t)old_keys[i] * 2654435761u;
+                h &= new_cap - 1;
+                while (new_keys[h]) h = (h + 1) & (new_cap - 1);
+                new_keys[h] = old_keys[i];
+            }
+        }
+        free(old_keys);
+        tl_str_literal_set.keys = new_keys;
+        tl_str_literal_set.cap  = new_cap;
+    }
+    size_t h = (size_t)p * 2654435761u;
+    h &= tl_str_literal_set.cap - 1;
+    while (tl_str_literal_set.keys[h]) {
+        if (tl_str_literal_set.keys[h] == p) return;
+        h = (h + 1) & (tl_str_literal_set.cap - 1);
+    }
+    tl_str_literal_set.keys[h] = p;
+    tl_str_literal_set.len++;
+}
+
+static int tl_str_literal_set_has(void *p) {
+    if (!tl_str_literal_set.keys || !p) return 0;
+    size_t h = (size_t)p * 2654435761u;
+    h &= tl_str_literal_set.cap - 1;
+    while (tl_str_literal_set.keys[h]) {
+        if (tl_str_literal_set.keys[h] == p) return 1;
+        h = (h + 1) & (tl_str_literal_set.cap - 1);
+    }
+    return 0;
+}
+#endc
+
+c_tl_str_literal_set_add(p: Ptr(CChar)) -> Void
+c_tl_str_literal_set_has(p: Ptr(CChar)) -> Bool
+
+_mark_literal(s: Ptr(Str)) {
+    if _is_small(s.*) {
+        s->small.tag_len = s->small.tag_len | _STR_LITERAL_TAG
+    } else {
+        c_tl_str_literal_set_add(s->big.buf)
+    }
+}
+
+_is_literal(s: Str) -> Bool {
+    return if _is_small(s) {
+        (s.small.tag_len & _STR_LITERAL_TAG) != 0
+    } else {
+        c_tl_str_literal_set_has(s.big.buf)
+    }
+}
+
+#endif
 
 
 _init_small(src: Ptr(CChar), n: CSize) -> Str {
@@ -153,9 +237,19 @@ from_cstr(s: CString) -> Str {
     from_cstr(Alloc.context.default, s)
 }
 
+#ifdef DEBUG
+from_literal(s: CString) -> Str {
+    r := from_cstr(Alloc.context.string_literals, s)
+    _mark_literal(r.&)
+    r
+}
+#endif
+
+#ifndef DEBUG
 from_literal(s: CString) -> Str {
     from_cstr(Alloc.context.string_literals, s)
 }
+#endif
 
 copy(alloc, s: Str) -> Str {
     n := len(s)
@@ -375,11 +469,24 @@ cat_4(a: Str, b: Str, c: Str, d: Str) -> Str {
     cat_4(Alloc.context.default, a, b, c, d)
 }
 
+#ifdef DEBUG
+push(self: Ptr(Str), alloc, other: Str) {
+    if _is_literal(self.*) {
+        _tl_fatal_(c"Str.push: cannot push to a string literal")
+    }
+    result := cat(alloc, self.*, other)
+    free(self, alloc)
+    self.* = result
+}
+#endif
+
+#ifndef DEBUG
 push(self: Ptr(Str), alloc, other: Str) {
     result := cat(alloc, self.*, other)
     free(self, alloc)
     self.* = result
 }
+#endif
 
 push(self: Ptr(Str), other: Str) {
     push(self, Alloc.context.default, other)
@@ -436,12 +543,26 @@ replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
 
 // -- Memory --
 
+#ifdef DEBUG
+free(self: Ptr(Str), alloc) {
+    if _is_literal(self.*) {
+        _tl_fatal_(c"Str.free: cannot free a string literal")
+    }
+    if !_is_small(self.*) {
+        alloc->free(alloc, self->big.buf)
+    }
+    self.* = empty()
+}
+#endif
+
+#ifndef DEBUG
 free(self: Ptr(Str), alloc) {
     if !_is_small(self.*) {
         alloc->free(alloc, self->big.buf)
     }
     self.* = empty()
 }
+#endif
 
 free(self: Ptr(Str)) {
     free(self, Alloc.context.default)

@@ -182,7 +182,7 @@ test_cat_to_big() {
 
 test_push() {
     error := 0
-    s     := "hello"
+    s     := Str.copy("hello")
     b     := " world"
     Str.push(s.&, b)
     if Str.len(s) != 11 { error += 1 }
@@ -227,7 +227,6 @@ test_slice() {
     e := Str.slice(s, 3, 3)
     if Str.len(e) != 0 { error += 1 }
 
-    Str.free(s.&)
     Str.free(sub.&)
     Str.free(e.&)
     error

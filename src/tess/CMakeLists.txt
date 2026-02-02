@@ -214,6 +214,37 @@ function(tl_create_known_fail_failure NAME)
   )
 endfunction()
 
+# Expected runtime failures (must compile, must fail at runtime)
+function(tl_create_runtime_fail_test NAME)
+  set(TEST_NAME test-tl-${NAME})
+  set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
+  add_custom_command(
+    OUTPUT ${TEST_EXE}
+    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    DEPENDS tess_exe
+      ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Compiling test_${NAME}.tl"
+  )
+  add_custom_target(${TEST_NAME} ALL DEPENDS ${TEST_EXE})
+  if(WIN32)
+    add_test(NAME ${TEST_NAME}
+      COMMAND cmd /c "${TEST_EXE} && exit 1 || exit 0"
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+  else()
+    add_test(NAME ${TEST_NAME}
+      COMMAND sh -c "${TEST_EXE} 2>/dev/null && exit 1 || exit 0"
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+  endif()
+  set_tests_properties(${TEST_NAME} PROPERTIES
+    LABELS "expected_runtime_failure"
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
+  )
+endfunction()
+
 tl_create_test(address_of)
 tl_create_test(alignof)
 tl_create_test(alloc_align)
@@ -432,6 +463,10 @@ tl_create_build_fail_test(fail_const_lambda_mutation)
 tl_create_build_fail_test(fail_const_strip)
 tl_create_build_fail_test(fail_const_strip_lambda)
 tl_create_build_fail_test(fail_const_strip_nested)
+
+# Expected runtime failures (debug mode: compile succeeds, run must fail)
+tl_create_runtime_fail_test(fail_str_free_literal)
+tl_create_runtime_fail_test(fail_str_push_literal)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
