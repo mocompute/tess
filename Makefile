@@ -506,7 +506,9 @@ TL_TESTS =					\
 	while_break				\
 	while_continue				\
 	while_statement				\
-	while_update_statement
+	while_update_statement			\
+	import_relative				\
+	import_relative_dotdot
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
@@ -540,7 +542,9 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_existing_type_bad_type_arg \
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
-	fail_unknown_free_variable
+	fail_unknown_free_variable		\
+	fail_import_absolute			\
+	fail_import_missing_quotes
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)
 TL_FAIL_RUNTIME_TESTS =				\
@@ -557,6 +561,15 @@ TL_KNOWN_FAILURES =			\
 
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
+
+# Special rule for test_import_relative_dotdot (needs to run from fixtures directory)
+$(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE)
+	@mkdir -p $(dir $@)
+	$(MSG_GEN) $@
+	@cd $(TL_TEST_DIR)/fixtures && \
+	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
+		$(MSG_FAIL) $@; \
+	fi
 
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)

@@ -127,7 +127,8 @@ str file_dirname(allocator *alloc, char const *path) {
     char const *p2 = strrchr(path, '\\');
     char const *p  = (p1 > p2) ? p1 : p2;
 
-    if (!p) return str_empty();
+    // No directory separator means the file is in the current directory
+    if (!p) return str_init(alloc, ".");
 
     size_t len = (size_t)(p - path);
     if (len == 0) {
