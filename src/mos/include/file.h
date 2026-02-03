@@ -12,4 +12,20 @@ char const *file_basename(char const *);
 char       *file_current_working_directory(span);
 char       *file_exe_directory(span buf);
 
+// -- path utilities --
+
+// Returns directory portion of path (e.g., "/foo/bar/baz.tl" -> "/foo/bar")
+// Returns empty string if path has no directory component
+str         file_dirname(allocator *, char const *path);
+
+// Returns 1 if path is absolute, 0 if relative
+int         file_is_absolute(char const *path);
+
+// Join two path components with separator
+str         file_path_join(allocator *, str dir, str file);
+
+// Normalize path: resolve "..", ".", remove redundant separators
+// Returns empty string if path would escape root (too many "..")
+str         file_path_normalize(allocator *, char const *path);
+
 #endif

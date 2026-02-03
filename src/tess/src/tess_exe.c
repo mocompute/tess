@@ -3,6 +3,7 @@
 #include "file.h"
 #include "format.h"
 #include "hashmap.h"
+#include "import_resolver.h"
 #include "infer.h"
 #include "parser.h"
 #include "str.h"
@@ -30,10 +31,10 @@ typedef struct {
 
     c_string_carray words;
 
-    str             cc;
-    str_sized       cflags;
-    str_array       include_paths;
-    str_array       defines;
+    str              cc;
+    str_sized        cflags;
+    import_resolver *resolver;
+    str_array        defines;
     hashmap        *import_defines; // hset for conditional compilation during import resolution
     int             import_skip_depth;
 
@@ -84,13 +85,14 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -h                     print usage and exit\n");
     printf("    -V, --version          print version and exit\n");
     printf("    -D <symbol>            define <symbol> for conditional compilation\n");
-    printf("    -I <path>              add <path> to import search path. Multiple ok.\n");
+    printf("    -I <path>              add user include path for \"...\" imports. Multiple ok.\n");
+    printf("    -S <path>              add standard library path for <...> imports. Multiple ok.\n");
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
-    printf("    --no-standard-includes only directories specified with -I will be searched\n");
+    printf("    --no-standard-includes do not add default standard library paths\n");
     printf("    --stats                report memory and time statistics per phase\n");
     printf("    --time                 report elapsed time of compilation process\n");
     printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
@@ -112,7 +114,7 @@ void state_init(state *self) {
     array_reserve(self->words, 32);
     self->cc                   = str_empty();
     self->cflags               = (str_sized){0};
-    self->include_paths        = (str_array){.alloc = self->arena};
+    self->resolver             = import_resolver_create(self->arena);
     self->defines              = (str_array){.alloc = self->arena};
     self->import_defines       = hset_create(self->arena, 8);
     self->program              = str_empty();
@@ -178,7 +180,11 @@ void state_gather_options(state *self, int argc, char *argv[]) {
             } else if (0 == strncmp("-I", argv[i], 2)) {
                 char const *val  = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         path = str_init(self->arena, val);
-                array_push(self->include_paths, path);
+                import_resolver_add_user_path(self->resolver, path);
+            } else if (0 == strncmp("-S", argv[i], 2)) {
+                char const *val  = argv[i][2] ? argv[i] + 2 : argv[++i];
+                str         path = str_init(self->arena, val);
+                import_resolver_add_standard_path(self->resolver, path);
             } else if (0 == strncmp("-D", argv[i], 2)) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         define = str_init(self->arena, sym);
@@ -274,35 +280,8 @@ void read_import_lines(state *self, char_csized input, str_array *output) {
     }
 }
 
-static int is_quoted(str arg) {
-    span s = str_span(&arg);
-    if (s.buf[0] != '"' || s.buf[s.len - 1] != '"') return 0;
-    return 1;
-}
-
-static int is_angle_quoted(str arg) {
-    span s = str_span(&arg);
-    if (s.buf[0] != '<' || s.buf[s.len - 1] != '>') return 0;
-    return 1;
-}
-
-static str strip_quotes(allocator *alloc, str quoted) {
-    // TODO: would be better to operate on spans so we don't needlessly copy
-    // strings
-    if (!is_quoted(quoted) && !is_angle_quoted(quoted)) return str_empty();
-
-    span s = str_span(&quoted);
-    s.buf++;
-    s.len -= 2;
-    return str_copy_span(alloc, s);
-}
-
 static void print_import_paths(state *self) {
-    fprintf(stderr, "info:  include paths:");
-    forall(i, self->include_paths) {
-        fprintf(stderr, " %s", str_cstr(&self->include_paths.v[i]));
-    }
-    fprintf(stderr, "\n");
+    import_resolver_print_paths(self->resolver);
 }
 
 static void add_standard_include_paths(state *self, char const *cwd) {
@@ -313,40 +292,80 @@ static void add_standard_include_paths(state *self, char const *cwd) {
     if (file_exe_directory(exe_span)) {
         str exe_dir       = str_init(self->arena, exe_buf);
         str installed_std = str_cat(self->arena, exe_dir, S("/../lib/tess/std"));
-        array_push(self->include_paths, installed_std);
+        import_resolver_add_standard_path(self->resolver, installed_std);
     }
 
     // 2. Add <cwd>/src/tl/std (for development builds)
     str cwd_std = str_cat(self->arena, str_init_static(cwd), S("/src/tl/std"));
-    array_push(self->include_paths, cwd_std);
+    import_resolver_add_standard_path(self->resolver, cwd_std);
 }
 
-static str find_import_file(state *self, str path) {
-    // Note: path must be quoted, either with quotes or angle brackets
-    if (!is_quoted(path) && !is_angle_quoted(path)) return str_empty();
+// Resolve an import path using the import resolver
+// Returns empty string on error (error already printed)
+static str resolve_import(state *self, str import_path, str importing_file) {
+    import_result result = import_resolver_resolve(self->resolver, import_path, importing_file);
 
-    path = strip_quotes(self->arena, path);
-    if (file_exists(str_cstr(&path))) return path;
-
-    forall(i, self->include_paths) {
-        str prefixed = str_cat_3(self->arena, self->include_paths.v[i], S("/"), path);
-        if (file_exists(str_cstr(&prefixed))) {
-            return prefixed;
-        }
+    if (str_is_empty(result.canonical_path)) {
+        exit(1); // Error already printed by resolver
     }
 
-    fprintf(stderr, "error: import not found: '%s'\n", str_cstr(&path));
-    print_import_paths(self);
-    exit(1);
+    return result.canonical_path;
 }
 
-static void collect_imports_from_import_file(state *self, str path, str_array *imports) {
+static void collect_imports_from_import_file(state *self, str import_path, str importing_file,
+                                             str_array *imports, str_array *resolved_paths) {
+    if (str_is_empty(import_path)) return;
+
+    // Resolve the import path
+    import_result result = import_resolver_resolve(self->resolver, import_path, importing_file);
+
+    if (str_is_empty(result.canonical_path)) {
+        exit(1); // Error already printed by resolver
+    }
+
+    // Skip if already imported (duplicate detection)
+    if (result.is_duplicate) {
+        return;
+    }
+
+    // Check for circular imports
+    if (import_resolver_begin_import(self->resolver, result.canonical_path)) {
+        fprintf(stderr, "error: circular import detected: %s\n", str_cstr(&result.canonical_path));
+        exit(1);
+    }
+
+    // Mark as imported
+    import_resolver_mark_imported(self->resolver, result.canonical_path);
+
+    // Read file and collect its imports
+    char *data;
+    u32   size;
+    file_read(imports->alloc, str_cstr(&result.canonical_path), &data, &size);
+
+    str_array file_imports = {.alloc = imports->alloc};
+    array_reserve(file_imports, 32);
+
+    read_import_lines(self, (char_csized){.size = size, .v = data}, &file_imports);
+
+    // Recursively collect imports from this file
+    forall(i, file_imports) {
+        collect_imports_from_import_file(self, file_imports.v[i], result.canonical_path,
+                                         imports, resolved_paths);
+    }
+
+    // Add to output after processing dependencies (topological order)
+    array_push(*imports, import_path);
+    array_push(*resolved_paths, result.canonical_path);
+
+    // Mark import as complete
+    import_resolver_end_import(self->resolver, result.canonical_path);
+}
+
+static void collect_imports_from_file(state *self, str path, str_array *imports,
+                                      str_array *resolved_paths) {
     char *data;
     u32   size;
 
-    if (str_is_empty(path)) return;
-
-    path = find_import_file(self, path);
     file_read(imports->alloc, str_cstr(&path), &data, &size);
 
     str_array file_imports = {.alloc = imports->alloc};
@@ -354,51 +373,36 @@ static void collect_imports_from_import_file(state *self, str path, str_array *i
 
     read_import_lines(self, (char_csized){.size = size, .v = data}, &file_imports);
     forall(i, file_imports) {
-        collect_imports_from_import_file(self, file_imports.v[i], imports);
-        array_push(*imports, file_imports.v[i]);
+        collect_imports_from_import_file(self, file_imports.v[i], path, imports, resolved_paths);
     }
 }
 
-static void collect_imports_from_file(state *self, str path, str_array *imports) {
-    char *data;
-    u32   size;
-
-    file_read(imports->alloc, str_cstr(&path), &data, &size);
-
-    str_array file_imports = {.alloc = imports->alloc};
-    array_reserve(file_imports, 32);
-
-    read_import_lines(self, (char_csized){.size = size, .v = data}, &file_imports);
-    forall(i, file_imports) {
-        collect_imports_from_import_file(self, file_imports.v[i], imports);
-        array_push(*imports, file_imports.v[i]);
-    }
-}
-
+// Collect all imports from the given files
+// Returns the resolved paths in dependency order
 static str_sized collect_imports(state *self, c_string_csized files) {
-    allocator *alloc  = self->arena;
+    allocator *alloc = self->arena;
 
-    char_array buffer = {.alloc = alloc};
-    array_reserve(buffer, 64 * 1024);
-
-    str_array imports = {.alloc = alloc};
+    str_array imports        = {.alloc = alloc};
+    str_array resolved_paths = {.alloc = alloc};
     array_reserve(imports, 32);
+    array_reserve(resolved_paths, 32);
 
     forall(i, files) {
-        collect_imports_from_file(self, str_init_static(files.v[i]), &imports);
+        collect_imports_from_file(self, str_init_static(files.v[i]), &imports, &resolved_paths);
     }
 
-    return (str_sized)array_sized(imports);
+    return (str_sized)array_sized(resolved_paths);
 }
 
 static str_sized files_in_order(state *self, c_string_csized files) {
-
-    str_sized imports        = collect_imports(self, files);
+    // Collect all imports (resolved paths in dependency order)
+    str_sized resolved_imports = collect_imports(self, files);
 
     str_array files_in_order = {.alloc = self->arena};
-    array_reserve(files_in_order, imports.size + files.size);
+    array_reserve(files_in_order, resolved_imports.size + files.size + 1);
 
-    str builtin = find_import_file(self, S("<builtin.tl>"));
+    // Resolve builtin.tl (always first)
+    str builtin = resolve_import(self, S("<builtin.tl>"), str_empty());
     if (str_is_empty(builtin)) {
         fprintf(stderr, "error: failed to find 'builtin.tl'\n");
         print_import_paths(self);
@@ -406,11 +410,9 @@ static str_sized files_in_order(state *self, c_string_csized files) {
     }
     array_push(files_in_order, builtin);
 
-    forall(i, imports) {
-        // resolve file paths and strip quotes
-        str file = imports.v[i];
-        file     = find_import_file(self, file);
-        array_push(files_in_order, file);
+    // Add resolved imports (already in correct order)
+    forall(i, resolved_imports) {
+        array_push(files_in_order, resolved_imports.v[i]);
     }
 
     forall(i, files) {
@@ -986,9 +988,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Current working directory: %s\n", buf_s.buf);
         fprintf(stderr, "C compiler: %s\n", str_cstr(&self.cc));
         if (self.no_standard_includes) fprintf(stderr, "Ignoring standard include paths\n");
-        forall(i, self.include_paths) {
-            fprintf(stderr, "-I %s\n", str_cstr(&self.include_paths.v[i]));
-        }
+        import_resolver_print_paths(self.resolver);
         forall(i, self.defines) {
             fprintf(stderr, "-D %s\n", str_cstr(&self.defines.v[i]));
         }
