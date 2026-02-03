@@ -74,6 +74,7 @@ set(SOURCES
 
   src/infer.c
   src/transpile.c
+  src/tlib.c
   src/type.c
 
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
@@ -81,7 +82,7 @@ set(SOURCES
 target_sources(tess PRIVATE ${HEADERS} ${SOURCES})
 target_compile_options(tess BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
 target_include_directories(tess PUBLIC "${PROJECT_SOURCE_DIR}/src/tess/include")
-target_link_libraries(tess PUBLIC mos)
+target_link_libraries(tess PUBLIC mos libdeflate::libdeflate_static)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- exe --
@@ -90,7 +91,7 @@ add_executable(tess_exe src/tess_exe.c)
 set_target_properties(tess_exe PROPERTIES OUTPUT_NAME tess)
 target_compile_options(tess_exe BEFORE PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
 target_include_directories(tess_exe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(tess_exe PUBLIC tess libdeflate::libdeflate_static)
+target_link_libraries(tess_exe PUBLIC tess)
 target_link_options(tess_exe PRIVATE ${MOS_C_LINK_OPTIONS})
 
 # -- tests --
@@ -107,6 +108,7 @@ endfunction()
 tess_create_test(tess)
 tess_create_test(type_v2)
 tess_create_test(format)
+tess_create_test(tlib)
 
 # -- vendor tests --
 

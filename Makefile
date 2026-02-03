@@ -39,7 +39,7 @@ check_flag = $(shell $(CC) -Werror $(patsubst -Wno-%,-W%,$(1)) -x c -c /dev/null
 CLANG_FLAGS := -Wno-gnu-alignof-expression
 CFLAGS += $(foreach flag,$(CLANG_FLAGS),$(call check_flag,$(flag)))
 
-CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
+CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR) -I$(LIBDEFLATE_DIR)
 LDFLAGS ?=
 LDFLAGS += $(LDFLAGS_CONFIG)
 
@@ -122,6 +122,7 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/tokenizer.c \
 	$(TESS_SRC_DIR)/src/infer.c	\
 	$(TESS_SRC_DIR)/src/transpile.c \
+	$(TESS_SRC_DIR)/src/tlib.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
 TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
@@ -287,10 +288,10 @@ test-mos: build-mos-tests
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format
+TESS_TESTS     = tess type_v2 format tlib
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
-$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
@@ -307,10 +308,10 @@ test-tess: build-tess-tests
 VENDOR_TESTS     = deflate
 VENDOR_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_vendor_%,$(VENDOR_TESTS))
 
-$(BUILD_DIR)/test_vendor_%: $(TESS_SRC_DIR)/src/test_%.c $(LIBDEFLATE_OBJECTS)
+$(BUILD_DIR)/test_vendor_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
-	$(Q)$(CC) $(CFLAGS) -I$(LIBDEFLATE_DIR) $(LDFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 build-vendor-tests: $(VENDOR_TEST_EXES)
 
