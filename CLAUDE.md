@@ -4,6 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Git Rules
 
+- NEVER commit on your own initiative. Always ask permission before committing, every time.
 - NEVER amend a commit unless the user explicitly gives permission to do so. Always create a new commit instead.
 
 ## Project Overview
