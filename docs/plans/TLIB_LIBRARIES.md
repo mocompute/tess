@@ -63,11 +63,23 @@ For each file:
     [N bytes] Content (raw source bytes)
 ```
 
+### Path Handling
+
+Files are stored with their directory structure relative to a common root (the nearest common ancestor of all packed files). This preserves import resolution semantics:
+
+- `liba/core.tl` and `libb/core.tl` can coexist
+- `#import "../util/util.tl"` from `liba/foo.tl` resolves correctly to `util/util.tl`
+- The compiler's existing relative import resolution works unchanged
+
+`..` components are allowed in stored paths. The validation rule is:
+- No path may escape the archive root (e.g., `../../../etc/passwd` is rejected)
+- After packing, every `#import` in every archived file must resolve to another file in the archive (self-containment check)
+
 ### Safety
 
 - All lengths are bounds-checked against remaining buffer size on read
 - Maximum individual file size and total archive size limits prevent memory exhaustion
-- Filenames are validated (no absolute paths, no `..` components)
+- Filenames are validated: no absolute paths, no escape from archive root
 
 ### Compression
 
