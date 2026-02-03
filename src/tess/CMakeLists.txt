@@ -108,6 +108,14 @@ tess_create_test(tess)
 tess_create_test(type_v2)
 tess_create_test(format)
 
+# -- vendor tests --
+
+add_executable(test-vendor-deflate src/test_deflate.c)
+target_link_libraries(test-vendor-deflate PRIVATE libdeflate::libdeflate_static)
+target_compile_options(test-vendor-deflate PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
+target_link_options(test-vendor-deflate PRIVATE ${MOS_C_LINK_OPTIONS})
+add_test(NAME test-vendor-deflate COMMAND $<TARGET_FILE:test-vendor-deflate>)
+
 # -- tesslang tests --
 
 function(tl_create_test NAME)

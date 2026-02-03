@@ -301,6 +301,23 @@ test-tess: build-tess-tests
 	$(call run_test_suite,tess,$(TESS_TEST_EXES))
 
 # ------------------------------------------------------------------------------
+# Vendor Tests
+# ------------------------------------------------------------------------------
+
+VENDOR_TESTS     = deflate
+VENDOR_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_vendor_%,$(VENDOR_TESTS))
+
+$(BUILD_DIR)/test_vendor_%: $(TESS_SRC_DIR)/src/test_%.c $(LIBDEFLATE_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) -I$(LIBDEFLATE_DIR) $(LDFLAGS) -o $@ $^
+
+build-vendor-tests: $(VENDOR_TEST_EXES)
+
+test-vendor: build-vendor-tests
+	$(call run_test_suite,vendor,$(VENDOR_TEST_EXES))
+
+# ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
 # ------------------------------------------------------------------------------
 
@@ -628,22 +645,24 @@ test-tl: build-tl-tests
 # Combined Test Target
 # ------------------------------------------------------------------------------
 
-build-tests: build-mos-tests build-tess-tests build-tl-tests
+build-tests: build-mos-tests build-tess-tests build-vendor-tests build-tl-tests
 
 test:
-	@mos_ok=0; tess_ok=0; tl_ok=0; \
+	@mos_ok=0; tess_ok=0; vendor_ok=0; tl_ok=0; \
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
 	$(MAKE) --no-print-directory test-tess && tess_ok=1; \
+	$(MAKE) --no-print-directory test-vendor && vendor_ok=1; \
 	$(MAKE) --no-print-directory test-tl && tl_ok=1; \
 	printf "\n"; \
 	printf "==============================================================================\n"; \
-	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
+	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$vendor_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
 		printf "\n"; \
 		$(MSG_PASS) "All test suites passed"; \
 	else \
-		[ $$mos_ok -eq 0 ]  && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
-		[ $$tess_ok -eq 0 ] && printf "  \033[1;31m[FAIL] tess tests failed\033[0m\n"; \
-		[ $$tl_ok -eq 0 ]   && printf "  \033[1;31m[FAIL] TL tests failed\033[0m\n"; \
+		[ $$mos_ok -eq 0 ]    && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
+		[ $$tess_ok -eq 0 ]   && printf "  \033[1;31m[FAIL] tess tests failed\033[0m\n"; \
+		[ $$vendor_ok -eq 0 ] && printf "  \033[1;31m[FAIL] vendor tests failed\033[0m\n"; \
+		[ $$tl_ok -eq 0 ]     && printf "  \033[1;31m[FAIL] TL tests failed\033[0m\n"; \
 		printf "\n"; \
 		exit 1; \
 	fi
