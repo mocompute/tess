@@ -173,6 +173,25 @@ $(TESS_EMBED_OBJ): $(TESS_EMBED_SRC)
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
+# libdeflate (vendored)
+# ------------------------------------------------------------------------------
+
+LIBDEFLATE_DIR = vendor/libdeflate-1.25
+LIBDEFLATE_SOURCES = \
+	$(LIBDEFLATE_DIR)/lib/arm/cpu_features.c \
+	$(LIBDEFLATE_DIR)/lib/x86/cpu_features.c \
+	$(LIBDEFLATE_DIR)/lib/utils.c \
+	$(LIBDEFLATE_DIR)/lib/deflate_compress.c \
+	$(LIBDEFLATE_DIR)/lib/deflate_decompress.c
+LIBDEFLATE_OBJECTS = $(patsubst $(LIBDEFLATE_DIR)/%.c,$(BUILD_DIR)/libdeflate/%.o,$(LIBDEFLATE_SOURCES))
+LIBDEFLATE_CFLAGS = -std=gnu11 -O2 -fPIE -I$(LIBDEFLATE_DIR)
+
+$(BUILD_DIR)/libdeflate/%.o: $(LIBDEFLATE_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(MSG_CC) $<
+	$(Q)$(CC) $(LIBDEFLATE_CFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
 # tess Executable
 # ------------------------------------------------------------------------------
 
@@ -180,7 +199,7 @@ TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
 TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
 TESS_EXE     = tess
 
-$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
