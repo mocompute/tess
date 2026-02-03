@@ -111,6 +111,7 @@ tess_create_test(tess)
 tess_create_test(type_v2)
 tess_create_test(format)
 tess_create_test(tlib)
+tess_create_test(import_resolver)
 
 # -- vendor tests --
 

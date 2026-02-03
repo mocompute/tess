@@ -291,7 +291,7 @@ test-mos: build-mos-tests
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format tlib
+TESS_TESTS     = tess type_v2 format tlib import_resolver
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
