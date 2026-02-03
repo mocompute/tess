@@ -58,6 +58,7 @@ endfunction()
 
 mos_create_test(alloc)
 mos_create_test(array)
+mos_create_test(file)
 mos_create_test(map)
 mos_create_test(sexp)
 mos_create_test(str)

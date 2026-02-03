@@ -242,6 +242,7 @@ cleanall:
 
 # $(1): test suite name (for display)
 # $(2): list of test executables
+# $(3): test count
 define run_test_suite
 	@failed=0; \
 	for test in $(2); do \
@@ -252,6 +253,7 @@ define run_test_suite
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $(3) $(1) tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed $(1) test(s) failed\033[0m\n"; \
 		exit 1; \
@@ -280,10 +282,10 @@ build-mos-tests: $(MOS_TEST_EXES)
 build-mos-benchmarks: $(MOS_BENCHMARK_EXES)
 
 bench-mos: build-mos-benchmarks
-	$(call run_test_suite,mos benchmarks,$(MOS_BENCHMARK_EXES))
+	$(call run_test_suite,mos benchmarks,$(MOS_BENCHMARK_EXES),$(words $(MOS_BENCHMARKS)))
 
 test-mos: build-mos-tests
-	$(call run_test_suite,mos,$(MOS_TEST_EXES))
+	$(call run_test_suite,mos,$(MOS_TEST_EXES),$(words $(MOS_TESTS)))
 
 # ------------------------------------------------------------------------------
 # tess Compiler Tests
@@ -300,7 +302,7 @@ $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_O
 build-tess-tests: $(TESS_TEST_EXES)
 
 test-tess: build-tess-tests
-	$(call run_test_suite,tess,$(TESS_TEST_EXES))
+	$(call run_test_suite,tess,$(TESS_TEST_EXES),$(words $(TESS_TESTS)))
 
 # ------------------------------------------------------------------------------
 # Vendor Tests
@@ -317,7 +319,7 @@ $(BUILD_DIR)/test_vendor_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_
 build-vendor-tests: $(VENDOR_TEST_EXES)
 
 test-vendor: build-vendor-tests
-	$(call run_test_suite,vendor,$(VENDOR_TEST_EXES))
+	$(call run_test_suite,vendor,$(VENDOR_TEST_EXES),$(words $(VENDOR_TESTS)))
 
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
@@ -558,7 +560,10 @@ TL_KNOWN_FAIL_FAILURES =
 TL_KNOWN_FAILURES =			\
 	while_empty_body
 
-
+# Total test count across all suites
+TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
+	$(TL_TESTS) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
+	$(TL_KNOWN_FAIL_FAILURES) $(TL_KNOWN_FAILURES))
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
@@ -642,8 +647,6 @@ test-tl: build-tl-tests
 		count_known=$$((count_known + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known known failure tests\n"; \
-	total=$$((count_pass + count_fail + count_fail_rt + count_known_fail + count_known)); \
-	printf "  \033[1;36m[TOTAL]\033[0m $$total tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \
 		exit 1; \
@@ -670,8 +673,8 @@ test:
 	$(MAKE) --no-print-directory test-tl && tl_ok=1; \
 	printf "\n"; \
 	printf "==============================================================================\n"; \
+	printf "  \033[1;36m[TOTAL]\033[0m $(TOTAL_TESTS) tests\n\n"; \
 	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$vendor_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
-		printf "\n"; \
 		$(MSG_PASS) "All test suites passed"; \
 	else \
 		[ $$mos_ok -eq 0 ]    && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
