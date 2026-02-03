@@ -7,13 +7,35 @@
 
 #ifdef MOS_WINDOWS
 #include <direct.h>
+#include <io.h>
 #define platform_mkdir(path) _mkdir(path)
 #define NULL_DEVICE          "NUL"
+#define dup    _dup
+#define dup2   _dup2
+#define fileno _fileno
+#define close  _close
 #else
 #include <sys/stat.h>
+#include <unistd.h>
 #define platform_mkdir(path) mkdir(path, 0755)
 #define NULL_DEVICE          "/dev/null"
 #endif
+
+// Suppress stderr output (for expected failures)
+static int saved_stderr_fd = -1;
+static void suppress_stderr(void) {
+    fflush(stderr);
+    saved_stderr_fd = dup(fileno(stderr));
+    FILE *ignore = freopen(NULL_DEVICE, "w", stderr);
+    (void)ignore;
+}
+
+static void restore_stderr(void) {
+    fflush(stderr);
+    dup2(saved_stderr_fd, fileno(stderr));
+    close(saved_stderr_fd);
+    saved_stderr_fd = -1;
+}
 
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
@@ -22,8 +44,9 @@
         error += this_error;                                                                               \
     }
 
-// Global test base directory
-static char test_base[PLATFORM_PATH_MAX];
+// Global test base directory (only needs to hold temp path like "/tmp/tess_import_test")
+#define TEST_BASE_MAX 256
+static char test_base[TEST_BASE_MAX];
 
 // Initialize test base directory using platform temp path
 static void init_test_base(void) {
@@ -277,11 +300,9 @@ static int test_quoted_ignores_standard_paths(void) {
 
     // Quoted import should NOT find it (should fail)
     // Suppress stderr for this expected failure
-    FILE *old_stderr = stderr;
-    stderr           = fopen(NULL_DEVICE, "w");
+    suppress_stderr();
     import_result r  = import_resolver_resolve(resolver, S("\"std_only.tl\""), str_empty());
-    fclose(stderr);
-    stderr = old_stderr;
+    restore_stderr();
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  quoted import should NOT search standard paths\n");
@@ -343,11 +364,9 @@ static int test_angle_bracket_ignores_user_paths(void) {
     import_resolver_add_user_path(resolver, str_init_static(dir_path));
 
     // Angle bracket import should NOT find it
-    FILE *old_stderr = stderr;
-    stderr           = fopen(NULL_DEVICE, "w");
+    suppress_stderr();
     import_result r  = import_resolver_resolve(resolver, S("<user_only.tl>"), str_empty());
-    fclose(stderr);
-    stderr = old_stderr;
+    restore_stderr();
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search user paths\n");
@@ -380,12 +399,10 @@ static int test_angle_bracket_ignores_relative(void) {
     // No paths added - only relative would work for quoted
 
     // Angle bracket import should NOT find the sibling file
-    FILE *old_stderr = stderr;
-    stderr           = fopen(NULL_DEVICE, "w");
+    suppress_stderr();
     build_path(main_path, sizeof(main_path), test_base, "rel_ignore/src/main.tl");
     import_result r = import_resolver_resolve(resolver, S("<sibling.tl>"), str_init_static(main_path));
-    fclose(stderr);
-    stderr = old_stderr;
+    restore_stderr();
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search relative paths\n");
