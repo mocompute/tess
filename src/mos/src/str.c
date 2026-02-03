@@ -13,7 +13,10 @@
 #define STR_SMALL 1
 
 str str_empty() {
-    return (str){.small.tag = STR_SMALL, .small.len = 0};
+    str out       = {0};
+    out.small.tag = STR_SMALL;
+
+    return out;
 }
 
 str str_move(str *orig) {
@@ -28,7 +31,7 @@ static void init_small(str *out, char const *in, size_t len) {
 
     out->small.tag = STR_SMALL;
     out->small.len = len;
-    memcpy(&out->small.buf[0], in, len);
+    memcpy(out->small.buf, in, len);
 }
 
 static int is_small(str self) {
@@ -38,7 +41,7 @@ static int is_small(str self) {
 str str_init_small(char const *in) {
     size_t len = strlen(in);
     if (len > MOS_STR_MAX_SMALL) fatal("out of range");
-    str out;
+    str out = {0};
     init_small(&out, in, len);
     return out;
 }
@@ -62,20 +65,24 @@ str str_init(allocator *alloc, char const *in) {
 
 str str_init_n(allocator *alloc, char const *in, size_t len) {
     if (len <= MOS_STR_MAX_SMALL) {
-        str out;
+        str out = {0};
         init_small(&out, in, len);
         return out;
     }
 
     // always allocate space for a terminating null to support str_cstr
-    str out = {.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
-    memcpy(&out.big.buf[0], in, len);
+    str out     = {0};
+    out.big.len = len;
+    out.big.buf = alloc_malloc(alloc, len + 1);
+
+    memcpy(out.big.buf, in, len);
+    out.big.buf[len] = '\0';
     return out;
 }
 
 str str_init_move_n(char **move_from, size_t len) {
     if (len <= MOS_STR_MAX_SMALL) {
-        str out;
+        str out = {0};
         init_small(&out, *move_from, len);
         // don't set move_from to null; caller must check it and free
         return out;
@@ -89,19 +96,28 @@ str str_init_move_n(char **move_from, size_t len) {
 str str_copy(allocator *alloc, str in) {
     span s = str_span(&in);
     if (s.len <= MOS_STR_MAX_SMALL) {
-        str out;
+        str out = {0};
         init_small(&out, s.buf, s.len);
         return out;
     }
 
     str out = (str){.big = {.len = s.len, .buf = alloc_malloc(alloc, s.len + 1)}};
-    memcpy(&out.big.buf[0], &s.buf[0], s.len);
+    memcpy(out.big.buf, s.buf, s.len);
+    out.big.buf[s.len] = '\0';
     return out;
 }
 
 str str_copy_span(allocator *alloc, span in) {
-    str in_str = (str){.big = {.buf = in.buf, .len = in.len}};
-    return str_copy(alloc, in_str);
+    if (in.len <= MOS_STR_MAX_SMALL) {
+        str out = {0};
+        init_small(&out, in.buf, in.len);
+        return out;
+    }
+
+    str out = (str){.big = {.len = in.len, .buf = alloc_malloc(alloc, in.len + 1)}};
+    memcpy(out.big.buf, in.buf, in.len);
+    out.big.buf[in.len] = '\0';
+    return out;
 }
 
 void str_deinit(allocator *alloc, str *self) {
@@ -148,13 +164,14 @@ str str_cat(allocator *alloc, str left, str right) {
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
         out = (str){.small = {.tag = STR_SMALL}};
-        memcpy(&out.small.buf[0], &left_span.buf[0], left_span.len);
-        memcpy(&out.small.buf[left_span.len], &right_span.buf[0], right_span.len);
+        memcpy(out.small.buf, left_span.buf, left_span.len);
+        memcpy(&out.small.buf[left_span.len], right_span.buf, right_span.len);
         out.small.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
-        memcpy(&out.big.buf[0], &left_span.buf[0], left_span.len);
-        memcpy(&out.big.buf[left_span.len], &right_span.buf[0], right_span.len);
+        memcpy(out.big.buf, left_span.buf, left_span.len);
+        memcpy(&out.big.buf[left_span.len], right_span.buf, right_span.len);
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -182,6 +199,7 @@ str str_cat_3(allocator *alloc, str one, str two, str three) {
         memcpy(out.big.buf, s1.buf, s1.len);
         memcpy(out.big.buf + s1.len, s2.buf, s2.len);
         memcpy(out.big.buf + s1.len + s2.len, s3.buf, s3.len);
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -214,6 +232,7 @@ str str_cat_4(allocator *alloc, str one, str two, str three, str four) {
         memcpy(out.big.buf + off, s3.buf, s3.len); off += s3.len;
         memcpy(out.big.buf + off, s4.buf, s4.len);
         // clang-format on
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -249,6 +268,7 @@ str str_cat_5(allocator *alloc, str one, str two, str three, str four, str five)
         memcpy(out.big.buf + off, s4.buf, s4.len); off += s4.len;
         memcpy(out.big.buf + off, s5.buf, s5.len);
         // clang-format on
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -287,6 +307,7 @@ str str_cat_6(allocator *alloc, str one, str two, str three, str four, str five,
         memcpy(out.big.buf + off, s5.buf, s5.len); off += s5.len;
         memcpy(out.big.buf + off, s6.buf, s6.len);
         // clang-format on
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -320,6 +341,8 @@ str str_cat_array(allocator *alloc, str_sized arr) {
         memcpy(out.big.buf + off, s.buf, s.len);
         off += s.len;
     }
+
+    out.big.buf[total] = '\0';
     return out;
 }
 
@@ -330,7 +353,7 @@ str *str_dcat(allocator *alloc, str *left, str right) {
 
     str_resize(alloc, left, new_len);
     span left_span = str_span(left);
-    memcpy(&left_span.buf[orig_len], &right_span.buf[0], right_span.len);
+    memcpy(&left_span.buf[orig_len], right_span.buf, right_span.len);
     return left;
 }
 
@@ -350,7 +373,7 @@ void str_resize(allocator *alloc, str *self, size_t len) {
         if (!is_small(*self)) {
             self->small.tag = STR_SMALL;
             self->small.len = len;
-            memcpy(&self->small.buf[0], old.buf, len);
+            memcpy(self->small.buf, old.buf, len);
             alloc_free(alloc, old.buf);
         }
         self->small.len = len;
@@ -362,13 +385,15 @@ void str_resize(allocator *alloc, str *self, size_t len) {
         assert(old.len <= MOS_STR_MAX_SMALL);
         memcpy(buf, old.buf, old.len);
         self->big.buf = alloc_malloc(alloc, len + 1);
-        memcpy(&self->big.buf[0], buf, old.len);
-        self->big.len = len;
+        memcpy(self->big.buf, buf, old.len);
+        self->big.buf[len] = '\0';
+        self->big.len      = len;
         return;
     }
 
-    self->big.buf = alloc_realloc(alloc, self->big.buf, len + 1);
-    self->big.len = len;
+    self->big.buf      = alloc_realloc(alloc, self->big.buf, len + 1);
+    self->big.buf[len] = '\0';
+    self->big.len      = len;
 }
 
 str str_replace_char(allocator *alloc, str s, char find, char replace) {
@@ -384,6 +409,7 @@ str str_replace_char(allocator *alloc, str s, char find, char replace) {
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         for (size_t i = 0; i < len; ++i) out.big.buf[i] = src.buf[i] == find ? replace : src.buf[i];
+        out.big.buf[len] = '\0';
     }
     return out;
 }
@@ -670,7 +696,7 @@ int str_parse_num(str self, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     char buf[64];
     span s = str_span(&self);
     if (s.len > 63) return 0;
-    memcpy(&buf[0], &s.buf[0], s.len);
+    memcpy(buf, s.buf, s.len);
     buf[s.len] = '\0';
 
     return str_parse_cnum(buf, out_i64, out_u64, out_f64);
