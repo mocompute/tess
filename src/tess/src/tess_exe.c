@@ -52,6 +52,7 @@ typedef struct {
     int              optimize;
 
     int              in_place;
+    int              unpack_list; // --list option for unpack command
 
     int              is_library;
     int              is_executable;
@@ -83,6 +84,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (-o required)\n");
+    printf(
+      "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage and exit\n");
     printf("    -V, --version          print version and exit\n");
@@ -91,6 +94,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -S <path>              add standard library path for <...> imports. Multiple ok.\n");
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
+    printf("    --list                 list archive contents without extracting (unpack only)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -161,6 +165,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
     else if (0 == strcmp("--in-place", str)) self->in_place = 1;
+    else if (0 == strcmp("--list", str)) self->unpack_list = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--", str)) /* ignore */
@@ -964,107 +969,40 @@ static int pack_files(state *self) {
     // Get input files (skip command name)
     c_string_csized input_files = {.v = self->words.v + 1, .size = self->words.size - 1};
 
-    // Get all files in dependency order using existing infrastructure
-    str_sized all_files = files_in_order(self, input_files);
-
-    // Determine base directory from first input file
+    // Compute base directory from first user input file (before dependency resolution)
     str first_input = str_init(self->arena, input_files.v[0]);
     str first_norm  = file_path_normalize(self->arena, first_input);
     str base_dir    = file_dirname(self->arena, first_norm);
 
-    if (str_is_empty(base_dir)) {
-        // Use current directory
-        char cwd_buf[4096];
-        if (!file_current_working_directory((span){.buf = cwd_buf, .len = sizeof(cwd_buf)})) {
-            fprintf(stderr, "error: failed to determine current working directory\n");
-            return 1;
-        }
-        base_dir = str_init(self->arena, cwd_buf);
-    }
+    // Get all files in dependency order using existing infrastructure
+    str_sized all_files = files_in_order(self, input_files);
 
-    if (self->verbose) {
-        fprintf(stderr, "Archive base directory: %s\n", str_cstr(&base_dir));
-    }
+    // Delegate to tlib module
+    tl_tlib_pack_opts opts = {.verbose = self->verbose};
+    return tl_tlib_pack(self->arena, self->out_path, all_files, base_dir, self->resolver, opts);
+}
 
-    // Count non-stdlib files and allocate entries
-    u32 user_file_count = 0;
-    forall(i, all_files) {
-        if (!import_resolver_is_stdlib_file(self->resolver, all_files.v[i])) {
-            user_file_count++;
-        }
-    }
-
-    if (user_file_count == 0) {
-        fprintf(stderr, "error: no user files to pack (only standard library dependencies)\n");
+static int unpack_files(state *self) {
+    // Validate arguments
+    if (self->words.size < 2) {
+        fprintf(stderr, "error: unpack command requires input archive\n");
+        usage(1, self->argv0);
         return 1;
     }
 
-    tl_tlib_entry *entries   = alloc_malloc(self->arena, user_file_count * sizeof(tl_tlib_entry));
-    u32            entry_idx = 0;
-
-    // Process each file
-    forall(i, all_files) {
-        str file_path = all_files.v[i];
-
-        // Skip standard library files
-        if (import_resolver_is_stdlib_file(self->resolver, file_path)) {
-            if (self->verbose) {
-                fprintf(stderr, "Skipping stdlib: %s\n", str_cstr(&file_path));
-            }
-            continue;
-        }
-
-        // Compute relative path from base directory
-        str rel_path = file_path_relative(self->arena, base_dir, file_path);
-
-        if (str_is_empty(rel_path)) {
-            fprintf(stderr, "error: cannot compute relative path for: %s\n", str_cstr(&file_path));
-            fprintf(stderr, "       from base directory: %s\n", str_cstr(&base_dir));
-            return 1;
-        }
-
-        // Validate filename for archive (no "..", no absolute paths)
-        if (!tl_tlib_valid_filename(str_cstr(&rel_path), (u32)str_len(rel_path))) {
-            fprintf(stderr, "error: invalid archive path: %s\n", str_cstr(&rel_path));
-            fprintf(stderr, "       Archive paths must not contain '..' or be absolute.\n");
-            return 1;
-        }
-
-        // Read file contents
-        char *data;
-        u32   size;
-        file_read(self->arena, str_cstr(&file_path), &data, &size);
-        if (!data) {
-            fprintf(stderr, "error: failed to read file: %s\n", str_cstr(&file_path));
-            return 1;
-        }
-
-        if (self->verbose) {
-            fprintf(stderr, "Packing: %s (%u bytes)\n", str_cstr(&rel_path), size);
-        }
-
-        // Add to entries
-        entries[entry_idx].name     = str_cstr(&rel_path);
-        entries[entry_idx].name_len = (u32)str_len(rel_path);
-        entries[entry_idx].data     = (byte const *)data;
-        entries[entry_idx].data_len = size;
-        entry_idx++;
+    if (!self->unpack_list && !self->out_path) {
+        // Default current directory.
+        self->out_path = ".";
     }
 
-    // Write archive
-    if (self->verbose) {
-        fprintf(stderr, "Writing archive with %u files to: %s\n", entry_idx, self->out_path);
-    }
+    char const         *archive_path = self->words.v[1];
 
-    int result = tl_tlib_write(self->arena, self->out_path, entries, entry_idx);
+    tl_tlib_unpack_opts opts         = {
+              .list_only = self->unpack_list,
+              .verbose   = self->verbose,
+    };
 
-    if (result == 0) {
-        if (self->verbose) {
-            fprintf(stderr, "Archive created successfully.\n");
-        }
-    }
-
-    return result;
+    return tl_tlib_unpack(self->arena, archive_path, self->out_path, opts);
 }
 
 int main(int argc, char *argv[]) {
@@ -1161,6 +1099,10 @@ int main(int argc, char *argv[]) {
 
     else if (0 == strcmp("pack", self.words.v[0])) {
         result = pack_files(&self);
+    }
+
+    else if (0 == strcmp("unpack", self.words.v[0])) {
+        result = unpack_files(&self);
     }
 
 done:
