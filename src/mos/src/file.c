@@ -287,6 +287,25 @@ str file_path_normalize(allocator *alloc, char const *path) {
     return str_build_finish(&build);
 }
 
+// Compute relative path from a directory to a target path.
+//
+// Given a starting directory (from_dir) and a target path (to_path), returns
+// the relative path that would navigate from from_dir to to_path.
+//
+// If either path is relative, it is first converted to absolute using the
+// current working directory.
+//
+// Examples:
+//   file_path_relative("/a/b", "/a/b/file.txt")     -> "file.txt"
+//   file_path_relative("/a/b", "/a/c/file.txt")     -> "../c/file.txt"
+//   file_path_relative("/a/b/c", "/a/file.txt")     -> "../../file.txt"
+//   file_path_relative("/a/b", "/a/b")              -> "."
+//   file_path_relative("src", "src/file.c")         -> "file.c" (relative inputs OK)
+//
+// Returns empty string on error:
+//   - Empty input paths
+//   - Different drives on Windows (e.g., C: vs D:)
+//   - Failed to get current working directory (for relative inputs)
 str file_path_relative(allocator *alloc, char const *from_dir, char const *to_path) {
     if (!from_dir || !from_dir[0] || !to_path || !to_path[0]) {
         return str_empty();
