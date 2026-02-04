@@ -969,8 +969,8 @@ static int pack_files(state *self) {
 
     // Determine base directory from first input file
     str first_input = str_init(self->arena, input_files.v[0]);
-    str first_norm  = file_path_normalize(self->arena, str_cstr(&first_input));
-    str base_dir    = file_dirname(self->arena, str_cstr(&first_norm));
+    str first_norm  = file_path_normalize(self->arena, first_input);
+    str base_dir    = file_dirname(self->arena, first_norm);
 
     if (str_is_empty(base_dir)) {
         // Use current directory
@@ -1015,7 +1015,7 @@ static int pack_files(state *self) {
         }
 
         // Compute relative path from base directory
-        str rel_path = file_path_relative(self->arena, str_cstr(&base_dir), str_cstr(&file_path));
+        str rel_path = file_path_relative(self->arena, base_dir, file_path);
 
         if (str_is_empty(rel_path)) {
             fprintf(stderr, "error: cannot compute relative path for: %s\n", str_cstr(&file_path));

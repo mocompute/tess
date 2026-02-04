@@ -18,8 +18,8 @@
 #include <mach-o/dyld.h>
 #endif
 
-int file_exists(char const *filename) {
-    FILE *f = fopen(filename, "rb");
+int file_exists(str filename) {
+    FILE *f = fopen(str_cstr(&filename), "rb");
     if (!f) {
         return 0;
     }
@@ -120,35 +120,42 @@ char *file_exe_directory(span buf) {
 
 // -- path utilities --
 
-str file_dirname(allocator *alloc, char const *path) {
-    if (!path || !path[0]) return str_empty();
+str file_dirname(allocator *alloc, str path) {
+    span s = str_span(&path);
+    if (s.len == 0) return str_empty();
 
-    char const *p1 = strrchr(path, '/');
-    char const *p2 = strrchr(path, '\\');
-    char const *p  = (p1 > p2) ? p1 : p2;
+    // Find last separator
+    char const *p = null;
+    for (size_t i = s.len; i > 0; i--) {
+        if (s.buf[i - 1] == '/' || s.buf[i - 1] == '\\') {
+            p = s.buf + i - 1;
+            break;
+        }
+    }
 
     // No directory separator means the file is in the current directory
     if (!p) return str_init(alloc, ".");
 
-    size_t len = (size_t)(p - path);
+    size_t len = (size_t)(p - s.buf);
     if (len == 0) {
         // Root directory case: "/" or "\"
-        return str_init_n(alloc, path, 1);
+        return str_init_n(alloc, s.buf, 1);
     }
 
-    return str_init_n(alloc, path, len);
+    return str_init_n(alloc, s.buf, len);
 }
 
-int file_is_absolute(char const *path) {
-    if (!path || !path[0]) return 0;
+int file_is_absolute(str path) {
+    span s = str_span(&path);
+    if (s.len == 0) return 0;
 
     // Unix absolute: starts with /
-    if (path[0] == '/') return 1;
+    if (s.buf[0] == '/') return 1;
 
 #ifdef MOS_WINDOWS
     // Windows absolute: starts with \ or drive letter (C:\)
-    if (path[0] == '\\') return 1;
-    if (path[0] && path[1] == ':' && (path[2] == '/' || path[2] == '\\')) return 1;
+    if (s.buf[0] == '\\') return 1;
+    if (s.len >= 3 && s.buf[1] == ':' && (s.buf[2] == '/' || s.buf[2] == '\\')) return 1;
 #endif
 
     return 0;
@@ -170,21 +177,21 @@ str file_path_join(allocator *alloc, str dir, str file) {
     }
 }
 
-str file_path_normalize(allocator *alloc, char const *path) {
-    if (!path || !path[0]) return str_empty();
+str file_path_normalize(allocator *alloc, str path) {
+    span s = str_span(&path);
+    if (s.len == 0) return str_empty();
 
     // Parse path into components, resolving . and ..
     // We use a simple stack-based approach
 
-    size_t      len        = strlen(path);
     int         is_abs     = file_is_absolute(path);
-    char const *start      = path;
+    char const *start      = s.buf;
     size_t      prefix_len = 0;
 
     // Handle absolute path prefixes
     if (is_abs) {
 #ifdef MOS_WINDOWS
-        if (path[1] == ':') {
+        if (s.buf[1] == ':') {
             prefix_len = 3; // "C:/"
         } else {
             prefix_len = 1; // "/" or "\"
@@ -192,19 +199,19 @@ str file_path_normalize(allocator *alloc, char const *path) {
 #else
         prefix_len = 1; // "/"
 #endif
-        start = path + prefix_len;
+        start = s.buf + prefix_len;
     }
 
     // Stack of component start/length pairs
-    // Maximum depth is len/2 (alternating char/separator)
-    size_t max_components = len / 2 + 1;
+    // Maximum depth is s.len/2 (alternating char/separator)
+    size_t max_components = s.len / 2 + 1;
     size_t *comp_start    = alloc_malloc(alloc, max_components * sizeof(size_t));
     size_t *comp_len      = alloc_malloc(alloc, max_components * sizeof(size_t));
     size_t  comp_count    = 0;
     int     depth         = 0; // Track depth for relative paths
 
     char const *p   = start;
-    char const *end = path + len;
+    char const *end = s.buf + s.len;
 
     while (p < end) {
         // Skip separators
@@ -231,12 +238,12 @@ str file_path_normalize(allocator *alloc, char const *path) {
                 // Check if we're trying to go above root
                 if (depth < 0) {
                     // Already have leading .., add another
-                    comp_start[comp_count] = (size_t)(comp_begin - path);
+                    comp_start[comp_count] = (size_t)(comp_begin - s.buf);
                     comp_len[comp_count]   = clen;
                     comp_count++;
                 } else if (comp_count == 0) {
                     // No components to pop, add leading ..
-                    comp_start[comp_count] = (size_t)(comp_begin - path);
+                    comp_start[comp_count] = (size_t)(comp_begin - s.buf);
                     comp_len[comp_count]   = clen;
                     comp_count++;
                     depth = -1; // Mark that we have leading ..
@@ -249,7 +256,7 @@ str file_path_normalize(allocator *alloc, char const *path) {
             // For absolute paths, just ignore .. at root
         } else {
             // Regular component
-            comp_start[comp_count] = (size_t)(comp_begin - path);
+            comp_start[comp_count] = (size_t)(comp_begin - s.buf);
             comp_len[comp_count]   = clen;
             comp_count++;
             if (depth >= 0) depth++;
@@ -257,19 +264,19 @@ str file_path_normalize(allocator *alloc, char const *path) {
     }
 
     // Build result
-    str_build build = str_build_init(alloc, (u32)(len + 1));
+    str_build build = str_build_init(alloc, (u32)(s.len + 1));
 
     // Add prefix for absolute paths
     if (is_abs) {
-        str_build_cat(&build, str_init_n(alloc, path, prefix_len));
+        str_build_cat(&build, str_init_n(alloc, s.buf, prefix_len));
     }
 
     // Add components
     for (size_t i = 0; i < comp_count; i++) {
-        if (i > 0 || (is_abs && prefix_len > 0 && path[prefix_len - 1] != '/' && path[prefix_len - 1] != '\\')) {
+        if (i > 0 || (is_abs && prefix_len > 0 && s.buf[prefix_len - 1] != '/' && s.buf[prefix_len - 1] != '\\')) {
             str_build_cat(&build, S("/"));
         }
-        str_build_cat(&build, str_init_n(alloc, path + comp_start[i], comp_len[i]));
+        str_build_cat(&build, str_init_n(alloc, s.buf + comp_start[i], comp_len[i]));
     }
 
     // Handle empty result
@@ -306,8 +313,8 @@ str file_path_normalize(allocator *alloc, char const *path) {
 //   - Empty input paths
 //   - Different drives on Windows (e.g., C: vs D:)
 //   - Failed to get current working directory (for relative inputs)
-str file_path_relative(allocator *alloc, char const *from_dir, char const *to_path) {
-    if (!from_dir || !from_dir[0] || !to_path || !to_path[0]) {
+str file_path_relative(allocator *alloc, str from_dir, str to_path) {
+    if (str_is_empty(from_dir) || str_is_empty(to_path)) {
         return str_empty();
     }
 
@@ -320,8 +327,8 @@ str file_path_relative(allocator *alloc, char const *from_dir, char const *to_pa
     }
 
     // If paths are relative, convert to absolute using cwd
-    int from_abs = file_is_absolute(str_cstr(&from_norm));
-    int to_abs   = file_is_absolute(str_cstr(&to_norm));
+    int from_abs = file_is_absolute(from_norm);
+    int to_abs   = file_is_absolute(to_norm);
 
     if (!from_abs || !to_abs) {
         char cwd_buf[4096];
@@ -332,11 +339,11 @@ str file_path_relative(allocator *alloc, char const *from_dir, char const *to_pa
 
         if (!from_abs) {
             str abs_from = file_path_join(alloc, cwd, from_norm);
-            from_norm = file_path_normalize(alloc, str_cstr(&abs_from));
+            from_norm    = file_path_normalize(alloc, abs_from);
         }
         if (!to_abs) {
             str abs_to = file_path_join(alloc, cwd, to_norm);
-            to_norm = file_path_normalize(alloc, str_cstr(&abs_to));
+            to_norm    = file_path_normalize(alloc, abs_to);
         }
 
         if (str_is_empty(from_norm) || str_is_empty(to_norm)) {

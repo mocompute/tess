@@ -13,8 +13,8 @@ struct import_resolver {
 };
 
 import_resolver *import_resolver_create(allocator *arena) {
-    import_resolver *self = alloc_malloc(arena, sizeof(import_resolver));
-    self->arena           = arena;
+    import_resolver *self        = alloc_malloc(arena, sizeof(import_resolver));
+    self->arena                  = arena;
     self->user_include_paths     = (str_array){.alloc = arena};
     self->standard_include_paths = (str_array){.alloc = arena};
     self->imported_files         = hset_create(arena, 32);
@@ -81,22 +81,20 @@ void import_resolver_print_paths(import_resolver *self) {
 
 static str try_resolve_path(allocator *alloc, str dir, str file) {
     str joined = file_path_join(alloc, dir, file);
-    str normed = file_path_normalize(alloc, str_cstr(&joined));
+    str normed = file_path_normalize(alloc, joined);
 
-    if (!str_is_empty(normed) && file_exists(str_cstr(&normed))) {
+    if (!str_is_empty(normed) && file_exists(normed)) {
         return normed;
     }
     return str_empty();
 }
 
-import_result import_resolver_resolve(import_resolver *self,
-                                      str              import_path,
-                                      str              importing_file) {
+import_result import_resolver_resolve(import_resolver *self, str import_path, str importing_file) {
     import_result result = {.canonical_path = str_empty(), .is_duplicate = 0};
 
     // Determine import kind and strip quotes
-    import_kind kind     = import_resolver_get_kind(import_path);
-    str         path     = import_resolver_strip_quotes(self->arena, import_path);
+    import_kind kind = import_resolver_get_kind(import_path);
+    str         path = import_resolver_strip_quotes(self->arena, import_path);
 
     if (str_is_empty(path)) {
         fprintf(stderr, "error: invalid import syntax: %s\n", str_cstr(&import_path));
@@ -105,9 +103,8 @@ import_result import_resolver_resolve(import_resolver *self,
     }
 
     // Reject absolute paths
-    if (file_is_absolute(str_cstr(&path))) {
-        fprintf(stderr, "error: absolute paths not allowed in imports: %s\n",
-                str_cstr(&import_path));
+    if (file_is_absolute(path)) {
+        fprintf(stderr, "error: absolute paths not allowed in imports: %s\n", str_cstr(&import_path));
         return result;
     }
 
@@ -134,7 +131,7 @@ import_result import_resolver_resolve(import_resolver *self,
 
         // 1. Try relative to importing file's directory
         if (!str_is_empty(importing_file)) {
-            str dir = file_dirname(self->arena, str_cstr(&importing_file));
+            str dir = file_dirname(self->arena, importing_file);
             if (!str_is_empty(dir)) {
                 resolved = try_resolve_path(self->arena, dir, path);
             }
@@ -152,7 +149,7 @@ import_result import_resolver_resolve(import_resolver *self,
             fprintf(stderr, "error: import not found: %s\n", str_cstr(&import_path));
             fprintf(stderr, "  Quoted imports search:\n");
             if (!str_is_empty(importing_file)) {
-                str dir = file_dirname(self->arena, str_cstr(&importing_file));
+                str dir = file_dirname(self->arena, importing_file);
                 if (!str_is_empty(dir)) {
                     fprintf(stderr, "    Relative to: %s\n", str_cstr(&dir));
                 }
@@ -202,15 +199,16 @@ void import_resolver_mark_imported(import_resolver *self, str canonical_path) {
 }
 
 int import_resolver_is_stdlib_file(import_resolver *self, str canonical_path) {
+    span canonical_path_s = str_span(&canonical_path);
     forall(i, self->standard_include_paths) {
         str std_path = self->standard_include_paths.v[i];
         if (str_starts_with(canonical_path, std_path)) {
             // Also check that the next char is a path separator or end of string
             size_t std_len = str_len(std_path);
-            size_t path_len = str_len(canonical_path);
-            if (path_len == std_len ||
-                str_buf(&canonical_path)[std_len] == '/' ||
-                str_buf(&canonical_path)[std_len] == '\\') {
+            if (canonical_path_s.len == std_len) {
+                return 1;
+            }
+            if (canonical_path_s.buf[std_len] == '/' || canonical_path_s.buf[std_len] == '\\') {
                 return 1;
             }
         }
