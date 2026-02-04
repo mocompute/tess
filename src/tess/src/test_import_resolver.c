@@ -10,32 +10,16 @@
 #include <io.h>
 #define platform_mkdir(path) _mkdir(path)
 #define NULL_DEVICE          "NUL"
-#define dup    _dup
-#define dup2   _dup2
-#define fileno _fileno
-#define close  _close
+#define dup                  _dup
+#define dup2                 _dup2
+#define fileno               _fileno
+#define close                _close
 #else
 #include <sys/stat.h>
 #include <unistd.h>
 #define platform_mkdir(path) mkdir(path, 0755)
 #define NULL_DEVICE          "/dev/null"
 #endif
-
-// Suppress stderr output (for expected failures)
-static int saved_stderr_fd = -1;
-static void suppress_stderr(void) {
-    fflush(stderr);
-    saved_stderr_fd = dup(fileno(stderr));
-    FILE *ignore = freopen(NULL_DEVICE, "w", stderr);
-    (void)ignore;
-}
-
-static void restore_stderr(void) {
-    fflush(stderr);
-    dup2(saved_stderr_fd, fileno(stderr));
-    close(saved_stderr_fd);
-    saved_stderr_fd = -1;
-}
 
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
@@ -299,10 +283,7 @@ static int test_quoted_ignores_standard_paths(void) {
     import_resolver_add_standard_path(resolver, str_init_static(dir_path));
 
     // Quoted import should NOT find it (should fail)
-    // Suppress stderr for this expected failure
-    suppress_stderr();
-    import_result r  = import_resolver_resolve(resolver, S("\"std_only.tl\""), str_empty());
-    restore_stderr();
+    import_result r = import_resolver_resolve(resolver, S("\"std_only.tl\""), str_empty());
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  quoted import should NOT search standard paths\n");
@@ -364,9 +345,7 @@ static int test_angle_bracket_ignores_user_paths(void) {
     import_resolver_add_user_path(resolver, str_init_static(dir_path));
 
     // Angle bracket import should NOT find it
-    suppress_stderr();
-    import_result r  = import_resolver_resolve(resolver, S("<user_only.tl>"), str_empty());
-    restore_stderr();
+    import_result r = import_resolver_resolve(resolver, S("<user_only.tl>"), str_empty());
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search user paths\n");
@@ -399,10 +378,8 @@ static int test_angle_bracket_ignores_relative(void) {
     // No paths added - only relative would work for quoted
 
     // Angle bracket import should NOT find the sibling file
-    suppress_stderr();
     build_path(main_path, sizeof(main_path), test_base, "rel_ignore/src/main.tl");
     import_result r = import_resolver_resolve(resolver, S("<sibling.tl>"), str_init_static(main_path));
-    restore_stderr();
 
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search relative paths\n");
