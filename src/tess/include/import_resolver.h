@@ -63,4 +63,8 @@ str import_resolver_strip_quotes(allocator *alloc, str quoted_path);
 // Print search paths for error messages
 void import_resolver_print_paths(import_resolver *self);
 
+// Check if a canonical file path is from a standard library path
+// Returns 1 if the path is under any standard include path, 0 otherwise
+int import_resolver_is_stdlib_file(import_resolver *self, str canonical_path);
+
 #endif // TESS_IMPORT_RESOLVER_H

@@ -28,4 +28,10 @@ str         file_path_join(allocator *, str dir, str file);
 // Returns empty string if path would escape root (too many "..")
 str         file_path_normalize(allocator *, char const *path);
 
+// Compute relative path from a directory to a file
+// Both paths should be absolute. Returns path relative to from_dir that reaches to_path.
+// Example: file_path_relative("/a/b", "/a/c/d.tl") -> "../c/d.tl"
+// Returns empty string on error (different drives on Windows, etc.)
+str         file_path_relative(allocator *, char const *from_dir, char const *to_path);
+
 #endif

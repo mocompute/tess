@@ -200,3 +200,20 @@ int import_resolver_is_imported(import_resolver *self, str canonical_path) {
 void import_resolver_mark_imported(import_resolver *self, str canonical_path) {
     str_hset_insert(&self->imported_files, canonical_path);
 }
+
+int import_resolver_is_stdlib_file(import_resolver *self, str canonical_path) {
+    forall(i, self->standard_include_paths) {
+        str std_path = self->standard_include_paths.v[i];
+        if (str_starts_with(canonical_path, std_path)) {
+            // Also check that the next char is a path separator or end of string
+            size_t std_len = str_len(std_path);
+            size_t path_len = str_len(canonical_path);
+            if (path_len == std_len ||
+                str_buf(&canonical_path)[std_len] == '/' ||
+                str_buf(&canonical_path)[std_len] == '\\') {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}

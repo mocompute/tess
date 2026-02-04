@@ -425,6 +425,7 @@ TL_TESTS =					\
 	nested_lambda_context			\
 	number_formats				\
 	number_separators			\
+	pack					\
 	printf					\
 	pointer_array				\
 	pointer_cast				\

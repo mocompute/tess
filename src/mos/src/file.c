@@ -286,3 +286,165 @@ str file_path_normalize(allocator *alloc, char const *path) {
 
     return str_build_finish(&build);
 }
+
+str file_path_relative(allocator *alloc, char const *from_dir, char const *to_path) {
+    if (!from_dir || !from_dir[0] || !to_path || !to_path[0]) {
+        return str_empty();
+    }
+
+    // Normalize both paths
+    str from_norm = file_path_normalize(alloc, from_dir);
+    str to_norm   = file_path_normalize(alloc, to_path);
+
+    if (str_is_empty(from_norm) || str_is_empty(to_norm)) {
+        return str_empty();
+    }
+
+    // If paths are relative, convert to absolute using cwd
+    int from_abs = file_is_absolute(str_cstr(&from_norm));
+    int to_abs   = file_is_absolute(str_cstr(&to_norm));
+
+    if (!from_abs || !to_abs) {
+        char cwd_buf[4096];
+        if (!file_current_working_directory((span){.buf = cwd_buf, .len = sizeof(cwd_buf)})) {
+            return str_empty();
+        }
+        str cwd = str_init_static(cwd_buf);
+
+        if (!from_abs) {
+            str abs_from = file_path_join(alloc, cwd, from_norm);
+            from_norm = file_path_normalize(alloc, str_cstr(&abs_from));
+        }
+        if (!to_abs) {
+            str abs_to = file_path_join(alloc, cwd, to_norm);
+            to_norm = file_path_normalize(alloc, str_cstr(&abs_to));
+        }
+
+        if (str_is_empty(from_norm) || str_is_empty(to_norm)) {
+            return str_empty();
+        }
+    }
+
+#ifdef MOS_WINDOWS
+    // On Windows, check that both paths are on the same drive
+    char const *from_cstr = str_cstr(&from_norm);
+    char const *to_cstr   = str_cstr(&to_norm);
+    if (from_cstr[1] == ':' && to_cstr[1] == ':') {
+        char from_drive = from_cstr[0];
+        char to_drive   = to_cstr[0];
+        // Normalize drive letter case
+        if (from_drive >= 'a' && from_drive <= 'z') from_drive -= 32;
+        if (to_drive >= 'a' && to_drive <= 'z') to_drive -= 32;
+        if (from_drive != to_drive) {
+            return str_empty(); // Different drives
+        }
+    }
+#endif
+
+    // Split paths into components
+    span from_span = str_span(&from_norm);
+    span to_span   = str_span(&to_norm);
+
+    // Find common prefix length (by path components)
+    size_t from_pos  = 0;
+    size_t to_pos    = 0;
+    size_t last_sep  = 0;
+
+    // Skip initial path prefix (/ or C:/)
+    if (from_span.len > 0 && (from_span.buf[0] == '/' || from_span.buf[0] == '\\')) {
+        from_pos = 1;
+    }
+#ifdef MOS_WINDOWS
+    else if (from_span.len >= 3 && from_span.buf[1] == ':') {
+        from_pos = 3;
+    }
+#endif
+
+    if (to_span.len > 0 && (to_span.buf[0] == '/' || to_span.buf[0] == '\\')) {
+        to_pos = 1;
+    }
+#ifdef MOS_WINDOWS
+    else if (to_span.len >= 3 && to_span.buf[1] == ':') {
+        to_pos = 3;
+    }
+#endif
+
+    // Find where paths diverge
+    while (from_pos < from_span.len && to_pos < to_span.len) {
+        char fc = from_span.buf[from_pos];
+        char tc = to_span.buf[to_pos];
+
+        // Normalize separators for comparison
+        if (fc == '\\') fc = '/';
+        if (tc == '\\') tc = '/';
+
+        if (fc != tc) break;
+
+        if (fc == '/') {
+            last_sep = from_pos;
+        }
+
+        from_pos++;
+        to_pos++;
+    }
+
+    // Check if we stopped at a separator or end of one path
+    if (from_pos == from_span.len || to_pos == to_span.len) {
+        char fc = (from_pos < from_span.len) ? from_span.buf[from_pos] : '/';
+        char tc = (to_pos < to_span.len) ? to_span.buf[to_pos] : '/';
+        if (fc == '/' || fc == '\\') last_sep = from_pos;
+        if (tc == '/' || tc == '\\') last_sep = from_pos;
+        if (from_pos == from_span.len && to_pos == to_span.len) {
+            // Paths are identical
+            return str_init(alloc, ".");
+        }
+        if (from_pos == from_span.len && (tc == '/' || tc == '\\')) {
+            last_sep = from_pos;
+        }
+    }
+
+    // Count remaining components in from_dir (need that many "..")
+    int up_count = 0;
+    for (size_t i = last_sep + 1; i < from_span.len; i++) {
+        if (from_span.buf[i] == '/' || from_span.buf[i] == '\\') {
+            up_count++;
+        }
+    }
+    // If there are characters after last_sep, we need one more ".."
+    if (last_sep + 1 < from_span.len) {
+        up_count++;
+    }
+
+    // Build relative path
+    str_build build = str_build_init(alloc, 64);
+
+    // Add ".." components
+    for (int i = 0; i < up_count; i++) {
+        if (i > 0) str_build_cat(&build, S("/"));
+        str_build_cat(&build, S(".."));
+    }
+
+    // Add remaining part of to_path
+    size_t to_remaining_start = last_sep;
+    // Skip the separator
+    if (to_remaining_start < to_span.len &&
+        (to_span.buf[to_remaining_start] == '/' || to_span.buf[to_remaining_start] == '\\')) {
+        to_remaining_start++;
+    }
+
+    if (to_remaining_start < to_span.len) {
+        if (up_count > 0) {
+            str_build_cat(&build, S("/"));
+        }
+        str remaining = str_init_n(alloc, to_span.buf + to_remaining_start,
+                                   to_span.len - to_remaining_start);
+        str_build_cat(&build, remaining);
+    }
+
+    // Handle empty result (paths are the same up to the end of from_dir)
+    if (build.size == 0) {
+        str_build_cat(&build, S("."));
+    }
+
+    return str_build_finish(&build);
+}
