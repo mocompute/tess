@@ -547,6 +547,95 @@ static int test_cycle_detection(void) {
     return 0;
 }
 
+// Test import_resolver_is_stdlib_file()
+static int test_is_stdlib_file(void) {
+    allocator *alloc = default_allocator();
+
+    // Create resolver with known standard paths
+    import_resolver *resolver = import_resolver_create(alloc);
+
+    // Add standard paths
+    import_resolver_add_standard_path(resolver, str_init_static("/usr/lib/tess/std"));
+    import_resolver_add_standard_path(resolver, str_init_static("/home/user/.tess/std"));
+
+    // Add user paths (should not be considered stdlib)
+    import_resolver_add_user_path(resolver, str_init_static("/home/user/project/lib"));
+
+    int error = 0;
+
+    // Test 1: File in standard path should be detected
+    {
+        str path   = str_init_static("/usr/lib/tess/std/builtin.tl");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (!result) {
+            fprintf(stderr, "  file in stdlib path should be detected\n");
+            error++;
+        }
+    }
+
+    // Test 2: File in nested standard path should be detected
+    {
+        str path   = str_init_static("/usr/lib/tess/std/sub/module.tl");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (!result) {
+            fprintf(stderr, "  file in nested stdlib path should be detected\n");
+            error++;
+        }
+    }
+
+    // Test 3: File in second standard path should be detected
+    {
+        str path   = str_init_static("/home/user/.tess/std/Array.tl");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (!result) {
+            fprintf(stderr, "  file in second stdlib path should be detected\n");
+            error++;
+        }
+    }
+
+    // Test 4: File NOT in standard path should NOT be detected
+    {
+        str path   = str_init_static("/home/user/project/lib/helper.tl");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (result) {
+            fprintf(stderr, "  file in user path should NOT be detected as stdlib\n");
+            error++;
+        }
+    }
+
+    // Test 5: File with similar prefix but different path should NOT be detected
+    {
+        str path   = str_init_static("/usr/lib/tess/stdlib/other.tl");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (result) {
+            fprintf(stderr, "  file with similar prefix should NOT be detected as stdlib\n");
+            error++;
+        }
+    }
+
+    // Test 6: Exact match of standard path (directory itself)
+    {
+        str path   = str_init_static("/usr/lib/tess/std");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (!result) {
+            fprintf(stderr, "  exact match of stdlib path should be detected\n");
+            error++;
+        }
+    }
+
+    // Test 7: Random unrelated path
+    {
+        str path   = str_init_static("/etc/passwd");
+        int result = import_resolver_is_stdlib_file(resolver, path);
+        if (result) {
+            fprintf(stderr, "  unrelated path should NOT be detected as stdlib\n");
+            error++;
+        }
+    }
+
+    return error;
+}
+
 int main(void) {
     init_test_base();
 
@@ -562,5 +651,6 @@ int main(void) {
     T(test_angle_bracket_ignores_relative)
     T(test_quoted_relative_precedence)
     T(test_quoted_fallback_to_user_paths)
+    T(test_is_stdlib_file)
     return error;
 }
