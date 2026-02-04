@@ -917,6 +917,7 @@ static int format_file(state *self) {
     if (self->words.size > 1) {
         filename = self->words.v[1];
         file_read(self->arena, filename, &data, &size);
+        if (!data) return 1;
     } else {
         // Read all of stdin
         u32 capacity = 64 * 1024;
@@ -925,18 +926,28 @@ static int format_file(state *self) {
         for (;;) {
             size_t n = fread(data + size, 1, capacity - size, stdin);
             size += (u32)n;
-            if (n == 0) break;
+            if (n == 0) {
+                if (ferror(stdin)) {
+                    perror("error reading stdin");
+                    return 1;
+                }
+                break;
+            }
+
             if (size == capacity) {
-                u32   new_cap = capacity * 2;
-                char *new_buf = alloc_malloc(self->arena, new_cap);
-                memcpy(new_buf, data, size);
-                data     = new_buf;
-                capacity = new_cap;
+                if (capacity > UINT32_MAX / 2) {
+                    fprintf(stderr, "error: input too large\n");
+                    return 1;
+                }
+                u32 new_cap = capacity * 2;
+                data        = alloc_realloc(self->arena, data, new_cap);
+                capacity    = new_cap;
             }
         }
     }
 
-    str result = tl_format(self->arena, data, size, filename);
+    str    result = tl_format(self->arena, data, size, filename);
+    size_t len    = str_len(result);
 
     if (self->in_place) {
         FILE *f = fopen(filename, "wb");
@@ -944,10 +955,17 @@ static int format_file(state *self) {
             fprintf(stderr, "error: could not open '%s' for writing\n", filename);
             return 1;
         }
-        fwrite(str_buf(&result), 1, str_len(result), f);
+        if (len != fwrite(str_buf(&result), 1, len, f)) {
+            perror("error writing to file");
+            fclose(f);
+            return 1;
+        }
         fclose(f);
     } else {
-        fwrite(str_buf(&result), 1, str_len(result), stdout);
+        if (len != fwrite(str_buf(&result), 1, len, stdout)) {
+            perror("error writing to stdout");
+            return 1;
+        }
     }
 
     return 0;
