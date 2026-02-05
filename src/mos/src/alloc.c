@@ -338,10 +338,8 @@ void arena_reset(allocator *arena_) {
 
     // Compute current total and update peak
     size_t current = 0;
-    for (arena_header *h = arena->head; h; h = h->next)
-        current += h->size - sizeof(arena_header);
-    if (current > arena->peak_allocated)
-        arena->peak_allocated = current;
+    for (arena_header *h = arena->head; h; h = h->next) current += h->size - sizeof(arena_header);
+    if (current > arena->peak_allocated) arena->peak_allocated = current;
 
     // Reset buckets
     arena_header *next = arena->head;
@@ -359,8 +357,7 @@ void arena_get_stats(allocator *arena_, arena_stats *out) {
         out->capacity += h->capacity - sizeof(arena_header);
         out->bucket_count++;
     }
-    out->peak_allocated = arena->peak_allocated > out->allocated
-                          ? arena->peak_allocated : out->allocated;
+    out->peak_allocated = arena->peak_allocated > out->allocated ? arena->peak_allocated : out->allocated;
 }
 
 // -- leak detector allocator --

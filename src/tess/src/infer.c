@@ -126,9 +126,9 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->synthesized_nodes  = (ast_node_array){.alloc = self->arena};
 
     self->toplevels          = null;
-    self->instances          = map_new(self->arena, name_and_type, str, 512);
-    self->instance_names     = hset_create(self->arena, 512);
-    self->attributes         = map_new(self->arena, str, void *, 512);
+    self->instances          = map_new(self->arena, name_and_type, str, 4096);
+    self->instance_names     = hset_create(self->arena, 4096);
+    self->attributes         = map_new(self->arena, str, void *, 4096);
     self->hash_includes      = (str_array){.alloc = self->arena};
     self->errors             = (tl_infer_error_array){.alloc = self->arena};
 
@@ -563,8 +563,8 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
     traverse_ctx *out   = new (transient, traverse_ctx);
-    out->lexical_names  = hset_create(transient, 32);
-    out->type_arguments = map_create_ptr(transient, 16);
+    out->lexical_names  = hset_create(transient, 64);
+    out->type_arguments = map_create_ptr(transient, 64);
     out->user           = null;
     out->result_type    = null;
     out->node_pos       = npos_operand;
@@ -614,7 +614,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
         log_constraint_mono(self, left, right, node);
     }
 
-    hashmap *seen = hset_create(self->transient, 32);
+    hashmap *seen = hset_create(self->transient, 64);
     int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
     return res;
 }
@@ -2516,7 +2516,7 @@ cancel:
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype **out_type) {
 
-    hashmap *seen = hset_create(self->transient, 8);
+    hashmap *seen = hset_create(self->transient, 64);
     str      out  = specialize_type_constructor_(self, name, args, out_type, &seen);
     return out;
 }
@@ -3980,7 +3980,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     case tl_arrow:
     case tl_tuple:
     case tl_literal:     {
-        hashmap     *in_progress = hset_create(self->transient, 8);
+        hashmap     *in_progress = hset_create(self->transient, 64);
         tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
         return out;
     }
@@ -4012,7 +4012,7 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
     case tl_literal:     {
         // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
         // need to replace the type being tested.
-        int tries = 10;
+        int tries = 3;
         while (tries--) {
             int did_replace = 1;
 
@@ -4097,7 +4097,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 }
 
 static void update_specialized_types(tl_infer *self) {
-    update_types_ctx ctx  = {.in_progress = hset_create(self->transient, 8)};
+    update_types_ctx ctx = {.in_progress = hset_create(self->transient, 64)};
 
     // Snapshot the env keys before iterating. update_types_one_type may trigger
     // specialize_type_constructor_ which inserts new entries into the env. Robin Hood
@@ -4113,10 +4113,11 @@ static void update_specialized_types(tl_infer *self) {
     }
     array_free(env_keys);
 
+    // NOTE: this is an expensive traverse
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     traverse->user         = &ctx;
     hashmap_iterator iter  = {0};
-    ast_node *node;
+    ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
         traverse_ast(self, traverse, node, update_types_cb);

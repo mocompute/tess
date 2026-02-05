@@ -10,8 +10,6 @@
 #include "str.h"
 #include "util.h"
 
-#include "parser.h" // for mangle_str_for_arity
-
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -60,9 +58,9 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     transient_allocator    = transient;
 
     self->subs             = subs;
-    self->definitions      = map_new(self->alloc, str, tl_polytype *, 64);       // key: str
-    self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 64); // key: registry_key
-    self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 64);
+    self->definitions      = map_new(self->alloc, str, tl_polytype *, 1024);       // key: str
+    self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
+    self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
     // Basic types
     make_nullary_inst(self, S("Void"));
@@ -877,9 +875,9 @@ void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_par
                                           hashmap *type_arguments) {
     *ctx = (tl_type_registry_parse_type_ctx){
       .memoize        = map_new(alloc, ast_node *, tl_monotype *, 64),
-      .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 16),
-      .deferred_parse = map_new(alloc, str, ast_node *, 8),
-      .in_progress    = hset_create(alloc, 8),
+      .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 64),
+      .deferred_parse = map_new(alloc, str, ast_node *, 64),
+      .in_progress    = hset_create(alloc, 64),
     };
 }
 
@@ -1246,7 +1244,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
 static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
                                              tl_monotype_sized args) {
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
-    hashmap     *seen  = hset_create(transient_allocator, 8);
+    hashmap     *seen  = hset_create(transient_allocator, 64);
 
     if (!args.v) {
         // Create fresh type variables for each quantifier
@@ -1376,7 +1374,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
 
 void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *subs) {
 
-    hashmap               *seen  = hset_create(transient_allocator, 8);
+    hashmap               *seen  = hset_create(transient_allocator, 64);
     tl_type_variable_array quant = {.alloc = transient_allocator};
     generalize(self->type, &quant, &seen);
     self->quantifiers.size = quant.size;
@@ -1399,7 +1397,7 @@ tl_monotype *tl_polytype_concrete(tl_polytype *self) {
 
 tl_polytype *tl_monotype_generalize(allocator *alloc, tl_monotype *mono) {
     tl_type_variable_array quantifiers = {.alloc = alloc};
-    hashmap               *seen        = hset_create(transient_allocator, 8);
+    hashmap               *seen        = hset_create(transient_allocator, 64);
     generalize(mono, &quantifiers, &seen);
     return tl_polytype_create(alloc, (tl_type_variable_sized)array_sized(quantifiers), mono);
 }
@@ -1593,7 +1591,7 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
 }
 
 int tl_monotype_is_concrete(tl_monotype *self) {
-    hashmap *seen = hset_create(transient_allocator, 32);
+    hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_monotype_is_concrete_(self, &seen);
     return res;
 }
@@ -1638,7 +1636,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
 }
 
 int tl_monotype_is_weak_deep(tl_monotype *self) {
-    hashmap *seen = hset_create(transient_allocator, 32);
+    hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_monotype_is_weak_(self, &seen);
     return res;
 }
@@ -2024,8 +2022,8 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
 
 u64 tl_monotype_hash64(tl_monotype *self) {
 
-    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 32);
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 32);
     u64      out         = tl_monotype_hash64_(self, &seen, &in_progress);
     return out;
 }
@@ -2580,7 +2578,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 }
 
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
-    hashmap *seen = hset_create(transient_allocator, 32);
+    hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
     return res;
 }
@@ -2750,7 +2748,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 }
 
 void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
-    hashmap *seen = hset_create(transient_allocator, 32);
+    hashmap *seen = hset_create(transient_allocator, 64);
     tl_monotype_substitute_(alloc, self, subs, exclude, &seen);
 }
 
@@ -2858,8 +2856,8 @@ u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen, h
 }
 
 u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
-    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 8);
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 32);
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 32);
     u64      out         = tl_monotype_sized_hash64_(seed, arr, &seen, &in_progress);
     return out;
 }
