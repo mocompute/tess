@@ -400,7 +400,7 @@ typedef struct {
 - `tl_tlib_valid_filename()`: Validates filenames (rejects absolute paths, ".." escapes)
 - Unit tests in `src/tess/src/test_tlib.c`
 
-**Note:** This is a simplified format without metadata fields. The full format with name/version/modules/requires will be added in Phase 4.
+**Note:** This was a simplified format without metadata fields. Phase 4 added the full format with name/version/modules/requires.
 
 #### Phase 3: Pack/Unpack CLI Commands ✓
 
@@ -417,25 +417,15 @@ High-level operations in `src/tess/src/tlib.c`:
 
 **Limitations:** No manifest support, no metadata in archive.
 
----
+#### Phase 4: Archive Metadata ✓
 
-### Remaining Phases
-
-The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
-
-#### Phase 4: Archive Metadata
-
-**Goal:** Archives contain package information (name, version, modules, dependencies).
-
-**Changes:**
-
-Extend the archive format to include metadata fields before the payload:
+Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`:
 
 ```c
 typedef struct {
-    str name;              // package name
+    str name;              // package name (required)
     str author;            // author (may be empty)
-    str version;           // version string
+    str version;           // version string (required)
     str modules;           // comma-separated public module names
     str requires;          // comma-separated required dependencies
     str requires_optional; // comma-separated optional dependencies
@@ -443,27 +433,32 @@ typedef struct {
 
 typedef struct {
     tl_tlib_metadata metadata;
-    tl_tlib_entry   *files;
-    u32              file_count;
+    tl_tlib_entry   *entries;
+    u32              count;
 } tl_tlib_archive;
 ```
 
-Update `tl_tlib_write()` and `tl_tlib_read()` to handle metadata fields per the binary format specification in this document.
+**Binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. Each field is a length-prefixed UTF-8 string (u32 length in big-endian, then data). This allows metadata inspection without decompressing the archive.
 
-**Temporary CLI for testing:** Add command-line flags to `tess pack` for specifying metadata without a manifest:
+**CLI flags for testing** (temporary until manifest support in Phase 5):
 
 ```bash
-tess pack --name MyLib --version 1.0.0 --modules "Foo,Bar" foo.tl -o MyLib.tlib
+tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" src/*.tl -o MyLib.tlib
 ```
 
-This allows testing the format before manifest parsing is implemented. The `--name` and `--version` flags are required; `--modules` defaults to empty.
+- `--name` and `--pkg-version` are required (note: `--pkg-version` instead of `--version` to avoid collision with `-V/--version`)
+- `--author` and `--modules` are optional (default to empty)
+- `tess unpack --list` displays metadata followed by file list
 
-**Validation:**
-- Error if `--name` or `--version` is missing
-- Unit tests for metadata roundtrip
-- `tess unpack --list` shows metadata fields
-- Keep the format version at v1 during development. There is no need
-  for backwards compatibility.
+**Unit tests** in `src/tess/src/test_tlib.c`:
+- `test_metadata_roundtrip()` - all fields preserved through write/read cycle
+- `test_metadata_empty_fields()` - optional fields handle empty strings correctly
+
+---
+
+### Remaining Phases
+
+The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
 #### Phase 5: Minimal TOML Manifest Parser
 
@@ -734,7 +729,7 @@ Final validation and edge case coverage:
 ### Phase Dependencies
 
 ```
-Phase 4 (Metadata)
+Phase 4 (Metadata) ✓
     ↓
 Phase 5 (Manifest Parser)
     ↓
@@ -754,6 +749,7 @@ Phase 12 (Test Suite)
 ```
 
 **Key validation points:**
+- After Phase 4: Archives contain metadata (name, version, modules, dependencies)
 - After Phase 7: Can pack and consume a simple library (no dependencies)
 - After Phase 8: Can handle library chains (A uses B)
 - After Phase 11: Full access control model working

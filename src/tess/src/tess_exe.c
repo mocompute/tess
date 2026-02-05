@@ -54,6 +54,12 @@ typedef struct {
     int              in_place;
     int              unpack_list; // --list option for unpack command
 
+    // Pack metadata options
+    char const      *pack_name;        // --name
+    char const      *pack_author;      // --author
+    char const      *pack_version;     // --pkg-version
+    char const      *pack_modules;     // --modules
+
     int              is_library;
     int              is_executable;
 
@@ -84,6 +90,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (-o required)\n");
+    printf("                           requires: --name, --pkg-version; optional: --author, --modules\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
@@ -95,6 +102,10 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents without extracting (unpack only)\n");
+    printf("    --name <name>          package name (pack only, required)\n");
+    printf("    --pkg-version <ver>    package version (pack only, required)\n");
+    printf("    --author <author>      package author (pack only, optional)\n");
+    printf("    --modules <list>       public modules, comma-separated (pack only, optional)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -134,6 +145,10 @@ void state_init(state *self) {
     self->help                 = 0;
     self->optimize             = 0;
     self->in_place             = 0;
+    self->pack_name            = null;
+    self->pack_author          = null;
+    self->pack_version         = null;
+    self->pack_modules         = null;
     self->is_library           = 0;
     self->is_executable        = 0;
 }
@@ -196,6 +211,18 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         define = str_init(self->arena, sym);
                 array_push(self->defines, define);
+            } else if (0 == strcmp("--name", argv[i])) {
+                if (++i >= argc) usage(1, self->argv0);
+                self->pack_name = argv[i];
+            } else if (0 == strcmp("--author", argv[i])) {
+                if (++i >= argc) usage(1, self->argv0);
+                self->pack_author = argv[i];
+            } else if (0 == strcmp("--pkg-version", argv[i])) {
+                if (++i >= argc) usage(1, self->argv0);
+                self->pack_version = argv[i];
+            } else if (0 == strcmp("--modules", argv[i])) {
+                if (++i >= argc) usage(1, self->argv0);
+                self->pack_modules = argv[i];
             } else if (0 == strncmp("--", argv[i], 2)) {
                 state_gather_long_option(self, argv[i]);
             } else {
@@ -996,7 +1023,13 @@ static int pack_files(state *self) {
     str_sized all_files = files_in_order(self, input_files);
 
     // Delegate to tlib module
-    tl_tlib_pack_opts opts = {.verbose = self->verbose};
+    tl_tlib_pack_opts opts = {
+        .verbose = self->verbose,
+        .name    = self->pack_name,
+        .author  = self->pack_author,
+        .version = self->pack_version,
+        .modules = self->pack_modules,
+    };
     return tl_tlib_pack(self->arena, self->out_path, all_files, base_dir, self->resolver, opts);
 }
 

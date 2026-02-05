@@ -13,10 +13,11 @@
 #include <direct.h>
 #endif
 
-#define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
-#define TLIB_VERSION       1u
-#define TLIB_HEADER_SIZE   16u
-#define TLIB_MAX_FILE_SIZE (64u * 1024u * 1024u)
+#define TLIB_MAGIC           0x544C4942u /* "TLIB" big-endian (network order) */
+#define TLIB_VERSION         1u
+#define TLIB_FIXED_HEADER    8u  /* magic + version */
+#define TLIB_MAX_FILE_SIZE   (64u * 1024u * 1024u)
+#define TLIB_MAX_META_FIELD  (1u * 1024u * 1024u) /* max metadata field size */
 
 static inline void write_u32_be(byte *p, u32 v) {
     p[0] = (byte)(v >> 24);
@@ -27,6 +28,34 @@ static inline void write_u32_be(byte *p, u32 v) {
 
 static inline u32 read_u32_be(byte const *p) {
     return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+}
+
+// Write a length-prefixed string to file. Returns 0 on success.
+static int write_string_field(FILE *f, char const *s, u32 len) {
+    byte len_buf[4];
+    write_u32_be(len_buf, len);
+    if (fwrite(len_buf, 1, 4, f) != 4) return 1;
+    if (len > 0 && fwrite(s, 1, len, f) != len) return 1;
+    return 0;
+}
+
+// Read a length-prefixed string from buffer. Updates *pp on success.
+// Returns 0 on success, 1 on error.
+static int read_string_field(byte const **pp, byte const *end, allocator *alloc, str *out) {
+    byte const *p = *pp;
+    if (p + 4 > end) return 1;
+    u32 len = read_u32_be(p);
+    p += 4;
+    if (len > TLIB_MAX_META_FIELD) return 1;
+    if (p + len > end) return 1;
+    if (len > 0) {
+        *out = str_init_n(alloc, (char const *)p, len);
+    } else {
+        *out = str_empty();
+    }
+    p += len;
+    *pp = p;
+    return 0;
 }
 
 int tl_tlib_valid_filename(char const *name, u32 len) {
@@ -48,11 +77,18 @@ int tl_tlib_valid_filename(char const *name, u32 len) {
     return 1;
 }
 
-int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_entry const *entries, u32 count) {
-    /* compute payload size */
+int tl_tlib_write(allocator *alloc, char const *output_path,
+                  tl_tlib_metadata const *metadata,
+                  tl_tlib_entry const *entries, u32 count) {
+    /* compute payload size with overflow check */
     u32 payload_size = 4; /* file count */
     for (u32 i = 0; i < count; i++) {
-        payload_size += 4 + entries[i].name_len + 4 + entries[i].data_len;
+        u32 entry_size = 8 + entries[i].name_len + entries[i].data_len;
+        if (payload_size > UINT32_MAX - entry_size) {
+            fprintf(stderr, "tlib: payload too large\n");
+            return 1;
+        }
+        payload_size += entry_size;
     }
 
     /* serialize payload */
@@ -100,14 +136,46 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_entry const
         return 1;
     }
 
-    byte header[TLIB_HEADER_SIZE];
+    /* write fixed header: magic + version */
+    byte header[TLIB_FIXED_HEADER];
     write_u32_be(header + 0, TLIB_MAGIC);
     write_u32_be(header + 4, TLIB_VERSION);
-    write_u32_be(header + 8, payload_size);
-    write_u32_be(header + 12, (u32)compressed_size);
+    if (fwrite(header, 1, TLIB_FIXED_HEADER, f) != TLIB_FIXED_HEADER) {
+        fclose(f);
+        alloc_free(alloc, compressed);
+        fprintf(stderr, "tlib: failed to write header\n");
+        return 1;
+    }
 
-    int ok = fwrite(header, 1, TLIB_HEADER_SIZE, f) == TLIB_HEADER_SIZE &&
-             fwrite(compressed, 1, compressed_size, f) == compressed_size;
+    /* write metadata fields (uncompressed) */
+    int meta_ok = 1;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->name), (u32)str_len(metadata->name)) == 0;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->author), (u32)str_len(metadata->author)) == 0;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->version), (u32)str_len(metadata->version)) == 0;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->modules), (u32)str_len(metadata->modules)) == 0;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->requires), (u32)str_len(metadata->requires)) == 0;
+    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->requires_optional), (u32)str_len(metadata->requires_optional)) == 0;
+
+    if (!meta_ok) {
+        fclose(f);
+        alloc_free(alloc, compressed);
+        fprintf(stderr, "tlib: failed to write metadata\n");
+        return 1;
+    }
+
+    /* write payload sizes */
+    byte sizes[8];
+    write_u32_be(sizes + 0, payload_size);
+    write_u32_be(sizes + 4, (u32)compressed_size);
+    if (fwrite(sizes, 1, 8, f) != 8) {
+        fclose(f);
+        alloc_free(alloc, compressed);
+        fprintf(stderr, "tlib: failed to write size fields\n");
+        return 1;
+    }
+
+    /* write compressed payload */
+    int ok = fwrite(compressed, 1, compressed_size, f) == compressed_size;
 
     fclose(f);
     alloc_free(alloc, compressed);
@@ -120,25 +188,26 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_entry const
 }
 
 int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out) {
-    out->entries   = null;
-    out->count     = 0;
+    memset(out, 0, sizeof(*out));
 
     char *raw      = null;
     u32   raw_size = 0;
     file_read(alloc, input_path, &raw, &raw_size);
     if (!raw) return 1;
 
-    if (raw_size < TLIB_HEADER_SIZE) {
+    if (raw_size < TLIB_FIXED_HEADER) {
         fprintf(stderr, "tlib: file too small\n");
         alloc_free(alloc, raw);
         return 1;
     }
 
-    byte const *h               = (byte const *)raw;
-    u32         magic           = read_u32_be(h + 0);
-    u32         version         = read_u32_be(h + 4);
-    u32         uncompressed_sz = read_u32_be(h + 8);
-    u32         compressed_sz   = read_u32_be(h + 12);
+    byte const *p   = (byte const *)raw;
+    byte const *end = p + raw_size;
+
+    /* read fixed header */
+    u32 magic   = read_u32_be(p + 0);
+    u32 version = read_u32_be(p + 4);
+    p += TLIB_FIXED_HEADER;
 
     if (magic != TLIB_MAGIC) {
         fprintf(stderr, "tlib: invalid magic\n");
@@ -150,7 +219,22 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
         alloc_free(alloc, raw);
         return 1;
     }
-    if (compressed_sz != raw_size - TLIB_HEADER_SIZE) {
+
+    /* read metadata fields */
+    if (read_string_field(&p, end, alloc, &out->metadata.name)) goto corrupt_meta;
+    if (read_string_field(&p, end, alloc, &out->metadata.author)) goto corrupt_meta;
+    if (read_string_field(&p, end, alloc, &out->metadata.version)) goto corrupt_meta;
+    if (read_string_field(&p, end, alloc, &out->metadata.modules)) goto corrupt_meta;
+    if (read_string_field(&p, end, alloc, &out->metadata.requires)) goto corrupt_meta;
+    if (read_string_field(&p, end, alloc, &out->metadata.requires_optional)) goto corrupt_meta;
+
+    /* read payload sizes */
+    if (p + 8 > end) goto corrupt_meta;
+    u32 uncompressed_sz = read_u32_be(p);
+    u32 compressed_sz   = read_u32_be(p + 4);
+    p += 8;
+
+    if (compressed_sz != (u32)(end - p)) {
         fprintf(stderr, "tlib: compressed size mismatch\n");
         alloc_free(alloc, raw);
         return 1;
@@ -173,8 +257,8 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     }
 
     size_t                 actual_out = 0;
-    enum libdeflate_result r = libdeflate_deflate_decompress(d, raw + TLIB_HEADER_SIZE, compressed_sz,
-                                                             payload, uncompressed_sz, &actual_out);
+    enum libdeflate_result r          = libdeflate_deflate_decompress(d, p, compressed_sz,
+                                                                      payload, uncompressed_sz, &actual_out);
     libdeflate_free_decompressor(d);
     alloc_free(alloc, raw);
 
@@ -185,22 +269,22 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     }
 
     /* parse entries */
-    byte const *p   = payload;
-    byte const *end = payload + uncompressed_sz;
+    byte const *pp  = payload;
+    byte const *pend = payload + uncompressed_sz;
 
-    if (p + 4 > end) goto corrupt;
-    u32 count = read_u32_be(p);
-    p += 4;
+    if (pp + 4 > pend) goto corrupt;
+    u32 count = read_u32_be(pp);
+    pp += 4;
 
     tl_tlib_entry *entries = alloc_calloc(alloc, count, sizeof(tl_tlib_entry));
 
     for (u32 i = 0; i < count; i++) {
-        if (p + 4 > end) goto corrupt_entries;
-        u32 name_len = read_u32_be(p);
-        p += 4;
-        if (p + name_len > end) goto corrupt_entries;
-        char const *name = (char const *)p;
-        p += name_len;
+        if (pp + 4 > pend) goto corrupt_entries;
+        u32 name_len = read_u32_be(pp);
+        pp += 4;
+        if (pp + name_len > pend) goto corrupt_entries;
+        char const *name = (char const *)pp;
+        pp += name_len;
 
         if (!tl_tlib_valid_filename(name, name_len)) {
             fprintf(stderr, "tlib: invalid filename in archive\n");
@@ -209,12 +293,12 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
             return 1;
         }
 
-        if (p + 4 > end) goto corrupt_entries;
-        u32 data_len = read_u32_be(p);
-        p += 4;
-        if (p + data_len > end) goto corrupt_entries;
-        byte const *data = p;
-        p += data_len;
+        if (pp + 4 > pend) goto corrupt_entries;
+        u32 data_len = read_u32_be(pp);
+        pp += 4;
+        if (pp + data_len > pend) goto corrupt_entries;
+        byte const *data = pp;
+        pp += data_len;
 
         entries[i].name     = name;
         entries[i].name_len = name_len;
@@ -233,12 +317,27 @@ corrupt:
     fprintf(stderr, "tlib: corrupted payload\n");
     alloc_free(alloc, payload);
     return 1;
+
+corrupt_meta:
+    fprintf(stderr, "tlib: corrupted metadata\n");
+    alloc_free(alloc, raw);
+    return 1;
 }
 
 // -- High-level operations --
 
 int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
                  struct import_resolver *resolver, tl_tlib_pack_opts opts) {
+    // Validate required metadata
+    if (!opts.name || strlen(opts.name) == 0) {
+        fprintf(stderr, "tlib: --name is required\n");
+        return 1;
+    }
+    if (!opts.version || strlen(opts.version) == 0) {
+        fprintf(stderr, "tlib: --pkg-version is required\n");
+        return 1;
+    }
+
     // Determine base directory from first input file if not provided
     if (str_is_empty(base_dir)) {
         if (files.size == 0) {
@@ -334,12 +433,30 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         entry_idx++;
     }
 
+    // Build metadata
+    tl_tlib_metadata meta = {
+        .name              = str_init(alloc, opts.name),
+        .author            = opts.author ? str_init(alloc, opts.author) : str_empty(),
+        .version           = str_init(alloc, opts.version),
+        .modules           = opts.modules ? str_init(alloc, opts.modules) : str_empty(),
+        .requires          = str_empty(),
+        .requires_optional = str_empty(),
+    };
+
     // Write archive
     if (opts.verbose) {
         fprintf(stderr, "Writing archive with %u files to: %s\n", entry_idx, output_path);
+        fprintf(stderr, "  Name: %s\n", str_cstr(&meta.name));
+        fprintf(stderr, "  Version: %s\n", str_cstr(&meta.version));
+        if (!str_is_empty(meta.author)) {
+            fprintf(stderr, "  Author: %s\n", str_cstr(&meta.author));
+        }
+        if (!str_is_empty(meta.modules)) {
+            fprintf(stderr, "  Modules: %s\n", str_cstr(&meta.modules));
+        }
     }
 
-    int result = tl_tlib_write(alloc, output_path, entries, entry_idx);
+    int result = tl_tlib_write(alloc, output_path, &meta, entries, entry_idx);
 
     if (result == 0 && opts.verbose) {
         fprintf(stderr, "Archive created successfully.\n");
@@ -399,9 +516,25 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
     }
 
     if (opts.list_only) {
-        // List mode: print filenames
+        // List mode: print metadata and filenames
+        tl_tlib_metadata *m = &archive.metadata;
+        printf("Name: %s\n", str_cstr(&m->name));
+        printf("Version: %s\n", str_cstr(&m->version));
+        if (!str_is_empty(m->author)) {
+            printf("Author: %s\n", str_cstr(&m->author));
+        }
+        if (!str_is_empty(m->modules)) {
+            printf("Modules: %s\n", str_cstr(&m->modules));
+        }
+        if (!str_is_empty(m->requires)) {
+            printf("Requires: %s\n", str_cstr(&m->requires));
+        }
+        if (!str_is_empty(m->requires_optional)) {
+            printf("Optional: %s\n", str_cstr(&m->requires_optional));
+        }
+        printf("\nFiles:\n");
         for (u32 i = 0; i < archive.count; i++) {
-            printf("%.*s\n", archive.entries[i].name_len, archive.entries[i].name);
+            printf("  %.*s\n", archive.entries[i].name_len, archive.entries[i].name);
         }
         return 0;
     }

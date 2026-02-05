@@ -8,6 +8,17 @@
 // Forward declaration
 struct import_resolver;
 
+// Package metadata (stored uncompressed in archive header)
+typedef struct {
+	str name;              // package name (required)
+	str author;            // author name/email (may be empty)
+	str version;           // version string (required)
+	str modules;           // comma-separated public module names
+	str requires;          // comma-separated required dependencies
+	str requires_optional; // comma-separated optional dependencies
+} tl_tlib_metadata;
+
+// Single file entry in the archive
 typedef struct {
 	char const *name;
 	u32         name_len;
@@ -15,13 +26,16 @@ typedef struct {
 	u32         data_len;
 } tl_tlib_entry;
 
+// Complete archive structure
 typedef struct {
-	tl_tlib_entry *entries;
-	u32            count;
+	tl_tlib_metadata metadata;
+	tl_tlib_entry   *entries;
+	u32              count;
 } tl_tlib_archive;
 
-// Write entries to a .tlib file. Returns 0 on success.
+// Write archive to a .tlib file. Returns 0 on success.
 int tl_tlib_write(allocator *alloc, char const *output_path,
+                  tl_tlib_metadata const *metadata,
                   tl_tlib_entry const *entries, u32 count);
 
 // Read a .tlib file. Allocates entries and their data from alloc. Returns 0 on success.
@@ -35,7 +49,12 @@ int tl_tlib_valid_filename(char const *name, u32 len);
 
 // Pack options
 typedef struct {
-	int verbose;
+	int         verbose;
+	// Metadata fields (for CLI testing before manifest support)
+	char const *name;    // --name (required)
+	char const *author;  // --author (optional)
+	char const *version; // --pkg-version (required)
+	char const *modules; // --modules (optional, comma-separated)
 } tl_tlib_pack_opts;
 
 // Pack resolved files into a .tlib archive.
