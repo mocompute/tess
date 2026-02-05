@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-01 to 2026-02-03 (4699c0d..5c41c59)
+
+### Highlights
+
+- New string literal system: `"..."` literals now produce `Str` values with `c"..."` syntax for C interop (breaking change)
+- Conditional compilation with `#ifdef`, `#ifndef`, `#define`, `#undef`, `#endif` directives and `-D` flag
+- VS Code extension for TL language support with syntax highlighting and formatting integration
+- Debug-mode string literal protection detecting invalid `Str.free` and `Str.push` on literals
+- Critical hashmap corruption fix in generic specialization
+
+### Added
+
+- **Conditional Compilation System**: Full preprocessor-style conditional compilation with `#define`, `#undef`, `#ifdef`, `#ifndef`, `#endif` directives. Supports nested conditionals, `-D` command-line flag (including joined `-DFOO` form), and conditional import resolution (imports inside false `#ifdef` blocks are skipped). Auto-defines `DEBUG` or `NDEBUG` based on optimization mode.
+- **C String Literal Syntax**: New `c"..."` syntax for C string literals (`const char*`) for C interoperability. Standard `"..."` literals now produce `Str` values using a dedicated string literal allocator.
+- **Module Prelude System**: New `#module_prelude` directive allows defining module symbols that can be extended by a later `#module` of the same name. Embedded `prelude.tl` defines the `Str` type, enabling string literals without explicit imports.
+- **VS Code Extension**: New TL language support extension for Visual Studio Code with TextMate-based syntax highlighting, bracket matching, comment toggling, and formatting integration via `tess fmt`.
+- **Debug-Mode String Literal Protection**: In DEBUG builds, `Str.free` and `Str.push` on string literals produce fatal errors, catching common memory bugs. Small strings use a tag bit; big strings are tracked in a C-level pointer set.
+
+### Changed
+
+- **String Literals Now Produce Str Values (Breaking Change)**: `"hello"` now produces a `Str` value instead of `const char*`. Use `c"hello"` when C interop requires a C string. String literals use a dedicated bump allocator and should not be freed.
+- **Const Handling in Type System**: Unification now looks through `Const` wrappers, const check moved to unification entry point.
+- **Emacs tl-mode**: Underscore (`_`) no longer treated as part of identifiers, matching C mode behavior for easier navigation of `snake_case` names.
+- **CTest Expected-Failure Tests**: Use CTest's native `WILL_FAIL` property instead of shell wrappers for expected-failure tests.
+- **C Compiler Output Handling**: Compiler output is now captured and shown only on error. Verbose mode streams output in real-time.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- **Hashmap Corruption in Generic Specialization**: Fixed critical bug where iterating the env hashmap while `specialize_type_constructor_` inserted new entries caused Robin Hood hashing to relocate entries, corrupting unrelated type bindings.
+- **Module-Mangle Toplevel Symbol Assignments**: Toplevel assignments now properly add module symbols and mangle names.
+- **MSVC LTCG Miscompilation**: Fixed `str_hash32`/`str_hash64` miscompilation by avoiding `str_span` which MSVC whole-program optimization mishandled.
+- **Valgrind: Uninitialized String Buffers**: All `str` construction paths now properly zero-initialize buffers. Big strings now always have null terminators written.
+- **Windows Buffer Overflow**: Added bounds checking for command-line construction in `platform_exec()`.
+- **Carriage Return Handling**: Improved `\r\n` handling in tokenizer and import line parsing. Fixed off-by-one error in `is_end_of_line`.
+- **isspace Unsigned Char**: `isspace()` now receives `unsigned char` as required by C standard.
+- **Format Operator Handling**: Added support for `<<=`, `>>=`, `%=`, `&=`, `^=`, `|=` operators in the formatter.
+- **CMake Build Fixes**: Fixed helper scripts to pass build type and config correctly, copy `tess.exe` to project root after successful build, removed `-j` from Windows CI build.
+
+### Security
+
 ## [Unreleased] - 2026-01-30 to 2026-02-01 (576c968..4699c0d)
 
 ### Highlights
