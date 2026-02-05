@@ -48,6 +48,7 @@ typedef struct arena_allocator {
     struct allocator allocator;
     allocator       *parent;
     arena_header    *head;
+    arena_header    *tail;  // cached pointer to current/last bucket for O(1) allocation
     size_t           peak_allocated;
 } arena_allocator;
 
@@ -191,38 +192,38 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     (void)file;
     (void)line;
 
-    arena_header *bucket        = arena->head;
-    arena_header *last          = null;
-    size_t        last_capacity = 0;
-
-    sz                          = alloc_align_to_pointer_size(sz);
-
+    sz = alloc_align_to_pointer_size(sz);
     if (0 == sz) return null;
 
-    assert(bucket);
-    while (bucket) {
-        if (bucket_has_capacity(bucket, sz)) {
-            return bump_alloc_assume_capacity(bucket, sz);
-        }
-
-        last_capacity = bucket->capacity;
-        last          = bucket;
-        bucket        = bucket->next;
+    // Fast path: check tail bucket first (most allocations succeed here)
+    arena_header *tail = arena->tail;
+    assert(tail);
+    if (bucket_has_capacity(tail, sz)) {
+        return bump_alloc_assume_capacity(tail, sz);
     }
 
-    // need to allocate a new bucket
-    size_t needed       = sz + sizeof(arena_header);
+    // Slow path: walk all buckets from head looking for one with capacity
+    arena_header *bucket = arena->head;
+    while (bucket) {
+        if (bucket_has_capacity(bucket, sz)) {
+            arena->tail = bucket;
+            return bump_alloc_assume_capacity(bucket, sz);
+        }
+        tail = bucket;  // track last bucket for potential new allocation
+        bucket = bucket->next;
+    }
 
-    size_t new_capacity = last_capacity * 2;
+    // Need to allocate a new bucket
+    size_t needed       = sz + sizeof(arena_header);
+    size_t new_capacity = tail->capacity * 2;
     if (new_capacity < needed) new_capacity = alloc_next_power_of_two(needed);
     if (new_capacity == 0) return null; // overflow
 
-    last->next = arena_header_create(arena->parent, new_capacity);
-    if (null == last->next) return null;
+    tail->next = arena_header_create(arena->parent, new_capacity);
+    if (null == tail->next) return null;
 
-    bucket = last->next;
-
-    return bump_alloc_assume_capacity(bucket, sz);
+    arena->tail = tail->next;
+    return bump_alloc_assume_capacity(arena->tail, sz);
 }
 
 static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
@@ -305,6 +306,7 @@ static void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     if (0 == sz) sz = 16; // overflow (TODO)
 
     arena->head              = arena_header_create(parent, sz);
+    arena->tail              = arena->head;  // tail tracks current allocation bucket
     arena->allocator.malloc  = &arena_malloc;
     arena->allocator.calloc  = &arena_calloc;
     arena->allocator.realloc = &arena_realloc;
@@ -347,6 +349,9 @@ void arena_reset(allocator *arena_) {
         next->size = sizeof(arena_header);
         next       = next->next;
     }
+
+    // Reset tail to head so allocations start from beginning
+    arena->tail = arena->head;
 }
 
 void arena_get_stats(allocator *arena_, arena_stats *out) {
