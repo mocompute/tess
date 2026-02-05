@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Consumers include packages via a manifest file (with paths and version verification) or via `-l` flags (without version verification). The compiler performs whole-program compilation as usual. The `[[export]]` attribute controls which symbols are part of the library's public API.
+Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Consumers include packages via a manifest file (with paths and version verification) or via `-l` flags (without version verification). The compiler performs whole-program compilation as usual. Access control has two levels: the manifest's `modules` list controls which modules consumers can import, and the `[[export]]` attribute controls which symbols within those modules are accessible.
 
 This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged. A future `[[c_export]]` attribute may be introduced for C-compatible symbol export.
 
@@ -14,8 +14,17 @@ This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/
 - **Package**: A `.tlib` archive containing one or more modules plus metadata. Packages bundle modules for distribution but have no name visible to source code--only the modules inside are visible.
 
 **Notes:**
-- Not every `.tl` file needs a `#module` directive. Files without one are internal implementation files that become part of the translation unit.
-- Module names are discovered at load time by parsing `#module` declarations. They cannot be cached in package metadata because `#module` directives may be conditional (inside `#ifdef`/`#endif`).
+- Every `.tl` file MUST have a `#module` directive before any definitions. The parser will error if it encounters a definition before seeing `#module`.
+- Module names are discovered at load time by parsing `#module` declarations (because `#module` directives may be conditional inside `#ifdef`/`#endif`). The manifest's `modules` field separately declares which discovered modules are *public*--this is for access control, not discovery.
+
+**Import semantics:**
+
+`#import "file.tl"` is **not** like C's `#include` (text replacement). Instead:
+1. All imports are collected from all source files
+2. Each imported file is parsed as a separate compilation unit in depth-first order
+3. All files are then compiled together as a single translation unit
+
+This means an imported file's symbols are available to all other files in the translation unit via `ModuleName.symbol` syntax. Each file declares its own module namespace.
 
 ---
 
@@ -98,6 +107,185 @@ When packages are included (via manifest or `-l`), all modules from all packages
 
 ---
 
+## End-to-End Example
+
+This example walks through a library producer publishing a `MathUtils` package (which depends on a `LoggingLib` package) and a consumer using it.
+
+### Prerequisite: The LoggingLib Package
+
+First, assume a logging package exists. In this example, the **package name** ("LoggingLib") differs from the **module name** ("Logger") to illustrate that they are independent--they may also be the same:
+
+**LoggingLib's manifest.toml:**
+```toml
+[package]
+name = "LoggingLib"
+version = "2.0.0"
+author = "Bob"
+modules = ["Logger"]
+```
+
+**LoggingLib's module (logger.tl):**
+```tl
+#module Logger    // module name used in code
+
+#import <stdio.tl>
+
+[[export]] warn(msg) {
+  c_fprintf(c_stderr, "[WARN] %s\n", msg)
+  void
+}
+
+[[export]] error(msg) {
+  c_fprintf(c_stderr, "[ERROR] %s\n", msg)
+  void
+}
+```
+
+Built with:
+```bash
+tess pack -m manifest.toml logger.tl -o LoggingLib.tlib
+```
+
+Package names and module names are independent (they may differ or be the same). Package names appear in manifests and dependency metadata. Module names appear in source code (`#import Logger`, `Logger.error(...)`).
+
+### Producer: Creating a Package with Dependencies
+
+**Directory structure:**
+```
+mathutils/
+  manifest.toml
+  libs/
+    LoggingLib.tlib
+  src/
+    math.tl
+    internal.tl
+```
+
+**src/math.tl** -- the public module:
+```tl
+#module MathUtils
+
+#import "internal.tl"    // adds internal.tl to compilation unit
+
+// Public API (exported)
+[[export]] clamp(x, lo, hi) {
+  _validate_range(lo, hi)    // same-module call
+  if x < lo { lo }
+  else if x > hi { hi }
+  else { x }
+}
+
+[[export]] lerp(a, b, t) {
+  a + (b - a) * t
+}
+
+// Internal helper (not exported)
+_validate_range(lo, hi) {
+  if lo > hi { MathUtils.Internal.fatal("invalid range") }
+}
+```
+
+**src/internal.tl** -- internal module (not exported):
+```tl
+#module MathUtils.Internal
+
+#import Logger    // package dependency (unquoted)
+
+// Internal function (not exported)
+fatal(msg) {
+  Logger.error(msg)    // use the Logger package
+  c_exit(1)
+  void
+}
+```
+
+Note: Every file must have a `#module` directive. Internal implementation uses a submodule (`MathUtils.Internal`) whose symbols are not exported, so consumers cannot access them.
+
+**manifest.toml:**
+```toml
+[package]
+name = "MathUtils"
+version = "1.0.0"
+author = "Alice"
+modules = ["MathUtils"]    # only public module; MathUtils.Internal is internal
+
+[dependencies]
+LoggingLib = { version = "2.0.0", path = "libs/LoggingLib.tlib" }
+```
+
+Note: `MathUtils.Internal` is not listed in `modules`, so consumers cannot import it. The manifest references the **package name** ("LoggingLib"), while the source code uses the **module name** (`#import Logger`, `Logger.error(...)`).
+
+**Build the package:**
+```bash
+tess pack -m manifest.toml src/math.tl -o MathUtils.tlib
+```
+
+The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tlib). The metadata records:
+- name="MathUtils", version="1.0.0"
+- requires="LoggingLib=2.0.0"
+
+### Consumer: Using the Package
+
+**Directory structure:**
+```
+myapp/
+  manifest.toml
+  libs/
+    MathUtils.tlib
+    LoggingLib.tlib    # transitive dependency
+  src/
+    main.tl
+```
+
+**src/main.tl:**
+```tl
+#module main
+
+#import MathUtils    // unquoted = package module
+// #import MathUtils.Internal          // ERROR: not in package's modules list
+
+main() {
+  x := MathUtils.clamp(150, 0, 100)
+  c_printf("clamped: %d\n", x)    // prints "clamped: 100"
+
+  y := MathUtils.lerp(0.0, 10.0, 0.5)
+  c_printf("lerp: %f\n", y)       // prints "lerp: 5.0"
+
+  // MathUtils._validate_range(1, 2)      // ERROR: not [[export]]ed
+
+  0
+}
+```
+
+**Option A: With manifest (version verification):**
+
+**manifest.toml:**
+```toml
+[package]
+name = "MyApp"
+version = "0.1.0"
+
+[dependencies]
+MathUtils = { version = "1.0.0", path = "libs/MathUtils.tlib" }
+LoggingLib = { version = "2.0.0", path = "libs/LoggingLib.tlib" }    # transitive dep
+```
+
+```bash
+tess exe -m manifest.toml src/main.tl -o myapp
+```
+
+**Option B: Without manifest (quick and simple):**
+
+```bash
+tess exe src/main.tl -l libs/MathUtils.tlib -l libs/LoggingLib.tlib -o myapp
+```
+
+Note: The consumer must provide LoggingLib.tlib even though main.tl doesn't directly import it--MathUtils depends on it. The compiler verifies that MathUtils's declared dependency (LoggingLib=2.0.0) is satisfied by the provided LoggingLib.tlib.
+
+Both options produce the same executable. Option A verifies all package versions match; Option B uses whatever versions are in the `.tlib` files.
+
+---
+
 ## `.tlib` Archive Format
 
 A custom binary format, chosen over tar for simplicity, security, and zero external dependencies (aside from libdeflate for compression).
@@ -106,19 +294,21 @@ A custom binary format, chosen over tar for simplicity, security, and zero exter
 
 ```
 [4 bytes]  Magic: "TLIB"
-[4 bytes]  Format version: 1 (little-endian uint32)
-[4 bytes]  Name length (little-endian uint32)
+[4 bytes]  Format version: 1 (big-endian uint32)
+[4 bytes]  Name length (big-endian uint32)
 [N bytes]  Package name (UTF-8 string)
-[4 bytes]  Author length (little-endian uint32)
+[4 bytes]  Author length (big-endian uint32)
 [N bytes]  Author (UTF-8 string, may be empty)
-[4 bytes]  Version length (little-endian uint32)
+[4 bytes]  Version length (big-endian uint32)
 [N bytes]  Version (UTF-8 string)
-[4 bytes]  Requires length (little-endian uint32)
+[4 bytes]  Modules length (big-endian uint32)
+[N bytes]  Modules (UTF-8 string, comma-separated public module names)
+[4 bytes]  Requires length (big-endian uint32)
 [N bytes]  Requires (UTF-8 string, comma-separated dependencies, may be empty)
-[4 bytes]  Requires-optional length (little-endian uint32)
+[4 bytes]  Requires-optional length (big-endian uint32)
 [N bytes]  Requires-optional (UTF-8 string, comma-separated dependencies, may be empty)
-[4 bytes]  Uncompressed payload size (little-endian uint32)
-[4 bytes]  Compressed payload size (little-endian uint32)
+[4 bytes]  Uncompressed payload size (big-endian uint32)
+[4 bytes]  Compressed payload size (big-endian uint32)
 [N bytes]  Deflate-compressed payload
 ```
 
@@ -129,6 +319,7 @@ A custom binary format, chosen over tar for simplicity, security, and zero exter
 | Name | Yes | Package name (e.g., "MyLibrary") |
 | Author | No | Author name or email |
 | Version | Yes | Version string, free-form (compared as literal string) |
+| Modules | Yes | Comma-separated list of public module names |
 | Requires | No | Comma-separated list of required versioned dependencies |
 | Requires-optional | No | Comma-separated list of optional versioned dependencies |
 
@@ -142,11 +333,11 @@ Examples:
 ### Payload (before compression)
 
 ```
-[4 bytes] File count (little-endian uint32)
+[4 bytes] File count (big-endian uint32)
 For each file:
-    [4 bytes] Filename length (little-endian uint32)
+    [4 bytes] Filename length (big-endian uint32)
     [N bytes] Filename (UTF-8, relative path)
-    [4 bytes] Content length (little-endian uint32)
+    [4 bytes] Content length (big-endian uint32)
     [N bytes] Content (raw source bytes)
 ```
 
@@ -191,6 +382,7 @@ typedef struct {
     str name;
     str author;
     str version;
+    str modules;            // comma-separated public module names
     str requires;           // comma-separated required dependencies
     str requires_optional;  // comma-separated optional dependencies
 } tlib_metadata;
@@ -252,6 +444,7 @@ The manifest is a TOML file specifying package metadata:
 name = "MyLibrary"
 version = "1.0.0"
 author = "Jane Doe"
+modules = ["MyLib", "MyLib.Extras"]    # public modules
 
 [dependencies]
 Utils = { version = "1.2.0", path = "libs/Utils.tlib" }
@@ -280,6 +473,11 @@ The manifest follows the [TOML specification](https://toml.io/). Paths are relat
 | `name` | Yes | Package name |
 | `version` | Yes | Version string (free-form) |
 | `author` | No | Author name or email |
+| `modules` | For `tess pack` | List of public module names |
+
+The `modules` field declares which modules are part of the package's public API. Consumers can only import modules listed here. Internal modules (not listed) are inaccessible to consumers, providing module-level access control in addition to symbol-level `[[export]]` control.
+
+Note: `modules` is required for `tess pack` manifests. For `tess exe` manifests, it is ignored (executables don't export modules).
 
 **Dependency fields:**
 
@@ -303,11 +501,11 @@ The manifest declares dependencies with paths. The packer verifies consistency:
 
 **CLI:**
 ```bash
-tess pack manifest.toml foo.tl -o Foo.tlib
-tess pack manifest.toml foo.tl bar.tl -o Foo.tlib
+tess pack -m manifest.toml foo.tl -o Foo.tlib
+tess pack -m manifest.toml foo.tl bar.tl -o Foo.tlib
 ```
 
-The manifest file is required. Dependency package paths are specified in the manifest (no `-l` flags).
+The `-m` flag specifies the manifest file (required). Unflagged arguments are source files. Dependency package paths are specified in the manifest (no `-l` flags).
 
 ### Phase 4: Package Consumption
 
@@ -316,12 +514,12 @@ Extend the compiler CLI and import resolution in `tess_exe.c`:
 **CLI:**
 ```bash
 tess exe main.tl -l Foo.tlib -l Bar.tlib -o main    # without manifest
-tess exe manifest.toml main.tl -o main              # with manifest (no -l flags)
+tess exe -m manifest.toml main.tl -o main           # with manifest (no -l flags)
 ```
 
-The manifest is optional for `tess exe`:
-- Without manifest: use `-l` flags to provide packages, no version verification
-- With manifest: package paths come from manifest, versions are verified, `-l` flags not allowed
+The `-m` flag specifies a manifest file (optional for `tess exe`):
+- Without `-m`: use `-l` flags to provide packages, no version verification
+- With `-m`: package paths come from manifest, versions are verified, `-l` flags not allowed
 
 **Compilation process:**
 
@@ -342,25 +540,32 @@ The manifest is optional for `tess exe`:
 #import "local.tl" // imports local file
 ```
 
-### Phase 5: `[[export]]` Enforcement
+### Phase 5: Access Control Enforcement
 
 When compiling a program that includes packages:
 
+**Module-level access control:**
+1. Read each package's `modules` metadata to get the list of public modules
+2. When consumer code uses `#import ModuleName`, verify `ModuleName` is in the package's public modules list
+3. Error if consumer tries to import a non-public module
+
+**Symbol-level access control (`[[export]]`):**
 1. After parsing package source, identify all symbols with `[[export]]` attributes
-2. During type inference, track which package-defined symbols are referenced by consumer code (local source files)
+2. During type inference, track which package-defined symbols are referenced by consumer code
 3. Error if consumer code references a non-`[[export]]` symbol from a package module
 4. Package-internal symbols remain usable within the package's own source files
 
 ### Phase 6: Tests
 
 - Unit test: `.tlib` write/read roundtrip (correct format, corruption detection)
-- Unit test: metadata field roundtrip (name, author, version, requires)
+- Unit test: metadata field roundtrip (name, author, version, modules, requires)
 - Unit test: manifest file parsing (valid TOML, comments, missing fields, malformed)
 - Unit test: filename validation rejects `..` escapes and absolute paths
 - Integration test: `tess pack` a multi-file library, then `tess exe` a consumer that imports it
 - Integration test: module name conflict detection across packages
 - Integration test: pack dependency verification (missing dep in manifest, unused required dep, unused optional ok, version mismatch)
 - Integration test: compile dependency verification (missing `-l` package, version mismatch with manifest, transitive dep missing)
+- Integration test: module access control--error when importing non-public module
 - Integration test: `[[export]]` enforcement--error when accessing non-exported symbol
 - Integration test: generics in a package specialize correctly in the consumer
 - Add all tests to both Makefile and CMakeLists.txt
