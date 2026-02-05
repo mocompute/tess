@@ -302,25 +302,6 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     return type;
 }
 
-// tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args)
-// {
-//     // For use with Type literals only, e.g. instantiate a Point(a) as a Point(Int)
-//     tl_monotype *type       = null;
-
-//     tl_polytype *poly       = tl_type_registry_get(self, name);
-//     if (!poly) {
-//         // unknown type, possibly due to recursive types: return a weak type variable rather than null
-//         return tl_monotype_create_fresh_weak(self->subs);
-//     }
-
-//     u32 arity = poly->quantifiers.size;
-//     if (args.size != arity) fatal("runtime error");
-
-//     type = tl_polytype_instantiate_with(self->alloc, poly, args, self->subs);
-
-//     return type;
-// }
-
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
     str          name = S("Union");
     tl_monotype *type = null;
@@ -2722,7 +2703,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
                 tl_monotype_substitute_(alloc, resolved, subs, exclude, gen);
             }
 
-            *self = *resolved;
+            *self             = *resolved;
             self->visited_gen = gen; // restore after copy
         } else {
             // update to representative tv
