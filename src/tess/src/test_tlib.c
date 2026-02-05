@@ -100,6 +100,48 @@ static int test_filename_validation(void) {
 	return error;
 }
 
+static int test_byte_order(void) {
+	allocator *alloc = default_allocator();
+	char const *path = "/tmp/test_tlib_byteorder.tlib";
+
+	tl_tlib_entry entry = { "a.tl", 4, (byte const *)"x", 1 };
+
+	if (tl_tlib_write(alloc, path, &entry, 1)) {
+		fprintf(stderr, "  write failed\n");
+		return 1;
+	}
+
+	// Read raw bytes and verify header is big-endian
+	FILE *f = fopen(path, "rb");
+	if (!f) {
+		fprintf(stderr, "  open failed\n");
+		return 1;
+	}
+
+	byte header[16];
+	if (fread(header, 1, 16, f) != 16) {
+		fclose(f);
+		fprintf(stderr, "  read failed\n");
+		return 1;
+	}
+	fclose(f);
+
+	// Verify magic is "TLIB" in reading order (big-endian)
+	if (header[0] != 'T' || header[1] != 'L' || header[2] != 'I' || header[3] != 'B') {
+		fprintf(stderr, "  magic mismatch: expected TLIB, got %c%c%c%c\n",
+		        header[0], header[1], header[2], header[3]);
+		return 1;
+	}
+
+	// Verify version is 1 in big-endian (0x00000001)
+	if (header[4] != 0 || header[5] != 0 || header[6] != 0 || header[7] != 1) {
+		fprintf(stderr, "  version mismatch\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int test_large_payload(void) {
 	allocator *alloc = default_allocator();
 	char const *path = "/tmp/test_tlib_large.tlib";
@@ -141,6 +183,7 @@ int main(void) {
 	T(test_roundtrip)
 	T(test_empty_archive)
 	T(test_filename_validation)
+	T(test_byte_order)
 	T(test_large_payload)
 	return error;
 }

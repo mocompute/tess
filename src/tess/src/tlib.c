@@ -13,20 +13,20 @@
 #include <direct.h>
 #endif
 
-#define TLIB_MAGIC         0x42494C54u /* "TLIB" little-endian */
+#define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
 #define TLIB_VERSION       1u
 #define TLIB_HEADER_SIZE   16u
 #define TLIB_MAX_FILE_SIZE (64u * 1024u * 1024u)
 
-static inline void write_u32_le(byte *p, u32 v) {
-    p[0] = (byte)(v);
-    p[1] = (byte)(v >> 8);
-    p[2] = (byte)(v >> 16);
-    p[3] = (byte)(v >> 24);
+static inline void write_u32_be(byte *p, u32 v) {
+    p[0] = (byte)(v >> 24);
+    p[1] = (byte)(v >> 16);
+    p[2] = (byte)(v >> 8);
+    p[3] = (byte)(v);
 }
 
-static inline u32 read_u32_le(byte const *p) {
-    return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
+static inline u32 read_u32_be(byte const *p) {
+    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
 }
 
 int tl_tlib_valid_filename(char const *name, u32 len) {
@@ -58,14 +58,14 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_entry const
     /* serialize payload */
     byte *payload = alloc_malloc(alloc, payload_size);
     byte *p       = payload;
-    write_u32_le(p, count);
+    write_u32_be(p, count);
     p += 4;
     for (u32 i = 0; i < count; i++) {
-        write_u32_le(p, entries[i].name_len);
+        write_u32_be(p, entries[i].name_len);
         p += 4;
         memcpy(p, entries[i].name, entries[i].name_len);
         p += entries[i].name_len;
-        write_u32_le(p, entries[i].data_len);
+        write_u32_be(p, entries[i].data_len);
         p += 4;
         memcpy(p, entries[i].data, entries[i].data_len);
         p += entries[i].data_len;
@@ -101,10 +101,10 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_entry const
     }
 
     byte header[TLIB_HEADER_SIZE];
-    write_u32_le(header + 0, TLIB_MAGIC);
-    write_u32_le(header + 4, TLIB_VERSION);
-    write_u32_le(header + 8, payload_size);
-    write_u32_le(header + 12, (u32)compressed_size);
+    write_u32_be(header + 0, TLIB_MAGIC);
+    write_u32_be(header + 4, TLIB_VERSION);
+    write_u32_be(header + 8, payload_size);
+    write_u32_be(header + 12, (u32)compressed_size);
 
     int ok = fwrite(header, 1, TLIB_HEADER_SIZE, f) == TLIB_HEADER_SIZE &&
              fwrite(compressed, 1, compressed_size, f) == compressed_size;
@@ -135,10 +135,10 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     }
 
     byte const *h               = (byte const *)raw;
-    u32         magic           = read_u32_le(h + 0);
-    u32         version         = read_u32_le(h + 4);
-    u32         uncompressed_sz = read_u32_le(h + 8);
-    u32         compressed_sz   = read_u32_le(h + 12);
+    u32         magic           = read_u32_be(h + 0);
+    u32         version         = read_u32_be(h + 4);
+    u32         uncompressed_sz = read_u32_be(h + 8);
+    u32         compressed_sz   = read_u32_be(h + 12);
 
     if (magic != TLIB_MAGIC) {
         fprintf(stderr, "tlib: invalid magic\n");
@@ -189,14 +189,14 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     byte const *end = payload + uncompressed_sz;
 
     if (p + 4 > end) goto corrupt;
-    u32 count = read_u32_le(p);
+    u32 count = read_u32_be(p);
     p += 4;
 
     tl_tlib_entry *entries = alloc_calloc(alloc, count, sizeof(tl_tlib_entry));
 
     for (u32 i = 0; i < count; i++) {
         if (p + 4 > end) goto corrupt_entries;
-        u32 name_len = read_u32_le(p);
+        u32 name_len = read_u32_be(p);
         p += 4;
         if (p + name_len > end) goto corrupt_entries;
         char const *name = (char const *)p;
@@ -210,7 +210,7 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
         }
 
         if (p + 4 > end) goto corrupt_entries;
-        u32 data_len = read_u32_le(p);
+        u32 data_len = read_u32_be(p);
         p += 4;
         if (p + data_len > end) goto corrupt_entries;
         byte const *data = p;
