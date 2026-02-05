@@ -49,6 +49,8 @@ static void                      mark_float_type(tl_type_registry *, str);
 // -- type constructor --
 
 static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
+static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
+static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
 
 tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
@@ -1926,14 +1928,14 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     return hash;
 }
 
-u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, hashmap **, hashmap **);
+u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, u32, hashmap **);
 
-u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress) {
+u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
     if (!self) return 0;
 
-    u64 *found = map_get(*seen, &self, sizeof(tl_monotype *));
-    if (found) {
-        return *found;
+    // Generation-based memoization
+    if (self->hash_gen == gen) {
+        return self->cached_hash;
     }
 
     u64 hash = hash64(&self->tag, sizeof self->tag);
@@ -1984,12 +1986,12 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
                         hash = hash64_combine(hash, ancestor, sizeof *ancestor);
                     } else {
                         hash  = str_hash64_combine(hash, S("Unary"));
-                        u64 h = tl_monotype_hash64_(target, seen, in_progress);
+                        u64 h = tl_monotype_hash64_(target, gen, in_progress);
                         hash  = hash64_combine(hash, &h, sizeof h);
                     }
 
                 } else {
-                    u64 h = tl_monotype_hash64_(arg, seen, in_progress);
+                    u64 h = tl_monotype_hash64_(arg, gen, in_progress);
                     hash  = hash64_combine(hash, &h, sizeof h);
                 }
             }
@@ -2005,27 +2007,28 @@ u64 tl_monotype_hash64_(tl_monotype *self, hashmap **seen, hashmap **in_progress
 
     case tl_arrow:
     case tl_tuple: {
-        hash = tl_monotype_sized_hash64_(hash, self->list.xs, seen, in_progress);
+        hash = tl_monotype_sized_hash64_(hash, self->list.xs, gen, in_progress);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
 
     case tl_literal: {
         hash  = str_hash64_combine(hash, S("Literal"));
-        u64 h = tl_monotype_hash64_(self->literal, seen, in_progress);
+        u64 h = tl_monotype_hash64_(self->literal, gen, in_progress);
         hash  = hash64_combine(hash, &h, sizeof h);
     } break;
     }
 
-    map_set(seen, &self, sizeof(tl_monotype *), &hash); // memoise
+    // Cache result
+    self->hash_gen    = gen;
+    self->cached_hash = hash;
     return hash;
 }
 
 u64 tl_monotype_hash64(tl_monotype *self) {
-
-    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 32);
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 32);
-    u64      out         = tl_monotype_hash64_(self, &seen, &in_progress);
-    return out;
+    u32 gen = hash_gen++;
+    if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    return tl_monotype_hash64_(self, gen, &in_progress);
 }
 
 str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
@@ -2694,11 +2697,11 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
 }
 
 static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type_subs *subs,
-                                    hashmap *exclude, hashmap **seen) {
+                                    hashmap *exclude, u32 gen) {
     // exclude may be null.
     if (!self) return;
-    if (hset_contains(*seen, &self, sizeof(void *))) return;
-    hset_insert(seen, &self, sizeof(void *));
+    if (self->visited_gen == gen) return;
+    self->visited_gen = gen;
 
     switch (self->tag) {
     case tl_integer:
@@ -2716,11 +2719,11 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         tl_monotype *resolved = subs->data.v[root].type;
         if (resolved) {
             if (!tl_monotype_is_concrete_no_weak(resolved)) {
-                tl_monotype_substitute_(alloc, resolved, subs, exclude, seen);
+                tl_monotype_substitute_(alloc, resolved, subs, exclude, gen);
             }
 
             *self = *resolved;
-            hset_insert(seen, &self, sizeof(void *));
+            self->visited_gen = gen; // restore after copy
         } else {
             // update to representative tv
             self->var = root;
@@ -2730,7 +2733,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 
     case tl_literal:
         //
-        tl_monotype_substitute_(alloc, self->literal, subs, exclude, seen);
+        tl_monotype_substitute_(alloc, self->literal, subs, exclude, gen);
         break;
 
     case tl_cons_inst:
@@ -2740,7 +2743,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         if (tl_cons_inst == self->tag) arr = self->cons_inst->args;
         else arr = self->list.xs;
         forall(i, arr) {
-            tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, seen);
+            tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, gen);
         }
 
     } break;
@@ -2748,8 +2751,9 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 }
 
 void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
-    hashmap *seen = hset_create(transient_allocator, 64);
-    tl_monotype_substitute_(alloc, self, subs, exclude, &seen);
+    u32 gen = substitute_gen++;
+    if (gen == 0) gen = substitute_gen++; // skip 0 on wraparound (0 means "never visited")
+    tl_monotype_substitute_(alloc, self, subs, exclude, gen);
 }
 
 static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
@@ -2846,20 +2850,20 @@ void tl_type_subs_log(tl_type_subs *self) {
 
 //
 
-u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, hashmap **seen, hashmap **in_progress) {
+u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, u32 gen, hashmap **in_progress) {
     u64 hash = seed;
     forall(i, arr) {
-        u64 h = tl_monotype_hash64_(arr.v[i], seen, in_progress);
+        u64 h = tl_monotype_hash64_(arr.v[i], gen, in_progress);
         hash  = hash64_combine(hash, &h, sizeof h);
     }
     return hash;
 }
 
 u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
-    hashmap *seen        = map_new(transient_allocator, tl_monotype *, u64, 32);
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 32);
-    u64      out         = tl_monotype_sized_hash64_(seed, arr, &seen, &in_progress);
-    return out;
+    u32 gen = hash_gen++;
+    if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
+    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    return tl_monotype_sized_hash64_(seed, arr, gen, &in_progress);
 }
 
 tl_monotype_sized tl_monotype_sized_clone(allocator *alloc, tl_monotype_sized in, hashmap **mapping) {

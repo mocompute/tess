@@ -58,6 +58,9 @@ typedef struct tl_monotype {
         tl_literal,
         tl_placeholder
     } tag;
+    u32 visited_gen; // generation counter for cycle detection in traversals
+    u32 hash_gen;    // generation when cached_hash was computed
+    u64 cached_hash; // memoized hash value
 } tl_monotype;
 
 typedef struct tl_polytype {
