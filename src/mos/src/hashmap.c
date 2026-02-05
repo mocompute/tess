@@ -28,6 +28,7 @@ struct hashmap {
     u32        n_occupied;
 
     u16        value_size;
+    u16        entry_size;  // cached hashmap_entry_size result
 
     alignas(alignof(hashmap_entry)) byte entries[];
 };
@@ -67,26 +68,28 @@ static inline void set_tombstone(u8 *status) {
 }
 
 static inline size_t hashmap_entry_size(hashmap const *map) {
-    size_t aligned_value_size = alloc_align_to_pointer_size(map->value_size);
-    return aligned_value_size + sizeof(hashmap_entry);
+    return map->entry_size;
+}
+
+static inline u32 hash_to_bucket(hashmap const *map, u32 hash) {
+    return hash & (map->n_cells - 1);  // n_cells is always power of 2
 }
 
 static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len) {
     assert(map);
     u32 const h = hash32(key, key_len);
-    return h % map->n_cells;
+    return hash_to_bucket(map, h);
 }
 
 static inline u32 incr_index(hashmap const *map, u32 index) {
-    return (index + 1) % map->n_cells;
+    return (index + 1) & (map->n_cells - 1);  // n_cells is always power of 2
 }
 
-// Returns: if key exists, pointer to header. Sets out_index to found
-// bucket index.
-static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
+// Returns: if key exists, pointer to header.
+// Takes pre-computed bucket index to avoid re-hashing.
+static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32 index) {
     assert(map);
 
-    u32 index          = key_to_bucket(map, key, key_len);
     u32 probe_distance = 0;
 
     while (1) {
@@ -113,7 +116,12 @@ static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
     }
 }
 
-static int set_one(hashmap *map, hashmap_entry const *header, byte const *element) {
+static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
+    u32 index = key_to_bucket(map, key, key_len);
+    return map_find_at(map, key, key_len, index);
+}
+
+static int set_one_at(hashmap *map, hashmap_entry const *header, byte const *element, u32 index) {
 
     byte to_store[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_entry)];
     byte tmp[HASHMAP_MAX_ELEMENT_SIZE + sizeof(hashmap_entry)];
@@ -128,7 +136,6 @@ static int set_one(hashmap *map, hashmap_entry const *header, byte const *elemen
     memcpy(to_store, header, sizeof *header);
     memcpy(to_store + sizeof *header, element, map->value_size);
 
-    u32 index           = key_to_bucket(map, header->key->data, header->key->size);
     u8  probe_distance  = 0;
     int warning_printed = 0;
 
@@ -241,6 +248,7 @@ hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
 
 hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     if (n_buckets < 8) n_buckets = 8;
+    n_buckets = (u32)alloc_next_power_of_two(n_buckets);  // ensure power of 2 for fast modulo
 
     size_t aligned_value_size = alloc_align_to_pointer_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
@@ -255,6 +263,7 @@ hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     map->n_cells         = n_buckets;
     map->n_occupied      = 0;
     map->value_size      = value_size;
+    map->entry_size      = (u16)bucket_size;  // cache entry size
 
     memset(map->entries, 0, n_buckets * bucket_size);
 
@@ -341,8 +350,12 @@ int str_map_contains(hashmap const *self, str key) {
 
 void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
 
+    // Compute hash once upfront
+    u32 hash         = hash32(key, key_len);
+    u32 bucket_index = hash_to_bucket(*self, hash);
+
     // Must check for existing key. Replace if present.
-    hashmap_entry *existing = map_find(*self, key, key_len);
+    hashmap_entry *existing = map_find_at(*self, key, key_len, bucket_index);
 
     if (existing) {
         memcpy(existing->data, data, (*self)->value_size);
@@ -355,6 +368,8 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
             assert(0);
             exit(1);
         }
+        // Recompute bucket index after resize (n_cells changed)
+        bucket_index = hash_to_bucket(*self, hash);
     }
 
     hashmap_entry entry = {
@@ -366,7 +381,7 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
     entry.key->size = key_len;
     memcpy(entry.key->data, key, key_len);
 
-    if (set_one(*self, &entry, data)) {
+    if (set_one_at(*self, &entry, data, bucket_index)) {
         dbg("map_set: error in set_one\n");
         assert(0);
         exit(1);
