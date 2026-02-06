@@ -32,7 +32,7 @@ typedef struct {
 // Parse a manifest from a buffer. Returns 0 on success, 1 on error.
 // Errors are printed to stderr with "manifest:" prefix.
 // All strings are allocated from alloc.
-int tl_manifest_parse(allocator *alloc, char const *data, u32 data_len, tl_manifest *out);
+int tl_manifest_parse(allocator *alloc, str data, tl_manifest *out);
 
 // Parse a manifest file. Reads file then calls tl_manifest_parse.
 int tl_manifest_parse_file(allocator *alloc, char const *path, tl_manifest *out);

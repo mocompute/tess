@@ -1,5 +1,7 @@
 #include "manifest.h"
 
+#include "str.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -12,7 +14,8 @@
 
 // Helper: parse a string literal as manifest
 static int parse(allocator *alloc, char const *text, tl_manifest *out) {
-    return tl_manifest_parse(alloc, text, (u32)strlen(text), out);
+    str s = str_init_static(text);
+    return tl_manifest_parse(alloc, s, out);
 }
 
 // ---------------------------------------------------------------------------

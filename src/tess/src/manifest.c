@@ -1,5 +1,6 @@
 #include "manifest.h"
 #include "file.h"
+#include "str.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -130,7 +131,7 @@ enum { SECTION_NONE, SECTION_PACKAGE, SECTION_DEPEND, SECTION_DEPEND_OPTIONAL, S
 // Main parser
 // ---------------------------------------------------------------------------
 
-int tl_manifest_parse(allocator *alloc, char const *data, u32 data_len, tl_manifest *out) {
+int tl_manifest_parse(allocator *alloc, str data, tl_manifest *out) {
     memset(out, 0, sizeof(*out));
     out->package.name    = str_empty();
     out->package.version = str_empty();
@@ -151,8 +152,9 @@ int tl_manifest_parse(allocator *alloc, char const *data, u32 data_len, tl_manif
     int         cur_dep     = -1;
     int         cur_dep_opt = 0; // is current dep optional?
 
-    char const *p           = data;
-    char const *end         = data + data_len;
+    span        data_s      = str_span(&data);
+    char const *p           = data_s.buf;
+    char const *end         = data_s.buf + data_s.len;
     int         line_num    = 0;
     int         error       = 0;
 
@@ -381,5 +383,6 @@ int tl_manifest_parse_file(allocator *alloc, char const *path, tl_manifest *out)
         fprintf(stderr, "manifest: cannot read '%s'\n", path);
         return 1;
     }
-    return tl_manifest_parse(alloc, data, size, out);
+    str s = str_init_allocated_n(data, size);
+    return tl_manifest_parse(alloc, s, out);
 }

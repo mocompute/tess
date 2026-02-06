@@ -95,7 +95,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (-o required)\n");
-    printf("                           use -m <manifest> or --name, --pkg-version; optional: --author, --modules\n");
+    printf("                           use -m <manifest> or --name, --pkg-version; optional: --author, "
+           "--modules\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
@@ -1046,8 +1047,9 @@ static int pack_files(state *self) {
 
     if (self->pack_manifest) {
         // Conflict detection: -m cannot be combined with CLI metadata flags
-        if (self->pack_name || self->pack_version || self->pack_modules) {
-            fprintf(stderr, "error: -m cannot be combined with --name, --pkg-version, or --modules\n");
+        if (self->pack_name || self->pack_version || self->pack_modules || self->pack_author) {
+            fprintf(stderr,
+                    "error: -m cannot be combined with --name, --author, --pkg-version, or --modules\n");
             return 1;
         }
 
@@ -1076,11 +1078,15 @@ static int pack_files(state *self) {
                         (unsigned)UINT16_MAX);
                 return 1;
             }
-            opts.requires       = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
+            opts.
+                requires
+            = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
             opts.requires_count = (u16)manifest.dep_count;
             for (u32 i = 0; i < manifest.dep_count; i++) {
-                opts.requires[i] =
-                  str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
+                opts.
+                    requires[
+                            i] =
+                      str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
             }
         }
 
