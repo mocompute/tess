@@ -557,7 +557,39 @@ typedef struct {
 - `test_empty_array` / `test_whitespace_trimming` — edge cases
 - `test_full_manifest` — complete manifest matching the design doc example
 
-**Limitation:** Not yet integrated with the `tess pack` command (no `-m` flag). Integration is part of Phase 5b below.
+#### Phase 5b: Manifest Integration with Pack Command ✓
+
+Implemented in `src/tess/src/tess_exe.c`:
+
+```bash
+tess pack -m manifest.toml foo.tl -o Foo.tlib
+```
+
+When `-m` is provided, metadata is read from the manifest instead of command-line flags. `[depend]` sections are parsed but not validated (dependencies aren't loaded yet).
+
+- Remove support for `--name`, `--author`, `--version`, and `--modules` flags
+- Integration test: `test_pack_with_manifest` in `src/tess/src/test_tlib.c`
+
+#### Phase 6: Module Discovery (partial) ✓
+
+**Goal:** Discover module names from `#module` directives in source files.
+
+**Completed: `#module` directive scanning.**
+
+The existing directive scanner in `tess_exe.c` (`process_hash_directive()`) was extended to discover `#module` directives alongside `#import` directives. A `modules_seen` hashmap in the `state` struct tracks discovered modules. Module discovery respects conditional compilation (`#ifdef`/`#ifndef`/`#endif`) the same way imports do.
+
+```c
+// In process_hash_directive():
+else if (!is_stdlib_file && str_eq(words.v[0], S("module"))) {
+    str_hset_insert(&self->modules_seen, words.v[1]);
+}
+```
+
+Discovered modules are printed in verbose mode during `pack_files()`.
+
+**Not yet completed:**
+
+The remaining parts of Phase 6 are listed under "Remaining Phases" below as Phase 6b.
 
 ---
 
@@ -565,48 +597,9 @@ typedef struct {
 
 The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
-#### Phase 5b: Manifest Integration with Pack Command
+#### Phase 6b: Module Discovery Integration with Pack
 
-**Goal:** Wire the manifest parser into `tess pack` via a `-m` flag.
-
-```bash
-tess pack -m manifest.toml foo.tl -o Foo.tlib
-```
-
-When `-m` is provided, read metadata from manifest instead of command-line flags. At this phase, `[depend]` sections are parsed but not validated (dependencies aren't loaded yet).
-
-**CLI conflict handling:** Error if `-m` is used together with `--name`, `--version`, or `--modules` flags.
-
-**Validation:**
-- Integration test: pack with manifest, verify archive contains correct metadata
-- Test that `-m` with metadata CLI flags produces an error
-
-#### Phase 6: Module Discovery
-
-**Goal:** Discover module names from `#module` directives in source files.
-
-**Implementation:**
-
-The existing code in `tess_exe.c` already handles conditional compilation for import resolution:
-- `process_import_hash()` (lines 215-249) tracks `#ifdef`/`#ifndef`/`#endif` nesting
-- `read_import_lines()` (lines 251-288) scans source for hash directives
-- `import_skip_depth` and `import_defines` handle conditional state
-
-Extend this infrastructure to also discover `#module` directives:
-
-```c
-// In process_import_hash(), add handling for #module:
-if (0 == self->import_skip_depth && words.size >= 2 && str_eq(words.v[0], S("module"))) {
-    // words.v[1] is the module name (e.g., "MathUtils" or "MathUtils.Internal")
-    array_push(*modules_output, words.v[1]);
-}
-```
-
-Options for integration:
-1. **Extend existing functions**: Add a `str_array *modules` output parameter to `read_import_lines()` and `process_import_hash()` to collect module names alongside imports
-2. **Factor out scanning**: Extract the line-scanning and conditional-compilation logic into a reusable scanner that can collect both imports and modules in one pass
-
-Recommendation: Option 1 is simpler and avoids duplication. The scanner already does one pass over the source; adding module collection is minimal overhead
+**Goal:** Use discovered modules to validate against manifest and enforce self-containment.
 
 **Integrate with pack:**
 
@@ -799,9 +792,11 @@ Final validation and edge case coverage:
 ```
 Phase 5 (Manifest Parser) ✓
     ↓
-Phase 5b (Manifest Integration)
+Phase 5b (Manifest Integration) ✓
     ↓
-Phase 6 (Module Discovery)
+Phase 6 (Module Discovery — scanning) ✓
+    ↓
+Phase 6b (Module Discovery — pack integration)
     ↓
 Phase 7 (Basic Consumption)  ←── First end-to-end validation
     ↓
@@ -818,6 +813,7 @@ Phase 12 (Test Suite)
 
 **Key validation points:**
 - After Phase 5: Manifest parser works standalone with full test coverage
+- After Phase 6: Module discovery scanning works, manifest integration with pack complete
 - After Phase 7: Can pack and consume a simple library (no dependencies)
 - After Phase 8: Can handle library chains (A uses B)
 - After Phase 11: Full access control model working
