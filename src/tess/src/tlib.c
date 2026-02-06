@@ -13,10 +13,10 @@
 #include <direct.h>
 #endif
 
-#define TLIB_MAGIC           0x544C4942u /* "TLIB" big-endian (network order) */
-#define TLIB_VERSION         1u
-#define TLIB_FIXED_HEADER    8u  /* magic + version */
-#define TLIB_MAX_FILE_SIZE   (64u * 1024u * 1024u)
+#define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
+#define TLIB_VERSION       1u
+#define TLIB_FIXED_HEADER  8u /* magic + version */
+#define TLIB_MAX_FILE_SIZE (64u * 1024u * 1024u)
 
 static inline void write_u32_be(byte *p, u32 v) {
     p[0] = (byte)(v >> 24);
@@ -85,8 +85,8 @@ static int read_str16(byte const **pp, byte const *end, allocator *alloc, str *o
 }
 
 // Read a u16-counted array of u16-prefixed strings. Returns 0 on success.
-static int read_str16_array(byte const **pp, byte const *end, allocator *alloc,
-                            str **out_items, u16 *out_count) {
+static int read_str16_array(byte const **pp, byte const *end, allocator *alloc, str **out_items,
+                            u16 *out_count) {
     byte const *p = *pp;
     if (p + 2 > end) return 1;
     u16 count = read_u16_be(p);
@@ -94,7 +94,7 @@ static int read_str16_array(byte const **pp, byte const *end, allocator *alloc,
     *out_count = count;
     if (count == 0) {
         *out_items = null;
-        *pp = p;
+        *pp        = p;
         return 0;
     }
     str *items = alloc_calloc(alloc, count, sizeof(str));
@@ -105,7 +105,7 @@ static int read_str16_array(byte const **pp, byte const *end, allocator *alloc,
         }
     }
     *out_items = items;
-    *pp = p;
+    *pp        = p;
     return 0;
 }
 
@@ -128,8 +128,7 @@ int tl_tlib_valid_filename(char const *name, u32 len) {
     return 1;
 }
 
-int tl_tlib_write(allocator *alloc, char const *output_path,
-                  tl_tlib_metadata const *metadata,
+int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata const *metadata,
                   tl_tlib_entry const *entries, u32 count) {
     /* compute payload size with overflow check */
     u32 payload_size = 4; /* file count */
@@ -180,9 +179,8 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
     }
 
     /* validate metadata string lengths fit in u16 */
-    if (str_len(metadata->name) > UINT16_MAX
-        || str_len(metadata->author) > UINT16_MAX
-        || str_len(metadata->version) > UINT16_MAX) {
+    if (str_len(metadata->name) > UINT16_MAX || str_len(metadata->author) > UINT16_MAX ||
+        str_len(metadata->version) > UINT16_MAX) {
         alloc_free(alloc, compressed);
         fprintf(stderr, "tlib: metadata field too long for u16\n");
         return 1;
@@ -211,16 +209,13 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
 
     /* write metadata fields (uncompressed, u16-prefixed) */
     int meta_ok = 1;
-    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->name),
-                                     (u16)str_len(metadata->name), &crc) == 0;
-    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->author),
-                                     (u16)str_len(metadata->author), &crc) == 0;
-    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->version),
-                                     (u16)str_len(metadata->version), &crc) == 0;
-    meta_ok = meta_ok && write_str16_array(f, metadata->modules,
-                                           metadata->module_count, &crc) == 0;
-    meta_ok = meta_ok && write_str16_array(f, metadata->requires,
-                                           metadata->requires_count, &crc) == 0;
+    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->name), (u16)str_len(metadata->name), &crc) == 0;
+    meta_ok =
+      meta_ok && write_str16(f, str_buf(&metadata->author), (u16)str_len(metadata->author), &crc) == 0;
+    meta_ok =
+      meta_ok && write_str16(f, str_buf(&metadata->version), (u16)str_len(metadata->version), &crc) == 0;
+    meta_ok = meta_ok && write_str16_array(f, metadata->modules, metadata->module_count, &crc) == 0;
+    meta_ok = meta_ok && write_str16_array(f, metadata->requires, metadata->requires_count, &crc) == 0;
     meta_ok = meta_ok && write_str16_array(f, metadata->requires_optional,
                                            metadata->requires_optional_count, &crc) == 0;
 
@@ -313,12 +308,13 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     if (read_str16(&p, end, alloc, &out->metadata.name)) goto corrupt_meta;
     if (read_str16(&p, end, alloc, &out->metadata.author)) goto corrupt_meta;
     if (read_str16(&p, end, alloc, &out->metadata.version)) goto corrupt_meta;
-    if (read_str16_array(&p, end, alloc, &out->metadata.modules,
-                         &out->metadata.module_count)) goto corrupt_meta;
-    if (read_str16_array(&p, end, alloc, &out->metadata.requires,
-                         &out->metadata.requires_count)) goto corrupt_meta;
+    if (read_str16_array(&p, end, alloc, &out->metadata.modules, &out->metadata.module_count))
+        goto corrupt_meta;
+    if (read_str16_array(&p, end, alloc, &out->metadata.requires, &out->metadata.requires_count))
+        goto corrupt_meta;
     if (read_str16_array(&p, end, alloc, &out->metadata.requires_optional,
-                         &out->metadata.requires_optional_count)) goto corrupt_meta;
+                         &out->metadata.requires_optional_count))
+        goto corrupt_meta;
 
     /* read payload sizes */
     if (p + 8 > end) goto corrupt_meta;
@@ -349,8 +345,8 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     }
 
     size_t                 actual_out = 0;
-    enum libdeflate_result r          = libdeflate_deflate_decompress(d, p, compressed_sz,
-                                                                      payload, uncompressed_sz, &actual_out);
+    enum libdeflate_result r =
+      libdeflate_deflate_decompress(d, p, compressed_sz, payload, uncompressed_sz, &actual_out);
     libdeflate_free_decompressor(d);
     alloc_free(alloc, raw);
 
@@ -361,7 +357,7 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     }
 
     /* parse entries */
-    byte const *pp  = payload;
+    byte const *pp   = payload;
     byte const *pend = payload + uncompressed_sz;
 
     if (pp + 4 > pend) goto corrupt;
@@ -422,11 +418,11 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
                  struct import_resolver *resolver, tl_tlib_pack_opts opts) {
     // Validate required metadata
     if (!opts.name || strlen(opts.name) == 0) {
-        fprintf(stderr, "tlib: --name is required\n");
+        fprintf(stderr, "tlib: name is required\n");
         return 1;
     }
     if (!opts.version || strlen(opts.version) == 0) {
-        fprintf(stderr, "tlib: --pkg-version is required\n");
+        fprintf(stderr, "tlib: package version is required\n");
         return 1;
     }
 
@@ -527,15 +523,15 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
 
     // Build metadata
     tl_tlib_metadata meta = {
-        .name                    = str_init(alloc, opts.name),
-        .author                  = opts.author ? str_init(alloc, opts.author) : str_empty(),
-        .version                 = str_init(alloc, opts.version),
-        .modules                 = opts.modules,
-        .module_count            = opts.module_count,
-        .requires                = opts.requires,
-        .requires_count          = opts.requires_count,
-        .requires_optional       = opts.requires_optional,
-        .requires_optional_count = opts.requires_optional_count,
+      .name                    = str_init(alloc, opts.name),
+      .author                  = opts.author ? str_init(alloc, opts.author) : str_empty(),
+      .version                 = str_init(alloc, opts.version),
+      .modules                 = opts.modules,
+      .module_count            = opts.module_count,
+      .requires                = opts.requires,
+      .requires_count          = opts.requires_count,
+      .requires_optional       = opts.requires_optional,
+      .requires_optional_count = opts.requires_optional_count,
     };
 
     // Write archive

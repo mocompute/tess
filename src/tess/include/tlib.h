@@ -53,9 +53,9 @@ int tl_tlib_valid_filename(char const *name, u32 len);
 typedef struct {
     int verbose;
     // Metadata fields (for CLI testing before manifest support)
-    char const *name;    // --name (required)
-    char const *author;  // --author (optional)
-    char const *version; // --pkg-version (required)
+    char const *name;    // package name (required)
+    char const *author;  // package author (optional)
+    char const *version; // package version (required)
     str        *modules; // array of public module names (optional)
     u16         module_count;
     // Dependencies (from manifest; null/0 when using CLI flags)

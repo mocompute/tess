@@ -90,9 +90,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tlib archive from source files (-o required)\n");
-    printf("                           use -m <manifest> or --name, --pkg-version; optional: --author, "
-           "--modules\n");
+    printf("    pack                   create .tlib archive from source files (-o and -m required)\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
