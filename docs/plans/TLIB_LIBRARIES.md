@@ -49,6 +49,8 @@ All modules--whether from local source files or included packages--share a singl
 
 This matches how Tess currently works: there is one global namespace for modules, and `Module.function()` syntax accesses members.
 
+**Consequence: strict version equality.** Because all modules share a single global namespace, two versions of the same package cannot coexist--they would define the same module names, causing a conflict. This means dependency version requirements must use strict equality (`Logger=2.0.0`), not version ranges. This is not a temporary simplification; it is a structural requirement of the flat namespace model. If package A requires `Logger=1.0` and package B requires `Logger=2.0`, the compiler must emit an error--there is no way to satisfy both.
+
 ### Import Syntax
 
 Three forms of `#import` serve different purposes:
@@ -67,12 +69,15 @@ When `tess pack` encounters an import that resolves to a module from another pac
 
 **Dependency format:** `PackageName=Version` (e.g., `Utils=1.2.0`)
 
-Version is always required. Multiple dependencies are comma-separated:
-`Utils=1.2.0,Logger=0.5.3`. Whitespace before and after commas is ok.
+Version is always required. In the binary archive format, dependencies are stored as individual entries in a u16 length-prefixed array.
 
-When compiling, if a package declares dependencies, the compiler verifies:
-1. Each required package is provided (via manifest or `-l`)
-2. The provided package's version matches exactly (strict equality)
+When compiling, if a package declares dependencies, the compiler resolves them automatically:
+1. Search `-L` library paths (CLI) or `lib_path` directories (manifest) for `<PackageName>.tlib`
+2. Verify the provided package's version matches exactly (strict equality)
+3. Recurse: load transitive dependencies the same way
+4. Error if a dependency cannot be found, with a message naming the missing package and which package requires it
+
+Consumers only need to declare their **direct** dependencies. Transitive dependencies are resolved automatically from search paths.
 
 **Future: Hash verification**
 
@@ -92,7 +97,9 @@ This ensures byte-for-byte reproducibility regardless of when or where the packa
 ### `[[export]]` as API Boundary
 
 - `[[export]]` marks a symbol as part of the library's public API
-- `[[export]]` is ignored by `tess pack` (it just bundles everything)
+- `tess pack` scans for `[[export]]` annotations and emits warnings to give authors early feedback:
+  - Warning if a module listed in `modules` has zero `[[export]]` symbols (likely a mistake)
+  - Warning if a module has `[[export]]` symbols but isn't listed in `modules` (may be unintentional)
 - `[[export]]` is ignored by `tess exe` on standalone files (no packages)
 - `[[export]]` is enforced when `tess exe` compiles a program that includes packages: consumer code may only reference `[[export]]`-annotated symbols from the package's modules
 - A future `[[c_export(name)]]` variant may allow custom symbol naming for C-compatible libraries
@@ -105,6 +112,10 @@ Standard library files are excluded from `.tlib` archives. The consumer's compil
 
 When packages are included (via manifest or `-l`), all modules from all packages are loaded into the global namespace. The compiler performs whole-program compilation, and tree shaking at the end of the pipeline discards code not referenced by the program.
 
+### Diamond Dependencies
+
+When packages A and B both depend on package C, the consumer provides C once. Because C's source is compiled exactly once into a single compilation unit, type identity is naturally preserved--`C.SomeType` as seen by A is the same type as seen by B. This is a direct benefit of the source-only, whole-program compilation model. Pre-compiled or IR-based approaches would need explicit type deduplication or canonical type representations; source-level compilation avoids this entirely.
+
 ---
 
 ## End-to-End Example
@@ -115,13 +126,13 @@ This example walks through a library producer publishing a `MathUtils` package (
 
 First, assume a logging package exists. In this example, the **package name** ("LoggingLib") differs from the **module name** ("Logger") to illustrate that they are independent--they may also be the same:
 
-**LoggingLib's manifest.toml:**
-```toml
+**LoggingLib's manifest:**
+```
 [package]
-name = "LoggingLib"
-version = "2.0.0"
-author = "Bob"
-modules = ["Logger"]
+name = LoggingLib
+version = 2.0.0
+author = Bob
+modules = [Logger]
 ```
 
 **LoggingLib's module (logger.tl):**
@@ -202,15 +213,17 @@ fatal(msg) {
 Note: Every file must have a `#module` directive. Internal implementation uses a submodule (`MathUtils.Internal`) whose symbols are not exported, so consumers cannot access them.
 
 **manifest.toml:**
-```toml
+```
 [package]
-name = "MathUtils"
-version = "1.0.0"
-author = "Alice"
-modules = ["MathUtils"]    # only public module; MathUtils.Internal is internal
+name = MathUtils
+version = 1.0.0
+author = Alice
+modules = [MathUtils]    # only public module; MathUtils.Internal is internal
+lib_path = [libs/]
 
-[dependencies]
-LoggingLib = { version = "2.0.0", path = "libs/LoggingLib.tlib" }
+[depend.LoggingLib]
+version = 2.0.0
+path = libs/LoggingLib.tlib    # optional: overrides lib_path for this package
 ```
 
 Note: `MathUtils.Internal` is not listed in `modules`, so consumers cannot import it. The manifest references the **package name** ("LoggingLib"), while the source code uses the **module name** (`#import Logger`, `Logger.error(...)`).
@@ -222,7 +235,7 @@ tess pack -m manifest.toml src/math.tl -o MathUtils.tlib
 
 The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tlib). The metadata records:
 - name="MathUtils", version="1.0.0"
-- requires="LoggingLib=2.0.0"
+- requires=["LoggingLib=2.0.0"]
 
 ### Consumer: Using the Package
 
@@ -260,14 +273,16 @@ main() {
 **Option A: With manifest (version verification):**
 
 **manifest.toml:**
-```toml
+```
 [package]
-name = "MyApp"
-version = "0.1.0"
+name = MyApp
+version = 0.1.0
+lib_path = [libs/]    # search paths for transitive dependency resolution
 
-[dependencies]
-MathUtils = { version = "1.0.0", path = "libs/MathUtils.tlib" }
-LoggingLib = { version = "2.0.0", path = "libs/LoggingLib.tlib" }    # transitive dep
+[depend.MathUtils]
+version = 1.0.0
+path = libs/MathUtils.tlib    # optional: overrides lib_path for this package
+# LoggingLib is NOT listed -- resolved automatically from lib_path
 ```
 
 ```bash
@@ -277,10 +292,10 @@ tess exe -m manifest.toml src/main.tl -o myapp
 **Option B: Without manifest (quick and simple):**
 
 ```bash
-tess exe src/main.tl -l libs/MathUtils.tlib -l libs/LoggingLib.tlib -o myapp
+tess exe src/main.tl -l libs/MathUtils.tlib -L libs/ -o myapp
 ```
 
-Note: The consumer must provide LoggingLib.tlib even though main.tl doesn't directly import it--MathUtils depends on it. The compiler verifies that MathUtils's declared dependency (LoggingLib=2.0.0) is satisfied by the provided LoggingLib.tlib.
+In both cases, consumers only declare **direct** dependencies. The compiler reads MathUtils's `requires` field (`LoggingLib=2.0.0`), searches the library paths for `LoggingLib.tlib`, verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
 
 Both options produce the same executable. Option A verifies all package versions match; Option B uses whatever versions are in the `.tlib` files.
 
@@ -295,39 +310,51 @@ A custom binary format, chosen over tar for simplicity, security, and zero exter
 ```
 [4 bytes]  Magic: "TLIB"
 [4 bytes]  Format version: 1 (big-endian uint32)
-[4 bytes]  Name length (big-endian uint32)
+[2 bytes]  Name length (big-endian uint16)
 [N bytes]  Package name (UTF-8 string)
-[4 bytes]  Author length (big-endian uint32)
+[2 bytes]  Author length (big-endian uint16)
 [N bytes]  Author (UTF-8 string, may be empty)
-[4 bytes]  Version length (big-endian uint32)
+[2 bytes]  Version length (big-endian uint16)
 [N bytes]  Version (UTF-8 string)
-[4 bytes]  Modules length (big-endian uint32)
-[N bytes]  Modules (UTF-8 string, comma-separated public module names)
-[4 bytes]  Requires length (big-endian uint32)
-[N bytes]  Requires (UTF-8 string, comma-separated dependencies, may be empty)
-[4 bytes]  Requires-optional length (big-endian uint32)
-[N bytes]  Requires-optional (UTF-8 string, comma-separated dependencies, may be empty)
+[2 bytes]  Modules count (big-endian uint16)
+For each module:
+    [2 bytes]  Module name length (big-endian uint16)
+    [N bytes]  Module name (UTF-8 string)
+[2 bytes]  Requires count (big-endian uint16)
+For each required dependency:
+    [2 bytes]  Dependency string length (big-endian uint16)
+    [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
+[2 bytes]  Requires-optional count (big-endian uint16)
+For each optional dependency:
+    [2 bytes]  Dependency string length (big-endian uint16)
+    [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
 [4 bytes]  Uncompressed payload size (big-endian uint32)
 [4 bytes]  Compressed payload size (big-endian uint32)
 [N bytes]  Deflate-compressed payload
+[4 bytes]  CRC32 checksum of all preceding bytes (big-endian uint32)
 ```
+
+### Integrity Check
+
+A CRC32 checksum is stored at the end of the archive, covering all bytes from the magic through the compressed payload. On read, the reader computes CRC32 over everything before the last 4 bytes and compares. A mismatch produces a corruption error. CRC32 is available via vendored libdeflate (`libdeflate_crc32`). This is for corruption detection, not a security feature--the future SHA-256 hash in dependency records serves that purpose.
 
 ### Metadata Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| Name | Yes | Package name (e.g., "MyLibrary") |
-| Author | No | Author name or email |
-| Version | Yes | Version string, free-form (compared as literal string) |
-| Modules | Yes | Comma-separated list of public module names |
-| Requires | No | Comma-separated list of required versioned dependencies |
-| Requires-optional | No | Comma-separated list of optional versioned dependencies |
+| Field | Size | Required | Description |
+|-------|------|----------|-------------|
+| Name | u16-prefixed string | Yes | Package name (e.g., "MyLibrary") |
+| Author | u16-prefixed string | No | Author name or email |
+| Version | u16-prefixed string | Yes | Version string, free-form (compared as literal string) |
+| Modules | u16 count + u16-prefixed strings | Yes | Array of public module names |
+| Requires | u16 count + u16-prefixed strings | No | Array of required versioned dependencies |
+| Requires-optional | u16 count + u16-prefixed strings | No | Array of optional versioned dependencies |
 
-**Dependency format:** `PackageName=Version[#Hash]`
+All metadata fields use u16 (big-endian) for lengths and counts, giving a maximum of 65535 bytes per string and 65535 entries per array -- more than sufficient for metadata. Only the payload sizes (uncompressed and compressed) use u32, since source archives can be large.
+
+**Dependency string format:** `PackageName=Version[#Hash]`
 
 Examples:
 - `Utils=1.2.0` -- requires Utils version 1.2.0
-- `Utils=1.2.0,Logger=0.5.3` -- multiple dependencies
 - `Utils=1.2.0#a1b2c3d4...` -- with hash verification (future)
 
 ### Payload (before compression)
@@ -343,21 +370,31 @@ For each file:
 
 ### Path Handling
 
-Files are stored with their directory structure relative to a common root (the nearest common ancestor of all packed files). This preserves import resolution semantics:
+Files are stored with their directory structure relative to a common root (the nearest common ancestor of all packed files). All paths are normalized at pack time--`..` components are resolved before storing. This preserves import resolution semantics:
 
 - `liba/core.tl` and `libb/core.tl` can coexist
-- `#import "../util/util.tl"` from `liba/foo.tl` resolves correctly to `util/util.tl`
+- `#import "../util/util.tl"` from `liba/foo.tl` resolves correctly to `util/util.tl` (the `..` is in the source code, resolved at compile time against the archive's directory structure)
 - The compiler's existing relative import resolution works unchanged
 
-`..` components are allowed in stored paths. The validation rule is:
-- No path may escape the archive root (e.g., `../../../etc/passwd` is rejected)
+Stored path validation rules:
+- No `..` components in stored filenames (resolved at pack time)
+- No absolute paths
 - After packing, every quoted `#import` in every archived file must resolve to another file in the archive (self-containment check for local imports)
+
+### Size Limits
+
+Metadata fields use `u16` (big-endian), giving a maximum of 65535 bytes per string and 65535 entries per array. Payload sizes use `u32` (big-endian), giving a maximum of ~4GB. These are conscious design choices--source archives should never approach these limits. Specific limits:
+- Individual metadata string (name, version, etc.): 65535 bytes
+- Metadata array entries (modules, dependencies): 65535 entries
+- Individual file content in payload: ~4GB
+- Total uncompressed payload: ~4GB
+- Total compressed payload: ~4GB
 
 ### Safety
 
 - All lengths are bounds-checked against remaining buffer size on read
 - Maximum individual file size and total archive size limits prevent memory exhaustion
-- Filenames are validated: no absolute paths, no escape from archive root
+- Filenames are validated: no absolute paths, no `..` components
 
 ### Compression
 
@@ -397,7 +434,7 @@ typedef struct {
 
 - `tl_tlib_write()`: Writes magic, version, compressed payload
 - `tl_tlib_read()`: Reads and validates archive, decompresses payload
-- `tl_tlib_valid_filename()`: Validates filenames (rejects absolute paths, ".." escapes)
+- `tl_tlib_valid_filename()`: Validates filenames (rejects absolute paths and `..` components)
 - Unit tests in `src/tess/src/test_tlib.c`
 
 **Note:** This was a simplified format without metadata fields. Phase 4 added the full format with name/version/modules/requires.
@@ -417,28 +454,38 @@ High-level operations in `src/tess/src/tlib.c`:
 
 **Limitations:** No manifest support, no metadata in archive.
 
-#### Phase 4: Archive Metadata ✓
+#### Phase 4: Archive Metadata ✓ (needs revision)
 
-Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`:
+Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`. The current implementation uses the original format (u32 length-prefixed comma-separated strings for modules/requires/requires-optional). It needs to be revised to match the updated spec below:
 
 ```c
 typedef struct {
     str name;              // package name (required)
     str author;            // author (may be empty)
     str version;           // version string (required)
-    str modules;           // comma-separated public module names
-    str requires;          // comma-separated required dependencies
-    str requires_optional; // comma-separated optional dependencies
+    str *modules;          // array of public module names
+    u16  module_count;
+    str *requires;         // array of required dependencies ("Name=Version")
+    u16  requires_count;
+    str *requires_optional; // array of optional dependencies ("Name=Version")
+    u16  requires_optional_count;
 } tl_tlib_metadata;
+
+typedef struct {
+    char const *name;
+    u32         name_len;
+    byte const *data;
+    u32         data_len;
+} tl_tlib_entry;
 
 typedef struct {
     tl_tlib_metadata metadata;
     tl_tlib_entry   *entries;
-    u32              count;
+    u32              entries_count;
 } tl_tlib_archive;
 ```
 
-**Binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. Each field is a length-prefixed UTF-8 string (u32 length in big-endian, then data). This allows metadata inspection without decompressing the archive.
+**Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, requires, requires-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
 
 **CLI flags for testing** (temporary until manifest support in Phase 5):
 
@@ -460,48 +507,51 @@ tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" 
 
 The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
-#### Phase 5: Minimal TOML Manifest Parser
+#### Phase 5: Manifest Parser
 
-**Goal:** Parse TOML manifest files for package metadata.
+**Goal:** Parse manifest files for package metadata.
 
-**Scope:** Implement a minimal TOML subset parser supporting:
-- `[section]` headers
-- `[section.subsection]` dotted headers (for `[dependencies.PkgName]`)
-- `key = "string value"`
-- `key = ["array", "of", "strings"]`
-- `# comments`
-- Inline tables `{ key = "value", ... }` (for dependencies)
+**Format:** A simple line-oriented format (not TOML). Parsing rules:
 
-Both dependency styles are supported:
+- `[section]` and `[section.subsection]` headers (e.g., `[package]`, `[depend.LoggingLib]`)
+- `key = value` — values are unquoted, end at newline, trimmed of whitespace. Quotes are disallowed (parser error if `"` appears in a value)
+- `key = [a, b, c]` — arrays of unquoted, comma-separated values. Array elements must not contain spaces (parser error if they do)
+- `# comments` (line comments)
+- Blank lines are ignored
 
-```toml
-# Inline table style
-[dependencies]
-Utils = { version = "1.2.0", path = "libs/Utils.tlib" }
+Example:
+```
+[package]
+name = MathUtils
+version = 1.0.0
+author = Alice
+modules = [MathUtils]
+lib_path = [libs/]
 
-# Regular table style
-[dependencies.Logger]
-version = "0.5.3"
-path = "libs/Logger.tlib"
+# Dependencies use [depend.Name] sections
+[depend.LoggingLib]
+version = 2.0.0
+path = libs/LoggingLib.tlib
 ```
 
 **Implementation:**
 - New file `src/tess/src/manifest.c` with header `src/tess/include/manifest.h`
-- Hand-written parser (~300-400 lines), not a full TOML library
-- Returns structured data for `[package]` and `[dependencies]` sections
+- Hand-written line-oriented parser (~200-300 lines)
+- Returns structured data for `[package]` and `[depend]` sections
 
 ```c
 typedef struct {
-    str name;
-    str version;
-    str author;
-    str_sized modules;  // array of module names
+    str        name;
+    str        version;
+    str        author;
+    str_sized  modules;   // array of module names
+    str_sized  lib_path;  // array of library search paths
 } tl_manifest_package;
 
 typedef struct {
     str name;
     str version;
-    str path;
+    str path;       // explicit path (optional if lib_path is set)
 } tl_manifest_dep;
 
 typedef struct {
@@ -519,12 +569,12 @@ typedef struct {
 tess pack -m manifest.toml foo.tl -o Foo.tlib
 ```
 
-When `-m` is provided, read metadata from manifest instead of command-line flags. At this phase, `[dependencies]` is parsed but not validated (dependencies aren't loaded yet).
+When `-m` is provided, read metadata from manifest instead of command-line flags. At this phase, `[depend]` sections are parsed but not validated (dependencies aren't loaded yet).
 
 **CLI conflict handling:** Error if `-m` is used together with `--name`, `--version`, or `--modules` flags.
 
 **Validation:**
-- Unit tests for manifest parsing (valid TOML, comments, missing fields, malformed)
+- Unit tests for manifest parsing (valid manifests, comments, missing fields, malformed, quotes rejected, spaces in array elements rejected)
 - Integration test: pack with manifest, verify archive contains correct metadata
 - Test that `-m` with metadata CLI flags produces an error
 
@@ -557,12 +607,15 @@ Recommendation: Option 1 is simpler and avoids duplication. The scanner already 
 
 **Integrate with pack:**
 
-After collecting source files, scan each for `#module` declarations:
+After collecting source files, scan each for `#module` declarations and `[[export]]` annotations:
 1. Discover all modules in source files (both public and internal)
-2. If manifest specifies `modules = [...]`:
+2. Record which modules contain `[[export]]` symbols
+3. If manifest specifies `modules = [...]`:
    - Verify every module listed in manifest is discovered in source
    - Warn (but don't error) if discovered modules aren't in manifest (they're internal)
-3. Store the manifest's `modules` list in archive metadata (not all discovered modules)
+   - Warn if a module listed in `modules` has zero `[[export]]` symbols
+   - Warn if a module not listed in `modules` has `[[export]]` symbols
+4. Store the manifest's `modules` list in archive metadata (not all discovered modules)
 
 **Self-containment check:**
 
@@ -579,11 +632,15 @@ Verify every quoted `#import "file.tl"` in the archived files resolves to anothe
 
 **Implementation:**
 
-Add `-l` flag to `tess exe`:
+Add `-l` and `-L` flags to `tess exe`:
 
 ```bash
-tess exe main.tl -l Foo.tlib -o main
+tess exe main.tl -l Foo.tlib -o main            # explicit package
+tess exe main.tl -l Foo.tlib -L libs/ -o main    # with search path for transitive deps
 ```
+
+- `-l <file.tlib>`: Load a specific package file (direct dependency)
+- `-L <dir>`: Add a library search path for automatic transitive dependency resolution
 
 The compilation process:
 1. Load each `-l` package via `tl_tlib_read()`
@@ -593,8 +650,9 @@ The compilation process:
 5. Build module → package mapping
 6. Extend import resolver to handle unquoted imports:
    - `#import ModuleName` → look up in module→package map → add package files to compilation
-7. Feed all source (local + package) into existing compilation pipeline
-8. Tree shaking removes unreferenced code
+7. For each loaded package, check its `requires` field and auto-resolve transitive dependencies from `-L` paths (see Phase 8)
+8. Feed all source (local + package) into existing compilation pipeline
+9. Tree shaking removes unreferenced code
 
 **File provenance tracking:** Each source file is tagged with its origin (local, or which package). This is needed later for access control (Phase 10-11) to determine if code is "inside" or "outside" a package.
 
@@ -616,7 +674,7 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 **Implementation:**
 
 **During pack:**
-1. Load dependency packages from manifest's `[dependencies]` paths
+1. Load dependency packages from manifest's `[depend]` paths
 2. Verify each package's version matches manifest declaration
 3. Scan dependencies to discover their modules
 4. Build module → package mapping for dependencies
@@ -626,18 +684,20 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 7. Error if a required dependency is declared but never used
 8. Optional dependencies may be unused
 
-**During compile:**
+**During compile (transitive dependency resolution):**
 1. When loading a package, check its `requires` field
-2. Verify all required packages are provided (via `-l` or manifest)
-3. Verify versions match
-4. Load dependencies recursively (handle transitive deps)
-5. Error on missing dependencies with helpful message
+2. For each required dependency, search `-L` paths (CLI) or `lib_path` directories (manifest) for `<PackageName>.tlib`
+3. Read metadata and verify version matches exactly
+4. Recurse: load the transitive dependency's own `requires` the same way
+5. Detect cycles during resolution (A→B→A) and emit an error listing the cycle path
+6. Error on missing dependencies with helpful message: `"package 'MathUtils' requires 'LoggingLib=2.0.0', not found in library search paths"`
 
 **Validation:**
 - Integration test: MathUtils→LoggingLib example from this document
 - Test version mismatch detection
-- Test missing dependency detection
-- Test transitive dependency handling
+- Test missing transitive dependency detection (helpful error message)
+- Test transitive dependency auto-resolution from `-L` path
+- Test circular dependency detection
 
 #### Phase 9: Manifest-Based Compilation
 
@@ -650,16 +710,19 @@ tess exe -m manifest.toml main.tl -o main
 ```
 
 When `-m` is provided:
-1. Parse manifest for `[dependencies]`
-2. Load packages from manifest paths (not `-l` flags)
+1. Parse manifest for `[depend]` sections (direct dependencies only)
+2. Load packages from manifest paths (or resolve from `lib_path` if no explicit `path`)
 3. Verify versions match manifest declarations
-4. `-l` flags are disallowed when `-m` is used
+4. Auto-resolve transitive dependencies from `lib_path` directories
+5. `-l` and `-L` flags are disallowed when `-m` is used
 
-This enables reproducible builds with pinned versions.
+Consumers only list direct dependencies in `[depend]` sections. Transitive dependencies are resolved automatically from `lib_path`. This enables reproducible builds with pinned versions for direct dependencies while keeping manifests concise.
 
 **Validation:**
 - Integration test: compile with manifest, verify version checking
-- Test that `-l` and `-m` together produce an error
+- Test transitive dependency auto-resolution from `lib_path`
+- Test that `-l`/`-L` and `-m` together produce an error
+- Test dependency resolution when `path` is omitted (resolved from `lib_path`)
 
 #### Phase 10: Module-Level Access Control
 
@@ -684,7 +747,7 @@ Internal modules (not listed in `modules`) remain usable within the package itse
 
 **Implementation:**
 
-1. Extend the parser to recognize `[[export]]` attribute on function definitions
+1. Extend the parser to recognize `[[export]]` attribute on function and type definitions (structs/enums)
 2. During parsing, mark exported symbols in the AST
 3. Use file provenance tracking (from Phase 7) to determine code origin
 4. During type inference, when consumer code references a symbol from a package:
@@ -695,8 +758,10 @@ Internal modules (not listed in `modules`) remain usable within the package itse
 **Future extension:** `[[c_export(name)]]` for C-compatible symbol naming.
 
 **Validation:**
-- Integration test: access exported symbol (works)
+- Integration test: access exported function (works)
+- Integration test: access exported type (works)
 - Integration test: access non-exported symbol (error)
+- Integration test: access non-exported type (error)
 - Test that package-internal code can access non-exported symbols
 
 #### Phase 12: Comprehensive Test Suite
@@ -706,7 +771,7 @@ Final validation and edge case coverage:
 **Unit tests:**
 - `.tlib` write/read roundtrip (correct format, corruption detection)
 - Metadata field roundtrip (all fields, empty fields, special characters)
-- Manifest parsing (valid TOML, comments, missing fields, malformed)
+- Manifest parsing (valid manifests, comments, missing fields, malformed)
 - Filename validation (rejects `..` escapes, absolute paths)
 - Module discovery (simple, conditional, edge cases)
 
@@ -762,20 +827,17 @@ Each phase can be merged independently, allowing incremental progress and early 
 
 ### Resolved
 
-- **TOML parsing**: Implement a minimal subset parser (~300-400 lines). Features: `[section]`, `[section.subsection]` dotted headers, `key = "value"`, `key = [...]`, inline tables `{ key = "value" }`, regular tables, and `# comments`. This avoids vendoring a full TOML library while covering all manifest needs.
+- **Manifest format**: Use a simple line-oriented format (~200-300 lines parser). Features: `[section]`, `[section.subsection]` dotted headers, `key = value` (unquoted, quotes disallowed), `key = [a, b]` (arrays, no spaces in elements), and `# comments`. No inline tables. Simpler than TOML, covers all manifest needs.
 
 - **Circular dependencies**: Error at pack time. When building the dependency graph, detect cycles and report an error listing the cycle path (e.g., "circular dependency: A → B → C → A").
 
 - **Format version compatibility**: Keep v1 during development. The format is internal/experimental; no backwards compatibility needed.
 
+- **`[[export]]` on types**: `[[export]]` applies to functions and type definitions (structs/enums). A library that exports functions but not the types they return or accept is not useful to consumers. Phase 11 implements `[[export]]` for both functions and types.
+
+- **Transitive dependency version conflicts**: Error on conflict. The single global module namespace means two versions of the same package cannot coexist--strict equality is a structural requirement, not a simplification. See "Single Global Module Namespace" section.
+
 ### Open
-
-- **`[[export]]` on types**: Should `[[export]]` work on struct/enum definitions, or only on functions and values? Options:
-  1. Functions only (simplest)
-  2. Functions and values (globals)
-  3. Functions, values, and types (full control)
-
-  Recommendation: Start with functions only (Phase 11), extend later if needed.
 
 - **Hash algorithm**: For future hash verification, which algorithm? SHA-256 is standard but produces long hashes. Consider:
   - SHA-256 truncated to 16 bytes (32 hex chars)
@@ -785,13 +847,7 @@ Each phase can be merged independently, allowing incremental progress and early 
 
 - **Module naming conflicts**: What error message when two packages define the same module? Should we include package paths in the error? Example: "module 'Utils' defined in both 'libs/A.tlib' and 'libs/B.tlib'"
 
-- **Transitive dependency version conflicts**: What if A requires Logger=1.0 and B requires Logger=2.0? Options:
-  1. Error (strict, simple)
-  2. Allow if versions are compatible (needs semver)
-
-  Recommendation: Error for now. Semver support can be added later.
-
-- **Optional dependencies for consumers**: How are `[dependencies.optional]` used during compilation? Options:
+- **Optional dependencies for consumers**: How are `[depend-optional]` sections used during compilation? Options:
   1. Consumer must explicitly enable them (e.g., `-D USE_WINAPI`)
   2. Auto-detect based on platform
   3. Just provide them via `-l`; they're "optional" only for the producer
