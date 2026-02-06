@@ -1062,13 +1062,14 @@ static int pack_files(state *self) {
         opts.version = str_cstr(&manifest.package.version);
         opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
 
-        // Join modules array into comma-separated string
         if (manifest.package.module_count > 0) {
-            str_sized mod_sized = {.v = manifest.package.modules, .size = manifest.package.module_count};
-            str_build sb        = str_build_init(self->arena, 128);
-            str_build_join_sized(&sb, S(","), mod_sized);
-            str modules_str = str_build_finish(&sb);
-            opts.modules    = str_cstr(&modules_str);
+            if (manifest.package.module_count > UINT16_MAX) {
+                fprintf(stderr, "error: too many modules (%u, max %u)\n",
+                        manifest.package.module_count, (unsigned)UINT16_MAX);
+                return 1;
+            }
+            opts.modules      = manifest.package.modules;
+            opts.module_count = (u16)manifest.package.module_count;
         }
 
         // Build requires array: "Name=Version" strings
@@ -1108,7 +1109,30 @@ static int pack_files(state *self) {
         opts.name    = self->pack_name;
         opts.author  = self->pack_author;
         opts.version = self->pack_version;
-        opts.modules = self->pack_modules;
+
+        // Split comma-separated --modules string into array
+        if (self->pack_modules && strlen(self->pack_modules) > 0) {
+            u32 n = 1;
+            for (char const *ch = self->pack_modules; *ch; ch++) {
+                if (*ch == ',') n++;
+            }
+            if (n > UINT16_MAX) {
+                fprintf(stderr, "error: too many modules (%u, max %u)\n", n, (unsigned)UINT16_MAX);
+                return 1;
+            }
+            opts.modules = alloc_malloc(self->arena, n * sizeof(str));
+            char const *start = self->pack_modules;
+            u32 idx = 0;
+            for (char const *ch = self->pack_modules; ; ch++) {
+                if (*ch == ',' || *ch == '\0') {
+                    opts.modules[idx] = str_init_n(self->arena, start, (size_t)(ch - start));
+                    idx++;
+                    if (*ch == '\0') break;
+                    start = ch + 1;
+                }
+            }
+            opts.module_count = (u16)n;
+        }
     }
 
     return tl_tlib_pack(self->arena, self->out_path, all_files, base_dir, self->resolver, opts);

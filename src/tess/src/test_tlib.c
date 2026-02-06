@@ -568,13 +568,9 @@ static int test_pack_with_manifest(void) {
 	opts.version = str_cstr(&manifest.package.version);
 	opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
 
-	// Join modules
 	if (manifest.package.module_count > 0) {
-		str_sized mod_sized = {.v = manifest.package.modules, .size = manifest.package.module_count};
-		str_build sb        = str_build_init(alloc, 128);
-		str_build_join_sized(&sb, S(","), mod_sized);
-		str modules_str = str_build_finish(&sb);
-		opts.modules    = str_cstr(&modules_str);
+		opts.modules      = manifest.package.modules;
+		opts.module_count = (u16)manifest.package.module_count;
 	}
 
 	// Build requires

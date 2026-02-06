@@ -525,41 +525,13 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         entry_idx++;
     }
 
-    // Split comma-separated modules into array
-    str *modules_arr   = null;
-    u16  module_count  = 0;
-    if (opts.modules && strlen(opts.modules) > 0) {
-        // Count commas to determine array size (u32 to avoid u16 overflow)
-        u32 n = 1;
-        for (char const *ch = opts.modules; *ch; ch++) {
-            if (*ch == ',') n++;
-        }
-        if (n > UINT16_MAX) {
-            fprintf(stderr, "tlib: too many modules (max %u)\n", (unsigned)UINT16_MAX);
-            return 1;
-        }
-        modules_arr = alloc_malloc(alloc, n * sizeof(str));
-        // Split by comma
-        char const *start = opts.modules;
-        u32 idx = 0;
-        for (char const *ch = opts.modules; ; ch++) {
-            if (*ch == ',' || *ch == '\0') {
-                modules_arr[idx] = str_init_n(alloc, start, (size_t)(ch - start));
-                idx++;
-                if (*ch == '\0') break;
-                start = ch + 1;
-            }
-        }
-        module_count = (u16)n;
-    }
-
     // Build metadata
     tl_tlib_metadata meta = {
         .name                    = str_init(alloc, opts.name),
         .author                  = opts.author ? str_init(alloc, opts.author) : str_empty(),
         .version                 = str_init(alloc, opts.version),
-        .modules                 = modules_arr,
-        .module_count            = module_count,
+        .modules                 = opts.modules,
+        .module_count            = opts.module_count,
         .requires                = opts.requires,
         .requires_count          = opts.requires_count,
         .requires_optional       = opts.requires_optional,

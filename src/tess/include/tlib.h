@@ -57,7 +57,8 @@ typedef struct {
 	char const *name;    // --name (required)
 	char const *author;  // --author (optional)
 	char const *version; // --pkg-version (required)
-	char const *modules; // --modules (optional, comma-separated)
+	str        *modules;      // array of public module names (optional)
+	u16         module_count;
 	// Dependencies (from manifest; null/0 when using CLI flags)
 	str        *requires;
 	u16         requires_count;
