@@ -454,9 +454,9 @@ High-level operations in `src/tess/src/tlib.c`:
 
 **Limitations:** No manifest support, no metadata in archive.
 
-#### Phase 4: Archive Metadata ✓ (needs revision)
+#### Phase 4: Archive Metadata ✓
 
-Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`. The current implementation uses the original format (u32 length-prefixed comma-separated strings for modules/requires/requires-optional). It needs to be revised to match the updated spec below:
+Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`.
 
 ```c
 typedef struct {
@@ -501,15 +501,9 @@ tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" 
 - `test_metadata_roundtrip()` - all fields preserved through write/read cycle
 - `test_metadata_empty_fields()` - optional fields handle empty strings correctly
 
----
+#### Phase 5: Manifest Parser ✓
 
-### Remaining Phases
-
-The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
-
-#### Phase 5: Manifest Parser
-
-**Goal:** Parse manifest files for package metadata.
+Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.h`.
 
 **Format:** A simple line-oriented format (not TOML). Parsing rules:
 
@@ -519,51 +513,61 @@ The remaining work is organized into phases that build incrementally. Each phase
 - `# comments` (line comments)
 - Blank lines are ignored
 
-Example:
-```
-[package]
-name = MathUtils
-version = 1.0.0
-author = Alice
-modules = [MathUtils]
-lib_path = [libs/]
-
-# Dependencies use [depend.Name] sections
-[depend.LoggingLib]
-version = 2.0.0
-path = libs/LoggingLib.tlib
-```
-
-**Implementation:**
-- New file `src/tess/src/manifest.c` with header `src/tess/include/manifest.h`
-- Hand-written line-oriented parser (~200-300 lines)
-- Returns structured data for `[package]` and `[depend]` sections
-
 ```c
 typedef struct {
-    str        name;
-    str        version;
-    str        author;
-    str_sized  modules;   // array of module names
-    str_sized  lib_path;  // array of library search paths
+    str  name;           // package name (required)
+    str  version;        // version string (required)
+    str  author;         // author name/email (may be empty)
+    str *modules;        // array of public module names
+    u32  module_count;
+    str *lib_path;       // array of library search paths
+    u32  lib_path_count;
 } tl_manifest_package;
 
 typedef struct {
-    str name;
-    str version;
-    str path;       // explicit path (optional if lib_path is set)
+    str name;            // dependency package name (from section header)
+    str version;         // required version
+    str path;            // optional explicit path override
 } tl_manifest_dep;
 
 typedef struct {
-    tl_manifest_package package;
-    tl_manifest_dep    *deps;
-    u32                 dep_count;
-    tl_manifest_dep    *optional_deps;
-    u32                 optional_dep_count;
+    tl_manifest_package  package;
+    tl_manifest_dep     *deps;
+    u32                  dep_count;
+    tl_manifest_dep     *optional_deps;
+    u32                  optional_dep_count;
 } tl_manifest;
 ```
 
-**Integrate with pack command:**
+**API:**
+- `tl_manifest_parse()`: Parse manifest from a buffer (all strings allocated from the provided arena)
+- `tl_manifest_parse_file()`: Read file then parse
+
+**Design notes:**
+- Used `str *` arrays with `u32` counts instead of `str_sized` — simpler to build incrementally during parsing with `str_array` + `array_push`, then copy `.v` and `.size` to the output struct.
+- Unknown keys emit a warning but don't fail (forward compatibility). Unknown sections are skipped with a warning.
+- Errors printed to stderr with `manifest:LINE:` prefix for line-level errors or `manifest:` prefix for validation errors.
+
+**Unit tests** in `src/tess/src/test_manifest.c` (14 tests):
+- `test_basic_package` / `test_minimal_package` — all fields and required-only parsing
+- `test_comments_and_blanks` — comments and blank lines ignored
+- `test_dependencies` / `test_optional_dependencies` / `test_multiple_deps` — `[depend.X]` and `[depend-optional.X]` sections
+- `test_missing_name` / `test_missing_version` / `test_missing_dep_version` — required field validation
+- `test_quotes_rejected` / `test_array_spaces_rejected` — format enforcement
+- `test_empty_array` / `test_whitespace_trimming` — edge cases
+- `test_full_manifest` — complete manifest matching the design doc example
+
+**Limitation:** Not yet integrated with the `tess pack` command (no `-m` flag). Integration is part of Phase 5b below.
+
+---
+
+### Remaining Phases
+
+The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
+
+#### Phase 5b: Manifest Integration with Pack Command
+
+**Goal:** Wire the manifest parser into `tess pack` via a `-m` flag.
 
 ```bash
 tess pack -m manifest.toml foo.tl -o Foo.tlib
@@ -574,7 +578,6 @@ When `-m` is provided, read metadata from manifest instead of command-line flags
 **CLI conflict handling:** Error if `-m` is used together with `--name`, `--version`, or `--modules` flags.
 
 **Validation:**
-- Unit tests for manifest parsing (valid manifests, comments, missing fields, malformed, quotes rejected, spaces in array elements rejected)
 - Integration test: pack with manifest, verify archive contains correct metadata
 - Test that `-m` with metadata CLI flags produces an error
 
@@ -794,9 +797,9 @@ Final validation and edge case coverage:
 ### Phase Dependencies
 
 ```
-Phase 4 (Metadata) ✓
+Phase 5 (Manifest Parser) ✓
     ↓
-Phase 5 (Manifest Parser)
+Phase 5b (Manifest Integration)
     ↓
 Phase 6 (Module Discovery)
     ↓
@@ -814,7 +817,7 @@ Phase 12 (Test Suite)
 ```
 
 **Key validation points:**
-- After Phase 4: Archives contain metadata (name, version, modules, dependencies)
+- After Phase 5: Manifest parser works standalone with full test coverage
 - After Phase 7: Can pack and consume a simple library (no dependencies)
 - After Phase 8: Can handle library chains (A uses B)
 - After Phase 11: Full access control model working

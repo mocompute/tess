@@ -52,6 +52,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/ast_tags.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/error.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/import_resolver.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/manifest.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/parser.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/tess.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/token.h
@@ -69,6 +70,7 @@ set(SOURCES
   src/error.c
   src/format.c
   src/import_resolver.c
+  src/manifest.c
   src/parser.c
   src/tess.c
   src/token.c
@@ -112,6 +114,7 @@ tess_create_test(type_v2)
 tess_create_test(format)
 tess_create_test(tlib)
 tess_create_test(import_resolver)
+tess_create_test(manifest)
 
 # -- vendor tests --
 
