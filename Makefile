@@ -184,7 +184,8 @@ LIBDEFLATE_SOURCES = \
 	$(LIBDEFLATE_DIR)/lib/x86/cpu_features.c \
 	$(LIBDEFLATE_DIR)/lib/utils.c \
 	$(LIBDEFLATE_DIR)/lib/deflate_compress.c \
-	$(LIBDEFLATE_DIR)/lib/deflate_decompress.c
+	$(LIBDEFLATE_DIR)/lib/deflate_decompress.c \
+	$(LIBDEFLATE_DIR)/lib/crc32.c
 LIBDEFLATE_OBJECTS = $(patsubst $(LIBDEFLATE_DIR)/%.c,$(BUILD_DIR)/libdeflate/%.o,$(LIBDEFLATE_SOURCES))
 LIBDEFLATE_CFLAGS = -std=gnu11 -O2 -fPIE -I$(LIBDEFLATE_DIR)
 

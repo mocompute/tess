@@ -17,7 +17,6 @@
 #define TLIB_VERSION         1u
 #define TLIB_FIXED_HEADER    8u  /* magic + version */
 #define TLIB_MAX_FILE_SIZE   (64u * 1024u * 1024u)
-#define TLIB_MAX_META_FIELD  (1u * 1024u * 1024u) /* max metadata field size */
 
 static inline void write_u32_be(byte *p, u32 v) {
     p[0] = (byte)(v >> 24);
@@ -30,23 +29,50 @@ static inline u32 read_u32_be(byte const *p) {
     return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
 }
 
-// Write a length-prefixed string to file. Returns 0 on success.
-static int write_string_field(FILE *f, char const *s, u32 len) {
-    byte len_buf[4];
-    write_u32_be(len_buf, len);
-    if (fwrite(len_buf, 1, 4, f) != 4) return 1;
-    if (len > 0 && fwrite(s, 1, len, f) != len) return 1;
+static inline void write_u16_be(byte *p, u16 v) {
+    p[0] = (byte)(v >> 8);
+    p[1] = (byte)(v);
+}
+
+static inline u16 read_u16_be(byte const *p) {
+    return ((u16)p[0] << 8) | (u16)p[1];
+}
+
+// Write bytes to file and update CRC32. Returns 0 on success.
+static int fwrite_crc(FILE *f, void const *data, size_t len, u32 *crc) {
+    if (fwrite(data, 1, len, f) != len) return 1;
+    *crc = libdeflate_crc32(*crc, data, len);
     return 0;
 }
 
-// Read a length-prefixed string from buffer. Updates *pp on success.
-// Returns 0 on success, 1 on error.
-static int read_string_field(byte const **pp, byte const *end, allocator *alloc, str *out) {
+// Write a u16-length-prefixed string to file, updating CRC32. Returns 0 on success.
+static int write_str16(FILE *f, char const *s, u16 len, u32 *crc) {
+    byte len_buf[2];
+    write_u16_be(len_buf, len);
+    if (fwrite_crc(f, len_buf, 2, crc)) return 1;
+    if (len > 0 && fwrite_crc(f, s, len, crc)) return 1;
+    return 0;
+}
+
+// Write a u16-counted array of u16-prefixed strings, updating CRC32. Returns 0 on success.
+static int write_str16_array(FILE *f, str const *items, u16 count, u32 *crc) {
+    byte count_buf[2];
+    write_u16_be(count_buf, count);
+    if (fwrite_crc(f, count_buf, 2, crc)) return 1;
+    for (u16 i = 0; i < count; i++) {
+        size_t slen = str_len(items[i]);
+        if (slen > UINT16_MAX) return 1;
+        if (write_str16(f, str_buf(&items[i]), (u16)slen, crc)) return 1;
+    }
+    return 0;
+}
+
+// Read a u16-length-prefixed string from buffer. Updates *pp on success.
+static int read_str16(byte const **pp, byte const *end, allocator *alloc, str *out) {
     byte const *p = *pp;
-    if (p + 4 > end) return 1;
-    u32 len = read_u32_be(p);
-    p += 4;
-    if (len > TLIB_MAX_META_FIELD) return 1;
+    if (p + 2 > end) return 1;
+    u16 len = read_u16_be(p);
+    p += 2;
     if (p + len > end) return 1;
     if (len > 0) {
         *out = str_init_n(alloc, (char const *)p, len);
@@ -54,6 +80,31 @@ static int read_string_field(byte const **pp, byte const *end, allocator *alloc,
         *out = str_empty();
     }
     p += len;
+    *pp = p;
+    return 0;
+}
+
+// Read a u16-counted array of u16-prefixed strings. Returns 0 on success.
+static int read_str16_array(byte const **pp, byte const *end, allocator *alloc,
+                            str **out_items, u16 *out_count) {
+    byte const *p = *pp;
+    if (p + 2 > end) return 1;
+    u16 count = read_u16_be(p);
+    p += 2;
+    *out_count = count;
+    if (count == 0) {
+        *out_items = null;
+        *pp = p;
+        return 0;
+    }
+    str *items = alloc_calloc(alloc, count, sizeof(str));
+    for (u16 i = 0; i < count; i++) {
+        if (read_str16(&p, end, alloc, &items[i])) {
+            alloc_free(alloc, items);
+            return 1;
+        }
+    }
+    *out_items = items;
     *pp = p;
     return 0;
 }
@@ -128,6 +179,15 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
         return 1;
     }
 
+    /* validate metadata string lengths fit in u16 */
+    if (str_len(metadata->name) > UINT16_MAX
+        || str_len(metadata->author) > UINT16_MAX
+        || str_len(metadata->version) > UINT16_MAX) {
+        alloc_free(alloc, compressed);
+        fprintf(stderr, "tlib: metadata field too long for u16\n");
+        return 1;
+    }
+
     /* write file */
     FILE *f = fopen(output_path, "wb");
     if (!f) {
@@ -136,25 +196,33 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
         return 1;
     }
 
+    u32 crc = 0;
+
     /* write fixed header: magic + version */
     byte header[TLIB_FIXED_HEADER];
     write_u32_be(header + 0, TLIB_MAGIC);
     write_u32_be(header + 4, TLIB_VERSION);
-    if (fwrite(header, 1, TLIB_FIXED_HEADER, f) != TLIB_FIXED_HEADER) {
+    if (fwrite_crc(f, header, TLIB_FIXED_HEADER, &crc)) {
         fclose(f);
         alloc_free(alloc, compressed);
         fprintf(stderr, "tlib: failed to write header\n");
         return 1;
     }
 
-    /* write metadata fields (uncompressed) */
+    /* write metadata fields (uncompressed, u16-prefixed) */
     int meta_ok = 1;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->name), (u32)str_len(metadata->name)) == 0;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->author), (u32)str_len(metadata->author)) == 0;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->version), (u32)str_len(metadata->version)) == 0;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->modules), (u32)str_len(metadata->modules)) == 0;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->requires), (u32)str_len(metadata->requires)) == 0;
-    meta_ok = meta_ok && write_string_field(f, str_buf(&metadata->requires_optional), (u32)str_len(metadata->requires_optional)) == 0;
+    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->name),
+                                     (u16)str_len(metadata->name), &crc) == 0;
+    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->author),
+                                     (u16)str_len(metadata->author), &crc) == 0;
+    meta_ok = meta_ok && write_str16(f, str_buf(&metadata->version),
+                                     (u16)str_len(metadata->version), &crc) == 0;
+    meta_ok = meta_ok && write_str16_array(f, metadata->modules,
+                                           metadata->module_count, &crc) == 0;
+    meta_ok = meta_ok && write_str16_array(f, metadata->requires,
+                                           metadata->requires_count, &crc) == 0;
+    meta_ok = meta_ok && write_str16_array(f, metadata->requires_optional,
+                                           metadata->requires_optional_count, &crc) == 0;
 
     if (!meta_ok) {
         fclose(f);
@@ -167,7 +235,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
     byte sizes[8];
     write_u32_be(sizes + 0, payload_size);
     write_u32_be(sizes + 4, (u32)compressed_size);
-    if (fwrite(sizes, 1, 8, f) != 8) {
+    if (fwrite_crc(f, sizes, 8, &crc)) {
         fclose(f);
         alloc_free(alloc, compressed);
         fprintf(stderr, "tlib: failed to write size fields\n");
@@ -175,15 +243,26 @@ int tl_tlib_write(allocator *alloc, char const *output_path,
     }
 
     /* write compressed payload */
-    int ok = fwrite(compressed, 1, compressed_size, f) == compressed_size;
-
-    fclose(f);
-    alloc_free(alloc, compressed);
-
-    if (!ok) {
-        fprintf(stderr, "tlib: failed to write output file\n");
+    if (fwrite(compressed, 1, compressed_size, f) != compressed_size) {
+        fclose(f);
+        alloc_free(alloc, compressed);
+        fprintf(stderr, "tlib: failed to write compressed payload\n");
         return 1;
     }
+    crc = libdeflate_crc32(crc, compressed, compressed_size);
+
+    alloc_free(alloc, compressed);
+
+    /* write CRC32 checksum */
+    byte crc_buf[4];
+    write_u32_be(crc_buf, crc);
+    if (fwrite(crc_buf, 1, 4, f) != 4) {
+        fclose(f);
+        fprintf(stderr, "tlib: failed to write CRC32\n");
+        return 1;
+    }
+
+    fclose(f);
     return 0;
 }
 
@@ -195,14 +274,24 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     file_read(alloc, input_path, &raw, &raw_size);
     if (!raw) return 1;
 
-    if (raw_size < TLIB_FIXED_HEADER) {
+    /* need at least header(8) + CRC32(4) */
+    if (raw_size < TLIB_FIXED_HEADER + 4) {
         fprintf(stderr, "tlib: file too small\n");
         alloc_free(alloc, raw);
         return 1;
     }
 
+    /* verify CRC32: checksum covers all bytes except the trailing 4 */
+    u32 stored_crc   = read_u32_be((byte const *)raw + raw_size - 4);
+    u32 computed_crc = libdeflate_crc32(0, raw, raw_size - 4);
+    if (stored_crc != computed_crc) {
+        fprintf(stderr, "tlib: CRC32 checksum mismatch (archive corrupted)\n");
+        alloc_free(alloc, raw);
+        return 1;
+    }
+
     byte const *p   = (byte const *)raw;
-    byte const *end = p + raw_size;
+    byte const *end = p + raw_size - 4; /* exclude CRC32 from field parsing */
 
     /* read fixed header */
     u32 magic   = read_u32_be(p + 0);
@@ -220,13 +309,16 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
         return 1;
     }
 
-    /* read metadata fields */
-    if (read_string_field(&p, end, alloc, &out->metadata.name)) goto corrupt_meta;
-    if (read_string_field(&p, end, alloc, &out->metadata.author)) goto corrupt_meta;
-    if (read_string_field(&p, end, alloc, &out->metadata.version)) goto corrupt_meta;
-    if (read_string_field(&p, end, alloc, &out->metadata.modules)) goto corrupt_meta;
-    if (read_string_field(&p, end, alloc, &out->metadata.requires)) goto corrupt_meta;
-    if (read_string_field(&p, end, alloc, &out->metadata.requires_optional)) goto corrupt_meta;
+    /* read metadata fields (u16-prefixed) */
+    if (read_str16(&p, end, alloc, &out->metadata.name)) goto corrupt_meta;
+    if (read_str16(&p, end, alloc, &out->metadata.author)) goto corrupt_meta;
+    if (read_str16(&p, end, alloc, &out->metadata.version)) goto corrupt_meta;
+    if (read_str16_array(&p, end, alloc, &out->metadata.modules,
+                         &out->metadata.module_count)) goto corrupt_meta;
+    if (read_str16_array(&p, end, alloc, &out->metadata.requires,
+                         &out->metadata.requires_count)) goto corrupt_meta;
+    if (read_str16_array(&p, end, alloc, &out->metadata.requires_optional,
+                         &out->metadata.requires_optional_count)) goto corrupt_meta;
 
     /* read payload sizes */
     if (p + 8 > end) goto corrupt_meta;
@@ -273,12 +365,12 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     byte const *pend = payload + uncompressed_sz;
 
     if (pp + 4 > pend) goto corrupt;
-    u32 count = read_u32_be(pp);
+    u32 entry_count = read_u32_be(pp);
     pp += 4;
 
-    tl_tlib_entry *entries = alloc_calloc(alloc, count, sizeof(tl_tlib_entry));
+    tl_tlib_entry *entries = alloc_calloc(alloc, entry_count, sizeof(tl_tlib_entry));
 
-    for (u32 i = 0; i < count; i++) {
+    for (u32 i = 0; i < entry_count; i++) {
         if (pp + 4 > pend) goto corrupt_entries;
         u32 name_len = read_u32_be(pp);
         pp += 4;
@@ -306,8 +398,8 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
         entries[i].data_len = data_len;
     }
 
-    out->entries = entries;
-    out->count   = count;
+    out->entries       = entries;
+    out->entries_count = entry_count;
     /* caller owns both entries and payload (entries point into payload) */
     return 0;
 
@@ -433,14 +525,45 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         entry_idx++;
     }
 
+    // Split comma-separated modules into array
+    str *modules_arr   = null;
+    u16  module_count  = 0;
+    if (opts.modules && strlen(opts.modules) > 0) {
+        // Count commas to determine array size (u32 to avoid u16 overflow)
+        u32 n = 1;
+        for (char const *ch = opts.modules; *ch; ch++) {
+            if (*ch == ',') n++;
+        }
+        if (n > UINT16_MAX) {
+            fprintf(stderr, "tlib: too many modules (max %u)\n", (unsigned)UINT16_MAX);
+            return 1;
+        }
+        modules_arr = alloc_malloc(alloc, n * sizeof(str));
+        // Split by comma
+        char const *start = opts.modules;
+        u32 idx = 0;
+        for (char const *ch = opts.modules; ; ch++) {
+            if (*ch == ',' || *ch == '\0') {
+                modules_arr[idx] = str_init_n(alloc, start, (size_t)(ch - start));
+                idx++;
+                if (*ch == '\0') break;
+                start = ch + 1;
+            }
+        }
+        module_count = (u16)n;
+    }
+
     // Build metadata
     tl_tlib_metadata meta = {
-        .name              = str_init(alloc, opts.name),
-        .author            = opts.author ? str_init(alloc, opts.author) : str_empty(),
-        .version           = str_init(alloc, opts.version),
-        .modules           = opts.modules ? str_init(alloc, opts.modules) : str_empty(),
-        .requires          = str_empty(),
-        .requires_optional = str_empty(),
+        .name                    = str_init(alloc, opts.name),
+        .author                  = opts.author ? str_init(alloc, opts.author) : str_empty(),
+        .version                 = str_init(alloc, opts.version),
+        .modules                 = modules_arr,
+        .module_count            = module_count,
+        .requires                = null,
+        .requires_count          = 0,
+        .requires_optional       = null,
+        .requires_optional_count = 0,
     };
 
     // Write archive
@@ -451,8 +574,12 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         if (!str_is_empty(meta.author)) {
             fprintf(stderr, "  Author: %s\n", str_cstr(&meta.author));
         }
-        if (!str_is_empty(meta.modules)) {
-            fprintf(stderr, "  Modules: %s\n", str_cstr(&meta.modules));
+        if (meta.module_count > 0) {
+            fprintf(stderr, "  Modules:");
+            for (u16 i = 0; i < meta.module_count; i++) {
+                fprintf(stderr, " %s", str_cstr(&meta.modules[i]));
+            }
+            fprintf(stderr, "\n");
         }
     }
 
@@ -523,17 +650,26 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
         if (!str_is_empty(m->author)) {
             printf("Author: %s\n", str_cstr(&m->author));
         }
-        if (!str_is_empty(m->modules)) {
-            printf("Modules: %s\n", str_cstr(&m->modules));
+        if (m->module_count > 0) {
+            printf("Modules:\n");
+            for (u16 i = 0; i < m->module_count; i++) {
+                printf("  %s\n", str_cstr(&m->modules[i]));
+            }
         }
-        if (!str_is_empty(m->requires)) {
-            printf("Requires: %s\n", str_cstr(&m->requires));
+        if (m->requires_count > 0) {
+            printf("Requires:\n");
+            for (u16 i = 0; i < m->requires_count; i++) {
+                printf("  %s\n", str_cstr(&m->requires[i]));
+            }
         }
-        if (!str_is_empty(m->requires_optional)) {
-            printf("Optional: %s\n", str_cstr(&m->requires_optional));
+        if (m->requires_optional_count > 0) {
+            printf("Optional:\n");
+            for (u16 i = 0; i < m->requires_optional_count; i++) {
+                printf("  %s\n", str_cstr(&m->requires_optional[i]));
+            }
         }
         printf("\nFiles:\n");
-        for (u32 i = 0; i < archive.count; i++) {
+        for (u32 i = 0; i < archive.entries_count; i++) {
             printf("  %.*s\n", archive.entries[i].name_len, archive.entries[i].name);
         }
         return 0;
@@ -554,7 +690,7 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
     fprintf(stderr, "tlib: Extracting to: %s\n", output_dir);
 
     // Extract each file
-    for (u32 i = 0; i < archive.count; i++) {
+    for (u32 i = 0; i < archive.entries_count; i++) {
         tl_tlib_entry const *entry = &archive.entries[i];
 
         // Build output path
@@ -597,7 +733,7 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
     }
 
     if (opts.verbose) {
-        fprintf(stderr, "Extracted %u files to: %s\n", archive.count, output_dir);
+        fprintf(stderr, "Extracted %u files to: %s\n", archive.entries_count, output_dir);
     }
 
     return 0;

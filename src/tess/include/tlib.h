@@ -10,12 +10,15 @@ struct import_resolver;
 
 // Package metadata (stored uncompressed in archive header)
 typedef struct {
-	str name;              // package name (required)
-	str author;            // author name/email (may be empty)
-	str version;           // version string (required)
-	str modules;           // comma-separated public module names
-	str requires;          // comma-separated required dependencies
-	str requires_optional; // comma-separated optional dependencies
+	str  name;                    // package name (required)
+	str  author;                  // author name/email (may be empty)
+	str  version;                 // version string (required)
+	str *modules;                 // array of public module names
+	u16  module_count;
+	str *requires;                // array of required dependencies ("Name=Version")
+	u16  requires_count;
+	str *requires_optional;       // array of optional dependencies ("Name=Version")
+	u16  requires_optional_count;
 } tl_tlib_metadata;
 
 // Single file entry in the archive
@@ -30,7 +33,7 @@ typedef struct {
 typedef struct {
 	tl_tlib_metadata metadata;
 	tl_tlib_entry   *entries;
-	u32              count;
+	u32              entries_count;
 } tl_tlib_archive;
 
 // Write archive to a .tlib file. Returns 0 on success.

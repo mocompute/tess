@@ -36,14 +36,21 @@ static void make_temp_path(char *buf, size_t bufsize, char const *filename) {
 	snprintf(buf, bufsize, "%s%s", temp_dir, filename);
 }
 
+static str test_modules[2];
+
 static tl_tlib_metadata make_test_metadata(allocator *alloc) {
+	test_modules[0] = str_init(alloc, "Foo");
+	test_modules[1] = str_init(alloc, "Bar");
 	return (tl_tlib_metadata){
-		.name              = str_init(alloc, "TestLib"),
-		.author            = str_init(alloc, "Tester"),
-		.version           = str_init(alloc, "1.0.0"),
-		.modules           = str_init(alloc, "Foo,Bar"),
-		.requires          = str_empty(),
-		.requires_optional = str_empty(),
+		.name                    = str_init(alloc, "TestLib"),
+		.author                  = str_init(alloc, "Tester"),
+		.version                 = str_init(alloc, "1.0.0"),
+		.modules                 = test_modules,
+		.module_count            = 2,
+		.requires                = null,
+		.requires_count          = 0,
+		.requires_optional       = null,
+		.requires_optional_count = 0,
 	};
 }
 
@@ -71,8 +78,8 @@ static int test_roundtrip(void) {
 		return 1;
 	}
 
-	if (arc.count != 3) {
-		fprintf(stderr, "  expected 3 entries, got %u\n", arc.count);
+	if (arc.entries_count != 3) {
+		fprintf(stderr, "  expected 3 entries, got %u\n", arc.entries_count);
 		return 1;
 	}
 
@@ -120,8 +127,8 @@ static int test_empty_archive(void) {
 		return 1;
 	}
 
-	if (arc.count != 0) {
-		fprintf(stderr, "  expected 0 entries, got %u\n", arc.count);
+	if (arc.entries_count != 0) {
+		fprintf(stderr, "  expected 0 entries, got %u\n", arc.entries_count);
 		return 1;
 	}
 
@@ -173,8 +180,8 @@ static int test_byte_order(void) {
 		return 1;
 	}
 
-	byte header[16];
-	if (fread(header, 1, 16, f) != 16) {
+	byte header[8];
+	if (fread(header, 1, 8, f) != 8) {
 		fclose(f);
 		fprintf(stderr, "  read failed\n");
 		return 1;
@@ -225,7 +232,7 @@ static int test_large_payload(void) {
 	}
 
 	int result = 0;
-	if (arc.count != 1 || arc.entries[0].data_len != size
+	if (arc.entries_count != 1 || arc.entries[0].data_len != size
 	    || memcmp(arc.entries[0].data, data, size) != 0) {
 		fprintf(stderr, "  large payload data mismatch\n");
 		result = 1;
@@ -240,13 +247,27 @@ static int test_metadata_roundtrip(void) {
 	char path[512];
 	make_temp_path(path, sizeof(path), "test_tlib_metadata.tlib");
 
+	str modules[3];
+	modules[0] = str_init(alloc, "Core");
+	modules[1] = str_init(alloc, "Utils");
+	modules[2] = str_init(alloc, "Helper");
+
+	str requires[1];
+	requires[0] = str_init(alloc, "Lib=1.0.0");
+
+	str requires_opt[1];
+	requires_opt[0] = str_init(alloc, "Debug=0.5.0");
+
 	tl_tlib_metadata meta = {
-		.name              = str_init(alloc, "MetaTest"),
-		.author            = str_init(alloc, "Alice"),
-		.version           = str_init(alloc, "2.3.4"),
-		.modules           = str_init(alloc, "Core,Utils,Helper"),
-		.requires          = str_init(alloc, "Lib=1.0.0"),
-		.requires_optional = str_init(alloc, "Debug=0.5.0"),
+		.name                    = str_init(alloc, "MetaTest"),
+		.author                  = str_init(alloc, "Alice"),
+		.version                 = str_init(alloc, "2.3.4"),
+		.modules                 = modules,
+		.module_count            = 3,
+		.requires                = requires,
+		.requires_count          = 1,
+		.requires_optional       = requires_opt,
+		.requires_optional_count = 1,
 	};
 
 	tl_tlib_entry entry = { "test.tl", 7, (byte const *)"content", 7 };
@@ -266,9 +287,18 @@ static int test_metadata_roundtrip(void) {
 	error += !str_eq(arc.metadata.name, meta.name);
 	error += !str_eq(arc.metadata.author, meta.author);
 	error += !str_eq(arc.metadata.version, meta.version);
-	error += !str_eq(arc.metadata.modules, meta.modules);
-	error += !str_eq(arc.metadata.requires, meta.requires);
-	error += !str_eq(arc.metadata.requires_optional, meta.requires_optional);
+	error += (arc.metadata.module_count != 3);
+	for (u16 i = 0; i < 3 && i < arc.metadata.module_count; i++) {
+		error += !str_eq(arc.metadata.modules[i], modules[i]);
+	}
+	error += (arc.metadata.requires_count != 1);
+	if (arc.metadata.requires_count >= 1) {
+		error += !str_eq(arc.metadata.requires[0], requires[0]);
+	}
+	error += (arc.metadata.requires_optional_count != 1);
+	if (arc.metadata.requires_optional_count >= 1) {
+		error += !str_eq(arc.metadata.requires_optional[0], requires_opt[0]);
+	}
 
 	if (error) {
 		fprintf(stderr, "  metadata mismatch (%d fields)\n", error);
@@ -283,12 +313,15 @@ static int test_metadata_empty_fields(void) {
 	make_temp_path(path, sizeof(path), "test_tlib_metadata_empty.tlib");
 
 	tl_tlib_metadata meta = {
-		.name              = str_init(alloc, "MinimalLib"),
-		.author            = str_empty(),
-		.version           = str_init(alloc, "0.1"),
-		.modules           = str_empty(),
-		.requires          = str_empty(),
-		.requires_optional = str_empty(),
+		.name                    = str_init(alloc, "MinimalLib"),
+		.author                  = str_empty(),
+		.version                 = str_init(alloc, "0.1"),
+		.modules                 = null,
+		.module_count            = 0,
+		.requires                = null,
+		.requires_count          = 0,
+		.requires_optional       = null,
+		.requires_optional_count = 0,
 	};
 
 	tl_tlib_entry entry = { "a.tl", 4, (byte const *)"x", 1 };
@@ -308,9 +341,10 @@ static int test_metadata_empty_fields(void) {
 	error += !str_eq(arc.metadata.name, meta.name);
 	error += !str_is_empty(arc.metadata.author);
 	error += !str_eq(arc.metadata.version, meta.version);
-	error += !str_is_empty(arc.metadata.modules);
-	error += !str_is_empty(arc.metadata.requires);
-	error += !str_is_empty(arc.metadata.requires_optional);
+	error += (arc.metadata.module_count != 0);
+	error += (arc.metadata.modules != null);
+	error += (arc.metadata.requires_count != 0);
+	error += (arc.metadata.requires_optional_count != 0);
 
 	if (error) {
 		fprintf(stderr, "  empty field handling failed (%d errors)\n", error);
@@ -324,14 +358,20 @@ static int test_metadata_unicode(void) {
 	char path[512];
 	make_temp_path(path, sizeof(path), "test_tlib_metadata_unicode.tlib");
 
-	// Test with Unicode characters in metadata
+	str unicode_modules[2];
+	unicode_modules[0] = str_init(alloc, "Módulo");
+	unicode_modules[1] = str_init(alloc, "Функция");
+
 	tl_tlib_metadata meta = {
-		.name              = str_init(alloc, "Bibliothèque"),
-		.author            = str_init(alloc, "日本語 Author™"),
-		.version           = str_init(alloc, "1.0.0-β"),
-		.modules           = str_init(alloc, "Módulo,Функция"),
-		.requires          = str_empty(),
-		.requires_optional = str_empty(),
+		.name                    = str_init(alloc, "Bibliothèque"),
+		.author                  = str_init(alloc, "日本語 Author™"),
+		.version                 = str_init(alloc, "1.0.0-β"),
+		.modules                 = unicode_modules,
+		.module_count            = 2,
+		.requires                = null,
+		.requires_count          = 0,
+		.requires_optional       = null,
+		.requires_optional_count = 0,
 	};
 
 	tl_tlib_entry entry = { "test.tl", 7, (byte const *)"content", 7 };
@@ -351,7 +391,10 @@ static int test_metadata_unicode(void) {
 	error += !str_eq(arc.metadata.name, meta.name);
 	error += !str_eq(arc.metadata.author, meta.author);
 	error += !str_eq(arc.metadata.version, meta.version);
-	error += !str_eq(arc.metadata.modules, meta.modules);
+	error += (arc.metadata.module_count != 2);
+	for (u16 i = 0; i < 2 && i < arc.metadata.module_count; i++) {
+		error += !str_eq(arc.metadata.modules[i], unicode_modules[i]);
+	}
 
 	if (error) {
 		fprintf(stderr, "  unicode metadata mismatch (%d fields)\n", error);
@@ -365,14 +408,19 @@ static int test_corrupted_metadata(void) {
 	char path[512];
 	make_temp_path(path, sizeof(path), "test_tlib_corrupted_meta.tlib");
 
-	// Write a valid archive first
+	str test_mods[1];
+	test_mods[0] = str_init(alloc, "Foo");
+
 	tl_tlib_metadata meta = {
-		.name              = str_init(alloc, "TestLib"),
-		.author            = str_init(alloc, "Author"),
-		.version           = str_init(alloc, "1.0.0"),
-		.modules           = str_init(alloc, "Foo"),
-		.requires          = str_empty(),
-		.requires_optional = str_empty(),
+		.name                    = str_init(alloc, "TestLib"),
+		.author                  = str_init(alloc, "Author"),
+		.version                 = str_init(alloc, "1.0.0"),
+		.modules                 = test_mods,
+		.module_count            = 1,
+		.requires                = null,
+		.requires_count          = 0,
+		.requires_optional       = null,
+		.requires_optional_count = 0,
 	};
 
 	tl_tlib_entry entry = { "test.tl", 7, (byte const *)"content", 7 };
@@ -382,16 +430,15 @@ static int test_corrupted_metadata(void) {
 		return 1;
 	}
 
-	// Now truncate the file to corrupt metadata (keep header + partial name field)
+	// Truncate the file to corrupt it (CRC32 will not match)
 	FILE *f = fopen(path, "r+b");
 	if (!f) {
 		fprintf(stderr, "  open for truncate failed\n");
 		return 1;
 	}
 
-	// Truncate after magic(4) + version(4) + name_len(4) + partial name
-	// This should cause read_string_field to fail
-	int trunc_result = ftruncate(fileno(f), 14);
+	// Truncate after magic(4) + version(4) + partial metadata = 12 bytes
+	int trunc_result = ftruncate(fileno(f), 12);
 	fclose(f);
 
 	if (trunc_result != 0) {
@@ -408,7 +455,55 @@ static int test_corrupted_metadata(void) {
 		return 1;
 	}
 
-	// Success - corrupted file was rejected
+	return 0;
+}
+
+static int test_crc32_integrity(void) {
+	allocator *alloc = default_allocator();
+	char path[512];
+	make_temp_path(path, sizeof(path), "test_tlib_crc32.tlib");
+
+	tl_tlib_metadata meta = make_test_metadata(alloc);
+	tl_tlib_entry entry = { "test.tl", 7, (byte const *)"content", 7 };
+
+	if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+		fprintf(stderr, "  write failed\n");
+		return 1;
+	}
+
+	// Read the file, flip a byte in the metadata region, write it back
+	FILE *f = fopen(path, "r+b");
+	if (!f) {
+		fprintf(stderr, "  open failed\n");
+		return 1;
+	}
+
+	// Flip a byte at offset 10 (inside the name field)
+	fseek(f, 10, SEEK_SET);
+	byte b;
+	if (fread(&b, 1, 1, f) != 1) {
+		fclose(f);
+		fprintf(stderr, "  read byte failed\n");
+		return 1;
+	}
+	b ^= 0xFF;
+	fseek(f, 10, SEEK_SET);
+	if (fwrite(&b, 1, 1, f) != 1) {
+		fclose(f);
+		fprintf(stderr, "  write byte failed\n");
+		return 1;
+	}
+	fclose(f);
+
+	// Try to read - should fail with CRC mismatch
+	tl_tlib_archive arc = {0};
+	int read_result = tl_tlib_read(alloc, path, &arc);
+
+	if (read_result == 0) {
+		fprintf(stderr, "  read should have failed on CRC mismatch\n");
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -426,5 +521,6 @@ int main(void) {
 	T(test_metadata_empty_fields)
 	T(test_metadata_unicode)
 	T(test_corrupted_metadata)
+	T(test_crc32_integrity)
 	return error;
 }
