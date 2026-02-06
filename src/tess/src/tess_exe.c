@@ -60,10 +60,6 @@ typedef struct {
 
     // Pack metadata options
     char const *pack_manifest; // -m <path>
-    char const *pack_name;     // --name
-    char const *pack_author;   // --author
-    char const *pack_version;  // --pkg-version
-    char const *pack_modules;  // --modules
 
     int         is_library;
     int         is_executable;
@@ -109,10 +105,6 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents without extracting (unpack only)\n");
     printf("    -m <path>              manifest file for pack metadata (pack only)\n");
-    printf("    --name <name>          package name (pack only, required)\n");
-    printf("    --pkg-version <ver>    package version (pack only, required)\n");
-    printf("    --author <author>      package author (pack only, optional)\n");
-    printf("    --modules <list>       public modules, comma-separated (pack only, optional)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -154,10 +146,6 @@ void state_init(state *self) {
     self->optimize             = 0;
     self->in_place             = 0;
     self->pack_manifest        = null;
-    self->pack_name            = null;
-    self->pack_author          = null;
-    self->pack_version         = null;
-    self->pack_modules         = null;
     self->is_library           = 0;
     self->is_executable        = 0;
 }
@@ -222,18 +210,6 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 array_push(self->defines, define);
             } else if (0 == strncmp("-m", argv[i], 2)) {
                 self->pack_manifest = argv[i][2] ? argv[i] + 2 : argv[++i];
-            } else if (0 == strcmp("--name", argv[i])) {
-                if (++i >= argc) usage(1, self->argv0);
-                self->pack_name = argv[i];
-            } else if (0 == strcmp("--author", argv[i])) {
-                if (++i >= argc) usage(1, self->argv0);
-                self->pack_author = argv[i];
-            } else if (0 == strcmp("--pkg-version", argv[i])) {
-                if (++i >= argc) usage(1, self->argv0);
-                self->pack_version = argv[i];
-            } else if (0 == strcmp("--modules", argv[i])) {
-                if (++i >= argc) usage(1, self->argv0);
-                self->pack_modules = argv[i];
             } else if (0 == strncmp("--", argv[i], 2)) {
                 state_gather_long_option(self, argv[i]);
             } else {
@@ -1014,6 +990,11 @@ static int pack_files(state *self) {
         return 1;
     }
 
+    if (!self->pack_manifest) {
+        fprintf(stderr, "error: -m option is required for pack command\n");
+        return 1;
+    }
+
     if (self->words.size < 2) {
         fprintf(stderr, "error: pack command requires input file(s)\n");
         usage(1, self->argv0);
@@ -1043,95 +1024,58 @@ static int pack_files(state *self) {
     }
 
     // Delegate to tlib module
-    tl_tlib_pack_opts opts = {.verbose = self->verbose};
+    tl_tlib_pack_opts opts     = {.verbose = self->verbose};
 
-    if (self->pack_manifest) {
-        // Conflict detection: -m cannot be combined with CLI metadata flags
-        if (self->pack_name || self->pack_version || self->pack_modules || self->pack_author) {
-            fprintf(stderr,
-                    "error: -m cannot be combined with --name, --author, --pkg-version, or --modules\n");
+    tl_manifest       manifest = {0};
+    if (tl_manifest_parse_file(self->arena, self->pack_manifest, &manifest)) {
+        return 1;
+    }
+
+    opts.name    = str_cstr(&manifest.package.name);
+    opts.version = str_cstr(&manifest.package.version);
+    opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
+
+    if (manifest.package.module_count > 0) {
+        if (manifest.package.module_count > UINT16_MAX) {
+            fprintf(stderr, "error: too many modules (%u, max %u)\n", manifest.package.module_count,
+                    (unsigned)UINT16_MAX);
             return 1;
         }
+        opts.modules      = manifest.package.modules;
+        opts.module_count = (u16)manifest.package.module_count;
+    }
 
-        tl_manifest manifest = {0};
-        if (tl_manifest_parse_file(self->arena, self->pack_manifest, &manifest)) {
+    // Build requires array: "Name=Version" strings
+    if (manifest.dep_count > 0) {
+        if (manifest.dep_count > UINT16_MAX) {
+            fprintf(stderr, "error: too many dependencies (%u, max %u)\n", manifest.dep_count,
+                    (unsigned)UINT16_MAX);
             return 1;
         }
-
-        opts.name    = str_cstr(&manifest.package.name);
-        opts.version = str_cstr(&manifest.package.version);
-        opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
-
-        if (manifest.package.module_count > 0) {
-            if (manifest.package.module_count > UINT16_MAX) {
-                fprintf(stderr, "error: too many modules (%u, max %u)\n",
-                        manifest.package.module_count, (unsigned)UINT16_MAX);
-                return 1;
-            }
-            opts.modules      = manifest.package.modules;
-            opts.module_count = (u16)manifest.package.module_count;
-        }
-
-        // Build requires array: "Name=Version" strings
-        if (manifest.dep_count > 0) {
-            if (manifest.dep_count > UINT16_MAX) {
-                fprintf(stderr, "error: too many dependencies (%u, max %u)\n", manifest.dep_count,
-                        (unsigned)UINT16_MAX);
-                return 1;
-            }
+        opts.
+            requires
+        = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
+        opts.requires_count = (u16)manifest.dep_count;
+        for (u32 i = 0; i < manifest.dep_count; i++) {
             opts.
-                requires
-            = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
-            opts.requires_count = (u16)manifest.dep_count;
-            for (u32 i = 0; i < manifest.dep_count; i++) {
-                opts.
-                    requires[
-                            i] =
-                      str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
-            }
+                requires[
+                        i] =
+                  str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
         }
+    }
 
-        // Build requires_optional array
-        if (manifest.optional_dep_count > 0) {
-            if (manifest.optional_dep_count > UINT16_MAX) {
-                fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
-                        manifest.optional_dep_count, (unsigned)UINT16_MAX);
-                return 1;
-            }
-            opts.requires_optional = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
-            opts.requires_optional_count = (u16)manifest.optional_dep_count;
-            for (u32 i = 0; i < manifest.optional_dep_count; i++) {
-                opts.requires_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
-                                                      manifest.optional_deps[i].version);
-            }
+    // Build requires_optional array
+    if (manifest.optional_dep_count > 0) {
+        if (manifest.optional_dep_count > UINT16_MAX) {
+            fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
+                    manifest.optional_dep_count, (unsigned)UINT16_MAX);
+            return 1;
         }
-    } else {
-        opts.name    = self->pack_name;
-        opts.author  = self->pack_author;
-        opts.version = self->pack_version;
-
-        // Split comma-separated --modules string into array
-        if (self->pack_modules && strlen(self->pack_modules) > 0) {
-            u32 n = 1;
-            for (char const *ch = self->pack_modules; *ch; ch++) {
-                if (*ch == ',') n++;
-            }
-            if (n > UINT16_MAX) {
-                fprintf(stderr, "error: too many modules (%u, max %u)\n", n, (unsigned)UINT16_MAX);
-                return 1;
-            }
-            opts.modules = alloc_malloc(self->arena, n * sizeof(str));
-            char const *start = self->pack_modules;
-            u32 idx = 0;
-            for (char const *ch = self->pack_modules; ; ch++) {
-                if (*ch == ',' || *ch == '\0') {
-                    opts.modules[idx] = str_init_n(self->arena, start, (size_t)(ch - start));
-                    idx++;
-                    if (*ch == '\0') break;
-                    start = ch + 1;
-                }
-            }
-            opts.module_count = (u16)n;
+        opts.requires_optional       = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
+        opts.requires_optional_count = (u16)manifest.optional_dep_count;
+        for (u32 i = 0; i < manifest.optional_dep_count; i++) {
+            opts.requires_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
+                                                  manifest.optional_deps[i].version);
         }
     }
 
