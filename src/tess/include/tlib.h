@@ -58,6 +58,11 @@ typedef struct {
 	char const *author;  // --author (optional)
 	char const *version; // --pkg-version (required)
 	char const *modules; // --modules (optional, comma-separated)
+	// Dependencies (from manifest; null/0 when using CLI flags)
+	str        *requires;
+	u16         requires_count;
+	str        *requires_optional;
+	u16         requires_optional_count;
 } tl_tlib_pack_opts;
 
 // Pack resolved files into a .tlib archive.

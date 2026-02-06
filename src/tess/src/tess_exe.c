@@ -5,6 +5,7 @@
 #include "hashmap.h"
 #include "import_resolver.h"
 #include "infer.h"
+#include "manifest.h"
 #include "parser.h"
 #include "str.h"
 #include "tlib.h"
@@ -58,10 +59,11 @@ typedef struct {
     int              unpack_list; // --list option for unpack command
 
     // Pack metadata options
-    char const *pack_name;    // --name
-    char const *pack_author;  // --author
-    char const *pack_version; // --pkg-version
-    char const *pack_modules; // --modules
+    char const *pack_manifest; // -m <path>
+    char const *pack_name;     // --name
+    char const *pack_author;   // --author
+    char const *pack_version;  // --pkg-version
+    char const *pack_modules;  // --modules
 
     int         is_library;
     int         is_executable;
@@ -93,7 +95,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (-o required)\n");
-    printf("                           requires: --name, --pkg-version; optional: --author, --modules\n");
+    printf("                           use -m <manifest> or --name, --pkg-version; optional: --author, --modules\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
@@ -105,6 +107,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents without extracting (unpack only)\n");
+    printf("    -m <path>              manifest file for pack metadata (pack only)\n");
     printf("    --name <name>          package name (pack only, required)\n");
     printf("    --pkg-version <ver>    package version (pack only, required)\n");
     printf("    --author <author>      package author (pack only, optional)\n");
@@ -149,6 +152,7 @@ void state_init(state *self) {
     self->help                 = 0;
     self->optimize             = 0;
     self->in_place             = 0;
+    self->pack_manifest        = null;
     self->pack_name            = null;
     self->pack_author          = null;
     self->pack_version         = null;
@@ -215,6 +219,8 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         define = str_init(self->arena, sym);
                 array_push(self->defines, define);
+            } else if (0 == strncmp("-m", argv[i], 2)) {
+                self->pack_manifest = argv[i][2] ? argv[i] + 2 : argv[++i];
             } else if (0 == strcmp("--name", argv[i])) {
                 if (++i >= argc) usage(1, self->argv0);
                 self->pack_name = argv[i];
@@ -1036,13 +1042,69 @@ static int pack_files(state *self) {
     }
 
     // Delegate to tlib module
-    tl_tlib_pack_opts opts = {
-      .verbose = self->verbose,
-      .name    = self->pack_name,
-      .author  = self->pack_author,
-      .version = self->pack_version,
-      .modules = self->pack_modules,
-    };
+    tl_tlib_pack_opts opts = {.verbose = self->verbose};
+
+    if (self->pack_manifest) {
+        // Conflict detection: -m cannot be combined with CLI metadata flags
+        if (self->pack_name || self->pack_version || self->pack_modules) {
+            fprintf(stderr, "error: -m cannot be combined with --name, --pkg-version, or --modules\n");
+            return 1;
+        }
+
+        tl_manifest manifest = {0};
+        if (tl_manifest_parse_file(self->arena, self->pack_manifest, &manifest)) {
+            return 1;
+        }
+
+        opts.name    = str_cstr(&manifest.package.name);
+        opts.version = str_cstr(&manifest.package.version);
+        opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
+
+        // Join modules array into comma-separated string
+        if (manifest.package.module_count > 0) {
+            str_sized mod_sized = {.v = manifest.package.modules, .size = manifest.package.module_count};
+            str_build sb        = str_build_init(self->arena, 128);
+            str_build_join_sized(&sb, S(","), mod_sized);
+            str modules_str = str_build_finish(&sb);
+            opts.modules    = str_cstr(&modules_str);
+        }
+
+        // Build requires array: "Name=Version" strings
+        if (manifest.dep_count > 0) {
+            if (manifest.dep_count > UINT16_MAX) {
+                fprintf(stderr, "error: too many dependencies (%u, max %u)\n", manifest.dep_count,
+                        (unsigned)UINT16_MAX);
+                return 1;
+            }
+            opts.requires       = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
+            opts.requires_count = (u16)manifest.dep_count;
+            for (u32 i = 0; i < manifest.dep_count; i++) {
+                opts.requires[i] =
+                  str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
+            }
+        }
+
+        // Build requires_optional array
+        if (manifest.optional_dep_count > 0) {
+            if (manifest.optional_dep_count > UINT16_MAX) {
+                fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
+                        manifest.optional_dep_count, (unsigned)UINT16_MAX);
+                return 1;
+            }
+            opts.requires_optional = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
+            opts.requires_optional_count = (u16)manifest.optional_dep_count;
+            for (u32 i = 0; i < manifest.optional_dep_count; i++) {
+                opts.requires_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
+                                                      manifest.optional_deps[i].version);
+            }
+        }
+    } else {
+        opts.name    = self->pack_name;
+        opts.author  = self->pack_author;
+        opts.version = self->pack_version;
+        opts.modules = self->pack_modules;
+    }
+
     return tl_tlib_pack(self->arena, self->out_path, all_files, base_dir, self->resolver, opts);
 }
 

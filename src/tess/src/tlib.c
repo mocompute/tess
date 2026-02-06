@@ -560,10 +560,10 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         .version                 = str_init(alloc, opts.version),
         .modules                 = modules_arr,
         .module_count            = module_count,
-        .requires                = null,
-        .requires_count          = 0,
-        .requires_optional       = null,
-        .requires_optional_count = 0,
+        .requires                = opts.requires,
+        .requires_count          = opts.requires_count,
+        .requires_optional       = opts.requires_optional,
+        .requires_optional_count = opts.requires_optional_count,
     };
 
     // Write archive

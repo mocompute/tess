@@ -1,4 +1,7 @@
 #include "tlib.h"
+#include "file.h"
+#include "import_resolver.h"
+#include "manifest.h"
 #include "platform.h"
 
 #include <stdio.h>
@@ -507,6 +510,159 @@ static int test_crc32_integrity(void) {
 	return 0;
 }
 
+// Helper to write a string to a file
+static int write_file(char const *path, char const *content) {
+	FILE *f = fopen(path, "wb");
+	if (!f) return 1;
+	size_t len = strlen(content);
+	if (len != fwrite(content, 1, len, f)) {
+		fclose(f);
+		return 1;
+	}
+	fclose(f);
+	return 0;
+}
+
+static int test_pack_with_manifest(void) {
+	allocator *alloc = default_allocator();
+
+	// Create source file
+	char src_path[512];
+	make_temp_path(src_path, sizeof(src_path), "test_manifest_pack_lib.tl");
+	char const *src_content = "#module Foo\nfoo() { 1 }\n";
+	if (write_file(src_path, src_content)) {
+		fprintf(stderr, "  failed to write source file\n");
+		return 1;
+	}
+
+	// Create manifest file
+	char manifest_path[512];
+	make_temp_path(manifest_path, sizeof(manifest_path), "test_manifest_pack.toml");
+	char const *manifest_content =
+		"[package]\n"
+		"name = TestPkg\n"
+		"version = 1.0.0\n"
+		"author = Tester\n"
+		"modules = [Foo]\n"
+		"\n"
+		"[depend.Logger]\n"
+		"version = 2.0.0\n"
+		"\n"
+		"[depend-optional.Debug]\n"
+		"version = 0.1.0\n";
+	if (write_file(manifest_path, manifest_content)) {
+		fprintf(stderr, "  failed to write manifest file\n");
+		return 1;
+	}
+
+	// Parse manifest
+	tl_manifest manifest = {0};
+	if (tl_manifest_parse_file(alloc, manifest_path, &manifest)) {
+		fprintf(stderr, "  manifest parse failed\n");
+		return 1;
+	}
+
+	// Build pack opts from manifest (same logic as pack_files in tess_exe.c)
+	tl_tlib_pack_opts opts = {.verbose = 0};
+	opts.name    = str_cstr(&manifest.package.name);
+	opts.version = str_cstr(&manifest.package.version);
+	opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
+
+	// Join modules
+	if (manifest.package.module_count > 0) {
+		str_sized mod_sized = {.v = manifest.package.modules, .size = manifest.package.module_count};
+		str_build sb        = str_build_init(alloc, 128);
+		str_build_join_sized(&sb, S(","), mod_sized);
+		str modules_str = str_build_finish(&sb);
+		opts.modules    = str_cstr(&modules_str);
+	}
+
+	// Build requires
+	if (manifest.dep_count > 0) {
+		opts.requires       = alloc_malloc(alloc, manifest.dep_count * sizeof(str));
+		opts.requires_count = (u16)manifest.dep_count;
+		for (u32 i = 0; i < manifest.dep_count; i++) {
+			opts.requires[i] =
+				str_cat_3(alloc, manifest.deps[i].name, S("="), manifest.deps[i].version);
+		}
+	}
+
+	// Build requires_optional
+	if (manifest.optional_dep_count > 0) {
+		opts.requires_optional       = alloc_malloc(alloc, manifest.optional_dep_count * sizeof(str));
+		opts.requires_optional_count = (u16)manifest.optional_dep_count;
+		for (u32 i = 0; i < manifest.optional_dep_count; i++) {
+			opts.requires_optional[i] = str_cat_3(alloc, manifest.optional_deps[i].name, S("="),
+			                                      manifest.optional_deps[i].version);
+		}
+	}
+
+	// Set up files array with the source file (normalized path)
+	str file_str  = file_path_normalize(alloc, str_init(alloc, src_path));
+	str base_dir  = file_dirname(alloc, file_str);
+	str_sized files = {.v = &file_str, .size = 1};
+
+	// Create a minimal import resolver (no stdlib paths, so no files get filtered)
+	import_resolver *resolver = import_resolver_create(alloc);
+
+	// Pack
+	char out_path[512];
+	make_temp_path(out_path, sizeof(out_path), "test_manifest_pack.tlib");
+	if (tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts)) {
+		fprintf(stderr, "  pack failed\n");
+		return 1;
+	}
+
+	// Read back and verify
+	tl_tlib_archive arc = {0};
+	if (tl_tlib_read(alloc, out_path, &arc)) {
+		fprintf(stderr, "  read failed\n");
+		return 1;
+	}
+
+	int error = 0;
+
+	// Verify metadata
+	error += !str_eq(arc.metadata.name, S("TestPkg"));
+	if (error) fprintf(stderr, "  name mismatch: %s\n", str_cstr(&arc.metadata.name));
+
+	error += !str_eq(arc.metadata.version, S("1.0.0"));
+	error += !str_eq(arc.metadata.author, S("Tester"));
+
+	// Verify modules
+	error += (arc.metadata.module_count != 1);
+	if (arc.metadata.module_count >= 1) {
+		error += !str_eq(arc.metadata.modules[0], S("Foo"));
+	}
+
+	// Verify requires
+	error += (arc.metadata.requires_count != 1);
+	if (arc.metadata.requires_count >= 1) {
+		error += !str_eq(arc.metadata.requires[0], S("Logger=2.0.0"));
+	}
+
+	// Verify requires_optional
+	error += (arc.metadata.requires_optional_count != 1);
+	if (arc.metadata.requires_optional_count >= 1) {
+		error += !str_eq(arc.metadata.requires_optional[0], S("Debug=0.1.0"));
+	}
+
+	// Verify file entries
+	error += (arc.entries_count != 1);
+	if (arc.entries_count >= 1) {
+		error += (arc.entries[0].data_len != strlen(src_content));
+		if (arc.entries[0].data_len == strlen(src_content)) {
+			error += memcmp(arc.entries[0].data, src_content, strlen(src_content)) != 0;
+		}
+	}
+
+	if (error) {
+		fprintf(stderr, "  %d check(s) failed in test_pack_with_manifest\n", error);
+	}
+
+	return error;
+}
+
 int main(void) {
 	init_temp_dir();
 
@@ -522,5 +678,6 @@ int main(void) {
 	T(test_metadata_unicode)
 	T(test_corrupted_metadata)
 	T(test_crc32_integrity)
+	T(test_pack_with_manifest)
 	return error;
 }
