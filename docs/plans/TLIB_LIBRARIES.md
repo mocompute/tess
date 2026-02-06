@@ -599,6 +599,8 @@ The remaining work is organized into phases that build incrementally. Each phase
 
 #### Phase 6b: Module Discovery Integration with Pack
 
+**Detailed implementation plan:** [TLIB_PHASE_6B.md](TLIB_PHASE_6B.md)
+
 **Goal:** Use discovered modules to validate against manifest and enforce self-containment.
 
 **Integrate with pack:**
