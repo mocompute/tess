@@ -630,13 +630,13 @@ static void generate_toplevels(transpile *self) {
 
         // skip let nodes that are not specialized
         if (ast_node_is_let(node) && !ast_node_is_specialized(node)) {
-            fprintf(stderr, "DEBUG: skip not spec %s\n", str_cstr(&name));
+            // fprintf(stderr, "DEBUG: skip not spec %s\n", str_cstr(&name));
             continue;
         }
 
         // skip non-arrow types, main, any generic types, intrinsics
         if (!should_generate(self, name, poly)) {
-            fprintf(stderr, "DEBUG: skip not generate %s\n", str_cstr(&name));
+            // fprintf(stderr, "DEBUG: skip not generate %s\n", str_cstr(&name));
             continue;
         }
 
@@ -644,12 +644,12 @@ static void generate_toplevels(transpile *self) {
         tl_monotype *return_type = tl_monotype_sized_last(poly->type->list.xs);
         node                     = ast_node_str_map_get(self->toplevels, name);
         if (!node) {
-            fprintf(stderr, "DEBUG: skip not in toplevels %s\n", str_cstr(&name));
+            // fprintf(stderr, "DEBUG: skip not in toplevels %s\n", str_cstr(&name));
             continue; // e.g. std.tl funs that aren't used
         }
         ast_node *body = ast_node_body(node);
         if (!body) {
-            fprintf(stderr, "DEBUG: skip no body %s\n", str_cstr(&name));
+            // fprintf(stderr, "DEBUG: skip no body %s\n", str_cstr(&name));
             continue;
         }
 
