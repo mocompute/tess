@@ -15,7 +15,7 @@
 // Helper: scan a string as source file content.
 // Returns 0 on success, 1 on error.
 static int scan(tl_source_scanner *s, char const *file_path, char const *content, str_array *imports) {
-    str       fp = str_init(s->arena, file_path);
+    str         fp    = str_init(s->arena, file_path);
     char_csized input = {.v = content, .size = (u32)strlen(content)};
     return tl_source_scanner_scan(s, fp, input, imports);
 }
@@ -26,11 +26,11 @@ static int scan(tl_source_scanner *s, char const *file_path, char const *content
 
 // Basic: single module discovered with correct file path mapping
 static int test_single_module(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
 
@@ -53,11 +53,11 @@ static int test_single_module(void) {
 
 // Multiple modules from different files
 static int test_multiple_modules(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
     error += scan(&s, "/src/bar.tl", "#module Bar\nbar() { 2 }\n", &imports) != 0;
@@ -78,11 +78,11 @@ static int test_multiple_modules(void) {
 
 // Duplicate module name from different files should fail
 static int test_duplicate_module_error(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // First file defines Foo — should succeed
     error += scan(&s, "/src/a.tl", "#module Foo\na() { 1 }\n", &imports) != 0;
@@ -101,16 +101,16 @@ static int test_duplicate_module_error(void) {
 
 // Imports are collected correctly
 static int test_imports_collected(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Foo\n"
-                      "#import \"bar.tl\"\n"
-                      "#import <stdio.tl>\n"
-                      "foo() { 1 }\n";
+    char const       *src     = "#module Foo\n"
+                                "#import \"bar.tl\"\n"
+                                "#import <stdio.tl>\n"
+                                "foo() { 1 }\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -126,11 +126,11 @@ static int test_imports_collected(void) {
 
 // Conditional compilation: #ifdef with define present — module is discovered
 static int test_ifdef_defined(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     tl_source_scanner_define(&s, S("USE_FOO"));
 
@@ -149,11 +149,11 @@ static int test_ifdef_defined(void) {
 
 // Conditional compilation: #ifdef without define — module is NOT discovered
 static int test_ifdef_not_defined(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // Do NOT define USE_FOO
 
@@ -172,15 +172,15 @@ static int test_ifdef_not_defined(void) {
 
 // Conditional compilation: #ifndef
 static int test_ifndef(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#ifndef MISSING\n"
-                      "#module Fallback\n"
-                      "#endif\n";
+    char const       *src     = "#ifndef MISSING\n"
+                                "#module Fallback\n"
+                                "#endif\n";
 
     error += scan(&s, "/src/fb.tl", src, &imports) != 0;
 
@@ -193,11 +193,11 @@ static int test_ifndef(void) {
 
 // Conditional compilation: nested #ifdef, module in inner branch
 static int test_nested_ifdef(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     tl_source_scanner_define(&s, S("OUTER"));
     // Do NOT define INNER
@@ -222,16 +222,16 @@ static int test_nested_ifdef(void) {
 
 // #define inside source affects subsequent #ifdef
 static int test_define_in_source(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#define HAS_FEATURE\n"
-                      "#ifdef HAS_FEATURE\n"
-                      "#module Feature\n"
-                      "#endif\n";
+    char const       *src     = "#define HAS_FEATURE\n"
+                                "#ifdef HAS_FEATURE\n"
+                                "#module Feature\n"
+                                "#endif\n";
 
     error += scan(&s, "/src/feat.tl", src, &imports) != 0;
 
@@ -243,11 +243,11 @@ static int test_define_in_source(void) {
 
 // #undef removes a define
 static int test_undef(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     tl_source_scanner_define(&s, S("FOO"));
 
@@ -267,11 +267,11 @@ static int test_undef(void) {
 
 // Stdlib files should not have their modules tracked
 static int test_stdlib_modules_ignored(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // Register /std/ as a standard library path
     import_resolver_add_standard_path(res, str_init(alloc, "/std"));
@@ -290,11 +290,11 @@ static int test_stdlib_modules_ignored(void) {
 
 // Conditional skip depth resets between files
 static int test_skip_depth_resets(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // First file: unmatched #ifdef (no #endif) — leaves skip depth > 0
     char const *src1 = "#ifdef MISSING\n"
@@ -315,11 +315,11 @@ static int test_skip_depth_resets(void) {
 
 // Module directive at end of file without trailing newline
 static int test_module_at_eof(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // No trailing newline
     error += scan(&s, "/src/eof.tl", "#module Eof", &imports) != 0;
@@ -335,11 +335,11 @@ static int test_module_at_eof(void) {
 
 // No #module directive — modules_seen stays empty
 static int test_no_module(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     error += scan(&s, "/src/bare.tl", "foo() { 1 }\nbar() { 2 }\n", &imports) != 0;
 
@@ -352,16 +352,16 @@ static int test_no_module(void) {
 
 // Multiline string containing #module should be ignored
 static int test_string_hides_directive(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Real\n"
-                      "x = \"\n"
-                      "#module Fake\n"
-                      "\"\n";
+    char const       *src     = "#module Real\n"
+                                "x = \"\n"
+                                "#module Fake\n"
+                                "\"\n";
 
     error += scan(&s, "/src/str.tl", src, &imports) != 0;
 
@@ -375,16 +375,16 @@ static int test_string_hides_directive(void) {
 
 // String with escaped quote should not prematurely end string tracking
 static int test_string_escaped_quote(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Real\n"
-                      "x = \"foo\\\"\n"
-                      "#module Fake\n"
-                      "\"\n";
+    char const       *src     = "#module Real\n"
+                                "x = \"foo\\\"\n"
+                                "#module Fake\n"
+                                "\"\n";
 
     error += scan(&s, "/src/esc.tl", src, &imports) != 0;
 
@@ -398,11 +398,11 @@ static int test_string_escaped_quote(void) {
 
 // Single-line string with # inside should not be treated as directive
 static int test_string_single_line(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     // The string is on the same line as other content — noise state handles it.
     // But test the case where a string starts at a newline boundary.
@@ -420,14 +420,14 @@ static int test_string_single_line(void) {
 
 // Line comment should not hide next line's directive
 static int test_comment_does_not_span_lines(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "// this is a comment\n"
-                      "#module Real\n";
+    char const       *src     = "// this is a comment\n"
+                                "#module Real\n";
 
     error += scan(&s, "/src/cmt.tl", src, &imports) != 0;
 
@@ -439,15 +439,15 @@ static int test_comment_does_not_span_lines(void) {
 
 // Comment containing directive-like text should be ignored
 static int test_comment_hides_directive(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Real\n"
-                      "// #import \"fake.tl\"\n"
-                      "foo() { 1 }\n";
+    char const       *src     = "#module Real\n"
+                                "// #import \"fake.tl\"\n"
+                                "foo() { 1 }\n";
 
     error += scan(&s, "/src/ci.tl", src, &imports) != 0;
 
@@ -461,16 +461,16 @@ static int test_comment_hides_directive(void) {
 
 // Unterminated string hides all subsequent directives until EOF
 static int test_string_unterminated(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Real\n"
-                      "x = \"unterminated\n"
-                      "#module Fake\n"
-                      "#import \"hidden.tl\"\n";
+    char const       *src     = "#module Real\n"
+                                "x = \"unterminated\n"
+                                "#module Fake\n"
+                                "#import \"hidden.tl\"\n";
 
     error += scan(&s, "/src/ut.tl", src, &imports) != 0;
 
@@ -487,14 +487,14 @@ static int test_string_unterminated(void) {
 
 // [[export]] in source marks the module in export_seen
 static int test_export_basic(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Foo\n"
-                      "[[export]] foo() { 1 }\n";
+    char const       *src     = "#module Foo\n"
+                                "[[export]] foo() { 1 }\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -507,14 +507,14 @@ static int test_export_basic(void) {
 
 // No [[export]] means module is NOT in export_seen
 static int test_export_absent(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Foo\n"
-                      "foo() { 1 }\n";
+    char const       *src     = "#module Foo\n"
+                                "foo() { 1 }\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -527,14 +527,14 @@ static int test_export_absent(void) {
 
 // [[export]] inside a string should be ignored
 static int test_export_in_string(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Foo\n"
-                      "x = \"[[export]] fake\"\n";
+    char const       *src     = "#module Foo\n"
+                                "x = \"[[export]] fake\"\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -547,14 +547,14 @@ static int test_export_in_string(void) {
 
 // [[export]] inside a comment should be ignored
 static int test_export_in_comment(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "#module Foo\n"
-                      "// [[export]] fake\n";
+    char const       *src     = "#module Foo\n"
+                                "// [[export]] fake\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -567,13 +567,13 @@ static int test_export_in_comment(void) {
 
 // [[export]] without #module should not add anything to export_seen
 static int test_export_no_module(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
-    char const *src = "[[export]] foo() { 1 }\n";
+    char const       *src     = "[[export]] foo() { 1 }\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
 
@@ -586,11 +586,11 @@ static int test_export_no_module(void) {
 
 // Multiple files: only files with [[export]] appear in export_seen
 static int test_export_multiple_files(void) {
-    int              error = 0;
-    allocator       *alloc = default_allocator();
-    import_resolver *res   = import_resolver_create(alloc);
-    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
-    str_array imports      = {.alloc = alloc};
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
 
     error += scan(&s, "/src/a.tl", "#module A\n[[export]] a() { 1 }\n", &imports) != 0;
     error += scan(&s, "/src/b.tl", "#module B\nb() { 2 }\n", &imports) != 0;
@@ -599,6 +599,172 @@ static int test_export_multiple_files(void) {
     error += !str_hset_contains(s.export_seen, S("A"));
     error += str_hset_contains(s.export_seen, S("B"));
     error += !str_hset_contains(s.export_seen, S("C"));
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// --- Validation tests ---
+
+// Manifest declares module not found in source -> error
+static int test_validate_missing_module(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Bar")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 1;
+    error += result.warning_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Manifest module found with [[export]] -> no errors, no warnings
+static int test_validate_ok(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\n[[export]] foo() { 1 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Empty manifest modules list -> skip validation entirely
+static int test_validate_empty_modules(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
+
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, null, 0, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Public module with no [[export]] -> warning
+static int test_validate_warn_public_no_export(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Non-public module with [[export]] -> warning
+static int test_validate_warn_export_not_public(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\n[[export]] foo() { 1 }\n", &imports) != 0;
+    error += scan(&s, "/src/bar.tl", "#module Bar\n[[export]] bar() { 2 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Internal module (in source, not in manifest, no exports) is fine
+static int test_validate_internal_module_ok(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\n[[export]] foo() { 1 }\n", &imports) != 0;
+    error += scan(&s, "/src/internal.tl", "#module Foo.Internal\ninternal() { 2 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Multiple manifest modules, one missing -> error (warnings skipped)
+static int test_validate_multiple_one_missing(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    error += scan(&s, "/src/foo.tl", "#module Foo\n[[export]] foo() { 1 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo"), S("Bar")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 2, 0);
+
+    error += result.error_count != 1;
+    error += result.warning_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Both warning types at once
+static int test_validate_both_warnings(void) {
+    int               error   = 0;
+    allocator        *alloc   = default_allocator();
+    import_resolver  *res     = import_resolver_create(alloc);
+    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
+    str_array         imports = {.alloc = alloc};
+
+    // Foo: public, no exports (warning 1)
+    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
+    // Bar: not public, has exports (warning 2)
+    error += scan(&s, "/src/bar.tl", "#module Bar\n[[export]] bar() { 2 }\n", &imports) != 0;
+
+    str                               manifest_modules[] = {S("Foo")};
+    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
+
+    error += result.error_count != 0;
+    error += result.warning_count != 2;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
     return error;
@@ -633,5 +799,13 @@ int main(void) {
     T(test_export_in_comment)
     T(test_export_no_module)
     T(test_export_multiple_files)
+    T(test_validate_missing_module)
+    T(test_validate_ok)
+    T(test_validate_empty_modules)
+    T(test_validate_warn_public_no_export)
+    T(test_validate_warn_export_not_public)
+    T(test_validate_internal_module_ok)
+    T(test_validate_multiple_one_missing)
+    T(test_validate_both_warnings)
     return error;
 }

@@ -15,11 +15,11 @@ typedef struct {
     allocator              *arena;
     struct import_resolver *resolver;
 
-    hashmap *modules_seen;           // str module_name -> str file_path
-    hashmap *export_seen;            // hset of module names whose source contains [[export]]
-    hashmap *import_defines;         // hset of defined symbols for conditional compilation
-    int      conditional_skip_depth; // tracks #ifdef nesting depth during scanning
-    str      current_file_module;    // transient: module name of file currently being scanned
+    hashmap                *modules_seen;           // str module_name -> str file_path
+    hashmap                *export_seen;            // hset of module names whose source contains [[export]]
+    hashmap                *import_defines;         // hset of defined symbols for conditional compilation
+    int                     conditional_skip_depth; // tracks #ifdef nesting depth during scanning
+    str                     current_file_module; // transient: module name of file currently being scanned
 } tl_source_scanner;
 
 // Create and initialize a source scanner.
@@ -44,5 +44,27 @@ void tl_source_scanner_define(tl_source_scanner *self, str symbol);
 //
 // Returns 0 on success, 1 on error.
 int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports);
+
+// Result of cross-checking scanner state against manifest modules.
+typedef struct {
+    int error_count;
+    int warning_count;
+} tl_source_scanner_validate_result;
+
+// Cross-check discovered modules and exports against a manifest's public module list.
+// - manifest_modules: array of public module names from manifest
+// - manifest_module_count: number of entries in manifest_modules
+// - verbose: if nonzero, print internal module list to stderr
+//
+// Checks:
+// - ERROR if a manifest module is not found in modules_seen
+// - WARNING if a public module has no [[export]] symbols
+// - WARNING if a non-public module has [[export]] symbols
+// - VERBOSE: list internal modules (in modules_seen but not in manifest)
+//
+// Returns result with error_count and warning_count.
+tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,
+                                                             str const         *manifest_modules,
+                                                             u32 manifest_module_count, int verbose);
 
 #endif // TESS_SOURCE_SCANNER_H

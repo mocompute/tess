@@ -1,6 +1,7 @@
 #include "source_scanner.h"
 
 #include "import_resolver.h"
+#include "str.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -89,7 +90,16 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
     //   in_string    - inside "..." string literal (newlines don't reset to start)
     //   in_string_bs - after '\' inside string (skip one character)
     //   in_comment   - after '//' comment, skip to end of line
-    enum { start, noise, start_hash, in_hash, stop_hash, in_string, in_string_bs, in_comment } state = start;
+    enum {
+        start,
+        noise,
+        start_hash,
+        in_hash,
+        stop_hash,
+        in_string,
+        in_string_bs,
+        in_comment
+    } state = start;
 
     // Reset per-file transient state
     self->conditional_skip_depth = 0;
@@ -105,13 +115,11 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
             else if ('[' == c && pos + 8 <= size && 0 == memcmp(&data[pos], "[export]]", 9)) {
                 pos += 9;
                 file_has_export = 1;
-                state = noise;
-            }
-            else if ('/' == c && pos < size && '/' == data[pos]) {
+                state           = noise;
+            } else if ('/' == c && pos < size && '/' == data[pos]) {
                 pos++;
                 state = in_comment;
-            }
-            else if (isspace(c)) state = start;
+            } else if (isspace(c)) state = start;
             else state = noise;
         } break;
         case noise: {
@@ -160,4 +168,73 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
     }
 
     return 0;
+}
+
+tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,
+                                                             str const         *manifest_modules,
+                                                             u32 manifest_module_count, int verbose) {
+
+    tl_source_scanner_validate_result result = {0, 0};
+
+    if (manifest_module_count == 0) return result;
+
+    // Build hashset of manifest module names for O(1) lookup
+    hashmap *manifest_set = hset_create(self->arena, manifest_module_count * 2);
+    for (u32 i = 0; i < manifest_module_count; i++) {
+        str_hset_insert(&manifest_set, manifest_modules[i]);
+    }
+
+    // Check 1: every manifest module must exist in modules_seen
+    for (u32 i = 0; i < manifest_module_count; i++) {
+        str m = manifest_modules[i];
+        if (!str_map_contains(self->modules_seen, m)) {
+            fprintf(stderr,
+                    "error: manifest declares module '%s' but no #module directive found in source\n",
+                    str_cstr(&m));
+            result.error_count++;
+        }
+    }
+
+    // If errors found, skip warnings (they depend on correct module discovery)
+    if (result.error_count > 0) return result;
+
+    // Check 2: public module with no [[export]] symbols
+    for (u32 i = 0; i < manifest_module_count; i++) {
+        str m = manifest_modules[i];
+        if (!str_hset_contains(self->export_seen, m)) {
+            fprintf(stderr, "warning: module '%s' is listed as public but has no [[export]] symbols\n",
+                    str_cstr(&m));
+            result.warning_count++;
+        }
+    }
+
+    // Check 3: non-public module with [[export]] symbols
+    hashmap_iterator iter = {0};
+    while (hset_iter(self->export_seen, &iter)) {
+        str name = str_init_n(self->arena, iter.key_ptr, iter.key_size);
+        if (!str_hset_contains(manifest_set, name)) {
+            fprintf(stderr,
+                    "warning: module '%s' has [[export]] symbols but is not listed in manifest modules\n",
+                    str_cstr(&name));
+            result.warning_count++;
+        }
+        str_deinit(self->arena, &name);
+    }
+
+    // Verbose: list internal modules (in modules_seen but not in manifest)
+    if (verbose) {
+        str_array keys         = str_map_sorted_keys(self->arena, self->modules_seen);
+        int       has_internal = 0;
+        forall(i, keys) {
+            if (!str_hset_contains(manifest_set, keys.v[i])) {
+                if (!has_internal) {
+                    fprintf(stderr, "Internal modules:\n");
+                    has_internal = 1;
+                }
+                fprintf(stderr, "  (internal) %s\n", str_cstr(&keys.v[i]));
+            }
+        }
+    }
+
+    return result;
 }
