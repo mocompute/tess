@@ -124,6 +124,7 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/infer.c	\
 	$(TESS_SRC_DIR)/src/transpile.c \
 	$(TESS_SRC_DIR)/src/manifest.c \
+	$(TESS_SRC_DIR)/src/source_scanner.c \
 	$(TESS_SRC_DIR)/src/tlib.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
@@ -293,7 +294,7 @@ test-mos: build-mos-tests
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format tlib import_resolver manifest
+TESS_TESTS     = tess type_v2 format tlib import_resolver manifest source_scanner
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)

@@ -43,19 +43,19 @@ These decisions were made during planning to resolve ambiguities in the parent d
 
 The parent doc says "Warn (but don't error) if discovered modules aren't in manifest (they're internal)." However, internal modules are a normal and expected pattern (e.g., `MathUtils.Internal` in the end-to-end example). Emitting a warning for every internal module is noisy.
 
-**Decision:** Internal modules are reported as verbose-only output (`-v`), not warnings. Only emit actual warnings for likely mistakes (public module with no exports, non-public module with exports).
+**Decision:** Do not warn about unused modules. Only emit actual warnings for likely mistakes (public module with no exports, non-public module with exports).
 
-### `[[export]]` scanning: text-level, false positives accepted
+### `[[export]]` scanning: text-level: guard against false positives
 
 For Phase 6b, `[[export]]` detection uses simple text search (`[[export]]` literal in file content). This may produce false positives from comments (`// [[export]]`) or strings (`"[[export]]"`).
 
-**Decision:** Accept false positives. The warnings are advisory and non-blocking. Phase 11 will do proper parser-level handling when `[[export]]` becomes enforced.
+**Decision:** Guard against false positives. ``[[export]]`` annotations always appear before a symbol. Using
+a line parser, you can detect strings and comments and ignore them.
 
 ### Module-to-file mapping via re-scan
 
-The existing `modules_seen` hashmap is a flat global set that doesn't track which file each module came from. For `[[export]]` warnings, we need per-file module tracking.
-
-**Decision:** During the validation pass (after `files_in_order()` returns), do a lightweight re-scan of each non-stdlib file to extract its `#module` name and detect `[[export]]` presence. This avoids modifying the existing import-scanning infrastructure.
+This is no longer necessary, as the import-scanning infrastructure has been updated so that the modules_seen
+field is now a map with module keys and file path values (str).
 
 ### Self-containment check in `tl_tlib_pack()`
 
