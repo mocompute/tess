@@ -350,6 +350,141 @@ static int test_no_module(void) {
     return error;
 }
 
+// Multiline string containing #module should be ignored
+static int test_string_hides_directive(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    char const *src = "#module Real\n"
+                      "x = \"\n"
+                      "#module Fake\n"
+                      "\"\n";
+
+    error += scan(&s, "/src/str.tl", src, &imports) != 0;
+
+    // Only Real should be discovered, not Fake
+    error += !str_map_contains(s.modules_seen, S("Real"));
+    error += str_map_contains(s.modules_seen, S("Fake"));
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// String with escaped quote should not prematurely end string tracking
+static int test_string_escaped_quote(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    char const *src = "#module Real\n"
+                      "x = \"foo\\\"\n"
+                      "#module Fake\n"
+                      "\"\n";
+
+    error += scan(&s, "/src/esc.tl", src, &imports) != 0;
+
+    // Fake is inside the string (the \" doesn't close it)
+    error += !str_map_contains(s.modules_seen, S("Real"));
+    error += str_map_contains(s.modules_seen, S("Fake"));
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Single-line string with # inside should not be treated as directive
+static int test_string_single_line(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    // The string is on the same line as other content — noise state handles it.
+    // But test the case where a string starts at a newline boundary.
+    char const *src = "#module Real\n"
+                      "x = \"#module Fake\"\n";
+
+    error += scan(&s, "/src/sl.tl", src, &imports) != 0;
+
+    error += !str_map_contains(s.modules_seen, S("Real"));
+    error += str_map_contains(s.modules_seen, S("Fake"));
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Line comment should not hide next line's directive
+static int test_comment_does_not_span_lines(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    char const *src = "// this is a comment\n"
+                      "#module Real\n";
+
+    error += scan(&s, "/src/cmt.tl", src, &imports) != 0;
+
+    error += !str_map_contains(s.modules_seen, S("Real"));
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Comment containing directive-like text should be ignored
+static int test_comment_hides_directive(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    char const *src = "#module Real\n"
+                      "// #import \"fake.tl\"\n"
+                      "foo() { 1 }\n";
+
+    error += scan(&s, "/src/ci.tl", src, &imports) != 0;
+
+    error += !str_map_contains(s.modules_seen, S("Real"));
+    // The commented-out import should NOT be collected
+    error += imports.size != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Unterminated string hides all subsequent directives until EOF
+static int test_string_unterminated(void) {
+    int              error = 0;
+    allocator       *alloc = default_allocator();
+    import_resolver *res   = import_resolver_create(alloc);
+    tl_source_scanner s    = tl_source_scanner_create(alloc, res);
+    str_array imports      = {.alloc = alloc};
+
+    char const *src = "#module Real\n"
+                      "x = \"unterminated\n"
+                      "#module Fake\n"
+                      "#import \"hidden.tl\"\n";
+
+    error += scan(&s, "/src/ut.tl", src, &imports) != 0;
+
+    // Real is before the string, should be discovered
+    error += !str_map_contains(s.modules_seen, S("Real"));
+    // Fake is inside the unterminated string, should NOT be discovered
+    error += str_map_contains(s.modules_seen, S("Fake"));
+    // Import is also inside the string
+    error += imports.size != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -367,5 +502,11 @@ int main(void) {
     T(test_skip_depth_resets)
     T(test_module_at_eof)
     T(test_no_module)
+    T(test_string_hides_directive)
+    T(test_string_escaped_quote)
+    T(test_string_single_line)
+    T(test_comment_does_not_span_lines)
+    T(test_comment_hides_directive)
+    T(test_string_unterminated)
     return error;
 }

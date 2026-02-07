@@ -74,9 +74,19 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
 
 int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports) {
     u32         pos = 0, capture_start = 0;
-    char const *data                                            = input.v;
-    u32         size                                            = input.size;
-    enum { start, noise, start_hash, in_hash, stop_hash } state = start;
+    char const *data = input.v;
+    u32         size = input.size;
+
+    // States:
+    //   start        - beginning of line, looking for '#' directive
+    //   noise        - non-directive line content, waiting for newline
+    //   start_hash   - just saw '#' at line start, record capture position
+    //   in_hash      - reading directive content until newline
+    //   stop_hash    - end of directive, process it
+    //   in_string    - inside "..." string literal (newlines don't reset to start)
+    //   in_string_bs - after '\' inside string (skip one character)
+    //   in_comment   - after '//' comment, skip to end of line
+    enum { start, noise, start_hash, in_hash, stop_hash, in_string, in_string_bs, in_comment } state = start;
 
     // Reset conditional skip depth in case of unmatched conditionals in previous file
     self->conditional_skip_depth = 0;
@@ -85,12 +95,31 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
         case start: {
             char c = data[pos++];
             if ('#' == c) state = start_hash;
+            else if ('"' == c) state = in_string;
             else if (isspace(c)) state = start;
             else state = noise;
         } break;
         case noise: {
             char c = data[pos++];
             if ('\n' == c) state = start;
+            else if ('"' == c) state = in_string;
+            else if ('/' == c && pos < size && '/' == data[pos]) {
+                pos++;
+                state = in_comment;
+            }
+        } break;
+        case in_comment: {
+            char c = data[pos++];
+            if ('\n' == c) state = start;
+        } break;
+        case in_string: {
+            char c = data[pos++];
+            if ('"' == c) state = noise;
+            else if ('\\' == c) state = in_string_bs;
+        } break;
+        case in_string_bs: {
+            pos++; // skip escaped character
+            state = in_string;
         } break;
         case start_hash: {
             capture_start = pos;
