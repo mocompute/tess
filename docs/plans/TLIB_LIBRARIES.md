@@ -634,24 +634,24 @@ tess exe main.tl -l Foo.tlib -L libs/ -o main    # with search path for transiti
 
 The compilation process:
 1. Load each `-l` package via `tl_tlib_read()`
-2. Extract source files into arena-allocated buffers
-3. Track file→package provenance (which files came from which package)
-4. Scan extracted source for `#module` declarations
-5. Build module → package mapping
-6. Extend import resolver to handle unquoted imports:
-   - `#import ModuleName` → look up in module→package map → add package files to compilation
-7. For each loaded package, check its `depends` field and auto-resolve transitive dependencies from `-L` paths (see Phase 8)
-8. Feed all source (local + package) into existing compilation pipeline
-9. Tree shaking removes unreferenced code
+2. Extract source files into arena-allocated buffers, marking each as package source (boolean flag)
+3. All modules from all packages enter the single global namespace
+4. Build two sets from package metadata and source scanning:
+   - **All package modules**: every module discovered from package source via `#module` directives
+   - **Listed modules**: modules declared in each package's `modules` metadata (the public API)
+5. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
+6. Feed all source (local + package) into the existing compilation pipeline
+7. Tree shaking removes unreferenced code
 
-**File provenance tracking:** Each source file is tagged with its origin (local, or which package). This is needed later for access control (Phase 10-11) to determine if code is "inside" or "outside" a package.
+All package source is loaded upfront and unconditionally — there is no lazy loading triggered by imports. `#import ModuleName` (unquoted) is a declaration of intent to use a package module, resolved against the listed modules set, not a trigger to load package files.
+
+**No file→package provenance tracking.** Instead, two lighter mechanisms provide access control in later phases:
+- The two module sets (all package modules vs listed modules) enable module-level access control (Phase 10)
+- The boolean "is package source" flag per file enables symbol-level access control (Phase 11)
 
 **Unquoted import resolution:**
 
-Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no angle brackets) as a package module import. The import resolver then:
-1. Looks up `ModuleName` in the module→package mapping
-2. If found, adds the package's source files to compilation (if not already added)
-3. If not found, emits an error
+Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no angle brackets) as a package module import. The import resolver checks that `ModuleName` exists in the listed modules set. If the module exists in all package modules but is not listed, it is an internal module and the import is rejected. If not found at all, an error is emitted.
 
 **Validation:**
 - Integration test: Create a simple package, compile a consumer that imports it
@@ -720,16 +720,29 @@ Consumers only list direct dependencies in `[depend]` sections. Transitive depen
 
 **Implementation:**
 
-When resolving `#import ModuleName` from a package:
-1. Read the package's `modules` metadata
-2. Verify `ModuleName` is in that list
-3. If not, emit error: "module 'X' is not exported by package 'Y'"
+Access control uses two sets built during package loading (Phase 7):
+- **All package modules**: every module discovered from package source
+- **Listed modules**: modules declared in packages' `modules` metadata
 
-Internal modules (not listed in `modules`) remain usable within the package itself. The file provenance tracking from Phase 7 determines what's "inside" vs "outside" the package.
+**Unquoted import resolution** (for local files):
+1. If `ModuleName` is in the listed modules set → allowed
+2. If `ModuleName` is in all package modules but not listed → error: "module 'X' is not a public module"
+3. If `ModuleName` is not found → error: "module 'X' not found"
+
+**Qualified access** (`Module.symbol`) in local files:
+- If `Module` is in all package modules but not in listed modules → error (accessing internal package module)
+- If `Module` is in listed modules → allowed (symbol-level check deferred to Phase 11)
+- If `Module` is not in package modules → local module, no restrictions
+
+Local files are identified by the absence of the "is package source" flag (set during Phase 7 loading). Package source files are unrestricted — they can access any module freely, including unlisted modules from other packages.
+
+**Known limitation:** Access control is not enforced between packages — only between consumer (local) code and packages.
 
 **Validation:**
 - Integration test: attempt to import internal module, verify error
 - Test that internal modules work within the package
+- Test that local modules remain accessible without restrictions
+- Test that qualified access to an unlisted package module from local code is rejected
 
 #### Phase 11: Symbol-Level Access Control (`[[export]]`)
 
@@ -739,11 +752,14 @@ Internal modules (not listed in `modules`) remain usable within the package itse
 
 1. Extend the parser to recognize `[[export]]` attribute on function and type definitions (structs/enums)
 2. During parsing, mark exported symbols in the AST
-3. Use file provenance tracking (from Phase 7) to determine code origin
-4. During type inference, when consumer code references a symbol from a package:
+3. During type inference, when a local file references `Module.symbol` where `Module` is a listed package module:
    - Verify the symbol has `[[export]]` attribute
    - If not, emit error: "symbol 'X' is not exported from module 'Y'"
-5. Package-internal code (same provenance) can access non-exported symbols freely
+4. Package source files are unrestricted — they can access any symbol freely, including non-exported symbols from other packages
+
+The "is package source" boolean flag (set during package loading in Phase 7) determines whether access control applies. Local files (flag not set) are subject to `[[export]]` restrictions; package source (flag set) is not.
+
+**Known limitation:** `[[export]]` is not enforced between packages — only between consumer (local) code and packages. Package A can access non-exported symbols from Package B.
 
 **Future extension:** `[[c_export(name)]]` for C-compatible symbol naming.
 
