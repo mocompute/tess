@@ -593,36 +593,28 @@ The remaining parts of Phase 6 are listed under "Remaining Phases" below as Phas
 
 ---
 
-### Remaining Phases
-
-The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
-
-#### Phase 6b: Module Discovery Integration with Pack
+#### Phase 6b: Module Discovery Integration with Pack ✓
 
 **Detailed implementation plan:** [TLIB_PHASE_6B.md](TLIB_PHASE_6B.md)
 
 **Goal:** Use discovered modules to validate against manifest and enforce self-containment.
 
-**Integrate with pack:**
+Implemented in four sub-phases:
 
-After collecting source files, scan each for `#module` declarations and `[[export]]` annotations:
-1. Discover all modules in source files (both public and internal)
-2. Record which modules contain `[[export]]` symbols
-3. If manifest specifies `modules = [...]`:
-   - Verify every module listed in manifest is discovered in source
-   - Warn (but don't error) if discovered modules aren't in manifest (they're internal)
-   - Warn if a module listed in `modules` has zero `[[export]]` symbols
-   - Warn if a module not listed in `modules` has `[[export]]` symbols
-4. Store the manifest's `modules` list in archive metadata (not all discovered modules)
+1. **Module Validation** — `tl_source_scanner_validate()` cross-checks manifest modules against discovered `#module` directives. Errors on missing modules, verbose-only listing of internal modules.
+2. **`[[export]]` Scanning** — State machine detects `[[export]]` at line start with string/comment awareness. Tracks which modules have exports in `export_seen` hashset.
+3. **`[[export]]` Warnings** — Warns if public module has no exports, or non-public module has exports. Warnings don't block pack.
+4. **Self-Containment** — `check_self_containment()` in `tlib.c` verifies every quoted `#import` resolves to another file in the archive. Uses shared `tl_source_scanner_collect_imports()` for correct string/comment handling.
 
-**Self-containment check:**
+Key infrastructure: callback-based `scan_directives()` core in `source_scanner.c` shared by the full scanner and the lightweight import collector. `validate` CLI command for standalone validation.
 
-Verify every quoted `#import "file.tl"` in the archived files resolves to another file in the archive. Error if an import would escape the archive (references a file not being packed).
+43 unit tests across `test_source_scanner.c` and `test_tlib.c`.
 
-**Validation:**
-- Unit tests for module discovery (simple, conditional, nested)
-- Integration test: pack multi-module library, verify modules metadata matches
-- Test self-containment check catches missing imports
+---
+
+### Remaining Phases
+
+The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
 #### Phase 7: Basic Package Consumption
 
@@ -798,7 +790,7 @@ Phase 5b (Manifest Integration) ✓
     ↓
 Phase 6 (Module Discovery — scanning) ✓
     ↓
-Phase 6b (Module Discovery — pack integration)
+Phase 6b (Module Discovery — pack integration) ✓
     ↓
 Phase 7 (Basic Consumption)  ←── First end-to-end validation
     ↓
@@ -815,7 +807,7 @@ Phase 12 (Test Suite)
 
 **Key validation points:**
 - After Phase 5: Manifest parser works standalone with full test coverage
-- After Phase 6: Module discovery scanning works, manifest integration with pack complete
+- After Phase 6/6b: Module discovery, validation, export scanning, and self-containment checking complete
 - After Phase 7: Can pack and consume a simple library (no dependencies)
 - After Phase 8: Can handle library chains (A uses B)
 - After Phase 11: Full access control model working

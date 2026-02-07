@@ -2,7 +2,7 @@
 
 **Parent document:** [TLIB_LIBRARIES.md](TLIB_LIBRARIES.md) (Phase 6b section)
 
-**Status:** Sub-Phases 1-3 complete. Sub-Phase 4 remaining.
+**Status:** Complete (all sub-phases).
 
 ---
 
@@ -28,7 +28,7 @@ Sub-Phase 2 ([[export]] Scanning)  ✅ complete
 Sub-Phase 3 ([[export]] Warnings)  ✅ complete
     |
     v
-Sub-Phase 4 (Self-Containment)     ⬜ remaining
+Sub-Phase 4 (Self-Containment)     ✅ complete
 ```
 
 Sub-Phase 4 is independent and could be done in any order, but is placed last because it involves more complex path logic in `tlib.c`.
@@ -141,68 +141,50 @@ Warnings do not block pack — only `error_count > 0` causes failure. The `valid
 
 ---
 
-## Sub-Phase 4: Self-Containment Check — REMAINING
+## Sub-Phase 4: Self-Containment Check — COMPLETE
 
-### Task
+**Commit:** `9827279`
 
-Verify every quoted `#import "file.tl"` in packed files resolves to another file in the archive. Error if an import escapes the archive.
+### What was implemented
 
-### Implementation
+Self-containment check in `tl_tlib_pack()` (in `tlib.c`) verifies every quoted `#import "file.tl"` resolves to another file in the archive. Runs after building the entries array but before writing.
 
-**Location:** `tl_tlib_pack()` in `src/tess/src/tlib.c`, after building the entries array but before writing.
+**Static function `check_self_containment()`** in `tlib.c`:
+- Builds a hashset of entry names (relative paths in the archive)
+- For each entry, uses `tl_source_scanner_collect_imports()` to extract all `#import` directives with correct string/comment handling
+- Skips angle-bracket imports (stdlib, not in archive)
+- For quoted imports: computes directory from entry name, joins with import path, normalizes, checks hashset
+- Validates closing quote delimiter (guards against malformed imports)
+- Returns 0 if self-contained, 1 if an import escapes the archive
 
-**New static function: `check_self_containment()`**
+**Shared scanner infrastructure:** The state machine in `source_scanner.c` was refactored into a callback-based `scan_directives()` core function. Both the full scanner (`tl_source_scanner_scan()`) and import-only extraction (`tl_source_scanner_collect_imports()`) share this state machine, ensuring correct string/comment handling in both paths.
 
-```c
-// Verify all quoted imports in archive entries resolve to other entries.
-// Returns 0 if self-contained, 1 if an import escapes the archive.
-static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries, u32 count);
-```
+**Design decisions:**
+- Conservative scanning: collects ALL imports regardless of `#ifdef` conditionals (archive integrity check, not compilation behavior)
+- Uses `tl_source_scanner_collect_imports()` (no `tl_source_scanner` struct needed) for clean separation
 
-**Algorithm:**
+### Files changed
 
-1. Build a hashset of entry names (relative paths in the archive)
-2. For each entry:
-   a. Scan content for `#import` directives using a minimal scanner (similar to `scan_directives` but only extracting imports, no conditional compilation needed since `files_in_order()` already resolved the actual imports)
-   b. For each import found:
-      - Determine kind: quoted (`"..."`) or angle-bracket (`<...>`)
-      - **Skip** angle-bracket imports (stdlib, not in archive)
-      - For quoted imports:
-        - Compute the importing file's directory from its entry name
-        - Join with the import path
-        - Normalize (resolve `.` and `..` components)
-        - Check if the result exists in the entry names hashset
-   c. If not found: **error** — `"error: self-containment check failed: '%s' (imported from '%s') not found in archive"` — return 1
-
-3. If all imports resolve, return 0
-
-**Path resolution detail:**
-
-For entry `liba/foo.tl` importing `"../util/util.tl"`:
-- Directory: `liba/`
-- Joined: `liba/../util/util.tl`
-- Normalized: `util/util.tl`
-- Check: is `util/util.tl` in the hashset?
-
-**Edge case — conditional imports:** The scanner does NOT need to respect `#ifdef`/`#endif` for the self-containment check. The check should be conservative: if ANY quoted import appears in the file (even in a conditionally-excluded branch), it should resolve. This is stricter than necessary but simpler and safer. If this proves too strict in practice, it can be relaxed later.
-
-**Design note:** We could alternatively reuse the conditional-compilation-aware scanning. But the self-containment check is about archive integrity, not compilation behavior. Being strict here is a feature: it ensures the archive works regardless of which conditional branches are active.
+- `src/tess/src/source_scanner.c` — extracted `scan_directives()` callback-based core, refactored `tl_source_scanner_scan()` to use it, added `tl_source_scanner_collect_imports()`
+- `src/tess/include/source_scanner.h` — added `tl_source_scanner_collect_imports()` declaration
+- `src/tess/src/tlib.c` — added `check_self_containment()`, called from `tl_tlib_pack()`
+- `src/tess/src/test_source_scanner.c` — 4 new tests for `tl_source_scanner_collect_imports()`
+- `src/tess/src/test_tlib.c` — 5 new self-containment tests
 
 ### Tests
 
-New tests in `src/tess/src/test_tlib.c`:
+Source scanner collect_imports tests (`test_source_scanner.c`):
+- `test_collect_basic` — extracts both quoted and angle-bracket imports
+- `test_collect_ignores_string` — `#import` inside string literal is ignored
+- `test_collect_ignores_comment` — `#import` inside `//` comment is ignored
+- `test_collect_ignores_conditionals` — imports inside `#ifdef` blocks are still collected (no conditional filtering)
 
-- **`test_pack_self_contained`** — Two files: `a.tl` with `#import "b.tl"`, `b.tl` standalone. Pack both. Must succeed.
-- **`test_pack_not_self_contained`** — `a.tl` with `#import "missing.tl"`. Pack only `a.tl`. Must fail with self-containment error.
-- **`test_pack_stdlib_import_ok`** — `a.tl` with `#import <stdio.tl>`. Pack `a.tl`. Must succeed (stdlib imports ignored).
-- **`test_pack_subdir_import`** — `lib/a.tl` with `#import "../util.tl"`, `util.tl` standalone. Pack both with correct relative paths. Must succeed.
-
-**Note:** These tests operate at the `tl_tlib_pack()` level, building file arrays and calling pack directly (similar to existing `test_pack_with_manifest`). They do NOT need the full CLI pipeline.
-
-### Verification
-
-- `make -j test` passes
-- Manual test: pack a file with a broken import, verify error message
+Self-containment tests (`test_tlib.c`):
+- `test_pack_self_contained` — `a.tl` imports `b.tl`, both packed: succeeds
+- `test_pack_not_self_contained` — `a.tl` imports `missing.tl`: fails with error
+- `test_pack_stdlib_import_ok` — `#import <stdio.tl>`: succeeds (stdlib ignored)
+- `test_pack_malformed_import_ok` — `#import "unterminated` (no closing quote): gracefully skipped
+- `test_pack_subdir_import` — `lib/a.tl` imports `../util.tl`: succeeds (relative path resolution)
 
 ---
 
@@ -221,13 +203,16 @@ Sub-Phase 4 adds code to existing `tlib.c` and tests to existing `test_tlib.c`. 
 | 1: Module Validation | `source_scanner.c` | Error on mismatch | Yes (error) | Complete |
 | 2: Export Scanning | `source_scanner.c` | Detection only | No | Complete |
 | 3: Export Warnings | `source_scanner.c` | Warning on mismatch | No (warning) | Complete |
-| 4: Self-Containment | `tlib.c` | Error on escape | Yes (error) | Remaining |
+| 4: Self-Containment | `tlib.c` | Error on escape | Yes (error) | Complete |
 
-### Key infrastructure built during Sub-Phases 1-3
+### Key infrastructure built
 
 - `source_scanner.c/.h` — extracted from `tess_exe.c` as a testable library
-- Scanner state machine handles strings, comments, conditional compilation, `[[export]]` detection
+- Callback-based `scan_directives()` core with 8-state state machine (strings, comments, `[[export]]`)
+- `tl_source_scanner_scan()` — full scanner with conditional compilation, module tracking, exports
+- `tl_source_scanner_collect_imports()` — lightweight import-only extraction (no scanner struct needed)
 - `modules_seen` (str->str map) and `export_seen` (str hashset) track scan results
 - `tl_source_scanner_validate()` — reusable validation function with structured result
 - `validate` CLI command — standalone validation without packing
-- 34 unit tests in `test_source_scanner.c` covering scanning and validation
+- `check_self_containment()` in `tlib.c` — archive integrity check using shared scanner
+- 38 unit tests in `test_source_scanner.c`, 5 self-containment tests in `test_tlib.c`
