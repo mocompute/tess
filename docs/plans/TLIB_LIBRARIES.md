@@ -2,9 +2,9 @@
 
 ## Summary
 
-Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Consumers include packages via a manifest file (with paths and version verification) or via `-l` flags (without version verification). The compiler performs whole-program compilation as usual. Access control has two levels: the manifest's `modules` list controls which modules consumers can import, and the `[[export]]` attribute controls which symbols within those modules are accessible.
+Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. Access control is at the module level: the `export()` declarations in `package.tl` control which modules consumers can import, and all symbols within those modules are accessible.
 
-This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged. A future `[[c_export]]` attribute may be introduced for C-compatible symbol export.
+This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged.
 
 ---
 
@@ -15,7 +15,7 @@ This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/
 
 **Notes:**
 - Every `.tl` file MUST have a `#module` directive before any definitions. The parser will error if it encounters a definition before seeing `#module`.
-- Module names are discovered at load time by parsing `#module` declarations (because `#module` directives may be conditional inside `#ifdef`/`#endif`). The manifest's `modules` field separately declares which discovered modules are *public*--this is for access control, not discovery.
+- Module names are discovered at load time by parsing `#module` declarations (because `#module` directives may be conditional inside `#ifdef`/`#endif`). The `export()` declarations in `package.tl` separately declare which discovered modules are *public*--this is for access control, not discovery.
 
 **Import semantics:**
 
@@ -59,50 +59,23 @@ Three forms of `#import` serve different purposes:
 |--------|---------|------------|
 | `#import "file.tl"` | Local file import | Relative to importing file, then `-I` paths |
 | `#import <file.tl>` | Standard library import | Standard library paths (`-S` paths) |
-| `#import ModuleName` | Package module import | Modules from included packages (via manifest or `-l`) |
+| `#import ModuleName` | Package module import | Modules from included packages (via `package.tl`) |
 
 The unquoted form (`#import ModuleName`) is **only** for modules provided by packages. Local project modules must use the quoted form with a file path.
 
 ### Package Dependencies
 
-When `tess pack` encounters an import that resolves to a module from another package (not a local file), it records that package as a dependency in the metadata. The source from external packages is **not** bundled--only local source files are included.
+When `tess pack` encounters an import that resolves to a module from another package (not a local file), it records that package as a dependency in the `.tlib` archive metadata. The source from external packages is **not** bundled--only local source files are included.
 
-**Dependency format:** `PackageName=Version` (e.g., `Utils=1.2.0`)
+Consumers only need to declare their **direct** dependencies in `package.tl` via `depend()`. When the compiler loads a package, it reads the archive's dependency metadata and automatically resolves transitive dependencies from `depend_path()` directories, verifying version equality. See Phases 8 and 9 for the full resolution algorithm.
 
-Version is always required. In the binary archive format, dependencies are stored as individual entries in a u16 length-prefixed array.
+The binary encoding of dependencies in the `.tlib` archive is described in the Archive Format section.
 
-When compiling, if a package declares dependencies, the compiler resolves them automatically:
-1. Search `-L` library paths (CLI) or `lib_path` directories (manifest) for `<PackageName>.tlib`
-2. Verify the provided package's version matches exactly (strict equality)
-3. Recurse: load transitive dependencies the same way
-4. Error if a dependency cannot be found, with a message naming the missing package and which package requires it
+### Module-Level Access Control
 
-Consumers only need to declare their **direct** dependencies. Transitive dependencies are resolved automatically from search paths.
+Access control is purely at the module level. The `export()` declarations in `package.tl` declare which modules are part of the package's public API. All symbols within an exported module are accessible to consumers. Modules not exported are internal and cannot be imported by consumer code.
 
-**Future: Hash verification**
-
-A future extension will add optional hash verification for reproducible builds:
-
-```
-Utils=1.2.0#a1b2c3d4e5f6...
-```
-
-The hash covers a canonical representation of the package content (platform-independent):
-- Package name and version
-- Sorted list of (filename, content) pairs
-- Uses a standard hash algorithm (e.g., SHA-256, truncated for readability)
-
-This ensures byte-for-byte reproducibility regardless of when or where the package was created.
-
-### `[[export]]` as API Boundary
-
-- `[[export]]` marks a symbol as part of the library's public API
-- `tess pack` scans for `[[export]]` annotations and emits warnings to give authors early feedback:
-  - Warning if a module listed in `modules` has zero `[[export]]` symbols (likely a mistake)
-  - Warning if a module has `[[export]]` symbols but isn't listed in `modules` (may be unintentional)
-- `[[export]]` is ignored by `tess exe` on standalone files (no packages)
-- `[[export]]` is enforced when `tess exe` compiles a program that includes packages: consumer code may only reference `[[export]]`-annotated symbols from the package's modules
-- A future `[[c_export(name)]]` variant may allow custom symbol naming for C-compatible libraries
+Library authors control their API surface by organizing code into public and internal modules. For example, a package might expose `MathUtils` while keeping `MathUtils.Internal` unlisted. This is simpler than symbol-level visibility and encourages clean module boundaries.
 
 ### Standard Library Exclusion
 
@@ -110,7 +83,7 @@ Standard library files are excluded from `.tlib` archives. The consumer's compil
 
 ### Whole-Program Compilation with Tree Shaking
 
-When packages are included (via manifest or `-l`), all modules from all packages are loaded into the global namespace. The compiler performs whole-program compilation, and tree shaking at the end of the pipeline discards code not referenced by the program.
+When packages are included (via `package.tl`), all modules from all packages are loaded into the global namespace. The compiler performs whole-program compilation, and tree shaking at the end of the pipeline discards code not referenced by the program.
 
 ### Diamond Dependencies
 
@@ -126,13 +99,13 @@ This example walks through a library producer publishing a `MathUtils` package (
 
 First, assume a logging package exists. In this example, the **package name** ("LoggingLib") differs from the **module name** ("Logger") to illustrate that they are independent--they may also be the same:
 
-**LoggingLib's manifest:**
-```
-[package]
-name = LoggingLib
-version = 2.0.0
-author = Bob
-modules = [Logger]
+**LoggingLib's `package.tl`:**
+```tl
+format(1)
+package("LoggingLib")
+version("2.0.0")
+author("Bob")
+export("Logger")
 ```
 
 **LoggingLib's module (logger.tl):**
@@ -141,12 +114,12 @@ modules = [Logger]
 
 #import <stdio.tl>
 
-[[export]] warn(msg) {
+warn(msg) {
   c_fprintf(c_stderr, "[WARN] %s\n", msg)
   void
 }
 
-[[export]] error(msg) {
+error(msg) {
   c_fprintf(c_stderr, "[ERROR] %s\n", msg)
   void
 }
@@ -154,17 +127,17 @@ modules = [Logger]
 
 Built with:
 ```bash
-tess pack -m manifest.toml logger.tl -o LoggingLib.tlib
+tess pack logger.tl -o LoggingLib.tlib
 ```
 
-Package names and module names are independent (they may differ or be the same). Package names appear in manifests and dependency metadata. Module names appear in source code (`#import Logger`, `Logger.error(...)`).
+The compiler auto-discovers `package.tl` in the current working directory. Package names and module names are independent (they may differ or be the same). Package names appear in `package.tl` and dependency metadata. Module names appear in source code (`#import Logger`, `Logger.error(...)`).
 
 ### Producer: Creating a Package with Dependencies
 
 **Directory structure:**
 ```
 mathutils/
-  manifest.toml
+  package.tl
   libs/
     LoggingLib.tlib
   src/
@@ -178,31 +151,28 @@ mathutils/
 
 #import "internal.tl"    // adds internal.tl to compilation unit
 
-// Public API (exported)
-[[export]] clamp(x, lo, hi) {
-  _validate_range(lo, hi)    // same-module call
+clamp(x, lo, hi) {
+  MathUtils.Internal.validate_range(lo, hi)
   if x < lo { lo }
   else if x > hi { hi }
   else { x }
 }
 
-[[export]] lerp(a, b, t) {
+lerp(a, b, t) {
   a + (b - a) * t
-}
-
-// Internal helper (not exported)
-_validate_range(lo, hi) {
-  if lo > hi { MathUtils.Internal.fatal("invalid range") }
 }
 ```
 
-**src/internal.tl** -- internal module (not exported):
+**src/internal.tl** -- internal module (not listed in `export()`):
 ```tl
 #module MathUtils.Internal
 
 #import Logger    // package dependency (unquoted)
 
-// Internal function (not exported)
+validate_range(lo, hi) {
+  if lo > hi { fatal("invalid range") }
+}
+
 fatal(msg) {
   Logger.error(msg)    // use the Logger package
   c_exit(1)
@@ -210,27 +180,25 @@ fatal(msg) {
 }
 ```
 
-Note: Every file must have a `#module` directive. Internal implementation uses a submodule (`MathUtils.Internal`) whose symbols are not exported, so consumers cannot access them.
+Note: Every file must have a `#module` directive. `MathUtils.Internal` is not listed in `export()`, so consumers cannot import it or access its symbols. All symbols in the exported `MathUtils` module are accessible to consumers.
 
-**manifest.toml:**
-```
-[package]
-name = MathUtils
-version = 1.0.0
-author = Alice
-modules = [MathUtils]    # only public module; MathUtils.Internal is internal
-lib_path = [libs/]
+**package.tl:**
+```tl
+format(1)
+package("MathUtils")
+version("1.0.0")
+author("Alice")
+export("MathUtils")    // only public module; MathUtils.Internal is internal
 
-[depend.LoggingLib]
-version = 2.0.0
-path = libs/LoggingLib.tlib    # optional: overrides lib_path for this package
+depend("LoggingLib", "2.0.0")
+depend_path("./libs")
 ```
 
-Note: `MathUtils.Internal` is not listed in `modules`, so consumers cannot import it. The manifest references the **package name** ("LoggingLib"), while the source code uses the **module name** (`#import Logger`, `Logger.error(...)`).
+Note: `MathUtils.Internal` is not listed in `export()`, so consumers cannot import it. `package.tl` references the **package name** ("LoggingLib"), while the source code uses the **module name** (`#import Logger`, `Logger.error(...)`).
 
 **Build the package:**
 ```bash
-tess pack -m manifest.toml src/math.tl -o MathUtils.tlib
+tess pack src/math.tl -o MathUtils.tlib
 ```
 
 The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tlib). The metadata records:
@@ -242,7 +210,7 @@ The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT Log
 **Directory structure:**
 ```
 myapp/
-  manifest.toml
+  package.tl
   libs/
     MathUtils.tlib
     LoggingLib.tlib    # transitive dependency
@@ -255,7 +223,7 @@ myapp/
 #module main
 
 #import MathUtils    // unquoted = package module
-// #import MathUtils.Internal          // ERROR: not in package's modules list
+// #import MathUtils.Internal          // ERROR: not in package's export()
 
 main() {
   x := MathUtils.clamp(150, 0, 100)
@@ -264,40 +232,34 @@ main() {
   y := MathUtils.lerp(0.0, 10.0, 0.5)
   c_printf("lerp: %f\n", y)       // prints "lerp: 5.0"
 
-  // MathUtils._validate_range(1, 2)      // ERROR: not [[export]]ed
+  // MathUtils.Internal.fatal("x")        // ERROR: MathUtils.Internal not in export()
 
   0
 }
 ```
 
-**Option A: With manifest (version verification):**
+**package.tl:**
+```tl
+format(1)
+package("MyApp")
+version("0.1.0")
 
-**manifest.toml:**
-```
-[package]
-name = MyApp
-version = 0.1.0
-lib_path = [libs/]    # search paths for transitive dependency resolution
-
-[depend.MathUtils]
-version = 1.0.0
-path = libs/MathUtils.tlib    # optional: overrides lib_path for this package
-# LoggingLib is NOT listed -- resolved automatically from lib_path
+depend("MathUtils", "1.0.0")
+depend_path("./libs")
+// LoggingLib is NOT listed -- resolved automatically from depend_path
 ```
 
 ```bash
-tess exe -m manifest.toml src/main.tl -o myapp
+tess exe src/main.tl -o myapp
 ```
 
-**Option B: Without manifest (quick and simple):**
+The compiler auto-discovers `package.tl` in the current working directory, loads declared dependencies, and
+verifies versions match. Consumers only declare **direct** dependencies. The compiler reads MathUtils's
+`depends` field (`"LoggingLib", "2.0.0"`), searches `depend_path()` directories for `LoggingLib.tlib`,
+verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the
+compiler emits an error naming the missing package and which package requires it.
 
-```bash
-tess exe src/main.tl -l libs/MathUtils.tlib -L libs/ -o myapp
-```
-
-In both cases, consumers only declare **direct** dependencies. The compiler reads MathUtils's `depends` field (`LoggingLib=2.0.0`), searches the library paths for `LoggingLib.tlib`, verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
-
-Both options produce the same executable. Option A verifies all package versions match; Option B uses whatever versions are in the `.tlib` files.
+A `package.tl` is required for any build that uses packages. There are no `-l` or `-L` CLI flags — all dependency information comes from `package.tl`.
 
 ---
 
@@ -353,9 +315,13 @@ All metadata fields use u16 (big-endian) for lengths and counts, giving a maximu
 
 **Dependency string format:** `PackageName=Version[#Hash]`
 
+Version is always required. Each dependency is stored as a u16 length-prefixed UTF-8 string.
+
 Examples:
 - `Utils=1.2.0` -- requires Utils version 1.2.0
 - `Utils=1.2.0#a1b2c3d4...` -- with hash verification (future)
+
+**Future: Hash verification.** A future extension will add optional hash verification for reproducible builds. The hash would cover a canonical representation of the package content (platform-independent): package name and version, sorted list of (filename, content) pairs, using a standard hash algorithm (e.g., SHA-256, truncated for readability). This ensures byte-for-byte reproducibility regardless of when or where the package was created.
 
 ### Payload (before compression)
 
@@ -452,7 +418,7 @@ High-level operations in `src/tess/src/tlib.c`:
 - `tl_tlib_pack()`: Resolves imports, excludes stdlib, computes relative paths
 - `tl_tlib_unpack()`: Extracts files or lists contents
 
-**Limitations:** No manifest support, no metadata in archive.
+**Limitations:** No `package.tl` support, no metadata in archive.
 
 #### Phase 4: Archive Metadata ✓
 
@@ -487,7 +453,7 @@ typedef struct {
 
 **Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, depends, depends-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
 
-**CLI flags for testing** (temporary until manifest support in Phase 5):
+**CLI flags for testing** (temporary until `package.tl` support in Phase 5):
 
 ```bash
 tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" src/*.tl -o MyLib.tlib
@@ -501,74 +467,115 @@ tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" 
 - `test_metadata_roundtrip()` - all fields preserved through write/read cycle
 - `test_metadata_empty_fields()` - optional fields handle empty strings correctly
 
-#### Phase 5: Manifest Parser ✓
+#### Phase 5: Package Manifest (`package.tl`) — needs rewrite
 
-Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.h`.
+**Previous implementation:** INI-like manifest parser in `manifest.c`/`manifest.h` with 14 tests in `test_manifest.c`. This is being replaced (see Design Change Log).
 
-**Format:** A simple line-oriented format (not TOML). Parsing rules:
+**New design:** `package.tl` is a file at the package root using a function-call DSL that is valid TL syntax. The existing TL parser parses it into AST nodes, and a DSL interpreter walks the AST to extract metadata.
 
-- `[section]` and `[section.subsection]` headers (e.g., `[package]`, `[depend.LoggingLib]`)
-- `key = value` — values are unquoted, end at newline, trimmed of whitespace. Quotes are disallowed (parser error if `"` appears in a value)
-- `key = [a, b, c]` — arrays of unquoted, comma-separated values. Array elements must not contain spaces (parser error if they do)
-- `# comments` (line comments)
-- Blank lines are ignored
+**Format:**
+
+```tl
+format(1)
+package("MathUtils")
+version("1.0.0")
+author("Alice")
+export("MathUtils", "OtherModule")
+
+depend("LoggingLib", "2.0.0")
+depend("OtherLib", "1.2.3", "./vendor/OtherLib.tlib")
+depend_optional("WinAPI", "1.0.0")
+depend_path("./libs")
+depend_path("./vendor")
+```
+
+**DSL functions:**
+
+| Function | Arguments | Required | Description |
+|----------|-----------|----------|-------------|
+| `format(n)` | 1 integer | Yes | DSL format version (currently 1). Checked first; error if unsupported. |
+| `package(name)` | 1 string | Yes | Package name |
+| `version(ver)` | 1 string | Yes | Version string |
+| `author(name)` | 1 string | No | Author name or email |
+| `export(mod, ...)` | 1+ strings | For `tess pack` | Exported module names (public API) |
+| `depend(name, ver)` | 2 strings | No | Required dependency (name + version) |
+| `depend(name, ver, path)` | 3 strings | No | Required dependency with explicit path override |
+| `depend_optional(name, ver)` | 2 strings | No | Optional dependency |
+| `depend_optional(name, ver, path)` | 3 strings | No | Optional dependency with explicit path override |
+| `depend_path(dir)` | 1 string | No | Add a dependency search path (accumulates) |
+
+**Parsing approach:**
+1. Parse `package.tl` with the existing TL parser to produce an AST
+2. Walk the top-level AST nodes, expecting only function call expressions
+3. Check `format()` first — error if missing or unsupported version
+4. Interpret each remaining call by name: extract string literal arguments, populate metadata struct
+5. Error on unknown function names, wrong argument counts, or non-string arguments (except `format()` which takes an integer)
+
+**Auto-discovery:** The compiler looks for `package.tl` in the current working directory when running `tess pack` or `tess exe`. If found, metadata and dependencies are loaded from it. `package.tl` is required for any build that uses packages — there are no `-l`/`-L` CLI flags. If `package.tl` is not found and the source code uses `#import ModuleName` (unquoted package imports), the compiler emits an error.
+
+**Data structures** (replacing the old `tl_manifest` types):
 
 ```c
 typedef struct {
-    str  name;           // package name (required)
-    str  version;        // version string (required)
-    str  author;         // author name/email (may be empty)
-    str *modules;        // array of public module names
-    u32  module_count;
-    str *lib_path;       // array of library search paths
-    u32  lib_path_count;
-} tl_manifest_package;
+    u32  format;          // from format(), currently 1
+    str  name;            // from package()
+    str  version;         // from version()
+    str  author;          // from author(), may be empty
+    str *exports;         // from export() calls
+    u32  export_count;
+    str *depend_paths;    // from depend_path() calls
+    u32  depend_path_count;
+} tl_package_info;
 
 typedef struct {
-    str name;            // dependency package name (from section header)
-    str version;         // required version
-    str path;            // optional explicit path override
-} tl_manifest_dep;
+    str name;             // dependency package name
+    str version;          // required version
+    str path;             // optional explicit path override (may be empty)
+} tl_package_dep;
 
 typedef struct {
-    tl_manifest_package  package;
-    tl_manifest_dep     *deps;
-    u32                  dep_count;
-    tl_manifest_dep     *optional_deps;
-    u32                  optional_dep_count;
-} tl_manifest;
+    tl_package_info  info;
+    tl_package_dep  *deps;
+    u32              dep_count;
+    tl_package_dep  *optional_deps;
+    u32              optional_dep_count;
+} tl_package;
 ```
 
-**API:**
-- `tl_manifest_parse()`: Parse manifest from a buffer (all strings allocated from the provided arena)
-- `tl_manifest_parse_file()`: Read file then parse
+**Required fields:**
+- `format()` is always required and must be the first call
+- `package()` and `version()` are always required
+- `export()` is required for `tess pack`, not required for `tess exe`
+- All other fields are optional
 
-**Design notes:**
-- Used `str *` arrays with `u32` counts instead of `str_sized` — simpler to build incrementally during parsing with `str_array` + `array_push`, then copy `.v` and `.size` to the output struct.
-- Unknown keys emit a warning but don't fail (forward compatibility). Unknown sections are skipped with a warning.
-- Errors printed to stderr with `manifest:LINE:` prefix for line-level errors or `manifest:` prefix for validation errors.
+**Unit tests** (replacing the 14 tests in `test_manifest.c`):
+- Basic package with all fields
+- Minimal package (required fields only)
+- Multiple `depend()` and `depend_optional()` calls
+- Multiple `depend_path()` calls accumulate
+- `depend()` with 3-argument path override
+- Missing required fields (format, package, version) produce errors
+- `format()` must be first call; error if not
+- Unsupported format version produces error
+- Unknown function names produce errors
+- Wrong argument counts produce errors
+- Non-string arguments produce errors
+- `export()` with multiple arguments
 
-**Unit tests** in `src/tess/src/test_manifest.c` (14 tests):
-- `test_basic_package` / `test_minimal_package` — all fields and required-only parsing
-- `test_comments_and_blanks` — comments and blank lines ignored
-- `test_dependencies` / `test_optional_dependencies` / `test_multiple_deps` — `[depend.X]` and `[depend-optional.X]` sections
-- `test_missing_name` / `test_missing_version` / `test_missing_dep_version` — required field validation
-- `test_quotes_rejected` / `test_array_spaces_rejected` — format enforcement
-- `test_empty_array` / `test_whitespace_trimming` — edge cases
-- `test_full_manifest` — complete manifest matching the design doc example
+#### Phase 5b: Package.tl Integration with Pack Command — needs rewrite
 
-#### Phase 5b: Manifest Integration with Pack Command ✓
+**Previous implementation:** `-m manifest.toml` flag in `tess_exe.c`. Being replaced by auto-discovery (see Design Change Log).
 
-Implemented in `src/tess/src/tess_exe.c`:
+**New design:** `tess pack` auto-discovers `package.tl` in the current working directory:
 
 ```bash
-tess pack -m manifest.toml foo.tl -o Foo.tlib
+tess pack src/math.tl -o MathUtils.tlib
 ```
 
-When `-m` is provided, metadata is read from the manifest instead of command-line flags. `[depend]` sections are parsed but not validated (dependencies aren't loaded yet).
+When `package.tl` is found, metadata is read from it. `depend()` declarations are parsed but not validated (dependencies aren't loaded yet). The `-m` flag is removed.
 
-- Remove support for `--name`, `--author`, `--version`, and `--modules` flags
-- Integration test: `test_pack_with_manifest` in `src/tess/src/test_tlib.c`
+- Remove support for `-m`, `--name`, `--author`, `--version`, and `--modules` flags
+- Integration test: `test_pack_with_package_tl` in `src/tess/src/test_tlib.c`
 
 #### Phase 6: Module Discovery (partial) ✓
 
@@ -597,18 +604,14 @@ The remaining parts of Phase 6 are listed under "Remaining Phases" below as Phas
 
 **Detailed implementation plan:** [TLIB_PHASE_6B.md](TLIB_PHASE_6B.md)
 
-**Goal:** Use discovered modules to validate against manifest and enforce self-containment.
+**Goal:** Use discovered modules to validate against `package.tl` and enforce self-containment.
 
-Implemented in four sub-phases:
+Implemented in two sub-phases (export scanning was removed — see Design Change Log):
 
-1. **Module Validation** — `tl_source_scanner_validate()` cross-checks manifest modules against discovered `#module` directives. Errors on missing modules, verbose-only listing of internal modules.
-2. **`[[export]]` Scanning** — State machine detects `[[export]]` at line start with string/comment awareness. Tracks which modules have exports in `export_seen` hashset.
-3. **`[[export]]` Warnings** — Warns if public module has no exports, or non-public module has exports. Warnings don't block pack.
-4. **Self-Containment** — `check_self_containment()` in `tlib.c` verifies every quoted `#import` resolves to another file in the archive. Uses shared `tl_source_scanner_collect_imports()` for correct string/comment handling.
+1. **Module Validation** — `tl_source_scanner_validate()` cross-checks `export()` modules against discovered `#module` directives. Errors on missing modules, verbose-only listing of internal modules.
+2. **Self-Containment** — `check_self_containment()` in `tlib.c` verifies every quoted `#import` resolves to another file in the archive. Uses shared `tl_source_scanner_collect_imports()` for correct string/comment handling.
 
 Key infrastructure: callback-based `scan_directives()` core in `source_scanner.c` shared by the full scanner and the lightweight import collector. `validate` CLI command for standalone validation.
-
-43 unit tests across `test_source_scanner.c` and `test_tlib.c`.
 
 ---
 
@@ -622,36 +625,31 @@ The remaining work is organized into phases that build incrementally. Each phase
 
 **Implementation:**
 
-Add `-l` and `-L` flags to `tess exe`:
+The compiler auto-discovers `package.tl` in the current working directory and loads dependencies from it:
 
 ```bash
-tess exe main.tl -l Foo.tlib -o main            # explicit package
-tess exe main.tl -l Foo.tlib -L libs/ -o main    # with search path for transitive deps
+tess exe main.tl -o main
 ```
 
-- `-l <file.tlib>`: Load a specific package file (direct dependency)
-- `-L <dir>`: Add a library search path for automatic transitive dependency resolution
-
 The compilation process:
-1. Load each `-l` package via `tl_tlib_read()`
-2. Extract source files into arena-allocated buffers, marking each as package source (boolean flag)
+1. Auto-discover and parse `package.tl`
+2. Load each `depend()` package via `tl_tlib_read()`, resolving from explicit paths or `depend_path()` directories
+3. Extract source files into arena-allocated buffers
 3. All modules from all packages enter the single global namespace
 4. Build two sets from package metadata and source scanning:
    - **All package modules**: every module discovered from package source via `#module` directives
-   - **Listed modules**: modules declared in each package's `modules` metadata (the public API)
+   - **Exported modules**: modules declared in the package's `export()` (the public API)
 5. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
 6. Feed all source (local + package) into the existing compilation pipeline
 7. Tree shaking removes unreferenced code
 
-All package source is loaded upfront and unconditionally — there is no lazy loading triggered by imports. `#import ModuleName` (unquoted) is a declaration of intent to use a package module, resolved against the listed modules set, not a trigger to load package files.
+All package source is loaded upfront and unconditionally — there is no lazy loading triggered by imports. `#import ModuleName` (unquoted) is a declaration of intent to use a package module, resolved against the exported modules set, not a trigger to load package files.
 
-**No file→package provenance tracking.** Instead, two lighter mechanisms provide access control in later phases:
-- The two module sets (all package modules vs listed modules) enable module-level access control (Phase 10)
-- The boolean "is package source" flag per file enables symbol-level access control (Phase 11)
+**No file→package provenance tracking.** The two module sets (all package modules vs exported modules) enable module-level access control (Phase 10). No per-file "is package source" flag is needed since there is no symbol-level access control.
 
 **Unquoted import resolution:**
 
-Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no angle brackets) as a package module import. The import resolver checks that `ModuleName` exists in the listed modules set. If the module exists in all package modules but is not listed, it is an internal module and the import is rejected. If not found at all, an error is emitted.
+Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no angle brackets) as a package module import. The import resolver checks that `ModuleName` exists in the exported modules set. If the module exists in all package modules but is not exported, it is an internal module and the import is rejected. If not found at all, an error is emitted.
 
 **Validation:**
 - Integration test: Create a simple package, compile a consumer that imports it
@@ -664,8 +662,8 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 **Implementation:**
 
 **During pack:**
-1. Load dependency packages from manifest's `[depend]` paths
-2. Verify each package's version matches manifest declaration
+1. Load dependency packages from `package.tl`'s `depend()` declarations (resolved via `depend_path()` or explicit path)
+2. Verify each package's version matches `depend()` declaration
 3. Scan dependencies to discover their modules
 4. Build module → package mapping for dependencies
 5. When packing source uses `#import ModuleName`:
@@ -676,7 +674,7 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 
 **During compile (transitive dependency resolution):**
 1. When loading a package, check its `depends` field
-2. For each required dependency, search `-L` paths (CLI) or `lib_path` directories (manifest) for `<PackageName>.tlib`
+2. For each required dependency, search `depend_path()` directories for `<PackageName>.tlib`
 3. Read metadata and verify version matches exactly
 4. Recurse: load the transitive dependency's own `depends` the same way
 5. Detect cycles during resolution (A→B→A) and emit an error listing the cycle path
@@ -686,55 +684,54 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 - Integration test: MathUtils→LoggingLib example from this document
 - Test version mismatch detection
 - Test missing transitive dependency detection (helpful error message)
-- Test transitive dependency auto-resolution from `-L` path
+- Test transitive dependency auto-resolution from `depend_path()`
 - Test circular dependency detection
 
-#### Phase 9: Manifest-Based Compilation
+#### Phase 9: Package.tl-Based Compilation
 
-**Goal:** `tess exe` can use a manifest for version-verified compilation.
+**Goal:** `tess exe` auto-discovers `package.tl` and uses it for version-verified compilation.
 
 **Implementation:**
 
 ```bash
-tess exe -m manifest.toml main.tl -o main
+tess exe src/main.tl -o main
 ```
 
-When `-m` is provided:
-1. Parse manifest for `[depend]` sections (direct dependencies only)
-2. Load packages from manifest paths (or resolve from `lib_path` if no explicit `path`)
-3. Verify versions match manifest declarations
-4. Auto-resolve transitive dependencies from `lib_path` directories
-5. `-l` and `-L` flags are disallowed when `-m` is used
+The compiler auto-discovers `package.tl` in the current working directory:
+1. Parse `package.tl` for `depend()` declarations (direct dependencies only)
+2. Load packages from explicit paths or resolve from `depend_path()` directories
+3. Verify versions match `depend()` declarations
+4. Auto-resolve transitive dependencies from `depend_path()` directories
 
-Consumers only list direct dependencies in `[depend]` sections. Transitive dependencies are resolved automatically from `lib_path`. This enables reproducible builds with pinned versions for direct dependencies while keeping manifests concise.
+Consumers only list direct dependencies via `depend()`. Transitive dependencies are resolved automatically from `depend_path()`. This enables reproducible builds with pinned versions for direct dependencies while keeping `package.tl` concise.
 
 **Validation:**
-- Integration test: compile with manifest, verify version checking
-- Test transitive dependency auto-resolution from `lib_path`
-- Test that `-l`/`-L` and `-m` together produce an error
-- Test dependency resolution when `path` is omitted (resolved from `lib_path`)
+- Integration test: compile with `package.tl`, verify version checking
+- Test transitive dependency auto-resolution from `depend_path()`
+- Test dependency resolution with explicit path (3-argument `depend()`)
+- Test error when `package.tl` is missing but package imports are used
 
 #### Phase 10: Module-Level Access Control
 
-**Goal:** Consumers can only import modules listed in a package's `modules` metadata.
+**Goal:** Consumers can only import modules listed in a package's `export()` declarations.
 
 **Implementation:**
 
 Access control uses two sets built during package loading (Phase 7):
 - **All package modules**: every module discovered from package source
-- **Listed modules**: modules declared in packages' `modules` metadata
+- **Exported modules**: modules declared in packages' `export()` declarations
 
 **Unquoted import resolution** (for local files):
-1. If `ModuleName` is in the listed modules set → allowed
-2. If `ModuleName` is in all package modules but not listed → error: "module 'X' is not a public module"
+1. If `ModuleName` is in the exported modules set → allowed
+2. If `ModuleName` is in all package modules but not exported → error: "module 'X' is not a public module"
 3. If `ModuleName` is not found → error: "module 'X' not found"
 
 **Qualified access** (`Module.symbol`) in local files:
-- If `Module` is in all package modules but not in listed modules → error (accessing internal package module)
-- If `Module` is in listed modules → allowed (symbol-level check deferred to Phase 11)
+- If `Module` is in all package modules but not in exported modules → error (accessing internal package module)
+- If `Module` is in exported modules → allowed (all symbols accessible)
 - If `Module` is not in package modules → local module, no restrictions
 
-Local files are identified by the absence of the "is package source" flag (set during Phase 7 loading). Package source files are unrestricted — they can access any module freely, including unlisted modules from other packages.
+Package source files are unrestricted — they can access any module freely, including unlisted modules from other packages.
 
 **Known limitation:** Access control is not enforced between packages — only between consumer (local) code and packages.
 
@@ -744,40 +741,14 @@ Local files are identified by the absence of the "is package source" flag (set d
 - Test that local modules remain accessible without restrictions
 - Test that qualified access to an unlisted package module from local code is rejected
 
-#### Phase 11: Symbol-Level Access Control (`[[export]]`)
-
-**Goal:** Consumers can only access `[[export]]`-marked symbols from package modules.
-
-**Implementation:**
-
-1. Extend the parser to recognize `[[export]]` attribute on function and type definitions (structs/enums)
-2. During parsing, mark exported symbols in the AST
-3. During type inference, when a local file references `Module.symbol` where `Module` is a listed package module:
-   - Verify the symbol has `[[export]]` attribute
-   - If not, emit error: "symbol 'X' is not exported from module 'Y'"
-4. Package source files are unrestricted — they can access any symbol freely, including non-exported symbols from other packages
-
-The "is package source" boolean flag (set during package loading in Phase 7) determines whether access control applies. Local files (flag not set) are subject to `[[export]]` restrictions; package source (flag set) is not.
-
-**Known limitation:** `[[export]]` is not enforced between packages — only between consumer (local) code and packages. Package A can access non-exported symbols from Package B.
-
-**Future extension:** `[[c_export(name)]]` for C-compatible symbol naming.
-
-**Validation:**
-- Integration test: access exported function (works)
-- Integration test: access exported type (works)
-- Integration test: access non-exported symbol (error)
-- Integration test: access non-exported type (error)
-- Test that package-internal code can access non-exported symbols
-
-#### Phase 12: Comprehensive Test Suite
+#### Phase 11: Comprehensive Test Suite
 
 Final validation and edge case coverage:
 
 **Unit tests:**
 - `.tlib` write/read roundtrip (correct format, corruption detection)
 - Metadata field roundtrip (all fields, empty fields, special characters)
-- Manifest parsing (valid manifests, comments, missing fields, malformed)
+- `package.tl` parsing (valid packages, missing fields, malformed DSL)
 - Filename validation (rejects `..` escapes, absolute paths)
 - Module discovery (simple, conditional, edge cases)
 
@@ -787,7 +758,6 @@ Final validation and edge case coverage:
 - Pack dependency verification (missing dep, unused required dep, unused optional ok, version mismatch)
 - Compile dependency verification (missing package, version mismatch, transitive dep missing)
 - Module access control (import non-public module → error)
-- Symbol access control (access non-exported symbol → error)
 - Generics in a package specialize correctly in the consumer
 - Circular dependency detection (package A requires B, B requires A → error)
 
@@ -800,9 +770,9 @@ Final validation and edge case coverage:
 ### Phase Dependencies
 
 ```
-Phase 5 (Manifest Parser) ✓
+Phase 5 (Package.tl Parser) — needs rewrite
     ↓
-Phase 5b (Manifest Integration) ✓
+Phase 5b (Package.tl Integration) — needs rewrite
     ↓
 Phase 6 (Module Discovery — scanning) ✓
     ↓
@@ -812,21 +782,19 @@ Phase 7 (Basic Consumption)  ←── First end-to-end validation
     ↓
 Phase 8 (Dependencies)
     ↓
-Phase 9 (Manifest Compilation)
+Phase 9 (Package.tl Compilation)
     ↓
 Phase 10 (Module Access Control)
     ↓
-Phase 11 (Symbol Access Control)
-    ↓
-Phase 12 (Test Suite)
+Phase 11 (Test Suite)
 ```
 
 **Key validation points:**
-- After Phase 5: Manifest parser works standalone with full test coverage
-- After Phase 6/6b: Module discovery, validation, export scanning, and self-containment checking complete
+- After Phase 5: `package.tl` parser works standalone with full test coverage
+- After Phase 6/6b: Module discovery, validation, and self-containment checking complete
 - After Phase 7: Can pack and consume a simple library (no dependencies)
 - After Phase 8: Can handle library chains (A uses B)
-- After Phase 11: Full access control model working
+- After Phase 10: Full access control model working (module-level)
 
 Each phase can be merged independently, allowing incremental progress and early feedback on the design
 
@@ -836,13 +804,13 @@ Each phase can be merged independently, allowing incremental progress and early 
 
 ### Resolved
 
-- **Manifest format**: Use a simple line-oriented format (~200-300 lines parser). Features: `[section]`, `[section.subsection]` dotted headers, `key = value` (unquoted, quotes disallowed), `key = [a, b]` (arrays, no spaces in elements), and `# comments`. No inline tables. Simpler than TOML, covers all manifest needs.
+- **Package metadata format**: Use a `package.tl` file with a function-call DSL that is valid TL syntax. Parsed by the existing TL parser, interpreted as DSL. Replaces the previous INI-like manifest format. See Design Change Log.
 
 - **Circular dependencies**: Error at pack time. When building the dependency graph, detect cycles and report an error listing the cycle path (e.g., "circular dependency: A → B → C → A").
 
 - **Format version compatibility**: Keep v1 during development. The format is internal/experimental; no backwards compatibility needed.
 
-- **`[[export]]` on types**: `[[export]]` applies to functions and type definitions (structs/enums). A library that exports functions but not the types they return or accept is not useful to consumers. Phase 11 implements `[[export]]` for both functions and types.
+- **Symbol-level access control (`[[export]]`)**: Removed. Access control is purely at the module level via `export()` in `package.tl`. All symbols in an exported module are accessible. Authors control API surface by organizing code into public vs internal modules (e.g., `MathUtils` vs `MathUtils.Internal`). This is simpler and encourages clean module boundaries. See Design Change Log.
 
 - **Transitive dependency version conflicts**: Error on conflict. The single global module namespace means two versions of the same package cannot coexist--strict equality is a structural requirement, not a simplification. See "Single Global Module Namespace" section.
 
@@ -856,9 +824,64 @@ Each phase can be merged independently, allowing incremental progress and early 
 
 - **Module naming conflicts**: What error message when two packages define the same module? Should we include package paths in the error? Example: "module 'Utils' defined in both 'libs/A.tlib' and 'libs/B.tlib'"
 
-- **Optional dependencies for consumers**: How are `[depend-optional]` sections used during compilation? Options:
+- **Optional dependencies for consumers**: How are `depend_optional()` declarations used during compilation? Options:
   1. Consumer must explicitly enable them (e.g., `-D USE_WINAPI`)
   2. Auto-detect based on platform
-  3. Just provide them via `-l`; they're "optional" only for the producer
+  3. They're "optional" only for the producer — consumer provides what the package actually needs via their own `depend()`
 
   Recommendation: Option 3 for simplicity. Optional means "producer doesn't always use this dep"; consumer provides what the package actually needs.
+
+---
+
+## Design Change Log
+
+### Removed: `[[export]]` Symbol-Level Access Control
+
+**Change:** Removed `[[export]]` as a package visibility mechanism. Access control is now purely at the module level via `export()` in `package.tl`. All symbols within an exported module are accessible to consumers.
+
+**Rationale:** Simpler model — authors control their API surface by organizing code into public modules (declared in `export()`) and internal modules (not declared, e.g., `MathUtils.Internal`). No parser/AST changes needed for export attributes, no type inference changes to check export status on qualified access.
+
+**Phases affected:**
+- Phase 6b simplified (removed sub-phases 2 and 3)
+- Phase 7 simplified (no "is package source" flag needed)
+- Phase 10 simplified (listed modules → all symbols accessible, no deferred symbol check)
+- Phase 11 (Symbol-Level Access Control) eliminated entirely
+- Old Phase 12 (Test Suite) renumbered to Phase 11
+
+**Implementation cleanup required:**
+- Remove `[[export]]` state machine scanning in `source_scanner.c`
+- Remove `export_seen` hashset from scanner state
+- Remove export warning logic (public module with no exports, non-public module with exports)
+- Remove associated tests in `test_source_scanner.c`
+- The `[[export]]` attribute syntax remains valid in the language's general attribute system; it simply has no special meaning for package visibility
+
+### Replaced: INI Manifest with `package.tl` DSL
+
+**Change:** Replaced the INI-like `manifest.toml` with a `package.tl` file at the package root. The file uses a function-call DSL (`package()`, `version()`, `export()`, `depend()`, etc.) that is valid TL syntax, parsed by the existing TL parser and interpreted as a DSL.
+
+**Rationale:** Follows the `go.mod` model — every package (including consumer applications) has a single metadata file at its root. Using TL syntax means no separate parser is needed; the existing TL parser produces AST nodes that are interpreted as DSL calls. Auto-discovery from the current working directory simplifies the CLI (no `-m` flag).
+
+**Phases affected:**
+- Phase 5 (Manifest Parser) — full rewrite: INI parser replaced by TL parser + AST interpreter
+- Phase 5b (Manifest Integration) — `-m` flag replaced by auto-discovery
+- Phase 7 onward — all references to "manifest" updated to `package.tl`
+
+**Implementation cleanup required:**
+- Replace `manifest.c` and `manifest.h` with new `package.tl` interpreter
+- Replace all 14 tests in `test_manifest.c` with new `package.tl` tests
+- Remove `-m` flag handling from `tess_exe.c`
+- Update `tl_manifest` / `tl_manifest_package` / `tl_manifest_dep` types to `tl_package` / `tl_package_info` / `tl_package_dep`
+
+### Removed: `-l` and `-L` CLI Flags
+
+**Change:** Removed `-l` (load package) and `-L` (library search path) CLI flags. All dependency information must come from `package.tl`. A `package.tl` is required for any build that uses packages.
+
+**Rationale:** Simplifies the CLI and ensures a single source of truth for dependencies. Having two ways to specify dependencies (CLI flags vs `package.tl`) creates ambiguity about version verification behavior and complicates the compilation pipeline.
+
+**Phases affected:**
+- Phase 7 (Basic Consumption) — no longer adds `-l`/`-L` flags; loads from `package.tl` only
+- Phase 9 (Package.tl Compilation) — no longer needs to check for `-l`/`-L` and `package.tl` conflicts
+
+**Implementation cleanup required:**
+- Remove `-l` and `-L` flag parsing from `tess_exe.c`
+- Remove "without manifest" code paths
