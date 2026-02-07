@@ -971,37 +971,35 @@ static int pack_files(state *self) {
         opts.module_count = (u16)manifest.package.module_count;
     }
 
-    // Build requires array: "Name=Version" strings
+    // Build depends array: "Name=Version" strings
     if (manifest.dep_count > 0) {
         if (manifest.dep_count > UINT16_MAX) {
             fprintf(stderr, "error: too many dependencies (%u, max %u)\n", manifest.dep_count,
                     (unsigned)UINT16_MAX);
             return 1;
         }
-        opts.
-            requires
-        = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
-        opts.requires_count = (u16)manifest.dep_count;
+
+        opts.depends       = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
+        opts.depends_count = (u16)manifest.dep_count;
+
         for (u32 i = 0; i < manifest.dep_count; i++) {
-            opts.
-                requires[
-                        i] =
-                  str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
+            opts.depends[i] =
+              str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
         }
     }
 
-    // Build requires_optional array
+    // Build depends_optional array
     if (manifest.optional_dep_count > 0) {
         if (manifest.optional_dep_count > UINT16_MAX) {
             fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
                     manifest.optional_dep_count, (unsigned)UINT16_MAX);
             return 1;
         }
-        opts.requires_optional       = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
-        opts.requires_optional_count = (u16)manifest.optional_dep_count;
+        opts.depends_optional       = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
+        opts.depends_optional_count = (u16)manifest.optional_dep_count;
         for (u32 i = 0; i < manifest.optional_dep_count; i++) {
-            opts.requires_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
-                                                  manifest.optional_deps[i].version);
+            opts.depends_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
+                                                 manifest.optional_deps[i].version);
         }
     }
 

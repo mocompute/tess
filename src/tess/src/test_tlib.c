@@ -45,15 +45,15 @@ static tl_tlib_metadata make_test_metadata(allocator *alloc) {
     test_modules[0] = str_init(alloc, "Foo");
     test_modules[1] = str_init(alloc, "Bar");
     return (tl_tlib_metadata){
-      .name                    = str_init(alloc, "TestLib"),
-      .author                  = str_init(alloc, "Tester"),
-      .version                 = str_init(alloc, "1.0.0"),
-      .modules                 = test_modules,
-      .module_count            = 2,
-      .requires                = null,
-      .requires_count          = 0,
-      .requires_optional       = null,
-      .requires_optional_count = 0,
+      .name                   = str_init(alloc, "TestLib"),
+      .author                 = str_init(alloc, "Tester"),
+      .version                = str_init(alloc, "1.0.0"),
+      .modules                = test_modules,
+      .module_count           = 2,
+      .depends                = null,
+      .depends_count          = 0,
+      .depends_optional       = null,
+      .depends_optional_count = 0,
     };
 }
 
@@ -253,24 +253,22 @@ static int test_metadata_roundtrip(void) {
     modules[1] = str_init(alloc, "Utils");
     modules[2] = str_init(alloc, "Helper");
 
-    str
-        requires[
-          1];
-    requires[0] = str_init(alloc, "Lib=1.0.0");
+    str depends[1];
+    depends[0] = str_init(alloc, "Lib=1.0.0");
 
-    str requires_opt[1];
-    requires_opt[0]       = str_init(alloc, "Debug=0.5.0");
+    str depends_opt[1];
+    depends_opt[0]        = str_init(alloc, "Debug=0.5.0");
 
     tl_tlib_metadata meta = {
-      .name                    = str_init(alloc, "MetaTest"),
-      .author                  = str_init(alloc, "Alice"),
-      .version                 = str_init(alloc, "2.3.4"),
-      .modules                 = modules,
-      .module_count            = 3,
-      .requires                = requires,
-      .requires_count          = 1,
-      .requires_optional       = requires_opt,
-      .requires_optional_count = 1,
+      .name                   = str_init(alloc, "MetaTest"),
+      .author                 = str_init(alloc, "Alice"),
+      .version                = str_init(alloc, "2.3.4"),
+      .modules                = modules,
+      .module_count           = 3,
+      .depends                = depends,
+      .depends_count          = 1,
+      .depends_optional       = depends_opt,
+      .depends_optional_count = 1,
     };
 
     tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -294,13 +292,13 @@ static int test_metadata_roundtrip(void) {
     for (u16 i = 0; i < 3 && i < arc.metadata.module_count; i++) {
         error += !str_eq(arc.metadata.modules[i], modules[i]);
     }
-    error += (arc.metadata.requires_count != 1);
-    if (arc.metadata.requires_count >= 1) {
-        error += !str_eq(arc.metadata.requires[0], requires[0]);
+    error += (arc.metadata.depends_count != 1);
+    if (arc.metadata.depends_count >= 1) {
+        error += !str_eq(arc.metadata.depends[0], depends[0]);
     }
-    error += (arc.metadata.requires_optional_count != 1);
-    if (arc.metadata.requires_optional_count >= 1) {
-        error += !str_eq(arc.metadata.requires_optional[0], requires_opt[0]);
+    error += (arc.metadata.depends_optional_count != 1);
+    if (arc.metadata.depends_optional_count >= 1) {
+        error += !str_eq(arc.metadata.depends_optional[0], depends_opt[0]);
     }
 
     if (error) {
@@ -316,15 +314,15 @@ static int test_metadata_empty_fields(void) {
     make_temp_path(path, sizeof(path), "test_tlib_metadata_empty.tlib");
 
     tl_tlib_metadata meta = {
-      .name                    = str_init(alloc, "MinimalLib"),
-      .author                  = str_empty(),
-      .version                 = str_init(alloc, "0.1"),
-      .modules                 = null,
-      .module_count            = 0,
-      .requires                = null,
-      .requires_count          = 0,
-      .requires_optional       = null,
-      .requires_optional_count = 0,
+      .name                   = str_init(alloc, "MinimalLib"),
+      .author                 = str_empty(),
+      .version                = str_init(alloc, "0.1"),
+      .modules                = null,
+      .module_count           = 0,
+      .depends                = null,
+      .depends_count          = 0,
+      .depends_optional       = null,
+      .depends_optional_count = 0,
     };
 
     tl_tlib_entry entry = {"a.tl", 4, (byte const *)"x", 1};
@@ -346,8 +344,8 @@ static int test_metadata_empty_fields(void) {
     error += !str_eq(arc.metadata.version, meta.version);
     error += (arc.metadata.module_count != 0);
     error += (arc.metadata.modules != null);
-    error += (arc.metadata.requires_count != 0);
-    error += (arc.metadata.requires_optional_count != 0);
+    error += (arc.metadata.depends_count != 0);
+    error += (arc.metadata.depends_optional_count != 0);
 
     if (error) {
         fprintf(stderr, "  empty field handling failed (%d errors)\n", error);
@@ -366,15 +364,15 @@ static int test_metadata_unicode(void) {
     unicode_modules[1]    = str_init(alloc, "Функция");
 
     tl_tlib_metadata meta = {
-      .name                    = str_init(alloc, "Bibliothèque"),
-      .author                  = str_init(alloc, "日本語 Author™"),
-      .version                 = str_init(alloc, "1.0.0-β"),
-      .modules                 = unicode_modules,
-      .module_count            = 2,
-      .requires                = null,
-      .requires_count          = 0,
-      .requires_optional       = null,
-      .requires_optional_count = 0,
+      .name                   = str_init(alloc, "Bibliothèque"),
+      .author                 = str_init(alloc, "日本語 Author™"),
+      .version                = str_init(alloc, "1.0.0-β"),
+      .modules                = unicode_modules,
+      .module_count           = 2,
+      .depends                = null,
+      .depends_count          = 0,
+      .depends_optional       = null,
+      .depends_optional_count = 0,
     };
 
     tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -415,15 +413,15 @@ static int test_corrupted_metadata(void) {
     test_mods[0]          = str_init(alloc, "Foo");
 
     tl_tlib_metadata meta = {
-      .name                    = str_init(alloc, "TestLib"),
-      .author                  = str_init(alloc, "Author"),
-      .version                 = str_init(alloc, "1.0.0"),
-      .modules                 = test_mods,
-      .module_count            = 1,
-      .requires                = null,
-      .requires_count          = 0,
-      .requires_optional       = null,
-      .requires_optional_count = 0,
+      .name                   = str_init(alloc, "TestLib"),
+      .author                 = str_init(alloc, "Author"),
+      .version                = str_init(alloc, "1.0.0"),
+      .modules                = test_mods,
+      .module_count           = 1,
+      .depends                = null,
+      .depends_count          = 0,
+      .depends_optional       = null,
+      .depends_optional_count = 0,
     };
 
     tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -572,25 +570,21 @@ static int test_pack_with_manifest(void) {
         opts.module_count = (u16)manifest.package.module_count;
     }
 
-    // Build requires
+    // Build depends
     if (manifest.dep_count > 0) {
-        opts.
-            requires
-        = alloc_malloc(alloc, manifest.dep_count * sizeof(str));
-        opts.requires_count = (u16)manifest.dep_count;
+        opts.depends       = alloc_malloc(alloc, manifest.dep_count * sizeof(str));
+        opts.depends_count = (u16)manifest.dep_count;
         for (u32 i = 0; i < manifest.dep_count; i++) {
-            opts.
-                requires[
-                        i] = str_cat_3(alloc, manifest.deps[i].name, S("="), manifest.deps[i].version);
+            opts.depends[i] = str_cat_3(alloc, manifest.deps[i].name, S("="), manifest.deps[i].version);
         }
     }
 
-    // Build requires_optional
+    // Build depends_optional
     if (manifest.optional_dep_count > 0) {
-        opts.requires_optional       = alloc_malloc(alloc, manifest.optional_dep_count * sizeof(str));
-        opts.requires_optional_count = (u16)manifest.optional_dep_count;
+        opts.depends_optional       = alloc_malloc(alloc, manifest.optional_dep_count * sizeof(str));
+        opts.depends_optional_count = (u16)manifest.optional_dep_count;
         for (u32 i = 0; i < manifest.optional_dep_count; i++) {
-            opts.requires_optional[i] =
+            opts.depends_optional[i] =
               str_cat_3(alloc, manifest.optional_deps[i].name, S("="), manifest.optional_deps[i].version);
         }
     }
@@ -633,16 +627,16 @@ static int test_pack_with_manifest(void) {
         error += !str_eq(arc.metadata.modules[0], S("Foo"));
     }
 
-    // Verify requires
-    error += (arc.metadata.requires_count != 1);
-    if (arc.metadata.requires_count >= 1) {
-        error += !str_eq(arc.metadata.requires[0], S("Logger=2.0.0"));
+    // Verify depends
+    error += (arc.metadata.depends_count != 1);
+    if (arc.metadata.depends_count >= 1) {
+        error += !str_eq(arc.metadata.depends[0], S("Logger=2.0.0"));
     }
 
-    // Verify requires_optional
-    error += (arc.metadata.requires_optional_count != 1);
-    if (arc.metadata.requires_optional_count >= 1) {
-        error += !str_eq(arc.metadata.requires_optional[0], S("Debug=0.1.0"));
+    // Verify depends_optional
+    error += (arc.metadata.depends_optional_count != 1);
+    if (arc.metadata.depends_optional_count >= 1) {
+        error += !str_eq(arc.metadata.depends_optional[0], S("Debug=0.1.0"));
     }
 
     // Verify file entries

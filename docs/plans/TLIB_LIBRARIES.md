@@ -235,7 +235,7 @@ tess pack -m manifest.toml src/math.tl -o MathUtils.tlib
 
 The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tlib). The metadata records:
 - name="MathUtils", version="1.0.0"
-- requires=["LoggingLib=2.0.0"]
+- depends=["LoggingLib=2.0.0"]
 
 ### Consumer: Using the Package
 
@@ -295,7 +295,7 @@ tess exe -m manifest.toml src/main.tl -o myapp
 tess exe src/main.tl -l libs/MathUtils.tlib -L libs/ -o myapp
 ```
 
-In both cases, consumers only declare **direct** dependencies. The compiler reads MathUtils's `requires` field (`LoggingLib=2.0.0`), searches the library paths for `LoggingLib.tlib`, verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
+In both cases, consumers only declare **direct** dependencies. The compiler reads MathUtils's `depends` field (`LoggingLib=2.0.0`), searches the library paths for `LoggingLib.tlib`, verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
 
 Both options produce the same executable. Option A verifies all package versions match; Option B uses whatever versions are in the `.tlib` files.
 
@@ -320,11 +320,11 @@ A custom binary format, chosen over tar for simplicity, security, and zero exter
 For each module:
     [2 bytes]  Module name length (big-endian uint16)
     [N bytes]  Module name (UTF-8 string)
-[2 bytes]  Requires count (big-endian uint16)
+[2 bytes]  depends count (big-endian uint16)
 For each required dependency:
     [2 bytes]  Dependency string length (big-endian uint16)
     [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
-[2 bytes]  Requires-optional count (big-endian uint16)
+[2 bytes]  depends-optional count (big-endian uint16)
 For each optional dependency:
     [2 bytes]  Dependency string length (big-endian uint16)
     [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
@@ -346,8 +346,8 @@ A CRC32 checksum is stored at the end of the archive, covering all bytes from th
 | Author | u16-prefixed string | No | Author name or email |
 | Version | u16-prefixed string | Yes | Version string, free-form (compared as literal string) |
 | Modules | u16 count + u16-prefixed strings | Yes | Array of public module names |
-| Requires | u16 count + u16-prefixed strings | No | Array of required versioned dependencies |
-| Requires-optional | u16 count + u16-prefixed strings | No | Array of optional versioned dependencies |
+| depends | u16 count + u16-prefixed strings | No | Array of required versioned dependencies |
+| depends-optional | u16 count + u16-prefixed strings | No | Array of optional versioned dependencies |
 
 All metadata fields use u16 (big-endian) for lengths and counts, giving a maximum of 65535 bytes per string and 65535 entries per array -- more than sufficient for metadata. Only the payload sizes (uncompressed and compressed) use u32, since source archives can be large.
 
@@ -437,7 +437,7 @@ typedef struct {
 - `tl_tlib_valid_filename()`: Validates filenames (rejects absolute paths and `..` components)
 - Unit tests in `src/tess/src/test_tlib.c`
 
-**Note:** This was a simplified format without metadata fields. Phase 4 added the full format with name/version/modules/requires.
+**Note:** This was a simplified format without metadata fields. Phase 4 added the full format with name/version/modules/depends.
 
 #### Phase 3: Pack/Unpack CLI Commands ✓
 
@@ -465,10 +465,10 @@ typedef struct {
     str version;           // version string (required)
     str *modules;          // array of public module names
     u16  module_count;
-    str *requires;         // array of required dependencies ("Name=Version")
-    u16  requires_count;
-    str *requires_optional; // array of optional dependencies ("Name=Version")
-    u16  requires_optional_count;
+    str *depends;         // array of required dependencies ("Name=Version")
+    u16  depends_count;
+    str *depends_optional; // array of optional dependencies ("Name=Version")
+    u16  depends_optional_count;
 } tl_tlib_metadata;
 
 typedef struct {
@@ -485,7 +485,7 @@ typedef struct {
 } tl_tlib_archive;
 ```
 
-**Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, requires, requires-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
+**Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, depends, depends-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
 
 **CLI flags for testing** (temporary until manifest support in Phase 5):
 
@@ -648,7 +648,7 @@ The compilation process:
 5. Build module → package mapping
 6. Extend import resolver to handle unquoted imports:
    - `#import ModuleName` → look up in module→package map → add package files to compilation
-7. For each loaded package, check its `requires` field and auto-resolve transitive dependencies from `-L` paths (see Phase 8)
+7. For each loaded package, check its `depends` field and auto-resolve transitive dependencies from `-L` paths (see Phase 8)
 8. Feed all source (local + package) into existing compilation pipeline
 9. Tree shaking removes unreferenced code
 
@@ -678,17 +678,17 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 4. Build module → package mapping for dependencies
 5. When packing source uses `#import ModuleName`:
    - If `ModuleName` is from a dependency, record that dependency
-6. Write used dependencies to archive's `requires` field
+6. Write used dependencies to archive's `depends` field
 7. Error if a required dependency is declared but never used
 8. Optional dependencies may be unused
 
 **During compile (transitive dependency resolution):**
-1. When loading a package, check its `requires` field
+1. When loading a package, check its `depends` field
 2. For each required dependency, search `-L` paths (CLI) or `lib_path` directories (manifest) for `<PackageName>.tlib`
 3. Read metadata and verify version matches exactly
-4. Recurse: load the transitive dependency's own `requires` the same way
+4. Recurse: load the transitive dependency's own `depends` the same way
 5. Detect cycles during resolution (A→B→A) and emit an error listing the cycle path
-6. Error on missing dependencies with helpful message: `"package 'MathUtils' requires 'LoggingLib=2.0.0', not found in library search paths"`
+6. Error on missing dependencies with helpful message: `"package 'MathUtils' depends 'LoggingLib=2.0.0', not found in library search paths"`
 
 **Validation:**
 - Integration test: MathUtils→LoggingLib example from this document

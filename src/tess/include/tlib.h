@@ -15,11 +15,10 @@ typedef struct {
     str  version; // version string (required)
     str *modules; // array of public module names
     u16  module_count;
-    str *
-        requires; // array of required dependencies ("Name=Version")
-    u16  requires_count;
-    str *requires_optional; // array of optional dependencies ("Name=Version")
-    u16  requires_optional_count;
+    str *depends; // array of required dependencies ("Name=Version")
+    u16  depends_count;
+    str *depends_optional; // array of optional dependencies ("Name=Version")
+    u16  depends_optional_count;
 } tl_tlib_metadata;
 
 // Single file entry in the archive
@@ -59,11 +58,10 @@ typedef struct {
     str        *modules; // array of public module names (optional)
     u16         module_count;
     // Dependencies (from manifest; null/0 when using CLI flags)
-    str *
-        requires;
-    u16  requires_count;
-    str *requires_optional;
-    u16  requires_optional_count;
+    str *depends;
+    u16  depends_count;
+    str *depends_optional;
+    u16  depends_optional_count;
 } tl_tlib_pack_opts;
 
 // Pack resolved files into a .tlib archive.
