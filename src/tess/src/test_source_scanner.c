@@ -604,6 +604,82 @@ static int test_export_multiple_files(void) {
     return error;
 }
 
+// --- collect_imports tests (no conditional compilation, string/comment aware) ---
+
+// Helper: collect imports from a string without a full scanner.
+static str_array collect(allocator *alloc, char const *content) {
+    str_array   imports = {.alloc = alloc};
+    char_csized input   = {.v = content, .size = (u32)strlen(content)};
+    tl_source_scanner_collect_imports(alloc, input, &imports);
+    return imports;
+}
+
+// Extracts both quoted and angle-bracket imports
+static int test_collect_basic(void) {
+    int        error   = 0;
+    allocator *alloc   = default_allocator();
+    str_array  imports = collect(alloc, "#import \"foo.tl\"\n#import <stdio.tl>\n");
+
+    error += imports.size != 2;
+    if (imports.size >= 2) {
+        error += !str_eq(imports.v[0], S("\"foo.tl\""));
+        error += !str_eq(imports.v[1], S("<stdio.tl>"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Ignores #import inside a string literal
+static int test_collect_ignores_string(void) {
+    int        error   = 0;
+    allocator *alloc   = default_allocator();
+    str_array  imports = collect(alloc, "x = \"\n#import \"fake.tl\"\n\"\n#import \"real.tl\"\n");
+
+    error += imports.size != 1;
+    if (imports.size >= 1) {
+        error += !str_eq(imports.v[0], S("\"real.tl\""));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Ignores #import inside a comment
+static int test_collect_ignores_comment(void) {
+    int        error   = 0;
+    allocator *alloc   = default_allocator();
+    str_array  imports = collect(alloc, "// #import \"fake.tl\"\n#import \"real.tl\"\n");
+
+    error += imports.size != 1;
+    if (imports.size >= 1) {
+        error += !str_eq(imports.v[0], S("\"real.tl\""));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
+// Collects imports from inside #ifdef blocks (no conditional filtering)
+static int test_collect_ignores_conditionals(void) {
+    int        error   = 0;
+    allocator *alloc   = default_allocator();
+    str_array  imports = collect(alloc, "#ifdef FEATURE\n"
+                                         "#import \"conditional.tl\"\n"
+                                         "#endif\n"
+                                         "#import \"always.tl\"\n");
+
+    // Both imports should be collected (no conditional filtering)
+    error += imports.size != 2;
+    if (imports.size >= 2) {
+        error += !str_eq(imports.v[0], S("\"conditional.tl\""));
+        error += !str_eq(imports.v[1], S("\"always.tl\""));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    return error;
+}
+
 // --- Validation tests ---
 
 // Manifest declares module not found in source -> error
@@ -799,6 +875,10 @@ int main(void) {
     T(test_export_in_comment)
     T(test_export_no_module)
     T(test_export_multiple_files)
+    T(test_collect_basic)
+    T(test_collect_ignores_string)
+    T(test_collect_ignores_comment)
+    T(test_collect_ignores_conditionals)
     T(test_validate_missing_module)
     T(test_validate_ok)
     T(test_validate_empty_modules)

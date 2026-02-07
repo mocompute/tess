@@ -67,4 +67,10 @@ tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *
                                                              str const         *manifest_modules,
                                                              u32 manifest_module_count, int verbose);
 
+// Extract all #import directives from source text.
+// Uses the scanner state machine for correct string/comment handling.
+// Does NOT apply conditional compilation — all imports are collected unconditionally.
+// Appends to *imports (caller initializes the array).
+void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_array *imports);
+
 #endif // TESS_SOURCE_SCANNER_H

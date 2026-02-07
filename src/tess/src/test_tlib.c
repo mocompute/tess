@@ -6,8 +6,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #ifdef MOS_WINDOWS
+#include <direct.h>
 #include <io.h>
 #define ftruncate(fd, size) _chsize(fd, size)
 #define fileno              _fileno
@@ -655,6 +657,137 @@ static int test_pack_with_manifest(void) {
     return error;
 }
 
+// Create directory and parents (simplified version for tests).
+static void test_mkdir_p(char const *path) {
+    char tmp[512];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+#ifdef MOS_WINDOWS
+            _mkdir(tmp);
+#else
+            mkdir(tmp, 0755);
+#endif
+            *p = '/';
+        }
+    }
+#ifdef MOS_WINDOWS
+    _mkdir(tmp);
+#else
+    mkdir(tmp, 0755);
+#endif
+}
+
+// Helper: pack files from in-memory content using tl_tlib_pack.
+// file_names and file_contents must have `count` elements.
+// file_names are relative paths within a temp directory.
+// Returns the result of tl_tlib_pack (0 = success).
+static int pack_test_files(char const **file_names, char const **file_contents, u32 count) {
+    allocator *alloc = default_allocator();
+
+    // Write files to temp directory
+    char base_path[512];
+    make_temp_path(base_path, sizeof(base_path), "test_self_contain/");
+    test_mkdir_p(base_path);
+
+    str  base_dir   = str_init(alloc, base_path);
+
+    str *file_paths = alloc_malloc(alloc, count * sizeof(str));
+    for (u32 i = 0; i < count; i++) {
+        str name      = str_init(alloc, file_names[i]);
+        str full      = file_path_join(alloc, base_dir, name);
+        file_paths[i] = full;
+
+        // Create parent directory if needed
+        str parent = file_dirname(alloc, full);
+        if (!str_is_empty(parent)) {
+            test_mkdir_p(str_cstr(&parent));
+        }
+
+        if (write_file(str_cstr(&full), file_contents[i])) {
+            fprintf(stderr, "  pack_test_files: failed to write %s\n", str_cstr(&full));
+            return 1;
+        }
+    }
+
+    str_sized         files    = {.v = file_paths, .size = count};
+
+    import_resolver  *resolver = import_resolver_create(alloc);
+    tl_tlib_pack_opts opts     = {
+          .verbose = 0,
+          .name    = "TestSelfContain",
+          .version = "1.0.0",
+    };
+
+    char out_path[512];
+    make_temp_path(out_path, sizeof(out_path), "test_self_contain.tlib");
+
+    int result = tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts);
+
+    // Clean up temp files
+    for (u32 i = 0; i < count; i++) {
+        remove(str_cstr(&file_paths[i]));
+    }
+
+    return result;
+}
+
+static int test_pack_self_contained(void) {
+    char const *names[]    = {"a.tl", "b.tl"};
+    char const *contents[] = {"#import \"b.tl\"\nfoo() { 1 }\n", "bar() { 2 }\n"};
+    int         result     = pack_test_files(names, contents, 2);
+    if (result != 0) {
+        fprintf(stderr, "  expected pack to succeed (self-contained)\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int test_pack_not_self_contained(void) {
+    char const *names[]    = {"a.tl"};
+    char const *contents[] = {"#import \"missing.tl\"\nfoo() { 1 }\n"};
+    int         result     = pack_test_files(names, contents, 1);
+    if (result == 0) {
+        fprintf(stderr, "  expected pack to fail (missing import)\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int test_pack_stdlib_import_ok(void) {
+    char const *names[]    = {"a.tl"};
+    char const *contents[] = {"#import <stdio.tl>\nfoo() { 1 }\n"};
+    int         result     = pack_test_files(names, contents, 1);
+    if (result != 0) {
+        fprintf(stderr, "  expected pack to succeed (stdlib import ignored)\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int test_pack_malformed_import_ok(void) {
+    char const *names[]    = {"a.tl"};
+    char const *contents[] = {"#import \"unterminated\nfoo() { 1 }\n"};
+    int         result     = pack_test_files(names, contents, 1);
+    if (result != 0) {
+        fprintf(stderr, "  expected pack to succeed (malformed import skipped)\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int test_pack_subdir_import(void) {
+    char const *names[]    = {"lib/a.tl", "util.tl"};
+    char const *contents[] = {"#import \"../util.tl\"\nfoo() { 1 }\n", "bar() { 2 }\n"};
+    int         result     = pack_test_files(names, contents, 2);
+    if (result != 0) {
+        fprintf(stderr, "  expected pack to succeed (subdir relative import resolves)\n");
+        return 1;
+    }
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
 
@@ -671,5 +804,10 @@ int main(void) {
     T(test_corrupted_metadata)
     T(test_crc32_integrity)
     T(test_pack_with_manifest)
+    T(test_pack_self_contained)
+    T(test_pack_not_self_contained)
+    T(test_pack_stdlib_import_ok)
+    T(test_pack_malformed_import_ok)
+    T(test_pack_subdir_import)
     return error;
 }

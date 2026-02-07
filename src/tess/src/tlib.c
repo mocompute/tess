@@ -1,8 +1,10 @@
 #include "tlib.h"
 #include "file.h"
+#include "hashmap.h"
 #include "import_resolver.h"
 #include "libdeflate.h"
 #include "platform.h"
+#include "source_scanner.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -414,6 +416,59 @@ corrupt_meta:
 
 // -- High-level operations --
 
+// Verify all quoted imports in archive entries resolve to other entries.
+// Uses tl_source_scanner_collect_imports() for correct string/comment handling.
+// Returns 0 if self-contained, 1 if an import escapes the archive.
+static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries, u32 count) {
+    // Build hashset of entry names
+    hashmap *entry_names = hset_create(alloc, count * 2);
+    for (u32 i = 0; i < count; i++) {
+        str name = str_init_n(alloc, entries[i].name, entries[i].name_len);
+        str_hset_insert(&entry_names, name);
+        str_deinit(alloc, &name);
+    }
+
+    // Scan each entry for #import directives
+    for (u32 i = 0; i < count; i++) {
+        str_array imports = {.alloc = alloc};
+        tl_source_scanner_collect_imports(
+          alloc, (char_csized){(char const *)entries[i].data, entries[i].data_len}, &imports);
+
+        str entry_name = str_init_n(alloc, entries[i].name, entries[i].name_len);
+        str entry_dir  = file_dirname(alloc, entry_name);
+
+        for (u32 j = 0; j < imports.size; j++) {
+            str  imp   = imports.v[j];
+            span s     = str_span(&imp);
+            char first = s.len > 0 ? s.buf[0] : 0;
+
+            // Skip non-quoted imports (angle-bracket = stdlib, not in archive)
+            if (first != '"') continue;
+
+            // Strip surrounding quotes to get raw path
+            if (s.len < 3 || s.buf[s.len - 1] != '"') continue;
+            str import_path = str_init_n(alloc, s.buf + 1, (u32)s.len - 2);
+
+            // Resolve relative to importing file's directory
+            str joined     = file_path_join(alloc, entry_dir, import_path);
+            str normalized = file_path_normalize(alloc, joined);
+
+            if (str_is_empty(normalized) || !str_hset_contains(entry_names, normalized)) {
+                fprintf(stderr,
+                        "error: self-containment check failed: '%s' (imported from '%s') "
+                        "not found in archive\n",
+                        str_cstr(&import_path), entries[i].name);
+                return 1;
+            }
+        }
+
+        str_deinit(alloc, &entry_dir);
+        str_deinit(alloc, &entry_name);
+    }
+
+    return 0;
+}
+
 int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
                  struct import_resolver *resolver, tl_tlib_pack_opts opts) {
     // Validate required metadata
@@ -519,6 +574,11 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         entries[entry_idx].data     = (byte const *)data;
         entries[entry_idx].data_len = size;
         entry_idx++;
+    }
+
+    // Self-containment check: verify all quoted imports resolve within the archive
+    if (check_self_containment(alloc, entries, entry_idx)) {
+        return 1;
     }
 
     // Build metadata

@@ -76,20 +76,20 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
     return 0;
 }
 
-int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports) {
+// Callback for each # directive found in source.
+// data[start..end) is the directive text (after '#', up to and including '\n').
+// Return 0 to continue scanning, non-zero to stop (value propagated to caller).
+typedef int (*scan_directive_fn)(void *ctx, char const *data, u32 start, u32 end);
+
+// Walk source text with string/comment awareness.
+// Calls fn for each # directive at line start.
+// Sets *out_has_export to 1 if [[export]] found (pass NULL if not needed).
+// Returns 0 if all directives processed, or the non-zero return from fn.
+static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx, int *out_has_export) {
     u32         pos = 0, capture_start = 0;
     char const *data = input.v;
     u32         size = input.size;
 
-    // States:
-    //   start        - beginning of line, looking for '#' directive
-    //   noise        - non-directive line content, waiting for newline
-    //   start_hash   - just saw '#' at line start, record capture position
-    //   in_hash      - reading directive content until newline
-    //   stop_hash    - end of directive, process it
-    //   in_string    - inside "..." string literal (newlines don't reset to start)
-    //   in_string_bs - after '\' inside string (skip one character)
-    //   in_comment   - after '//' comment, skip to end of line
     enum {
         start,
         noise,
@@ -99,12 +99,9 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
         in_string,
         in_string_bs,
         in_comment
-    } state = start;
+    } state        = start;
 
-    // Reset per-file transient state
-    self->conditional_skip_depth = 0;
-    self->current_file_module    = (str){0};
-    int file_has_export          = 0;
+    int has_export = 0;
 
     while (pos < size) {
         switch (state) {
@@ -114,8 +111,8 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
             else if ('"' == c) state = in_string;
             else if ('[' == c && pos + 8 <= size && 0 == memcmp(&data[pos], "[export]]", 9)) {
                 pos += 9;
-                file_has_export = 1;
-                state           = noise;
+                has_export = 1;
+                state      = noise;
             } else if ('/' == c && pos < size && '/' == data[pos]) {
                 pos++;
                 state = in_comment;
@@ -152,22 +149,80 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
             if ('\n' == c) state = stop_hash;
         } break;
         case stop_hash: {
-            if (process_hash_directive(self, file_path, imports, data, capture_start, pos)) return 1;
+            int rc = fn(ctx, data, capture_start, pos);
+            if (rc) return rc;
             state = start;
         } break;
         }
     }
 
     if (stop_hash == state) {
-        // catch command at end of file
-        if (process_hash_directive(self, file_path, imports, data, capture_start, pos)) return 1;
+        int rc = fn(ctx, data, capture_start, pos);
+        if (rc) return rc;
     }
+
+    if (out_has_export) *out_has_export = has_export;
+
+    return 0;
+}
+
+// Context and callback for the full scanner (tl_source_scanner_scan).
+typedef struct {
+    tl_source_scanner *self;
+    str                file_path;
+    str_array         *imports;
+} scan_full_ctx;
+
+static int scan_full_callback(void *raw_ctx, char const *data, u32 start, u32 end) {
+    scan_full_ctx *ctx = raw_ctx;
+    return process_hash_directive(ctx->self, ctx->file_path, ctx->imports, data, start, end);
+}
+
+int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports) {
+    // Reset per-file transient state
+    self->conditional_skip_depth  = 0;
+    self->current_file_module     = (str){0};
+
+    int           file_has_export = 0;
+    scan_full_ctx ctx             = {.self = self, .file_path = file_path, .imports = imports};
+
+    int           rc              = scan_directives(input, scan_full_callback, &ctx, &file_has_export);
+    if (rc) return rc;
 
     if (file_has_export && !str_is_empty(self->current_file_module)) {
         str_hset_insert(&self->export_seen, self->current_file_module);
     }
 
     return 0;
+}
+
+// Context and callback for collect_imports (no conditionals, imports only).
+typedef struct {
+    allocator *alloc;
+    str_array *imports;
+} collect_imports_ctx;
+
+static int collect_imports_callback(void *raw_ctx, char const *data, u32 start, u32 end) {
+    collect_imports_ctx *ctx = raw_ctx;
+
+    u32                  len = end - start;
+    if (len > 0 && data[end - 1] == '\n') len -= 1;
+    if (len > 0 && data[end - 2] == '\r') len -= 1;
+
+    str       command = str_init_n(ctx->alloc, &data[start], len);
+    str_array words   = {.alloc = ctx->alloc};
+    str_parse_words(command, &words);
+
+    if (words.size >= 2 && str_eq(words.v[0], S("import"))) {
+        array_push(*ctx->imports, words.v[1]);
+    }
+
+    return 0;
+}
+
+void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_array *imports) {
+    collect_imports_ctx ctx = {.alloc = alloc, .imports = imports};
+    scan_directives(input, collect_imports_callback, &ctx, null);
 }
 
 tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,
