@@ -15,9 +15,11 @@ typedef struct {
     allocator              *arena;
     struct import_resolver *resolver;
 
-    hashmap *modules_seen;         // str module_name -> str file_path
-    hashmap *import_defines;       // hset of defined symbols for conditional compilation
+    hashmap *modules_seen;           // str module_name -> str file_path
+    hashmap *export_seen;            // hset of module names whose source contains [[export]]
+    hashmap *import_defines;         // hset of defined symbols for conditional compilation
     int      conditional_skip_depth; // tracks #ifdef nesting depth during scanning
+    str      current_file_module;    // transient: module name of file currently being scanned
 } tl_source_scanner;
 
 // Create and initialize a source scanner.
@@ -33,8 +35,9 @@ void tl_source_scanner_define(tl_source_scanner *self, str symbol);
 //
 // Side effects:
 // - Discovered #module directives are recorded in modules_seen (module_name -> file_path)
+// - If the file contains [[export]] and a #module, the module name is added to export_seen
 // - Conditional compilation state (import_defines, conditional_skip_depth) is updated
-// - conditional_skip_depth is reset to 0 at the start of each call
+// - conditional_skip_depth and current_file_module are reset at the start of each call
 //
 // Errors:
 // - Duplicate module name (same module defined in two files): prints error and returns 1

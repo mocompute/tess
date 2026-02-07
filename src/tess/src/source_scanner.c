@@ -4,12 +4,14 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 
 tl_source_scanner tl_source_scanner_create(allocator *arena, struct import_resolver *resolver) {
     return (tl_source_scanner){
       .arena                  = arena,
       .resolver               = resolver,
       .modules_seen           = map_new(arena, str, str, 8),
+      .export_seen            = hset_create(arena, 8),
       .import_defines         = hset_create(arena, 8),
       .conditional_skip_depth = 0,
     };
@@ -66,6 +68,7 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
             }
 
             str_map_set(&self->modules_seen, words.v[1], &file_path);
+            self->current_file_module = words.v[1];
         }
     }
 
@@ -88,24 +91,35 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
     //   in_comment   - after '//' comment, skip to end of line
     enum { start, noise, start_hash, in_hash, stop_hash, in_string, in_string_bs, in_comment } state = start;
 
-    // Reset conditional skip depth in case of unmatched conditionals in previous file
+    // Reset per-file transient state
     self->conditional_skip_depth = 0;
+    self->current_file_module    = (str){0};
+    int file_has_export          = 0;
+
     while (pos < size) {
         switch (state) {
         case start: {
             char c = data[pos++];
             if ('#' == c) state = start_hash;
             else if ('"' == c) state = in_string;
+            else if ('[' == c && pos + 8 <= size && 0 == memcmp(&data[pos], "[export]]", 9)) {
+                pos += 9;
+                file_has_export = 1;
+                state = noise;
+            }
+            else if ('/' == c && pos < size && '/' == data[pos]) {
+                pos++;
+                state = in_comment;
+            }
             else if (isspace(c)) state = start;
             else state = noise;
         } break;
         case noise: {
             char c = data[pos++];
             if ('\n' == c) state = start;
-            else if ('"' == c) state = in_string;
-            else if ('/' == c && pos < size && '/' == data[pos]) {
-                pos++;
-                state = in_comment;
+            else if ('"' == c || '/' == c || '[' == c) {
+                pos--;
+                state = start;
             }
         } break;
         case in_comment: {
@@ -139,6 +153,10 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
     if (stop_hash == state) {
         // catch command at end of file
         if (process_hash_directive(self, file_path, imports, data, capture_start, pos)) return 1;
+    }
+
+    if (file_has_export && !str_is_empty(self->current_file_module)) {
+        str_hset_insert(&self->export_seen, self->current_file_module);
     }
 
     return 0;
