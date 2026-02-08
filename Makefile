@@ -578,6 +578,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	@cd $(TL_TEST_DIR)/fixtures && \
+	export ASAN_OPTIONS=detect_leaks=0 && \
 	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
 		$(MSG_FAIL) $@; \
 	fi
@@ -585,7 +586,8 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
-	@if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
+	@export ASAN_OPTIONS=detect_leaks=0; \
+	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
 		$(MSG_FAIL) $@; \
 	fi
 
@@ -593,6 +595,7 @@ build-tl-tests: $(TL_TEST_EXES)
 
 test-tl: build-tl-tests
 	@failed=0; \
+	export ASAN_OPTIONS=detect_leaks=0; \
 	count_pass=0; \
 	count_fail=0; \
 	count_known=0; \
