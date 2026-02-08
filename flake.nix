@@ -77,7 +77,7 @@
             isDarwin = pkgs.stdenv.isDarwin;
           in
             {
-              default = pkgs.mkShellNoCC {
+              default = pkgs.mkShell {
                 inputsFrom = [ self.packages.${system}.default ];
 
                 # Seems necessary on my MacBook to make lldb work.
