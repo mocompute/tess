@@ -3913,8 +3913,14 @@ int parser_next(parser *self) {
                     self->current_file_data.size = 0;
                 }
 
-                // read file
-                char const *file = str_cstr(&self->files.v[self->files_index++]);
+                // read file — normalize backslashes to forward slashes so that
+                // #line directives don't contain sequences like \U that C
+                // compilers interpret as UCN escapes.
+                str file_str = self->files.v[self->files_index++];
+#ifdef MOS_WINDOWS
+                file_str = str_replace_char(self->file_arena, file_str, '\\', '/');
+#endif
+                char const *file = str_cstr(&file_str);
                 file_read(self->file_arena, file, (char **)&self->current_file_data.v,
                           &self->current_file_data.size);
 
