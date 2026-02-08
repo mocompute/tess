@@ -467,115 +467,41 @@ tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" 
 - `test_metadata_roundtrip()` - all fields preserved through write/read cycle
 - `test_metadata_empty_fields()` - optional fields handle empty strings correctly
 
-#### Phase 5: Package Manifest (`package.tl`) — needs rewrite
+#### Phase 5: Package Manifest (`package.tl`) ✓
 
-**Previous implementation:** INI-like manifest parser in `manifest.c`/`manifest.h` with 14 tests in `test_manifest.c`. This is being replaced (see Design Change Log).
+Replaced the INI-like manifest parser with a `package.tl` DSL interpreter. The file uses a function-call DSL that is valid TL syntax, parsed by the existing TL parser (`parser_parse_all_toplevel_funcalls()`) and interpreted as DSL calls.
 
-**New design:** `package.tl` is a file at the package root using a function-call DSL that is valid TL syntax. The existing TL parser parses it into AST nodes, and a DSL interpreter walks the AST to extract metadata.
+Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.h`:
 
-**Format:**
-
-```tl
-format(1)
-package("MathUtils")
-version("1.0.0")
-author("Alice")
-export("MathUtils", "OtherModule")
-
-depend("LoggingLib", "2.0.0")
-depend("OtherLib", "1.2.3", "./vendor/OtherLib.tlib")
-depend_optional("WinAPI", "1.0.0")
-depend_path("./libs")
-depend_path("./vendor")
-```
+- `tl_package_parse_file()`: Reads file, parses with TL parser, walks AST to extract metadata
+- `extract_string()` / `extract_int()`: Helper functions to extract typed values from AST nodes
+- String literals are unwrapped from the parser's `nfa("Str__from_literal__1", [c_string(value)])` representation
 
 **DSL functions:**
 
 | Function | Arguments | Required | Description |
 |----------|-----------|----------|-------------|
-| `format(n)` | 1 integer | Yes | DSL format version (currently 1). Checked first; error if unsupported. |
-| `package(name)` | 1 string | Yes | Package name |
-| `version(ver)` | 1 string | Yes | Version string |
+| `format(n)` | 1 integer | Yes | DSL format version (currently 1). Must be first declaration. |
+| `package(name)` | 1 string | Yes | Package name (duplicate rejected) |
+| `version(ver)` | 1 string | Yes | Version string (duplicate rejected) |
 | `author(name)` | 1 string | No | Author name or email |
 | `export(mod, ...)` | 1+ strings | For `tess pack` | Exported module names (public API) |
-| `depend(name, ver)` | 2 strings | No | Required dependency (name + version) |
-| `depend(name, ver, path)` | 3 strings | No | Required dependency with explicit path override |
-| `depend_optional(name, ver)` | 2 strings | No | Optional dependency |
-| `depend_optional(name, ver, path)` | 3 strings | No | Optional dependency with explicit path override |
-| `depend_path(dir)` | 1 string | No | Add a dependency search path (accumulates) |
+| `depend(name, ver [, path])` | 2-3 strings | No | Required dependency |
+| `depend_optional(name, ver [, path])` | 2-3 strings | No | Optional dependency |
+| `depend_path(dir)` | 1 string | No | Dependency search path (accumulates) |
 
-**Parsing approach:**
-1. Parse `package.tl` with the existing TL parser to produce an AST
-2. Walk the top-level AST nodes, expecting only function call expressions
-3. Check `format()` first — error if missing or unsupported version
-4. Interpret each remaining call by name: extract string literal arguments, populate metadata struct
-5. Error on unknown function names, wrong argument counts, or non-string arguments (except `format()` which takes an integer)
+**Data structures** (in `manifest.h`): `tl_package_info`, `tl_package_dep`, `tl_package`
 
-**Auto-discovery:** The compiler looks for `package.tl` in the current working directory when running `tess pack` or `tess exe`. If found, metadata and dependencies are loaded from it. `package.tl` is required for any build that uses packages — there are no `-l`/`-L` CLI flags. If `package.tl` is not found and the source code uses `#import ModuleName` (unquoted package imports), the compiler emits an error.
+**Unit tests** in `src/tess/src/test_manifest.c` (16 tests):
+- Basic package, minimal package, multiple depends, depend with path, multiple depend_paths, export with multiple args
+- Error cases: missing format/package/version, format not first, unsupported format, unknown function, wrong arg count, non-string arg, duplicate package, duplicate version
 
-**Data structures** (replacing the old `tl_manifest` types):
+#### Phase 5b: Package.tl Integration with Pack Command ✓
 
-```c
-typedef struct {
-    u32  format;          // from format(), currently 1
-    str  name;            // from package()
-    str  version;         // from version()
-    str  author;          // from author(), may be empty
-    str *exports;         // from export() calls
-    u32  export_count;
-    str *depend_paths;    // from depend_path() calls
-    u32  depend_path_count;
-} tl_package_info;
+`tess pack` and `tess validate` auto-discover `package.tl` in the current working directory via `tl_package_parse_file()`. The `-m` flag and `--name`/`--author`/`--version`/`--modules` CLI flags were removed.
 
-typedef struct {
-    str name;             // dependency package name
-    str version;          // required version
-    str path;             // optional explicit path override (may be empty)
-} tl_package_dep;
-
-typedef struct {
-    tl_package_info  info;
-    tl_package_dep  *deps;
-    u32              dep_count;
-    tl_package_dep  *optional_deps;
-    u32              optional_dep_count;
-} tl_package;
-```
-
-**Required fields:**
-- `format()` is always required and must be the first call
-- `package()` and `version()` are always required
-- `export()` is required for `tess pack`, not required for `tess exe`
-- All other fields are optional
-
-**Unit tests** (replacing the 14 tests in `test_manifest.c`):
-- Basic package with all fields
-- Minimal package (required fields only)
-- Multiple `depend()` and `depend_optional()` calls
-- Multiple `depend_path()` calls accumulate
-- `depend()` with 3-argument path override
-- Missing required fields (format, package, version) produce errors
-- `format()` must be first call; error if not
-- Unsupported format version produces error
-- Unknown function names produce errors
-- Wrong argument counts produce errors
-- Non-string arguments produce errors
-- `export()` with multiple arguments
-
-#### Phase 5b: Package.tl Integration with Pack Command — needs rewrite
-
-**Previous implementation:** `-m manifest.toml` flag in `tess_exe.c`. Being replaced by auto-discovery (see Design Change Log).
-
-**New design:** `tess pack` auto-discovers `package.tl` in the current working directory:
-
-```bash
-tess pack src/math.tl -o MathUtils.tlib
-```
-
-When `package.tl` is found, metadata is read from it. `depend()` declarations are parsed but not validated (dependencies aren't loaded yet). The `-m` flag is removed.
-
-- Remove support for `-m`, `--name`, `--author`, `--version`, and `--modules` flags
-- Integration test: `test_pack_with_package_tl` in `src/tess/src/test_tlib.c`
+- `pack_files()` and `validate_files()` in `tess_exe.c` read `package.tl` from CWD
+- Integration test: `test_pack_with_manifest` in `src/tess/src/test_tlib.c`
 
 #### Phase 6: Module Discovery (partial) ✓
 
@@ -770,9 +696,9 @@ Final validation and edge case coverage:
 ### Phase Dependencies
 
 ```
-Phase 5 (Package.tl Parser) — needs rewrite
+Phase 5 (Package.tl Parser) ✓
     ↓
-Phase 5b (Package.tl Integration) — needs rewrite
+Phase 5b (Package.tl Integration) ✓
     ↓
 Phase 6 (Module Discovery — scanning) ✓
     ↓
@@ -848,11 +774,10 @@ Each phase can be merged independently, allowing incremental progress and early 
 - Phase 11 (Symbol-Level Access Control) eliminated entirely
 - Old Phase 12 (Test Suite) renumbered to Phase 11
 
-**Implementation cleanup required:**
-- Remove `[[export]]` state machine scanning in `source_scanner.c`
-- Remove `export_seen` hashset from scanner state
-- Remove export warning logic (public module with no exports, non-public module with exports)
-- Remove associated tests in `test_source_scanner.c`
+**Implementation cleanup (done):**
+- Removed `[[export]]` state machine scanning and `out_has_export` parameter from `scan_directives()` in `source_scanner.c`
+- Removed `export_seen` hashset from scanner state
+- Removed export warning logic and associated tests in `test_source_scanner.c`
 - The `[[export]]` attribute syntax remains valid in the language's general attribute system; it simply has no special meaning for package visibility
 
 ### Replaced: INI Manifest with `package.tl` DSL
@@ -866,11 +791,11 @@ Each phase can be merged independently, allowing incremental progress and early 
 - Phase 5b (Manifest Integration) — `-m` flag replaced by auto-discovery
 - Phase 7 onward — all references to "manifest" updated to `package.tl`
 
-**Implementation cleanup required:**
-- Replace `manifest.c` and `manifest.h` with new `package.tl` interpreter
-- Replace all 14 tests in `test_manifest.c` with new `package.tl` tests
-- Remove `-m` flag handling from `tess_exe.c`
-- Update `tl_manifest` / `tl_manifest_package` / `tl_manifest_dep` types to `tl_package` / `tl_package_info` / `tl_package_dep`
+**Implementation cleanup (done):**
+- Replaced `manifest.c` and `manifest.h` with `package.tl` DSL interpreter
+- Replaced tests in `test_manifest.c` with 16 new `package.tl` tests
+- Removed `-m` flag handling from `tess_exe.c`
+- Updated types to `tl_package` / `tl_package_info` / `tl_package_dep`
 
 ### Removed: `-l` and `-L` CLI Flags
 
@@ -882,6 +807,5 @@ Each phase can be merged independently, allowing incremental progress and early 
 - Phase 7 (Basic Consumption) — no longer adds `-l`/`-L` flags; loads from `package.tl` only
 - Phase 9 (Package.tl Compilation) — no longer needs to check for `-l`/`-L` and `package.tl` conflicts
 
-**Implementation cleanup required:**
-- Remove `-l` and `-L` flag parsing from `tess_exe.c`
-- Remove "without manifest" code paths
+**Implementation cleanup (done):**
+- `-l` and `-L` flags were never added; `package.tl` is the sole mechanism from the start
