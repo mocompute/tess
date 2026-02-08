@@ -485,125 +485,6 @@ static int test_string_unterminated(void) {
     return error;
 }
 
-// [[export]] in source marks the module in export_seen
-static int test_export_basic(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    char const       *src     = "#module Foo\n"
-                                "[[export]] foo() { 1 }\n";
-
-    error += scan(&s, "/src/foo.tl", src, &imports) != 0;
-
-    // Foo should be in export_seen
-    error += !str_hset_contains(s.export_seen, S("Foo"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// No [[export]] means module is NOT in export_seen
-static int test_export_absent(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    char const       *src     = "#module Foo\n"
-                                "foo() { 1 }\n";
-
-    error += scan(&s, "/src/foo.tl", src, &imports) != 0;
-
-    // Foo should NOT be in export_seen
-    error += str_hset_contains(s.export_seen, S("Foo"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// [[export]] inside a string should be ignored
-static int test_export_in_string(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    char const       *src     = "#module Foo\n"
-                                "x = \"[[export]] fake\"\n";
-
-    error += scan(&s, "/src/foo.tl", src, &imports) != 0;
-
-    // Should NOT be in export_seen (the [[export]] is inside a string)
-    error += str_hset_contains(s.export_seen, S("Foo"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// [[export]] inside a comment should be ignored
-static int test_export_in_comment(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    char const       *src     = "#module Foo\n"
-                                "// [[export]] fake\n";
-
-    error += scan(&s, "/src/foo.tl", src, &imports) != 0;
-
-    // Should NOT be in export_seen (the [[export]] is inside a comment)
-    error += str_hset_contains(s.export_seen, S("Foo"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// [[export]] without #module should not add anything to export_seen
-static int test_export_no_module(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    char const       *src     = "[[export]] foo() { 1 }\n";
-
-    error += scan(&s, "/src/foo.tl", src, &imports) != 0;
-
-    // export_seen should be empty (no module to associate with)
-    error += hset_size(s.export_seen) != 0;
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// Multiple files: only files with [[export]] appear in export_seen
-static int test_export_multiple_files(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    error += scan(&s, "/src/a.tl", "#module A\n[[export]] a() { 1 }\n", &imports) != 0;
-    error += scan(&s, "/src/b.tl", "#module B\nb() { 2 }\n", &imports) != 0;
-    error += scan(&s, "/src/c.tl", "#module C\n[[export]] c() { 3 }\n", &imports) != 0;
-
-    error += !str_hset_contains(s.export_seen, S("A"));
-    error += str_hset_contains(s.export_seen, S("B"));
-    error += !str_hset_contains(s.export_seen, S("C"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
 // --- collect_imports tests (no conditional compilation, string/comment aware) ---
 
 // Helper: collect imports from a string without a full scanner.
@@ -741,46 +622,6 @@ static int test_validate_empty_modules(void) {
     return error;
 }
 
-// Public module with no [[export]] -> warning
-static int test_validate_warn_public_no_export(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
-
-    str                               manifest_modules[] = {S("Foo")};
-    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
-
-    error += result.error_count != 0;
-    error += result.warning_count != 1;
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
-// Non-public module with [[export]] -> warning
-static int test_validate_warn_export_not_public(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    error += scan(&s, "/src/foo.tl", "#module Foo\n[[export]] foo() { 1 }\n", &imports) != 0;
-    error += scan(&s, "/src/bar.tl", "#module Bar\n[[export]] bar() { 2 }\n", &imports) != 0;
-
-    str                               manifest_modules[] = {S("Foo")};
-    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
-
-    error += result.error_count != 0;
-    error += result.warning_count != 1;
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
 
 // Internal module (in source, not in manifest, no exports) is fine
 static int test_validate_internal_module_ok(void) {
@@ -823,29 +664,6 @@ static int test_validate_multiple_one_missing(void) {
     return error;
 }
 
-// Both warning types at once
-static int test_validate_both_warnings(void) {
-    int               error   = 0;
-    allocator        *alloc   = default_allocator();
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    // Foo: public, no exports (warning 1)
-    error += scan(&s, "/src/foo.tl", "#module Foo\nfoo() { 1 }\n", &imports) != 0;
-    // Bar: not public, has exports (warning 2)
-    error += scan(&s, "/src/bar.tl", "#module Bar\n[[export]] bar() { 2 }\n", &imports) != 0;
-
-    str                               manifest_modules[] = {S("Foo")};
-    tl_source_scanner_validate_result result = tl_source_scanner_validate(&s, manifest_modules, 1, 0);
-
-    error += result.error_count != 0;
-    error += result.warning_count != 2;
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    return error;
-}
-
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -869,12 +687,7 @@ int main(void) {
     T(test_comment_does_not_span_lines)
     T(test_comment_hides_directive)
     T(test_string_unterminated)
-    T(test_export_basic)
-    T(test_export_absent)
-    T(test_export_in_string)
-    T(test_export_in_comment)
-    T(test_export_no_module)
-    T(test_export_multiple_files)
+
     T(test_collect_basic)
     T(test_collect_ignores_string)
     T(test_collect_ignores_comment)
@@ -882,10 +695,7 @@ int main(void) {
     T(test_validate_missing_module)
     T(test_validate_ok)
     T(test_validate_empty_modules)
-    T(test_validate_warn_public_no_export)
-    T(test_validate_warn_export_not_public)
     T(test_validate_internal_module_ok)
     T(test_validate_multiple_one_missing)
-    T(test_validate_both_warnings)
     return error;
 }

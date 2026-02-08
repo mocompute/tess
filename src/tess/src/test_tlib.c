@@ -535,59 +535,55 @@ static int test_pack_with_manifest(void) {
         return 1;
     }
 
-    // Create manifest file
-    char manifest_path[512];
-    make_temp_path(manifest_path, sizeof(manifest_path), "test_manifest_pack.toml");
-    char const *manifest_content = "[package]\n"
-                                   "name = TestPkg\n"
-                                   "version = 1.0.0\n"
-                                   "author = Tester\n"
-                                   "modules = [Foo]\n"
-                                   "\n"
-                                   "[depend.Logger]\n"
-                                   "version = 2.0.0\n"
-                                   "\n"
-                                   "[depend-optional.Debug]\n"
-                                   "version = 0.1.0\n";
-    if (write_file(manifest_path, manifest_content)) {
-        fprintf(stderr, "  failed to write manifest file\n");
+    // Create package.tl file
+    char pkg_path[512];
+    make_temp_path(pkg_path, sizeof(pkg_path), "test_manifest_pack_package.tl");
+    char const *pkg_content = "format(1)\n"
+                              "package(\"TestPkg\")\n"
+                              "version(\"1.0.0\")\n"
+                              "author(\"Tester\")\n"
+                              "export(\"Foo\")\n"
+                              "depend(\"Logger\", \"2.0.0\")\n"
+                              "depend_optional(\"Debug\", \"0.1.0\")\n";
+    if (write_file(pkg_path, pkg_content)) {
+        fprintf(stderr, "  failed to write package.tl file\n");
         return 1;
     }
 
-    // Parse manifest
-    tl_manifest manifest = {0};
-    if (tl_manifest_parse_file(alloc, manifest_path, &manifest)) {
-        fprintf(stderr, "  manifest parse failed\n");
+    // Parse package.tl
+    tl_package pkg = {0};
+    if (tl_package_parse_file(alloc, pkg_path, &pkg)) {
+        fprintf(stderr, "  package.tl parse failed\n");
         return 1;
     }
 
-    // Build pack opts from manifest (same logic as pack_files in tess_exe.c)
+    // Build pack opts from package (same logic as pack_files in tess_exe.c)
     tl_tlib_pack_opts opts = {.verbose = 0};
-    opts.name              = str_cstr(&manifest.package.name);
-    opts.version           = str_cstr(&manifest.package.version);
-    opts.author = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
+    opts.name              = str_cstr(&pkg.info.name);
+    opts.version           = str_cstr(&pkg.info.version);
+    opts.author = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
 
-    if (manifest.package.module_count > 0) {
-        opts.modules      = manifest.package.modules;
-        opts.module_count = (u16)manifest.package.module_count;
+    if (pkg.info.export_count > 0) {
+        opts.modules      = pkg.info.exports;
+        opts.module_count = (u16)pkg.info.export_count;
     }
 
     // Build depends
-    if (manifest.dep_count > 0) {
-        opts.depends       = alloc_malloc(alloc, manifest.dep_count * sizeof(str));
-        opts.depends_count = (u16)manifest.dep_count;
-        for (u32 i = 0; i < manifest.dep_count; i++) {
-            opts.depends[i] = str_cat_3(alloc, manifest.deps[i].name, S("="), manifest.deps[i].version);
+    if (pkg.dep_count > 0) {
+        opts.depends       = alloc_malloc(alloc, pkg.dep_count * sizeof(str));
+        opts.depends_count = (u16)pkg.dep_count;
+        for (u32 i = 0; i < pkg.dep_count; i++) {
+            opts.depends[i] = str_cat_3(alloc, pkg.deps[i].name, S("="), pkg.deps[i].version);
         }
     }
 
     // Build depends_optional
-    if (manifest.optional_dep_count > 0) {
-        opts.depends_optional       = alloc_malloc(alloc, manifest.optional_dep_count * sizeof(str));
-        opts.depends_optional_count = (u16)manifest.optional_dep_count;
-        for (u32 i = 0; i < manifest.optional_dep_count; i++) {
+    if (pkg.optional_dep_count > 0) {
+        opts.depends_optional       = alloc_malloc(alloc, pkg.optional_dep_count * sizeof(str));
+        opts.depends_optional_count = (u16)pkg.optional_dep_count;
+        for (u32 i = 0; i < pkg.optional_dep_count; i++) {
             opts.depends_optional[i] =
-              str_cat_3(alloc, manifest.optional_deps[i].name, S("="), manifest.optional_deps[i].version);
+              str_cat_3(alloc, pkg.optional_deps[i].name, S("="), pkg.optional_deps[i].version);
         }
     }
 

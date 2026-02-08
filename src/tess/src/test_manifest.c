@@ -5,6 +5,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef MOS_WINDOWS
+#include <io.h>
+#define ftruncate(fd, size) _chsize(fd, size)
+#define fileno              _fileno
+#else
+#include <unistd.h>
+#endif
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -12,10 +20,41 @@
         error += this_error;                                                                               \
     }
 
-// Helper: parse a string literal as manifest
-static int parse(allocator *alloc, char const *text, tl_manifest *out) {
-    str s = str_init_static(text);
-    return tl_manifest_parse(alloc, s, out);
+// Platform-specific temp directory
+static char temp_dir[512];
+
+static void init_temp_dir(void) {
+#ifdef MOS_WINDOWS
+    char temp[260];
+    GetTempPathA(260, temp);
+    snprintf(temp_dir, sizeof(temp_dir), "%s", temp);
+#else
+    snprintf(temp_dir, sizeof(temp_dir), "/tmp/");
+#endif
+}
+
+static void make_temp_path(char *buf, size_t bufsize, char const *filename) {
+    snprintf(buf, bufsize, "%s%s", temp_dir, filename);
+}
+
+static int write_file(char const *path, char const *content) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return 1;
+    size_t len = strlen(content);
+    if (len != fwrite(content, 1, len, f)) {
+        fclose(f);
+        return 1;
+    }
+    fclose(f);
+    return 0;
+}
+
+// Helper: write package.tl content to temp file, parse, return result
+static int parse_pkg(char const *content, tl_package *out) {
+    char path[512];
+    make_temp_path(path, sizeof(path), "test_package.tl");
+    if (write_file(path, content)) return -1;
+    return tl_package_parse_file(default_allocator(), path, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -23,30 +62,39 @@ static int parse(allocator *alloc, char const *text, tl_manifest *out) {
 // ---------------------------------------------------------------------------
 
 static int test_basic_package(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = MathUtils\n"
-                        "version = 1.0.0\n"
-                        "author = Alice\n"
-                        "modules = [MathUtils, MathUtils.Internal]\n"
-                        "lib_path = [libs/, vendor/]\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n"
+        "author(\"Alice\")\n"
+        "export(\"Mod1\", \"Mod2\")\n"
+        "depend(\"Bar\", \"2.0\")\n"
+        "depend_path(\"./libs\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += !str_eq(m.package.name, S("MathUtils"));
-    error += !str_eq(m.package.version, S("1.0.0"));
-    error += !str_eq(m.package.author, S("Alice"));
-    error += m.package.module_count != 2;
-    if (m.package.module_count == 2) {
-        error += !str_eq(m.package.modules[0], S("MathUtils"));
-        error += !str_eq(m.package.modules[1], S("MathUtils.Internal"));
+    error += rc != 0;
+    if (rc) return error;
+
+    error += pkg.info.format != 1;
+    error += !str_eq(pkg.info.name, S("Foo"));
+    error += !str_eq(pkg.info.version, S("1.0"));
+    error += !str_eq(pkg.info.author, S("Alice"));
+    error += pkg.info.export_count != 2;
+    if (pkg.info.export_count == 2) {
+        error += !str_eq(pkg.info.exports[0], S("Mod1"));
+        error += !str_eq(pkg.info.exports[1], S("Mod2"));
     }
-    error += m.package.lib_path_count != 2;
-    if (m.package.lib_path_count == 2) {
-        error += !str_eq(m.package.lib_path[0], S("libs/"));
-        error += !str_eq(m.package.lib_path[1], S("vendor/"));
+    error += pkg.dep_count != 1;
+    if (pkg.dep_count == 1) {
+        error += !str_eq(pkg.deps[0].name, S("Bar"));
+        error += !str_eq(pkg.deps[0].version, S("2.0"));
+    }
+    error += pkg.info.depend_path_count != 1;
+    if (pkg.info.depend_path_count == 1) {
+        error += !str_eq(pkg.info.depend_paths[0], S("./libs"));
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_basic_package\n", error);
@@ -54,342 +102,307 @@ static int test_basic_package(void) {
 }
 
 static int test_minimal_package(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 0.1.0\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += !str_eq(m.package.name, S("Foo"));
-    error += !str_eq(m.package.version, S("0.1.0"));
-    error += !str_is_empty(m.package.author);
-    error += m.package.module_count != 0;
-    error += m.package.lib_path_count != 0;
-    error += m.dep_count != 0;
-    error += m.optional_dep_count != 0;
+    error += rc != 0;
+    if (rc) return error;
+
+    error += pkg.info.format != 1;
+    error += !str_eq(pkg.info.name, S("Foo"));
+    error += !str_eq(pkg.info.version, S("1.0"));
+    error += !str_is_empty(pkg.info.author);
+    error += pkg.info.export_count != 0;
+    error += pkg.info.depend_path_count != 0;
+    error += pkg.dep_count != 0;
+    error += pkg.optional_dep_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_minimal_package\n", error);
     return error;
 }
 
-static int test_comments_and_blanks(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_multiple_depends(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "# This is a comment\n"
-                        "\n"
-                        "[package]\n"
-                        "# Another comment\n"
-                        "name = Foo\n"
-                        "\n"
-                        "version = 1.0.0\n"
-                        "# trailing comment\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"App\")\n"
+        "version(\"0.1\")\n"
+        "depend(\"Lib1\", \"1.0\")\n"
+        "depend(\"Lib2\", \"2.0\")\n"
+        "depend_optional(\"OptLib\", \"3.0\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += !str_eq(m.package.name, S("Foo"));
-    error += !str_eq(m.package.version, S("1.0.0"));
+    error += rc != 0;
+    if (rc) return error;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_comments_and_blanks\n", error);
-    return error;
-}
-
-static int test_dependencies(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
-
-    char const *input = "[package]\n"
-                        "name = MyApp\n"
-                        "version = 0.1.0\n"
-                        "\n"
-                        "[depend.LoggingLib]\n"
-                        "version = 2.0.0\n"
-                        "path = libs/LoggingLib.tlib\n";
-
-    error += parse(alloc, input, &m) != 0;
-    error += m.dep_count != 1;
-    if (m.dep_count == 1) {
-        error += !str_eq(m.deps[0].name, S("LoggingLib"));
-        error += !str_eq(m.deps[0].version, S("2.0.0"));
-        error += !str_eq(m.deps[0].path, S("libs/LoggingLib.tlib"));
+    error += pkg.dep_count != 2;
+    if (pkg.dep_count == 2) {
+        error += !str_eq(pkg.deps[0].name, S("Lib1"));
+        error += !str_eq(pkg.deps[0].version, S("1.0"));
+        error += !str_eq(pkg.deps[1].name, S("Lib2"));
+        error += !str_eq(pkg.deps[1].version, S("2.0"));
+    }
+    error += pkg.optional_dep_count != 1;
+    if (pkg.optional_dep_count == 1) {
+        error += !str_eq(pkg.optional_deps[0].name, S("OptLib"));
+        error += !str_eq(pkg.optional_deps[0].version, S("3.0"));
     }
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_dependencies\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_depends\n", error);
     return error;
 }
 
-static int test_optional_dependencies(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_depend_with_path(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = MyLib\n"
-                        "version = 1.0.0\n"
-                        "\n"
-                        "[depend-optional.WinAPI]\n"
-                        "version = 3.0.0\n"
-                        "path = libs/WinAPI.tlib\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"App\")\n"
+        "version(\"0.1\")\n"
+        "depend(\"Lib\", \"1.0\", \"./path/Lib.tlib\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += m.dep_count != 0;
-    error += m.optional_dep_count != 1;
-    if (m.optional_dep_count == 1) {
-        error += !str_eq(m.optional_deps[0].name, S("WinAPI"));
-        error += !str_eq(m.optional_deps[0].version, S("3.0.0"));
-        error += !str_eq(m.optional_deps[0].path, S("libs/WinAPI.tlib"));
+    error += rc != 0;
+    if (rc) return error;
+
+    error += pkg.dep_count != 1;
+    if (pkg.dep_count == 1) {
+        error += !str_eq(pkg.deps[0].name, S("Lib"));
+        error += !str_eq(pkg.deps[0].version, S("1.0"));
+        error += !str_eq(pkg.deps[0].path, S("./path/Lib.tlib"));
     }
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_optional_dependencies\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_depend_with_path\n", error);
     return error;
 }
 
-static int test_multiple_deps(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_multiple_depend_paths(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = MyApp\n"
-                        "version = 0.1.0\n"
-                        "\n"
-                        "[depend.LoggingLib]\n"
-                        "version = 2.0.0\n"
-                        "\n"
-                        "[depend.MathUtils]\n"
-                        "version = 1.0.0\n"
-                        "path = libs/MathUtils.tlib\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"App\")\n"
+        "version(\"0.1\")\n"
+        "depend_path(\"./libs\")\n"
+        "depend_path(\"./vendor\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += m.dep_count != 2;
-    if (m.dep_count == 2) {
-        error += !str_eq(m.deps[0].name, S("LoggingLib"));
-        error += !str_eq(m.deps[0].version, S("2.0.0"));
-        error += !str_is_empty(m.deps[0].path);
-        error += !str_eq(m.deps[1].name, S("MathUtils"));
-        error += !str_eq(m.deps[1].version, S("1.0.0"));
-        error += !str_eq(m.deps[1].path, S("libs/MathUtils.tlib"));
+    error += rc != 0;
+    if (rc) return error;
+
+    error += pkg.info.depend_path_count != 2;
+    if (pkg.info.depend_path_count == 2) {
+        error += !str_eq(pkg.info.depend_paths[0], S("./libs"));
+        error += !str_eq(pkg.info.depend_paths[1], S("./vendor"));
     }
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_deps\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_depend_paths\n", error);
     return error;
 }
 
-static int test_missing_name(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_export_multiple_args(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "version = 1.0.0\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"App\")\n"
+        "version(\"0.1\")\n"
+        "export(\"A\", \"B\", \"C\")\n",
+        &pkg);
 
-    // Should fail: name is required
-    error += parse(alloc, input, &m) != 1;
+    error += rc != 0;
+    if (rc) return error;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_missing_name\n", error);
+    error += pkg.info.export_count != 3;
+    if (pkg.info.export_count == 3) {
+        error += !str_eq(pkg.info.exports[0], S("A"));
+        error += !str_eq(pkg.info.exports[1], S("B"));
+        error += !str_eq(pkg.info.exports[2], S("C"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_export_multiple_args\n", error);
+    return error;
+}
+
+static int test_missing_format(void) {
+    int        error = 0;
+    tl_package pkg;
+
+    // No format() call
+    int rc = parse_pkg(
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n",
+        &pkg);
+
+    // Should fail
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_missing_format\n", error);
+    return error;
+}
+
+static int test_format_not_first(void) {
+    int        error = 0;
+    tl_package pkg;
+
+    int rc = parse_pkg(
+        "package(\"Foo\")\n"
+        "format(1)\n"
+        "version(\"1.0\")\n",
+        &pkg);
+
+    // Should fail: format not first
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_format_not_first\n", error);
+    return error;
+}
+
+static int test_unsupported_format(void) {
+    int        error = 0;
+    tl_package pkg;
+
+    int rc = parse_pkg(
+        "format(2)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n",
+        &pkg);
+
+    // Should fail: unsupported format
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_unsupported_format\n", error);
+    return error;
+}
+
+static int test_missing_package(void) {
+    int        error = 0;
+    tl_package pkg;
+
+    int rc = parse_pkg(
+        "format(1)\n"
+        "version(\"1.0\")\n",
+        &pkg);
+
+    // Should fail
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_missing_package\n", error);
     return error;
 }
 
 static int test_missing_version(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n",
+        &pkg);
 
-    // Should fail: version is required
-    error += parse(alloc, input, &m) != 1;
+    // Should fail
+    error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_missing_version\n", error);
     return error;
 }
 
-static int test_missing_dep_version(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_unknown_function(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 1.0.0\n"
-                        "[depend.Bar]\n"
-                        "path = libs/Bar.tlib\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n"
+        "unknown(\"x\")\n",
+        &pkg);
 
-    // Should fail: depend version is required
-    error += parse(alloc, input, &m) != 1;
+    // Should fail
+    error += rc != 1;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_missing_dep_version\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_unknown_function\n", error);
     return error;
 }
 
-static int test_quotes_rejected(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_wrong_arg_count(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = \"Foo\"\n"
-                        "version = 1.0.0\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"a\", \"b\")\n"
+        "version(\"1.0\")\n",
+        &pkg);
 
-    // Should fail: quotes not allowed
-    error += parse(alloc, input, &m) != 1;
+    // Should fail: package expects 1 arg
+    error += rc != 1;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_quotes_rejected\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_wrong_arg_count\n", error);
     return error;
 }
 
-static int test_array_spaces_rejected(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_non_string_arg(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 1.0.0\n"
-                        "modules = [Foo Bar]\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(42)\n"
+        "version(\"1.0\")\n",
+        &pkg);
 
-    // Should fail: spaces in array elements
-    error += parse(alloc, input, &m) != 1;
+    // Should fail: integer where string expected
+    error += rc != 1;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_array_spaces_rejected\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_non_string_arg\n", error);
     return error;
 }
 
-static int test_array_trailing_text_rejected(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_duplicate_package(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 1.0.0\n"
-                        "modules = [A, B] garbage\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n"
+        "package(\"Bar\")\n",
+        &pkg);
 
-    // Should fail: text after closing bracket
-    error += parse(alloc, input, &m) != 1;
+    // Should fail: duplicate package()
+    error += rc != 1;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_array_trailing_text_rejected\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_duplicate_package\n", error);
     return error;
 }
 
-static int test_empty_array(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
+static int test_duplicate_version(void) {
+    int        error = 0;
+    tl_package pkg;
 
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 1.0.0\n"
-                        "modules = []\n";
+    int rc = parse_pkg(
+        "format(1)\n"
+        "package(\"Foo\")\n"
+        "version(\"1.0\")\n"
+        "version(\"2.0\")\n",
+        &pkg);
 
-    error += parse(alloc, input, &m) != 0;
-    error += m.package.module_count != 0;
-    error += m.package.modules != 0;
+    // Should fail: duplicate version()
+    error += rc != 1;
 
-    if (error) fprintf(stderr, "  %d check(s) failed in test_empty_array\n", error);
-    return error;
-}
-
-static int test_whitespace_trimming(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
-
-    char const *input = "[package]\n"
-                        "  name   =   Foo  \n"
-                        "  version  =  1.0.0  \n"
-                        "  modules  =  [ A , B , C ]  \n";
-
-    error += parse(alloc, input, &m) != 0;
-    error += !str_eq(m.package.name, S("Foo"));
-    error += !str_eq(m.package.version, S("1.0.0"));
-    error += m.package.module_count != 3;
-    if (m.package.module_count == 3) {
-        error += !str_eq(m.package.modules[0], S("A"));
-        error += !str_eq(m.package.modules[1], S("B"));
-        error += !str_eq(m.package.modules[2], S("C"));
-    }
-
-    if (error) fprintf(stderr, "  %d check(s) failed in test_whitespace_trimming\n", error);
-    return error;
-}
-
-static int test_multiline_array(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
-
-    char const *input = "[package]\n"
-                        "name = Foo\n"
-                        "version = 1.0.0\n"
-                        "modules = [\n"
-                        "  Alpha,\n"
-                        "  Beta,\n"
-                        "  Gamma\n"
-                        "]\n"
-                        "lib_path = [libs/,\n"
-                        "  vendor/]\n";
-
-    error += parse(alloc, input, &m) != 0;
-    error += m.package.module_count != 3;
-    if (m.package.module_count == 3) {
-        error += !str_eq(m.package.modules[0], S("Alpha"));
-        error += !str_eq(m.package.modules[1], S("Beta"));
-        error += !str_eq(m.package.modules[2], S("Gamma"));
-    }
-    error += m.package.lib_path_count != 2;
-    if (m.package.lib_path_count == 2) {
-        error += !str_eq(m.package.lib_path[0], S("libs/"));
-        error += !str_eq(m.package.lib_path[1], S("vendor/"));
-    }
-
-    if (error) fprintf(stderr, "  %d check(s) failed in test_multiline_array\n", error);
-    return error;
-}
-
-static int test_full_manifest(void) {
-    int         error = 0;
-    allocator  *alloc = default_allocator();
-    tl_manifest m;
-
-    char const *input = "[package]\n"
-                        "name = MathUtils\n"
-                        "version = 1.0.0\n"
-                        "author = Alice\n"
-                        "modules = [MathUtils]\n"
-                        "lib_path = [libs/]\n"
-                        "\n"
-                        "# Dependencies use [depend.Name] sections\n"
-                        "[depend.LoggingLib]\n"
-                        "version = 2.0.0\n"
-                        "path = libs/LoggingLib.tlib\n";
-
-    error += parse(alloc, input, &m) != 0;
-    error += !str_eq(m.package.name, S("MathUtils"));
-    error += !str_eq(m.package.version, S("1.0.0"));
-    error += !str_eq(m.package.author, S("Alice"));
-    error += m.package.module_count != 1;
-    if (m.package.module_count == 1) {
-        error += !str_eq(m.package.modules[0], S("MathUtils"));
-    }
-    error += m.package.lib_path_count != 1;
-    if (m.package.lib_path_count == 1) {
-        error += !str_eq(m.package.lib_path[0], S("libs/"));
-    }
-    error += m.dep_count != 1;
-    if (m.dep_count == 1) {
-        error += !str_eq(m.deps[0].name, S("LoggingLib"));
-        error += !str_eq(m.deps[0].version, S("2.0.0"));
-        error += !str_eq(m.deps[0].path, S("libs/LoggingLib.tlib"));
-    }
-    error += m.optional_dep_count != 0;
-
-    if (error) fprintf(stderr, "  %d check(s) failed in test_full_manifest\n", error);
+    if (error) fprintf(stderr, "  %d check(s) failed in test_duplicate_version\n", error);
     return error;
 }
 
@@ -398,25 +411,26 @@ static int test_full_manifest(void) {
 // ---------------------------------------------------------------------------
 
 int main(void) {
+    init_temp_dir();
     int error      = 0;
     int this_error = 0;
 
     T(test_basic_package)
     T(test_minimal_package)
-    T(test_comments_and_blanks)
-    T(test_dependencies)
-    T(test_optional_dependencies)
-    T(test_multiple_deps)
-    T(test_missing_name)
+    T(test_multiple_depends)
+    T(test_depend_with_path)
+    T(test_multiple_depend_paths)
+    T(test_export_multiple_args)
+    T(test_missing_format)
+    T(test_format_not_first)
+    T(test_unsupported_format)
+    T(test_missing_package)
     T(test_missing_version)
-    T(test_missing_dep_version)
-    T(test_quotes_rejected)
-    T(test_array_spaces_rejected)
-    T(test_array_trailing_text_rejected)
-    T(test_empty_array)
-    T(test_whitespace_trimming)
-    T(test_multiline_array)
-    T(test_full_manifest)
+    T(test_unknown_function)
+    T(test_wrong_arg_count)
+    T(test_non_string_arg)
+    T(test_duplicate_package)
+    T(test_duplicate_version)
 
     if (error) fprintf(stderr, "manifest tests: %d FAILED\n", error);
     return error;

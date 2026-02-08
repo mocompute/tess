@@ -55,8 +55,6 @@ typedef struct {
     int               in_place;
     int               unpack_list; // --list option for unpack command
 
-    // Pack metadata options
-    char const *pack_manifest; // -m <path>
 
     int         is_library;
     int         is_executable;
@@ -87,8 +85,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tlib archive from source files (-o and -m required)\n");
-    printf("    validate               validate source files against manifest (-m required)\n");
+    printf("    pack                   create .tlib archive from source files (-o required, reads package.tl)\n");
+    printf("    validate               validate source files against package.tl\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
@@ -100,7 +98,6 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents without extracting (unpack only)\n");
-    printf("    -m <path>              manifest file (pack and validate)\n");
     printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -140,7 +137,6 @@ void state_init(state *self) {
     self->help                 = 0;
     self->optimize             = 0;
     self->in_place             = 0;
-    self->pack_manifest        = null;
     self->is_library           = 0;
     self->is_executable        = 0;
 }
@@ -203,8 +199,6 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         define = str_init(self->arena, sym);
                 array_push(self->defines, define);
-            } else if (0 == strncmp("-m", argv[i], 2)) {
-                self->pack_manifest = argv[i][2] ? argv[i] + 2 : argv[++i];
             } else if (0 == strncmp("--", argv[i], 2)) {
                 state_gather_long_option(self, argv[i]);
             } else {
@@ -908,11 +902,6 @@ static int pack_files(state *self) {
         return 1;
     }
 
-    if (!self->pack_manifest) {
-        fprintf(stderr, "error: -m option is required for pack command\n");
-        return 1;
-    }
-
     if (self->words.size < 2) {
         fprintf(stderr, "error: pack command requires input file(s)\n");
         usage(1, self->argv0);
@@ -941,65 +930,70 @@ static int pack_files(state *self) {
         // FIXME: print sorted module list
     }
 
-    // Delegate to tlib module
-    tl_tlib_pack_opts opts     = {.verbose = self->verbose};
-
-    tl_manifest       manifest = {0};
-    if (tl_manifest_parse_file(self->arena, self->pack_manifest, &manifest)) {
+    // Parse package.tl from CWD
+    tl_package pkg = {0};
+    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
         return 1;
     }
 
-    // Validate modules against manifest
+    if (pkg.info.export_count == 0) {
+        fprintf(stderr, "error: package.tl must declare at least one export() module for pack\n");
+        return 1;
+    }
+
+    // Validate exported modules against scanned source
     tl_source_scanner_validate_result vresult = tl_source_scanner_validate(
-      &self->scanner, manifest.package.modules, manifest.package.module_count, self->verbose);
+      &self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
     if (vresult.error_count > 0) {
         fprintf(stderr, "pack aborted: %d validation error(s)\n", vresult.error_count);
         return 1;
     }
 
-    opts.name    = str_cstr(&manifest.package.name);
-    opts.version = str_cstr(&manifest.package.version);
-    opts.author  = str_is_empty(manifest.package.author) ? null : str_cstr(&manifest.package.author);
+    // Build pack opts from package
+    tl_tlib_pack_opts opts = {.verbose = self->verbose};
+    opts.name    = str_cstr(&pkg.info.name);
+    opts.version = str_cstr(&pkg.info.version);
+    opts.author  = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
 
-    if (manifest.package.module_count > 0) {
-        if (manifest.package.module_count > UINT16_MAX) {
-            fprintf(stderr, "error: too many modules (%u, max %u)\n", manifest.package.module_count,
+    if (pkg.info.export_count > 0) {
+        if (pkg.info.export_count > UINT16_MAX) {
+            fprintf(stderr, "error: too many modules (%u, max %u)\n", pkg.info.export_count,
                     (unsigned)UINT16_MAX);
             return 1;
         }
-        opts.modules      = manifest.package.modules;
-        opts.module_count = (u16)manifest.package.module_count;
+        opts.modules      = pkg.info.exports;
+        opts.module_count = (u16)pkg.info.export_count;
     }
 
     // Build depends array: "Name=Version" strings
-    if (manifest.dep_count > 0) {
-        if (manifest.dep_count > UINT16_MAX) {
-            fprintf(stderr, "error: too many dependencies (%u, max %u)\n", manifest.dep_count,
+    if (pkg.dep_count > 0) {
+        if (pkg.dep_count > UINT16_MAX) {
+            fprintf(stderr, "error: too many dependencies (%u, max %u)\n", pkg.dep_count,
                     (unsigned)UINT16_MAX);
             return 1;
         }
 
-        opts.depends       = alloc_malloc(self->arena, manifest.dep_count * sizeof(str));
-        opts.depends_count = (u16)manifest.dep_count;
+        opts.depends       = alloc_malloc(self->arena, pkg.dep_count * sizeof(str));
+        opts.depends_count = (u16)pkg.dep_count;
 
-        for (u32 i = 0; i < manifest.dep_count; i++) {
+        for (u32 i = 0; i < pkg.dep_count; i++) {
             opts.depends[i] =
-              str_cat_3(self->arena, manifest.deps[i].name, S("="), manifest.deps[i].version);
+              str_cat_3(self->arena, pkg.deps[i].name, S("="), pkg.deps[i].version);
         }
     }
 
     // Build depends_optional array
-    if (manifest.optional_dep_count > 0) {
-        if (manifest.optional_dep_count > UINT16_MAX) {
+    if (pkg.optional_dep_count > 0) {
+        if (pkg.optional_dep_count > UINT16_MAX) {
             fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
-                    manifest.optional_dep_count, (unsigned)UINT16_MAX);
+                    pkg.optional_dep_count, (unsigned)UINT16_MAX);
             return 1;
         }
-        opts.depends_optional       = alloc_malloc(self->arena, manifest.optional_dep_count * sizeof(str));
-        opts.depends_optional_count = (u16)manifest.optional_dep_count;
-        for (u32 i = 0; i < manifest.optional_dep_count; i++) {
-            opts.depends_optional[i] = str_cat_3(self->arena, manifest.optional_deps[i].name, S("="),
-                                                 manifest.optional_deps[i].version);
+        opts.depends_optional       = alloc_malloc(self->arena, pkg.optional_dep_count * sizeof(str));
+        opts.depends_optional_count = (u16)pkg.optional_dep_count;
+        for (u32 i = 0; i < pkg.optional_dep_count; i++) {
+            opts.depends_optional[i] = str_cat_3(self->arena, pkg.optional_deps[i].name, S("="),
+                                                 pkg.optional_deps[i].version);
         }
     }
 
@@ -1007,11 +1001,6 @@ static int pack_files(state *self) {
 }
 
 static int validate_files(state *self) {
-    if (!self->pack_manifest) {
-        fprintf(stderr, "error: -m option is required for validate command\n");
-        return 1;
-    }
-
     if (self->words.size < 2) {
         fprintf(stderr, "error: validate command requires input file(s)\n");
         usage(1, self->argv0);
@@ -1021,18 +1010,18 @@ static int validate_files(state *self) {
     // Get input files (skip command name)
     c_string_csized input_files = {.v = self->words.v + 1, .size = self->words.size - 1};
 
-    // Scan all files in dependency order (populates scanner.modules_seen, scanner.export_seen)
+    // Scan all files in dependency order (populates scanner.modules_seen)
     files_in_order(self, input_files);
 
-    // Parse manifest
-    tl_manifest manifest = {0};
-    if (tl_manifest_parse_file(self->arena, self->pack_manifest, &manifest)) {
+    // Parse package.tl
+    tl_package pkg = {0};
+    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
         return 1;
     }
 
-    // Cross-check scanner results against manifest
+    // Cross-check scanner results against exported modules
     tl_source_scanner_validate_result result = tl_source_scanner_validate(
-      &self->scanner, manifest.package.modules, manifest.package.module_count, self->verbose);
+      &self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
 
     if (result.error_count > 0) {
         fprintf(stderr, "validation failed: %d error(s)\n", result.error_count);

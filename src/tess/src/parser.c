@@ -3854,12 +3854,6 @@ static int toplevel_funcall_only(parser *self) {
         else if (ERROR_STOP == res) goto error;
 
         self->error.tag = tl_err_expected_funcall;
-        // Fall through to cleanup_fail
-
-    cleanup_fail:
-        arena_reset(self->speculative);
-        self->ast_arena = permanent;
-        return 1;
 
     error:
         arena_reset(self->speculative);
@@ -3867,13 +3861,11 @@ static int toplevel_funcall_only(parser *self) {
         return res;
 
     success:
-        if (self->expect_module) {
-            self->error.tag = tl_err_expected_module;
-            goto cleanup_fail;
-        }
-
-        // continue loop, reset speculative arena for next iteration
+        // Clone successful result to permanent arena before resetting speculative
+        self->result = ast_node_clone(permanent, self->result);
         arena_reset(self->speculative);
+        self->ast_arena = permanent;
+        return 0;
     }
 
     // EOF reached

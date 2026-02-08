@@ -12,7 +12,6 @@ tl_source_scanner tl_source_scanner_create(allocator *arena, struct import_resol
       .arena                  = arena,
       .resolver               = resolver,
       .modules_seen           = map_new(arena, str, str, 8),
-      .export_seen            = hset_create(arena, 8),
       .import_defines         = hset_create(arena, 8),
       .conditional_skip_depth = 0,
     };
@@ -83,9 +82,8 @@ typedef int (*scan_directive_fn)(void *ctx, char const *data, u32 start, u32 end
 
 // Walk source text with string/comment awareness.
 // Calls fn for each # directive at line start.
-// Sets *out_has_export to 1 if [[export]] found (pass NULL if not needed).
 // Returns 0 if all directives processed, or the non-zero return from fn.
-static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx, int *out_has_export) {
+static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx) {
     u32         pos = 0, capture_start = 0;
     char const *data = input.v;
     u32         size = input.size;
@@ -101,19 +99,13 @@ static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx, i
         in_comment
     } state        = start;
 
-    int has_export = 0;
-
     while (pos < size) {
         switch (state) {
         case start: {
             char c = data[pos++];
             if ('#' == c) state = start_hash;
             else if ('"' == c) state = in_string;
-            else if ('[' == c && pos + 8 <= size && 0 == memcmp(&data[pos], "[export]]", 9)) {
-                pos += 9;
-                has_export = 1;
-                state      = noise;
-            } else if ('/' == c && pos < size && '/' == data[pos]) {
+            else if ('/' == c && pos < size && '/' == data[pos]) {
                 pos++;
                 state = in_comment;
             } else if (isspace(c)) state = start;
@@ -122,7 +114,7 @@ static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx, i
         case noise: {
             char c = data[pos++];
             if ('\n' == c) state = start;
-            else if ('"' == c || '/' == c || '[' == c) {
+            else if ('"' == c || '/' == c) {
                 pos--;
                 state = start;
             }
@@ -161,8 +153,6 @@ static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx, i
         if (rc) return rc;
     }
 
-    if (out_has_export) *out_has_export = has_export;
-
     return 0;
 }
 
@@ -183,17 +173,9 @@ int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized i
     self->conditional_skip_depth  = 0;
     self->current_file_module     = (str){0};
 
-    int           file_has_export = 0;
     scan_full_ctx ctx             = {.self = self, .file_path = file_path, .imports = imports};
 
-    int           rc              = scan_directives(input, scan_full_callback, &ctx, &file_has_export);
-    if (rc) return rc;
-
-    if (file_has_export && !str_is_empty(self->current_file_module)) {
-        str_hset_insert(&self->export_seen, self->current_file_module);
-    }
-
-    return 0;
+    return scan_directives(input, scan_full_callback, &ctx);
 }
 
 // Context and callback for collect_imports (no conditionals, imports only).
@@ -222,66 +204,40 @@ static int collect_imports_callback(void *raw_ctx, char const *data, u32 start, 
 
 void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_array *imports) {
     collect_imports_ctx ctx = {.alloc = alloc, .imports = imports};
-    scan_directives(input, collect_imports_callback, &ctx, null);
+    scan_directives(input, collect_imports_callback, &ctx);
 }
 
 tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,
-                                                             str const         *manifest_modules,
-                                                             u32 manifest_module_count, int verbose) {
+                                                             str const         *export_modules,
+                                                             u32 export_module_count, int verbose) {
 
     tl_source_scanner_validate_result result = {0, 0};
 
-    if (manifest_module_count == 0) return result;
+    if (export_module_count == 0) return result;
 
-    // Build hashset of manifest module names for O(1) lookup
-    hashmap *manifest_set = hset_create(self->arena, manifest_module_count * 2);
-    for (u32 i = 0; i < manifest_module_count; i++) {
-        str_hset_insert(&manifest_set, manifest_modules[i]);
+    // Build hashset of export module names for O(1) lookup
+    hashmap *export_set = hset_create(self->arena, export_module_count * 2);
+    for (u32 i = 0; i < export_module_count; i++) {
+        str_hset_insert(&export_set, export_modules[i]);
     }
 
-    // Check 1: every manifest module must exist in modules_seen
-    for (u32 i = 0; i < manifest_module_count; i++) {
-        str m = manifest_modules[i];
+    // Check: every export module must exist in modules_seen
+    for (u32 i = 0; i < export_module_count; i++) {
+        str m = export_modules[i];
         if (!str_map_contains(self->modules_seen, m)) {
             fprintf(stderr,
-                    "error: manifest declares module '%s' but no #module directive found in source\n",
+                    "error: export() declares module '%s' but no #module directive found in source\n",
                     str_cstr(&m));
             result.error_count++;
         }
     }
 
-    // If errors found, skip warnings (they depend on correct module discovery)
-    if (result.error_count > 0) return result;
-
-    // Check 2: public module with no [[export]] symbols
-    for (u32 i = 0; i < manifest_module_count; i++) {
-        str m = manifest_modules[i];
-        if (!str_hset_contains(self->export_seen, m)) {
-            fprintf(stderr, "warning: module '%s' is listed as public but has no [[export]] symbols\n",
-                    str_cstr(&m));
-            result.warning_count++;
-        }
-    }
-
-    // Check 3: non-public module with [[export]] symbols
-    hashmap_iterator iter = {0};
-    while (hset_iter(self->export_seen, &iter)) {
-        str name = str_init_n(self->arena, iter.key_ptr, iter.key_size);
-        if (!str_hset_contains(manifest_set, name)) {
-            fprintf(stderr,
-                    "warning: module '%s' has [[export]] symbols but is not listed in manifest modules\n",
-                    str_cstr(&name));
-            result.warning_count++;
-        }
-        str_deinit(self->arena, &name);
-    }
-
-    // Verbose: list internal modules (in modules_seen but not in manifest)
+    // Verbose: list internal modules (in modules_seen but not in export list)
     if (verbose) {
         str_array keys         = str_map_sorted_keys(self->arena, self->modules_seen);
         int       has_internal = 0;
         forall(i, keys) {
-            if (!str_hset_contains(manifest_set, keys.v[i])) {
+            if (!str_hset_contains(export_set, keys.v[i])) {
                 if (!has_internal) {
                     fprintf(stderr, "Internal modules:\n");
                     has_internal = 1;
