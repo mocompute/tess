@@ -293,7 +293,12 @@ int platform_exec(platform_exec_opts const *opts) {
                 captured_cap = (captured_len + bytes_read) * 2;
                 if (captured_cap < 4096) captured_cap = 4096;
                 char *new_buf = realloc(captured, captured_cap);
-                if (!new_buf) { free(captured); captured = NULL; captured_len = 0; break; }
+                if (!new_buf) {
+                    free(captured);
+                    captured     = NULL;
+                    captured_len = 0;
+                    break;
+                }
                 captured = new_buf;
             }
             memcpy(captured + captured_len, buf, bytes_read);
@@ -376,7 +381,7 @@ int platform_exec(platform_exec_opts const *opts) {
     size_t captured_len = 0;
     size_t captured_cap = 0;
 
-    FILE *output_file = fdopen(output_pipe[0], "r");
+    FILE  *output_file  = fdopen(output_pipe[0], "r");
     if (output_file) {
         size_t n;
         while ((n = fread(buf, 1, sizeof(buf), output_file)) > 0) {
@@ -387,7 +392,12 @@ int platform_exec(platform_exec_opts const *opts) {
                     captured_cap = (captured_len + n) * 2;
                     if (captured_cap < 4096) captured_cap = 4096;
                     char *new_buf = realloc(captured, captured_cap);
-                    if (!new_buf) { free(captured); captured = NULL; captured_len = 0; break; }
+                    if (!new_buf) {
+                        free(captured);
+                        captured     = NULL;
+                        captured_len = 0;
+                        break;
+                    }
                     captured = new_buf;
                 }
                 memcpy(captured + captured_len, buf, n);

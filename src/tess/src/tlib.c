@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <string.h>
 
-
 #define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
 #define TLIB_VERSION       1u
 #define TLIB_FIXED_HEADER  8u /* magic + version */
@@ -24,16 +23,16 @@ static void write_u32_be(byte *p, u32 v) {
     p[3] = (byte)(v);
 }
 
-static  u32 read_u32_be(byte const *p) {
+static u32 read_u32_be(byte const *p) {
     return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
 }
 
-static  void write_u16_be(byte *p, u16 v) {
+static void write_u16_be(byte *p, u16 v) {
     p[0] = (byte)(v >> 8);
     p[1] = (byte)(v);
 }
 
-static  u16 read_u16_be(byte const *p) {
+static u16 read_u16_be(byte const *p) {
     return ((u16)p[0] << 8) | (u16)p[1];
 }
 
@@ -437,7 +436,7 @@ static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries
         for (u32 j = 0; j < imports.size; j++) {
             str  imp   = imports.v[j];
             span s     = str_span(&imp);
-            char first = s.len > 0 ? s.buf[0] : 0;
+            char first = (char)(s.len > 0 ? s.buf[0] : 0);
 
             // Skip non-quoted imports (angle-bracket = stdlib, not in archive)
             if (first != '"') continue;
@@ -642,7 +641,7 @@ static int mkdir_p(char const *path) {
             char saved = *p;
             *p         = '\0';
 
-            int ret = platform_mkdir(tmp);
+            int ret    = platform_mkdir(tmp);
             if (ret != 0 && errno != EEXIST) {
                 return 1;
             }
@@ -660,8 +659,8 @@ static int mkdir_p(char const *path) {
     return 0;
 }
 
-int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
-                    char const *output_dir, str_array *out_files) {
+int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const *output_dir,
+                    str_array *out_files) {
     if (mkdir_p(output_dir) != 0) {
         fprintf(stderr, "tlib: failed to create output directory: %s\n", output_dir);
         return 1;
@@ -670,12 +669,12 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
     str out_dir = str_init(alloc, output_dir);
 
     for (u32 i = 0; i < archive->entries_count; i++) {
-        tl_tlib_entry const *entry = &archive->entries[i];
+        tl_tlib_entry const *entry    = &archive->entries[i];
 
-        str name     = str_init_n(alloc, entry->name, entry->name_len);
-        str out_path = file_path_join(alloc, out_dir, name);
+        str                  name     = str_init_n(alloc, entry->name, entry->name_len);
+        str                  out_path = file_path_join(alloc, out_dir, name);
 
-        str parent = file_dirname(alloc, out_path);
+        str                  parent   = file_dirname(alloc, out_path);
         if (!str_is_empty(parent) && mkdir_p(str_cstr(&parent)) != 0) {
             fprintf(stderr, "tlib: failed to create directory: %s\n", str_cstr(&parent));
             return 1;

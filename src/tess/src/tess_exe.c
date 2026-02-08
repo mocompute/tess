@@ -55,12 +55,11 @@ typedef struct {
     int               in_place;
     int               unpack_list; // --list option for unpack command
 
-
-    int         is_library;
-    int         is_executable;
+    int               is_library;
+    int               is_executable;
 
     // Temp directories created during package extraction (cleaned up in state_deinit)
-    c_string_carray     temp_dirs;
+    c_string_carray temp_dirs;
 
     // Compilation statistics (populated when report_stats is set)
     struct {
@@ -89,7 +88,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tlib archive from source files (-o required, reads package.tl)\n");
+    printf("    pack                   create .tlib archive from source files (-o required, reads "
+           "package.tl)\n");
     printf("    validate               validate source files against package.tl\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
@@ -327,12 +327,10 @@ static void scan_file_directives(state *self, str path, str_array *resolved_path
     }
 }
 
-
 // Find a .tlib file for a dependency.
 // If dep->path is non-empty (3-arg depend()), use it directly.
 // Otherwise, search depend_path() directories for <name>.tlib.
-static str resolve_tlib_path(state *self, tl_package_dep const *dep,
-                             tl_package_info const *info) {
+static str resolve_tlib_path(state *self, tl_package_dep const *dep, tl_package_info const *info) {
     if (!str_is_empty(dep->path)) {
         return dep->path;
     }
@@ -361,15 +359,15 @@ static int parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *o
 
 // Context for recursive dependency resolution.
 typedef struct {
-    hashmap   *loaded; // name -> version (str->str map) for dedup and conflict detection
-    str_array  stack;  // package names currently being resolved (cycle detection)
+    hashmap  *loaded; // name -> version (str->str map) for dedup and conflict detection
+    str_array stack;  // package names currently being resolved (cycle detection)
 } dep_resolve_ctx;
 
 // Recursively resolve a single dependency and its transitive deps.
 // Uses consumer's depend_path directories for transitive resolution.
 static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
-                                 tl_package_info const *consumer_info,
-                                 dep_resolve_ctx *ctx, str_array *out_pkg_files) {
+                                 tl_package_info const *consumer_info, dep_resolve_ctx *ctx,
+                                 str_array *out_pkg_files) {
     // Check for cycle: is this package already on the resolution stack?
     for (u32 i = 0; i < ctx->stack.size; i++) {
         if (str_eq(ctx->stack.v[i], dep_name)) {
@@ -386,8 +384,7 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     if (str_map_contains(ctx->loaded, dep_name)) {
         str *loaded_version = str_map_get(ctx->loaded, dep_name);
         if (!str_eq(*loaded_version, dep_version)) {
-            fprintf(stderr,
-                    "error: version conflict for package '%s': requires both '%s' and '%s'\n",
+            fprintf(stderr, "error: version conflict for package '%s': requires both '%s' and '%s'\n",
                     str_cstr(&dep_name), str_cstr(loaded_version), str_cstr(&dep_version));
             return 1;
         }
@@ -396,10 +393,9 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
 
     // Resolve .tlib path
     tl_package_dep synth_dep = {.name = dep_name, .version = dep_version, .path = str_empty()};
-    str tlib_path = resolve_tlib_path(self, &synth_dep, consumer_info);
+    str            tlib_path = resolve_tlib_path(self, &synth_dep, consumer_info);
     if (str_is_empty(tlib_path)) {
-        fprintf(stderr, "error: package '%s=%s' not found",
-                str_cstr(&dep_name), str_cstr(&dep_version));
+        fprintf(stderr, "error: package '%s=%s' not found", str_cstr(&dep_name), str_cstr(&dep_version));
         if (ctx->stack.size > 0) {
             fprintf(stderr, " (required by '%s')", str_cstr(&ctx->stack.v[ctx->stack.size - 1]));
         }
@@ -416,17 +412,16 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     // Read archive
     tl_tlib_archive archive;
     if (tl_tlib_read(self->arena, str_cstr(&tlib_path), &archive)) {
-        fprintf(stderr, "error: failed to read package '%s' from '%s'\n",
-                str_cstr(&dep_name), str_cstr(&tlib_path));
+        fprintf(stderr, "error: failed to read package '%s' from '%s'\n", str_cstr(&dep_name),
+                str_cstr(&tlib_path));
         return 1;
     }
 
     // Verify version
     if (!str_eq(archive.metadata.version, dep_version)) {
-        fprintf(stderr,
-                "error: package '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
-                str_cstr(&dep_name), str_cstr(&dep_version),
-                str_cstr(&archive.metadata.version), str_cstr(&tlib_path));
+        fprintf(stderr, "error: package '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
+                str_cstr(&dep_name), str_cstr(&dep_version), str_cstr(&archive.metadata.version),
+                str_cstr(&tlib_path));
         return 1;
     }
 
@@ -437,14 +432,12 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     for (u16 i = 0; i < archive.metadata.depends_count; i++) {
         str trans_name    = str_empty();
         str trans_version = str_empty();
-        if (parse_dep_string(self->arena, archive.metadata.depends[i],
-                             &trans_name, &trans_version)) {
+        if (parse_dep_string(self->arena, archive.metadata.depends[i], &trans_name, &trans_version)) {
             fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                     str_cstr(&archive.metadata.depends[i]), str_cstr(&dep_name));
             return 1;
         }
-        if (resolve_dep_recursive(self, trans_name, trans_version, consumer_info,
-                                  ctx, out_pkg_files)) {
+        if (resolve_dep_recursive(self, trans_name, trans_version, consumer_info, ctx, out_pkg_files)) {
             return 1;
         }
     }
@@ -458,8 +451,7 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     // Extract to temp directory
     platform_temp_path tmppath;
     if (platform_temp_path_create(&tmppath, "tess-pkg-")) {
-        fprintf(stderr, "error: failed to create temp directory for package '%s'\n",
-                str_cstr(&dep_name));
+        fprintf(stderr, "error: failed to create temp directory for package '%s'\n", str_cstr(&dep_name));
         return 1;
     }
     state_track_temp_dir(self, tmppath.path);
@@ -470,9 +462,8 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     }
 
     if (self->verbose) {
-        fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n",
-                str_cstr(&dep_name), str_cstr(&dep_version),
-                str_cstr(&tlib_path), archive.entries_count, tmppath.path);
+        fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep_name),
+                str_cstr(&dep_version), str_cstr(&tlib_path), archive.entries_count, tmppath.path);
     }
 
     return 0;
@@ -498,8 +489,8 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
     }
 
     dep_resolve_ctx ctx = {
-        .loaded = map_new(self->arena, str, str, 8),
-        .stack  = {.alloc = self->arena},
+      .loaded = map_new(self->arena, str, str, 8),
+      .stack  = {.alloc = self->arena},
     };
 
     for (u32 i = 0; i < pkg.dep_count; i++) {
@@ -508,8 +499,8 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         // Direct deps may have explicit paths; use resolve_tlib_path with the original dep
         str tlib_path = resolve_tlib_path(self, dep, &pkg.info);
         if (str_is_empty(tlib_path)) {
-            fprintf(stderr, "error: package '%s=%s' not found",
-                    str_cstr(&dep->name), str_cstr(&dep->version));
+            fprintf(stderr, "error: package '%s=%s' not found", str_cstr(&dep->name),
+                    str_cstr(&dep->version));
             if (pkg.info.depend_path_count > 0) {
                 fprintf(stderr, "; searched:");
                 for (u32 j = 0; j < pkg.info.depend_path_count; j++) {
@@ -525,8 +516,7 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         if (str_map_contains(ctx.loaded, dep->name)) {
             str *loaded_version = str_map_get(ctx.loaded, dep->name);
             if (!str_eq(*loaded_version, dep->version)) {
-                fprintf(stderr,
-                        "error: version conflict for package '%s': requires both '%s' and '%s'\n",
+                fprintf(stderr, "error: version conflict for package '%s': requires both '%s' and '%s'\n",
                         str_cstr(&dep->name), str_cstr(loaded_version), str_cstr(&dep->version));
                 return 1;
             }
@@ -536,17 +526,16 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         // Read archive
         tl_tlib_archive archive;
         if (tl_tlib_read(self->arena, str_cstr(&tlib_path), &archive)) {
-            fprintf(stderr, "error: failed to read package '%s' from '%s'\n",
-                    str_cstr(&dep->name), str_cstr(&tlib_path));
+            fprintf(stderr, "error: failed to read package '%s' from '%s'\n", str_cstr(&dep->name),
+                    str_cstr(&tlib_path));
             return 1;
         }
 
         // Verify version
         if (!str_eq(archive.metadata.version, dep->version)) {
-            fprintf(stderr,
-                    "error: package '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
-                    str_cstr(&dep->name), str_cstr(&dep->version),
-                    str_cstr(&archive.metadata.version), str_cstr(&tlib_path));
+            fprintf(stderr, "error: package '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
+                    str_cstr(&dep->name), str_cstr(&dep->version), str_cstr(&archive.metadata.version),
+                    str_cstr(&tlib_path));
             return 1;
         }
 
@@ -557,14 +546,12 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         for (u16 j = 0; j < archive.metadata.depends_count; j++) {
             str trans_name    = str_empty();
             str trans_version = str_empty();
-            if (parse_dep_string(self->arena, archive.metadata.depends[j],
-                                 &trans_name, &trans_version)) {
+            if (parse_dep_string(self->arena, archive.metadata.depends[j], &trans_name, &trans_version)) {
                 fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                         str_cstr(&archive.metadata.depends[j]), str_cstr(&dep->name));
                 return 1;
             }
-            if (resolve_dep_recursive(self, trans_name, trans_version, &pkg.info,
-                                      &ctx, out_pkg_files)) {
+            if (resolve_dep_recursive(self, trans_name, trans_version, &pkg.info, &ctx, out_pkg_files)) {
                 return 1;
             }
         }
@@ -585,15 +572,13 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         state_track_temp_dir(self, tmppath.path);
 
         if (tl_tlib_extract(self->arena, &archive, tmppath.path, out_pkg_files)) {
-            fprintf(stderr, "error: failed to extract package '%s'\n",
-                    str_cstr(&dep->name));
+            fprintf(stderr, "error: failed to extract package '%s'\n", str_cstr(&dep->name));
             return 1;
         }
 
         if (self->verbose) {
-            fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n",
-                    str_cstr(&dep->name), str_cstr(&dep->version),
-                    str_cstr(&tlib_path), archive.entries_count, tmppath.path);
+            fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep->name),
+                    str_cstr(&dep->version), str_cstr(&tlib_path), archive.entries_count, tmppath.path);
         }
     }
 
@@ -738,25 +723,25 @@ int compile(state *self) {
     hires_timer phase_timer;
     hires_timer_init(&phase_timer);
 
-    c_string_csized paths       = {.v = &self->words.v[1], .size = self->words.size - 1};
+    c_string_csized paths = {.v = &self->words.v[1], .size = self->words.size - 1};
 
     // Load package dependencies (if package.tl exists with depend() declarations)
     str_array pkg_files = {.alloc = self->arena};
     if (load_package_deps(self, &pkg_files)) return 1;
 
-    tl_infer_opts   infer_opts  = {.is_library = self->is_library};
-    tl_infer       *infer       = tl_infer_create(default_allocator(), &infer_opts);
+    tl_infer_opts infer_opts  = {.is_library = self->is_library};
+    tl_infer     *infer       = tl_infer_create(default_allocator(), &infer_opts);
 
-    parser_opts     parser_opts = {
-          .registry      = tl_infer_get_registry(infer),
-          .files         = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
-          .prelude       = embed_prelude_tl,
-          .defines       = self->defines,
-          // The parser validates nested modules (#module Foo.Bar) by checking that the
-          // parent (Foo) exists. Without this, cross-file nested modules fail when import
-          // resolution orders the child before the parent (the parser hasn't seen Foo yet).
-          // The scanner has already discovered all modules, so we pass its map here.
-          .known_modules = self->scanner.modules_seen,
+    parser_opts   parser_opts = {
+        .registry = tl_infer_get_registry(infer),
+        .files    = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
+        .prelude  = embed_prelude_tl,
+        .defines  = self->defines,
+      // The parser validates nested modules (#module Foo.Bar) by checking that the
+      // parent (Foo) exists. Without this, cross-file nested modules fail when import
+      // resolution orders the child before the parent (the parser hasn't seen Foo yet).
+      // The scanner has already discovered all modules, so we pass its map here.
+        .known_modules = self->scanner.modules_seen,
     };
 
     // === PARSING PHASE ===
@@ -1244,8 +1229,8 @@ static int pack_files(state *self) {
     }
 
     // Validate exported modules against scanned source
-    tl_source_scanner_validate_result vresult = tl_source_scanner_validate(
-      &self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
+    tl_source_scanner_validate_result vresult =
+      tl_source_scanner_validate(&self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
     if (vresult.error_count > 0) {
         fprintf(stderr, "pack aborted: %d validation error(s)\n", vresult.error_count);
         return 1;
@@ -1253,11 +1238,11 @@ static int pack_files(state *self) {
 
     // Validate declared dependencies exist and versions match
     for (u32 i = 0; i < pkg.dep_count; i++) {
-        tl_package_dep *dep = &pkg.deps[i];
-        str tlib_path = resolve_tlib_path(self, dep, &pkg.info);
+        tl_package_dep *dep       = &pkg.deps[i];
+        str             tlib_path = resolve_tlib_path(self, dep, &pkg.info);
         if (str_is_empty(tlib_path)) {
-            fprintf(stderr, "error: declared dependency '%s=%s' not found",
-                    str_cstr(&dep->name), str_cstr(&dep->version));
+            fprintf(stderr, "error: declared dependency '%s=%s' not found", str_cstr(&dep->name),
+                    str_cstr(&dep->version));
             if (pkg.info.depend_path_count > 0) {
                 fprintf(stderr, "; searched:");
                 for (u32 j = 0; j < pkg.info.depend_path_count; j++) {
@@ -1269,24 +1254,23 @@ static int pack_files(state *self) {
         }
         tl_tlib_archive dep_archive;
         if (tl_tlib_read(self->arena, str_cstr(&tlib_path), &dep_archive)) {
-            fprintf(stderr, "error: failed to read dependency '%s' from '%s'\n",
-                    str_cstr(&dep->name), str_cstr(&tlib_path));
+            fprintf(stderr, "error: failed to read dependency '%s' from '%s'\n", str_cstr(&dep->name),
+                    str_cstr(&tlib_path));
             return 1;
         }
         if (!str_eq(dep_archive.metadata.version, dep->version)) {
-            fprintf(stderr,
-                    "error: dependency '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
-                    str_cstr(&dep->name), str_cstr(&dep->version),
-                    str_cstr(&dep_archive.metadata.version), str_cstr(&tlib_path));
+            fprintf(stderr, "error: dependency '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
+                    str_cstr(&dep->name), str_cstr(&dep->version), str_cstr(&dep_archive.metadata.version),
+                    str_cstr(&tlib_path));
             return 1;
         }
     }
 
     // Build pack opts from package
     tl_tlib_pack_opts opts = {.verbose = self->verbose};
-    opts.name    = str_cstr(&pkg.info.name);
-    opts.version = str_cstr(&pkg.info.version);
-    opts.author  = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
+    opts.name              = str_cstr(&pkg.info.name);
+    opts.version           = str_cstr(&pkg.info.version);
+    opts.author            = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
 
     if (pkg.info.export_count > 0) {
         if (pkg.info.export_count > UINT16_MAX) {
@@ -1310,23 +1294,22 @@ static int pack_files(state *self) {
         opts.depends_count = (u16)pkg.dep_count;
 
         for (u32 i = 0; i < pkg.dep_count; i++) {
-            opts.depends[i] =
-              str_cat_3(self->arena, pkg.deps[i].name, S("="), pkg.deps[i].version);
+            opts.depends[i] = str_cat_3(self->arena, pkg.deps[i].name, S("="), pkg.deps[i].version);
         }
     }
 
     // Build depends_optional array
     if (pkg.optional_dep_count > 0) {
         if (pkg.optional_dep_count > UINT16_MAX) {
-            fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n",
-                    pkg.optional_dep_count, (unsigned)UINT16_MAX);
+            fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n", pkg.optional_dep_count,
+                    (unsigned)UINT16_MAX);
             return 1;
         }
         opts.depends_optional       = alloc_malloc(self->arena, pkg.optional_dep_count * sizeof(str));
         opts.depends_optional_count = (u16)pkg.optional_dep_count;
         for (u32 i = 0; i < pkg.optional_dep_count; i++) {
-            opts.depends_optional[i] = str_cat_3(self->arena, pkg.optional_deps[i].name, S("="),
-                                                 pkg.optional_deps[i].version);
+            opts.depends_optional[i] =
+              str_cat_3(self->arena, pkg.optional_deps[i].name, S("="), pkg.optional_deps[i].version);
         }
     }
 
@@ -1353,8 +1336,8 @@ static int validate_files(state *self) {
     }
 
     // Cross-check scanner results against exported modules
-    tl_source_scanner_validate_result result = tl_source_scanner_validate(
-      &self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
+    tl_source_scanner_validate_result result =
+      tl_source_scanner_validate(&self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
 
     if (result.error_count > 0) {
         fprintf(stderr, "validation failed: %d error(s)\n", result.error_count);
@@ -1387,7 +1370,7 @@ static int init_package(state *self) {
     }
     char const *name = file_basename(cwd);
 
-    FILE *f = fopen("package.tl", "wb");
+    FILE       *f    = fopen("package.tl", "wb");
     if (!f) {
         fprintf(stderr, "error: cannot create package.tl\n");
         return 1;

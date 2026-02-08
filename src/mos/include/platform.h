@@ -24,9 +24,9 @@
 #undef small
 #undef OUT
 #else
-#include <unistd.h>
-#include <time.h>
 #include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 #endif
 
 // -- High-resolution timing --
